@@ -9,7 +9,7 @@ class AppTheme {
     primaryColor: AppColors.primary,
     scaffoldBackgroundColor: AppColors.background,
     cardColor: AppColors.cardBg,
-    colorScheme: ColorScheme.light(
+    colorScheme: const ColorScheme.light(
       primary: AppColors.primary,
       secondary: AppColors.accent,
       error: AppColors.error,
@@ -63,7 +63,7 @@ class AppTheme {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -76,9 +76,9 @@ class AppTheme {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        side: BorderSide(color: AppColors.primary, width: 2),
+        side: const BorderSide(color: AppColors.primary, width: 2),
         foregroundColor: AppColors.primary,
         textStyle: GoogleFonts.poppins(
           fontSize: 16,
@@ -91,17 +91,17 @@ class AppTheme {
       fillColor: Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: AppColors.primary, width: 2),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
       ),
-      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
       hintStyle: GoogleFonts.inter(color: AppColors.textLight),
     ),
@@ -120,7 +120,7 @@ class AppTheme {
       backgroundColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
-      iconTheme: IconThemeData(color: AppColors.textPrimary),
+      iconTheme: const IconThemeData(color: AppColors.textPrimary),
       titleTextStyle: GoogleFonts.poppins(
         fontSize: 18,
         fontWeight: FontWeight.w600,

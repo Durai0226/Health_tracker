@@ -10,7 +10,7 @@ class PeriodIntroScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
               AppColors.periodLight,
@@ -30,13 +30,13 @@ class PeriodIntroScreen extends StatelessWidget {
                   alignment: Alignment.topRight,
                   child: IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
                   ),
                 ),
-                Spacer(flex: 2),
+                const Spacer(flex: 2),
                 // Icon
                 Container(
-                  padding: EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
                     gradient: AppColors.periodGradient,
                     shape: BoxShape.circle,
@@ -44,17 +44,17 @@ class PeriodIntroScreen extends StatelessWidget {
                       BoxShadow(
                         color: AppColors.periodPrimary.withOpacity(0.3),
                         blurRadius: 30,
-                        offset: Offset(0, 10),
+                        offset: const Offset(0, 10),
                       ),
                     ],
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.favorite_rounded,
                     size: 56,
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(height: 48),
+                const SizedBox(height: 48),
                 Text(
                   "Period Tracking",
                   style: Theme.of(context).textTheme.displayMedium?.copyWith(
@@ -62,7 +62,7 @@ class PeriodIntroScreen extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Text(
                   "Track your cycle alongside your\nmedication reminders",
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -71,7 +71,7 @@ class PeriodIntroScreen extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                Spacer(flex: 3),
+                const Spacer(flex: 3),
                 // Enable Button
                 Container(
                   width: double.infinity,
@@ -83,7 +83,7 @@ class PeriodIntroScreen extends StatelessWidget {
                       BoxShadow(
                         color: AppColors.periodPrimary.withOpacity(0.4),
                         blurRadius: 20,
-                        offset: Offset(0, 8),
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
@@ -97,18 +97,18 @@ class PeriodIntroScreen extends StatelessWidget {
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                     ),
-                    child: Text("Enable Period Tracking"),
+                    child: const Text("Enable Period Tracking"),
                   ),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
+                  child: const Text(
                     "Maybe Later",
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
               ],
             ),
           ),

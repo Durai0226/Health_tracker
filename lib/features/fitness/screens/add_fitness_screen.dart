@@ -1,8 +1,9 @@
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/storage_service.dart';
-import '../../../core/services/notification_service.dart';
+import '../../../core/services/fitness_reminder_service.dart';
 import '../models/fitness_reminder.dart';
 
 class AddFitnessScreen extends StatefulWidget {
@@ -16,10 +17,11 @@ class AddFitnessScreen extends StatefulWidget {
 
 class _AddFitnessScreenState extends State<AddFitnessScreen> {
   String _selectedType = 'walk';
-  TimeOfDay _selectedTime = TimeOfDay(hour: 7, minute: 0);
+  TimeOfDay _selectedTime = const TimeOfDay(hour: 7, minute: 0);
   String _selectedFrequency = 'daily';
   int _duration = 30;
   bool _enableReminder = true;
+  bool _isSaving = false;
 
   final List<Map<String, dynamic>> _workoutTypes = [
     {'type': 'walk', 'emoji': '🚶', 'label': 'Walking'},
@@ -46,44 +48,99 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
     }
   }
 
-  void _save() async {
-    final now = DateTime.now();
-    final String id = widget.existingReminder?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
-    
-    // Generate a safe 32-bit ID for notifications (last 9 digits of timestamp)
-    final int notificationId = int.parse(id.substring(id.length - 9));
+  Future<void> _save() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
 
-    final reminder = FitnessReminder(
-      id: id,
-      type: _selectedType,
-      title: _workoutTypes.firstWhere((w) => w['type'] == _selectedType)['label'],
-      reminderTime: DateTime(now.year, now.month, now.day, _selectedTime.hour, _selectedTime.minute),
-      frequency: _selectedFrequency,
-      durationMinutes: _duration,
-      isEnabled: _enableReminder,
-    );
+    try {
+      final reminderService = FitnessReminderService();
+      final isEditing = widget.existingReminder != null;
+      
+      final now = DateTime.now();
+      final String id = widget.existingReminder?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
 
-    // Cancel old notification if editing
-    final notificationService = NotificationService();
-    if (widget.existingReminder != null) {
-      final oldId = int.parse(widget.existingReminder!.id.substring(widget.existingReminder!.id.length - 9));
-      await notificationService.cancelFitnessNotification(oldId, widget.existingReminder!.frequency);
-    }
-
-    await StorageService.addFitnessReminder(reminder);
-
-    if (_enableReminder) {
-      await notificationService.scheduleFitnessReminder(
-        id: notificationId,
-        title: '${reminder.emoji} ${reminder.title}',
-        body: 'Time for your ${reminder.durationMinutes} min workout! 💪',
-        hour: _selectedTime.hour,
-        minute: _selectedTime.minute,
+      final reminder = FitnessReminder(
+        id: id,
+        type: _selectedType,
+        title: _workoutTypes.firstWhere((w) => w['type'] == _selectedType)['label'],
+        reminderTime: DateTime(now.year, now.month, now.day, _selectedTime.hour, _selectedTime.minute),
         frequency: _selectedFrequency,
+        durationMinutes: _duration,
+        isEnabled: _enableReminder,
       );
-    }
 
-    if (mounted) Navigator.pop(context);
+      bool success = false;
+      String message = '';
+      
+      if (isEditing) {
+        // Use the service to update (handles cancellation and rescheduling)
+        success = await reminderService.updateReminder(
+          widget.existingReminder!,
+          reminder,
+        );
+        message = success 
+            ? (_enableReminder 
+                ? 'Updated! Reminder set for ${_selectedTime.format(context)}'
+                : 'Workout updated')
+            : 'Saved but reminder may not work. Check permissions.';
+      } else {
+        // Save to storage first
+        await StorageService.addFitnessReminder(reminder);
+        
+        if (_enableReminder) {
+          // Schedule with retry logic
+          success = await reminderService.scheduleReminder(reminder);
+          message = success 
+              ? 'Reminder set for ${_selectedTime.format(context)}'
+              : 'Saved but reminder failed. Check permissions.';
+        } else {
+          success = true;
+          message = 'Workout saved';
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  success ? Icons.check_circle : Icons.warning_amber_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: success ? AppColors.success : Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('Error saving fitness reminder: $e');
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Text('Failed to save. Please try again.'),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -94,12 +151,12 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary),
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           widget.existingReminder != null ? 'Edit Workout' : 'Add Workout',
-          style: TextStyle(
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
           ),
@@ -107,14 +164,14 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        physics: BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Workout Type Selection
-              Text(
+              const Text(
                 'Workout Type',
                 style: TextStyle(
                   fontSize: 18,
@@ -122,12 +179,12 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildWorkoutTypeGrid(),
-              SizedBox(height: 28),
+              const SizedBox(height: 28),
 
               // Time Picker
-              Text(
+              const Text(
                 'Reminder Time',
                 style: TextStyle(
                   fontSize: 18,
@@ -135,12 +192,12 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _buildTimePicker(),
-              SizedBox(height: 28),
+              const SizedBox(height: 28),
 
               // Duration
-              Text(
+              const Text(
                 'Duration',
                 style: TextStyle(
                   fontSize: 18,
@@ -148,12 +205,12 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _buildDurationSelector(),
-              SizedBox(height: 28),
+              const SizedBox(height: 28),
 
               // Frequency
-              Text(
+              const Text(
                 'Frequency',
                 style: TextStyle(
                   fontSize: 18,
@@ -161,17 +218,17 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _buildFrequencySelector(),
-              SizedBox(height: 28),
+              const SizedBox(height: 28),
 
               // Reminder Toggle
               _buildReminderToggle(),
-              SizedBox(height: 40),
+              const SizedBox(height: 40),
 
               // Save Button
               _buildSaveButton(),
-              SizedBox(height: 100),
+              const SizedBox(height: 100),
             ],
           ),
         ),
@@ -182,8 +239,8 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
   Widget _buildWorkoutTypeGrid() {
     return GridView.builder(
       shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
@@ -197,7 +254,7 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
         return GestureDetector(
           onTap: () => setState(() => _selectedType = workout['type']),
           child: AnimatedContainer(
-            duration: Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
               color: isSelected ? AppColors.primary : Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -210,7 +267,7 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
                       BoxShadow(
                         color: AppColors.primary.withOpacity(0.3),
                         blurRadius: 12,
-                        offset: Offset(0, 4),
+                        offset: const Offset(0, 4),
                       )
                     ]
                   : [],
@@ -218,8 +275,8 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(workout['emoji'], style: TextStyle(fontSize: 32)),
-                SizedBox(height: 8),
+                Text(workout['emoji'], style: const TextStyle(fontSize: 32)),
+                const SizedBox(height: 8),
                 Text(
                   workout['label'],
                   style: TextStyle(
@@ -248,7 +305,7 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
         }
       },
       child: Container(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -256,32 +313,32 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
               blurRadius: 10,
-              offset: Offset(0, 2),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              padding: EdgeInsets.all(10),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.access_time_rounded, color: AppColors.primary),
+              child: const Icon(Icons.access_time_rounded, color: AppColors.primary),
             ),
-            SizedBox(width: 16),
+            const SizedBox(width: 16),
             Expanded(
               child: Text(
                 _selectedTime.format(context),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
                 ),
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
           ],
         ),
       ),
@@ -297,11 +354,11 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
         children: durations.map((d) {
           final isSelected = _duration == d;
           return Padding(
-            padding: EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.only(right: 10),
             child: GestureDetector(
               onTap: () => setState(() => _duration = d),
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primary : Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -334,11 +391,11 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
 
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             child: GestureDetector(
               onTap: () => setState(() => _selectedFrequency = f),
               child: Container(
-                padding: EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primary : Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -366,7 +423,7 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
 
   Widget _buildReminderToggle() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -374,22 +431,22 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(10),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: AppColors.warning.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.notifications_active_rounded, color: AppColors.warning),
+            child: const Icon(Icons.notifications_active_rounded, color: AppColors.warning),
           ),
-          SizedBox(width: 16),
-          Expanded(
+          const SizedBox(width: 16),
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -413,7 +470,7 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
           Switch(
             value: _enableReminder,
             onChanged: (val) => setState(() => _enableReminder = val),
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
         ],
       ),
@@ -422,30 +479,40 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
 
   Widget _buildSaveButton() {
     return GestureDetector(
-      onTap: _save,
+      onTap: _isSaving ? null : _save,
       child: Container(
         width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: 18),
+        padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
+          gradient: _isSaving ? null : AppColors.primaryGradient,
+          color: _isSaving ? AppColors.primary.withOpacity(0.5) : null,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
+          boxShadow: _isSaving ? [] : [
             BoxShadow(
               color: AppColors.primary.withOpacity(0.3),
               blurRadius: 16,
-              offset: Offset(0, 6),
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         child: Center(
-          child: Text(
-            widget.existingReminder != null ? 'Update Workout' : 'Add Workout',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          child: _isSaving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Text(
+                  widget.existingReminder != null ? 'Update Workout' : 'Add Workout',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
         ),
       ),
     );

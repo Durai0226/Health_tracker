@@ -51,4 +51,32 @@ class Medicine extends HiveObject {
     this.stockRemaining,
     this.lowStockThreshold,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'dosageAmount': dosageAmount,
+    'dosageType': dosageType,
+    'time': time.toIso8601String(),
+    'frequency': frequency,
+    'durationDays': durationDays,
+    'enableReminder': enableReminder,
+    'enableBuyReminder': enableBuyReminder,
+    'stockRemaining': stockRemaining,
+    'lowStockThreshold': lowStockThreshold,
+  };
+
+  factory Medicine.fromJson(Map<String, dynamic> json) => Medicine(
+    id: json['id'] ?? '',
+    name: json['name'] ?? '',
+    dosageAmount: json['dosageAmount'] ?? 1,
+    dosageType: json['dosageType'] ?? 'Tablet',
+    time: DateTime.parse(json['time']),
+    frequency: json['frequency'] ?? 'Once a day',
+    durationDays: json['durationDays'],
+    enableReminder: json['enableReminder'] ?? true,
+    enableBuyReminder: json['enableBuyReminder'] ?? false,
+    stockRemaining: json['stockRemaining'],
+    lowStockThreshold: json['lowStockThreshold'],
+  );
 }

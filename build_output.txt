@@ -1,0 +1,256 @@
+Running Gradle task 'assembleRelease'...                        
+lib/core/services/notification_service.dart:11:8: Error: Error when reading 'lib/core/features/reminders/models/reminder_model.dart': No such file or directory
+import '../features/reminders/models/reminder_model.dart';
+       ^
+lib/core/services/notification_service.dart:627:14: Error: Type 'RepeatType' not found.
+    required RepeatType repeatType,
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:628:5: Error: Type 'ReminderPriority' not found.
+    ReminderPriority priority = ReminderPriority.high,
+    ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:866:46: Error: Type 'RepeatType' not found.
+  Future<void> cancelGenericReminder(int id, RepeatType repeatType, List<int>? customDays) async {
+                                             ^^^^^^^^^^
+lib/core/services/notification_service.dart:1034:5: Error: Type 'ReminderPriority' not found.
+    ReminderPriority priority = ReminderPriority.high,
+    ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:628:33: Error: Undefined name 'ReminderPriority'.
+    ReminderPriority priority = ReminderPriority.high,
+                                ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1034:33: Error: Undefined name 'ReminderPriority'.
+    ReminderPriority priority = ReminderPriority.high,
+                                ^^^^^^^^^^^^^^^^
+lib/core/services/storage_service.dart:279:16: Error: Method not found: 'NotificationService'.
+         await NotificationService().scheduleGenericReminder(
+               ^^^^^^^^^^^^^^^^^^^
+lib/core/services/storage_service.dart:307:13: Error: Method not found: 'NotificationService'.
+      await NotificationService().cancelNotification(notifId);
+            ^^^^^^^^^^^^^^^^^^^
+lib/core/services/storage_service.dart:310:16: Error: Method not found: 'NotificationService'.
+         await NotificationService().scheduleGenericReminder(
+               ^^^^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:411:40: Error: The getter 'priority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'priority'.
+        _notificationDetails(priority: priority),
+                                       ^^^^^^^^
+lib/core/services/notification_service.dart:486:40: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(priority: ReminderPriority.high),
+                                       ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:556:40: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(priority: ReminderPriority.high),
+                                       ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:627:14: Error: 'RepeatType' isn't a type.
+    required RepeatType repeatType,
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:628:5: Error: 'ReminderPriority' isn't a type.
+    ReminderPriority priority = ReminderPriority.high,
+    ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:650:16: Error: Not a constant expression.
+          case RepeatType.none:
+               ^^^^^^^^^^
+lib/core/services/notification_service.dart:663:16: Error: Not a constant expression.
+          case RepeatType.daily:
+               ^^^^^^^^^^
+lib/core/services/notification_service.dart:676:16: Error: Not a constant expression.
+          case RepeatType.weekly:
+               ^^^^^^^^^^
+lib/core/services/notification_service.dart:763:14: Error: Not a constant expression.
+        case RepeatType.none:
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:776:14: Error: Not a constant expression.
+        case RepeatType.daily:
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:791:14: Error: Not a constant expression.
+        case RepeatType.weekly:
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:806:14: Error: Not a constant expression.
+        case RepeatType.weekdays:
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:820:14: Error: Not a constant expression.
+        case RepeatType.weekends:
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:826:14: Error: Not a constant expression.
+        case RepeatType.custom:
+             ^^^^^^^^^^
+lib/core/services/notification_service.dart:666:15: Error: No named parameter with the name 'time'.
+              time: TimeOfDay.fromDateTime(scheduledTime),
+              ^^^^
+lib/core/services/notification_service.dart:725:21: Error: The method '_getImportance' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing method, or defining a method named '_getImportance'.
+        importance: _getImportance(priority),
+                    ^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:726:19: Error: The method '_getPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing method, or defining a method named '_getPriority'.
+        priority: _getPriority(priority),
+                  ^^^^^^^^^^^^
+lib/core/services/notification_service.dart:728:39: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        fullScreenIntent: priority == ReminderPriority.high, // Only high priority gets full screen
+                                      ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:747:30: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        ongoing: priority == ReminderPriority.high, 
+                             ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:748:33: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        autoCancel: priority != ReminderPriority.high, 
+                                ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:749:35: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        timeoutAfter: priority == ReminderPriority.high ? 600000 : null,
+                                  ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:724:9: Error: Duplicated named argument 'channelDescription'.
+        channelDescription: 'General reminders',
+        ^^^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:755:35: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        presentSound: priority != ReminderPriority.low,
+                                  ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:756:28: Error: The method '_getIOSInterruptionLevel' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing method, or defining a method named '_getIOSInterruptionLevel'.
+        interruptionLevel: _getIOSInterruptionLevel(priority),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:866:46: Error: 'RepeatType' isn't a type.
+  Future<void> cancelGenericReminder(int id, RepeatType repeatType, List<int>? customDays) async {
+                                             ^^^^^^^^^^
+lib/core/services/notification_service.dart:870:25: Error: The getter 'RepeatType' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'RepeatType'.
+      if (repeatType == RepeatType.weekdays) {
+                        ^^^^^^^^^^
+lib/core/services/notification_service.dart:872:32: Error: The getter 'RepeatType' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'RepeatType'.
+      } else if (repeatType == RepeatType.weekends) {
+                               ^^^^^^^^^^
+lib/core/services/notification_service.dart:875:32: Error: The getter 'RepeatType' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'RepeatType'.
+      } else if (repeatType == RepeatType.custom && customDays != null) {
+                               ^^^^^^^^^^
+lib/core/services/notification_service.dart:950:27: Error: Too many positional arguments: 0 allowed, but 2 found.
+Try removing the extra positional arguments.
+      _notificationDetails(channelId, channelName),
+                          ^
+lib/core/services/notification_service.dart:962:28: Error: 'Reminder' isn't a type.
+      final box = Hive.box<Reminder>('reminders');
+                           ^^^^^^^^
+lib/core/services/notification_service.dart:962:19: Error: The getter 'Hive' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'Hive'.
+      final box = Hive.box<Reminder>('reminders');
+                  ^^^^
+lib/core/services/notification_service.dart:1021:27: Error: Too many positional arguments: 0 allowed, but 2 found.
+Try removing the extra positional arguments.
+      _notificationDetails(channelId, channelName),
+                          ^
+lib/core/services/notification_service.dart:1034:5: Error: 'ReminderPriority' isn't a type.
+    ReminderPriority priority = ReminderPriority.high,
+    ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1044:21: Error: The method '_getImportance' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing method, or defining a method named '_getImportance'.
+        importance: _getImportance(priority),
+                    ^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1045:19: Error: The method '_getPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing method, or defining a method named '_getPriority'.
+        priority: _getPriority(priority),
+                  ^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1137:40: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(priority: ReminderPriority.high),
+                                       ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1163:86: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(channelId: channelId, channelName: channelId, priority: ReminderPriority.high),
+                                                                                     ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1212:100: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(channelId: 'water_channel', channelName: 'Water Reminders', priority: ReminderPriority.high),
+                                                                                          ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1246:102: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(channelId: 'period_channel', channelName: 'Period Reminders', priority: ReminderPriority.low),
+                                                                                          ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1305:40: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(priority: ReminderPriority.high),
+                                       ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1342:40: Error: The getter 'ReminderPriority' isn't defined for the type 'NotificationService'.
+ - 'NotificationService' is from 'package:tablet_remainder/core/services/notification_service.dart' ('lib/core/services/notification_service.dart').
+Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReminderPriority'.
+        _notificationDetails(priority: ReminderPriority.high),
+                                       ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1468:29: Error: 'ReminderPriority' isn't a type.
+  Importance _getImportance(ReminderPriority priority) {
+                            ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1470:12: Error: Not a constant expression.
+      case ReminderPriority.high:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1472:12: Error: Not a constant expression.
+      case ReminderPriority.medium:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1474:12: Error: Not a constant expression.
+      case ReminderPriority.low:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1479:25: Error: 'ReminderPriority' isn't a type.
+  Priority _getPriority(ReminderPriority priority) {
+                        ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1481:12: Error: Not a constant expression.
+      case ReminderPriority.high:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1483:12: Error: Not a constant expression.
+      case ReminderPriority.medium:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1485:12: Error: Not a constant expression.
+      case ReminderPriority.low:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1490:46: Error: 'ReminderPriority' isn't a type.
+  InterruptionLevel _getIOSInterruptionLevel(ReminderPriority priority) {
+                                             ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1492:12: Error: Not a constant expression.
+      case ReminderPriority.high:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1494:12: Error: Not a constant expression.
+      case ReminderPriority.medium:
+           ^^^^^^^^^^^^^^^^
+lib/core/services/notification_service.dart:1496:12: Error: Not a constant expression.
+      case ReminderPriority.low:
+           ^^^^^^^^^^^^^^^^
+Target kernel_snapshot_program failed: Exception
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildRelease'.
+> Process 'command '/Users/dsp/Documents/flutter/bin/flutter'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1m 6s
+Running Gradle task 'assembleRelease'...                           67.3s
+Gradle task assembleRelease failed with exit code 1

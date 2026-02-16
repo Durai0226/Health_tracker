@@ -1,0 +1,47 @@
+{
+    "project_info": {
+        "project_number": "393292496655",
+        "project_id": "remedly-86882",
+        "storage_bucket": "remedly-86882.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:393292496655:android:98cbb11f06b64d66c5c87a",
+                "android_client_info": {
+                    "package_name": "com.dlyminder.app"
+                }
+            },
+            "oauth_client": [
+                {
+                    "client_id": "393292496655-s2dtheob7ilkevaa300jbp0aa4mt54cu.apps.googleusercontent.com",
+                    "client_type": 1,
+                    "android_info": {
+                        "package_name": "com.dlyminder.app",
+                        "certificate_hash": "72d8c63c0a89924d4ac1ef1e024def0449896e91"
+                    }
+                },
+                {
+                    "client_id": "393292496655-l2m1k813boj72p74e9a7tkorm52hu8al.apps.googleusercontent.com",
+                    "client_type": 3
+                }
+            ],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyCL3QZk5VXByMc3vpfNdyVWwTqrnkKaekk"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": [
+                        {
+                            "client_id": "393292496655-l2m1k813boj72p74e9a7tkorm52hu8al.apps.googleusercontent.com",
+                            "client_type": 3
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}

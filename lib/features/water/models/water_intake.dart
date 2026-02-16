@@ -43,6 +43,28 @@ class WaterIntake extends HiveObject {
       logs: logs ?? this.logs,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'date': date.toIso8601String(),
+    'dailyGoalMl': dailyGoalMl,
+    'currentIntakeMl': currentIntakeMl,
+    'logs': logs.map((log) => {
+      'time': log.time.toIso8601String(),
+      'amountMl': log.amountMl,
+    }).toList(),
+  };
+
+  factory WaterIntake.fromJson(Map<String, dynamic> json) => WaterIntake(
+    id: json['id'] ?? '',
+    date: DateTime.parse(json['date']),
+    dailyGoalMl: json['dailyGoalMl'] ?? 2500,
+    currentIntakeMl: json['currentIntakeMl'] ?? 0,
+    logs: (json['logs'] as List<dynamic>?)?.map((log) => WaterLog(
+      time: DateTime.parse(log['time']),
+      amountMl: log['amountMl'] ?? 0,
+    )).toList(),
+  );
 }
 
 @HiveType(typeId: 4)

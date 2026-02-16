@@ -1,0 +1,20 @@
+Running Gradle task 'assembleRelease'...                        
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 41156 bytes (97.5% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Error: No source specified
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:l8DexDesugarLibRelease'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.L8DexWorkAction
+   > Compilation failed to complete
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 15m 27s
+Running Gradle task 'assembleRelease'...                          934.0s
+Gradle task assembleRelease failed with exit code 1

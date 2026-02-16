@@ -1,8 +1,9 @@
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../home/screens/home_screen.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../models/medicine.dart';
 import 'package:uuid/uuid.dart';
 
@@ -22,49 +23,120 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
   String _name = "";
   int _dosageAmount = 1;
   String _dosageType = "Tablet";
-  TimeOfDay _time = TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
   String _frequency = "Once a day";
   int _durationDays = 7;
   bool _enableReminder = true;
   bool _enableBuyReminder = false;
   int _stockRemaining = 10;
+  bool _isSaving = false;
 
   void _nextPage() {
     _pageController.nextPage(
-      duration: Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOutCubic,
     );
   }
 
   void _prevPage() {
     _pageController.previousPage(
-      duration: Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOutCubic,
     );
   }
 
   Future<void> _saveMedicine() async {
-    final newMedicine = Medicine(
-      id: const Uuid().v4(),
-      name: _name,
-      dosageAmount: _dosageAmount,
-      dosageType: _dosageType,
-      time: DateTime(2024, 1, 1, _time.hour, _time.minute),
-      frequency: _frequency,
-      durationDays: _durationDays == -1 ? null : _durationDays,
-      enableReminder: _enableReminder,
-      enableBuyReminder: _enableBuyReminder,
-      stockRemaining: _enableBuyReminder ? _stockRemaining : null,
-      lowStockThreshold: _enableBuyReminder ? 5 : null,
-    );
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
 
-    await StorageService.addMedicine(newMedicine);
-
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => HomeScreen()),
-        (route) => false,
+    try {
+      final newMedicine = Medicine(
+        id: const Uuid().v4(),
+        name: _name,
+        dosageAmount: _dosageAmount,
+        dosageType: _dosageType,
+        time: DateTime(2024, 1, 1, _time.hour, _time.minute),
+        frequency: _frequency,
+        durationDays: _durationDays == -1 ? null : _durationDays,
+        enableReminder: _enableReminder,
+        enableBuyReminder: _enableBuyReminder,
+        stockRemaining: _enableBuyReminder ? _stockRemaining : null,
+        lowStockThreshold: _enableBuyReminder ? 5 : null,
       );
+
+      await StorageService.addMedicine(newMedicine);
+
+      bool scheduled = false;
+      String message = '';
+      
+      if (_enableReminder) {
+        final notificationService = NotificationService();
+        
+        scheduled = await notificationService.scheduleMedicineReminder(
+          id: newMedicine.id.hashCode,
+          medicineName: _name,
+          hour: _time.hour,
+          minute: _time.minute,
+          frequency: _frequency,
+        );
+
+        if (scheduled) {
+          message = 'Reminder set for ${_time.format(context)}';
+          // Show confirmation (non-blocking)
+          unawaited(notificationService.showImmediateNotification(
+            title: 'Reminder Added 💊',
+            body: '$_name - ${_time.format(context)}',
+            channelId: 'medicine_channel',
+          ).catchError((e) { debugPrint('Notification error: $e'); return false; }));
+        } else {
+          message = 'Saved but reminder failed. Check permissions.';
+        }
+      } else {
+        message = 'Medicine saved';
+        scheduled = true;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  scheduled ? Icons.check_circle_rounded : Icons.warning_rounded,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: scheduled ? AppColors.success : AppColors.warning,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      debugPrint('Error saving medicine: $e');
+      setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Failed to save medicine. Please try again.'),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -74,7 +146,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
           onPressed: () {
             if (_currentPage > 0) {
               _prevPage();
@@ -83,7 +155,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
             }
           },
         ),
-        title: Text("Add Medicine"),
+        title: const Text("Add Reminder"),
       ),
       body: SafeArea(
         child: Column(
@@ -109,7 +181,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
                           ),
                           child: Center(
                             child: isComplete
-                                ? Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                                ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
                                 : Text(
                                     "${index + 1}",
                                     style: TextStyle(
@@ -137,7 +209,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
             Expanded(
               child: PageView(
                 controller: _pageController,
-                physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (index) {
                   setState(() => _currentPage = index);
                 },
@@ -163,9 +235,9 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: Theme.of(context).textTheme.headlineLarge),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-          SizedBox(height: 32),
+          const SizedBox(height: 32),
           Expanded(child: child),
         ],
       ),
@@ -179,14 +251,17 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
       child: Column(
         children: [
           TextField(
-            onChanged: (val) => setState(() => _name = val),
-            style: TextStyle(fontSize: 18),
-            decoration: InputDecoration(
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            maxLength: 50,
+            onChanged: (val) => setState(() => _name = val.trim()),
+            style: const TextStyle(fontSize: 18),
+            decoration: const InputDecoration(
               hintText: "e.g., Paracetamol",
               prefixIcon: Icon(Icons.medication_outlined, color: AppColors.primary),
             ),
           ),
-          Spacer(),
+          const Spacer(),
           _buildNextButton(enabled: _name.isNotEmpty),
         ],
       ),
@@ -201,7 +276,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
         children: [
           // Amount Selector
           Container(
-            padding: EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -215,14 +290,14 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
                 _buildCircleButton(Icons.remove_rounded, () {
                   if (_dosageAmount > 1) setState(() => _dosageAmount--);
                 }),
-                SizedBox(width: 32),
-                Text("$_dosageAmount", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
-                SizedBox(width: 32),
+                const SizedBox(width: 32),
+                Text("$_dosageAmount", style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 32),
                 _buildCircleButton(Icons.add_rounded, () => setState(() => _dosageAmount++)),
               ],
             ),
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           // Type Selector
           Wrap(
             spacing: 12,
@@ -232,7 +307,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
               return GestureDetector(
                 onTap: () => setState(() => _dosageType = type),
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -251,7 +326,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
               );
             }).toList(),
           ),
-          Spacer(),
+          const Spacer(),
           _buildNextButton(),
         ],
       ),
@@ -270,7 +345,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
               if (t != null) setState(() => _time = t);
             },
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 48, vertical: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(20),
@@ -278,29 +353,29 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
                   BoxShadow(
                     color: AppColors.primary.withOpacity(0.3),
                     blurRadius: 20,
-                    offset: Offset(0, 8),
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Text(
                 _time.format(context),
-                style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white),
+                style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white),
               ),
             ),
           ),
-          SizedBox(height: 32),
+          const SizedBox(height: 32),
           DropdownButtonFormField<String>(
-            value: _frequency,
+            initialValue: _frequency,
             items: ["Once a day", "Twice a day", "Every 8 hours"]
                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                 .toList(),
             onChanged: (val) => setState(() => _frequency = val!),
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               labelText: "Frequency",
               prefixIcon: Icon(Icons.repeat_rounded, color: AppColors.primary),
             ),
           ),
-          Spacer(),
+          const Spacer(),
           _buildNextButton(),
         ],
       ),
@@ -318,8 +393,8 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
             return GestureDetector(
               onTap: () => setState(() => _durationDays = days),
               child: Container(
-                margin: EdgeInsets.only(bottom: 12),
-                padding: EdgeInsets.all(20),
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -334,7 +409,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
                       days == -1 ? Icons.all_inclusive_rounded : Icons.calendar_today_rounded,
                       color: isSelected ? AppColors.primary : AppColors.textSecondary,
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Text(
                       days == -1 ? "Until I stop" : "$days days",
                       style: TextStyle(
@@ -343,15 +418,15 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
                         color: isSelected ? AppColors.primary : AppColors.textPrimary,
                       ),
                     ),
-                    Spacer(),
+                    const Spacer(),
                     if (isSelected)
-                      Icon(Icons.check_circle_rounded, color: AppColors.primary),
+                      const Icon(Icons.check_circle_rounded, color: AppColors.primary),
                   ],
                 ),
               ),
             );
           }),
-          Spacer(),
+          const Spacer(),
           _buildNextButton(),
         ],
       ),
@@ -371,7 +446,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
             value: _enableReminder,
             onChanged: (val) => setState(() => _enableReminder = val),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           _buildToggleCard(
             icon: Icons.shopping_bag_outlined,
             title: "Refill Reminder",
@@ -380,17 +455,17 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
             onChanged: (val) => setState(() => _enableBuyReminder = val),
           ),
           if (_enableBuyReminder) ...[
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             TextField(
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: "Current Stock (Tablets)",
                 prefixIcon: Icon(Icons.inventory_2_outlined),
               ),
               onChanged: (val) => setState(() => _stockRemaining = int.tryParse(val) ?? 10),
             ),
           ],
-          Spacer(),
+          const Spacer(),
           _buildSaveButton(),
         ],
       ),
@@ -420,7 +495,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
     required ValueChanged<bool> onChanged,
   }) {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -429,27 +504,27 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(10),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: AppColors.primary),
           ),
-          SizedBox(width: 16),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w600)),
-                Text(subtitle, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
         ],
       ),
@@ -462,7 +537,7 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
       height: 56,
       child: ElevatedButton(
         onPressed: enabled ? _nextPage : null,
-        child: Text("Continue"),
+        child: const Text("Continue"),
       ),
     );
   }
@@ -478,24 +553,33 @@ class _AddMedicineFlowState extends State<AddMedicineFlow> {
           BoxShadow(
             color: AppColors.primary.withOpacity(0.4),
             blurRadius: 16,
-            offset: Offset(0, 6),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: ElevatedButton(
-        onPressed: _saveMedicine,
+        onPressed: _isSaving ? null : _saveMedicine,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline_rounded),
-            SizedBox(width: 8),
-            Text("Save Medicine"),
-          ],
-        ),
+        child: _isSaving
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_outline_rounded),
+                  SizedBox(width: 8),
+                  Text("Save Medicine"),
+                ],
+              ),
       ),
     );
   }

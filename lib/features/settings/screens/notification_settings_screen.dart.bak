@@ -1,0 +1,1289 @@
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:just_audio/just_audio.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../core/services/focus_mode_service.dart';
+import '../../../core/models/user_settings.dart';
+import '../../reminders/screens/focus_mode_screen.dart';
+
+class NotificationSettingsScreen extends StatefulWidget {
+  const NotificationSettingsScreen({super.key});
+
+  @override
+  State<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
+}
+
+class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
+  UserSettings? _settings;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  // ignore: unused_field
+  String? _errorMessage;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingPreview = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+      
+      // Load settings asynchronously to prevent UI blocking
+      await Future.microtask(() {});
+      final settings = StorageService.getUserSettings();
+      
+      if (mounted) {
+        setState(() {
+          _settings = settings;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading settings: $e');
+      if (mounted) {
+        setState(() {
+          _settings = UserSettings(); // Use default settings as fallback
+          _isLoading = false;
+          _errorMessage = 'Failed to load settings. Using defaults.';
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveSettings() async {
+    if (_settings == null) return;
+    
+    setState(() => _isSaving = true);
+    
+    try {
+      // Save settings in background without blocking UI
+      await StorageService.saveUserSettings(_settings!);
+      
+      // Reschedule reminders with new settings (non-blocking)
+      _rescheduleRemindersInBackground();
+      
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Text('Settings saved'),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error saving settings: $e');
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Text('Failed to save settings'),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  void _rescheduleRemindersInBackground() {
+    // Run in background without blocking UI
+    Future.microtask(() async {
+      try {
+        // Import and use the reschedule service
+        final fitnessReminders = StorageService.getAllFitnessReminders();
+        final notificationService = NotificationService();
+        
+        for (final reminder in fitnessReminders) {
+          if (reminder.isEnabled) {
+            final notificationId = reminder.id.hashCode.abs() % 100000;
+            await notificationService.scheduleFitnessReminder(
+              id: notificationId,
+              title: '${reminder.emoji} ${reminder.title}',
+              body: 'Time for your ${reminder.durationMinutes} min workout! 💪',
+              hour: reminder.reminderTime.hour,
+              minute: reminder.reminderTime.minute,
+              frequency: reminder.frequency,
+            ).catchError((e) {
+              debugPrint('Error rescheduling fitness reminder: $e');
+              return false;
+            });
+          }
+        }
+        debugPrint('✓ Reminders rescheduled with new settings');
+      } catch (e) {
+        debugPrint('Error rescheduling reminders: $e');
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Show loading state
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.primary,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text('Notifications', style: TextStyle(color: Colors.white)),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: AppColors.primary),
+              SizedBox(height: 16),
+              Text('Loading settings...', style: TextStyle(color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show error state with retry option
+    if (_settings == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.primary,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text('Notifications', style: TextStyle(color: Colors.white)),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: AppColors.error),
+              SizedBox(height: 16),
+              Text('Failed to load settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _loadSettings,
+                child: Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: CustomScrollView(
+        slivers: [
+          // Premium App Bar
+          SliverAppBar(
+            expandedHeight: 140,
+            floating: false,
+            pinned: true,
+            backgroundColor: AppColors.primary,
+            leading: IconButton(
+              icon: Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text(
+                'Notifications',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primary,
+                      AppColors.primary.withOpacity(0.8),
+                    ],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -30,
+                      top: -30,
+                      child: Container(
+                        width: 150,
+                        height: 150,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 40,
+                      bottom: 60,
+                      child: Icon(
+                        Icons.notifications_active_rounded,
+                        size: 60,
+                        color: Colors.white.withOpacity(0.15),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          // Content
+          SliverPadding(
+            padding: EdgeInsets.all(20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // Focus Mode Quick Access
+                _buildFocusModeCard(),
+                SizedBox(height: 16),
+                
+                // Lock Screen & Persistent Notifications
+                _buildLockScreenCard(),
+                SizedBox(height: 16),
+                
+                _buildSoundCard(),
+                SizedBox(height: 16),
+                _buildCustomSoundCard(),
+                SizedBox(height: 16),
+                _buildVibrationCard(),
+                SizedBox(height: 16),
+                _buildSnoozeCard(),
+                SizedBox(height: 16),
+                _buildAlarmDurationCard(),
+                SizedBox(height: 24),
+                _buildTestButton(),
+                SizedBox(height: 32),
+              ]),
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _buildSaveButton(),
+    );
+  }
+
+  Widget _buildFocusModeCard() {
+    final focusService = FocusModeService();
+    
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const FocusModeScreen()),
+        );
+      },
+      child: Container(
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.info,
+              AppColors.info.withOpacity(0.8),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.info.withOpacity(0.3),
+              blurRadius: 12,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                focusService.isRunning 
+                    ? Icons.timer_rounded 
+                    : Icons.self_improvement_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Focus Mode',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    focusService.isRunning 
+                        ? 'Active - ${focusService.formattedTime} remaining'
+                        : FocusModeService.areRemindersPaused()
+                            ? 'Reminders paused'
+                            : 'Pause notifications during focus',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLockScreenCard() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.lock_clock_rounded, color: AppColors.warning, size: 24),
+              ),
+              SizedBox(width: 16),
+              Text(
+                'Lock Screen & Display',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 17,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          
+          // Show on Lock Screen
+          _buildToggleOption(
+            icon: Icons.screen_lock_portrait_rounded,
+            title: 'Show on Lock Screen',
+            subtitle: 'Display notifications when device is locked',
+            value: _settings!.showOnLockScreen,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings!.copyWith(showOnLockScreen: value);
+              });
+            },
+          ),
+          
+          Divider(height: 24, color: AppColors.border),
+          
+          // Persistent Notification
+          _buildToggleOption(
+            icon: Icons.push_pin_rounded,
+            title: 'Persistent Notifications',
+            subtitle: 'Keep notifications until manually dismissed',
+            value: _settings!.persistentNotification,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings!.copyWith(persistentNotification: value);
+              });
+            },
+          ),
+          
+          Divider(height: 24, color: AppColors.border),
+          
+          // Full Screen Notification
+          _buildToggleOption(
+            icon: Icons.fullscreen_rounded,
+            title: 'Full Screen Alerts',
+            subtitle: 'Show full screen for important reminders',
+            value: _settings!.fullScreenNotification,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings!.copyWith(fullScreenNotification: value);
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.textSecondary, size: 22),
+        SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 15,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: AppColors.primary,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSoundCard() {
+    return _PremiumSettingCard(
+      icon: Icons.volume_up_rounded,
+      iconColor: AppColors.primary,
+      title: 'Sound',
+      subtitle: _settings!.soundEnabled ? 'On' : 'Off',
+      child: Column(
+        children: [
+          _PremiumSwitch(
+            value: _settings!.soundEnabled,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings!.copyWith(soundEnabled: value);
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomSoundCard() {
+    final hasCustomSound = _settings!.notificationSound.isNotEmpty && 
+                           _settings!.notificationSound != 'default';
+    final soundName = hasCustomSound 
+        ? _settings!.notificationSound.split('/').last 
+        : 'Default';
+
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.music_note_rounded, color: AppColors.info, size: 24),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notification Sound',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      soundName.length > 25 
+                          ? '${soundName.substring(0, 22)}...' 
+                          : soundName,
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSoundOptionButton(
+                  icon: Icons.notifications_active_rounded,
+                  label: 'Default',
+                  isSelected: !hasCustomSound,
+                  onTap: () {
+                    setState(() {
+                      _settings = _settings!.copyWith(notificationSound: 'default');
+                    });
+                  },
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: _buildSoundOptionButton(
+                  icon: Icons.folder_open_rounded,
+                  label: 'Choose File',
+                  isSelected: hasCustomSound,
+                  onTap: _pickSoundFile,
+                ),
+              ),
+            ],
+          ),
+          if (hasCustomSound) ...[  
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.audiotrack_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      soundName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _previewSound,
+                    child: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        _isPlayingPreview ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _settings = _settings!.copyWith(notificationSound: 'default');
+                      });
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: AppColors.error,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSoundOptionButton({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.3),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ] : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
+              size: 20,
+            ),
+            SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickSoundFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.path != null) {
+          setState(() {
+            _settings = _settings!.copyWith(notificationSound: file.path!);
+          });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white, size: 20),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('Sound selected: ${file.name}')),
+                  ],
+                ),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Text('Failed to pick sound file'),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _previewSound() async {
+    try {
+      if (_isPlayingPreview) {
+        await _audioPlayer.stop();
+        setState(() => _isPlayingPreview = false);
+        return;
+      }
+
+      final soundPath = _settings!.notificationSound;
+      if (soundPath.isEmpty || soundPath == 'default') return;
+
+      setState(() => _isPlayingPreview = true);
+      await _audioPlayer.setFilePath(soundPath);
+      await _audioPlayer.play();
+      
+      _audioPlayer.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          if (mounted) {
+            setState(() => _isPlayingPreview = false);
+          }
+        }
+      });
+    } catch (e) {
+      setState(() => _isPlayingPreview = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cannot play this audio file'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildVibrationCard() {
+    return _PremiumSettingCard(
+      icon: Icons.vibration_rounded,
+      iconColor: AppColors.warning,
+      title: 'Vibration',
+      subtitle: _settings!.vibrationEnabled ? 'On' : 'Off',
+      child: _PremiumSwitch(
+        value: _settings!.vibrationEnabled,
+        onChanged: (value) {
+          setState(() {
+            _settings = _settings!.copyWith(vibrationEnabled: value);
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildSnoozeCard() {
+    return _PremiumSettingCard(
+      icon: Icons.snooze_rounded,
+      iconColor: AppColors.info,
+      title: 'Snooze',
+      subtitle: _settings!.snoozeEnabled 
+          ? '${_settings!.snoozeIntervalMinutes} min' 
+          : 'Off',
+      child: Column(
+        children: [
+          _PremiumSwitch(
+            value: _settings!.snoozeEnabled,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings!.copyWith(snoozeEnabled: value);
+              });
+            },
+          ),
+          if (_settings!.snoozeEnabled) ...[
+            SizedBox(height: 16),
+            _buildDurationSelector(
+              label: 'Snooze Duration',
+              options: [1, 5, 10, 15, 30],
+              selectedValue: _settings!.snoozeIntervalMinutes,
+              suffix: 'min',
+              onSelected: (value) {
+                setState(() {
+                  _settings = _settings!.copyWith(snoozeIntervalMinutes: value);
+                });
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlarmDurationCard() {
+    return _PremiumSettingCard(
+      icon: Icons.timer_rounded,
+      iconColor: AppColors.error,
+      title: 'Alarm Duration',
+      subtitle: '${_settings!.alarmRingDurationSeconds} seconds',
+      child: Column(
+        children: [
+          _buildDurationSelector(
+            label: 'Ring for',
+            options: [15, 30, 45, 60],
+            selectedValue: _settings!.alarmRingDurationSeconds,
+            suffix: 's',
+            onSelected: (value) {
+              setState(() {
+                _settings = _settings!.copyWith(alarmRingDurationSeconds: value);
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDurationSelector({
+    required String label,
+    required List<int> options,
+    required int selectedValue,
+    required String suffix,
+    required ValueChanged<int> onSelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: 12),
+        Row(
+          children: options.map((value) {
+            final isSelected = selectedValue == value;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onSelected(value),
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 200),
+                  margin: EdgeInsets.only(right: value != options.last ? 8 : 0),
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary : AppColors.border,
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: isSelected ? [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ] : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$value$suffix',
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTestButton() {
+    return GestureDetector(
+      onTap: () async {
+        await NotificationService().showTestNotification();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.notifications_active, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Text('Test notification sent!'),
+                ],
+              ),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      },
+      child: Container(
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                Icons.send_rounded,
+                color: AppColors.success,
+                size: 24,
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Test Notification',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Send a test to verify settings',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: AppColors.textSecondary,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: GestureDetector(
+          onTap: _isSaving ? null : _saveSettings,
+          child: AnimatedContainer(
+            duration: Duration(milliseconds: 200),
+            padding: EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, AppColors.primary.withOpacity(0.85)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.4),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: _isSaving
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.save_rounded, color: Colors.white),
+                        SizedBox(width: 10),
+                        Text(
+                          'Save Settings',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumSettingCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  const _PremiumSettingCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: iconColor, size: 24),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _PremiumSwitch({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 250),
+        width: double.infinity,
+        padding: EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: value ? AppColors.primary.withOpacity(0.1) : AppColors.background,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: value ? AppColors.primary : AppColors.border,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 250),
+                padding: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: !value ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: !value ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ] : null,
+                ),
+                child: Center(
+                  child: Text(
+                    'Off',
+                    style: TextStyle(
+                      color: !value ? AppColors.textPrimary : AppColors.textSecondary,
+                      fontWeight: !value ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 250),
+                padding: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: value ? AppColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: value ? [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.4),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ] : null,
+                ),
+                child: Center(
+                  child: Text(
+                    'On',
+                    style: TextStyle(
+                      color: value ? Colors.white : AppColors.textSecondary,
+                      fontWeight: value ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

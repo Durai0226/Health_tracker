@@ -1,4 +1,5 @@
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../home/screens/home_screen.dart';
@@ -25,6 +26,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
   late bool _enableReminder;
   late bool _enableBuyReminder;
   late int _stockRemaining;
+  bool _isSaving = false;
 
   final TextEditingController _nameController = TextEditingController();
 
@@ -51,37 +53,120 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
   }
 
   Future<void> _save() async {
-    final updatedMedicine = Medicine(
-      id: widget.medicine.id,
-      name: _name,
-      dosageAmount: _dosageAmount,
-      dosageType: _dosageType,
-      time: DateTime(2024, 1, 1, _time.hour, _time.minute),
-      frequency: _frequency,
-      durationDays: _durationDays == -1 ? null : _durationDays,
-      enableReminder: _enableReminder,
-      enableBuyReminder: _enableBuyReminder,
-      stockRemaining: _enableBuyReminder ? _stockRemaining : null,
-      lowStockThreshold: _enableBuyReminder ? 5 : null,
-    );
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
 
-    await StorageService.updateMedicine(updatedMedicine);
-
-    // Update notification
-    if (_enableReminder) {
-      await NotificationService().scheduleMedicineReminder(
-        id: widget.medicine.id.hashCode,
-        medicineName: _name,
-        hour: _time.hour,
-        minute: _time.minute,
+    try {
+      final notificationService = NotificationService();
+      final notificationId = widget.medicine.id.hashCode;
+      final wasReminderEnabled = widget.medicine.enableReminder;
+      
+      final updatedMedicine = Medicine(
+        id: widget.medicine.id,
+        name: _name,
+        dosageAmount: _dosageAmount,
+        dosageType: _dosageType,
+        time: DateTime(2024, 1, 1, _time.hour, _time.minute),
         frequency: _frequency,
+        durationDays: _durationDays == -1 ? null : _durationDays,
+        enableReminder: _enableReminder,
+        enableBuyReminder: _enableBuyReminder,
+        stockRemaining: _enableBuyReminder ? _stockRemaining : null,
+        lowStockThreshold: _enableBuyReminder ? 5 : null,
       );
-    } else {
-      await NotificationService().cancelNotification(widget.medicine.id.hashCode);
-    }
 
-    if (mounted) {
-      Navigator.of(context).pop(true);
+      // Save to storage first (critical operation)
+      await StorageService.updateMedicine(updatedMedicine);
+
+      // Handle notification scheduling based on what changed
+      bool scheduled = false;
+      String message = '';
+      
+      if (_enableReminder) {
+        // Case 1: Reminder is now enabled
+        // Always cancel first, then reschedule (handles time/frequency changes too)
+        unawaited(notificationService.cancelNotification(notificationId).catchError((e) {
+          debugPrint('Cancel notification error (non-blocking): $e');
+        }));
+        
+        // Small delay to ensure cancellation completes
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        scheduled = await notificationService.scheduleMedicineReminder(
+          id: notificationId,
+          medicineName: _name,
+          hour: _time.hour,
+          minute: _time.minute,
+          frequency: _frequency,
+        );
+        
+        if (scheduled) {
+          message = 'Reminder set for ${_time.format(context)}';
+          // Show confirmation notification (non-blocking)
+          unawaited(notificationService.showImmediateNotification(
+            title: wasReminderEnabled ? 'Reminder Updated 💊' : 'Reminder Enabled 💊',
+            body: '$_name - ${_time.format(context)}',
+            channelId: 'medicine_channel',
+          ).catchError((e) {
+            debugPrint('Confirmation notification error: $e');
+            return false;
+          }));
+        } else {
+          message = 'Saved but reminder failed. Check permissions.';
+        }
+      } else {
+        // Case 2: Reminder is now disabled
+        if (wasReminderEnabled) {
+          // Was enabled, now disabled - cancel the notification
+          unawaited(notificationService.cancelNotification(notificationId).catchError((e) {
+            debugPrint('Cancel notification error: $e');
+          }));
+          message = 'Medicine saved (reminder disabled)';
+        } else {
+          // Was disabled, still disabled
+          message = 'Medicine saved';
+        }
+        scheduled = true; // No scheduling needed, so consider it success
+      }
+
+      // Show result to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  scheduled ? Icons.check_circle_rounded : Icons.warning_rounded,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: scheduled ? AppColors.success : AppColors.warning,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      debugPrint('Error saving medicine: $e');
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('Failed to save. Please try again.')),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -89,16 +174,16 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Medicine'),
+        title: const Text('Delete Medicine'),
         content: Text('Are you sure you want to delete "$_name"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -109,7 +194,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
       await NotificationService().cancelNotification(widget.medicine.id.hashCode);
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => HomeScreen()),
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
           (route) => false,
         );
       }
@@ -122,42 +207,42 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Edit Medicine'),
+        title: const Text('Edit Medicine'),
         actions: [
           IconButton(
-            icon: Icon(Icons.delete_outline_rounded, color: AppColors.error),
+            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
             onPressed: _delete,
           ),
         ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Medicine Name
               Text('Medicine Name', style: Theme.of(context).textTheme.titleMedium),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               TextField(
                 controller: _nameController,
                 onChanged: (val) => setState(() => _name = val),
-                style: TextStyle(fontSize: 18),
-                decoration: InputDecoration(
+                style: const TextStyle(fontSize: 18),
+                decoration: const InputDecoration(
                   hintText: 'e.g., Paracetamol',
                   prefixIcon: Icon(Icons.medication_outlined, color: AppColors.primary),
                 ),
               ),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
 
               // Dosage
               Text('Dosage', style: Theme.of(context).textTheme.titleMedium),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               Container(
-                padding: EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -171,14 +256,14 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                     _buildCircleButton(Icons.remove_rounded, () {
                       if (_dosageAmount > 1) setState(() => _dosageAmount--);
                     }),
-                    SizedBox(width: 32),
-                    Text('$_dosageAmount', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
-                    SizedBox(width: 32),
+                    const SizedBox(width: 32),
+                    Text('$_dosageAmount', style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 32),
                     _buildCircleButton(Icons.add_rounded, () => setState(() => _dosageAmount++)),
                   ],
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -187,7 +272,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                   return GestureDetector(
                     onTap: () => setState(() => _dosageType = type),
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       decoration: BoxDecoration(
                         color: isSelected ? AppColors.primary : Colors.white,
                         borderRadius: BorderRadius.circular(12),
@@ -204,18 +289,18 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                   );
                 }).toList(),
               ),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
 
               // Reminder Time
               Text('Reminder Time', style: Theme.of(context).textTheme.titleMedium),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               GestureDetector(
                 onTap: () async {
                   final t = await showTimePicker(context: context, initialTime: _time);
                   if (t != null) setState(() => _time = t);
                 },
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
                   decoration: BoxDecoration(
                     gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(16),
@@ -223,47 +308,47 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                       BoxShadow(
                         color: AppColors.primary.withOpacity(0.3),
                         blurRadius: 16,
-                        offset: Offset(0, 6),
+                        offset: const Offset(0, 6),
                       ),
                     ],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.access_time_rounded, color: Colors.white, size: 28),
-                      SizedBox(width: 12),
+                      const Icon(Icons.access_time_rounded, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
                       Text(
                         _time.format(context),
-                        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ],
                   ),
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _frequency,
+                initialValue: _frequency,
                 items: ['Once a day', 'Twice a day', 'Every 8 hours']
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
                 onChanged: (val) => setState(() => _frequency = val!),
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Frequency',
                   prefixIcon: Icon(Icons.repeat_rounded, color: AppColors.primary),
                 ),
               ),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
 
               // Duration
               Text('Duration', style: Theme.of(context).textTheme.titleMedium),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               ...[7, 14, 30, -1].map((days) {
                 final isSelected = _durationDays == days;
                 return GestureDetector(
                   onTap: () => setState(() => _durationDays = days),
                   child: Container(
-                    margin: EdgeInsets.only(bottom: 8),
-                    padding: EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -278,7 +363,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                           days == -1 ? Icons.all_inclusive_rounded : Icons.calendar_today_rounded,
                           color: isSelected ? AppColors.primary : AppColors.textSecondary,
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Text(
                           days == -1 ? 'Until I stop' : '$days days',
                           style: TextStyle(
@@ -286,14 +371,14 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                             color: isSelected ? AppColors.primary : AppColors.textPrimary,
                           ),
                         ),
-                        Spacer(),
-                        if (isSelected) Icon(Icons.check_circle_rounded, color: AppColors.primary),
+                        const Spacer(),
+                        if (isSelected) const Icon(Icons.check_circle_rounded, color: AppColors.primary),
                       ],
                     ),
                   ),
                 );
               }),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
 
               // Reminder Toggles
               _buildToggleCard(
@@ -303,7 +388,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                 value: _enableReminder,
                 onChanged: (val) => setState(() => _enableReminder = val),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _buildToggleCard(
                 icon: Icons.shopping_bag_outlined,
                 title: 'Refill Reminder',
@@ -312,10 +397,10 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                 onChanged: (val) => setState(() => _enableBuyReminder = val),
               ),
               if (_enableBuyReminder) ...[
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextField(
                   keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Current Stock (Tablets)',
                     prefixIcon: Icon(Icons.inventory_2_outlined),
                   ),
@@ -323,7 +408,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                   onChanged: (val) => setState(() => _stockRemaining = int.tryParse(val) ?? 10),
                 ),
               ],
-              SizedBox(height: 48),
+              const SizedBox(height: 48),
 
               // Save Button
               Container(
@@ -336,27 +421,36 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
                     BoxShadow(
                       color: AppColors.primary.withOpacity(0.4),
                       blurRadius: 16,
-                      offset: Offset(0, 6),
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
                 child: ElevatedButton(
-                  onPressed: _name.isNotEmpty ? _save : null,
+                  onPressed: (_name.isNotEmpty && !_isSaving) ? _save : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.check_circle_outline_rounded),
-                      SizedBox(width: 8),
-                      Text('Save Changes'),
-                    ],
-                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_circle_outline_rounded),
+                            SizedBox(width: 8),
+                            Text('Save Changes'),
+                          ],
+                        ),
                 ),
               ),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -387,7 +481,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -396,27 +490,27 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(10),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: AppColors.primary),
           ),
-          SizedBox(width: 16),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w600)),
-                Text(subtitle, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
         ],
       ),

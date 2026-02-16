@@ -28,6 +28,11 @@ class AppColors {
   static const Color divider = Color(0xFFE5E7EB);
   static const Color border = Color(0xFFD1D5DB);
 
+  // Focus Theme
+  static const Color focusPrimary = Color(0xFF8B5CF6);
+  static const Color focusLight = Color(0xFFEDE9FE);
+  static const Color focusAccent = Color(0xFF7C3AED);
+
   // Period Theme (Elegant Rose)
   static const Color periodPrimary = Color(0xFFE91E63);
   static const Color periodLight = Color(0xFFFCE4EC);
@@ -57,5 +62,11 @@ class AppColors {
     colors: [Color(0xFFF8F9FA), Color(0xFFE8F5E9)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
+  );
+
+  static const LinearGradient focusGradient = LinearGradient(
+    colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
   );
 }

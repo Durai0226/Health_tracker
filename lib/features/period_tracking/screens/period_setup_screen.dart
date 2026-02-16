@@ -13,7 +13,7 @@ class PeriodSetupScreen extends StatefulWidget {
 }
 
 class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
-  DateTime _lastPeriodDate = DateTime.now().subtract(Duration(days: 14));
+  DateTime _lastPeriodDate = DateTime.now().subtract(const Duration(days: 14));
   int _cycleLength = 28;
   int _periodDuration = 5;
 
@@ -21,12 +21,12 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
     final date = await showDatePicker(
       context: context,
       initialDate: _lastPeriodDate,
-      firstDate: DateTime.now().subtract(Duration(days: 90)),
+      firstDate: DateTime.now().subtract(const Duration(days: 90)),
       lastDate: DateTime.now(),
       builder: (context, child) {
         return Theme(
           data: ThemeData.light().copyWith(
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: AppColors.periodPrimary,
               onPrimary: Colors.white,
             ),
@@ -62,10 +62,10 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: AppColors.periodPrimary),
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.periodPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text("Setup", style: TextStyle(color: AppColors.periodPrimary)),
+        title: const Text("Setup", style: TextStyle(color: AppColors.periodPrimary)),
       ),
       body: SafeArea(
         child: Padding(
@@ -79,14 +79,14 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
                   color: AppColors.periodPrimary,
                 ),
               ),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
               // Last Period Card
               _buildSettingCard(
                 title: "Last period started",
                 child: GestureDetector(
                   onTap: _pickDate,
                   child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     decoration: BoxDecoration(
                       color: AppColors.periodLight,
                       borderRadius: BorderRadius.circular(12),
@@ -94,20 +94,20 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_today_rounded, color: AppColors.periodPrimary),
-                        SizedBox(width: 16),
+                        const Icon(Icons.calendar_today_rounded, color: AppColors.periodPrimary),
+                        const SizedBox(width: 16),
                         Text(
                           "${_lastPeriodDate.day}/${_lastPeriodDate.month}/${_lastPeriodDate.year}",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                         ),
-                        Spacer(),
-                        Icon(Icons.edit_rounded, color: AppColors.periodPrimary, size: 20),
+                        const Spacer(),
+                        const Icon(Icons.edit_rounded, color: AppColors.periodPrimary, size: 20),
                       ],
                     ),
                   ),
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               // Cycle Length
               _buildSettingCard(
                 title: "Average cycle length",
@@ -122,7 +122,7 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
                   },
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               // Period Duration
               _buildSettingCard(
                 title: "Period duration",
@@ -137,7 +137,7 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
                   },
                 ),
               ),
-              Spacer(),
+              const Spacer(),
               // Save Button
               Container(
                 width: double.infinity,
@@ -149,7 +149,7 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
                     BoxShadow(
                       color: AppColors.periodPrimary.withOpacity(0.4),
                       blurRadius: 16,
-                      offset: Offset(0, 6),
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
@@ -159,7 +159,7 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                   ),
-                  child: Text("Save & Continue"),
+                  child: const Text("Save & Continue"),
                 ),
               ),
             ],
@@ -171,7 +171,7 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
 
   Widget _buildSettingCard({required String title, required Widget child}) {
     return Container(
-      padding: EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -179,7 +179,7 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -188,13 +188,13 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
         children: [
           Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               fontWeight: FontWeight.w600,
               color: AppColors.textSecondary,
               fontSize: 14,
             ),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -218,14 +218,14 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
               color: AppColors.periodLight,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.remove_rounded, color: AppColors.periodPrimary),
+            child: const Icon(Icons.remove_rounded, color: AppColors.periodPrimary),
           ),
         ),
         Expanded(
           child: Text(
             "$value $unit",
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
         ),
         GestureDetector(
@@ -237,7 +237,7 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
               color: AppColors.periodLight,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.add_rounded, color: AppColors.periodPrimary),
+            child: const Icon(Icons.add_rounded, color: AppColors.periodPrimary),
           ),
         ),
       ],

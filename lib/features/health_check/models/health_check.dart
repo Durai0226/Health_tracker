@@ -55,4 +55,24 @@ class HealthCheck extends HiveObject {
       readings: readings ?? this.readings,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'type': type,
+    'title': title,
+    'reminderTime': reminderTime.toIso8601String(),
+    'frequency': frequency,
+    'enableReminder': enableReminder,
+    'readings': readings?.map((r) => r.toIso8601String()).toList(),
+  };
+
+  factory HealthCheck.fromJson(Map<String, dynamic> json) => HealthCheck(
+    id: json['id'] ?? '',
+    type: json['type'] ?? 'sugar',
+    title: json['title'] ?? '',
+    reminderTime: DateTime.parse(json['reminderTime']),
+    frequency: json['frequency'] ?? 'Once a day',
+    enableReminder: json['enableReminder'] ?? true,
+    readings: (json['readings'] as List<dynamic>?)?.map((r) => DateTime.parse(r as String)).toList(),
+  );
 }

@@ -77,4 +77,26 @@ class FitnessReminder extends HiveObject {
         return '💪';
     }
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'type': type,
+    'title': title,
+    'reminderTime': reminderTime.toIso8601String(),
+    'frequency': frequency,
+    'durationMinutes': durationMinutes,
+    'isEnabled': isEnabled,
+    'customDays': customDays,
+  };
+
+  factory FitnessReminder.fromJson(Map<String, dynamic> json) => FitnessReminder(
+    id: json['id'] ?? '',
+    type: json['type'] ?? 'walk',
+    title: json['title'] ?? '',
+    reminderTime: DateTime.parse(json['reminderTime']),
+    frequency: json['frequency'] ?? 'daily',
+    durationMinutes: json['durationMinutes'] ?? 30,
+    isEnabled: json['isEnabled'] ?? true,
+    customDays: (json['customDays'] as List<dynamic>?)?.cast<int>(),
+  );
 }
