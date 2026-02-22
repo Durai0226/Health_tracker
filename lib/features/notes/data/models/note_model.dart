@@ -20,33 +20,24 @@ class NoteModel extends HiveObject {
   final DateTime updatedAt;
 
   @HiveField(5)
-  final String? folderId;
-
-  @HiveField(6)
   final List<String> tagIds;
 
-  @HiveField(7)
+  @HiveField(6)
   final bool isPinned;
 
-  @HiveField(8)
+  @HiveField(7)
   final bool isArchived;
 
+  @HiveField(8)
+  final bool isDeleted;
+
   @HiveField(9)
-  final bool isDeleted; // Soft delete
+  final String? color;
 
   @HiveField(10)
-  final List<String> mediaUrls;
-
-  @HiveField(11)
-  final String? color; // Hex color string
-
-  @HiveField(12)
-  final bool isLocked;
-
-  @HiveField(13)
   final bool isSynced;
 
-  @HiveField(14)
+  @HiveField(11)
   final String? reminderId;
 
   NoteModel({
@@ -55,14 +46,11 @@ class NoteModel extends HiveObject {
     required this.content,
     required this.createdAt,
     required this.updatedAt,
-    this.folderId,
     this.tagIds = const [],
     this.isPinned = false,
     this.isArchived = false,
     this.isDeleted = false,
-    this.mediaUrls = const [],
     this.color,
-    this.isLocked = false,
     this.isSynced = false,
     this.reminderId,
   });
@@ -73,14 +61,11 @@ class NoteModel extends HiveObject {
     String? content,
     DateTime? createdAt,
     DateTime? updatedAt,
-    String? folderId,
     List<String>? tagIds,
     bool? isPinned,
     bool? isArchived,
     bool? isDeleted,
-    List<String>? mediaUrls,
     String? color,
-    bool? isLocked,
     bool? isSynced,
     String? reminderId,
   }) {
@@ -90,14 +75,11 @@ class NoteModel extends HiveObject {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      folderId: folderId ?? this.folderId,
       tagIds: tagIds ?? this.tagIds,
       isPinned: isPinned ?? this.isPinned,
       isArchived: isArchived ?? this.isArchived,
       isDeleted: isDeleted ?? this.isDeleted,
-      mediaUrls: mediaUrls ?? this.mediaUrls,
       color: color ?? this.color,
-      isLocked: isLocked ?? this.isLocked,
       isSynced: isSynced ?? this.isSynced,
       reminderId: reminderId ?? this.reminderId,
     );
@@ -109,14 +91,11 @@ class NoteModel extends HiveObject {
     'content': content,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
-    'folderId': folderId,
     'tagIds': tagIds,
     'isPinned': isPinned,
     'isArchived': isArchived,
     'isDeleted': isDeleted,
-    'mediaUrls': mediaUrls,
     'color': color,
-    'isLocked': isLocked,
     'isSynced': isSynced,
     'reminderId': reminderId,
   };
@@ -127,14 +106,11 @@ class NoteModel extends HiveObject {
     content: json['content'] ?? '',
     createdAt: DateTime.parse(json['createdAt']),
     updatedAt: DateTime.parse(json['updatedAt']),
-    folderId: json['folderId'],
     tagIds: List<String>.from(json['tagIds'] ?? []),
     isPinned: json['isPinned'] ?? false,
     isArchived: json['isArchived'] ?? false,
     isDeleted: json['isDeleted'] ?? false,
-    mediaUrls: List<String>.from(json['mediaUrls'] ?? []),
     color: json['color'],
-    isLocked: json['isLocked'] ?? false,
     isSynced: json['isSynced'] ?? false,
     reminderId: json['reminderId'],
   );

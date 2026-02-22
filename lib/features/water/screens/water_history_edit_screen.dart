@@ -5,6 +5,7 @@ import '../models/beverage_type.dart';
 import '../models/enhanced_water_log.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
+import '../../../core/widgets/common_widgets.dart';
 
 /// Screen for editing water history - add/edit/delete entries for any date
 class WaterHistoryEditScreen extends StatefulWidget {
@@ -29,8 +30,13 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     await WaterService.init();
-    _dayData = WaterService.getDataForDate(widget.date);
-    setState(() => _isLoading = false);
+    final dateKey = '${widget.date.year}-${widget.date.month.toString().padLeft(2, '0')}-${widget.date.day.toString().padLeft(2, '0')}';
+    _dayData = WaterService.getDataForDate(widget.date) ?? DailyWaterData(
+      id: dateKey,
+      date: widget.date,
+      dailyGoalMl: WaterService.getDailyGoal(),
+    );
+    if (mounted) setState(() => _isLoading = false);
   }
 
   String _formatDate(DateTime date) {
@@ -47,9 +53,11 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => _AddEditEntrySheet(
         date: widget.date,
-        onSaved: () {
-          _loadData();
-          Navigator.pop(context);
+        onSaved: () async {
+          await _loadData();
+          if (context.mounted) {
+            Navigator.pop(context);
+          }
         },
       ),
     );
@@ -63,9 +71,11 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
       builder: (context) => _AddEditEntrySheet(
         date: widget.date,
         existingLog: log,
-        onSaved: () {
-          _loadData();
-          Navigator.pop(context);
+        onSaved: () async {
+          await _loadData();
+          if (context.mounted) {
+            Navigator.pop(context);
+          }
         },
       ),
     );
@@ -89,10 +99,10 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
         ),
         title: const Text('Edit History'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
+          CommonButton(
+            text: 'Add Entry',
+            variant: ButtonVariant.secondary,
             onPressed: _showAddEntryDialog,
-            tooltip: 'Add Entry',
           ),
         ],
       ),
@@ -112,11 +122,12 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                 ],
               ),
             ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: CommonButton(
+        text: 'Add Entry',
+        variant: ButtonVariant.primary,
         onPressed: _showAddEntryDialog,
         backgroundColor: AppColors.info,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add Entry', style: TextStyle(color: Colors.white)),
+        icon: Icons.add,
       ),
     );
   }
@@ -386,22 +397,44 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
             title: const Text('Delete Entry'),
             content: Text('Delete ${log.amountMl}ml of ${log.beverageName}?'),
             actions: [
-              TextButton(
+              CommonButton(
+                text: 'Cancel',
+                variant: ButtonVariant.secondary,
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
               ),
-              TextButton(
+              CommonButton(
+                text: 'Delete',
+                variant: ButtonVariant.danger,
                 onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                child: const Text('Delete'),
               ),
             ],
           ),
         );
       },
       onDismissed: (direction) async {
-        await WaterService.removeWaterLogForDate(widget.date, log.id);
-        await _loadData();
+        try {
+          await WaterService.removeWaterLogForDate(widget.date, log.id);
+          await _loadData();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Entry deleted successfully'),
+                backgroundColor: AppColors.success,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error deleting entry: $e'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+            await _loadData();
+          }
+        }
       },
       child: InkWell(
         onTap: () => _showEditEntryDialog(log),
@@ -529,7 +562,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
 class _AddEditEntrySheet extends StatefulWidget {
   final DateTime date;
   final EnhancedWaterLog? existingLog;
-  final VoidCallback onSaved;
+  final Future<void> Function() onSaved;
 
   const _AddEditEntrySheet({
     required this.date,
@@ -558,6 +591,10 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
     _beverages = WaterService.getAllBeverages();
     _containers = WaterService.getAllContainers();
     
+    if (_beverages.isEmpty) {
+      _beverages = BeverageType.defaultBeverages;
+    }
+    
     if (widget.existingLog != null) {
       final log = widget.existingLog!;
       _selectedBeverage = _beverages.firstWhere(
@@ -567,11 +604,14 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
       _amountController = TextEditingController(text: log.amountMl.toString());
       _noteController = TextEditingController(text: log.note ?? '');
       _selectedTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
-      if (log.containerId != null) {
-        _selectedContainer = _containers.firstWhere(
-          (c) => c.id == log.containerId,
-          orElse: () => _containers.first,
-        );
+      if (log.containerId != null && _containers.isNotEmpty) {
+        try {
+          _selectedContainer = _containers.firstWhere(
+            (c) => c.id == log.containerId,
+          );
+        } catch (e) {
+          _selectedContainer = null;
+        }
       }
     } else {
       _selectedBeverage = _beverages.firstWhere(
@@ -593,12 +633,26 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
   Future<void> _save() async {
     final amount = int.tryParse(_amountController.text) ?? 0;
     if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid amount'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid amount'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (amount > 5000) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Amount cannot exceed 5000ml'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
       return;
     }
 
@@ -614,7 +668,6 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
       );
 
       if (widget.existingLog != null) {
-        // Update existing entry
         await WaterService.updateWaterLogForDate(
           date: widget.date,
           logId: widget.existingLog!.id,
@@ -624,8 +677,16 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
           time: time,
           note: _noteController.text.isNotEmpty ? _noteController.text : null,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Entry updated successfully'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       } else {
-        // Add new entry
         await WaterService.addWaterLogForDate(
           date: widget.date,
           amountMl: amount,
@@ -634,15 +695,26 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
           time: time,
           note: _noteController.text.isNotEmpty ? _noteController.text : null,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Entry added successfully'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
 
-      widget.onSaved();
+      await widget.onSaved();
     } catch (e) {
+      debugPrint('Error saving water entry: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -913,31 +985,12 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
             SizedBox(
               width: double.infinity,
               height: 56,
-              child: ElevatedButton(
+              child: CommonButton(
+                text: widget.existingLog != null ? 'Update Entry' : 'Add Entry',
+                variant: ButtonVariant.primary,
+                backgroundColor: AppColors.info,
+                isLoading: _isSaving,
                 onPressed: _isSaving ? null : _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.info,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        ),
-                      )
-                    : Text(
-                        widget.existingLog != null ? 'Update Entry' : 'Add Entry',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
               ),
             ),
           ],

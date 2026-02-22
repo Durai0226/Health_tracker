@@ -7,15 +7,25 @@ class FolderCard extends StatelessWidget {
 
   const FolderCard({super.key, required this.folder});
 
+  Color _getFolderColor() {
+    if (folder.color == null) {
+      return AppColors.primary.withValues(alpha: 0.1);
+    }
+    try {
+      final colorStr = folder.color!.replaceAll('#', '');
+      return Color(int.parse('0xff$colorStr'));
+    } catch (_) {
+      return AppColors.primary.withValues(alpha: 0.1);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 100,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: folder.color != null 
-            ? Color(int.parse(folder.color!.replaceAll('#', '0xff'))) 
-            : AppColors.primary.withValues(alpha: 0.1),
+        color: _getFolderColor(),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(

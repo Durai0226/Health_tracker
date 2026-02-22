@@ -1,416 +1,471 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
-import '../models/exam_type.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../services/exam_prep_service.dart';
+import '../models/exam_model.dart';
+import '../models/subject_model.dart';
 
 class AddExamScreen extends StatefulWidget {
-  final ExamType? existingExam;
-  
-  const AddExamScreen({super.key, this.existingExam});
+  final Exam? exam;
+
+  const AddExamScreen({super.key, this.exam});
 
   @override
   State<AddExamScreen> createState() => _AddExamScreenState();
 }
 
 class _AddExamScreenState extends State<AddExamScreen> {
+  final ExamPrepService _examPrepService = ExamPrepService();
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
-  ExamCategory _selectedCategory = ExamCategory.banking;
-  String? _selectedExamName;
-  DateTime? _examDate;
-  List<String> _subjects = [];
-  final _subjectController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _totalMarksController = TextEditingController();
+  final _passingMarksController = TextEditingController();
+  final _targetStudyMinutesController = TextEditingController();
 
-  bool get isEditing => widget.existingExam != null;
+  String? _selectedSubjectId;
+  ExamType _selectedExamType = ExamType.test;
+  ExamPriority _selectedPriority = ExamPriority.medium;
+  DateTime _examDate = DateTime.now().add(const Duration(days: 7));
+  TimeOfDay _examTime = const TimeOfDay(hour: 9, minute: 0);
+  bool _reminderEnabled = true;
+  List<int> _reminderDays = [7, 3, 1];
+
+  bool get _isEditing => widget.exam != null;
 
   @override
   void initState() {
     super.initState();
-    if (widget.existingExam != null) {
-      _nameController.text = widget.existingExam!.name;
-      _descriptionController.text = widget.existingExam!.description ?? '';
-      _selectedCategory = widget.existingExam!.category;
-      _examDate = widget.existingExam!.examDate;
-      _subjects = List.from(widget.existingExam!.subjects);
+    if (_isEditing) {
+      _loadExamData();
     }
+  }
+
+  void _loadExamData() {
+    final exam = widget.exam!;
+    _titleController.text = exam.title;
+    _descriptionController.text = exam.description ?? '';
+    _locationController.text = exam.location ?? '';
+    _totalMarksController.text = exam.totalMarks?.toString() ?? '';
+    _passingMarksController.text = exam.passingMarks?.toString() ?? '';
+    _targetStudyMinutesController.text = exam.targetStudyMinutes.toString();
+    _selectedSubjectId = exam.subjectId;
+    _selectedExamType = exam.examType;
+    _selectedPriority = exam.priority;
+    _examDate = exam.examDate;
+    _examTime = TimeOfDay.fromDateTime(exam.examDate);
+    _reminderEnabled = exam.reminderEnabled;
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _titleController.dispose();
     _descriptionController.dispose();
-    _subjectController.dispose();
+    _locationController.dispose();
+    _totalMarksController.dispose();
+    _passingMarksController.dispose();
+    _targetStudyMinutesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final subjects = _examPrepService.getActiveSubjects();
+
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Exam' : 'Add Exam'),
+        title: Text(_isEditing ? 'Edit Exam' : 'Add Exam'),
         actions: [
-          if (isEditing)
+          if (_isEditing)
             IconButton(
+              icon: const Icon(Icons.delete_outline),
               onPressed: _deleteExam,
-              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
             ),
         ],
       ),
       body: Form(
         key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildCategorySelector(),
-              const SizedBox(height: 24),
-              _buildPopularExams(),
-              const SizedBox(height: 24),
-              _buildExamNameField(),
-              const SizedBox(height: 20),
-              _buildExamDatePicker(),
-              const SizedBox(height: 20),
-              _buildDescriptionField(),
-              const SizedBox(height: 24),
-              _buildSubjectsSection(),
-              const SizedBox(height: 32),
-              _buildSaveButton(),
-              const SizedBox(height: 100),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategorySelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Exam Category',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: ExamCategory.values.map((category) {
-            final isSelected = _selectedCategory == category;
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedCategory = category;
-                  _selectedExamName = null;
-                });
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Title
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                labelText: 'Exam Title *',
+                hintText: 'e.g., Midterm Mathematics',
+                prefixIcon: Icon(Icons.title),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter a title';
+                }
+                return null;
               },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelected ? category.color : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected ? category.color : Colors.grey.shade200,
-                  ),
+            ),
+            const SizedBox(height: 16),
+
+            // Subject Selection
+            DropdownButtonFormField<String>(
+              value: _selectedSubjectId,
+              decoration: const InputDecoration(
+                labelText: 'Subject *',
+                prefixIcon: Icon(Icons.book),
+              ),
+              items: [
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('Select a subject'),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(category.emoji, style: const TextStyle(fontSize: 16)),
-                    const SizedBox(width: 6),
-                    Text(
-                      category.name,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                ...subjects.map((subject) => DropdownMenuItem(
+                      value: subject.id,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Color(int.parse(
+                                  subject.colorHex.replaceAll('#', '0xFF'))),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(subject.name),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPopularExams() {
-    final popularExams = _selectedCategory.popularExams;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Popular ${_selectedCategory.name} Exams',
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: popularExams.map((exam) {
-            final isSelected = _selectedExamName == exam;
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedExamName = exam;
-                  _nameController.text = exam;
-                });
+                    )),
+              ],
+              onChanged: (value) => setState(() => _selectedSubjectId = value),
+              validator: (value) {
+                if (value == null) {
+                  return 'Please select a subject';
+                }
+                return null;
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                      ? _selectedCategory.color.withOpacity(0.15) 
-                      : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                  border: isSelected 
-                      ? Border.all(color: _selectedCategory.color)
-                      : null,
-                ),
-                child: Text(
-                  exam,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? _selectedCategory.color : AppColors.textPrimary,
-                  ),
+            ),
+            if (subjects.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: CommonButton(
+                  text: 'Create a subject first',
+                  variant: ButtonVariant.secondary,
+                  onPressed: _createQuickSubject,
                 ),
               ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
+            const SizedBox(height: 16),
 
-  Widget _buildExamNameField() {
-    return TextFormField(
-      controller: _nameController,
-      decoration: const InputDecoration(
-        labelText: 'Exam Name',
-        hintText: 'e.g., IBPS PO 2024',
-      ),
-      textCapitalization: TextCapitalization.words,
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter exam name';
-        }
-        return null;
-      },
-    );
-  }
-
-  Widget _buildExamDatePicker() {
-    return GestureDetector(
-      onTap: () async {
-        final date = await showDatePicker(
-          context: context,
-          initialDate: _examDate ?? DateTime.now().add(const Duration(days: 90)),
-          firstDate: DateTime.now(),
-          lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-        );
-        if (date != null) {
-          setState(() => _examDate = date);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.calendar_today_rounded,
-              color: _examDate != null ? AppColors.primary : AppColors.textSecondary,
+            // Exam Type
+            Text('Exam Type', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: ExamType.values.map((type) {
+                final isSelected = _selectedExamType == type;
+                return ChoiceChip(
+                  label: Text('${type.emoji} ${type.displayName}'),
+                  selected: isSelected,
+                  onSelected: (_) => setState(() => _selectedExamType = type),
+                );
+              }).toList(),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Exam Date',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
+            const SizedBox(height: 16),
+
+            // Date & Time
+            Text('Date & Time', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _selectDate,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.calendar_today),
+                      ),
+                      child: Text(DateFormat('EEE, MMM dd, yyyy').format(_examDate)),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _examDate != null
-                        ? DateFormat('EEEE, MMMM d, yyyy').format(_examDate!)
-                        : 'Select exam date (optional)',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: _examDate != null ? FontWeight.w600 : FontWeight.normal,
-                      color: _examDate != null ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: InkWell(
+                    onTap: _selectTime,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.access_time),
+                      ),
+                      child: Text(_examTime.format(context)),
                     ),
                   ),
-                ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Description
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Additional notes about the exam',
+                prefixIcon: Icon(Icons.description),
+              ),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 16),
+
+            // Location
+            TextFormField(
+              controller: _locationController,
+              decoration: const InputDecoration(
+                labelText: 'Location',
+                hintText: 'e.g., Room 101, Building A',
+                prefixIcon: Icon(Icons.location_on),
               ),
             ),
-            if (_examDate != null)
-              GestureDetector(
-                onTap: () => setState(() => _examDate = null),
-                child: const Icon(Icons.close_rounded, size: 20),
+            const SizedBox(height: 16),
+
+            // Marks
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _totalMarksController,
+                    decoration: const InputDecoration(
+                      labelText: 'Total Marks',
+                      prefixIcon: Icon(Icons.grade),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    controller: _passingMarksController,
+                    decoration: const InputDecoration(
+                      labelText: 'Passing Marks',
+                      prefixIcon: Icon(Icons.check_circle_outline),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Priority
+            Text('Priority', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            SegmentedButton<ExamPriority>(
+              showSelectedIcon: false,
+              segments: ExamPriority.values.map((priority) {
+                return ButtonSegment(
+                  value: priority,
+                  label: Text(priority.displayName),
+                );
+              }).toList(),
+              selected: {_selectedPriority},
+              onSelectionChanged: (selected) {
+                setState(() => _selectedPriority = selected.first);
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Target Study Time
+            TextFormField(
+              controller: _targetStudyMinutesController,
+              decoration: const InputDecoration(
+                labelText: 'Target Study Time (minutes)',
+                hintText: 'e.g., 600 for 10 hours',
+                prefixIcon: Icon(Icons.timer),
               ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+
+            // Reminders
+            SwitchListTile(
+              title: const Text('Enable Reminders'),
+              subtitle: const Text('Get notified before the exam'),
+              value: _reminderEnabled,
+              onChanged: (value) => setState(() => _reminderEnabled = value),
+            ),
+            if (_reminderEnabled)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Wrap(
+                  spacing: 8,
+                  children: [1, 3, 7, 14].map((days) {
+                    final isSelected = _reminderDays.contains(days);
+                    return FilterChip(
+                      label: Text('$days day${days > 1 ? 's' : ''} before'),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _reminderDays.add(days);
+                          } else {
+                            _reminderDays.remove(days);
+                          }
+                          _reminderDays.sort();
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            const SizedBox(height: 32),
+
+            // Save Button
+            CommonButton(
+              text: _isEditing ? 'Update Exam' : 'Create Exam',
+              variant: ButtonVariant.primary,
+              onPressed: _saveExam,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDescriptionField() {
-    return TextFormField(
-      controller: _descriptionController,
-      decoration: const InputDecoration(
-        labelText: 'Description (Optional)',
-        hintText: 'Add notes about this exam...',
-      ),
-      maxLines: 3,
+  Future<void> _selectDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _examDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-  }
-
-  Widget _buildSubjectsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Subjects',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _subjectController,
-                decoration: const InputDecoration(
-                  hintText: 'Add subject...',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                textCapitalization: TextCapitalization.words,
-                onSubmitted: (_) => _addSubject(),
-              ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: _addSubject,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _subjects.map((subject) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    subject,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => setState(() => _subjects.remove(subject)),
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 16,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  void _addSubject() {
-    final subject = _subjectController.text.trim();
-    if (subject.isNotEmpty && !_subjects.contains(subject)) {
-      setState(() {
-        _subjects.add(subject);
-        _subjectController.clear();
-      });
+    if (picked != null) {
+      setState(() => _examDate = picked);
     }
   }
 
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _saveExam,
-        child: Text(isEditing ? 'Update Exam' : 'Add Exam'),
-      ),
+  Future<void> _selectTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _examTime,
+    );
+    if (picked != null) {
+      setState(() => _examTime = picked);
+    }
+  }
+
+  void _createQuickSubject() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final nameController = TextEditingController();
+        return AlertDialog(
+          title: const Text('Create Subject'),
+          content: TextField(
+            controller: nameController,
+            decoration: const InputDecoration(
+              labelText: 'Subject Name',
+              hintText: 'e.g., Mathematics',
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            CommonButton(
+              text: 'Cancel',
+              variant: ButtonVariant.secondary,
+              onPressed: () => Navigator.pop(context),
+            ),
+            CommonButton(
+              text: 'Create',
+              variant: ButtonVariant.primary,
+              onPressed: () async {
+                if (nameController.text.trim().isNotEmpty) {
+                  final subject = await _examPrepService.createSubject(
+                    Subject(
+                      id: const Uuid().v4(),
+                      name: nameController.text.trim(),
+                    ),
+                  );
+                  setState(() => _selectedSubjectId = subject.id);
+                  if (mounted) Navigator.pop(context);
+                }
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
-  void _saveExam() {
-    if (_formKey.currentState!.validate()) {
-      final service = ExamPrepService();
-      final exam = ExamType(
-        id: widget.existingExam?.id ?? service.generateId(),
-        name: _nameController.text,
-        category: _selectedCategory,
-        examDate: _examDate,
-        description: _descriptionController.text.isNotEmpty 
-            ? _descriptionController.text 
-            : null,
-        subjects: _subjects,
-        createdAt: widget.existingExam?.createdAt ?? DateTime.now(),
+  Future<void> _saveExam() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedSubjectId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a subject')),
       );
+      return;
+    }
 
-      if (isEditing) {
-        service.updateExam(exam);
+    final examDateTime = DateTime(
+      _examDate.year,
+      _examDate.month,
+      _examDate.day,
+      _examTime.hour,
+      _examTime.minute,
+    );
+
+    List<DateTime> reminderTimes = [];
+    if (_reminderEnabled) {
+      for (final days in _reminderDays) {
+        reminderTimes.add(examDateTime.subtract(Duration(days: days)));
+      }
+    }
+
+    final exam = Exam(
+      id: widget.exam?.id ?? const Uuid().v4(),
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim().isEmpty
+          ? null
+          : _descriptionController.text.trim(),
+      subjectId: _selectedSubjectId!,
+      examType: _selectedExamType,
+      examDate: examDateTime,
+      location: _locationController.text.trim().isEmpty
+          ? null
+          : _locationController.text.trim(),
+      priority: _selectedPriority,
+      totalMarks: double.tryParse(_totalMarksController.text),
+      passingMarks: double.tryParse(_passingMarksController.text),
+      targetStudyMinutes:
+          int.tryParse(_targetStudyMinutesController.text) ?? 0,
+      reminderEnabled: _reminderEnabled,
+      reminderTimes: reminderTimes,
+      status: widget.exam?.status ?? ExamStatus.upcoming,
+      actualStudyMinutes: widget.exam?.actualStudyMinutes ?? 0,
+      topicIds: widget.exam?.topicIds ?? [],
+    );
+
+    try {
+      if (_isEditing) {
+        await _examPrepService.updateExam(exam);
       } else {
-        service.addExam(exam);
+        await _examPrepService.createExam(exam);
       }
 
-      Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEditing ? 'Exam updated!' : 'Exam created!'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     }
   }
 
@@ -418,23 +473,28 @@ class _AddExamScreenState extends State<AddExamScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Exam?'),
-        content: const Text(
-          'This will delete all study sessions, mock tests, and progress for this exam.',
-        ),
+        title: const Text('Delete Exam'),
+        content: Text(
+            'Are you sure you want to delete "${widget.exam!.title}"? This action cannot be undone.'),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Cancel',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
-          TextButton(
-            onPressed: () {
-              ExamPrepService().deleteExam(widget.existingExam!.id);
-              Navigator.pop(context);
-              Navigator.pop(context);
+          CommonButton(
+            text: 'Delete',
+            variant: ButtonVariant.danger,
+            onPressed: () async {
+              await _examPrepService.deleteExam(widget.exam!.id);
+              if (mounted) {
+                Navigator.pop(context);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Exam deleted')),
+                );
+              }
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
           ),
         ],
       ),

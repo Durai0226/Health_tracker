@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/storage_service.dart';
-import '../../medication/screens/add_medicine_flow.dart';
-import '../../health_check/screens/add_health_check_screen.dart';
+import '../../medication/screens/enhanced_medicine_dashboard.dart';
+import '../../medication/services/medicine_storage_service.dart';
 import '../../fitness/screens/add_fitness_screen.dart';
 import '../../../features/settings/screens/notification_settings_screen.dart';
 import 'reminders_screen.dart';
@@ -25,16 +25,14 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
   }
 
   void _loadStats() {
-    final medicines = StorageService.getAllMedicines();
-    final healthChecks = StorageService.getAllHealthChecks();
+    final medicines = MedicineStorageService.getAllMedicines();
     final fitnessReminders = StorageService.getAllFitnessReminders();
     final waterReminder = StorageService.getWaterReminder();
     final periodReminder = StorageService.getPeriodReminder();
     final reminders = StorageService.getAllReminders();
 
-    int total = medicines.length + healthChecks.length + fitnessReminders.length + reminders.length;
-    int active = medicines.where((m) => m.enableReminder).length +
-        healthChecks.where((h) => h.enableReminder).length +
+    int total = medicines.length + fitnessReminders.length + reminders.length;
+    int active = medicines.where((m) => m.reminderEnabled).length +
         fitnessReminders.where((f) => f.isEnabled).length +
         reminders.where((r) => !r.isCompleted).length;
 
@@ -104,26 +102,12 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
               icon: Icons.medication_rounded,
               title: 'Medicine Reminders',
               color: AppColors.primary,
-              count: StorageService.getAllMedicines().length,
-              activeCount: StorageService.getAllMedicines().where((m) => m.enableReminder).length,
+              count: MedicineStorageService.getAllMedicines().length,
+              activeCount: MedicineStorageService.getAllMedicines().where((m) => m.reminderEnabled).length,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AddMedicineFlow()),
-                ).then((_) => _loadStats());
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildReminderTypeCard(
-              icon: Icons.favorite_rounded,
-              title: 'Health Check Reminders',
-              color: AppColors.error,
-              count: StorageService.getAllHealthChecks().length,
-              activeCount: StorageService.getAllHealthChecks().where((h) => h.enableReminder).length,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddHealthCheckScreen()),
+                  MaterialPageRoute(builder: (_) => const EnhancedMedicineDashboard()),
                 ).then((_) => _loadStats());
               },
             ),

@@ -3,7 +3,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/analytics_service.dart';
 import '../models/medicine.dart';
-import 'add_medicine_flow.dart';
+import 'add_medicine_wizard.dart';
 import 'medicine_list_screen.dart';
 
 import '../../../core/services/vitavibe_service.dart';
@@ -698,7 +698,7 @@ class _MedicineDashboardScreenState extends State<MedicineDashboardScreen> {
   void _addMedicine() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddMedicineFlow()),
+      MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
     ).then((_) => _loadData());
   }
 }

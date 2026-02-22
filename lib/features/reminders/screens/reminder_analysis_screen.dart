@@ -160,19 +160,16 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
 
   Widget _buildStatisticsCard() {
     final medicines = StorageService.getAllMedicines();
-    final healthChecks = StorageService.getAllHealthChecks();
     final fitnessReminders = StorageService.getAllFitnessReminders();
     final waterReminder = StorageService.getWaterReminder();
     final periodReminder = StorageService.getPeriodReminder();
 
     final totalReminders = medicines.length + 
-                          healthChecks.length + 
                           fitnessReminders.length +
                           (waterReminder != null && waterReminder.isEnabled ? 1 : 0) +
                           (periodReminder != null && periodReminder.isEnabled ? 1 : 0);
 
     final activeReminders = medicines.where((m) => m.enableReminder).length +
-                           healthChecks.where((h) => h.enableReminder).length +
                            fitnessReminders.where((f) => f.isEnabled).length +
                            (waterReminder != null && waterReminder.isEnabled ? 1 : 0) +
                            (periodReminder != null && periodReminder.isEnabled ? 1 : 0);
@@ -244,7 +241,6 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
 
   Widget _buildReminderBreakdown() {
     final medicines = StorageService.getAllMedicines().where((m) => m.enableReminder).length;
-    final healthChecks = StorageService.getAllHealthChecks().where((h) => h.enableReminder).length;
     final fitness = StorageService.getAllFitnessReminders().where((f) => f.isEnabled).length;
     final water = StorageService.getWaterReminder()?.isEnabled == true ? 1 : 0;
     final period = StorageService.getPeriodReminder()?.isEnabled == true ? 1 : 0;
@@ -275,7 +271,6 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
           ),
           const SizedBox(height: 16),
           _buildBreakdownItem('Medicine', medicines, AppColors.primary, Icons.medication_rounded),
-          _buildBreakdownItem('Health Check', healthChecks, AppColors.error, Icons.favorite_rounded),
           _buildBreakdownItem('Fitness', fitness, AppColors.success, Icons.fitness_center_rounded),
           _buildBreakdownItem('Water', water, AppColors.info, Icons.water_drop_rounded),
           _buildBreakdownItem('Period', period, AppColors.periodPrimary, Icons.calendar_today_rounded),

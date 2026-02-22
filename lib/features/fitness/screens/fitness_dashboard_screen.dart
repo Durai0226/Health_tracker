@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/widgets/common_tab_widgets.dart';
 import '../models/fitness_reminder.dart';
 import '../models/fitness_activity.dart';
 import 'add_fitness_screen.dart';
@@ -83,8 +84,7 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen>
   }
 
   Future<List<FitnessActivity>> _loadActivities() async {
-    // For now, return empty list - would load from Hive
-    return [];
+    return StorageService.getAllFitnessActivities();
   }
 
   @override
@@ -100,23 +100,15 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen>
                 SliverToBoxAdapter(child: _buildQuickActions()),
                 SliverPersistentHeader(
                   pinned: true,
-                  delegate: _TabBarDelegate(
-                    TabBar(
+                  delegate: StickyTabBarDelegate(
+                    tabBar: CommonTabBar(
+                      tabs: const ['Reminders', 'Activity', 'Stats'],
                       controller: _tabController,
-                      labelColor: AppColors.primary,
-                      unselectedLabelColor: AppColors.textSecondary,
-                      indicatorColor: AppColors.primary,
-                      indicatorWeight: 3,
-                      tabs: const [
-                        Tab(text: 'Reminders'),
-                        Tab(text: 'Activity'),
-                        Tab(text: 'Stats'),
-                      ],
                     ),
                   ),
                 ),
               ],
-              body: TabBarView(
+              body: CommonTabView(
                 controller: _tabController,
                 children: [
                   _buildRemindersTab(),
@@ -981,29 +973,6 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen>
     );
     // Could navigate to active workout screen
   }
-}
-
-class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-
-  _TabBarDelegate(this.tabBar);
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: AppColors.background,
-      child: tabBar,
-    );
-  }
-
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-
-  @override
-  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) => false;
 }
 
 extension StringExtension on String {

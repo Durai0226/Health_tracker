@@ -592,3 +592,142 @@ class MedicineShapeAdapter extends TypeAdapter<MedicineShape> {
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
+
+class HealthCategoryAdapter extends TypeAdapter<HealthCategory> {
+  @override
+  final int typeId = 158;
+
+  @override
+  HealthCategory read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return HealthCategory.heart;
+      case 1:
+        return HealthCategory.kidney;
+      case 2:
+        return HealthCategory.lungs;
+      case 3:
+        return HealthCategory.liver;
+      case 4:
+        return HealthCategory.brain;
+      case 5:
+        return HealthCategory.stomach;
+      case 6:
+        return HealthCategory.skin;
+      case 7:
+        return HealthCategory.eye;
+      case 8:
+        return HealthCategory.ear;
+      case 9:
+        return HealthCategory.bone;
+      case 10:
+        return HealthCategory.blood;
+      case 11:
+        return HealthCategory.diabetes;
+      case 12:
+        return HealthCategory.thyroid;
+      case 13:
+        return HealthCategory.mentalHealth;
+      case 14:
+        return HealthCategory.reproductive;
+      case 15:
+        return HealthCategory.immune;
+      case 16:
+        return HealthCategory.cancer;
+      case 17:
+        return HealthCategory.pain;
+      case 18:
+        return HealthCategory.infection;
+      case 19:
+        return HealthCategory.allergy;
+      case 20:
+        return HealthCategory.vitamin;
+      case 21:
+        return HealthCategory.custom;
+      default:
+        return HealthCategory.heart;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, HealthCategory obj) {
+    switch (obj) {
+      case HealthCategory.heart:
+        writer.writeByte(0);
+        break;
+      case HealthCategory.kidney:
+        writer.writeByte(1);
+        break;
+      case HealthCategory.lungs:
+        writer.writeByte(2);
+        break;
+      case HealthCategory.liver:
+        writer.writeByte(3);
+        break;
+      case HealthCategory.brain:
+        writer.writeByte(4);
+        break;
+      case HealthCategory.stomach:
+        writer.writeByte(5);
+        break;
+      case HealthCategory.skin:
+        writer.writeByte(6);
+        break;
+      case HealthCategory.eye:
+        writer.writeByte(7);
+        break;
+      case HealthCategory.ear:
+        writer.writeByte(8);
+        break;
+      case HealthCategory.bone:
+        writer.writeByte(9);
+        break;
+      case HealthCategory.blood:
+        writer.writeByte(10);
+        break;
+      case HealthCategory.diabetes:
+        writer.writeByte(11);
+        break;
+      case HealthCategory.thyroid:
+        writer.writeByte(12);
+        break;
+      case HealthCategory.mentalHealth:
+        writer.writeByte(13);
+        break;
+      case HealthCategory.reproductive:
+        writer.writeByte(14);
+        break;
+      case HealthCategory.immune:
+        writer.writeByte(15);
+        break;
+      case HealthCategory.cancer:
+        writer.writeByte(16);
+        break;
+      case HealthCategory.pain:
+        writer.writeByte(17);
+        break;
+      case HealthCategory.infection:
+        writer.writeByte(18);
+        break;
+      case HealthCategory.allergy:
+        writer.writeByte(19);
+        break;
+      case HealthCategory.vitamin:
+        writer.writeByte(20);
+        break;
+      case HealthCategory.custom:
+        writer.writeByte(21);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HealthCategoryAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}

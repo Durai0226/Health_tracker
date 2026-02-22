@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../../features/medication/models/medicine.dart';
 import '../../features/period_tracking/models/period_data.dart';
-import '../../features/health_check/models/health_check.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/fitness/models/fitness_reminder.dart';
@@ -32,7 +31,6 @@ class CloudSyncService {
       await Future.wait([
         _syncMedicines(userId),
         _syncPeriodData(userId),
-        _syncHealthChecks(userId),
         _syncWaterIntake(userId),
         _syncFitnessReminders(userId),
       ]);
@@ -92,35 +90,6 @@ class CloudSyncService {
       }
     } catch (e) {
       debugPrint('Period data sync error: $e');
-    }
-  }
-
-  Future<void> _syncHealthChecks(String userId) async {
-    try {
-      final localChecks = StorageService.getAllHealthChecks();
-      final cloudRef = _firestore.collection('users').doc(userId).collection('health_checks');
-
-      // Use limit to prevent large data loads
-      final cloudSnapshot = await cloudRef.limit(500).get();
-      final cloudChecks = cloudSnapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return HealthCheck.fromJson(data);
-      }).toList();
-
-      if (cloudChecks.isEmpty && localChecks.isNotEmpty) {
-        debugPrint('Uploading ${localChecks.length} health checks to cloud');
-        for (final check in localChecks) {
-          await cloudRef.doc(check.id).set(check.toJson());
-        }
-      } else if (cloudChecks.isNotEmpty) {
-        debugPrint('Downloading ${cloudChecks.length} health checks from cloud');
-        for (final check in cloudChecks) {
-          await StorageService.addHealthCheck(check);
-        }
-      }
-    } catch (e) {
-      debugPrint('Health check sync error: $e');
     }
   }
 
@@ -200,7 +169,6 @@ class CloudSyncService {
 
       final localMedicines = StorageService.getAllMedicines();
       final localPeriod = StorageService.getPeriodData();
-      final localChecks = StorageService.getAllHealthChecks();
       final localWater = WaterService.getTodayData();
       final localReminders = StorageService.getAllFitnessReminders();
 
@@ -213,10 +181,6 @@ class CloudSyncService {
 
       if (localPeriod != null) {
         batch.set(userRef.collection('period').doc('current'), localPeriod.toJson());
-      }
-
-      for (final check in localChecks) {
-        batch.set(userRef.collection('health_checks').doc(check.id), check.toJson());
       }
 
       if (localWater.totalIntakeMl > 0 || localWater.logs.isNotEmpty) {
@@ -254,13 +218,6 @@ class CloudSyncService {
       final periodDoc = await userRef.collection('period').doc('current').get();
       if (periodDoc.exists && periodDoc.data() != null) {
         await StorageService.savePeriodData(PeriodData.fromJson(periodDoc.data()!));
-      }
-
-      final checksSnapshot = await userRef.collection('health_checks').limit(500).get();
-      for (final doc in checksSnapshot.docs) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        await StorageService.addHealthCheck(HealthCheck.fromJson(data));
       }
 
       // Limit water intake to recent entries (last 30 days worth)
@@ -310,9 +267,6 @@ class CloudSyncService {
 
       final periodDoc = await userRef.collection('period').doc('current').get();
       if (periodDoc.exists) return true;
-
-      final checksSnapshot = await userRef.collection('health_checks').limit(1).get();
-      if (checksSnapshot.docs.isNotEmpty) return true;
 
       final waterSnapshot = await userRef.collection('water_intake').limit(1).get();
       if (waterSnapshot.docs.isNotEmpty) return true;

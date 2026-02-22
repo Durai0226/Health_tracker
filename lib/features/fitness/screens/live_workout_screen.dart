@@ -940,11 +940,10 @@ class WorkoutSummaryScreen extends StatelessWidget {
        id: DateTime.now().toIso8601String(),
        type: workoutType,
        title: '${workoutType.substring(0,1).toUpperCase()}${workoutType.substring(1)} Workout',
-       description: 'Completed on ${DateTime.now().toString().split(' ')[0]}',
+       notes: 'Completed on ${DateTime.now().toString().split(' ')[0]}',
        startTime: DateTime.now().subtract(Duration(seconds: duration)),
        durationMinutes: (duration / 60).round(),
        caloriesBurned: calories,
-       emoji: _getWorkoutEmoji(workoutType),
        distanceKm: distance,
        isCompleted: true,
     );

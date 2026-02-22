@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/storage_service.dart';
-import '../../navigation/screens/main_navigation_screen.dart';
+import 'category_selection_screen.dart';
 
 class FeaturesScreen extends StatefulWidget {
   const FeaturesScreen({super.key});
@@ -291,7 +291,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> with TickerProviderStat
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const MainNavigationScreen(),
+          pageBuilder: (_, __, ___) => const CategorySelectionScreen(isOnboarding: true),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
           },

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_tab_widgets.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/focus_leaderboard.dart';
 import '../services/leaderboard_service.dart';
 
@@ -72,8 +74,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                       : TabBarView(
                           controller: _tabController,
                           children: [
-                            _buildGlobalLeaderboard(),
                             _buildFriendsLeaderboard(),
+                            _buildGlobalLeaderboard(),
                           ],
                         ),
                 ),
@@ -133,21 +135,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: TabBar(
+      child: CommonTabBar(
+        tabs: const ['Friends', 'Global'],
         controller: _tabController,
-        indicator: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        labelColor: Colors.white,
-        unselectedLabelColor: AppColors.textSecondary,
-        indicatorSize: TabBarIndicatorSize.tab,
-        dividerColor: Colors.transparent,
-        padding: const EdgeInsets.all(4),
-        tabs: const [
-          Tab(text: '🌍 Global'),
-          Tab(text: '👥 Friends'),
-        ],
       ),
     );
   }

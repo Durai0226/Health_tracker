@@ -67,6 +67,14 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
       }
     } catch (e) {
       debugPrint('Error saving profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving profile: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

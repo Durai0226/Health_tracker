@@ -1,555 +1,561 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/exam_prep_service.dart';
+import '../models/study_session_model.dart';
+import '../models/topic_model.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
-import '../models/study_subject.dart';
-import '../models/study_session.dart';
-import '../services/exam_prep_service.dart';
+import '../../../core/widgets/common_widgets.dart';
 
 class StudySessionScreen extends StatefulWidget {
-  final StudyType? initialStudyType;
-  
-  const StudySessionScreen({super.key, this.initialStudyType});
+  final String? subjectId;
+  final String? topicId;
+  final String? examId;
+
+  const StudySessionScreen({
+    super.key,
+    this.subjectId,
+    this.topicId,
+    this.examId,
+  });
 
   @override
   State<StudySessionScreen> createState() => _StudySessionScreenState();
 }
 
-class _StudySessionScreenState extends State<StudySessionScreen> {
-  final ExamPrepService _service = ExamPrepService();
+class _StudySessionScreenState extends State<StudySessionScreen>
+    with TickerProviderStateMixin {
+  final ExamPrepService _examPrepService = ExamPrepService();
   
-  StudySubject? _selectedSubject;
-  StudyType _selectedType = StudyType.reading;
-  String? _selectedTopic;
+  String? _selectedSubjectId;
+  String? _selectedTopicId;
+  StudySessionType _sessionType = StudySessionType.pomodoro;
+  int _selectedMinutes = 25;
   
-  bool _isRunning = false;
-  bool _isPaused = false;
-  int _elapsedSeconds = 0;
-  Timer? _timer;
-  DateTime? _startTime;
+  late AnimationController _pulseController;
+
+  final List<int> _presetMinutes = [15, 25, 45, 60, 90];
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialStudyType != null) {
-      _selectedType = widget.initialStudyType!;
-    }
-    final subjects = _service.activeExamId != null 
-        ? _service.getSubjectsForExam(_service.activeExamId!)
-        : <StudySubject>[];
-    if (subjects.isNotEmpty) {
-      _selectedSubject = subjects.first;
+    _selectedSubjectId = widget.subjectId;
+    _selectedTopicId = widget.topicId;
+    _examPrepService.addListener(_onServiceUpdate);
+    
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  void _onServiceUpdate() {
+    if (mounted) {
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _examPrepService.removeListener(_onServiceUpdate);
+    _pulseController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        if (_isRunning) {
-          _showExitConfirmation();
-          return false;
-        }
-        return true;
-      },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: const Text('Study Session'),
-          leading: IconButton(
-            onPressed: () {
-              if (_isRunning) {
-                _showExitConfirmation();
-              } else {
-                Navigator.pop(context);
-              }
-            },
-            icon: const Icon(Icons.close_rounded),
+    final theme = Theme.of(context);
+    final hasActiveSession = _examPrepService.hasActiveSession;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(hasActiveSession ? 'Study Session' : 'Start Study'),
+        actions: [
+          if (hasActiveSession)
+            IconButton(
+              icon: const Icon(Icons.stop),
+              onPressed: _showEndSessionDialog,
+              tooltip: 'End Session',
+            ),
+        ],
+      ),
+      body: hasActiveSession ? _buildActiveSession(theme) : _buildSessionSetup(theme),
+    );
+  }
+
+  Widget _buildSessionSetup(ThemeData theme) {
+    final subjects = _examPrepService.getActiveSubjects();
+    final topics = _selectedSubjectId != null
+        ? _examPrepService.getTopicsBySubject(_selectedSubjectId!)
+        : <Topic>[];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Session Type Selection
+          Text('Session Type', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: StudySessionType.values.map((type) {
+              final isSelected = _sessionType == type;
+              return ChoiceChip(
+                label: Text('${type.emoji} ${type.displayName}'),
+                selected: isSelected,
+                onSelected: (_) => setState(() => _sessionType = type),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 24),
+
+          // Duration Selection
+          Text('Duration', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Row(
+            children: _presetMinutes.map((mins) {
+              final isSelected = _selectedMinutes == mins;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ChoiceChip(
+                    label: Text('$mins'),
+                    selected: isSelected,
+                    onSelected: (_) => setState(() => _selectedMinutes = mins),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text('Custom: '),
+              Expanded(
+                child: Slider(
+                  value: _selectedMinutes.toDouble(),
+                  min: 5,
+                  max: 180,
+                  divisions: 35,
+                  label: '$_selectedMinutes min',
+                  onChanged: (value) => setState(() => _selectedMinutes = value.toInt()),
+                ),
+              ),
+              Text('$_selectedMinutes min'),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Subject Selection (Optional)
+          Text('Subject (Optional)', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            value: _selectedSubjectId,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.book),
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem(
+                value: null,
+                child: Text('No specific subject'),
+              ),
+              ...subjects.map((subject) => DropdownMenuItem(
+                    value: subject.id,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Color(int.parse(
+                                subject.colorHex.replaceAll('#', '0xFF'))),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(subject.name),
+                      ],
+                    ),
+                  )),
+            ],
+            onChanged: (value) => setState(() {
+              _selectedSubjectId = value;
+              _selectedTopicId = null;
+            }),
+          ),
+          const SizedBox(height: 16),
+
+          // Topic Selection (if subject selected)
+          if (_selectedSubjectId != null && topics.isNotEmpty) ...[
+            Text('Topic (Optional)', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String?>(
+              value: _selectedTopicId,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.topic),
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('No specific topic'),
+                ),
+                ...topics.map((topic) => DropdownMenuItem(
+                      value: topic.id,
+                      child: Text(topic.name),
+                    )),
+              ],
+              onChanged: (value) => setState(() => _selectedTopicId = value),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // Start Button
+          SizedBox(
+            width: double.infinity,
+            child: CommonButton(
+              text: 'Start $_selectedMinutes min Session',
+              variant: ButtonVariant.primary,
+              onPressed: _startSession,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Quick Tips
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.lightbulb_outline, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Text('Study Tips', style: theme.textTheme.titleSmall),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('• Find a quiet place to study'),
+                  const Text('• Put your phone on silent'),
+                  const Text('• Take short breaks between sessions'),
+                  const Text('• Stay hydrated'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveSession(ThemeData theme) {
+    final session = _examPrepService.activeSession;
+    final remainingSeconds = _examPrepService.remainingSeconds;
+    final mins = remainingSeconds ~/ 60;
+    final secs = remainingSeconds % 60;
+    
+    final subject = session?.subjectId != null
+        ? _examPrepService.getSubjectById(session!.subjectId!)
+        : null;
+    final topic = session?.topicId != null
+        ? _examPrepService.getTopicById(session!.topicId!)
+        : null;
+
+    final progress = session != null && session.plannedMinutes > 0
+        ? 1 - (remainingSeconds / (session.plannedMinutes * 60))
+        : 0.0;
+
+    return Column(
+      children: [
+        Expanded(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Session Type
+                Text(
+                  session?.sessionType.emoji ?? '📚',
+                  style: const TextStyle(fontSize: 48),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  session?.sessionType.displayName ?? 'Study Session',
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 32),
+
+                // Timer
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    return Container(
+                      width: 250,
+                      height: 250,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withOpacity(
+                            0.3 + (_pulseController.value * 0.2),
+                          ),
+                          width: 8,
+                        ),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}',
+                              style: theme.textTheme.displayLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'remaining',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 32),
+
+                // Progress Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    children: [
+                      LinearProgressIndicator(
+                        value: progress.clamp(0.0, 1.0),
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${(progress * 100).toInt()}% complete',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Subject/Topic Info
+                if (subject != null || topic != null)
+                  Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (subject != null) ...[
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Color(int.parse(
+                                    subject.colorHex.replaceAll('#', '0xFF'))),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(subject.name),
+                          ],
+                          if (topic != null) ...[
+                            const Text(' • '),
+                            Text(topic.name),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+
+        // Control Buttons
+        Padding(
+          padding: const EdgeInsets.all(32),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildTimerDisplay(),
-              const SizedBox(height: 32),
-              if (!_isRunning) ...[
-                _buildSubjectSelector(),
-                const SizedBox(height: 20),
-                _buildStudyTypeSelector(),
-                const SizedBox(height: 20),
-                if (_selectedSubject != null && _selectedSubject!.topics.isNotEmpty)
-                  _buildTopicSelector(),
-              ],
-              const SizedBox(height: 32),
-              _buildControls(),
+              // Pause/Resume Button
+              CommonButton(
+                text: _examPrepService.isPaused ? 'Resume' : 'Pause',
+                variant: _examPrepService.isPaused ? ButtonVariant.success : ButtonVariant.secondary,
+                onPressed: () {
+                  _examPrepService.togglePauseResume();
+                },
+              ),
+              // End Session Button
+              CommonButton(
+                text: 'End Session',
+                variant: ButtonVariant.primary,
+                onPressed: _showEndSessionDialog,
+              ),
+              // Abandon Button
+              CommonButton(
+                text: 'Abandon',
+                variant: ButtonVariant.danger,
+                onPressed: _showAbandonDialog,
+              ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildTimerDisplay() {
-    final hours = _elapsedSeconds ~/ 3600;
-    final minutes = (_elapsedSeconds % 3600) ~/ 60;
-    final seconds = _elapsedSeconds % 60;
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _selectedSubject?.color ?? AppColors.primary,
-            (_selectedSubject?.color ?? AppColors.primary).withOpacity(0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: (_selectedSubject?.color ?? AppColors.primary).withOpacity(0.4),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          if (_selectedSubject != null) ...[
-            Text(
-              _selectedSubject!.name,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white.withOpacity(0.9),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          Text(
-            '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-            style: const TextStyle(
-              fontSize: 56,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
+  void _startSession() async {
+    await _examPrepService.startStudySession(
+      subjectId: _selectedSubjectId,
+      topicId: _selectedTopicId,
+      examId: widget.examId,
+      sessionType: _sessionType,
+      plannedMinutes: _selectedMinutes,
+    );
+  }
+
+  void _showEndSessionDialog() {
+    SessionQuality? selectedQuality;
+    final notesController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('End Session'),
+          content: SingleChildScrollView(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_selectedType.emoji, style: const TextStyle(fontSize: 16)),
-                const SizedBox(width: 6),
-                Text(
-                  _selectedType.name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                const Text('How was your study session?'),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: SessionQuality.values.map((quality) {
+                    final isSelected = selectedQuality == quality;
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => selectedQuality = quality),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
+                                  : Colors.grey.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: isSelected
+                                  ? Border.all(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      width: 2,
+                                    )
+                                  : null,
+                            ),
+                            child: Text(
+                              quality.emoji,
+                              style: const TextStyle(fontSize: 32),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            quality.displayName,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                    hintText: 'What did you learn?',
+                    border: OutlineInputBorder(),
                   ),
+                  maxLines: 3,
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubjectSelector() {
-    final subjects = _service.activeExamId != null 
-        ? _service.getSubjectsForExam(_service.activeExamId!)
-        : <StudySubject>[];
-    
-    if (subjects.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Center(
-          child: Text('Please add subjects first'),
-        ),
-      );
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Subject',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: subjects.map((subject) {
-            final isSelected = _selectedSubject?.id == subject.id;
-            return GestureDetector(
-              onTap: () => setState(() {
-                _selectedSubject = subject;
-                _selectedTopic = null;
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? subject.color : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected ? subject.color : Colors.grey.shade200,
-                  ),
-                  boxShadow: isSelected
-                      ? [BoxShadow(color: subject.color.withOpacity(0.3), blurRadius: 8)]
-                      : null,
-                ),
-                child: Text(
-                  subject.name,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? Colors.white : AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStudyTypeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Study Type',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: StudyType.values.map((type) {
-            final isSelected = _selectedType == type;
-            return GestureDetector(
-              onTap: () => setState(() => _selectedType = type),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected ? AppColors.primary : Colors.grey.shade200,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(type.emoji, style: const TextStyle(fontSize: 16)),
-                    const SizedBox(width: 6),
-                    Text(
-                      type.name,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTopicSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Topic (Optional)',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _selectedSubject!.topics.map((topic) {
-            final isSelected = _selectedTopic == topic;
-            final isCompleted = _selectedSubject!.topicCompletion[topic] ?? false;
-            return GestureDetector(
-              onTap: () => setState(() => _selectedTopic = isSelected ? null : topic),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                      ? _selectedSubject!.color.withOpacity(0.15)
-                      : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                  border: isSelected 
-                      ? Border.all(color: _selectedSubject!.color)
-                      : null,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isCompleted)
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        size: 16,
-                        color: AppColors.success,
-                      ),
-                    if (isCompleted) const SizedBox(width: 4),
-                    Text(
-                      topic,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                        color: isSelected ? _selectedSubject!.color : AppColors.textPrimary,
-                        decoration: isCompleted ? TextDecoration.lineThrough : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildControls() {
-    if (!_isRunning) {
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _selectedSubject != null ? _startSession : null,
-          icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('Start Studying'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _isPaused ? _resumeSession : _pauseSession,
-            icon: Icon(_isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded),
-            label: Text(_isPaused ? 'Resume' : 'Pause'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(vertical: 16),
+          actions: [
+            CommonButton(
+              text: 'Cancel',
+              variant: ButtonVariant.secondary,
+              onPressed: () => Navigator.pop(context),
             ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _finishSession,
-            icon: const Icon(Icons.check_rounded),
-            label: const Text('Finish'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _startSession() {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _isRunning = true;
-      _isPaused = false;
-      _elapsedSeconds = 0;
-      _startTime = DateTime.now();
-    });
-    _startTimer();
-  }
-
-  void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!_isPaused) {
-        setState(() => _elapsedSeconds++);
-      }
-    });
-  }
-
-  void _pauseSession() {
-    HapticFeedback.lightImpact();
-    setState(() => _isPaused = true);
-  }
-
-  void _resumeSession() {
-    HapticFeedback.lightImpact();
-    setState(() => _isPaused = false);
-  }
-
-  void _finishSession() {
-    _timer?.cancel();
-    
-    if (_elapsedSeconds < 60) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session too short (minimum 1 minute)'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      setState(() {
-        _isRunning = false;
-        _elapsedSeconds = 0;
-      });
-      return;
-    }
-
-    _showProductivityRating();
-  }
-
-  void _showProductivityRating() {
-    int rating = 3;
-    
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Container(
-          padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'How productive was this session?',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  final isSelected = index < rating;
-                  return GestureDetector(
-                    onTap: () => setState(() => rating = index + 1),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Icon(
-                        isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: isSelected ? AppColors.warning : Colors.grey,
-                        size: 40,
-                      ),
+            CommonButton(
+              text: 'Complete Session',
+              variant: ButtonVariant.primary,
+              onPressed: () async {
+                await _examPrepService.endStudySession(
+                  wasCompleted: true,
+                  quality: selectedQuality,
+                  notes: notesController.text.trim().isEmpty
+                      ? null
+                      : notesController.text.trim(),
+                );
+                if (mounted) {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Great job! Session completed! 🎉'),
+                      backgroundColor: Colors.green,
                     ),
                   );
-                }),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _saveSession(rating);
-                  },
-                  child: const Text('Save Session'),
-                ),
-              ),
-            ],
-          ),
+                }
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  void _saveSession(int rating) {
-    final session = StudySession(
-      id: _service.generateId(),
-      examId: _service.activeExamId!,
-      subjectId: _selectedSubject!.id,
-      topicName: _selectedTopic,
-      startTime: _startTime!,
-      endTime: DateTime.now(),
-      durationMinutes: _elapsedSeconds ~/ 60,
-      type: _selectedType,
-      productivityRating: rating,
-    );
-
-    _service.addStudySession(session);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Session saved: ${_elapsedSeconds ~/ 60} minutes'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.success,
-      ),
-    );
-    
-    Navigator.pop(context);
-  }
-
-  void _showExitConfirmation() {
+  void _showAbandonDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('End Session?'),
-        content: const Text('Your current progress will be lost.'),
+        title: const Text('Abandon Session?'),
+        content: const Text(
+          'Are you sure you want to abandon this session? '
+          'Your progress will still be saved.',
+        ),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Continue Studying',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text('Continue Studying'),
           ),
-          TextButton(
-            onPressed: () {
-              _timer?.cancel();
-              Navigator.pop(context);
-              Navigator.pop(context);
+          CommonButton(
+            text: 'Abandon',
+            variant: ButtonVariant.danger,
+            onPressed: () async {
+              await _examPrepService.endStudySession(wasCompleted: false);
+              if (mounted) {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              }
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Discard'),
           ),
         ],
       ),

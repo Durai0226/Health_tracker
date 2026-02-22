@@ -38,7 +38,7 @@ class AnalyticsService {
   // ============ Water Analytics ============
 
   /// Get water intake for a specific date
-  DailyWaterData getWaterIntakeForDate(DateTime date) {
+  DailyWaterData? getWaterIntakeForDate(DateTime date) {
     return WaterService.getDataForDate(date);
   }
 

@@ -6,6 +6,16 @@ import '../models/enhanced_water_log.dart';
 import '../models/beverage_type.dart';
 import '../services/water_service.dart';
 import 'water_reminder_settings_screen.dart';
+import 'water_tracking_screen.dart';
+import 'water_statistics_screen.dart';
+import 'water_calendar_screen.dart';
+import 'water_history_edit_screen.dart';
+import 'beverage_selection_screen.dart';
+import 'hydration_profile_screen.dart';
+import 'water_achievements_screen.dart';
+import 'hydration_challenges_screen.dart';
+import 'caffeine_insights_screen.dart';
+import 'custom_cup_creator_screen.dart';
 
 /// Water Dashboard - WaterMinder-style water tracking
 /// Features: Animated water wave, quick add buttons, daily/weekly stats, history
@@ -89,6 +99,12 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
           _vitaVibeService.waterGoalReached();
         }
         
+        // Force refresh local state to ensure UI sync
+        setState(() {
+          _todayData = newData;
+          _dailyGoal = newData.dailyGoalMl;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -123,8 +139,34 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
       );
     }
 
+    final listenable = WaterService.listenToDailyData();
+    if (listenable == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Water Tracker'),
+          backgroundColor: AppColors.info,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: AppColors.error),
+              const SizedBox(height: 16),
+              const Text('Failed to initialize water tracking'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadData,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return ValueListenableBuilder(
-      valueListenable: WaterService.listenToDailyData()!,
+      valueListenable: listenable,
       builder: (context, box, _) {
        final todayData = WaterService.getTodayData();
        final currentMl = todayData.effectiveHydrationMl;
@@ -148,17 +190,35 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                     _buildWeeklyProgress(todayData), // Pass todayData
                     const SizedBox(height: 24),
                     _buildDrinkHistory(todayData),
+                    const SizedBox(height: 24),
+                    _buildQuickAccessMenu(),
                     const SizedBox(height: 100),
                   ],
                 ),
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => _showCustomAmountDialog(),
-            backgroundColor: AppColors.info,
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('Custom', style: TextStyle(color: Colors.white)),
+          floatingActionButton: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton(
+                heroTag: 'beverage',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BeverageSelectionScreen()),
+                ),
+                backgroundColor: Colors.white,
+                child: const Icon(Icons.local_cafe, color: AppColors.info),
+              ),
+              const SizedBox(height: 12),
+              FloatingActionButton.extended(
+                heroTag: 'custom',
+                onPressed: () => _showCustomAmountDialog(),
+                backgroundColor: AppColors.info,
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('Quick Add', style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
         );
       },
@@ -608,6 +668,164 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
     );
   }
 
+  Widget _buildQuickAccessMenu() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'More Features',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.85,
+            children: [
+              _buildFeatureCard(
+                icon: Icons.analytics_outlined,
+                label: 'Statistics',
+                color: Colors.purple,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WaterStatisticsScreen()),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.calendar_today,
+                label: 'Calendar',
+                color: Colors.orange,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WaterCalendarScreen()),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.edit_calendar,
+                label: 'Edit History',
+                color: Colors.teal,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => WaterHistoryEditScreen(date: DateTime.now())),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.person_outline,
+                label: 'Profile',
+                color: Colors.indigo,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HydrationProfileScreen()),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.emoji_events,
+                label: 'Achievements',
+                color: Colors.amber,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WaterAchievementsScreen()),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.flag_outlined,
+                label: 'Challenges',
+                color: Colors.red,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HydrationChallengesScreen()),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.coffee,
+                label: 'Caffeine',
+                color: Colors.brown,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CaffeineInsightsScreen()),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.create_outlined,
+                label: 'Custom Cup',
+                color: Colors.pink,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CustomCupCreatorScreen()),
+                ),
+              ),
+              _buildFeatureCard(
+                icon: Icons.track_changes,
+                label: 'Tracking',
+                color: Colors.cyan,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WaterTrackingScreen()),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureCard({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildLogItem(EnhancedWaterLog log) {
     final time = TimeOfDay.fromDateTime(log.time).format(context);
     
@@ -679,6 +897,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                       customAmount = (customAmount - 50).clamp(50, 2000);
                     }),
                     icon: const Icon(Icons.remove_circle_outline),
+                    key: const Key('remove_custom_amount'),
                     iconSize: 32,
                     color: AppColors.info,
                   ),
@@ -696,6 +915,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                       customAmount = (customAmount + 50).clamp(50, 2000);
                     }),
                     icon: const Icon(Icons.add_circle_outline),
+                    key: const Key('add_custom_amount'),
                     iconSize: 32,
                     color: AppColors.info,
                   ),
@@ -716,6 +936,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
+                  key: const Key('confirm_add_water'),
                   child: const Text(
                     'Add Water',
                     style: TextStyle(
@@ -793,8 +1014,6 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-                    Navigator.pop(context);
-                    
                     // Update header in HydrationProfile via WaterService
                     final profile = WaterService.getProfile();
                     final updatedProfile = profile.copyWith(
@@ -808,6 +1027,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                     final updatedData = todayData.copyWith(dailyGoalMl: newGoal);
                     await WaterService.saveDailyData(updatedData);
                     
+                    // Close the bottom sheet (only one pop needed)
                     if (context.mounted) Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(

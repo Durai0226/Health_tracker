@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import 'period_setup_screen.dart';
 
 class PeriodIntroScreen extends StatelessWidget {
@@ -87,26 +88,22 @@ class PeriodIntroScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: ElevatedButton(
+                  child: CommonButton(
+                    text: 'Enable Period Tracking',
+                    variant: ButtonVariant.primary,
+                    backgroundColor: AppColors.periodPrimary,
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const PeriodSetupScreen()),
                       );
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                    ),
-                    child: const Text("Enable Period Tracking"),
                   ),
                 ),
                 const SizedBox(height: 16),
-                TextButton(
+                CommonButton(
+                  text: 'Maybe Later',
+                  variant: ButtonVariant.secondary,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text(
-                    "Maybe Later",
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
                 ),
                 const SizedBox(height: 24),
               ],

@@ -6,7 +6,7 @@ import '../../../core/services/focus_mode_service.dart';
 import '../../water/screens/water_dashboard_screen.dart';
 import '../../fitness/screens/fitness_dashboard_screen.dart';
 import '../../reminders/screens/focus_dashboard_screen.dart';
-import '../../medication/screens/medicine_dashboard_screen.dart';
+import '../../medication/screens/enhanced_medicine_dashboard.dart';
 import '../../water/services/water_service.dart';
 import '../../water/models/beverage_type.dart';
 
@@ -568,7 +568,7 @@ class _ProgressOverviewScreenState extends State<ProgressOverviewScreen> {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const MedicineDashboardScreen()),
+        MaterialPageRoute(builder: (_) => const EnhancedMedicineDashboard()),
       ).then((_) => _loadAllData()),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -684,7 +684,7 @@ class _ProgressOverviewScreenState extends State<ProgressOverviewScreen> {
             color: AppColors.error,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const MedicineDashboardScreen()),
+              MaterialPageRoute(builder: (_) => const EnhancedMedicineDashboard()),
             ).then((_) => _loadAllData()),
           ),
         ],

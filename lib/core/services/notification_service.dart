@@ -51,7 +51,7 @@ Future<void> _handleBackgroundSnoozeAction(int notificationId, String? payload) 
     const initSettings = InitializationSettings(android: androidSettings);
     await notifications.initialize(initSettings);
     
-    // Schedule snoozed notification
+    // Schedule snoozed notification using alarm channel
     await notifications.zonedSchedule(
       snoozeId,
       '⏰ Snoozed Reminder',
@@ -59,25 +59,28 @@ Future<void> _handleBackgroundSnoozeAction(int notificationId, String? payload) 
       snoozeTime,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          'medicine_channel',
-          'Medicine Reminders',
-          channelDescription: 'Snoozed reminders',
+          'alarm_channel', // Use alarm channel for proper alarm sound
+          'Alarm Reminders',
+          channelDescription: 'High priority alarm reminders',
           importance: Importance.max,
           priority: Priority.max,
           playSound: true,
+          sound: null, // Use system default alarm sound
           enableVibration: true,
-          vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
+          vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
           fullScreenIntent: true,
           category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
-          autoCancel: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+          autoCancel: false,
+          ongoing: true,
           actions: <AndroidNotificationAction>[
             AndroidNotificationAction(
               'snooze',
               '⏰ Snooze ${snoozeMinutes}min',
               showsUserInterface: false,
             ),
-             const AndroidNotificationAction(
+            const AndroidNotificationAction(
               'dismiss',
               '❌ Dismiss',
               showsUserInterface: false,
@@ -123,7 +126,7 @@ class NotificationService {
     }
     
     try {
-      // Initialize timezone
+      // Initialize timezone (lightweight)
       try {
         tz_data.initializeTimeZones();
         final String timeZoneName = _getLocalTimeZone();
@@ -132,16 +135,6 @@ class NotificationService {
       } catch (e) {
         debugPrint('⚠️ Timezone init failed, using UTC: $e');
         tz.setLocalLocation(tz.getLocation('UTC'));
-      }
-      
-      // Initialize Android Alarm Manager for reliable background alarms
-      if (Platform.isAndroid) {
-        try {
-          await AndroidAlarmManager.initialize();
-          debugPrint('✓ AndroidAlarmManager initialized');
-        } catch (e) {
-          debugPrint('⚠️ AndroidAlarmManager init failed: $e');
-        }
       }
 
       const androidSettings =
@@ -166,14 +159,43 @@ class NotificationService {
       
       debugPrint('📱 Notification plugin initialized: $initialized');
 
-      await _createNotificationChannels();
-      await _requestPermissions();
       _isInitialized = true;
+      
+      // Defer heavy operations to background
+      _initializeBackground();
+      
       debugPrint('✓ NotificationService initialized successfully');
     } catch (e) {
       debugPrint('❌ NotificationService init failed: $e');
       _isInitialized = true; // Mark as initialized to prevent loops
     }
+  }
+  
+  /// Initialize heavy operations in background after app startup
+  void _initializeBackground() {
+    Future(() async {
+      try {
+        // Initialize Android Alarm Manager
+        if (Platform.isAndroid) {
+          try {
+            await AndroidAlarmManager.initialize();
+            debugPrint('✓ AndroidAlarmManager initialized');
+          } catch (e) {
+            debugPrint('⚠️ AndroidAlarmManager init failed: $e');
+          }
+        }
+        
+        // Create notification channels
+        await _createNotificationChannels();
+        
+        // Request permissions
+        await _requestPermissions();
+        
+        debugPrint('✓ Background notification setup complete');
+      } catch (e) {
+        debugPrint('⚠️ Background notification setup failed: $e');
+      }
+    });
   }
   
   String _getLocalTimeZone() {
@@ -188,6 +210,23 @@ class NotificationService {
             _notifications.resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>();
 
+        // Create alarm channel with USAGE_ALARM audio attributes for proper alarm sound
+        const alarmChannel = AndroidNotificationChannel(
+          'alarm_channel',
+          'Alarm Reminders',
+          description: 'High priority alarm reminders that ring like real alarms',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+          enableLights: true,
+          showBadge: true,
+          // This makes it use alarm audio stream - rings even in DND
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+        );
+        
+        await androidImplementation?.createNotificationChannel(alarmChannel);
+        debugPrint('✓ Created alarm channel with USAGE_ALARM audio');
+
         final channels = [
           const AndroidNotificationChannel(
             'medicine_channel',
@@ -198,6 +237,7 @@ class NotificationService {
             enableVibration: true,
             enableLights: true,
             showBadge: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
           const AndroidNotificationChannel(
             'health_channel',
@@ -208,6 +248,7 @@ class NotificationService {
             enableVibration: true,
             enableLights: true,
             showBadge: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
           const AndroidNotificationChannel(
             'fitness_channel',
@@ -218,6 +259,7 @@ class NotificationService {
             enableVibration: true,
             enableLights: true,
             showBadge: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
           const AndroidNotificationChannel(
             'water_channel',
@@ -228,6 +270,7 @@ class NotificationService {
             enableVibration: true,
             enableLights: true,
             showBadge: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
           const AndroidNotificationChannel(
             'period_channel',
@@ -238,8 +281,8 @@ class NotificationService {
             enableVibration: true,
             enableLights: true,
             showBadge: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
-
           const AndroidNotificationChannel(
             'reminders_channel',
             'General Reminders',
@@ -249,6 +292,7 @@ class NotificationService {
             enableVibration: true,
             enableLights: true,
             showBadge: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         ];
 
@@ -256,7 +300,7 @@ class NotificationService {
           await androidImplementation?.createNotificationChannel(channel);
         }
         
-        debugPrint('✓ Created ${channels.length} notification channels');
+        debugPrint('✓ Created ${channels.length + 1} notification channels with alarm audio');
       }
     } catch (e) {
       debugPrint('⚠️ Failed to create notification channels: $e');
@@ -703,39 +747,39 @@ class NotificationService {
       // Unified Logic using flutter_local_notifications for consistency and complex schedules
       // (AlarmManager is great for exact background, but `zonedSchedule` is also good)
 
-      final notificationSound = (sound != null && sound != 'default')
-          ? RawResourceAndroidNotificationSound(sound)
-          : null;
-      
+      // Use alarm_channel for proper alarm sound behavior
+      // The channel has audioAttributesUsage: alarm configured
       final androidDetails = AndroidNotificationDetails(
-        'reminders_channel',
-        'General Reminders',
-        channelDescription: 'General reminders',
-        importance: _getImportance(priority),
-        priority: _getPriority(priority),
-        sound: notificationSound,
-        fullScreenIntent: priority == ReminderPriority.high, // Only high priority gets full screen
-        category: AndroidNotificationCategory.alarm, // Mark as alarm
+        'alarm_channel', // Use dedicated alarm channel
+        'Alarm Reminders',
+        channelDescription: 'High priority alarm reminders',
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        sound: null, // Use system default alarm sound from channel
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
+        fullScreenIntent: priority == ReminderPriority.high,
+        category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction(
             'snooze',
             '⏰ Snooze ${snoozeDuration ?? 5}min',
             showsUserInterface: false,
           ),
-           const AndroidNotificationAction(
+          const AndroidNotificationAction(
             'dismiss',
             '❌ Dismiss',
             showsUserInterface: false,
             cancelNotification: true,
           ),
         ],
-
-        // Persistent alarm settings - only for High priority
-        // Persistent alarm settings - only for High priority
+        // Persistent alarm settings - stays until user interacts
         ongoing: priority == ReminderPriority.high, 
         autoCancel: priority != ReminderPriority.high, 
-        timeoutAfter: priority == ReminderPriority.high ? 600000 : null,
+        timeoutAfter: priority == ReminderPriority.high ? 300000 : null,
       );
 
       final iOSDetails = DarwinNotificationDetails(
@@ -1030,17 +1074,20 @@ class NotificationService {
     // Get user settings for notification preferences
     final settings = StorageService.getUserSettings();
     
+    // Always use alarm_channel for proper alarm sound behavior
+    // The channel has audioAttributesUsage: alarm configured
     return NotificationDetails(
       android: AndroidNotificationDetails(
-        channelId ?? 'medicine_channel',
-        channelName ?? 'Medicine Reminders',
-        channelDescription: 'Reminders for medicines, health checks, and fitness',
-        importance: _getImportance(priority),
-        priority: _getPriority(priority),
-        playSound: settings.soundEnabled,
+        'alarm_channel', // Use dedicated alarm channel for all reminders
+        'Alarm Reminders',
+        channelDescription: 'High priority alarm reminders',
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        sound: null, // Use system default alarm sound
         enableVibration: settings.vibrationEnabled,
         vibrationPattern: settings.vibrationEnabled 
-            ? Int64List.fromList([0, 500, 200, 500, 200, 500])
+            ? Int64List.fromList([0, 1000, 500, 1000, 500, 1000])
             : null,
         enableLights: true,
         ledColor: const Color(0xFF4CAF50),
@@ -1048,6 +1095,7 @@ class NotificationService {
         ledOffMs: 500,
         fullScreenIntent: settings.fullScreenNotification,
         category: AndroidNotificationCategory.alarm,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
         visibility: settings.showOnLockScreen 
             ? NotificationVisibility.public 
             : NotificationVisibility.private,

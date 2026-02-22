@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'cloud_sync_service.dart';
+import 'category_manager.dart';
 import '../config/env_config.dart';
 import '../utils/validators.dart';
 
@@ -331,6 +332,9 @@ class AuthService extends ChangeNotifier {
     }
     
     await _clearSavedUser();
+    
+    // Clear category selection so user can choose a new one
+    await CategoryManager().clearCategory();
     
     // Auto sign-in as guest after logout
     await signInAnonymously();

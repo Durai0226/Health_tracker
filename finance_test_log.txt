@@ -1,0 +1,286 @@
+00:00 +0: loading /Users/dsp/Documents/Dlyminder/test/features/finance/finance_end_to_end_test.dart                                                                                                    00:01 +0: loading /Users/dsp/Documents/Dlyminder/test/features/finance/finance_end_to_end_test.dart                                                                                                    00:01 +0: (setUpAll)                                                                                                                                                                                   00:01 +0: Finance Core Features E2E Tests Transaction Management - Add, Update, Delete                                                                                                                 00:01 +0: Finance Core Features E2E Tests Transaction Management - Add, Update, Delete                                                                                                                 
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +1: Finance Core Features E2E Tests Transaction Management - Add, Update, Delete                                                                                                                 00:01 +1: Finance Core Features E2E Tests Account Management - CRUD Operations                                                                                                                         00:01 +1: Finance Core Features E2E Tests Account Management - CRUD Operations                                                                                                                         
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +2: Finance Core Features E2E Tests Account Management - CRUD Operations                                                                                                                         00:01 +2: Finance Core Features E2E Tests Budget Tracking - Create and Track Spending                                                                                                                  00:01 +2: Finance Core Features E2E Tests Budget Tracking - Create and Track Spending                                                                                                                  
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +3: Finance Core Features E2E Tests Budget Tracking - Create and Track Spending                                                                                                                  00:01 +3: Finance Core Features E2E Tests Savings Goals - Create and Add Contributions                                                                                                                 00:01 +3: Finance Core Features E2E Tests Savings Goals - Create and Add Contributions                                                                                                                 
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +4: Finance Core Features E2E Tests Savings Goals - Create and Add Contributions                                                                                                                 00:01 +4: Finance Core Features E2E Tests Debt Management - Track Debt and Payments                                                                                                                    00:01 +4: Finance Core Features E2E Tests Debt Management - Track Debt and Payments                                                                                                                    
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +5: Finance Core Features E2E Tests Debt Management - Track Debt and Payments                                                                                                                    00:01 +5: Finance Core Features E2E Tests Bill Reminders - Create and Mark as Paid                                                                                                                     00:01 +5: Finance Core Features E2E Tests Bill Reminders - Create and Mark as Paid                                                                                                                     
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +6: Finance Core Features E2E Tests Bill Reminders - Create and Mark as Paid                                                                                                                     00:01 +6: Finance Core Features E2E Tests Net Worth Calculation                                                                                                                                        00:01 +6: Finance Core Features E2E Tests Net Worth Calculation                                                                                                                                        
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +7: Finance Core Features E2E Tests Net Worth Calculation                                                                                                                                        00:01 +7: Finance Core Features E2E Tests Analytics - Spending by Category                                                                                                                             00:01 +7: Finance Core Features E2E Tests Analytics - Spending by Category                                                                                                                             
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +8: Finance Core Features E2E Tests Analytics - Spending by Category                                                                                                                             00:01 +8: Finance Core Features E2E Tests Auto-Categorization Rules                                                                                                                                    00:01 +8: Finance Core Features E2E Tests Auto-Categorization Rules                                                                                                                                    
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +9: Finance Core Features E2E Tests Auto-Categorization Rules                                                                                                                                    00:01 +9: Finance Core Features E2E Tests CSV Export/Import                                                                                                                                            00:01 +9: Finance Core Features E2E Tests CSV Export/Import                                                                                                                                            
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +10: Finance Core Features E2E Tests CSV Export/Import                                                                                                                                           00:01 +10: Finance Core Features E2E Tests Recurring Transaction Processing                                                                                                                            00:01 +10: Finance Core Features E2E Tests Recurring Transaction Processing                                                                                                                            
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +11: Finance Core Features E2E Tests Recurring Transaction Processing                                                                                                                            00:01 +11: Finance Feature Integration Tests Complete User Flow - Add Income, Set Budget, Track Expenses                                                                                               00:01 +11: Finance Feature Integration Tests Complete User Flow - Add Income, Set Budget, Track Expenses                                                                                               
+Starting FinanceStorageService initialization...
+📦 Opening box: finance_transactions
+✓ Box finance_transactions opened successfully
+📦 Opening box: finance_accounts
+✓ Box finance_accounts opened successfully
+📦 Opening box: finance_categories
+✓ Box finance_categories opened successfully
+📦 Opening box: finance_budgets
+✓ Box finance_budgets opened successfully
+📦 Opening box: finance_savings_goals
+✓ Box finance_savings_goals opened successfully
+📦 Opening box: finance_debts
+✓ Box finance_debts opened successfully
+📦 Opening box: finance_bill_reminders
+✓ Box finance_bill_reminders opened successfully
+📦 Opening box: finance_auto_category_rules
+✓ Box finance_auto_category_rules opened successfully
+Initialized default finance categories
+Initialized default finance account
+Initialized default auto-category rules
+✓ FinanceStorageService initialized successfully
+00:01 +12: Finance Feature Integration Tests Complete User Flow - Add Income, Set Budget, Track Expenses                                                                                               00:01 +12: (tearDownAll)                                                                                                                                                                               00:01 +12: All tests passed!                                                                                                                                                                           

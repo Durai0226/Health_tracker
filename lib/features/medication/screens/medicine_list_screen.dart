@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
-import '../models/medicine.dart';
-import 'add_medicine_flow.dart';
-import 'edit_medicine_screen.dart';
+import '../../../widgets/smart_ad_widgets.dart';
+import '../../../core/services/simple_ad_service.dart';
+import '../models/enhanced_medicine.dart';
+import '../services/medicine_storage_service.dart';
+import 'add_medicine_wizard.dart';
+import 'medicine_detail_screen.dart';
 
 class MedicineListScreen extends StatelessWidget {
   const MedicineListScreen({super.key});
@@ -34,16 +35,16 @@ class MedicineListScreen extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const AddMedicineFlow()),
+                MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
               );
             },
           ),
         ],
       ),
       body: ValueListenableBuilder(
-        valueListenable: StorageService.listenable,
+        valueListenable: MedicineStorageService.medicinesListenable,
         builder: (context, box, _) {
-          final medicines = box.values.toList().cast<Medicine>();
+          final medicines = box.values.where((m) => !m.isArchived && m.isActive).toList();
           
           if (medicines.isEmpty) {
             return _buildEmptyState(context);
@@ -51,9 +52,23 @@ class MedicineListScreen extends StatelessWidget {
           
           return ListView.builder(
             padding: const EdgeInsets.all(24),
-            itemCount: medicines.length,
+            itemCount: medicines.length + (medicines.length ~/ 5), // Add ad slots
             itemBuilder: (context, index) {
-              final medicine = medicines[index];
+              // Show native ad every 5th position
+              if (index > 0 && index % 6 == 5) {
+                return SmartNativeListAd(
+                  placement: AdPlacement.medicationNative,
+                  index: index,
+                );
+              }
+              
+              // Adjust index for actual medicine item
+              final medicineIndex = index - (index ~/ 6);
+              if (medicineIndex >= medicines.length) {
+                return const SizedBox.shrink();
+              }
+              
+              final medicine = medicines[medicineIndex];
               return _buildMedicineCard(context, medicine);
             },
           );
@@ -63,7 +78,7 @@ class MedicineListScreen extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const AddMedicineFlow()),
+            MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
           );
         },
         backgroundColor: AppColors.primary,
@@ -116,7 +131,7 @@ class MedicineListScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AddMedicineFlow()),
+                  MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
                 );
               },
               icon: const Icon(Icons.add_rounded),
@@ -136,156 +151,171 @@ class MedicineListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMedicineCard(BuildContext context, Medicine medicine) {
+  Widget _buildMedicineCard(BuildContext context, EnhancedMedicine medicine) {
+    final nextDose = medicine.schedule.times.isNotEmpty 
+        ? medicine.schedule.times.first 
+        : null;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EditMedicineScreen(medicine: medicine),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MedicineDetailScreen(medicineId: medicine.id),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        );
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  medicine.dosageForm.icon,
+                  style: const TextStyle(fontSize: 28),
+                ),
               ),
-              child: const Icon(
-                Icons.medication_rounded,
-                color: AppColors.primary,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    medicine.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time_rounded, size: 14, color: AppColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text(
-                        DateFormat('h:mm a').format(medicine.time),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                        ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      medicine.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          "${medicine.dosageAmount} ${medicine.dosageType}",
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        if (nextDose != null) ...[
+                          const Icon(Icons.access_time_rounded, size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            nextDose.formattedTime,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            medicine.displayDosage,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.repeat_rounded,
-                        size: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        medicine.frequency,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      if (medicine.durationDays != null) ...[
-                        const SizedBox(width: 12),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
                         const Icon(
-                          Icons.calendar_today_rounded,
+                          Icons.repeat_rounded,
                           size: 14,
                           color: AppColors.textSecondary,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          '${medicine.durationDays} days',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
+                        Expanded(
+                          child: Text(
+                            medicine.schedule.frequencyDescription,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                  if (medicine.enableReminder)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.notifications_active_rounded,
-                            size: 14,
-                            color: AppColors.success,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Reminder Active',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.success,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                ],
+                    if (medicine.reminderEnabled)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.notifications_active_rounded,
+                              size: 14,
+                              color: AppColors.success,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Reminder Active',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (medicine.isLowStock)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              size: 14,
+                              color: AppColors.warning,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${medicine.currentStock} left - Low stock',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.divider),
-          ],
+              const Icon(Icons.chevron_right_rounded, color: AppColors.divider),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

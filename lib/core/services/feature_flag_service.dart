@@ -6,15 +6,15 @@ class FeatureFlagService {
   
   // Flag Keys
   static const String keyAdvancedRepeat = 'isAdvancedRepeatEnabled';
-  static const String keyPremiumThemes = 'isPremiumThemesEnabled';
   static const String keyBetaFeatures = 'isBetaFeaturesEnabled';
+  static const String keyPremiumThemes = 'isPremiumThemesEnabled';
 
   static final FeatureFlagService _instance = FeatureFlagService._internal();
   factory FeatureFlagService() => _instance;
   FeatureFlagService._internal();
 
   late SharedPreferences _prefs;
-  final ValueNotifier<bool> _notifier = ValueNotifier(false); // Notify listeners of changes
+  final ValueNotifier<bool> _notifier = ValueNotifier(false);
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -26,13 +26,12 @@ class FeatureFlagService {
 
   Future<void> setEnabled(String key, bool value) async {
     await _prefs.setBool('$_prefix$key', value);
-    _notifier.value = !_notifier.value; // Trigger update
+    _notifier.value = !_notifier.value;
   }
 
   ValueNotifier<bool> get notifier => _notifier;
 
   // Convenience getters
   bool get isAdvancedRepeatEnabled => isEnabled(keyAdvancedRepeat);
-  bool get isPremiumThemesEnabled => isEnabled(keyPremiumThemes);
   bool get isBetaFeaturesEnabled => isEnabled(keyBetaFeatures);
 }

@@ -1,17 +1,20 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
-import '../../../core/services/notification_service.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/reminder_category_model.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'category_management_screen.dart';
+import 'package:just_audio/just_audio.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/services/feature_flag_service.dart';
+import '../models/reminder_category_model.dart';
+import '../models/reminder_model.dart';
+import 'category_management_screen.dart';
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminder;
@@ -27,18 +30,48 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
-  final _noteController = TextEditingController(); // New note controller
+  final _noteController = TextEditingController();
+  final AudioPlayer _audioPlayer = AudioPlayer();
   
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   RepeatType _repeatType = RepeatType.none;
   List<int> _customDays = [];
-  int _snoozeDuration = 5; // Default 5 minutes
+  int _snoozeDuration = 5;
   String _sound = 'default';
   ReminderPriority _priority = ReminderPriority.high;
   String? _selectedCategoryId;
-  String? _selectedImagePath; // Path to selected image
+  String? _selectedImagePath;
   bool _isLoading = false;
+  bool _isPlayingPreview = false;
+
+  // Sound options with categories and preview URLs
+  static const Map<String, Map<String, String>> _soundOptions = {
+    'default': {'label': 'Default', 'category': 'Classic', 'icon': 'notifications'},
+    'gentle_chime': {'label': 'Gentle Chime', 'category': 'Gentle', 'icon': 'music_note'},
+    'soft_bells': {'label': 'Soft Bells', 'category': 'Gentle', 'icon': 'notifications_active'},
+    'morning_bird': {'label': 'Morning Bird', 'category': 'Nature', 'icon': 'flutter_dash'},
+    'ocean_wave': {'label': 'Ocean Wave', 'category': 'Nature', 'icon': 'water'},
+    'sunrise': {'label': 'Sunrise', 'category': 'Classic', 'icon': 'wb_sunny'},
+    'galaxy': {'label': 'Galaxy', 'category': 'Classic', 'icon': 'star'},
+    'urgent_alert': {'label': 'Urgent Alert', 'category': 'Alert', 'icon': 'warning'},
+    'digital_alarm': {'label': 'Digital Alarm', 'category': 'Alert', 'icon': 'alarm'},
+    'meditation': {'label': 'Meditation', 'category': 'Gentle', 'icon': 'self_improvement'},
+  };
+
+  // Preview sound URLs (using free sounds from Pixabay)
+  static const Map<String, String> _previewUrls = {
+    'default': 'https://cdn.pixabay.com/audio/2022/03/10/audio_d6a4c6a7f4.mp3',
+    'gentle_chime': 'https://cdn.pixabay.com/audio/2022/03/15/audio_115b9c3c1a.mp3',
+    'soft_bells': 'https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3',
+    'morning_bird': 'https://cdn.pixabay.com/audio/2022/02/07/audio_bc594618f0.mp3',
+    'ocean_wave': 'https://cdn.pixabay.com/audio/2021/08/09/audio_dc39aae018.mp3',
+    'sunrise': 'https://cdn.pixabay.com/audio/2022/07/08/audio_dc39bde808.mp3',
+    'galaxy': 'https://cdn.pixabay.com/audio/2024/02/14/audio_8e0db3cf42.mp3',
+    'urgent_alert': 'https://cdn.pixabay.com/audio/2022/03/24/audio_2e89e16de4.mp3',
+    'digital_alarm': 'https://cdn.pixabay.com/audio/2022/10/30/audio_1c3fa4ed6a.mp3',
+    'meditation': 'https://cdn.pixabay.com/audio/2023/06/14/audio_af7fc9b7f0.mp3',
+  };
 
   @override
   void initState() {
@@ -73,8 +106,57 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
-    _noteController.dispose(); // Dispose note controller
+    _noteController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<void> _previewSound(String soundKey) async {
+    try {
+      final url = _previewUrls[soundKey];
+      if (url == null) return;
+
+      setState(() => _isPlayingPreview = true);
+      
+      await _audioPlayer.stop();
+      await _audioPlayer.setUrl(url);
+      await _audioPlayer.setVolume(0.7);
+      await _audioPlayer.play();
+      
+      // Stop after 3 seconds for preview
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          _audioPlayer.stop();
+          setState(() => _isPlayingPreview = false);
+        }
+      });
+    } catch (e) {
+      debugPrint('Sound preview error: $e');
+      if (mounted) {
+        setState(() => _isPlayingPreview = false);
+      }
+    }
+  }
+
+  void _stopPreview() {
+    _audioPlayer.stop();
+    setState(() => _isPlayingPreview = false);
+  }
+
+  IconData _getSoundIcon(String iconName) {
+    switch (iconName) {
+      case 'notifications': return Icons.notifications_rounded;
+      case 'music_note': return Icons.music_note_rounded;
+      case 'notifications_active': return Icons.notifications_active_rounded;
+      case 'flutter_dash': return Icons.flutter_dash_rounded;
+      case 'water': return Icons.water_rounded;
+      case 'wb_sunny': return Icons.wb_sunny_rounded;
+      case 'star': return Icons.star_rounded;
+      case 'warning': return Icons.warning_rounded;
+      case 'alarm': return Icons.alarm_rounded;
+      case 'self_improvement': return Icons.self_improvement_rounded;
+      default: return Icons.music_note_rounded;
+    }
   }
 
   Future<void> _selectDate() async {
@@ -290,12 +372,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              CommonCard(
                 child: Column(
                   children: [
                     _buildTimeRow(
@@ -324,12 +401,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              CommonCard(
                 child: Column(
                   children: [
                     DropdownButtonHideUnderline(
@@ -402,12 +474,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              CommonCard(
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<int>(
                     value: _snoozeDuration,
@@ -431,52 +498,133 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Alarm Sound',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Alarm Sound',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (_isPlayingPreview)
+                    TextButton.icon(
+                      onPressed: _stopPreview,
+                      icon: const Icon(Icons.stop_rounded, size: 18),
+                      label: const Text('Stop'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _sound,
-                    isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
-                    items: [
-                      'default',
-                      'sunrise',
-                      'galaxy',
-                    ].map((String value) {
-                      String label;
-                      switch (value) {
-                        case 'default': label = 'Default'; break;
-                        case 'sunrise': label = 'Sunrise'; break;
-                        case 'galaxy': label = 'Galaxy'; break;
-                        default: label = value;
-                      }
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(
-                          label,
-                           style: const TextStyle(fontSize: 16),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      if (newValue != null) {
-                        setState(() => _sound = newValue);
-                      }
-                    },
-                  ),
+              CommonCard(
+                child: Column(
+                  children: [
+                    // Current selection with preview button
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              _getSoundIcon(_soundOptions[_sound]?['icon'] ?? 'notifications'),
+                              color: AppColors.primary,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _soundOptions[_sound]?['label'] ?? 'Default',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  _soundOptions[_sound]?['category'] ?? 'Classic',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _isPlayingPreview ? _stopPreview : () => _previewSound(_sound),
+                            icon: Icon(
+                              _isPlayingPreview ? Icons.stop_circle_rounded : Icons.play_circle_rounded,
+                              color: _isPlayingPreview ? AppColors.error : AppColors.primary,
+                              size: 32,
+                            ),
+                            tooltip: _isPlayingPreview ? 'Stop preview' : 'Preview sound',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    // Sound selection grid
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _soundOptions.entries.map((entry) {
+                          final isSelected = _sound == entry.key;
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() => _sound = entry.key);
+                              _previewSound(entry.key);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected 
+                                    ? AppColors.primary 
+                                    : AppColors.primary.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: isSelected 
+                                    ? null 
+                                    : Border.all(color: AppColors.border.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _getSoundIcon(entry.value['icon'] ?? 'notifications'),
+                                    size: 16,
+                                    color: isSelected ? Colors.white : AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    entry.value['label'] ?? entry.key,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -690,7 +838,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.1) : Colors.transparent,
+          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: isSelected ? Border.all(color: color, width: 2) : null,
         ),
@@ -740,7 +888,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
+                color: AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),

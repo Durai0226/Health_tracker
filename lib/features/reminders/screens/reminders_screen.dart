@@ -45,7 +45,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
           _buildCategoryFilter(),
           Expanded(
             child: ValueListenableBuilder<Box<Reminder>>(
-              valueListenable: StorageService.reminderListenable,
+              valueListenable: StorageService.remindersListenable,
               builder: (context, box, _) {
                 var reminders = box.values.toList();
                 

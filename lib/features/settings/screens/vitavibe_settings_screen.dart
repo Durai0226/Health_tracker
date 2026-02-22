@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../../settings/screens/early_access_screen.dart';
 
 class VitaVibeSettingsScreen extends StatefulWidget {
@@ -15,15 +16,16 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppColors.isDark(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA), // Light grey background
+      backgroundColor: AppColors.getBackground(context),
       appBar: AppBar(
         title: Row(
           children: [
             const Icon(Icons.vibration_rounded, size: 24),
             const SizedBox(width: 8),
             const Text(
-              'VitaVibe',
+              'Haptic Feel',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
@@ -55,27 +57,16 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
             padding: const EdgeInsets.all(20),
             children: [
               // Intro Card
-              Container(
-                width: double.infinity,
+              CommonCard(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+                borderRadius: 20,
                 child: Column(
                   children: [
                     Row(
                       children: [
                         const Icon(Icons.touch_app_rounded, color: Colors.teal, size: 28),
                         const SizedBox(width: 16),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -84,15 +75,15 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF2D3142),
+                                  color: AppColors.getTextPrimary(context),
                                 ),
                               ),
-                              SizedBox(height: 4),
+                              const SizedBox(height: 4),
                               Text(
                                 'Enable premium vibrations',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Color(0xFF9098B1),
+                                  color: AppColors.getTextSecondary(context),
                                 ),
                               ),
                             ],
@@ -166,30 +157,21 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
               const SizedBox(height: 24),
               
               if (_service.isEnabled) ...[
-                const Padding(
-                  padding: EdgeInsets.only(left: 4, bottom: 12),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 12),
                   child: Text(
                     'FEATURE HAPTICS',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF9098B1),
+                      color: AppColors.getTextSecondary(context),
                       letterSpacing: 1.2,
                     ),
                   ),
                 ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+                CommonCard(
+                  padding: EdgeInsets.zero,
+                  borderRadius: 20,
                   child: Column(
                     children: [
                       _buildFeatureItem(
@@ -258,71 +240,51 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                 const SizedBox(height: 24),
                 
                 // Pattern Explorer Button
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+                CommonCard(
+                  padding: EdgeInsets.zero,
+                  borderRadius: 20,
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     leading: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.purple.withOpacity(0.1),
+                        color: Colors.purple.withOpacity(isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.explore_rounded, color: Colors.purple),
                     ),
-                    title: const Text(
+                    title: Text(
                       'Pattern Explorer',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2D3142)),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(context)),
                     ),
-                    subtitle: const Text('Test all vibration patterns'),
-                    trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF9098B1)),
-                  onTap: _showPatternExplorer,
+                    subtitle: Text('Test all vibration patterns', style: TextStyle(color: AppColors.getTextSecondary(context))),
+                    trailing: Icon(Icons.chevron_right_rounded, color: AppColors.getTextSecondary(context)),
+                    onTap: _showPatternExplorer,
                   ),
                 ),
 
                 const SizedBox(height: 24),
 
                 // Early Access Features
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+                CommonCard(
+                  padding: EdgeInsets.zero,
+                  borderRadius: 20,
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     leading: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
+                        color: Colors.orange.withOpacity(isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.science_rounded, color: Colors.orange),
                     ),
-                    title: const Text(
+                    title: Text(
                       'Early Access',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2D3142)),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(context)),
                     ),
-                    subtitle: const Text('Try experimental features'),
-                    trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF9098B1)),
+                    subtitle: Text('Try experimental features', style: TextStyle(color: AppColors.getTextSecondary(context))),
+                    trailing: Icon(Icons.chevron_right_rounded, color: AppColors.getTextSecondary(context)),
                     onTap: () {
                       Navigator.push(
                         context,

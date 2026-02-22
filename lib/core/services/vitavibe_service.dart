@@ -129,6 +129,10 @@ class VitaVibeService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setEnabled(bool value) async {
+    await toggleEnabled(value);
+  }
+
   Future<void> setIntensity(VibeIntensity value) async {
     _intensity = value;
     await _saveSettings();

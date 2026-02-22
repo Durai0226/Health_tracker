@@ -74,17 +74,19 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
     final daysUntil = _periodData!.daysUntilNextPeriod(today);
     final isOnPeriod = _periodData!.isOnPeriod(today);
 
+    final periodAccent = AppColors.getPeriodAccent(context);
+    
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.periodPrimary),
+          icon: Icon(Icons.arrow_back_rounded, color: periodAccent),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text("Period Tracker", style: TextStyle(color: AppColors.periodPrimary)),
+        title: Text("Period Tracker", style: TextStyle(color: periodAccent)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_rounded, color: AppColors.periodPrimary),
+            icon: Icon(Icons.settings_rounded, color: periodAccent),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PeriodSettingsScreen()),
@@ -262,26 +264,18 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
   }
 
   Widget _buildActionCard(String label, IconData icon, Color color, VoidCallback onTap) {
+    final isDark = AppColors.isDark(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-            ),
-          ],
-        ),
+        decoration: AppColors.getCardDecoration(context, borderRadius: 16),
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withOpacity(isDark ? 0.2 : 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 24),
@@ -289,9 +283,10 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
             const SizedBox(height: 8),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
+                color: AppColors.getTextPrimary(context),
               ),
             ),
           ],
@@ -303,16 +298,7 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
   Widget _buildDailyTipCard() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-          ),
-        ],
-      ),
+      decoration: AppColors.getCardDecoration(context, borderRadius: 16),
       child: Row(
         children: [
           Text(_dailyTip!.icon, style: const TextStyle(fontSize: 32)),
@@ -323,18 +309,18 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
               children: [
                 Text(
                   _dailyTip!.title,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(context)),
                 ),
                 Text(
                   _dailyTip!.description,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: TextStyle(fontSize: 12, color: AppColors.getTextSecondary(context)),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+          Icon(Icons.chevron_right_rounded, color: AppColors.getTextSecondary(context)),
         ],
       ),
     );
@@ -343,16 +329,7 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
   Widget _buildCycleInfo() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-          ),
-        ],
-      ),
+      decoration: AppColors.getCardDecoration(context),
       child: Column(
         children: [
           _buildInfoRow(Icons.calendar_today_rounded, "Last Period",
@@ -370,6 +347,7 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
   Widget _buildUpcomingEvents() {
     if (_fertileWindow == null) return const SizedBox.shrink();
 
+    final isDark = AppColors.isDark(context);
     final today = DateTime.now();
     final ovulation = _fertileWindow!['ovulation']!;
     final fertileStart = _fertileWindow!['start']!;
@@ -379,12 +357,16 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isInFertileWindow ? Colors.blue.shade50 : Colors.white,
+        color: isInFertileWindow 
+            ? (isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50) 
+            : AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(16),
-        border: isInFertileWindow ? Border.all(color: Colors.blue.shade200) : null,
+        border: isInFertileWindow 
+            ? Border.all(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.shade200) 
+            : (isDark ? Border.all(color: AppColors.darkBorder.withOpacity(0.5)) : null),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: AppColors.getCardShadow(context),
             blurRadius: 10,
           ),
         ],
@@ -404,7 +386,7 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
                 isInFertileWindow ? 'Fertile Window Active' : 'Upcoming',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: isInFertileWindow ? Colors.blue : AppColors.textPrimary,
+                  color: isInFertileWindow ? Colors.blue : AppColors.getTextPrimary(context),
                 ),
               ),
             ],

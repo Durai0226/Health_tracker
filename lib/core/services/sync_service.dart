@@ -16,15 +16,18 @@ class SyncService {
   StreamSubscription<QuerySnapshot>? _reminderSubscription;
 
   void init() {
-    _listenToReminders();
-    
-    // Listen for auth changes to restart listeners if user switches
-    firebase_auth.FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user != null) {
-        _listenToReminders();
-      } else {
-        _cancelSubscriptions();
-      }
+    // Defer listener setup to avoid blocking startup
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _listenToReminders();
+      
+      // Listen for auth changes to restart listeners if user switches
+      firebase_auth.FirebaseAuth.instance.authStateChanges().listen((user) {
+        if (user != null) {
+          _listenToReminders();
+        } else {
+          _cancelSubscriptions();
+        }
+      });
     });
   }
 

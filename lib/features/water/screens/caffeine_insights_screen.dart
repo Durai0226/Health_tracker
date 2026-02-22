@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
 
@@ -13,9 +14,10 @@ class CaffeineInsightsScreen extends StatefulWidget {
 }
 
 class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
-  late DailyWaterData _todayData;
-  late Map<String, dynamic> _weeklyStats;
+  DailyWaterData? _todayData;
+  Map<String, dynamic> _weeklyStats = {};
   List<DailyWaterData> _weeklyData = [];
+  bool _isLoading = true;
   
   // Recommended daily caffeine limits
   static const int _recommendedMax = 400; // mg
@@ -27,21 +29,33 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     _loadData();
   }
 
-  void _loadData() {
-    _todayData = WaterService.getTodayData();
-    _weeklyStats = WaterService.getWeeklyStats();
-    _weeklyData = _weeklyStats['dailyData'] as List<DailyWaterData>? ?? [];
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      await WaterService.init();
+      if (mounted) {
+        setState(() {
+          _todayData = WaterService.getTodayData();
+          _weeklyStats = WaterService.getWeeklyStats();
+          _weeklyData = _weeklyStats['dailyData'] as List<DailyWaterData>? ?? [];
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading caffeine data: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Color get _caffeineColor {
-    final mg = _todayData.totalCaffeineMg;
+    final mg = _todayData?.totalCaffeineMg ?? 0;
     if (mg >= _recommendedMax) return AppColors.error;
     if (mg >= _warningThreshold) return Colors.orange;
     return Colors.brown;
   }
 
   String get _caffeineStatus {
-    final mg = _todayData.totalCaffeineMg;
+    final mg = _todayData?.totalCaffeineMg ?? 0;
     if (mg >= _recommendedMax) return 'High - Consider reducing';
     if (mg >= _warningThreshold) return 'Moderate - Approaching limit';
     if (mg > 0) return 'Within healthy range';
@@ -64,9 +78,30 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-      body: RefreshIndicator(
+
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator(color: Colors.brown))
+        : _todayData == null
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: AppColors.error),
+                const SizedBox(height: 16),
+                const Text('Failed to load caffeine data'),
+                const SizedBox(height: 16),
+                CommonButton(
+                  text: 'Retry',
+                  variant: ButtonVariant.primary,
+                  backgroundColor: Colors.brown,
+                  onPressed: _loadData,
+                ),
+              ],
+            ),
+          )
+        : RefreshIndicator(
         onRefresh: () async {
-          setState(() => _loadData());
+          await _loadData();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -99,7 +134,11 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildHeader() {
-    final progress = (_todayData.totalCaffeineMg / _recommendedMax).clamp(0.0, 1.0);
+    if (_todayData == null) {
+      return const SizedBox.shrink();
+    }
+    final todayData = _todayData!;
+    final progress = (todayData.totalCaffeineMg / _recommendedMax).clamp(0.0, 1.0);
     
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
@@ -139,7 +178,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                     style: TextStyle(fontSize: 36),
                   ),
                   Text(
-                    '${_todayData.totalCaffeineMg}',
+                    '${todayData.totalCaffeineMg}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 36,
@@ -178,7 +217,11 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildTodaySummary() {
-    final caffeinedrinks = _todayData.logs.where((l) => l.caffeineAmount > 0).toList();
+    if (_todayData == null) {
+      return const SizedBox.shrink();
+    }
+    final todayData = _todayData!;
+    final caffeinedrinks = todayData.logs.where((l) => l.caffeineAmount > 0).toList();
     
     return Container(
       padding: const EdgeInsets.all(20),
@@ -212,7 +255,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
               const SizedBox(width: 16),
               _buildSummaryItem(
                 icon: Icons.speed,
-                value: '${_todayData.totalCaffeineMg}mg',
+                value: '${todayData.totalCaffeineMg}mg',
                 label: 'Total',
                 color: _caffeineColor,
               ),
@@ -270,10 +313,12 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   int _calculateHydrationImpact() {
+    if (_todayData == null) return 0;
+    
     int impact = 0;
-    for (final log in _todayData.logs) {
+    final logs = _todayData!.logs;
+    for (final log in logs) {
       if (log.caffeineAmount > 0) {
-        // Caffeine drinks have reduced hydration
         impact += log.effectiveHydrationMl - log.amountMl;
       }
     }
@@ -281,12 +326,26 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildWeeklyChart() {
-    final maxCaffeine = _weeklyData.isEmpty
-        ? _recommendedMax.toDouble()
-        : math.max(
-            _weeklyData.map((d) => d.totalCaffeineMg).reduce(math.max).toDouble(),
-            _recommendedMax.toDouble(),
-          );
+    if (_weeklyData.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: Text(
+            'No weekly data available',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+    
+    final maxCaffeine = math.max(
+      _weeklyData.map((d) => d.totalCaffeineMg).reduce(math.max).toDouble(),
+      _recommendedMax.toDouble(),
+    );
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -337,7 +396,9 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
               children: List.generate(7, (index) {
                 final day = DateTime.now().subtract(Duration(days: 6 - index));
                 final dayData = _weeklyData.where((d) =>
-                    d.date.day == day.day && d.date.month == day.month).toList();
+                    d.date.day == day.day && 
+                    d.date.month == day.month && 
+                    d.date.year == day.year).toList();
                 
                 final caffeine = dayData.isNotEmpty ? dayData.first.totalCaffeineMg : 0;
                 final height = maxCaffeine > 0 ? (caffeine / maxCaffeine) * 100 : 0.0;
@@ -425,13 +486,23 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
 
   int _calculateWeeklyAverage() {
     if (_weeklyData.isEmpty) return 0;
-    final total = _weeklyData.fold(0, (sum, d) => sum + d.totalCaffeineMg);
-    return (total / _weeklyData.length).round();
+    try {
+      final total = _weeklyData.fold(0, (sum, d) => sum + d.totalCaffeineMg);
+      return (total / _weeklyData.length).round();
+    } catch (e) {
+      debugPrint('Error calculating weekly average: $e');
+      return 0;
+    }
   }
 
   Widget _buildCaffeineSources() {
+    if (_todayData == null) {
+      return const SizedBox.shrink();
+    }
+    
     final caffeineBreakdown = <String, int>{};
-    for (final log in _todayData.logs) {
+    final logs = _todayData!.logs;
+    for (final log in logs) {
       if (log.caffeineAmount > 0) {
         caffeineBreakdown[log.beverageId] = 
             (caffeineBreakdown[log.beverageId] ?? 0) + log.caffeineAmount;
@@ -468,8 +539,9 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           const SizedBox(height: 16),
           ...sortedEntries.map((entry) {
             final beverage = WaterService.getBeverage(entry.key);
-            final percent = _todayData.totalCaffeineMg > 0
-                ? (entry.value / _todayData.totalCaffeineMg * 100)
+            final totalCaffeine = _todayData?.totalCaffeineMg ?? 0;
+            final percent = totalCaffeine > 0
+                ? (entry.value / totalCaffeine * 100)
                 : 0.0;
 
             return Padding(
@@ -574,7 +646,12 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildTodayDrinks() {
-    final caffeineDrinks = _todayData.logs.where((l) => l.caffeineAmount > 0).toList();
+    if (_todayData == null) {
+      return const SizedBox.shrink();
+    }
+    
+    final allLogs = _todayData!.logs;
+    final caffeineDrinks = allLogs.where((l) => l.caffeineAmount > 0).toList();
     
     if (caffeineDrinks.isEmpty) {
       return Container(

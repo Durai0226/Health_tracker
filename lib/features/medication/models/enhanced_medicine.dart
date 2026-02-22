@@ -141,6 +141,21 @@ class EnhancedMedicine extends HiveObject {
   @HiveField(40)
   final Map<String, dynamic>? customFields;
 
+  @HiveField(41)
+  final List<HealthCategory>? healthCategories;
+
+  @HiveField(42)
+  final String? customHealthCategory;
+
+  @HiveField(43)
+  final String? patientProfileId;
+
+  @HiveField(44)
+  final bool requiresContinuousIntake;
+
+  @HiveField(45)
+  final int? minimumConsecutiveDays;
+
   EnhancedMedicine({
     required this.id,
     required this.name,
@@ -183,6 +198,11 @@ class EnhancedMedicine extends HiveObject {
     this.isArchived = false,
     this.notes,
     this.customFields,
+    this.healthCategories,
+    this.customHealthCategory,
+    this.patientProfileId,
+    this.requiresContinuousIntake = false,
+    this.minimumConsecutiveDays,
   }) : createdAt = createdAt ?? DateTime.now();
 
   // Computed properties
@@ -272,6 +292,11 @@ class EnhancedMedicine extends HiveObject {
     'isArchived': isArchived,
     'notes': notes,
     'customFields': customFields,
+    'healthCategories': healthCategories?.map((c) => c.index).toList(),
+    'customHealthCategory': customHealthCategory,
+    'patientProfileId': patientProfileId,
+    'requiresContinuousIntake': requiresContinuousIntake,
+    'minimumConsecutiveDays': minimumConsecutiveDays,
   };
 
   factory EnhancedMedicine.fromJson(Map<String, dynamic> json) => EnhancedMedicine(
@@ -316,6 +341,11 @@ class EnhancedMedicine extends HiveObject {
     isArchived: json['isArchived'] ?? false,
     notes: json['notes'],
     customFields: json['customFields'],
+    healthCategories: (json['healthCategories'] as List?)?.map((i) => HealthCategory.values[i as int]).toList(),
+    customHealthCategory: json['customHealthCategory'],
+    patientProfileId: json['patientProfileId'],
+    requiresContinuousIntake: json['requiresContinuousIntake'] ?? false,
+    minimumConsecutiveDays: json['minimumConsecutiveDays'],
   );
 
   EnhancedMedicine copyWith({
@@ -360,6 +390,11 @@ class EnhancedMedicine extends HiveObject {
     bool? isArchived,
     String? notes,
     Map<String, dynamic>? customFields,
+    List<HealthCategory>? healthCategories,
+    String? customHealthCategory,
+    String? patientProfileId,
+    bool? requiresContinuousIntake,
+    int? minimumConsecutiveDays,
   }) {
     return EnhancedMedicine(
       id: id ?? this.id,
@@ -403,6 +438,11 @@ class EnhancedMedicine extends HiveObject {
       isArchived: isArchived ?? this.isArchived,
       notes: notes ?? this.notes,
       customFields: customFields ?? this.customFields,
+      healthCategories: healthCategories ?? this.healthCategories,
+      customHealthCategory: customHealthCategory ?? this.customHealthCategory,
+      patientProfileId: patientProfileId ?? this.patientProfileId,
+      requiresContinuousIntake: requiresContinuousIntake ?? this.requiresContinuousIntake,
+      minimumConsecutiveDays: minimumConsecutiveDays ?? this.minimumConsecutiveDays,
     );
   }
 

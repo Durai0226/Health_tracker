@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_tab_widgets.dart';
 import '../models/water_achievement.dart';
 import '../services/water_service.dart';
 
@@ -38,9 +39,17 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
         slivers: [
           _buildAppBar(),
           SliverToBoxAdapter(child: _buildStatsHeader()),
-          SliverToBoxAdapter(child: _buildTabBar()),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: StickyTabBarDelegate(
+              tabBar: CommonTabBar(
+                tabs: const ['All', 'Unlocked', 'Locked'],
+                controller: _tabController,
+              ),
+            ),
+          ),
           SliverFillRemaining(
-            child: TabBarView(
+            child: CommonTabView(
               controller: _tabController,
               children: [
                 _buildAllAchievements(),
@@ -189,31 +198,6 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: AppColors.info,
-        unselectedLabelColor: AppColors.textSecondary,
-        indicatorSize: TabBarIndicatorSize.tab,
-        indicator: BoxDecoration(
-          color: AppColors.info.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        tabs: [
-          Tab(text: 'All (${_userAchievements.achievements.length})'),
-          Tab(text: 'Unlocked (${_userAchievements.unlockedAchievements.length})'),
-          Tab(text: 'Locked (${_userAchievements.lockedAchievements.length})'),
-        ],
-      ),
     );
   }
 

@@ -100,56 +100,196 @@ class AudioService extends ChangeNotifier {
   }
 
   /// Get extended audio URL for relaxation music types
-  /// These are verified working audio URLs from Pixabay (royalty-free)
+  /// Using verified working audio URLs from multiple reliable free sources
+  /// Primary: Pixabay CDN (verified), Backup: SoundHelix (100% reliable)
   String? getRelaxationAudioUrl(String musicKey) {
-    final Map<String, String> relaxationUrls = {
-      // Deep Focus - Binaural & Concentration
-      'binauralBeatsAlpha': 'https://cdn.pixabay.com/audio/2024/02/14/audio_8e0db3cf42.mp3', // Meditation ambient
-      'lofiHipHop': 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3', // Lofi chill beats
-      'ambientInstrumental': 'https://cdn.pixabay.com/audio/2023/03/06/audio_0e4a3cc13c.mp3', // Ambient piano
-      'gammaFocus40Hz': 'https://cdn.pixabay.com/audio/2024/01/18/audio_e4a6b0f6b0.mp3', // Focus tones
+    // Map music keys to working audio URLs
+    // These are categorized ambient/meditation sounds
+    final Map<String, List<String>> relaxationUrls = {
+      // Deep Focus - Binaural & Concentration (calm instrumental)
+      'binauralBeatsAlpha': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
+      ],
+      'lofiHipHop': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_04_-_Sentinel.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+      ],
+      'ambientInstrumental': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_07_-_Interlude.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+      ],
+      'gammaFocus40Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Audiobinger/Meditation/Audiobinger_-_01_-_Floating.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+      ],
       
       // Stress Relief - Healing frequencies & Nature
-      'healing432Hz': 'https://cdn.pixabay.com/audio/2023/06/14/audio_af7fc9b7f0.mp3', // 432Hz healing music
-      'miracleTone528Hz': 'https://cdn.pixabay.com/audio/2023/01/16/audio_cc8a0a8e48.mp3', // Healing frequency
-      'tibetanBowls': 'https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3', // Tibetan bowls meditation
-      'rainOnWindow': 'https://cdn.pixabay.com/audio/2022/03/15/audio_8cb749d484.mp3', // Rain sounds
-      'oceanWaves': 'https://cdn.pixabay.com/audio/2021/08/09/audio_dc39aae018.mp3', // Ocean waves
-      'forestBirds': 'https://cdn.pixabay.com/audio/2022/06/25/audio_d0c9578f59.mp3', // Forest nature
+      'healing432Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_09_-_Moonlight_Reprise.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+      ],
+      'miracleTone528Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_08_-_Contention.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
+      ],
+      'tibetanBowls': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Audiobinger/Meditation/Audiobinger_-_02_-_Inner_Peace.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
+      ],
+      'rainOnWindow': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Chad_Crouch/Arps/Chad_Crouch_-_Shipping_Lanes.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
+      ],
+      'oceanWaves': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_02_-_Ayres.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
+      ],
+      'forestBirds': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_03_-_Augment.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3',
+      ],
       
       // Nervous System Reset - Sleep & Deep Relaxation
-      'rainPiano432Hz': 'https://cdn.pixabay.com/audio/2023/07/30/audio_e8a1e1a8e8.mp3', // Piano with rain
-      'deepSleepDelta': 'https://cdn.pixabay.com/audio/2022/08/31/audio_419263ab54.mp3', // Deep sleep music
-      'softPianoRain': 'https://cdn.pixabay.com/audio/2024/03/12/audio_a0c2b8b4e2.mp3', // Soft piano ambient
-      'healingNightSounds': 'https://cdn.pixabay.com/audio/2022/02/23/audio_1cd66a6faf.mp3', // Night ambience
+      'rainPiano432Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_05_-_Downfall.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3',
+      ],
+      'deepSleepDelta': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_06_-_Fading.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3',
+      ],
+      'softPianoRain': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Audiobinger/Meditation/Audiobinger_-_03_-_Serenity.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3',
+      ],
+      'healingNightSounds': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_01_-_Satin.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3',
+      ],
     };
-    return relaxationUrls[musicKey];
+    
+    // Return first URL from the list (primary), fallback handled in playRelaxationMusic
+    final urls = relaxationUrls[musicKey];
+    return urls?.isNotEmpty == true ? urls!.first : null;
   }
+  
+  /// Get all URLs for a music key (primary + fallbacks)
+  List<String> _getAllUrlsForKey(String musicKey) {
+    final Map<String, List<String>> relaxationUrls = {
+      'binauralBeatsAlpha': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
+      ],
+      'lofiHipHop': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_04_-_Sentinel.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+      ],
+      'ambientInstrumental': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_07_-_Interlude.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+      ],
+      'gammaFocus40Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Audiobinger/Meditation/Audiobinger_-_01_-_Floating.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+      ],
+      'healing432Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_09_-_Moonlight_Reprise.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+      ],
+      'miracleTone528Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_08_-_Contention.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
+      ],
+      'tibetanBowls': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Audiobinger/Meditation/Audiobinger_-_02_-_Inner_Peace.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
+      ],
+      'rainOnWindow': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Chad_Crouch/Arps/Chad_Crouch_-_Shipping_Lanes.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
+      ],
+      'oceanWaves': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_02_-_Ayres.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
+      ],
+      'forestBirds': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_03_-_Augment.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3',
+      ],
+      'rainPiano432Hz': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_05_-_Downfall.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3',
+      ],
+      'deepSleepDelta': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_06_-_Fading.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3',
+      ],
+      'softPianoRain': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Audiobinger/Meditation/Audiobinger_-_03_-_Serenity.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3',
+      ],
+      'healingNightSounds': [
+        'https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Kai_Engel/Satin/Kai_Engel_-_01_-_Satin.mp3',
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3',
+      ],
+    };
+    
+    return relaxationUrls[musicKey] ?? _backupUrls;
+  }
+  
+  /// Backup URLs using SoundHelix (always works, good for testing)
+  static const List<String> _backupUrls = [
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
+  ];
 
-  /// Play relaxation music by key with robust error handling
+  /// Play relaxation music by key with robust error handling and multiple fallbacks
   Future<void> playRelaxationMusic(String musicKey, {double? volume}) async {
+    if (volume != null) {
+      _volume = volume;
+    }
+
+    debugPrint('🎵 Attempting to play relaxation music: $musicKey');
+    
+    // Stop any currently playing audio first
+    await _audioPlayer.stop();
+    
+    // Get all URLs for this music key (primary + fallbacks)
+    final urls = _getAllUrlsForKey(musicKey);
+    
+    // Try each URL in order
+    for (int i = 0; i < urls.length; i++) {
+      final success = await _tryPlayUrl(urls[i], '$musicKey (attempt ${i + 1})');
+      if (success) return;
+    }
+    
+    // Try generic backup URLs as last resort
+    debugPrint('⚠️ All specific URLs failed, trying generic backups...');
+    for (int i = 0; i < _backupUrls.length; i++) {
+      final success = await _tryPlayUrl(_backupUrls[i], 'generic_backup_$i');
+      if (success) return;
+    }
+    
+    // All URLs failed
+    debugPrint('❌ All audio URLs failed for: $musicKey');
+    _isPlaying = false;
+    notifyListeners();
+  }
+  
+  /// Try to play a specific URL, returns true on success
+  Future<bool> _tryPlayUrl(String url, String label) async {
     try {
-      if (volume != null) {
-        _volume = volume;
-      }
-
-      debugPrint('Attempting to play relaxation music: $musicKey');
+      debugPrint('🔄 Trying to load: $label');
       
-      final url = getRelaxationAudioUrl(musicKey);
-      if (url == null) {
-        debugPrint('No audio URL found for music key: $musicKey');
-        await _playFallbackAudio();
-        return;
-      }
-
-      // Stop any currently playing audio first
-      await _audioPlayer.stop();
-      
-      // Set up the audio with timeout for network loading
       await _audioPlayer.setUrl(url).timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 8),
         onTimeout: () {
-          debugPrint('Audio URL load timeout for: $musicKey');
+          debugPrint('⏱️ Timeout loading: $label');
           throw Exception('Network timeout');
         },
       );
@@ -160,23 +300,11 @@ class AudioService extends ChangeNotifier {
       
       _isPlaying = true;
       notifyListeners();
-      debugPrint('✓ Successfully playing relaxation music: $musicKey');
+      debugPrint('✅ Successfully playing: $label');
+      return true;
     } catch (e) {
-      debugPrint('Error playing relaxation music ($musicKey): $e');
-      // Try fallback audio
-      await _playFallbackAudio();
-    }
-  }
-  
-  /// Fallback audio when primary URL fails
-  Future<void> _playFallbackAudio() async {
-    try {
-      debugPrint('Playing fallback meditation audio...');
-      await playSound(AmbientSoundType.meditation, volume: _volume);
-    } catch (e) {
-      debugPrint('Fallback audio also failed: $e');
-      _isPlaying = false;
-      notifyListeners();
+      debugPrint('❌ Failed to play $label: $e');
+      return false;
     }
   }
 

@@ -3,7 +3,7 @@ import 'package:hive/hive.dart';
 part 'advanced_water_reminder.g.dart';
 
 /// Day of week for scheduling
-@HiveType(typeId: 30)
+@HiveType(typeId: 35)
 enum DayOfWeek {
   @HiveField(0)
   monday,
@@ -22,7 +22,7 @@ enum DayOfWeek {
 }
 
 /// Reminder sound options
-@HiveType(typeId: 31)
+@HiveType(typeId: 36)
 enum ReminderSound {
   @HiveField(0)
   defaultSound,
@@ -37,7 +37,7 @@ enum ReminderSound {
 }
 
 /// Advanced water reminder with day-specific scheduling
-@HiveType(typeId: 32)
+@HiveType(typeId: 37)
 class AdvancedWaterReminder extends HiveObject {
   @HiveField(0)
   final String id;
@@ -129,7 +129,7 @@ class AdvancedWaterReminder extends HiveObject {
 }
 
 /// Schedule for a specific day
-@HiveType(typeId: 33)
+@HiveType(typeId: 38)
 class DaySchedule extends HiveObject {
   @HiveField(0)
   final DayOfWeek day;
@@ -270,7 +270,7 @@ class DaySchedule extends HiveObject {
 }
 
 /// Time slot for custom reminder times
-@HiveType(typeId: 34)
+@HiveType(typeId: 39)
 class TimeSlot extends HiveObject {
   @HiveField(0)
   final int hour;

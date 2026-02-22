@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_tab_widgets.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/hydration_challenge.dart';
 
 /// Hydration Challenges Screen - Gamification with challenges and rewards
@@ -71,14 +73,15 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
         title: const Text('Abandon Challenge?'),
         content: Text('Are you sure you want to abandon "${challenge.title}"? Your progress will be lost.'),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Cancel',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
           ),
-          TextButton(
+          CommonButton(
+            text: 'Abandon',
+            variant: ButtonVariant.danger,
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Abandon'),
           ),
         ],
       ),
@@ -224,20 +227,10 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: TabBar(
+      child: CommonTabBar(
+        tabs: const ['Active', 'Available', 'Completed'],
         controller: _tabController,
-        labelColor: Colors.purple,
-        unselectedLabelColor: AppColors.textSecondary,
-        indicatorSize: TabBarIndicatorSize.tab,
-        indicator: BoxDecoration(
-          color: Colors.purple.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        tabs: [
-          Tab(text: 'Active (${_activeChallenges.length})'),
-          Tab(text: 'Available (${_availableChallenges.length})'),
-          Tab(text: 'Completed (${_completedChallenges.length})'),
-        ],
+        indicatorColor: Colors.purple,
       ),
     );
   }
@@ -478,10 +471,10 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
               ),
               Row(
                 children: [
-                  TextButton(
+                  CommonButton(
+                    text: 'Abandon',
+                    variant: ButtonVariant.danger,
                     onPressed: () => _abandonChallenge(challenge),
-                    style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                    child: const Text('Abandon'),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -582,19 +575,11 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
             ),
           ),
           const SizedBox(width: 8),
-          ElevatedButton(
+          CommonButton(
+            text: 'Start',
+            variant: ButtonVariant.primary,
+            backgroundColor: Colors.purple,
             onPressed: () => _startChallenge(challenge),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Start',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-            ),
           ),
         ],
       ),

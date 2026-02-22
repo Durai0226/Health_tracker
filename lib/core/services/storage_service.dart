@@ -10,7 +10,6 @@ import '../../features/medication/models/doctor_pharmacy.dart';
 import '../../features/medication/models/dependent_profile.dart';
 import '../../features/medication/models/drug_interaction.dart';
 import '../../features/period_tracking/models/period_data.dart';
-import '../../features/health_check/models/health_check.dart';
 import '../../features/water/models/water_intake.dart';
 import '../../features/water/models/beverage_type.dart';
 import '../../features/water/models/water_container.dart';
@@ -19,9 +18,6 @@ import '../../features/water/models/water_achievement.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/fitness/models/fitness_reminder.dart';
 import '../../features/fitness/models/fitness_activity.dart';
-import '../../features/fitness/models/routes_models.dart';
-import '../../features/fitness/models/social_models.dart';
-import '../../features/fitness/models/training_models.dart';
 import '../../features/water/models/water_reminder.dart';
 import '../../features/period_tracking/models/period_reminder.dart';
 import '../models/action_log.dart';
@@ -29,7 +25,6 @@ import '../models/user_settings.dart';
 import '../../features/notes/data/models/note_model.dart';
 import '../../features/notes/data/models/folder_model.dart';
 import '../../features/notes/data/models/tag_model.dart';
-import '../../features/notes/data/models/note_version_model.dart';
 import '../../features/reminders/models/reminder_model.dart';
 import '../../features/reminders/models/reminder_category_model.dart';
 import '../../core/utils/secure_storage_helper.dart';
@@ -41,23 +36,9 @@ import '../../features/reminders/utils/reminder_helper.dart';
 class StorageService {
   static const String _medicineBoxName = 'medicines';
   static const String _periodBoxName = 'period';
-  static const String _healthCheckBoxName = 'health_checks';
   static const String _waterBoxName = 'water_intake';
   static const String _fitnessBoxName = 'fitness_reminders';
   static const String _fitnessActivityBoxName = 'fitness_activities';
-  static const String _routesBoxName = 'fitness_routes';
-  static const String _suggestedRoutesBoxName = 'suggested_routes';
-  static const String _heatmapBoxName = 'fitness_heatmap';
-  static const String _offlineMapsBoxName = 'offline_maps';
-  static const String _challengesBoxName = 'fitness_challenges';
-  static const String _leaderboardBoxName = 'fitness_leaderboard';
-  static const String _socialFeedBoxName = 'social_feed';
-  static const String _segmentsBoxName = 'fitness_segments';
-  static const String _trainingPlansBoxName = 'training_plans';
-  static const String _personalRecordsBoxName = 'personal_records';
-  static const String _heartRateZonesBoxName = 'heart_rate_zones';
-  static const String _readinessBoxName = 'readiness_scores';
-  static const String _workoutAnalysisBoxName = 'workout_analysis';
   static const String _waterReminderBoxName = 'water_reminders';
   static const String _periodReminderBoxName = 'period_reminders';
   static const String _appPrefsBoxName = 'app_preferences';
@@ -66,7 +47,6 @@ class StorageService {
   static const String _notesBoxName = 'notes';
   static const String _foldersBoxName = 'folders';
   static const String _tagsBoxName = 'tags';
-  static const String _noteVersionsBoxName = 'note_versions';
   static const String _categoriesBoxName = 'reminder_categories';
   static const String _remindersBoxName = 'reminders';
   
@@ -126,7 +106,6 @@ class StorageService {
       // Register all adapters with error handling
       _safeRegisterAdapter(MedicineAdapter());
       _safeRegisterAdapter(PeriodDataAdapter());
-      _safeRegisterAdapter(HealthCheckAdapter());
       _safeRegisterAdapter(WaterIntakeAdapter());
       _safeRegisterAdapter(WaterLogAdapter());
       _safeRegisterAdapter(FitnessReminderAdapter());
@@ -137,34 +116,6 @@ class StorageService {
       _safeRegisterAdapter(UserSettingsAdapter());
       _safeRegisterAdapter(FitnessActivityAdapter());
       _safeRegisterAdapter(FitnessGoalAdapter());
-      
-      // Routes Adapters
-      _safeRegisterAdapter(WorkoutRouteAdapter());
-      _safeRegisterAdapter(RoutePointAdapter());
-      _safeRegisterAdapter(SuggestedRouteAdapter());
-      _safeRegisterAdapter(HeatmapDataAdapter());
-      _safeRegisterAdapter(HeatmapPointAdapter());
-      _safeRegisterAdapter(OfflineMapRegionAdapter());
-
-      // Social Adapters
-      _safeRegisterAdapter(SegmentAdapter());
-      _safeRegisterAdapter(RoutePointSimpleAdapter());
-      _safeRegisterAdapter(SegmentEffortAdapter());
-      _safeRegisterAdapter(LeaderboardEntryAdapter());
-      _safeRegisterAdapter(FitnessChallengeAdapter());
-      _safeRegisterAdapter(ChallengeParticipantAdapter());
-      _safeRegisterAdapter(SocialActivityItemAdapter());
-
-      // Training Adapters
-      _safeRegisterAdapter(HeartRateZoneAdapter());
-      _safeRegisterAdapter(RelativeEffortAdapter());
-      _safeRegisterAdapter(PersonalRecordAdapter());
-      _safeRegisterAdapter(TrainingPlanAdapter());
-      _safeRegisterAdapter(TrainingWeekAdapter());
-      _safeRegisterAdapter(PlannedWorkoutAdapter());
-      _safeRegisterAdapter(ReadinessScoreAdapter());
-      _safeRegisterAdapter(WorkoutAnalysisAdapter());
-      _safeRegisterAdapter(SplitAdapter());
       
       // Register water feature adapters
       _safeRegisterAdapter(BeverageTypeAdapter());
@@ -201,52 +152,41 @@ class StorageService {
       _safeRegisterAdapter(DependentProfileAdapter());
       _safeRegisterAdapter(EnhancedMedicineAdapter());
       _safeRegisterAdapter(TreatmentCourseAdapter());
+      _safeRegisterAdapter(HealthCategoryAdapter());
 
       // Register Notes adapters
       _safeRegisterAdapter(NoteModelAdapter());
       _safeRegisterAdapter(FolderModelAdapter());
       _safeRegisterAdapter(TagModelAdapter());
-      _safeRegisterAdapter(NoteVersionModelAdapter());
       _safeRegisterAdapter(ReminderAdapter());
       _safeRegisterAdapter(RepeatTypeAdapter());
       _safeRegisterAdapter(ReminderPriorityAdapter());
       _safeRegisterAdapter(ReminderCategoryAdapter());
       
-      // Open all boxes with error handling
-      await _safeOpenBox<Medicine>(_medicineBoxName);
-      await _safeOpenBox<PeriodData>(_periodBoxName);
-      await _safeOpenBox<HealthCheck>(_healthCheckBoxName);
-      await _safeOpenBox<WaterIntake>(_waterBoxName);
-      await _safeOpenBox<FitnessReminder>(_fitnessBoxName);
-      await _safeOpenBox<FitnessActivity>(_fitnessActivityBoxName);
-      await _safeOpenBox<WorkoutRoute>(_routesBoxName);
-      await _safeOpenBox<SuggestedRoute>(_suggestedRoutesBoxName);
-      await _safeOpenBox<HeatmapData>(_heatmapBoxName);
-      await _safeOpenBox<OfflineMapRegion>(_offlineMapsBoxName);
-      await _safeOpenBox<FitnessChallenge>(_challengesBoxName);
-      await _safeOpenBox<LeaderboardEntry>(_leaderboardBoxName);
-      await _safeOpenBox<SocialActivityItem>(_socialFeedBoxName);
-      await _safeOpenBox<Segment>(_segmentsBoxName);
-      await _safeOpenBox<TrainingPlan>(_trainingPlansBoxName);
-      await _safeOpenBox<PersonalRecord>(_personalRecordsBoxName);
-      await _safeOpenBox<HeartRateZone>(_heartRateZonesBoxName);
-      await _safeOpenBox<ReadinessScore>(_readinessBoxName);
-      await _safeOpenBox<WorkoutAnalysis>(_workoutAnalysisBoxName);
-      await _safeOpenBox<WaterReminder>(_waterReminderBoxName);
-      await _safeOpenBox<PeriodReminder>(_periodReminderBoxName);
-      await _safeOpenBox<ActionLog>(_actionLogBoxName);
-      await _safeOpenBox<UserSettings>(_userSettingsBoxName);
-      await _safeOpenBox<dynamic>(_appPrefsBoxName);
-      
-      // Open Notes boxes
-      await _safeOpenBox<NoteModel>(_notesBoxName);
-      await _safeOpenBox<FolderModel>(_foldersBoxName);
-      await _safeOpenBox<TagModel>(_tagsBoxName);
-      await _safeOpenBox<NoteVersionModel>(_noteVersionsBoxName);
-      await _safeOpenBox<Reminder>(_remindersBoxName);
-      await _safeOpenBox<ReminderCategory>(_categoriesBoxName);
+      // Open critical boxes in parallel for faster startup
+      await Future.wait([
+        _safeOpenBox<UserSettings>(_userSettingsBoxName),
+        _safeOpenBox<dynamic>(_appPrefsBoxName),
+        _safeOpenBox<Reminder>(_remindersBoxName),
+        _safeOpenBox<ReminderCategory>(_categoriesBoxName),
+      ]);
       
       await _initDefaultCategories();
+      
+      // Open remaining boxes in parallel (non-blocking for app startup)
+      Future.wait([
+        _safeOpenBox<Medicine>(_medicineBoxName),
+        _safeOpenBox<PeriodData>(_periodBoxName),
+        _safeOpenBox<WaterIntake>(_waterBoxName),
+        _safeOpenBox<FitnessReminder>(_fitnessBoxName),
+        _safeOpenBox<FitnessActivity>(_fitnessActivityBoxName),
+        _safeOpenBox<WaterReminder>(_waterReminderBoxName),
+        _safeOpenBox<PeriodReminder>(_periodReminderBoxName),
+        _safeOpenBox<ActionLog>(_actionLogBoxName),
+        _safeOpenBox<NoteModel>(_notesBoxName),
+        _safeOpenBox<FolderModel>(_foldersBoxName),
+        _safeOpenBox<TagModel>(_tagsBoxName),
+      ]).then((_) => debugPrint('✓ All storage boxes loaded'));
 
       _isInitialized = true;
       debugPrint('StorageService initialized successfully');
@@ -495,7 +435,12 @@ class StorageService {
   }
 
   // Medicine Methods
-  static Box<Medicine> get _medicineBox => Hive.box<Medicine>(_medicineBoxName);
+  static Box<Medicine> get _medicineBox {
+    if (!Hive.isBoxOpen(_medicineBoxName)) {
+      throw StateError('Medicine box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<Medicine>(_medicineBoxName);
+  }
 
   static List<Medicine> getAllMedicines() {
     return _medicineBox.values.toList();
@@ -519,7 +464,12 @@ class StorageService {
   static ValueListenable<Box<Medicine>> get listenable => _medicineBox.listenable();
 
   // Period Methods
-  static Box<PeriodData> get _periodBox => Hive.box<PeriodData>(_periodBoxName);
+  static Box<PeriodData> get _periodBox {
+    if (!Hive.isBoxOpen(_periodBoxName)) {
+      throw StateError('Period box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<PeriodData>(_periodBoxName);
+  }
 
   static Future<void> savePeriodData(PeriodData data) async {
     await _periodBox.put('current', data);
@@ -537,32 +487,13 @@ class StorageService {
 
   static bool get isPeriodTrackingEnabled => _periodBox.containsKey('current');
 
-  // Health Check Methods
-  static Box<HealthCheck> get _healthCheckBox => Hive.box<HealthCheck>(_healthCheckBoxName);
-
-  static List<HealthCheck> getAllHealthChecks() {
-    return _healthCheckBox.values.toList();
-  }
-
-  static Future<void> addHealthCheck(HealthCheck check) async {
-    await _healthCheckBox.put(check.id, check);
-    await _syncToCloud('health_checks', check.id, check.toJson());
-  }
-
-  static Future<void> deleteHealthCheck(String id) async {
-    await _healthCheckBox.delete(id);
-    await _deleteFromCloud('health_checks', id);
-  }
-
-  static Future<void> updateHealthCheck(HealthCheck check) async {
-    await _healthCheckBox.put(check.id, check);
-    await _syncToCloud('health_checks', check.id, check.toJson());
-  }
-
-  static ValueListenable<Box<HealthCheck>> get healthCheckListenable => _healthCheckBox.listenable();
-
   // Water Intake Methods
-  static Box<WaterIntake> get _waterBox => Hive.box<WaterIntake>(_waterBoxName);
+  static Box<WaterIntake> get _waterBox {
+    if (!Hive.isBoxOpen(_waterBoxName)) {
+      throw StateError('Water box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<WaterIntake>(_waterBoxName);
+  }
 
   static WaterIntake? getTodayWaterIntake() {
     final today = DateTime.now();
@@ -602,7 +533,12 @@ class StorageService {
   static ValueListenable<Box<WaterIntake>> get waterListenable => _waterBox.listenable();
 
   // Fitness Reminder Methods
-  static Box<FitnessReminder> get _fitnessBox => Hive.box<FitnessReminder>(_fitnessBoxName);
+  static Box<FitnessReminder> get _fitnessBox {
+    if (!Hive.isBoxOpen(_fitnessBoxName)) {
+      throw StateError('Fitness box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<FitnessReminder>(_fitnessBoxName);
+  }
 
   static List<FitnessReminder> getAllFitnessReminders() {
     return _fitnessBox.values.toList();
@@ -626,7 +562,12 @@ class StorageService {
   static ValueListenable<Box<FitnessReminder>> get fitnessListenable => _fitnessBox.listenable();
 
   // Fitness Activity Methods
-  static Box<FitnessActivity> get _fitnessActivityBox => Hive.box<FitnessActivity>(_fitnessActivityBoxName);
+  static Box<FitnessActivity> get _fitnessActivityBox {
+    if (!Hive.isBoxOpen(_fitnessActivityBoxName)) {
+      throw StateError('Fitness activity box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<FitnessActivity>(_fitnessActivityBoxName);
+  }
 
   static List<FitnessActivity> getAllFitnessActivities() {
     return _fitnessActivityBox.values.toList()..sort((a, b) => b.startTime.compareTo(a.startTime));
@@ -639,186 +580,18 @@ class StorageService {
 
   static ValueListenable<Box<FitnessActivity>> get fitnessActivityListenable => _fitnessActivityBox.listenable();
 
-  // Routes Methods
-  static Box<WorkoutRoute> get _routesBox => Hive.box<WorkoutRoute>(_routesBoxName);
-
-  static List<WorkoutRoute> getAllRoutes() {
-    return _routesBox.values.toList();
+  static Future<void> saveFitnessActivity(FitnessActivity activity) async {
+    await _fitnessActivityBox.put(activity.id, activity);
+    await _syncToCloud('fitness_activities', activity.id, activity.toJson());
   }
-
-  static Future<void> addRoute(WorkoutRoute route) async {
-    await _routesBox.put(route.id, route);
-    await _syncToCloud('fitness_routes', route.id, route.toJson());
-  }
-
-  static ValueListenable<Box<WorkoutRoute>> get routesListenable => _routesBox.listenable();
-
-  static Box<SuggestedRoute> get _suggestedRoutesBox => Hive.box<SuggestedRoute>(_suggestedRoutesBoxName);
-
-  static List<SuggestedRoute> getAllSuggestedRoutes() {
-    return _suggestedRoutesBox.values.toList();
-  }
-
-  static Future<void> addSuggestedRoute(SuggestedRoute route) async {
-    await _suggestedRoutesBox.put(route.id, route);
-  }
-
-  static ValueListenable<Box<SuggestedRoute>> get suggestedRoutesListenable => _suggestedRoutesBox.listenable();
-
-  static Box<HeatmapData> get _heatmapBox => Hive.box<HeatmapData>(_heatmapBoxName);
-
-  static HeatmapData? getHeatmapData(String activityType) {
-    try {
-        return _heatmapBox.values.firstWhere((h) => h.activityType == activityType);
-    } catch (_) {
-        return null;
-    }
-  }
-
-  static Box<OfflineMapRegion> get _offlineMapsBox => Hive.box<OfflineMapRegion>(_offlineMapsBoxName);
-
-  static List<OfflineMapRegion> getAllOfflineMaps() {
-    return _offlineMapsBox.values.toList();
-  }
-
-  // Challenges Methods
-  static Box<FitnessChallenge> get _challengesBox => Hive.box<FitnessChallenge>(_challengesBoxName);
-
-  static List<FitnessChallenge> getAllChallenges() {
-    return _challengesBox.values.toList();
-  }
-
-  static Future<void> addChallenge(FitnessChallenge challenge) async {
-    await _challengesBox.put(challenge.id, challenge);
-    await _syncToCloud('fitness_challenges', challenge.id, challenge.toJson());
-  }
-
-  static Future<void> joinChallenge(String challengeId, String userId, String userName) async {
-    final challenge = _challengesBox.get(challengeId);
-    if (challenge != null && !challenge.isJoined) {
-      final updatedParticipants = [...challenge.participants, ChallengeParticipant(
-        userId: userId,
-        userName: userName,
-        progress: 0,
-        rank: challenge.participants.length + 1,
-        joinedAt: DateTime.now(),
-        isCurrentUser: true,
-      )];
-      
-      final updatedChallenge = FitnessChallenge(
-        id: challenge.id,
-        name: challenge.name,
-        description: challenge.description,
-        challengeType: challenge.challengeType,
-        activityType: challenge.activityType,
-        targetValue: challenge.targetValue,
-        targetUnit: challenge.targetUnit,
-        startDate: challenge.startDate,
-        endDate: challenge.endDate,
-        participants: updatedParticipants,
-        imageUrl: challenge.imageUrl,
-        isJoined: true,
-        currentProgress: challenge.currentProgress,
-        privacy: challenge.privacy,
-        creatorId: challenge.creatorId,
-        prizes: challenge.prizes,
-      );
-      
-      await _challengesBox.put(challengeId, updatedChallenge);
-      await _syncToCloud('fitness_challenges', challengeId, updatedChallenge.toJson());
-    }
-  }
-
-  static ValueListenable<Box<FitnessChallenge>> get challengesListenable => _challengesBox.listenable();
-
-  static Box<LeaderboardEntry> get _leaderboardBox => Hive.box<LeaderboardEntry>(_leaderboardBoxName);
-  static ValueListenable<Box<LeaderboardEntry>> get leaderboardListenable => _leaderboardBox.listenable();
-  
-  static Box<SocialActivityItem> get _socialFeedBox => Hive.box<SocialActivityItem>(_socialFeedBoxName);
-  static ValueListenable<Box<SocialActivityItem>> get socialFeedListenable => _socialFeedBox.listenable();
-  
-  static Box<Segment> get _segmentsBox => Hive.box<Segment>(_segmentsBoxName);
-  static ValueListenable<Box<Segment>> get segmentsListenable => _segmentsBox.listenable();
-
-  // Training Plans Methods
-  static Box<TrainingPlan> get _trainingPlansBox => Hive.box<TrainingPlan>(_trainingPlansBoxName);
-
-  static List<TrainingPlan> getAllTrainingPlans() {
-    return _trainingPlansBox.values.toList();
-  }
-
-  static Future<void> addTrainingPlan(TrainingPlan plan) async {
-    await _trainingPlansBox.put(plan.id, plan);
-    await _syncToCloud('training_plans', plan.id, plan.toJson());
-  }
-
-  static ValueListenable<Box<TrainingPlan>> get trainingPlansListenable => _trainingPlansBox.listenable();
-
-  // Personal Records Methods
-  static Box<PersonalRecord> get _personalRecordsBox => Hive.box<PersonalRecord>(_personalRecordsBoxName);
-
-  static List<PersonalRecord> getAllPersonalRecords() {
-    return _personalRecordsBox.values.toList()..sort((a, b) => b.achievedAt.compareTo(a.achievedAt));
-  }
-
-  static ValueListenable<Box<PersonalRecord>> get personalRecordsListenable => _personalRecordsBox.listenable();
-
-  // Heart Rate Zones Methods
-  static Box<HeartRateZone> get _heartRateZonesBox => Hive.box<HeartRateZone>(_heartRateZonesBoxName);
-
-  static List<HeartRateZone> getHeartRateZones() {
-    final zones = _heartRateZonesBox.values.toList();
-    if (zones.isEmpty) {
-      // Return default zones if none exist
-      return HeartRateZone.getDefaultZones(190); // Default max HR 190
-    }
-    return zones..sort((a, b) => a.minBpm.compareTo(b.minBpm));
-  }
-
-  static ValueListenable<Box<HeartRateZone>> get heartRateZonesListenable => _heartRateZonesBox.listenable();
-
-
-  // Readiness Score Methods
-  static Box<ReadinessScore> get _readinessBox => Hive.box<ReadinessScore>(_readinessBoxName);
-
-  static ReadinessScore? getTodayReadiness() {
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month}-${today.day}';
-    
-    // Check if we have a score for today (filtering by date matching)
-    try {
-      return _readinessBox.values.firstWhere((s) {
-        return s.date.year == today.year && 
-               s.date.month == today.month && 
-               s.date.day == today.day;
-      });
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<void> saveReadinessScore(ReadinessScore score) async {
-    await _readinessBox.put(score.id, score);
-    await _syncToCloud('readiness_scores', score.id, score.toJson());
-  }
-
-  static Box<WorkoutAnalysis> get _analysisBox => Hive.box<WorkoutAnalysis>(_workoutAnalysisBoxName);
-  
-  static WorkoutAnalysis? getWorkoutAnalysis(String activityId) {
-    try {
-        return _analysisBox.values.firstWhere((a) => a.activityId == activityId);
-    } catch (_) {
-        return null;
-    }
-  }
-
-  static Future<void> saveWorkoutAnalysis(WorkoutAnalysis analysis) async {
-    await _analysisBox.put(analysis.activityId, analysis);
-  }
-
 
   // App Preferences
-  static Box get _appPrefsBox => Hive.box(_appPrefsBoxName);
+  static Box get _appPrefsBox {
+    if (!Hive.isBoxOpen(_appPrefsBoxName)) {
+      throw StateError('App prefs box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box(_appPrefsBoxName);
+  }
 
   static bool get isFirstLaunch {
     return _appPrefsBox.get('onboarding_complete', defaultValue: false) == false;
@@ -837,7 +610,12 @@ class StorageService {
   }
 
   // Water Reminder Methods
-  static Box<WaterReminder> get _waterReminderBox => Hive.box<WaterReminder>(_waterReminderBoxName);
+  static Box<WaterReminder> get _waterReminderBox {
+    if (!Hive.isBoxOpen(_waterReminderBoxName)) {
+      throw StateError('Water reminder box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<WaterReminder>(_waterReminderBoxName);
+  }
 
   static WaterReminder? getWaterReminder() {
     return _waterReminderBox.get('water_reminder');
@@ -854,7 +632,12 @@ class StorageService {
   }
 
   // Period Reminder Methods
-  static Box<PeriodReminder> get _periodReminderBox => Hive.box<PeriodReminder>(_periodReminderBoxName);
+  static Box<PeriodReminder> get _periodReminderBox {
+    if (!Hive.isBoxOpen(_periodReminderBoxName)) {
+      throw StateError('Period reminder box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<PeriodReminder>(_periodReminderBoxName);
+  }
 
   static PeriodReminder? getPeriodReminder() {
     return _periodReminderBox.get('period_reminder');
@@ -871,7 +654,12 @@ class StorageService {
   }
 
   // ============ Action Log Methods ============
-  static Box<ActionLog> get _actionLogBox => Hive.box<ActionLog>(_actionLogBoxName);
+  static Box<ActionLog> get _actionLogBox {
+    if (!Hive.isBoxOpen(_actionLogBoxName)) {
+      throw StateError('Action log box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<ActionLog>(_actionLogBoxName);
+  }
 
   static List<ActionLog> getAllActionLogs() {
     try {
@@ -1004,26 +792,6 @@ class StorageService {
     await addActionLog(log);
   }
 
-  static Future<void> logHealthCheckDone({
-    required String checkId,
-    required String checkType,
-    required String checkTitle,
-    Map<String, dynamic>? readings,
-  }) async {
-    final log = ActionLog(
-      id: '${checkId}_${DateTime.now().millisecondsSinceEpoch}',
-      type: ActionType.healthCheckDone,
-      timestamp: DateTime.now(),
-      referenceId: checkId,
-      title: checkTitle,
-      metadata: {
-        'checkType': checkType,
-        'readings': readings,
-      },
-    );
-    await addActionLog(log);
-  }
-
   static Future<void> logWaterIntake({
     required int amountMl,
     String? source,
@@ -1090,7 +858,12 @@ class StorageService {
   static ValueListenable<Box<ActionLog>> get actionLogListenable => _actionLogBox.listenable();
 
   // ============ User Settings Methods ============
-  static Box<UserSettings> get _userSettingsBox => Hive.box<UserSettings>(_userSettingsBoxName);
+  static Box<UserSettings> get _userSettingsBox {
+    if (!Hive.isBoxOpen(_userSettingsBoxName)) {
+      throw StateError('User settings box not initialized. Call StorageService.init() first.');
+    }
+    return Hive.box<UserSettings>(_userSettingsBoxName);
+  }
 
   static UserSettings getUserSettings() {
     try {
@@ -1267,7 +1040,6 @@ class StorageService {
       return {
         'exportDate': DateTime.now().toIso8601String(),
         'medicines': getAllMedicines().map((m) => m.toJson()).toList(),
-        'healthChecks': getAllHealthChecks().map((h) => h.toJson()).toList(),
         'fitnessReminders': getAllFitnessReminders().map((f) => f.toJson()).toList(),
         'periodData': getPeriodData()?.toJson(),
         'waterReminder': getWaterReminder()?.toJson(),
@@ -1301,14 +1073,6 @@ class StorageService {
         for (final json in data['medicines'] as List) {
           final medicine = Medicine.fromJson(json);
           await addMedicine(medicine);
-        }
-      }
-      
-      // Import health checks
-      if (data['healthChecks'] != null) {
-        for (final json in data['healthChecks'] as List) {
-          final check = HealthCheck.fromJson(json);
-          await addHealthCheck(check);
         }
       }
       
@@ -1371,7 +1135,6 @@ class StorageService {
   }
   static Box<FolderModel> get _foldersBox => Hive.box<FolderModel>(_foldersBoxName);
   static Box<TagModel> get _tagsBox => Hive.box<TagModel>(_tagsBoxName);
-  static Box<NoteVersionModel> get _noteVersionsBox => Hive.box<NoteVersionModel>(_noteVersionsBoxName);
 
   static ValueListenable<Box<NoteModel>> get notesListenable => _notesBox.listenable();
   static ValueListenable<Box<FolderModel>> get foldersListenable => _foldersBox.listenable();
@@ -1421,21 +1184,12 @@ class StorageService {
     await _tagsBox.delete(id);
   }
 
-  // Note Versions
-  static List<NoteVersionModel> getNoteVersions(String noteId) {
-    return _noteVersionsBox.values.where((v) => v.noteId == noteId).toList();
-  }
-
-  static Future<void> saveNoteVersion(NoteVersionModel version) async {
-    await _noteVersionsBox.put(version.id, version);
-  }
 
 
   // ============ Clear All Data ============
   static Future<void> clearAllData() async {
     try {
       await _medicineBox.clear();
-      await _healthCheckBox.clear();
       await _fitnessBox.clear();
       await _waterBox.clear();
       await _periodBox.clear();
@@ -1447,7 +1201,6 @@ class StorageService {
       await _notesBox.clear();
       await _foldersBox.clear();
       await _tagsBox.clear();
-      await _noteVersionsBox.clear();
       
       // Keep user settings and app preferences
       debugPrint('All data cleared');
@@ -1456,42 +1209,10 @@ class StorageService {
     }
   }
 
-  // ============ Missing Fitness Methods ============
-  static Future<void> saveHeartRateZone(HeartRateZone zone) async {
-    await _heartRateZonesBox.put(zone.id, zone);
-  }
+  // ============ Backup & Restore (Notes Feature) ============
 
-  static Future<void> saveFitnessActivity(FitnessActivity activity) async {
-    await _fitnessActivityBox.put(activity.id, activity);
-  }
-
-  static Future<void> savePersonalRecord(PersonalRecord record) async {
-    await _personalRecordsBox.put(record.id, record);
-    // Also update leaderboard/etc if needed? For now just save.
-  }
-
-  static Future<void> saveRoute(WorkoutRoute route) async {
-    await _routesBox.put(route.id, route);
-  }
-  
-  static Future<void> saveSuggestedRoute(SuggestedRoute route) async {
-    await _suggestedRoutesBox.put(route.id, route);
-  }
-  
-  static Future<void> saveReadinessScore(ReadinessScore score) async {
-    await _readinessBox.put(score.id, score);
-  }
-  
-  static Future<void> saveWorkoutAnalysis(WorkoutAnalysis analysis) async {
-    await _workoutAnalysisBox.put(analysis.id, analysis);
-  }
-  
-  static ValueListenable<Box<HeartRateZone>> get heartRateZonesListenable => _heartRateZonesBox.listenable();
-
-  // ============ Backup & Restore ============
-
-  /// Exports all relevant data as a JSON-encodable Map
-  static Future<Map<String, dynamic>> exportAllData() async {
+  /// Exports all relevant data as a JSON-encodable Map (Notes-focused backup)
+  static Future<Map<String, dynamic>> exportNotesData() async {
     return {
       'timestamp': DateTime.now().toIso8601String(),
       'version': 1,
@@ -1499,11 +1220,9 @@ class StorageService {
       'notes': _notesBox.values.map((e) => _noteToJson(e)).toList(),
       'folders': _foldersBox.values.map((e) => _folderToJson(e)).toList(),
       'tags': _tagsBox.values.map((e) => _tagToJson(e)).toList(),
-      'note_versions': _noteVersionsBox.values.map((e) => _noteVersionToJson(e)).toList(),
       
       // Legacy Features
       'medicines': getAllMedicines().map((m) => m.toJson()).toList(),
-      'healthChecks': getAllHealthChecks().map((h) => h.toJson()).toList(),
       'fitnessReminders': getAllFitnessReminders().map((f) => f.toJson()).toList(),
       'periodData': getPeriodData()?.toJson(),
       'waterReminder': getWaterReminder()?.toJson(),
@@ -1524,22 +1243,13 @@ class StorageService {
     };
   }
   
-  /// Imports data from a JSON Map.
-  /// WARNING: This overwrites existing data if instructed, or merges.
-  /// For simplicity v1: Clear and Rewrite (Restore)
-  static Future<void> importData(Map<String, dynamic> data) async {
+  /// Imports notes data from a JSON Map (Notes-focused restore).
+  static Future<void> importNotesData(Map<String, dynamic> data) async {
     try {
-      // Validate version? data['version']
-      
-      // Clear existing relevant data
       await _notesBox.clear();
       await _foldersBox.clear();
       await _tagsBox.clear();
-      await _noteVersionsBox.clear();
-      await _remindersBox.clear();
-      // await _categoriesBox.clear();
       
-      // Restore Notes
       if (data['notes'] != null) {
         for (var item in data['notes']) {
           final note = _jsonToNote(item);
@@ -1547,7 +1257,6 @@ class StorageService {
         }
       }
       
-      // Restore Folders
       if (data['folders'] != null) {
         for (var item in data['folders']) {
           final folder = _jsonToFolder(item);
@@ -1555,7 +1264,6 @@ class StorageService {
         }
       }
       
-      // Restore Tags
       if (data['tags'] != null) {
         for (var item in data['tags']) {
           final tag = _jsonToTag(item);
@@ -1563,17 +1271,9 @@ class StorageService {
         }
       }
       
-      // Restore Versions
-      if (data['note_versions'] != null) {
-        for (var item in data['note_versions']) {
-             // Handle potential format differences manually if needed
-             // For now assuming direct mapping or we implement _jsonToNoteVersion
-        }
-      }
-      
-      debugPrint("Data import completed successfully");
+      debugPrint("Notes data import completed successfully");
     } catch (e) {
-      debugPrint("Error importing data: $e");
+      debugPrint("Error importing notes data: $e");
       rethrow;
     }
   }
@@ -1590,14 +1290,11 @@ class StorageService {
     'content': note.content,
     'createdAt': note.createdAt.toIso8601String(),
     'updatedAt': note.updatedAt.toIso8601String(),
-    'folderId': note.folderId,
     'tagIds': note.tagIds,
     'isPinned': note.isPinned,
     'isArchived': note.isArchived,
     'isDeleted': note.isDeleted,
-    'mediaUrls': note.mediaUrls,
     'color': note.color,
-    'isLocked': note.isLocked,
     'isSynced': note.isSynced,
     'reminderId': note.reminderId,
   };
@@ -1608,14 +1305,11 @@ class StorageService {
     content: json['content'],
     createdAt: DateTime.parse(json['createdAt']),
     updatedAt: DateTime.parse(json['updatedAt']),
-    folderId: json['folderId'],
     tagIds: List<String>.from(json['tagIds'] ?? []),
     isPinned: json['isPinned'] ?? false,
     isArchived: json['isArchived'] ?? false,
     isDeleted: json['isDeleted'] ?? false,
-    mediaUrls: List<String>.from(json['mediaUrls'] ?? []),
     color: json['color'],
-    isLocked: json['isLocked'] ?? false,
     isSynced: false, // Reset sync status on import usually
     reminderId: json['reminderId'],
   );
@@ -1650,12 +1344,6 @@ class StorageService {
     color: json['color'],
   );
   
-  static Map<String, dynamic> _noteVersionToJson(NoteVersionModel v) => {
-     'id': v.id,
-     'noteId': v.noteId,
-     'content': v.content,
-     'createdAt': v.createdAt.toIso8601String(),
-  };
 
   static Map<String, dynamic> _userSettingsToJson(UserSettings s) => {
      // Implement if needed
@@ -1663,12 +1351,14 @@ class StorageService {
   };
   
   static Map<String, dynamic> _reminderToJson(Reminder r) => {
-    // Basic reminder backup
     'id': r.id,
     'title': r.title,
+    'body': r.body,
     'scheduledTime': r.scheduledTime.toIso8601String(),
-    'isEnabled': r.isEnabled,
+    'isCompleted': r.isCompleted,
     'categoryId': r.categoryId,
+    'repeatType': r.repeatType.index,
+    'priority': r.priority.index,
   };
 
 }

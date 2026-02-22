@@ -495,3 +495,149 @@ enum MedicineShape {
     }
   }
 }
+
+@HiveType(typeId: 158)
+enum HealthCategory {
+  @HiveField(0)
+  heart,
+  @HiveField(1)
+  kidney,
+  @HiveField(2)
+  lungs,
+  @HiveField(3)
+  liver,
+  @HiveField(4)
+  brain,
+  @HiveField(5)
+  stomach,
+  @HiveField(6)
+  skin,
+  @HiveField(7)
+  eye,
+  @HiveField(8)
+  ear,
+  @HiveField(9)
+  bone,
+  @HiveField(10)
+  blood,
+  @HiveField(11)
+  diabetes,
+  @HiveField(12)
+  thyroid,
+  @HiveField(13)
+  mentalHealth,
+  @HiveField(14)
+  reproductive,
+  @HiveField(15)
+  immune,
+  @HiveField(16)
+  cancer,
+  @HiveField(17)
+  pain,
+  @HiveField(18)
+  infection,
+  @HiveField(19)
+  allergy,
+  @HiveField(20)
+  vitamin,
+  @HiveField(21)
+  custom;
+
+  String get displayName {
+    switch (this) {
+      case HealthCategory.heart:
+        return 'Heart & Cardiovascular';
+      case HealthCategory.kidney:
+        return 'Kidney & Urinary';
+      case HealthCategory.lungs:
+        return 'Lungs & Respiratory';
+      case HealthCategory.liver:
+        return 'Liver & Digestive';
+      case HealthCategory.brain:
+        return 'Brain & Neurological';
+      case HealthCategory.stomach:
+        return 'Stomach & Gastrointestinal';
+      case HealthCategory.skin:
+        return 'Skin & Dermatology';
+      case HealthCategory.eye:
+        return 'Eye & Vision';
+      case HealthCategory.ear:
+        return 'Ear & Hearing';
+      case HealthCategory.bone:
+        return 'Bone & Joints';
+      case HealthCategory.blood:
+        return 'Blood & Circulation';
+      case HealthCategory.diabetes:
+        return 'Diabetes';
+      case HealthCategory.thyroid:
+        return 'Thyroid & Endocrine';
+      case HealthCategory.mentalHealth:
+        return 'Mental Health';
+      case HealthCategory.reproductive:
+        return 'Reproductive Health';
+      case HealthCategory.immune:
+        return 'Immune System';
+      case HealthCategory.cancer:
+        return 'Cancer Treatment';
+      case HealthCategory.pain:
+        return 'Pain Management';
+      case HealthCategory.infection:
+        return 'Infection & Antibiotics';
+      case HealthCategory.allergy:
+        return 'Allergy';
+      case HealthCategory.vitamin:
+        return 'Vitamins & Supplements';
+      case HealthCategory.custom:
+        return 'Custom Category';
+    }
+  }
+
+  String get icon {
+    switch (this) {
+      case HealthCategory.heart:
+        return '❤️';
+      case HealthCategory.kidney:
+        return '🫘';
+      case HealthCategory.lungs:
+        return '🫁';
+      case HealthCategory.liver:
+        return '🫀';
+      case HealthCategory.brain:
+        return '🧠';
+      case HealthCategory.stomach:
+        return '🫃';
+      case HealthCategory.skin:
+        return '🧴';
+      case HealthCategory.eye:
+        return '👁️';
+      case HealthCategory.ear:
+        return '👂';
+      case HealthCategory.bone:
+        return '🦴';
+      case HealthCategory.blood:
+        return '🩸';
+      case HealthCategory.diabetes:
+        return '💉';
+      case HealthCategory.thyroid:
+        return '🦋';
+      case HealthCategory.mentalHealth:
+        return '🧘';
+      case HealthCategory.reproductive:
+        return '🌸';
+      case HealthCategory.immune:
+        return '🛡️';
+      case HealthCategory.cancer:
+        return '🎗️';
+      case HealthCategory.pain:
+        return '💊';
+      case HealthCategory.infection:
+        return '🦠';
+      case HealthCategory.allergy:
+        return '🤧';
+      case HealthCategory.vitamin:
+        return '💪';
+      case HealthCategory.custom:
+        return '📋';
+    }
+  }
+}

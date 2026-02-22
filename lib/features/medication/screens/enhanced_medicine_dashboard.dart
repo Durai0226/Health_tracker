@@ -3,11 +3,13 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
+import '../../../core/widgets/common_tab_widgets.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/drug_interaction_service.dart';
-import 'enhanced_add_medicine_screen.dart';
+import 'add_medicine_wizard.dart';
 import 'medicine_detail_screen.dart';
 import 'medicine_history_screen.dart';
 
@@ -102,7 +104,7 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -128,7 +130,7 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const EnhancedAddMedicineScreen()),
+          MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
         ).then((_) => _loadData()),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -475,32 +477,18 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical:20),
       child: Column(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: TabBar(
+          CommonCard(
+            child: CommonTabBar(
+              tabs: const ['Today', 'Upcoming', 'All Meds'],
               controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              labelColor: Colors.white,
-              unselectedLabelColor: AppColors.textSecondary,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              tabs: const [
-                Tab(text: 'Today'),
-                Tab(text: 'Upcoming'),
-                Tab(text: 'All Meds'),
-              ],
             ),
           ),
           const SizedBox(height: 16),
           Container(
-            height: 400,
+            constraints: BoxConstraints(
+              minHeight: 200,
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
             decoration: BoxDecoration(
               color: AppColors.background,
               borderRadius: BorderRadius.circular(16),
@@ -591,6 +579,16 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
     final statusColor = dose.isTaken 
         ? AppColors.success 
         : (isOverdue ? AppColors.error : AppColors.primary);
+    
+    final now = DateTime.now();
+    final scheduledDateTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      dose.scheduledTime.hour,
+      dose.scheduledTime.minute,
+    );
+    final canTakeNow = now.isAfter(scheduledDateTime) || now.isAtSameMomentAs(scheduledDateTime);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -659,7 +657,7 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
               ],
             ),
           ),
-          if (!dose.isTaken)
+          if (!dose.isTaken && canTakeNow)
             GestureDetector(
               onTap: () => _takeDose(dose),
               child: Container(
@@ -676,6 +674,29 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
                     fontSize: 13,
                   ),
                 ),
+              ),
+            )
+          else if (!dose.isTaken && !canTakeNow)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule_rounded, size: 14, color: AppColors.info),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Scheduled',
+                    style: TextStyle(
+                      color: AppColors.info,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             )
           else

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/common_tab_widgets.dart';
 import '../models/beverage_type.dart';
+import '../models/enhanced_water_log.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
 
@@ -163,19 +166,17 @@ class _BeverageSelectionScreenState extends State<BeverageSelectionScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Add Drink'),
-        bottom: TabBar(
+        bottom: CommonTabBar(
+          tabs: _categories,
           controller: _tabController,
           isScrollable: true,
-          labelColor: AppColors.info,
-          unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.info,
-          tabs: _categories.map((c) => Tab(text: c)).toList(),
         ),
       ),
       body: Column(
         children: [
           Expanded(
-            child: TabBarView(
+            child: CommonTabView(
               controller: _tabController,
               children: _categories.map((category) {
                 return _buildBeverageGrid(category);
@@ -487,47 +488,13 @@ class _BeverageSelectionScreenState extends State<BeverageSelectionScreen>
         top: 16,
         bottom: MediaQuery.of(context).padding.bottom + 16,
       ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 56,
-        child: ElevatedButton(
-          onPressed: canLog && !_isLogging ? _logDrink : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: canLog ? AppColors.info : Colors.grey.shade300,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: canLog ? 4 : 0,
-          ),
-          child: _isLogging
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (_selectedBeverage != null) ...[
-                      Text(_selectedBeverage!.emoji, style: const TextStyle(fontSize: 20)),
-                      const SizedBox(width: 12),
-                    ],
-                    Text(
-                      canLog
-                          ? 'Log ${_customAmount}ml ${_selectedBeverage?.name ?? ''}'
-                          : 'Select a Drink',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
+      child: CommonButton(
+        text: 'Log ${_customAmount}ml${_selectedBeverage != null ? ' ${_selectedBeverage!.name}' : ''}',
+        icon: Icons.local_drink,
+        variant: ButtonVariant.primary,
+        backgroundColor: canLog ? AppColors.info : Colors.grey.shade300,
+        isLoading: _isLogging,
+        onPressed: canLog && !_isLogging ? _logDrink : null,
       ),
     );
   }

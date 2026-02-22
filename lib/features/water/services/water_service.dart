@@ -87,14 +87,22 @@ class WaterService {
 
   /// Add custom beverage
   static Future<void> addCustomBeverage(BeverageType beverage) async {
-    await _beveragesBox?.put(beverage.id, beverage);
+    if (_beveragesBox == null) {
+      debugPrint('Error: WaterService not initialized when adding beverage');
+      throw Exception('WaterService not initialized');
+    }
+    await _beveragesBox!.put(beverage.id, beverage);
   }
 
   /// Delete custom beverage (only non-default)
   static Future<void> deleteBeverage(String id) async {
-    final beverage = _beveragesBox?.get(id);
+    if (_beveragesBox == null) {
+      debugPrint('Error: WaterService not initialized when deleting beverage');
+      throw Exception('WaterService not initialized');
+    }
+    final beverage = _beveragesBox!.get(id);
     if (beverage != null && !beverage.isDefault) {
-      await _beveragesBox?.delete(id);
+      await _beveragesBox!.delete(id);
     }
   }
 
@@ -114,11 +122,13 @@ class WaterService {
 
   /// Track beverage usage
   static Future<void> _trackBeverageUsage(String beverageId) async {
+    if (_prefsBox == null) return; // Silent return or throw? Since this is internal, maybe log.
+    
     final usage = Map<String, int>.from(
-      _prefsBox?.get('beverage_usage') as Map? ?? {},
+      _prefsBox!.get('beverage_usage') as Map? ?? {},
     );
     usage[beverageId] = (usage[beverageId] ?? 0) + 1;
-    await _prefsBox?.put('beverage_usage', usage);
+    await _prefsBox!.put('beverage_usage', usage);
   }
 
   // ============ CONTAINERS ============
@@ -135,19 +145,31 @@ class WaterService {
 
   /// Add custom container
   static Future<void> addCustomContainer(WaterContainer container) async {
-    await _containersBox?.put(container.id, container);
+    if (_containersBox == null) {
+      debugPrint('Error: WaterService not initialized when adding container');
+      throw Exception('WaterService not initialized');
+    }
+    await _containersBox!.put(container.id, container);
   }
 
   /// Update container
   static Future<void> updateContainer(WaterContainer container) async {
-    await _containersBox?.put(container.id, container);
+    if (_containersBox == null) {
+      debugPrint('Error: WaterService not initialized when updating container');
+      throw Exception('WaterService not initialized');
+    }
+    await _containersBox!.put(container.id, container);
   }
 
   /// Delete custom container
   static Future<void> deleteContainer(String id) async {
-    final container = _containersBox?.get(id);
+    if (_containersBox == null) {
+      debugPrint('Error: WaterService not initialized when deleting container');
+      throw Exception('WaterService not initialized');
+    }
+    final container = _containersBox!.get(id);
     if (container != null && !container.isDefault) {
-      await _containersBox?.delete(id);
+      await _containersBox!.delete(id);
     }
   }
 
@@ -170,7 +192,11 @@ class WaterService {
 
   /// Save hydration profile
   static Future<void> saveProfile(HydrationProfile profile) async {
-    await _profileBox?.put('profile', profile);
+    if (_profileBox == null) {
+      debugPrint('Error: WaterService not initialized when saving profile');
+      throw Exception('WaterService not initialized');
+    }
+    await _profileBox!.put('profile', profile);
   }
 
   /// Get calculated daily goal
@@ -219,8 +245,12 @@ class WaterService {
   }
 
   static Future<void> saveDailyData(DailyWaterData data) async {
+    if (_dailyWaterBox == null) {
+      debugPrint('Error: WaterService not initialized when saving daily data');
+      throw Exception('WaterService not initialized');
+    }
     final key = _getDateKey(data.date);
-    await _dailyWaterBox?.put(key, data);
+    await _dailyWaterBox!.put(key, data);
   }
 
   /// Add water log
@@ -230,9 +260,14 @@ class WaterService {
     WaterContainer? container,
     String? note,
   }) async {
+    if (_dailyWaterBox == null) {
+      debugPrint('Error: WaterService not initialized when adding water log');
+      throw Exception('WaterService not initialized');
+    }
+    
     final now = DateTime.now();
     final key = _getDateKey(now);
-    var todayData = _dailyWaterBox?.get(key) ?? DailyWaterData(
+    var todayData = _dailyWaterBox!.get(key) ?? DailyWaterData(
       id: key,
       date: now,
       dailyGoalMl: getDailyGoal(),
@@ -299,8 +334,13 @@ class WaterService {
 
   /// Remove water log
   static Future<void> removeWaterLog(String logId) async {
+    if (_dailyWaterBox == null) {
+      debugPrint('Error: WaterService not initialized when removing water log');
+      throw Exception('WaterService not initialized');
+    }
+    
     final key = _getDateKey(DateTime.now());
-    var todayData = _dailyWaterBox?.get(key);
+    var todayData = _dailyWaterBox!.get(key);
     if (todayData == null) return;
 
     final logIndex = todayData.logs.indexWhere((l) => l.id == logId);
@@ -322,8 +362,13 @@ class WaterService {
 
   /// Remove water log for a specific date
   static Future<void> removeWaterLogForDate(DateTime date, String logId) async {
+    if (_dailyWaterBox == null) {
+      debugPrint('Error: WaterService not initialized when removing water log for date');
+      throw Exception('WaterService not initialized');
+    }
+    
     final key = _getDateKey(date);
-    var dayData = _dailyWaterBox?.get(key);
+    var dayData = _dailyWaterBox!.get(key);
     if (dayData == null) return;
 
     final logIndex = dayData.logs.indexWhere((l) => l.id == logId);
@@ -352,9 +397,14 @@ class WaterService {
     DateTime? time,
     String? note,
   }) async {
+    if (_dailyWaterBox == null) {
+      debugPrint('Error: WaterService not initialized when adding water log for date');
+      throw Exception('WaterService not initialized');
+    }
+    
     final key = _getDateKey(date);
     final logTime = time ?? date;
-    var dayData = _dailyWaterBox?.get(key) ?? DailyWaterData(
+    var dayData = _dailyWaterBox!.get(key) ?? DailyWaterData(
       id: key,
       date: date,
       dailyGoalMl: getDailyGoal(),
@@ -418,8 +468,13 @@ class WaterService {
     DateTime? time,
     String? note,
   }) async {
+    if (_dailyWaterBox == null) {
+      debugPrint('Error: WaterService not initialized when updating water log for date');
+      throw Exception('WaterService not initialized');
+    }
+    
     final key = _getDateKey(date);
-    var dayData = _dailyWaterBox?.get(key);
+    var dayData = _dailyWaterBox!.get(key);
     if (dayData == null) {
       throw Exception('No data for this date');
     }
@@ -497,6 +552,8 @@ class WaterService {
     BeverageType beverage,
     DateTime now,
   ) async {
+    if (_achievementsBox == null) return []; // Silent return or throw? Internal method.
+    
     var userAchievements = getAchievements();
     final newlyUnlocked = <WaterAchievement>[];
 

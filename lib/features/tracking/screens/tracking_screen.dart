@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/services/feature_manager.dart';
+import '../../../core/services/category_manager.dart';
 import '../../../core/services/focus_mode_service.dart';
 import '../../water/services/water_service.dart';
 import '../../water/models/enhanced_water_log.dart';
+import '../../water/models/beverage_type.dart';
 import '../../water/screens/water_dashboard_screen.dart';
 import '../../fitness/screens/fitness_dashboard_screen.dart';
 import '../../focus/screens/focus_screen.dart';
@@ -44,6 +47,10 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    final categoryManager = CategoryManager();
+    final selectedCategory = categoryManager.selectedCategory;
+    final enabledFeatures = categoryManager.enabledFeatureIds;
+    
     final waterData = WaterService.getTodayData();
     final isPeriodEnabled = StorageService.isPeriodTrackingEnabled;
     final medicines = StorageService.getAllMedicines();
@@ -63,6 +70,12 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
       'dailyGoal': dailyGoal,
       'avgCompletionRate': dailyGoal > 0 ? (avgDailyMl / dailyGoal * 100).round() : 0,
     };
+    
+    // Helper to check if feature is enabled for selected category
+    bool isFeatureEnabled(String featureId) {
+      return enabledFeatures.contains(featureId) || 
+             categoryManager.isFeatureEnabled(featureId);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -78,19 +91,37 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
                 _buildHeader(),
                 const SizedBox(height: 24),
 
-                // Quick Stats Overview
+                // Quick Stats Overview - filtered by category
                 _buildQuickStatsRow(
-                  todayData: waterData,
-                  medicineCount: medicines.length,
-                  fitnessCount: fitnessReminders.length,
-                  focusMinutes: focusService.todayMinutes,
+                  todayData: isFeatureEnabled('water') ? waterData : null,
+                  medicineCount: isFeatureEnabled('medicine') ? medicines.length : 0,
+                  fitnessCount: isFeatureEnabled('fitness') ? fitnessReminders.length : 0,
+                  focusMinutes: isFeatureEnabled('focus') ? focusService.todayMinutes : 0,
+                  enabledFeatures: enabledFeatures,
                 ),
                 const SizedBox(height: 24),
 
-                // Premium Category Cards
+                // Quick Actions Section - filtered by category
+                _buildSectionHeader('Quick Actions', icon: Icons.flash_on_rounded),
+                const SizedBox(height: 14),
+                _buildQuickActionsGrid(context, waterData, enabledFeatures),
+                const SizedBox(height: 24),
+
+                // Habit Streaks Section
+                _buildSectionHeader('Habit Streaks', icon: Icons.local_fire_department_rounded),
+                const SizedBox(height: 14),
+                _buildHabitStreaksSection(
+                  medicineStats: medicineStats,
+                  waterStats: waterStats,
+                  fitnessStats: fitnessStats,
+                  focusService: focusService,
+                ),
+                const SizedBox(height: 24),
+
+                // Health Category Cards - filtered by selected category
                 _buildSectionHeader('Health Categories', icon: Icons.category_rounded),
                 const SizedBox(height: 14),
-                _buildPremiumCategoryCards(
+                _buildCategoryCards(
                   context,
                   todayData: waterData,
                   medicineStats: medicineStats,
@@ -98,10 +129,11 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
                   focusService: focusService,
                   waterStats: waterStats,
                   isPeriodEnabled: isPeriodEnabled,
+                  enabledFeatures: enabledFeatures,
                 ),
                 const SizedBox(height: 28),
 
-                // Detailed Analytics per Category
+                // Detailed Analytics per Category - filtered by selected category
                 _buildSectionHeader('Category Insights', icon: Icons.insights_rounded),
                 const SizedBox(height: 14),
                 _buildDetailedAnalytics(
@@ -109,6 +141,7 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
                   waterStats: waterStats,
                   fitnessStats: fitnessStats,
                   focusService: focusService,
+                  enabledFeatures: enabledFeatures,
                 ),
               ],
             ),
@@ -214,7 +247,55 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
     required int medicineCount,
     required int fitnessCount,
     required int focusMinutes,
+    required List<String> enabledFeatures,
   }) {
+    // Build list of enabled stats
+    final stats = <Widget>[];
+    
+    if (enabledFeatures.contains('water') || enabledFeatures.contains('medicine')) {
+      stats.add(_buildQuickStat(
+        icon: Icons.water_drop_rounded,
+        color: AppColors.info,
+        value: '${((todayData?.effectiveHydrationMl ?? 0) / 1000).toStringAsFixed(1)}L',
+        label: 'Water',
+      ));
+    }
+    
+    if (enabledFeatures.contains('medicine')) {
+      if (stats.isNotEmpty) stats.add(_buildStatDivider());
+      stats.add(_buildQuickStat(
+        icon: Icons.medication_rounded,
+        color: AppColors.primary,
+        value: '$medicineCount',
+        label: 'Meds',
+      ));
+    }
+    
+    if (enabledFeatures.contains('fitness')) {
+      if (stats.isNotEmpty) stats.add(_buildStatDivider());
+      stats.add(_buildQuickStat(
+        icon: Icons.fitness_center_rounded,
+        color: AppColors.warning,
+        value: '$fitnessCount',
+        label: 'Workouts',
+      ));
+    }
+    
+    if (enabledFeatures.contains('focus')) {
+      if (stats.isNotEmpty) stats.add(_buildStatDivider());
+      stats.add(_buildQuickStat(
+        icon: Icons.self_improvement_rounded,
+        color: AppColors.focusPrimary,
+        value: '${focusMinutes}m',
+        label: 'Focus',
+      ));
+    }
+    
+    // If no features enabled, show a placeholder
+    if (stats.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -238,35 +319,7 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildQuickStat(
-            icon: Icons.water_drop_rounded,
-            color: AppColors.info,
-            value: '${((todayData?.effectiveHydrationMl ?? 0) / 1000).toStringAsFixed(1)}L',
-            label: 'Water',
-          ),
-          _buildStatDivider(),
-          _buildQuickStat(
-            icon: Icons.medication_rounded,
-            color: AppColors.primary,
-            value: '$medicineCount',
-            label: 'Meds',
-          ),
-          _buildStatDivider(),
-          _buildQuickStat(
-            icon: Icons.fitness_center_rounded,
-            color: AppColors.warning,
-            value: '$fitnessCount',
-            label: 'Workouts',
-          ),
-          _buildStatDivider(),
-          _buildQuickStat(
-            icon: Icons.self_improvement_rounded,
-            color: AppColors.focusPrimary,
-            value: '${focusMinutes}m',
-            label: 'Focus',
-          ),
-        ],
+        children: stats,
       ),
     );
   }
@@ -326,8 +379,8 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
     );
   }
 
-  // ============ PREMIUM CATEGORY CARDS ============
-  Widget _buildPremiumCategoryCards(
+  // ============ CATEGORY CARDS ============
+  Widget _buildCategoryCards(
     BuildContext context, {
     required DailyWaterData? todayData,
     required Map<String, dynamic> medicineStats,
@@ -335,90 +388,106 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
     required FocusModeService focusService,
     required Map<String, dynamic> waterStats,
     required bool isPeriodEnabled,
+    required List<String> enabledFeatures,
   }) {
+    // Helper to check if feature is in enabled list
+    bool isEnabled(String featureId) => enabledFeatures.contains(featureId);
+    
     return Column(
       children: [
-        // Medicine & Water Row
-        Row(
-          children: [
-            Expanded(
-              child: _buildPremiumCategoryCard(
-                context,
-                title: 'Medicine',
-                icon: Icons.medication_rounded,
-                color: AppColors.primary,
-                mainValue: '${medicineStats['adherenceRate']}%',
-                subtitle: 'Adherence Rate',
-                detail: '${medicineStats['taken']} taken this week',
-                screen: const EnhancedMedicineDashboard(),
-                progress: (medicineStats['adherenceRate'] as int) / 100,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildPremiumCategoryCard(
-                context,
-                title: 'Hydration',
-                icon: Icons.water_drop_rounded,
-                color: AppColors.info,
-                mainValue: '${((todayData?.effectiveHydrationMl ?? 0) / 1000).toStringAsFixed(1)}L',
-                subtitle: 'Today\'s intake',
-                detail: 'Goal: ${(waterStats['dailyGoal']! / 1000).toStringAsFixed(1)}L',
-                screen: const WaterDashboardScreen(),
-                progress: todayData?.progress ?? 0.0,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Fitness & Focus Row
-        Row(
-          children: [
-            Expanded(
-              child: _buildPremiumCategoryCard(
-                context,
-                title: 'Fitness',
-                icon: Icons.fitness_center_rounded,
-                color: AppColors.warning,
-                mainValue: '${fitnessStats['totalMinutes']}m',
-                subtitle: 'This Week',
-                detail: '${fitnessStats['completed']} sessions done',
-                screen: const FitnessDashboardScreen(),
-                progress: (fitnessStats['completionRate'] as int) / 100,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildPremiumCategoryCard(
-                context,
-                title: 'Focus',
-                icon: Icons.self_improvement_rounded,
-                color: AppColors.focusPrimary,
-                mainValue: '${focusService.todayMinutes}m',
-                subtitle: 'Today',
-                detail: '${focusService.totalSessions} total sessions',
-                screen: const FocusScreen(),
-                progress: (focusService.todayMinutes / 60).clamp(0.0, 1.0),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Period Tracking Wide Card
-        _buildWidePremiumCard(
-          context,
-          title: 'Period Tracking',
-          icon: Icons.calendar_month_rounded,
-          color: AppColors.periodPrimary,
-          value: isPeriodEnabled ? 'Active' : 'Set Up',
-          subtitle: isPeriodEnabled ? 'Track your cycle' : 'Start tracking today',
-          screen: isPeriodEnabled ? const PeriodOverviewScreen() : const PeriodIntroScreen(),
-        ),
+        // Medicine & Water Row - show only if enabled for selected category
+        if (isEnabled('medicine') || isEnabled('water'))
+          Row(
+            children: [
+              if (isEnabled('medicine'))
+                Expanded(
+                  child: _buildCategoryCard(
+                    context,
+                    title: 'Medicine',
+                    icon: Icons.medication_rounded,
+                    color: AppColors.primary,
+                    mainValue: '${medicineStats['adherenceRate']}%',
+                    subtitle: 'Adherence Rate',
+                    detail: '${medicineStats['taken']} taken this week',
+                    screen: const EnhancedMedicineDashboard(),
+                    progress: (medicineStats['adherenceRate'] as int) / 100,
+                  ),
+                ),
+              if (isEnabled('medicine') && isEnabled('water'))
+                const SizedBox(width: 12),
+              if (isEnabled('water'))
+                Expanded(
+                  child: _buildCategoryCard(
+                    context,
+                    title: 'Hydration',
+                    icon: Icons.water_drop_rounded,
+                    color: AppColors.info,
+                    mainValue: '${((todayData?.effectiveHydrationMl ?? 0) / 1000).toStringAsFixed(1)}L',
+                    subtitle: 'Today\'s intake',
+                    detail: 'Goal: ${(waterStats['dailyGoal']! / 1000).toStringAsFixed(1)}L',
+                    screen: const WaterDashboardScreen(),
+                    progress: todayData?.progress ?? 0.0,
+                  ),
+                ),
+            ],
+          ),
+        // Spacing between rows
+        if (isEnabled('medicine') || isEnabled('water'))
+          const SizedBox(height: 12),
+        // Fitness & Focus Row - show if enabled for selected category
+        if (isEnabled('fitness') || isEnabled('focus'))
+          Row(
+            children: [
+              if (isEnabled('fitness'))
+                Expanded(
+                  child: _buildCategoryCard(
+                    context,
+                    title: 'Fitness',
+                    icon: Icons.fitness_center_rounded,
+                    color: AppColors.warning,
+                    mainValue: '${fitnessStats['totalMinutes']}m',
+                    subtitle: 'This Week',
+                    detail: '${fitnessStats['completed']} sessions done',
+                    screen: const FitnessDashboardScreen(),
+                    progress: (fitnessStats['completionRate'] as int) / 100,
+                  ),
+                ),
+              if (isEnabled('fitness') && isEnabled('focus'))
+                const SizedBox(width: 12),
+              if (isEnabled('focus'))
+                Expanded(
+                  child: _buildCategoryCard(
+                    context,
+                    title: 'Focus',
+                    icon: Icons.self_improvement_rounded,
+                    color: AppColors.focusPrimary,
+                    mainValue: '${focusService.todayMinutes}m',
+                    subtitle: 'Today',
+                    detail: '${focusService.totalSessions} total sessions',
+                    screen: const FocusScreen(),
+                    progress: (focusService.todayMinutes / 60).clamp(0.0, 1.0),
+                  ),
+                ),
+            ],
+          ),
+        // Period Tracking Wide Card - show if enabled for selected category
+        if (isEnabled('period')) ...[
+          const SizedBox(height: 12),
+          _buildWideCard(
+            context,
+            title: 'Period Tracking',
+            icon: Icons.calendar_month_rounded,
+            color: AppColors.periodPrimary,
+            value: isPeriodEnabled ? 'Active' : 'Set Up',
+            subtitle: isPeriodEnabled ? 'Track your cycle' : 'Start tracking today',
+            screen: isPeriodEnabled ? const PeriodOverviewScreen() : const PeriodIntroScreen(),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildPremiumCategoryCard(
+  Widget _buildCategoryCard(
     BuildContext context, {
     required String title,
     required IconData icon,
@@ -520,7 +589,7 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildWidePremiumCard(
+  Widget _buildWideCard(
     BuildContext context, {
     required String title,
     required IconData icon,
@@ -790,6 +859,295 @@ class _TrackingScreenState extends State<TrackingScreen> with SingleTickerProvid
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============ QUICK ACTIONS GRID ============
+  Widget _buildQuickActionsGrid(BuildContext context, DailyWaterData? waterData) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickActionButton(
+                  icon: Icons.water_drop_rounded,
+                  label: '+250ml Water',
+                  color: AppColors.info,
+                  onTap: () async {
+                    await WaterService.addWaterLog(
+                      amountMl: 250,
+                      beverage: WaterService.getBeverage('water') ?? 
+                        BeverageType.defaultBeverages.first,
+                    );
+                    if (mounted) {
+                      setState(() {});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('✓ +250ml water logged'),
+                          backgroundColor: AppColors.info,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickActionButton(
+                  icon: Icons.medication_rounded,
+                  label: 'Log Medicine',
+                  color: AppColors.primary,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EnhancedMedicineDashboard())),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickActionButton(
+                  icon: Icons.fitness_center_rounded,
+                  label: 'Log Workout',
+                  color: AppColors.warning,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FitnessDashboardScreen())),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickActionButton(
+                  icon: Icons.self_improvement_rounded,
+                  label: 'Start Focus',
+                  color: AppColors.focusPrimary,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FocusScreen())),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============ HABIT STREAKS SECTION ============
+  Widget _buildHabitStreaksSection({
+    required Map<String, dynamic> medicineStats,
+    required Map<String, dynamic> waterStats,
+    required Map<String, dynamic> fitnessStats,
+    required FocusModeService focusService,
+  }) {
+    final medStreak = _calculateStreak(medicineStats['adherenceRate'] as int);
+    final waterStreak = _calculateStreak(waterStats['avgCompletionRate'] as int);
+    final fitnessStreak = _calculateStreak(fitnessStats['completionRate'] as int);
+    final focusStreak = focusService.todayMinutes >= 30 ? 1 : 0;
+    final totalStreak = medStreak + waterStreak + fitnessStreak + focusStreak;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            const Color(0xFFFF6B35).withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFF6B35).withOpacity(0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF6B35).withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header with total streak
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF6B35), Color(0xFFFF8E53)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Total Streak',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        '$totalStreak days',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFFF6B35),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: totalStreak > 0 ? AppColors.success.withOpacity(0.12) : AppColors.border.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  totalStreak > 0 ? '🔥 Active' : 'Start today!',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: totalStreak > 0 ? AppColors.success : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Individual streaks
+          Row(
+            children: [
+              Expanded(child: _buildStreakItem('Medicine', medStreak, AppColors.primary, Icons.medication_rounded)),
+              Expanded(child: _buildStreakItem('Water', waterStreak, AppColors.info, Icons.water_drop_rounded)),
+              Expanded(child: _buildStreakItem('Fitness', fitnessStreak, AppColors.warning, Icons.fitness_center_rounded)),
+              Expanded(child: _buildStreakItem('Focus', focusStreak, AppColors.focusPrimary, Icons.self_improvement_rounded)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _calculateStreak(int adherenceRate) {
+    if (adherenceRate >= 90) return 7;
+    if (adherenceRate >= 80) return 5;
+    if (adherenceRate >= 70) return 3;
+    if (adherenceRate >= 50) return 1;
+    return 0;
+  }
+
+  Widget _buildStreakItem(String label, int days, Color color, IconData icon) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.local_fire_department_rounded,
+              size: 12,
+              color: days > 0 ? const Color(0xFFFF6B35) : AppColors.textLight,
+            ),
+            const SizedBox(width: 2),
+            Text(
+              '$days',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: days > 0 ? AppColors.textPrimary : AppColors.textLight,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],

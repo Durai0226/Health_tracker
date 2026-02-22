@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
-import '../models/focus_plant.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/focus_session.dart';
-import '../models/breathing_exercise.dart';
+import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
 import '../widgets/plant_animation_widget.dart';
 import '../widgets/breathing_widget.dart';
+import '../models/breathing_exercise.dart';
 import '../widgets/ambient_sound_widget.dart';
 import 'focus_garden_screen.dart';
 import 'focus_stats_screen.dart';
 import 'relaxation_screen.dart';
-import 'relaxation_game_screen.dart';
 import 'plant_real_trees_screen.dart';
 import 'app_allow_list_screen.dart';
 import 'custom_tags_screen.dart';
 import 'detailed_stats_screen.dart';
-import 'leaderboard_screen.dart';
-import 'group_focus_screen.dart';
 import '../services/coins_service.dart';
 
 class FocusScreen extends StatefulWidget {
@@ -88,7 +87,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
             }
           },
           child: Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: AppColors.getBackground(context),
             body: SafeArea(
               child: Column(
                 children: [
@@ -119,8 +118,6 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                             _buildBreathingSection(),
                             const SizedBox(height: 20),
                             _buildRelaxationCard(),
-                            const SizedBox(height: 16),
-                            _buildPremiumRelaxationGameCard(),
                             const SizedBox(height: 24),
                             _buildNewFeaturesSection(),
                           ],
@@ -190,16 +187,18 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
   }
 
   Widget _buildHeaderButton({required IconData icon, required VoidCallback onTap}) {
+    final isDark = AppColors.isDark(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.getCardBg(context),
           borderRadius: BorderRadius.circular(14),
+          border: isDark ? Border.all(color: AppColors.darkBorder.withOpacity(0.5)) : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: AppColors.getSubtleShadow(context),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -391,12 +390,12 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Duration',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.getTextPrimary(context),
           ),
         ),
         const SizedBox(height: 12),
@@ -411,10 +410,10 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : Colors.white,
+                  color: isSelected ? AppColors.primary : AppColors.getCardBg(context),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isSelected ? AppColors.primary : Colors.grey.shade200,
+                    color: isSelected ? AppColors.primary : AppColors.getDivider(context),
                   ),
                   boxShadow: isSelected
                       ? [
@@ -431,7 +430,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: isSelected ? Colors.white : AppColors.textPrimary,
+                    color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
                   ),
                 ),
               ),
@@ -446,12 +445,12 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Activity',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.getTextPrimary(context),
           ),
         ),
         const SizedBox(height: 12),
@@ -468,10 +467,10 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : Colors.white,
+                      color: isSelected ? AppColors.primary : AppColors.getCardBg(context),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? AppColors.primary : Colors.grey.shade200,
+                        color: isSelected ? AppColors.primary : AppColors.getDivider(context),
                       ),
                     ),
                     child: Row(
@@ -484,7 +483,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
                           ),
                         ),
                       ],
@@ -506,19 +505,19 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Choose Your Plant',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: AppColors.getTextPrimary(context),
               ),
             ),
             Text(
               '${_focusService.unlockedPlants.length}/${PlantType.values.length} unlocked',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: AppColors.getTextSecondary(context),
               ),
             ),
           ],
@@ -558,12 +557,12 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Ambient Sound',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.getTextPrimary(context),
           ),
         ),
         const SizedBox(height: 12),
@@ -579,15 +578,16 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
   }
 
   Widget _buildBreathingSection() {
+    final isDark = AppColors.isDark(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Breathing Exercises',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.getTextPrimary(context),
           ),
         ),
         const SizedBox(height: 12),
@@ -611,10 +611,10 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                     width: 140,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: pattern.color.withOpacity(0.1),
+                      color: pattern.color.withOpacity(isDark ? 0.2 : 0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: pattern.color.withOpacity(0.3),
+                        color: pattern.color.withOpacity(isDark ? 0.4 : 0.3),
                       ),
                     ),
                     child: Column(
@@ -645,6 +645,9 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
   }
 
   Widget _buildRelaxationCard() {
+    final isDark = AppColors.isDark(context);
+    final focusColor = AppColors.getFocusAccent(context);
+    
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(24),
@@ -676,22 +679,25 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
           );
         },
         borderRadius: BorderRadius.circular(24),
-        splashColor: const Color(0xFF8B5CF6).withOpacity(0.2),
-        highlightColor: const Color(0xFF8B5CF6).withOpacity(0.1),
+        splashColor: focusColor.withOpacity(0.2),
+        highlightColor: focusColor.withOpacity(0.1),
         child: Ink(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF8B5CF6).withOpacity(0.1),
+              colors: isDark ? [
+                focusColor.withOpacity(0.15),
+                focusColor.withOpacity(0.05),
+              ] : [
+                focusColor.withOpacity(0.1),
                 const Color(0xFF6366F1).withOpacity(0.05),
               ],
             ),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: const Color(0xFF8B5CF6).withOpacity(0.2),
+              color: focusColor.withOpacity(isDark ? 0.3 : 0.2),
             ),
           ),
           child: Row(
@@ -700,7 +706,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6).withOpacity(0.15),
+                  color: focusColor.withOpacity(isDark ? 0.2 : 0.15),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: const Center(
@@ -708,7 +714,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                 ),
               ),
               const SizedBox(width: 16),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -717,15 +723,15 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: AppColors.getTextPrimary(context),
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       'Binaural beats, 432Hz healing, nature sounds & more',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: AppColors.getTextSecondary(context),
                       ),
                     ),
                   ],
@@ -734,7 +740,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6),
+                  color: focusColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -750,181 +756,19 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildPremiumRelaxationGameCard() {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        onTap: () {
-          _hapticService.navigation();
-          _vitaVibeService.tap();
-          Navigator.push(
-            context,
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const RelaxationGameScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-                      CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-                    ),
-                    child: child,
-                  ),
-                );
-              },
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(24),
-        splashColor: const Color(0xFFD4AF37).withOpacity(0.2),
-        highlightColor: const Color(0xFFD4AF37).withOpacity(0.1),
-        child: Ink(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF1A1A2E),
-                Color(0xFF0D0221),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: const Color(0xFFD4AF37).withOpacity(0.3),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFD4AF37).withOpacity(0.15),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFFD4AF37),
-                      Color(0xFFFACC15),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFD4AF37).withOpacity(0.4),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Text('✨', style: TextStyle(fontSize: 28)),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Premium Relaxation',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFFD4AF37),
-                                Color(0xFFFACC15),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'NEW',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Haptic therapy, visual experiences, bubble pop & more',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.7),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFFD4AF37),
-                      Color(0xFFFACC15),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.arrow_forward_rounded,
-                  color: Colors.black,
-                  size: 20,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildQuickStats() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: AppColors.getCardDecoration(context, borderRadius: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Today\'s Progress',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: AppColors.getTextPrimary(context),
             ),
           ),
           const SizedBox(height: 16),
@@ -963,11 +807,12 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     required String label,
     required Color color,
   }) {
+    final isDark = AppColors.isDark(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withOpacity(isDark ? 0.2 : 0.1),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -984,9 +829,9 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
             ),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: AppColors.getTextSecondary(context),
               ),
             ),
           ],
@@ -1001,12 +846,12 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'More Features',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.getTextPrimary(context),
           ),
         ),
         const SizedBox(height: 16),
@@ -1021,36 +866,6 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const PlantRealTreesScreen()),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildFeatureCard(
-                emoji: '👥',
-                title: 'Plant Together',
-                subtitle: 'Group Focus',
-                color: const Color(0xFF2196F3),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const GroupFocusScreen()),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildFeatureCard(
-                emoji: '🏆',
-                title: 'Leaderboards',
-                subtitle: 'Compete & Compare',
-                color: const Color(0xFFFF9800),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
                 ),
               ),
             ),
@@ -1110,6 +925,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     required Color color,
     required VoidCallback onTap,
   }) {
+    final isDark = AppColors.isDark(context);
     return GestureDetector(
       onTap: () {
         _hapticService.navigation();
@@ -1118,9 +934,9 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withOpacity(isDark ? 0.2 : 0.1),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withOpacity(isDark ? 0.3 : 0.2)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1137,9 +953,9 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
             ),
             Text(
               subtitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textSecondary,
+                color: AppColors.getTextSecondary(context),
               ),
             ),
           ],
@@ -1158,9 +974,9 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
         minChildSize: 0.5,
         maxChildSize: 0.9,
         builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          decoration: BoxDecoration(
+            color: AppColors.getModalBackground(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           ),
           child: Column(
             children: [
@@ -1169,17 +985,17 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: AppColors.getGrey300(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'Ambient Sounds',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.getTextPrimary(context),
                 ),
               ),
               const SizedBox(height: 20),
@@ -1224,18 +1040,19 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
           'Your plant will wither if you stop now. Are you sure you want to abandon this session?',
         ),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Keep Going',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text('Keep Going'),
           ),
-          TextButton(
+          CommonButton(
+            text: 'Give Up',
+            variant: ButtonVariant.danger,
             onPressed: () {
               Navigator.pop(context);
               _focusService.abandonSession();
               _showCompletionSnackbar('Session abandoned. Your plant has withered 🥀');
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Give Up'),
           ),
         ],
       ),
@@ -1278,25 +1095,20 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
           ],
         ),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Stay Focused',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Stay Focused',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: AppColors.success,
-              ),
-            ),
           ),
-          TextButton(
+          CommonButton(
+            text: 'Abandon & Leave',
+            variant: ButtonVariant.danger,
             onPressed: () {
               Navigator.pop(context);
               _focusService.abandonSession();
               _showCompletionSnackbar('Session abandoned. Your plant has withered 🥀');
               Navigator.pop(context);
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Abandon & Leave'),
           ),
         ],
       ),

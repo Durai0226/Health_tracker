@@ -9,7 +9,6 @@ class ReminderRescheduleService {
     
     try {
       final medicines = StorageService.getAllMedicines();
-      final healthChecks = StorageService.getAllHealthChecks();
       final waterReminder = StorageService.getWaterReminder();
       final periodReminder = StorageService.getPeriodReminder();
       
@@ -30,25 +29,6 @@ class ReminderRescheduleService {
             scheduled ? successCount++ : failCount++;
           } catch (e) {
             debugPrint('Failed to schedule medicine reminder ${medicine.name}: $e');
-            failCount++;
-          }
-        }
-      }
-      
-      // Schedule health check reminders
-      for (final check in healthChecks) {
-        if (check.enableReminder) {
-          try {
-            final scheduled = await NotificationService().scheduleHealthCheckReminder(
-              id: check.id.hashCode,
-              checkType: check.type,
-              hour: check.reminderTime.hour,
-              minute: check.reminderTime.minute,
-              frequency: check.frequency,
-            );
-            scheduled ? successCount++ : failCount++;
-          } catch (e) {
-            debugPrint('Failed to schedule health check reminder ${check.type}: $e');
             failCount++;
           }
         }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/period_settings.dart';
 import '../services/period_storage_service.dart';
 
@@ -58,9 +59,11 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
         ),
         title: const Text('Period Settings', style: TextStyle(color: AppColors.periodPrimary)),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Save',
+            variant: ButtonVariant.primary,
+            backgroundColor: AppColors.periodPrimary,
             onPressed: _saveSettings,
-            child: const Text('Save', style: TextStyle(color: AppColors.periodPrimary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -328,17 +331,7 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 10,
-              ),
-            ],
-          ),
+        CommonCard(
           child: Column(
             children: children,
           ),
@@ -383,29 +376,29 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
     return ListTile(
       title: const Text('Reminder Time', style: TextStyle(fontWeight: FontWeight.w500)),
       subtitle: const Text('When to receive daily reminders', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      trailing: TextButton(
+      trailing: CommonButton(
+        text: '${_settings.reminderTime?.hour.toString().padLeft(2, '0') ?? '09'}:${_settings.reminderTime?.minute.toString().padLeft(2, '0') ?? '00'}',
+        variant: ButtonVariant.secondary,
         onPressed: () async {
           final time = await showTimePicker(
             context: context,
-            initialTime: _reminderTime,
-            builder: (context, child) => Theme(
-              data: ThemeData.light().copyWith(
-                colorScheme: const ColorScheme.light(primary: AppColors.periodPrimary),
-              ),
-              child: child!,
+            initialTime: TimeOfDay(
+              hour: _settings.reminderTime?.hour ?? 9,
+              minute: _settings.reminderTime?.minute ?? 0,
             ),
           );
           if (time != null) {
-            setState(() => _reminderTime = time);
+            setState(() {
+              _settings = _settings.copyWith(
+                reminderTime: DateTime(
+                  2024, 1, 1,
+                  time.hour,
+                  time.minute,
+                ),
+              );
+            });
           }
         },
-        child: Text(
-          _reminderTime.format(context),
-          style: const TextStyle(
-            color: AppColors.periodPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
     );
   }
@@ -441,22 +434,21 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
         title: const Text('Clear All Data?'),
         content: const Text('This will permanently delete all your period tracking data. This action cannot be undone.'),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Cancel',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
-          TextButton(
+          CommonButton(
+            text: 'Clear All',
+            variant: ButtonVariant.danger,
             onPressed: () async {
               await PeriodStorageService.clearAllData();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('All data cleared'),
-                  backgroundColor: Colors.red,
-                ),
+                const SnackBar(content: Text('All data cleared')),
               );
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

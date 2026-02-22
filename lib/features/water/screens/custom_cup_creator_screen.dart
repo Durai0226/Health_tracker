@@ -60,7 +60,12 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
       _capacityController.text = c.capacityMl.toString();
       _selectedEmoji = c.emoji;
       if (c.colorHex != null) {
-        _selectedColor = Color(int.parse(c.colorHex!.replaceFirst('#', '0xFF')));
+        try {
+          _selectedColor = Color(int.parse(c.colorHex!.replaceFirst('#', '0xFF')));
+        } catch (e) {
+          debugPrint('Error parsing color: $e');
+          _selectedColor = AppColors.info;
+        }
       }
     } else {
       _capacityController.text = '250';
@@ -97,10 +102,53 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a name'), backgroundColor: AppColors.error),
-      );
+    
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a name'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (name.length > 50) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Name is too long (max 50 characters)'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (_totalCapacity <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid capacity'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (_totalCapacity > 10000) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Capacity cannot exceed 10000ml'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
       return;
     }
 
@@ -109,7 +157,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     try {
       final container = WaterContainer(
         id: widget.existingContainer?.id ?? const Uuid().v4(),
-        name: _nameController.text.trim(),
+        name: name,
         emoji: _selectedEmoji,
         capacityMl: _totalCapacity,
         colorHex: '#${_selectedColor.value.toRadixString(16).substring(2)}',
@@ -119,17 +167,40 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
 
       if (widget.existingContainer != null) {
         await WaterService.updateContainer(container);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cup updated successfully'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       } else {
         await WaterService.addCustomContainer(container);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cup created successfully'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
 
       if (mounted) {
         Navigator.pop(context, true);
       }
     } catch (e) {
+      debugPrint('Error saving container: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     } finally {
@@ -140,6 +211,16 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
   void _addIngredient() {
     final beverages = WaterService.getAllBeverages();
     
+    if (beverages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No beverages available'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -147,21 +228,25 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
       builder: (context) => _IngredientSelector(
         beverages: beverages,
         onSelected: (beverageId, amount) {
-          setState(() {
-            _ingredients.add(CupIngredient(
-              beverageId: beverageId,
-              amountMl: amount,
-            ));
-          });
+          if (mounted) {
+            setState(() {
+              _ingredients.add(CupIngredient(
+                beverageId: beverageId,
+                amountMl: amount,
+              ));
+            });
+          }
         },
       ),
     );
   }
 
   void _removeIngredient(int index) {
-    setState(() {
-      _ingredients.removeAt(index);
-    });
+    if (index >= 0 && index < _ingredients.length) {
+      setState(() {
+        _ingredients.removeAt(index);
+      });
+    }
   }
 
   @override
@@ -485,6 +570,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
               if (v == null || v.isEmpty) return 'Required';
               final n = int.tryParse(v);
               if (n == null || n <= 0) return 'Enter valid amount';
+              if (n > 10000) return 'Max 10000ml';
               return null;
             },
           ),
@@ -792,10 +878,26 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
                     ? null
                     : () {
                         final amount = int.tryParse(_amountController.text) ?? 0;
-                        if (amount > 0) {
-                          widget.onSelected(_selectedBeverage!.id, amount);
-                          Navigator.pop(context);
+                        if (amount <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter a valid amount'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
                         }
+                        if (amount > 5000) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Amount cannot exceed 5000ml'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
+                        }
+                        widget.onSelected(_selectedBeverage!.id, amount);
+                        Navigator.pop(context);
                       },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.info,

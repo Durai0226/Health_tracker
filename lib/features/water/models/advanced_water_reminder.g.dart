@@ -8,7 +8,7 @@ part of 'advanced_water_reminder.dart';
 
 class AdvancedWaterReminderAdapter extends TypeAdapter<AdvancedWaterReminder> {
   @override
-  final int typeId = 32;
+  final int typeId = 37;
 
   @override
   AdvancedWaterReminder read(BinaryReader reader) {
@@ -66,7 +66,7 @@ class AdvancedWaterReminderAdapter extends TypeAdapter<AdvancedWaterReminder> {
 
 class DayScheduleAdapter extends TypeAdapter<DaySchedule> {
   @override
-  final int typeId = 33;
+  final int typeId = 38;
 
   @override
   DaySchedule read(BinaryReader reader) {
@@ -121,7 +121,7 @@ class DayScheduleAdapter extends TypeAdapter<DaySchedule> {
 
 class TimeSlotAdapter extends TypeAdapter<TimeSlot> {
   @override
-  final int typeId = 34;
+  final int typeId = 39;
 
   @override
   TimeSlot read(BinaryReader reader) {
@@ -158,7 +158,7 @@ class TimeSlotAdapter extends TypeAdapter<TimeSlot> {
 
 class DayOfWeekAdapter extends TypeAdapter<DayOfWeek> {
   @override
-  final int typeId = 30;
+  final int typeId = 35;
 
   @override
   DayOfWeek read(BinaryReader reader) {
@@ -222,7 +222,7 @@ class DayOfWeekAdapter extends TypeAdapter<DayOfWeek> {
 
 class ReminderSoundAdapter extends TypeAdapter<ReminderSound> {
   @override
-  final int typeId = 31;
+  final int typeId = 36;
 
   @override
   ReminderSound read(BinaryReader reader) {

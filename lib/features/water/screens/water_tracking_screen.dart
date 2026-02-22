@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/beverage_type.dart';
+import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
 import '../../../../core/services/vitavibe_service.dart';
 import 'water_reminder_settings_screen.dart';
@@ -17,7 +19,6 @@ class WaterTrackingScreen extends StatefulWidget {
 
 class _WaterTrackingScreenState extends State<WaterTrackingScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _waveController;
   late AnimationController _waveController;
   final VitaVibeService _vitaVibeService = VitaVibeService();
   
@@ -95,6 +96,8 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
 
   void _editGoal() {
     int newGoal = _dailyGoal;
+    final isDark = AppColors.isDark(context);
+    final waterAccent = AppColors.getWaterAccent(context);
     
     showModalBottomSheet(
       context: context,
@@ -108,9 +111,9 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
             top: 24,
             bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: AppColors.getModalBackground(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -119,16 +122,17 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: AppColors.getGrey300(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Set Daily Goal',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: AppColors.getTextPrimary(context),
                 ),
               ),
               const SizedBox(height: 32),
@@ -145,10 +149,10 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                     icon: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.info.withOpacity(0.1),
+                        color: waterAccent.withOpacity(isDark ? 0.2 : 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.remove, color: AppColors.info),
+                      child: Icon(Icons.remove, color: waterAccent),
                     ),
                     iconSize: 36,
                   ),
@@ -157,17 +161,17 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                     children: [
                       Text(
                         '${newGoal}ml',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.info,
+                          color: waterAccent,
                         ),
                       ),
                       Text(
                         '${(newGoal / 250).round()} glasses',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: AppColors.textSecondary,
+                          color: AppColors.getTextSecondary(context),
                         ),
                       ),
                     ],
@@ -183,54 +187,39 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                     icon: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.info.withOpacity(0.1),
+                        color: waterAccent.withOpacity(isDark ? 0.2 : 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.add, color: AppColors.info),
+                      child: Icon(Icons.add, color: waterAccent),
                     ),
                     iconSize: 36,
                   ),
                 ],
               ),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    _vitaVibeService.playPattern(VibePattern.success);
-                    
-                    // Update header in HydrationProfile via WaterService
-                    final profile = WaterService.getProfile();
-                    final updatedProfile = profile.copyWith(
-                      customGoalMl: newGoal,
-                      useCustomGoal: true,
-                    );
-                    await WaterService.saveProfile(updatedProfile);
-                    
-                    // Also update today's data goal
-                    final todayData = WaterService.getTodayData();
-                    final updatedData = todayData.copyWith(dailyGoalMl: newGoal);
-                    await WaterService.saveDailyData(updatedData);
+              CommonButton(
+                text: 'Save Goal',
+                icon: Icons.save,
+                variant: ButtonVariant.primary,
+                backgroundColor: waterAccent,
+                onPressed: () async {
+                  _vitaVibeService.playPattern(VibePattern.success);
+                  
+                  // Update header in HydrationProfile via WaterService
+                  final profile = WaterService.getProfile();
+                  final updatedProfile = profile.copyWith(
+                    customGoalMl: newGoal,
+                    useCustomGoal: true,
+                  );
+                  await WaterService.saveProfile(updatedProfile);
+                  
+                  // Also update today's data goal
+                  final todayData = WaterService.getTodayData();
+                  final updatedData = todayData.copyWith(dailyGoalMl: newGoal);
+                  await WaterService.saveDailyData(updatedData);
 
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.info,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Save Goal',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                  if (context.mounted) Navigator.pop(context);
+                },
               ),
             ],
           ),
@@ -253,8 +242,11 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
         final water = WaterService.getTodayData();
         final progress = water.progress.clamp(0.0, 1.0);
 
+        final isDark = AppColors.isDark(context);
+        final waterAccent = AppColors.getWaterAccent(context);
+
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: AppColors.getBackground(context),
           extendBodyBehindAppBar: true,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
@@ -263,17 +255,18 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.getCardBg(context),
                   shape: BoxShape.circle,
+                  border: isDark ? Border.all(color: AppColors.darkBorder.withOpacity(0.5)) : null,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: AppColors.getSubtleShadow(context),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 18),
+                child: Icon(Icons.arrow_back_ios_rounded, color: AppColors.getTextPrimary(context), size: 18),
               ),
               onPressed: () => Navigator.pop(context),
             ),
@@ -282,17 +275,18 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.getCardBg(context),
                     shape: BoxShape.circle,
+                    border: isDark ? Border.all(color: AppColors.darkBorder.withOpacity(0.5)) : null,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: AppColors.getSubtleShadow(context),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.notifications_rounded, color: AppColors.info, size: 20),
+                  child: Icon(Icons.notifications_rounded, color: waterAccent, size: 20),
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -312,14 +306,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
               Container(
                 height: MediaQuery.of(context).size.height * 0.4,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.info.withOpacity(0.1),
-                      AppColors.info.withOpacity(0.05),
-                    ],
-                  ),
+                  gradient: AppColors.getFeatureGradient(context, waterAccent),
                 ),
               ),
               // Content
@@ -333,20 +320,20 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                       children: [
                         const SizedBox(height: 16),
                         // Title
-                        const Text(
+                        Text(
                           'Water Intake',
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                            color: AppColors.getTextPrimary(context),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           'Stay hydrated, stay healthy',
                           style: TextStyle(
                             fontSize: 14,
-                            color: AppColors.textSecondary,
+                            color: AppColors.getTextSecondary(context),
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -354,14 +341,14 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                         _buildWaterTank(water, progress),
                         const SizedBox(height: 32),
                         // Quick Add
-                        const SizedBox(
+                        SizedBox(
                           width: double.infinity,
                           child: Text(
                             'Quick Add',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                              color: AppColors.getTextPrimary(context),
                               ),
                             textAlign: TextAlign.center,
                           ),
@@ -376,24 +363,24 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
+                                Text(
                                   'Today\'s Log',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.textPrimary,
+                                    color: AppColors.getTextPrimary(context),
                                   ),
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: AppColors.info.withOpacity(0.1),
+                                    color: waterAccent.withOpacity(isDark ? 0.2 : 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
                                     '${water.drinksCount} drinks',
-                                    style: const TextStyle(
-                                      color: AppColors.info,
+                                    style: TextStyle(
+                                      color: waterAccent,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -409,22 +396,19 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 20),
                               padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
+                              decoration: AppColors.getCardDecoration(context),
                               child: Column(
                                 children: [
                                   Icon(
                                     Icons.water_drop_outlined,
                                     size: 48,
-                                    color: AppColors.textSecondary.withOpacity(0.5),
+                                    color: AppColors.getTextSecondary(context).withOpacity(0.5),
                                     ),
                                   const SizedBox(height: 12),
-                                  const Text(
+                                  Text(
                                     'No drinks logged yet',
                                     style: TextStyle(
-                                      color: AppColors.textSecondary,
+                                      color: AppColors.getTextSecondary(context),
                                       fontSize: 14,
                                     ),
                                   ),
@@ -447,19 +431,12 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
   }
 
   Widget _buildWaterTank(DailyWaterData water, double progress) {
+    final isDark = AppColors.isDark(context);
+    final waterAccent = AppColors.getWaterAccent(context);
+    
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.info.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: AppColors.getLuxuryCardDecoration(context, accentColor: waterAccent),
       child: Column(
         children: [
           // Animated Water Tank
@@ -473,9 +450,9 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                   width: 200,
                   height: 240,
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: AppColors.getGrey100(context),
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.grey[300]!, width: 3),
+                    border: Border.all(color: AppColors.getGrey300(context), width: 3),
                   ),
                 ),
                 // Water fill with wave
@@ -500,8 +477,8 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  AppColors.info.withOpacity(0.6),
-                                  AppColors.info,
+                                  waterAccent.withOpacity(0.6),
+                                  waterAccent,
                                 ],
                               ),
                             ),
@@ -520,7 +497,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                                   size: const Size(194, 16),
                                   painter: _WavePainter(
                                     animationValue: _waveController.value,
-                                    color: AppColors.info.withOpacity(0.4),
+                                    color: waterAccent.withOpacity(0.4),
                                   ),
                                 );
                               },
@@ -539,7 +516,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                       style: TextStyle(
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
-                        color: progress > 0.5 ? Colors.white : AppColors.textPrimary,
+                        color: progress > 0.5 ? Colors.white : AppColors.getTextPrimary(context),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -552,14 +529,14 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                             'of ${water.dailyGoalMl}ml',
                             style: TextStyle(
                               fontSize: 14,
-                              color: progress > 0.5 ? Colors.white70 : AppColors.textSecondary,
+                              color: progress > 0.5 ? Colors.white70 : AppColors.getTextSecondary(context),
                             ),
                           ),
                           const SizedBox(width: 4),
                           Icon(
                             Icons.edit,
                             size: 14,
-                            color: progress > 0.5 ? Colors.white70 : AppColors.info,
+                            color: progress > 0.5 ? Colors.white70 : AppColors.getTextSecondary(context),
                           ),
                         ],
                       ),
@@ -570,7 +547,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
-                        color: progress > 0.5 ? Colors.white : AppColors.info,
+                        color: progress > 0.5 ? Colors.white : waterAccent,
                       ),
                     ),
                   ],
@@ -584,8 +561,8 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             decoration: BoxDecoration(
               color: progress >= 1.0
-                  ? AppColors.success.withOpacity(0.1)
-                  : AppColors.info.withOpacity(0.1),
+                  ? AppColors.success.withOpacity(isDark ? 0.2 : 0.1)
+                  : waterAccent.withOpacity(isDark ? 0.2 : 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -593,7 +570,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
               children: [
                 Icon(
                   progress >= 1.0 ? Icons.check_circle : Icons.water_drop,
-                  color: progress >= 1.0 ? AppColors.success : AppColors.info,
+                  color: progress >= 1.0 ? AppColors.success : waterAccent,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -602,7 +579,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                       ? 'Goal Achieved! 🎉'
                       : 'Keep going! ${(water.dailyGoalMl - water.effectiveHydrationMl).clamp(0, water.dailyGoalMl)}ml to go',
                   style: TextStyle(
-                    color: progress >= 1.0 ? AppColors.success : AppColors.info,
+                    color: progress >= 1.0 ? AppColors.success : waterAccent,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
@@ -616,6 +593,9 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
   }
 
   Widget _buildQuickAddButtons() {
+    final isDark = AppColors.isDark(context);
+    final waterAccent = AppColors.getWaterAccent(context);
+    
     final amounts = [
       {'ml': 150, 'label': 'Cup', 'icon': '☕'},
       {'ml': 250, 'label': 'Glass', 'icon': '🥛'},
@@ -637,21 +617,20 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white,
-                    Colors.grey[50]!,
-                  ],
+                  colors: isDark 
+                      ? [AppColors.darkCard, AppColors.darkElevatedCard]
+                      : [Colors.white, Colors.grey[50]!],
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.info.withOpacity(0.1),
+                    color: waterAccent.withOpacity(isDark ? 0.15 : 0.1),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
                 ],
                 border: Border.all(
-                  color: AppColors.info.withOpacity(0.1),
+                  color: waterAccent.withOpacity(isDark ? 0.2 : 0.1),
                   width: 1,
                 ),
               ),
@@ -664,17 +643,17 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                   const SizedBox(height: 8),
                   Text(
                     '+${item['ml']}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: AppColors.info,
+                      color: waterAccent,
                       fontSize: 15,
                     ),
                   ),
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     'ml',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: AppColors.getTextSecondary(context),
                       fontSize: 11,
                     ),
                   ),
@@ -688,20 +667,12 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
   }
 
   Widget _buildLogList(List<EnhancedWaterLog> logs) {
+    final isDark = AppColors.isDark(context);
+    final waterAccent = AppColors.getWaterAccent(context);
     final reversedLogs = logs.reversed.toList();
     
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: AppColors.getCardDecoration(context),
       child: Column(
         children: reversedLogs.take(8).map((log) {
           final timeStr = '${log.time.hour.toString().padLeft(2, '0')}:${log.time.minute.toString().padLeft(2, '0')}';
@@ -712,7 +683,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: isLast ? Colors.transparent : Colors.grey[100]!,
+                  color: isLast ? Colors.transparent : AppColors.getDivider(context),
                   width: 1,
                 ),
               ),
@@ -724,15 +695,15 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        AppColors.info.withOpacity(0.2),
-                        AppColors.info.withOpacity(0.1),
+                        waterAccent.withOpacity(isDark ? 0.25 : 0.2),
+                        waterAccent.withOpacity(isDark ? 0.15 : 0.1),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.water_drop,
-                    color: AppColors.info,
+                    color: waterAccent,
                     size: 20,
                   ),
                 ),
@@ -743,17 +714,17 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                     children: [
                       Text(
                         '+${log.amountMl} ml',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: AppColors.getTextPrimary(context),
                           fontSize: 15,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '$timeStr • ${log.beverageName}',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: AppColors.getTextSecondary(context),
                           fontSize: 12,
                         ),
                       ),
@@ -763,7 +734,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.1),
+                    color: AppColors.success.withOpacity(isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Row(

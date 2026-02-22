@@ -61,5 +61,14 @@
 	<string>We need FaceID access to secure your private notes.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>We need notification access to remind you about your medicines, health checks, and fitness activities on time.</string>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 </dict>
 </plist>

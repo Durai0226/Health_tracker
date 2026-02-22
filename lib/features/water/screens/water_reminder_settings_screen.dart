@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/water_reminder.dart';
 
 class WaterReminderSettingsScreen extends StatefulWidget {
@@ -283,14 +284,12 @@ class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScree
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
+            child: CommonButton(
+              text: 'Generate Times',
+              icon: Icons.auto_fix_high_rounded,
+              variant: ButtonVariant.primary,
+              backgroundColor: AppColors.info,
               onPressed: _generateIntervalReminders,
-              icon: const Icon(Icons.auto_fix_high_rounded),
-              label: const Text('Generate Times'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.info,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
             ),
           ),
         ],

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_log.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/drug_interaction_service.dart';
-import 'enhanced_add_medicine_screen.dart';
+import '../services/intake_tracking_service.dart';
+import 'add_medicine_wizard.dart';
 import 'medicine_history_screen.dart';
 
 /// Medicine Detail Screen with comprehensive info like Medisafe
@@ -23,6 +25,9 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
   EnhancedMedicine? _medicine;
   List<MedicineLog> _recentLogs = [];
   bool _isLoading = true;
+  Map<String, dynamic>? _streakStats;
+  bool _hasTakenToday = false;
+  bool _hasSkippedToday = false;
 
   @override
   void initState() {
@@ -36,11 +41,22 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
       _medicine = MedicineStorageService.getMedicine(widget.medicineId);
       if (_medicine != null) {
         _recentLogs = MedicineStorageService.getLogsForMedicine(widget.medicineId).take(10).toList();
+        _streakStats = IntakeTrackingService.getStreakStats(widget.medicineId);
+        _checkTodayStatus();
       }
     } catch (e) {
       debugPrint('Error loading medicine: $e');
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  void _checkTodayStatus() {
+    final today = DateTime.now();
+    final todayLogs = MedicineStorageService.getLogsForDate(today)
+        .where((log) => log.medicineId == widget.medicineId);
+    
+    _hasTakenToday = todayLogs.any((log) => log.isTaken);
+    _hasSkippedToday = todayLogs.any((log) => log.isSkipped);
   }
 
   @override
@@ -65,6 +81,9 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
             child: Column(
               children: [
                 _buildQuickActions(),
+                if (_streakStats != null) _buildStreakCard(),
+                if (_medicine!.healthCategories != null && _medicine!.healthCategories!.isNotEmpty)
+                  _buildHealthCategoriesCard(),
                 _buildInfoCard(),
                 _buildScheduleCard(),
                 _buildStockCard(),
@@ -96,7 +115,7 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => EnhancedAddMedicineScreen(editMedicine: _medicine),
+              builder: (_) => AddMedicineWizard(editMedicine: _medicine),
             ),
           ).then((_) => _loadData()),
         ),
@@ -177,40 +196,102 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
   }
 
   Widget _buildQuickActions() {
+    final canTake = !_hasTakenToday && !_hasSkippedToday;
+    final canSkip = !_hasTakenToday && !_hasSkippedToday;
+
     return Container(
       margin: const EdgeInsets.all(20),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: _buildActionButton(
-              icon: Icons.check_circle_rounded,
-              label: 'Take Now',
-              color: AppColors.success,
-              onTap: () => _showTakeMedicineDialog(),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildActionButton(
-              icon: Icons.skip_next_rounded,
-              label: 'Skip',
-              color: AppColors.warning,
-              onTap: () => _showSkipDialog(),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildActionButton(
-              icon: Icons.history_rounded,
-              label: 'History',
-              color: AppColors.info,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MedicineHistoryScreen(medicineId: _medicine!.id),
-                ),
+          if (_hasTakenToday)
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.success.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Already taken today',
+                      style: TextStyle(
+                        color: AppColors.success,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+          if (_hasSkippedToday)
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.skip_next_rounded, color: AppColors.warning, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Already skipped today',
+                      style: TextStyle(
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.check_circle_rounded,
+                  label: 'Take Now',
+                  color: AppColors.success,
+                  onTap: canTake ? () => _showTakeMedicineDialog() : null,
+                  isEnabled: canTake,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.skip_next_rounded,
+                  label: 'Skip',
+                  color: AppColors.warning,
+                  onTap: canSkip ? () => _showSkipDialog() : null,
+                  isEnabled: canSkip,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.history_rounded,
+                  label: 'History',
+                  color: AppColors.info,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MedicineHistoryScreen(medicineId: _medicine!.id),
+                    ),
+                  ),
+                  isEnabled: true,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -221,31 +302,282 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
     required IconData icon,
     required String label,
     required Color color,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    required bool isEnabled,
   }) {
+    final effectiveColor = isEnabled ? color : AppColors.textSecondary;
+    
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3)),
+      onTap: isEnabled ? onTap : null,
+      child: Opacity(
+        opacity: isEnabled ? 1.0 : 0.5,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: effectiveColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: effectiveColor.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: effectiveColor, size: 28),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: effectiveColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+      ),
+    );
+  }
+
+  Widget _buildStreakCard() {
+    if (_streakStats == null) return const SizedBox.shrink();
+
+    final currentStreak = _streakStats!['currentStreak'] ?? 0;
+    final longestStreak = _streakStats!['longestStreak'] ?? 0;
+    final adherenceRate = _streakStats!['adherenceRate'] ?? 100.0;
+    final canSkip = _streakStats!['canSkip'] ?? true;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primary.withOpacity(0.1),
+            AppColors.success.withOpacity(0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Intake Streak',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              if (!canSkip)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.error,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Required',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStreakStat(
+                  'Current Streak',
+                  '$currentStreak',
+                  'days',
+                  AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStreakStat(
+                  'Longest Streak',
+                  '$longestStreak',
+                  'days',
+                  AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStreakStat(
+                  'Adherence',
+                  '${adherenceRate.toStringAsFixed(0)}',
+                  '%',
+                  AppColors.info,
+                ),
+              ),
+            ],
+          ),
+          if (_medicine!.requiresContinuousIntake) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_rounded, color: AppColors.info, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Continuous intake required${_medicine!.minimumConsecutiveDays != null ? ' for ${_medicine!.minimumConsecutiveDays} days' : ''}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStreakStat(String label, String value, String unit, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                value,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(width: 2),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  unit,
+                  style: TextStyle(fontSize: 12, color: color),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHealthCategoriesCard() {
+    if (_medicine!.healthCategories == null || _medicine!.healthCategories!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.medical_services_rounded, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text(
+                'Health Categories',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _medicine!.healthCategories!.map((category) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(category.icon, style: const TextStyle(fontSize: 16)),
+                    const SizedBox(width: 6),
+                    Text(
+                      category.displayName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          if (_medicine!.customHealthCategory != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('📋', style: TextStyle(fontSize: 16)),
+                  const SizedBox(width: 6),
+                  Text(
+                    _medicine!.customHealthCategory!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.secondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -525,15 +857,10 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: CommonButton(
+              text: 'Add Refill',
+              variant: ButtonVariant.primary,
               onPressed: _showRefillDialog,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Add Refill'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
             ),
           ),
         ],
@@ -640,14 +967,15 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
-              TextButton(
+              CommonButton(
+                text: 'View All',
+                variant: ButtonVariant.secondary,
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => MedicineHistoryScreen(medicineId: _medicine!.id),
                   ),
                 ),
-                child: const Text('See All'),
               ),
             ],
           ),
@@ -736,26 +1064,18 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: CommonButton(
+                  text: 'Archive',
+                  variant: ButtonVariant.secondary,
                   onPressed: _archiveMedicine,
-                  icon: const Icon(Icons.archive_rounded),
-                  label: const Text('Archive'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.warning,
-                    side: const BorderSide(color: AppColors.warning),
-                  ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: OutlinedButton.icon(
+                child: CommonButton(
+                  text: 'Delete',
+                  variant: ButtonVariant.danger,
                   onPressed: _deleteMedicine,
-                  icon: const Icon(Icons.delete_rounded),
-                  label: const Text('Delete'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
-                  ),
                 ),
               ),
             ],
@@ -812,36 +1132,34 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: CommonButton(
+                text: 'Confirm',
+                variant: ButtonVariant.primary,
                 onPressed: () async {
-                  await MedicineStorageService.markMedicineTaken(
+                  final result = await IntakeTrackingService.recordMedicineTaken(
                     medicineId: _medicine!.id,
-                    scheduledTime: DateTime.now(),
+                    takenDate: DateTime.now(),
                     dosageTaken: _medicine!.dosageAmount,
                   );
                   if (mounted) {
                     Navigator.pop(context);
                     _loadData();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Medicine marked as taken!'),
+                      SnackBar(
+                        content: Text(result['message'] ?? 'Medicine marked as taken!'),
                         backgroundColor: AppColors.success,
+                        duration: const Duration(seconds: 3),
                       ),
                     );
                   }
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Confirm', style: TextStyle(fontSize: 16)),
               ),
             ),
             const SizedBox(height: 12),
-            TextButton(
+            CommonButton(
+              text: 'Cancel',
+              variant: ButtonVariant.secondary,
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
             ),
           ],
         ),
@@ -849,8 +1167,34 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
     );
   }
 
-  void _showSkipDialog() {
+  void _showSkipDialog() async {
+    final canSkip = await IntakeTrackingService.canSkipMedicine(_medicine!.id);
+    
+    if (!canSkip) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Cannot Skip'),
+          content: Text(
+            _medicine!.requiresContinuousIntake
+                ? 'This medicine requires continuous intake. You have taken it ${_streakStats?['consecutiveTakes'] ?? 0} times consecutively. You must continue taking it as prescribed.'
+                : 'You cannot skip this dose at this time.',
+          ),
+          actions: [
+            CommonButton(
+              text: 'OK',
+              variant: ButtonVariant.primary,
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     SkipReason? selectedReason;
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -875,6 +1219,27 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
                 'Please select a reason',
                 style: TextStyle(color: AppColors.textSecondary),
               ),
+              if (_streakStats != null && _streakStats!['currentStreak'] > 0)
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Skipping will reset your ${_streakStats!['currentStreak']}-day streak',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 16),
               ...SkipReason.values.map((reason) => RadioListTile<SkipReason>(
                 value: reason,
@@ -886,25 +1251,29 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: CommonButton(
+                  text: 'Skip Dose',
+                  variant: ButtonVariant.primary,
+                  backgroundColor: AppColors.warning,
                   onPressed: selectedReason == null
                       ? null
                       : () async {
-                          await MedicineStorageService.markMedicineSkipped(
+                          final result = await IntakeTrackingService.recordMedicineSkipped(
                             medicineId: _medicine!.id,
-                            scheduledTime: DateTime.now(),
+                            skipDate: DateTime.now(),
                             reason: selectedReason!,
                           );
                           if (mounted) {
                             Navigator.pop(context);
                             _loadData();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(result['message'] ?? 'Dose skipped'),
+                                backgroundColor: AppColors.warning,
+                              ),
+                            );
                           }
                         },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.warning,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text('Skip Dose'),
                 ),
               ),
             ],
@@ -962,7 +1331,9 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: CommonButton(
+                  text: 'Add Refill',
+                  variant: ButtonVariant.primary,
                   onPressed: () async {
                     await MedicineStorageService.refillStock(_medicine!.id, amount);
                     if (mounted) {
@@ -973,7 +1344,6 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
                       );
                     }
                   },
-                  child: const Text('Add Refill'),
                 ),
               ),
             ],
@@ -1024,20 +1394,24 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
         title: const Text('Archive Medicine?'),
         content: const Text('This medicine will be hidden but you can restore it later.'),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Cancel',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          CommonButton(
+            text: 'Archive',
+            variant: ButtonVariant.secondary,
             onPressed: () async {
               await MedicineStorageService.archiveMedicine(_medicine!.id);
               if (mounted) {
                 Navigator.pop(context);
                 Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Medicine archived')),
+                );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
-            child: const Text('Archive'),
           ),
         ],
       ),
@@ -1051,20 +1425,24 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
         title: const Text('Delete Medicine?'),
         content: const Text('This action cannot be undone. All history will be lost.'),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Cancel',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          CommonButton(
+            text: 'Delete',
+            variant: ButtonVariant.danger,
             onPressed: () async {
               await MedicineStorageService.deleteMedicine(_medicine!.id);
               if (mounted) {
                 Navigator.pop(context);
                 Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Medicine deleted')),
+                );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Delete'),
           ),
         ],
       ),

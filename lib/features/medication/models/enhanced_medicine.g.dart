@@ -58,13 +58,18 @@ class EnhancedMedicineAdapter extends TypeAdapter<EnhancedMedicine> {
       isArchived: fields[38] as bool,
       notes: fields[39] as String?,
       customFields: (fields[40] as Map?)?.cast<String, dynamic>(),
+      healthCategories: (fields[41] as List?)?.cast<HealthCategory>(),
+      customHealthCategory: fields[42] as String?,
+      patientProfileId: fields[43] as String?,
+      requiresContinuousIntake: fields[44] as bool,
+      minimumConsecutiveDays: fields[45] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, EnhancedMedicine obj) {
     writer
-      ..writeByte(41)
+      ..writeByte(46)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -146,7 +151,17 @@ class EnhancedMedicineAdapter extends TypeAdapter<EnhancedMedicine> {
       ..writeByte(39)
       ..write(obj.notes)
       ..writeByte(40)
-      ..write(obj.customFields);
+      ..write(obj.customFields)
+      ..writeByte(41)
+      ..write(obj.healthCategories)
+      ..writeByte(42)
+      ..write(obj.customHealthCategory)
+      ..writeByte(43)
+      ..write(obj.patientProfileId)
+      ..writeByte(44)
+      ..write(obj.requiresContinuousIntake)
+      ..writeByte(45)
+      ..write(obj.minimumConsecutiveDays);
   }
 
   @override

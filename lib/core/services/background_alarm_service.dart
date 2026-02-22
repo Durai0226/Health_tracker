@@ -102,8 +102,6 @@ Future<void> alarmCallback(int alarmId) async {
     final alarmData = jsonDecode(alarmDataJson) as Map<String, dynamic>;
     final title = alarmData['title'] as String? ?? 'Reminder';
     final body = alarmData['body'] as String? ?? 'Time for your reminder!';
-    final channelId = alarmData['channelId'] as String? ?? 'medicine_channel';
-    final channelName = alarmData['channelName'] as String? ?? 'Medicine Reminders';
     final payload = alarmData['payload'] as String?;
     
     debugPrint('📋 Alarm data: $title - $body (Payload: $payload)');
@@ -143,22 +141,22 @@ Future<void> alarmCallback(int alarmId) async {
       snoozeMinutes = alarmData['snoozeDuration'] as int;
     }
 
-    final soundName = alarmData['sound'] as String?;
-    final notificationSound = (soundName != null && soundName != 'default')
-        ? RawResourceAndroidNotificationSound(soundName)
-        : null;
+    // Use system default alarm sound (null = default sound from channel)
+    // The channel is configured with audioAttributesUsage: alarm
+    // which makes it use the alarm audio stream and ring like a real alarm
     
     // Show notification with snooze/dismiss actions
+    // Using alarm_channel which has audioAttributesUsage.alarm configured
     final androidDetails = AndroidNotificationDetails(
-      channelId,
-      channelName,
-      channelDescription: 'Reminders for your health',
+      'alarm_channel', // Use dedicated alarm channel with USAGE_ALARM
+      'Alarm Reminders',
+      channelDescription: 'High priority alarm reminders',
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,
-      sound: notificationSound,
+      sound: null, // Use system default alarm sound from channel
       enableVibration: true,
-      vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
+      vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
       enableLights: true,
       ledColor: const Color(0xFF4CAF50),
       ledOnMs: 1000,
@@ -167,24 +165,26 @@ Future<void> alarmCallback(int alarmId) async {
       category: AndroidNotificationCategory.alarm,
       visibility: NotificationVisibility.public,
       showWhen: true,
-      autoCancel: false, // Changed to false
+      autoCancel: false,
       channelShowBadge: true,
+      // Audio attributes for alarm - ensures it plays on alarm stream
+      audioAttributesUsage: AudioAttributesUsage.alarm,
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction(
           'snooze',
           '⏰ Snooze ${snoozeMinutes}min',
           showsUserInterface: false,
         ),
-         const AndroidNotificationAction(
+        const AndroidNotificationAction(
           'dismiss',
           '❌ Dismiss',
           showsUserInterface: false,
           cancelNotification: true,
         ),
       ],
-      // Persistent alarm settings
+      // Persistent alarm settings - stays until user interacts
       ongoing: true,
-      timeoutAfter: 600000, // Safety timeout
+      timeoutAfter: 300000, // 5 minute safety timeout
     );
     
     const iosDetails = DarwinNotificationDetails(

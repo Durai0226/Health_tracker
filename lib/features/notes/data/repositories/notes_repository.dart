@@ -3,15 +3,11 @@ import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/services/storage_service.dart';
 import '../models/note_model.dart';
-import '../models/folder_model.dart';
 import '../models/tag_model.dart';
-import '../models/note_version_model.dart';
 import '../services/notes_cloud_service.dart';
-import '../services/notes_encryption_service.dart';
 
 class NotesRepository {
   final NotesCloudService _cloudService = NotesCloudService();
-  final NotesEncryptionService _encryptionService = NotesEncryptionService();
   final _uuid = const Uuid();
 
   // Notes
@@ -24,13 +20,12 @@ class NotesRepository {
   }
 
   ValueListenable<Box<NoteModel>> get notesListenable => StorageService.notesListenable;
-  ValueListenable<Box<FolderModel>> get foldersListenable => StorageService.foldersListenable;
 
   Future<String> createNote({
     required String title,
     required String content,
-    String? folderId,
     List<String> tagIds = const [],
+    String? color,
   }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
@@ -40,166 +35,120 @@ class NotesRepository {
       content: content,
       createdAt: now,
       updatedAt: now,
-      folderId: folderId,
       tagIds: tagIds,
+      color: color,
       isSynced: false,
     );
     
-    );
-    
-    // Encrypt content if creating a locked note (though usually created unlocked)
-    // But if we support creating locked notes directly:
-    // Actually, UI usually creates unlocked then user locks it? 
-    // Let's safe guard anyway.
-    if (note.isLocked) {
-       final encrypted = await _encryptionService.encryptContent(note.content);
-       // We can't modify 'note' variable directly as it's final?
-       // note is a local variable, we can reassign or create new.
-       // note = note.copyWith(content: encrypted); 
-       // Swiftly, let's just save the encrypted version.
-       
-       final encryptedNote = note.copyWith(content: encrypted);
-       await StorageService.saveNote(encryptedNote);
-       await _cloudService.syncNote(encryptedNote.copyWith(isSynced: true));
-       await StorageService.saveNote(encryptedNote.copyWith(isSynced: true));
-       return id;
-    }
-    
     await StorageService.saveNote(note);
     await _cloudService.syncNote(note.copyWith(isSynced: true));
-    
-    // Update local synced status
     await StorageService.saveNote(note.copyWith(isSynced: true));
     return id;
   }
 
   Future<void> updateNote(NoteModel note) async {
-    // 1. Save current state as a version before updating
-    final currentNote = StorageService.getNote(note.id);
-    if (currentNote != null) {
-      final version = NoteVersionModel(
-        id: _uuid.v4(),
-        noteId: currentNote.id,
-        content: currentNote.content,
-        createdAt: DateTime.now(),
-      );
-      await StorageService.saveNoteVersion(version);
-    }
-
-    // 2. Proceed with update
-    final updatedNote = note.copyWith(
+    final noteToSave = note.copyWith(
       updatedAt: DateTime.now(),
       isSynced: false,
     );
-    
-    // 2. Proceed with update
-    var noteToSave = note.copyWith(
-      updatedAt: DateTime.now(),
-      isSynced: false,
-    );
-    
-    // If locked, ensure content is encrypted before saving
-    if (noteToSave.isLocked) {
-       // Check if already encrypted to avoid double encryption?
-       // The UI should pass us PLAIN TEXT content when updating a locked note (because we unlocked it to edit).
-       // So we ALWAYS encrypt here.
-       final encrypted = await _encryptionService.encryptContent(noteToSave.content);
-       noteToSave = noteToSave.copyWith(content: encrypted);
-    }
     
     await StorageService.saveNote(noteToSave);
     await _cloudService.syncNote(noteToSave.copyWith(isSynced: true));
-    
-    // Update local synced status
     await StorageService.saveNote(noteToSave.copyWith(isSynced: true));
   }
 
-  Future<String> unlockNoteContent(NoteModel note) async {
-    if (!note.isLocked) return note.content;
-    return _encryptionService.decryptContent(note.content);
-  }
 
-  Future<void> toggleLock(String noteId) async {
-    final note = await getNote(noteId);
-    if (note == null) return;
-
-    if (note.isLocked) {
-      // Unlock: Decrypt content and save as plain text
-      try {
-        final plainText = await _encryptionService.decryptContent(note.content);
-        final unlockedNote = note.copyWith(
-          isLocked: false,
-          content: plainText,
+  /// Soft delete - moves note to trash (can be restored)
+  Future<void> deleteNote(String id, {bool permanent = false}) async {
+    if (permanent) {
+      await StorageService.deleteNote(id);
+      await _cloudService.deleteNote(id);
+    } else {
+      final note = await getNote(id);
+      if (note != null) {
+        final deletedNote = note.copyWith(
+          isDeleted: true,
           updatedAt: DateTime.now(),
           isSynced: false,
         );
-        await updateNote(unlockedNote);
-      } catch (e) {
-        debugPrint("Failed to decrypt note during unlock: $e");
-        // Force unlock but keep content as is? Or fail?
-        // If we fail, user is stuck. 
-        // If content is corrupted, we can't recover it anyway.
-        throw e; 
+        await StorageService.saveNote(deletedNote);
+        await _cloudService.syncNote(deletedNote.copyWith(isSynced: true));
+        await StorageService.saveNote(deletedNote.copyWith(isSynced: true));
       }
-    } else {
-      // Lock: Encrypt content and save
-      final encrypted = await _encryptionService.encryptContent(note.content);
-      final lockedNote = note.copyWith(
-        isLocked: true,
-        content: encrypted,
+    }
+  }
+
+  /// Restore a soft-deleted note from trash
+  Future<void> restoreNote(String id) async {
+    final note = await getNote(id);
+    if (note != null && note.isDeleted) {
+      final restoredNote = note.copyWith(
+        isDeleted: false,
         updatedAt: DateTime.now(),
         isSynced: false,
       );
-      // We use low-level save to avoid double encryption in updateNote?
-      // updateNote checks isLocked. If we pass lockedNote (isLocked=true), it will encrypt AGAIN.
-      // So we should call StorageService directly or refactor updateNote.
-      
-      // OPTION: Refactor updateNote to assume input is PLAIN TEXT?
-      // Yes, updateNote usually comes from Editor which has Plain Text.
-      // So if we pass a note with isLocked=true and CipherText to updateNote, it will re-encrypt the CipherText. 
-      // Bad.
-      
-      // Let's use direct storage save here to bypass updateNote's encryption logic
-      // But we need versioning? Locking/Unlocking might not need a version history entry?
-      // Let's create a version just in case.
-      
-      // Actually, cleaner implementation:
-      // updateNote expects PLAIN TEXT content always? 
-      // If so, we can't pass the already encrypted note to it.
-      // We should pass the plain text note with isLocked=true?
-      // YES.
-      
-      final noteToLock = note.copyWith(
-         isLocked: true,
-         // content currently plain text
-         updatedAt: DateTime.now(),
-         isSynced: false,
+      await StorageService.saveNote(restoredNote);
+      await _cloudService.syncNote(restoredNote.copyWith(isSynced: true));
+      await StorageService.saveNote(restoredNote.copyWith(isSynced: true));
+    }
+  }
+
+  /// Permanently delete a note (from trash)
+  Future<void> permanentlyDeleteNote(String id) async {
+    await deleteNote(id, permanent: true);
+  }
+
+  /// Get all notes in trash
+  List<NoteModel> getTrashNotes() {
+    return getAllNotes().where((n) => n.isDeleted).toList();
+  }
+
+  /// Empty trash - permanently delete all trashed notes
+  Future<void> emptyTrash() async {
+    final trashNotes = getTrashNotes();
+    for (final note in trashNotes) {
+      await permanentlyDeleteNote(note.id);
+    }
+  }
+
+  /// Archive a note
+  Future<void> archiveNote(String id) async {
+    final note = await getNote(id);
+    if (note != null) {
+      final archivedNote = note.copyWith(
+        isArchived: true,
+        updatedAt: DateTime.now(),
+        isSynced: false,
       );
-      await updateNote(noteToLock);
-    }
-
-  Future<void> restoreVersion(NoteVersionModel version) async {
-    final currentNote = StorageService.getNote(version.noteId);
-    if (currentNote != null) {
-        // This update call will trigger the logic above, saving the "bad" state as a version too, which is desirable.
-        await updateNote(currentNote.copyWith(
-            content: version.content,
-            // We keep the current title? Or should version store title too?
-            // Model check: NoteVersionModel has (id, noteId, content, createdAt). No title.
-            // So we only restore content.
-            updatedAt: DateTime.now(),
-        ));
+      await StorageService.saveNote(archivedNote);
+      await _cloudService.syncNote(archivedNote.copyWith(isSynced: true));
+      await StorageService.saveNote(archivedNote.copyWith(isSynced: true));
     }
   }
 
-  List<NoteVersionModel> getNoteVersions(String noteId) {
-    return StorageService.getNoteVersions(noteId)
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first
+  /// Unarchive a note
+  Future<void> unarchiveNote(String id) async {
+    final note = await getNote(id);
+    if (note != null && note.isArchived) {
+      final unarchivedNote = note.copyWith(
+        isArchived: false,
+        updatedAt: DateTime.now(),
+        isSynced: false,
+      );
+      await StorageService.saveNote(unarchivedNote);
+      await _cloudService.syncNote(unarchivedNote.copyWith(isSynced: true));
+      await StorageService.saveNote(unarchivedNote.copyWith(isSynced: true));
+    }
   }
 
-  Future<void> deleteNote(String id) async {
-    await StorageService.deleteNote(id);
-    await _cloudService.deleteNote(id);
+  /// Get all archived notes
+  List<NoteModel> getArchivedNotes() {
+    return getAllNotes().where((n) => n.isArchived && !n.isDeleted).toList();
+  }
+
+  /// Get active notes (not deleted, not archived)
+  List<NoteModel> getActiveNotes() {
+    return getAllNotes().where((n) => !n.isDeleted && !n.isArchived).toList();
   }
 
   Future<void> togglePin(String id) async {
@@ -214,30 +163,34 @@ class NotesRepository {
     }
   }
 
-  // Folders
-  List<FolderModel> getAllFolders() {
-    return StorageService.getAllFolders();
+  Future<void> addTagToNote(String noteId, String tagId) async {
+    final note = await getNote(noteId);
+    if (note != null && !note.tagIds.contains(tagId)) {
+      final updatedTags = [...note.tagIds, tagId];
+      await updateNote(note.copyWith(tagIds: updatedTags));
+    }
   }
 
-  Future<void> createFolder(String name, {String? parentId, String? color, String? icon}) async {
-    final folder = FolderModel(
-      id: _uuid.v4(),
-      name: name,
-      parentId: parentId,
-      createdAt: DateTime.now(),
-      color: color,
-      icon: icon,
-      isSynced: false,
-    );
-    
-    await StorageService.saveFolder(folder);
-    await _cloudService.syncFolder(folder.copyWith(isSynced: true));
-    await StorageService.saveFolder(folder.copyWith(isSynced: true));
+  Future<void> removeTagFromNote(String noteId, String tagId) async {
+    final note = await getNote(noteId);
+    if (note != null && note.tagIds.contains(tagId)) {
+      final updatedTags = note.tagIds.where((id) => id != tagId).toList();
+      await updateNote(note.copyWith(tagIds: updatedTags));
+    }
   }
 
-  Future<void> deleteFolder(String id) async {
-    await StorageService.deleteFolder(id);
-    await _cloudService.deleteFolder(id);
+  Future<void> setNoteColor(String noteId, String? color) async {
+    final note = await getNote(noteId);
+    if (note != null) {
+      await updateNote(note.copyWith(color: color));
+    }
+  }
+
+  Future<void> setNoteReminder(String noteId, String? reminderId) async {
+    final note = await getNote(noteId);
+    if (note != null) {
+      await updateNote(note.copyWith(reminderId: reminderId));
+    }
   }
 
   // Tags

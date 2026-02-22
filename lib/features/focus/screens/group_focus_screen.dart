@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/group_focus.dart';
 import '../models/focus_plant.dart';
 import '../services/group_focus_service.dart';
@@ -251,23 +252,10 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
+            child: CommonButton(
+              text: 'Create Room',
+              variant: ButtonVariant.primary,
               onPressed: _createSession,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text(
-                'Create Room',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
             ),
           ),
         ],
@@ -307,15 +295,10 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton(
+            child: CommonButton(
+              text: 'Join Room',
+              variant: ButtonVariant.secondary,
               onPressed: _joinSession,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text('Join Room'),
             ),
           ),
         ],
@@ -569,16 +552,10 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: CommonButton(
+                    text: 'Simulate Join',
+                    variant: ButtonVariant.secondary,
                     onPressed: _groupService.simulateParticipantJoin,
-                    icon: const Icon(Icons.person_add_rounded),
-                    label: const Text('Simulate Join'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
                   ),
                 ),
               ],
@@ -586,23 +563,10 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
+            child: CommonButton(
+              text: session.canStart ? 'Start Session' : 'Waiting for participants...',
+              variant: session.canStart ? ButtonVariant.primary : ButtonVariant.secondary,
               onPressed: session.canStart ? _groupService.startSession : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Text(
-                session.canStart ? 'Start Session' : 'Waiting for participants...',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
             ),
           ),
         ],
@@ -788,23 +752,10 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: CommonButton(
+                  text: 'Leave Session',
+                  variant: ButtonVariant.danger,
                   onPressed: () => _showLeaveConfirmation(session),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Text(
-                    'Leave (All Trees Die!)',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -840,17 +791,19 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
               : 'Are you sure you want to leave this session?',
         ),
         actions: [
-          TextButton(
+          CommonButton(
+            text: 'Stay',
+            variant: ButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
-            child: const Text('Stay'),
           ),
-          TextButton(
+          CommonButton(
+            text: 'Leave',
+            variant: ButtonVariant.danger,
             onPressed: () {
               Navigator.pop(context);
               _groupService.leaveSession();
+              Navigator.pop(context);
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Leave'),
           ),
         ],
       ),

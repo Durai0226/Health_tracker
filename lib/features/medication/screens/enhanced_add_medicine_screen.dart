@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
 import '../models/enhanced_medicine.dart';
@@ -21,7 +22,7 @@ class EnhancedAddMedicineScreen extends StatefulWidget {
 class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final int _totalPages = 7;
+  final int _totalPages = 8;
   bool _isSaving = false;
 
   // Basic Info
@@ -66,6 +67,12 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
   // Drug Interactions
   List<String> _warnings = [];
 
+  // Health & Tracking
+  List<HealthCategory> _selectedHealthCategories = [];
+  final _customCategoryController = TextEditingController();
+  bool _requiresContinuousIntake = false;
+  int _minimumConsecutiveDays = 7;
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +107,10 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
     _notesController.text = med.notes ?? '';
     _selectedDoctorId = med.doctorId;
     _selectedDependentId = med.dependentId;
+    _selectedHealthCategories = med.healthCategories ?? [];
+    _customCategoryController.text = med.customHealthCategory ?? '';
+    _requiresContinuousIntake = med.requiresContinuousIntake;
+    _minimumConsecutiveDays = med.minimumConsecutiveDays ?? 7;
   }
 
   @override
@@ -108,6 +119,7 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
     _strengthController.dispose();
     _instructionsController.dispose();
     _notesController.dispose();
+    _customCategoryController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -186,6 +198,10 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
         dependentId: _selectedDependentId,
         warnings: _warnings.isNotEmpty ? _warnings : null,
         createdAt: widget.editMedicine?.createdAt,
+        healthCategories: _selectedHealthCategories.isNotEmpty ? _selectedHealthCategories : null,
+        customHealthCategory: _customCategoryController.text.isNotEmpty ? _customCategoryController.text : null,
+        requiresContinuousIntake: _requiresContinuousIntake,
+        minimumConsecutiveDays: _requiresContinuousIntake ? _minimumConsecutiveDays : null,
       );
 
       if (widget.editMedicine != null) {
@@ -294,6 +310,7 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
                 _buildTimingPage(),
                 _buildStockPage(),
                 _buildIdentificationPage(),
+                _buildHealthAndTrackingPage(),
                 _buildReviewPage(),
               ],
             ),
@@ -529,30 +546,31 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
               final isSelected = _dosageForm == form;
               return GestureDetector(
                 onTap: () => setState(() => _dosageForm = form),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.border,
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(form.icon, style: const TextStyle(fontSize: 24)),
-                      const SizedBox(height: 4),
-                      Text(
-                        form.displayName,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                          color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                child: CommonCard(
+                  backgroundColor: isSelected ? AppColors.primary.withOpacity(0.1) : null,
+                  border: isSelected ? Border.all(color: AppColors.primary) : null,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Text(
+                          form.icon,
+                          style: TextStyle(
+                            fontSize: 32,
+                            color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                          ),
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        Text(
+                          form.displayName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -1027,6 +1045,118 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
             decoration: const InputDecoration(
               hintText: 'Special instructions',
               prefixIcon: Icon(Icons.notes_rounded, color: AppColors.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHealthAndTrackingPage() {
+    return _buildStepContainer(
+      title: 'Health & Tracking',
+      subtitle: 'Organize and track your health goals',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Health Categories', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: HealthCategory.values.where((c) => c != HealthCategory.custom).map((category) {
+              final isSelected = _selectedHealthCategories.contains(category);
+              return FilterChip(
+                label: Text('${category.icon} ${category.displayName}'),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedHealthCategories.add(category);
+                    } else {
+                      _selectedHealthCategories.remove(category);
+                    }
+                  });
+                },
+                selectedColor: AppColors.primary.withOpacity(0.2),
+                checkmarkColor: AppColors.primary,
+                labelStyle: TextStyle(
+                  color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isSelected ? AppColors.primary : AppColors.border,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _customCategoryController,
+            decoration: const InputDecoration(
+              hintText: 'Custom Category (optional)',
+              prefixIcon: Icon(Icons.category_rounded, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: 32),
+          const Text('Tracking Requirements', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Require Continuous Intake'),
+                  subtitle: const Text('Prevent skipping after consecutive days'),
+                  value: _requiresContinuousIntake,
+                  onChanged: (v) => setState(() => _requiresContinuousIntake = v),
+                  activeThumbColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (_requiresContinuousIntake) ...[
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Minimum consecutive days before skip is prevented'),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$_minimumConsecutiveDays days',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: _minimumConsecutiveDays.toDouble(),
+                    min: 3,
+                    max: 30,
+                    divisions: 27,
+                    activeColor: AppColors.primary,
+                    label: '$_minimumConsecutiveDays days',
+                    onChanged: (v) => setState(() => _minimumConsecutiveDays = v.toInt()),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
