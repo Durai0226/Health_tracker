@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:tablet_remainder/main.dart' as app;
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('Notes Feature E2E Tests', () {
     setUp(() async {
-      await Hive.initFlutter();
+      await CleanStorageService.init();
     });
 
     tearDown(() async {
-      await Hive.close();
+      await CleanStorageService.close();
     });
 
     testWidgets('Create a simple text note', (WidgetTester tester) async {

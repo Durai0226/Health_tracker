@@ -1,28 +1,10 @@
-import 'package:hive/hive.dart';
-
-part 'folder_model.g.dart';
-
-@HiveType(typeId: 101)
-class FolderModel extends HiveObject {
-  @HiveField(0)
+class FolderModel {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? parentId; // For nested folders
-
-  @HiveField(3)
   final DateTime createdAt;
-
-  @HiveField(4)
   final String? color;
-
-  @HiveField(5)
   final String? icon;
-
-  @HiveField(6)
   final bool isSynced;
 
   FolderModel({

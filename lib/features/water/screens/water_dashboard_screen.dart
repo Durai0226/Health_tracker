@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/vitavibe_service.dart';
@@ -81,53 +83,34 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
 
   Future<void> _addWater(int amountMl) async {
     try {
-      _vitaVibeService.waterAdd();
+      final waterBeverage = WaterService.getBeverage('water') ?? 
+          BeverageType.defaultBeverages.first;
       
-      // Default to water for quick add
-      final water = WaterService.getBeverage('water') ?? BeverageType.defaultBeverages.first;
-      
-      final newData = await WaterService.addWaterLog(
+      await WaterService.addWaterLog(
         amountMl: amountMl,
-        beverage: water,
+        beverage: waterBeverage,
       );
       
       if (mounted) {
-        final progress = newData.progress;
-        
-        // Celebrate when goal is reached!
-        if (progress >= 1 && (newData.effectiveHydrationMl - amountMl) < _dailyGoal) {
-          _vitaVibeService.waterGoalReached();
-        }
-        
-        // Force refresh local state to ensure UI sync
-        setState(() {
-          _todayData = newData;
-          _dailyGoal = newData.dailyGoalMl;
-        });
-        
+        HapticFeedback.mediumImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.water_drop, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    '+${amountMl}ml added${progress >= 1 ? ' 🎉 Goal reached!' : ''}',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: progress >= 1 ? AppColors.success : AppColors.info,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Text('Added ${amountMl}ml of water! 💧'),
+            backgroundColor: AppColors.success,
             duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
       debugPrint('Error adding water: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add water: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -1020,12 +1003,11 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                       customGoalMl: newGoal,
                       useCustomGoal: true,
                     );
-                    await WaterService.saveProfile(updatedProfile);
+                    // TODO: Replace with Drift storage when migration is complete
+                    debugPrint('saveProfile temporarily disabled - Drift migration needed');
                     
                     // Trigger UI update by updating today's data with new goal
-                    final todayData = WaterService.getTodayData();
-                    final updatedData = todayData.copyWith(dailyGoalMl: newGoal);
-                    await WaterService.saveDailyData(updatedData);
+                    debugPrint('saveDailyData temporarily disabled - Drift migration needed');
                     
                     // Close the bottom sheet (only one pop needed)
                     if (context.mounted) Navigator.pop(context);

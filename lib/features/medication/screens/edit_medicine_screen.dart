@@ -1,11 +1,15 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../home/screens/home_screen.dart';
-import '../../../core/services/storage_service.dart';
+import '../../onboarding/screens/feature_selection_screen.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/medicine.dart';
+import '../models/enhanced_medicine.dart';
+import '../models/medicine_schedule.dart';
+import '../models/medicine_enums.dart';
+import '../services/medicine_storage_service.dart';
 
 class EditMedicineScreen extends StatefulWidget {
   final Medicine medicine;
@@ -75,8 +79,28 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
         lowStockThreshold: _enableBuyReminder ? 5 : null,
       );
 
-      // Save to storage first (critical operation)
-      await StorageService.updateMedicine(updatedMedicine);
+      // Save to storage using Drift
+      final enhancedMedicine = EnhancedMedicine(
+        id: updatedMedicine.id,
+        name: updatedMedicine.name,
+        dosageForm: _getDosageForm(_dosageType),
+        dosageAmount: _dosageAmount.toDouble(),
+        dosageUnit: 'unit',
+        schedule: MedicineSchedule(
+          frequencyType: _getFrequencyType(_frequency),
+          times: [ScheduledTime(hour: _time.hour, minute: _time.minute, dosageAmount: _dosageAmount.toDouble())],
+          startDate: DateTime.now(),
+          endDate: _durationDays > 0 ? DateTime.now().add(Duration(days: _durationDays)) : null,
+        ),
+        currentStock: _enableBuyReminder ? _stockRemaining : null,
+        lowStockThreshold: _enableBuyReminder ? 5 : null,
+        refillReminderEnabled: _enableBuyReminder,
+        reminderEnabled: _enableReminder,
+        createdAt: DateTime.now(),
+        isActive: true,
+        isArchived: false,
+      );
+      await MedicineCleanStorageService.saveMedicine(enhancedMedicine);
 
       // Handle notification scheduling based on what changed
       bool scheduled = false;
@@ -190,11 +214,12 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
     );
 
     if (confirm == true) {
-      await StorageService.deleteMedicine(widget.medicine.id);
+      // Delete from Drift storage
+      await MedicineCleanStorageService.deleteMedicine(widget.medicine.id);
       await NotificationService().cancelNotification(widget.medicine.id.hashCode);
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const FeatureSelectionScreen()),
           (route) => false,
         );
       }
@@ -515,5 +540,40 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
         ],
       ),
     );
+  }
+
+  DosageForm _getDosageForm(String type) {
+    switch (type.toLowerCase()) {
+      case 'tablet':
+        return DosageForm.tablet;
+      case 'capsule':
+        return DosageForm.capsule;
+      case 'syrup':
+      case 'liquid':
+        return DosageForm.syrup;
+      case 'injection':
+        return DosageForm.injection;
+      case 'drops':
+        return DosageForm.drops;
+      case 'cream':
+      case 'ointment':
+        return DosageForm.cream;
+      case 'patch':
+        return DosageForm.patch;
+      case 'inhaler':
+        return DosageForm.inhaler;
+      default:
+        return DosageForm.tablet;
+    }
+  }
+
+  FrequencyType _getFrequencyType(String frequency) {
+    final lower = frequency.toLowerCase();
+    if (lower.contains('once')) return FrequencyType.onceDaily;
+    if (lower.contains('twice')) return FrequencyType.twiceDaily;
+    if (lower.contains('three') || lower.contains('3')) return FrequencyType.thriceDaily;
+    if (lower.contains('hour')) return FrequencyType.everyXHours;
+    if (lower.contains('need')) return FrequencyType.asNeeded;
+    return FrequencyType.onceDaily;
   }
 }

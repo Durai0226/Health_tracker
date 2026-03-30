@@ -4,9 +4,9 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:flutter/foundation.dart';
 import '../models/cycle_log.dart';
-import '../services/period_storage_service.dart';
-import '../services/period_prediction_service.dart';
-import '../services/period_health_tips_service.dart';
+import 'period_storage_service.dart';
+import 'period_prediction_service.dart';
+import 'period_health_tips_service.dart';
 
 class PeriodNotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
@@ -46,8 +46,8 @@ class PeriodNotificationService {
   }
 
   static Future<void> scheduleAllReminders() async {
-    final settings = PeriodStorageService.getSettings();
-    final currentCycle = PeriodStorageService.getCurrentCycle();
+    final settings = PeriodCleanStorageService.getSettings();
+    final currentCycle = PeriodCleanStorageService.getCurrentCycle();
 
     if (currentCycle == null) return;
 

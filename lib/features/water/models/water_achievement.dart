@@ -1,78 +1,30 @@
-import 'package:hive/hive.dart';
-
-part 'water_achievement.g.dart';
-
 /// Achievement types for gamification
-@HiveType(typeId: 25)
 enum AchievementType {
-  @HiveField(0)
   streak, // Consecutive days meeting goal
-
-  @HiveField(1)
   totalVolume, // Total water consumed
-
-  @HiveField(2)
   consistency, // Regular drinking pattern
-
-  @HiveField(3)
   variety, // Trying different beverages
-
-  @HiveField(4)
   earlyBird, // Drinking water early morning
-
-  @HiveField(5)
   nightOwl, // Staying hydrated late
-
-  @HiveField(6)
   perfectWeek, // 7 days in a row at 100%
-
-  @HiveField(7)
   perfectMonth, // 30 days in a row at 100%
-
-  @HiveField(8)
   overachiever, // Exceeding goal by 120%
-
-  @HiveField(9)
   socialDrinker, // Not drinking alcohol for X days
-
-  @HiveField(10)
   caffeineControl, // Limiting caffeine intake
 }
 
 /// User achievement with progress tracking
-@HiveType(typeId: 26)
-class WaterAchievement extends HiveObject {
-  @HiveField(0)
+class WaterAchievement {
   final String id;
-
-  @HiveField(1)
   final AchievementType type;
-
-  @HiveField(2)
   final String title;
-
-  @HiveField(3)
   final String description;
-
-  @HiveField(4)
   final String emoji;
-
-  @HiveField(5)
   final int targetValue;
-
-  @HiveField(6)
   final int currentValue;
-
-  @HiveField(7)
   final bool isUnlocked;
-
-  @HiveField(8)
   final DateTime? unlockedAt;
-
-  @HiveField(9)
   final int tier; // Bronze = 1, Silver = 2, Gold = 3, Platinum = 4
-
-  @HiveField(10)
   final int points; // Points awarded for this achievement
 
   WaterAchievement({
@@ -400,45 +352,19 @@ class WaterAchievement extends HiveObject {
 }
 
 /// User's achievement progress stored together
-@HiveType(typeId: 27)
-class UserAchievements extends HiveObject {
-  @HiveField(0)
+class UserAchievements {
   final String id;
-
-  @HiveField(1)
   final List<WaterAchievement> achievements;
-
-  @HiveField(2)
   final int totalPoints;
-
-  @HiveField(3)
   final int currentStreak;
-
-  @HiveField(4)
   final int longestStreak;
-
-  @HiveField(5)
   final int totalDrinks;
-
-  @HiveField(6)
   final int totalMl;
-
-  @HiveField(7)
   final List<String> beverageTypesUsed;
-
-  @HiveField(8)
   final int daysGoalMet;
-
-  @HiveField(9)
   final DateTime? lastGoalMetDate;
-
-  @HiveField(10)
   final int caffeineFreeDays;
-
-  @HiveField(11)
   final int alcoholFreeDays;
-
-  @HiveField(12)
   final int earlyMorningDrinks;
 
   UserAchievements({

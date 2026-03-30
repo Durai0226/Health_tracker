@@ -1,28 +1,10 @@
-import 'package:hive/hive.dart';
-
-part 'study_analytics_model.g.dart';
-
-@HiveType(typeId: 270)
 class DailyStudyStats {
-  @HiveField(0)
   final DateTime date;
-
-  @HiveField(1)
   final int totalMinutes;
-
-  @HiveField(2)
   final int sessionCount;
-
-  @HiveField(3)
   final int pomodoroCount;
-
-  @HiveField(4)
   final Map<String, int> minutesBySubject;
-
-  @HiveField(5)
   final double averageQuality;
-
-  @HiveField(6)
   final int goalMinutes;
 
   DailyStudyStats({
@@ -89,33 +71,15 @@ class DailyStudyStats {
   }
 }
 
-@HiveType(typeId: 271)
 class WeeklyStudyStats {
-  @HiveField(0)
   final DateTime weekStart;
-
-  @HiveField(1)
   final int totalMinutes;
-
-  @HiveField(2)
   final int totalSessions;
-
-  @HiveField(3)
   final int daysStudied;
-
-  @HiveField(4)
   final int goalDays;
-
-  @HiveField(5)
   final Map<String, int> minutesBySubject;
-
-  @HiveField(6)
   final List<DailyStudyStats> dailyStats;
-
-  @HiveField(7)
   final int topicsCompleted;
-
-  @HiveField(8)
   final double averageSessionLength;
 
   WeeklyStudyStats({
@@ -205,66 +169,26 @@ class WeeklyStudyStats {
   }
 }
 
-@HiveType(typeId: 272)
 class StudyAnalytics {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final int totalLifetimeMinutes;
-
-  @HiveField(2)
   final int totalLifetimeSessions;
-
-  @HiveField(3)
   final int currentStreak;
-
-  @HiveField(4)
   final int longestStreak;
-
-  @HiveField(5)
   final DateTime? lastStudyDate;
-
-  @HiveField(6)
   final int totalExamsCompleted;
-
-  @HiveField(7)
   final int totalExamsPassed;
-
-  @HiveField(8)
   final double averageGrade;
-
-  @HiveField(9)
   final int totalTopicsCompleted;
-
-  @HiveField(10)
   final int totalTopicsMastered;
-
-  @HiveField(11)
   final Map<String, int> minutesBySubject;
-
-  @HiveField(12)
   final Map<int, int> minutesByHour;
-
-  @HiveField(13)
   final Map<int, int> minutesByDayOfWeek;
-
-  @HiveField(14)
   final int dailyGoalMinutes;
-
-  @HiveField(15)
   final int weeklyGoalDays;
-
-  @HiveField(16)
   final List<String> achievementIds;
-
-  @HiveField(17)
   final DateTime createdAt;
-
-  @HiveField(18)
   final DateTime updatedAt;
-
-  @HiveField(19)
   final bool isSynced;
 
   StudyAnalytics({

@@ -6,7 +6,7 @@ import '../../features/period_tracking/models/period_data.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/fitness/models/fitness_reminder.dart';
-import 'storage_service.dart';
+import 'clean_storage_service.dart';
 
 class CloudSyncService {
   static final CloudSyncService _instance = CloudSyncService._internal();
@@ -46,7 +46,7 @@ class CloudSyncService {
 
   Future<void> _syncMedicines(String userId) async {
     try {
-      final localMedicines = StorageService.getAllMedicines();
+      final localMedicines = CleanStorageService.getAllMedicines();
       final cloudRef = _firestore.collection('users').doc(userId).collection('medicines');
 
       // Use limit for initial sync to avoid loading too much data
@@ -65,7 +65,7 @@ class CloudSyncService {
       } else if (cloudMedicines.isNotEmpty) {
         debugPrint('Downloading ${cloudMedicines.length} medicines from cloud');
         for (final medicine in cloudMedicines) {
-          await StorageService.addMedicine(medicine);
+          await CleanStorageService.addMedicineFromModel(medicine);
         }
       }
     } catch (e) {
@@ -75,7 +75,7 @@ class CloudSyncService {
 
   Future<void> _syncPeriodData(String userId) async {
     try {
-      final localPeriod = StorageService.getPeriodData();
+      final localPeriod = CleanStorageService.getPeriodData();
       final cloudRef = _firestore.collection('users').doc(userId).collection('period').doc('current');
 
       final cloudDoc = await cloudRef.get();
@@ -86,7 +86,7 @@ class CloudSyncService {
       } else if (cloudDoc.exists && cloudDoc.data() != null) {
         debugPrint('Downloading period data from cloud');
         final cloudPeriod = PeriodData.fromJson(cloudDoc.data()!);
-        await StorageService.savePeriodData(cloudPeriod);
+        await CleanStorageService.savePeriodDataFromModel(cloudPeriod);
       }
     } catch (e) {
       debugPrint('Period data sync error: $e');
@@ -136,7 +136,7 @@ class CloudSyncService {
 
   Future<void> _syncFitnessReminders(String userId) async {
     try {
-      final localReminders = StorageService.getAllFitnessReminders();
+      final localReminders = CleanStorageService.getAllFitnessReminders();
       final cloudRef = _firestore.collection('users').doc(userId).collection('fitness_reminders');
 
       // Use limit to prevent large data loads
@@ -155,7 +155,7 @@ class CloudSyncService {
       } else if (cloudReminders.isNotEmpty) {
         debugPrint('Downloading ${cloudReminders.length} fitness reminders from cloud');
         for (final reminder in cloudReminders) {
-          await StorageService.addFitnessReminder(reminder);
+          await CleanStorageService.addFitnessReminderFromModel(reminder);
         }
       }
     } catch (e) {
@@ -167,10 +167,10 @@ class CloudSyncService {
     try {
       debugPrint('Uploading all local data to cloud for user: $userId');
 
-      final localMedicines = StorageService.getAllMedicines();
-      final localPeriod = StorageService.getPeriodData();
+      final localMedicines = CleanStorageService.getAllMedicines();
+      final localPeriod = CleanStorageService.getPeriodData();
       final localWater = WaterService.getTodayData();
-      final localReminders = StorageService.getAllFitnessReminders();
+      final localReminders = CleanStorageService.getAllFitnessReminders();
 
       final batch = _firestore.batch();
       final userRef = _firestore.collection('users').doc(userId);
@@ -212,12 +212,12 @@ class CloudSyncService {
       for (final doc in medicinesSnapshot.docs) {
         final data = doc.data();
         data['id'] = doc.id;
-        await StorageService.addMedicine(Medicine.fromJson(data));
+        await CleanStorageService.addMedicineFromModel(Medicine.fromJson(data));
       }
 
       final periodDoc = await userRef.collection('period').doc('current').get();
       if (periodDoc.exists && periodDoc.data() != null) {
-        await StorageService.savePeriodData(PeriodData.fromJson(periodDoc.data()!));
+        await CleanStorageService.savePeriodDataFromModel(PeriodData.fromJson(periodDoc.data()!));
       }
 
       // Limit water intake to recent entries (last 30 days worth)
@@ -248,7 +248,7 @@ class CloudSyncService {
       for (final doc in remindersSnapshot.docs) {
         final data = doc.data();
         data['id'] = doc.id;
-        await StorageService.addFitnessReminder(FitnessReminder.fromJson(data));
+        await CleanStorageService.addFitnessReminderFromModel(FitnessReminder.fromJson(data));
       }
 
       debugPrint('Successfully downloaded all data from cloud');

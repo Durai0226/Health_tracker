@@ -1,44 +1,34 @@
-import 'package:hive/hive.dart';
+enum NoteType { text, checklist, voice, image, meeting }
 
-part 'note_model.g.dart';
+enum NotePriority { none, low, medium, high }
 
-@HiveType(typeId: 100)
-class NoteModel extends HiveObject {
-  @HiveField(0)
+class NoteModel {
   final String id;
-
-  @HiveField(1)
   final String title;
-
-  @HiveField(2)
   final String content; // JSON delta from Quill or Markdown string
-
-  @HiveField(3)
   final DateTime createdAt;
-
-  @HiveField(4)
   final DateTime updatedAt;
-
-  @HiveField(5)
   final List<String> tagIds;
-
-  @HiveField(6)
   final bool isPinned;
-
-  @HiveField(7)
   final bool isArchived;
-
-  @HiveField(8)
   final bool isDeleted;
-
-  @HiveField(9)
   final String? color;
-
-  @HiveField(10)
   final bool isSynced;
-
-  @HiveField(11)
   final String? reminderId;
+  final NoteType noteType;
+  final String? folderId;
+  final String? aiSummary;
+  final List<String> attachments;
+  final String? voiceRecordingPath;
+  final int? voiceDurationSeconds;
+  final String? voiceTranscript;
+  final NotePriority priority;
+  final bool isFavorite;
+  final int wordCount;
+  final String? coverImagePath;
+  final DateTime? reminderDate;
+  final bool isLocked;
+  final String? password;
 
   NoteModel({
     required this.id,
@@ -53,6 +43,20 @@ class NoteModel extends HiveObject {
     this.color,
     this.isSynced = false,
     this.reminderId,
+    this.noteType = NoteType.text,
+    this.folderId,
+    this.aiSummary,
+    this.attachments = const [],
+    this.voiceRecordingPath,
+    this.voiceDurationSeconds,
+    this.voiceTranscript,
+    this.priority = NotePriority.none,
+    this.isFavorite = false,
+    this.wordCount = 0,
+    this.coverImagePath,
+    this.reminderDate,
+    this.isLocked = false,
+    this.password,
   });
 
   NoteModel copyWith({
@@ -68,6 +72,20 @@ class NoteModel extends HiveObject {
     String? color,
     bool? isSynced,
     String? reminderId,
+    NoteType? noteType,
+    String? folderId,
+    String? aiSummary,
+    List<String>? attachments,
+    String? voiceRecordingPath,
+    int? voiceDurationSeconds,
+    String? voiceTranscript,
+    NotePriority? priority,
+    bool? isFavorite,
+    int? wordCount,
+    String? coverImagePath,
+    DateTime? reminderDate,
+    bool? isLocked,
+    String? password,
   }) {
     return NoteModel(
       id: id ?? this.id,
@@ -82,6 +100,20 @@ class NoteModel extends HiveObject {
       color: color ?? this.color,
       isSynced: isSynced ?? this.isSynced,
       reminderId: reminderId ?? this.reminderId,
+      noteType: noteType ?? this.noteType,
+      folderId: folderId ?? this.folderId,
+      aiSummary: aiSummary ?? this.aiSummary,
+      attachments: attachments ?? this.attachments,
+      voiceRecordingPath: voiceRecordingPath ?? this.voiceRecordingPath,
+      voiceDurationSeconds: voiceDurationSeconds ?? this.voiceDurationSeconds,
+      voiceTranscript: voiceTranscript ?? this.voiceTranscript,
+      priority: priority ?? this.priority,
+      isFavorite: isFavorite ?? this.isFavorite,
+      wordCount: wordCount ?? this.wordCount,
+      coverImagePath: coverImagePath ?? this.coverImagePath,
+      reminderDate: reminderDate ?? this.reminderDate,
+      isLocked: isLocked ?? this.isLocked,
+      password: password ?? this.password,
     );
   }
 
@@ -98,6 +130,20 @@ class NoteModel extends HiveObject {
     'color': color,
     'isSynced': isSynced,
     'reminderId': reminderId,
+    'noteType': noteType.index,
+    'folderId': folderId,
+    'aiSummary': aiSummary,
+    'attachments': attachments,
+    'voiceRecordingPath': voiceRecordingPath,
+    'voiceDurationSeconds': voiceDurationSeconds,
+    'voiceTranscript': voiceTranscript,
+    'priority': priority.index,
+    'isFavorite': isFavorite,
+    'wordCount': wordCount,
+    'coverImagePath': coverImagePath,
+    'reminderDate': reminderDate?.toIso8601String(),
+    'isLocked': isLocked,
+    'password': password,
   };
 
   factory NoteModel.fromJson(Map<String, dynamic> json) => NoteModel(
@@ -113,16 +159,50 @@ class NoteModel extends HiveObject {
     color: json['color'],
     isSynced: json['isSynced'] ?? false,
     reminderId: json['reminderId'],
+    noteType: NoteType.values[json['noteType'] ?? 0],
+    folderId: json['folderId'],
+    aiSummary: json['aiSummary'],
+    attachments: List<String>.from(json['attachments'] ?? []),
+    voiceRecordingPath: json['voiceRecordingPath'],
+    voiceDurationSeconds: json['voiceDurationSeconds'],
+    voiceTranscript: json['voiceTranscript'],
+    priority: NotePriority.values[json['priority'] ?? 0],
+    isFavorite: json['isFavorite'] ?? false,
+    wordCount: json['wordCount'] ?? 0,
+    coverImagePath: json['coverImagePath'],
+    reminderDate: json['reminderDate'] != null ? DateTime.parse(json['reminderDate']) : null,
+    isLocked: json['isLocked'] ?? false,
+    password: json['password'],
   );
 
   bool get hasUncheckedItems {
     if (content.isEmpty) return false;
     try {
       if (content.trim().startsWith('[')) {
-         // Simple string check for performance
          return content.contains('"list":"unchecked"');
       }
     } catch (_) {}
     return false;
+  }
+
+  bool get isVoiceNote => noteType == NoteType.voice;
+  bool get hasAttachments => attachments.isNotEmpty;
+  bool get hasAiSummary => aiSummary != null && aiSummary!.isNotEmpty;
+  bool get hasReminder => reminderDate != null;
+  
+  String get priorityLabel {
+    switch (priority) {
+      case NotePriority.low: return 'Low';
+      case NotePriority.medium: return 'Medium';
+      case NotePriority.high: return 'High';
+      default: return '';
+    }
+  }
+
+  String get formattedVoiceDuration {
+    if (voiceDurationSeconds == null) return '0:00';
+    final minutes = voiceDurationSeconds! ~/ 60;
+    final seconds = voiceDurationSeconds! % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }

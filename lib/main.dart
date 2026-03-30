@@ -5,7 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
-import 'core/services/storage_service.dart';
+import 'core/services/clean_storage_service.dart';
+import 'core/database/app_database.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/haptic_service.dart';
 import 'core/services/vitavibe_service.dart';
@@ -25,11 +26,13 @@ import 'features/focus/services/focus_service.dart';
 import 'features/exam_prep/services/exam_prep_service.dart';
 import 'features/finance/services/finance_sync_manager.dart';
 import 'features/finance/services/bill_storage_service.dart';
+import 'features/period_tracking/services/period_storage_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/screens/welcome_screen.dart';
-import 'features/onboarding/screens/category_selection_screen.dart';
-import 'features/navigation/screens/main_navigation_screen.dart';
+import 'features/onboarding/screens/feature_selection_screen.dart';
 import 'features/reminders/screens/alarm_screen.dart';
+import 'features/habit/screens/habit_shop_screen.dart';
+import 'features/habit/screens/collections_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -49,7 +52,7 @@ void _syncSnoozeSettings() {
   Future(() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userSettings = StorageService.getUserSettings();
+      final userSettings = CleanStorageService.getUserSettings();
       await prefs.setInt('snooze_interval_minutes', userSettings.snoozeIntervalMinutes);
       await prefs.setBool('snooze_enabled', userSettings.snoozeEnabled);
       debugPrint('✓ Synced snooze settings to SharedPreferences');
@@ -71,7 +74,7 @@ void _initDeferredServices() {
         _initService('SyncService', () async => SyncService().init()),
         _initService('BackgroundAlarmService', () => BackgroundAlarmService().init()),
         _initService('FeatureFlagService', () => FeatureFlagService().init()),
-        _initService('Finance Sync Manager', () => FinanceSyncManager.initialize()),
+        _initService('Finance Sync Manager', () => FinanceSyncManager().init()),
         _initService('VitaVibeService', () => VitaVibeService().init()),
         // Other services can be initialized on-demand
       ]);
@@ -117,19 +120,27 @@ void main() async {
     } catch (e) {
       debugPrint("⚠️ Firebase initialization failed: $e");
       debugPrint("⚠️ App will continue with local storage only");
-      // App can still function with local Hive storage
+      // App can still function with local Drift storage
     }
     
     // Initialize critical storage services in parallel
-    // Initialize core storage service first (registers Hive adapters)
-    await _initService('StorageService', () => StorageService.init());
+    // Initialize Drift database first
+    await _initService('AppDatabase', () async {
+      final db = AppDatabase.instance;
+      await db.customStatement('PRAGMA journal_mode=WAL;'); // Enable WAL mode for better performance
+      debugPrint('✓ Drift database connection established');
+    });
+    
+    // Initialize core storage service (now uses Drift)
+    await _initService('CleanStorageService', () => CleanStorageService.init());
 
     // Initialize dependent storage services in parallel
     await Future.wait([
-      _initService('MedicineStorageService', () => MedicineStorageService.init()),
+      _initService('MedicineCleanStorageService', () => MedicineCleanStorageService.init()),
       _initService('IntakeTrackingService', () => IntakeTrackingService.init()),
       _initService('WaterService', () => WaterService.init()),
-      _initService('BillStorageService', () => BillStorageService.init()),
+      _initService('BillStorageService', () => BillStorageService().init()),
+      _initService('PeriodCleanStorageService', () => PeriodCleanStorageService.init()),
     ]);
     
     // Sync snooze settings asynchronously (non-blocking)
@@ -199,7 +210,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _loadThemePreference() {
-    final settings = StorageService.getUserSettings();
+    final settings = CleanStorageService.getUserSettings();
     setState(() {
       _themeMode = settings.darkModeEnabled ? ThemeMode.dark : ThemeMode.light;
     });
@@ -213,16 +224,13 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    final isFirstLaunch = StorageService.isFirstLaunch;
-    final categoryManager = CategoryManager();
-    final hasCategory = categoryManager.hasSelectedCategory;
+    final isFirstLaunch = CleanStorageService.isFirstLaunch;
     
     // Determine initial route based on launch state
     String determineInitialRoute() {
       if (widget.initialRoute != null) return widget.initialRoute!;
       if (isFirstLaunch) return '/welcome';
-      if (!hasCategory) return '/category-selection';
-      return '/home';
+      return '/feature-selection';
     }
     
     return MaterialApp(
@@ -235,23 +243,15 @@ class _MyAppState extends State<MyApp> {
       initialRoute: determineInitialRoute(),
       routes: {
         '/welcome': (context) => const WelcomeScreen(),
-        '/home': (context) => const MainNavigationScreen(),
-        '/category-selection': (context) => const _CategorySelectionWrapper(),
+        '/feature-selection': (context) => const FeatureSelectionScreen(),
         '/alarm': (context) => AlarmScreen(
           payload: widget.alarmPayload ?? 
             (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {}),
         ),
+        '/habit/shop': (context) => const HabitShopScreen(),
+        '/habit/collections': (context) => const CollectionsScreen(),
       },
     );
   }
 }
 
-/// Wrapper for category selection screen used in routes
-class _CategorySelectionWrapper extends StatelessWidget {
-  const _CategorySelectionWrapper();
-  
-  @override
-  Widget build(BuildContext context) {
-    return const CategorySelectionScreen(isOnboarding: true);
-  }
-}

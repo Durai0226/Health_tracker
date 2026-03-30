@@ -1,23 +1,8 @@
-
-import 'package:hive/hive.dart';
-
-part 'water_intake.g.dart';
-
-@HiveType(typeId: 3)
-class WaterIntake extends HiveObject {
-  @HiveField(0)
+class WaterIntake {
   final String id;
-
-  @HiveField(1)
   final DateTime date;
-
-  @HiveField(2)
   final int dailyGoalMl;
-
-  @HiveField(3)
   final int currentIntakeMl;
-
-  @HiveField(4)
   final List<WaterLog> logs;
 
   WaterIntake({
@@ -67,12 +52,8 @@ class WaterIntake extends HiveObject {
   );
 }
 
-@HiveType(typeId: 4)
 class WaterLog {
-  @HiveField(0)
   final DateTime time;
-
-  @HiveField(1)
   final int amountMl;
 
   WaterLog({

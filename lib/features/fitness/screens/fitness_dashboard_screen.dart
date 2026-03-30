@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/common_tab_widgets.dart';
 import '../models/fitness_reminder.dart';
@@ -54,7 +54,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen>
     try {
       await Future.delayed(const Duration(milliseconds: 100));
       
-      final reminders = StorageService.getAllFitnessReminders();
+      // TODO: Replace with Drift storage
+      final reminders = <FitnessReminder>[];
       // Load activities from storage (we'll add this method)
       final activities = await _loadActivities();
       
@@ -84,7 +85,9 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen>
   }
 
   Future<List<FitnessActivity>> _loadActivities() async {
-    return StorageService.getAllFitnessActivities();
+    // TODO: Replace with Drift storage when migration is complete
+    debugPrint('getAllFitnessActivities temporarily disabled - Drift migration needed');
+    return [];
   }
 
   @override
@@ -956,7 +959,8 @@ class _FitnessDashboardScreenState extends State<FitnessDashboardScreen>
         isEnabled: enabled,
         customDays: reminder.customDays,
       );
-      await StorageService.updateFitnessReminder(updated);
+      // TODO: Replace with Drift storage
+      debugPrint('updateFitnessReminder temporarily disabled - Drift migration needed');
       _loadData();
     } catch (e) {
       debugPrint('Error toggling reminder: $e');

@@ -1,8 +1,10 @@
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
 import '../models/period_data.dart';
+import '../models/period_settings.dart';
+import '../services/period_storage_service.dart';
 import 'period_overview_screen.dart';
 
 class PeriodSetupScreen extends StatefulWidget {
@@ -47,7 +49,17 @@ class _PeriodSetupScreenState extends State<PeriodSetupScreen> {
       periodDuration: _periodDuration,
       isEnabled: true,
     );
-    await StorageService.savePeriodData(periodData);
+    // Save settings and start a new cycle using SharedPreferences storage
+    final settings = PeriodSettings(
+      defaultCycleLength: _cycleLength,
+      defaultPeriodDuration: _periodDuration,
+    );
+    await PeriodCleanStorageService.saveSettings(settings);
+    await PeriodCleanStorageService.startNewCycle(
+      _lastPeriodDate,
+      cycleLength: _cycleLength,
+      periodDuration: _periodDuration,
+    );
 
     if (mounted) {
       Navigator.of(context).pushReplacement(

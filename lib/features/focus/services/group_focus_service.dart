@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/group_focus.dart';
 import '../models/focus_plant.dart';
 
@@ -24,16 +24,16 @@ class GroupFocusService extends ChangeNotifier {
 
   Future<void> init() async {
     await _loadData();
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     _currentUserId = prefs['focusUserId'] ?? _generateId();
     _currentUserName = prefs['focusUserName'] ?? 'User';
-    await StorageService.setAppPreference('focusUserId', _currentUserId);
+    await CleanStorageService.setAppPreference('focusUserId', _currentUserId);
     debugPrint('✓ GroupFocusService initialized');
   }
 
   Future<void> _loadData() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       
       final historyJson = prefs['focusGroupHistory'];
       if (historyJson != null && historyJson is List) {
@@ -50,7 +50,7 @@ class GroupFocusService extends ChangeNotifier {
 
   Future<void> _saveData() async {
     try {
-      await StorageService.setAppPreference(
+      await CleanStorageService.setAppPreference(
         'focusGroupHistory',
         _sessionHistory.take(50).map((h) => h.toJson()).toList(),
       );

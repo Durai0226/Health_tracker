@@ -32,7 +32,7 @@ class _PeriodInsightsScreenState extends State<PeriodInsightsScreen> {
   }
 
   void _loadData() {
-    final cycle = PeriodStorageService.getCurrentCycle();
+    final cycle = PeriodCleanStorageService.getCurrentCycle();
     if (cycle == null) return;
 
     final today = DateTime.now();
@@ -47,7 +47,7 @@ class _PeriodInsightsScreenState extends State<PeriodInsightsScreen> {
     final fertileWindow = PeriodPredictionService.predictFertileWindow(cycle.startDate, cycle.cycleLength);
     final moodPredictions = PeriodPredictionService.predictMoodPattern(cycle.startDate, cycle.cycleLength);
     final pmsPrediction = PeriodPredictionService.predictPMS(
-      PeriodStorageService.getAllSymptomLogs(),
+      PeriodCleanStorageService.getAllSymptomLogs(),
       nextPeriod,
     );
     final dailyTip = PeriodHealthTipsService.getDailyTip(phase, cycleDay);

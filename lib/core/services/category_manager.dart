@@ -60,10 +60,10 @@ class CategoryManager extends ChangeNotifier {
       category: AppCategory.health,
       id: 'health',
       name: 'Health & Wellness',
-      description: 'Track medications, water intake, and health reminders',
+      description: 'Track medications, water intake, mood, habits and health reminders',
       icon: Icons.favorite_rounded,
       color: Color(0xFF00897B),
-      features: ['medicine', 'water', 'reminders'],
+      features: ['medicine', 'water', 'reminders', 'mood', 'habit'],
       tagline: 'Your complete health companion',
     ),
     CategoryConfig(
@@ -99,12 +99,12 @@ class CategoryManager extends ChangeNotifier {
     CategoryConfig(
       category: AppCategory.periodTracking,
       id: 'period_tracking',
-      name: 'Period Tracking',
-      description: 'Track menstrual cycles, symptoms, and predictions',
+      name: 'Her Elara',
+      description: 'Track cycles, symptoms, and predictions with HerElara',
       icon: Icons.calendar_month_rounded,
       color: Color(0xFFEC4899),
       features: ['period'],
-      tagline: 'Understand your cycle',
+      tagline: 'Embrace your rhythm',
     ),
   ];
 

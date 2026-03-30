@@ -1,94 +1,38 @@
-import 'package:hive/hive.dart';
-
-part 'hydration_profile.g.dart';
-
 /// Activity level for goal calculation
-@HiveType(typeId: 22)
 enum ActivityLevel {
-  @HiveField(0)
   sedentary, // Little to no exercise
-
-  @HiveField(1)
   light, // Light exercise 1-3 days/week
-
-  @HiveField(2)
   moderate, // Moderate exercise 3-5 days/week
-
-  @HiveField(3)
   active, // Hard exercise 6-7 days/week
-
-  @HiveField(4)
   veryActive, // Very hard exercise, physical job
 }
 
 /// Climate type for goal adjustment
-@HiveType(typeId: 23)
 enum ClimateType {
-  @HiveField(0)
   cold, // < 10°C
-
-  @HiveField(1)
   moderate, // 10-25°C
-
-  @HiveField(2)
   warm, // 25-30°C
-
-  @HiveField(3)
   hot, // 30-35°C
-
-  @HiveField(4)
   veryHot, // > 35°C
 }
 
 /// User's hydration profile for personalized goal calculation
-@HiveType(typeId: 24)
-class HydrationProfile extends HiveObject {
-  @HiveField(0)
+class HydrationProfile {
   final String id;
-
-  @HiveField(1)
   final double? weightKg;
-
-  @HiveField(2)
   final int? heightCm;
-
-  @HiveField(3)
   final int? age;
-
-  @HiveField(4)
   final bool isMale;
-
-  @HiveField(5)
   final ActivityLevel activityLevel;
-
-  @HiveField(6)
   final ClimateType climate;
-
-  @HiveField(7)
   final bool isPregnant;
-
-  @HiveField(8)
   final bool isBreastfeeding;
-
-  @HiveField(9)
   final int customGoalMl; // User can override calculated goal
-
-  @HiveField(10)
   final bool useCustomGoal;
-
-  @HiveField(11)
   final DateTime? createdAt;
-
-  @HiveField(12)
   final DateTime? updatedAt;
-
-  @HiveField(13)
   final bool wakeUpReminderEnabled;
-
-  @HiveField(14)
   final int? wakeUpHour;
-
-  @HiveField(15)
   final int? bedtimeHour;
 
   HydrationProfile({

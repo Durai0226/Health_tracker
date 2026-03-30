@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 
 /// Haptic intensity levels
 enum HapticIntensity {
@@ -179,8 +180,7 @@ class HapticService extends ChangeNotifier {
   factory HapticService() => _instance;
   HapticService._internal();
 
-  static const String _boxName = 'haptic_settings';
-  Box? _box;
+  static const String _prefsKey = 'haptic_settings';
 
   bool _isEnabled = true;
   HapticIntensity _globalIntensity = HapticIntensity.medium;
@@ -216,41 +216,62 @@ class HapticService extends ChangeNotifier {
   /// Initialize the haptic service
   Future<void> init() async {
     try {
-      _box = await Hive.openBox(_boxName);
-      _loadSettings();
+      await _loadSettings();
     } catch (e) {
       debugPrint('Error initializing HapticService: $e');
     }
   }
 
-  void _loadSettings() {
-    if (_box == null) return;
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settingsJson = prefs.getString(_prefsKey);
+      
+      if (settingsJson != null) {
+        final settings = jsonDecode(settingsJson) as Map<String, dynamic>;
+        _isEnabled = settings['enabled'] ?? true;
+        
+        final intensityIndex = settings['globalIntensity'] ?? 1;
+        _globalIntensity = HapticIntensity.values[intensityIndex];
 
-    _isEnabled = _box!.get('enabled', defaultValue: true);
-    final intensityIndex = _box!.get('globalIntensity', defaultValue: 1);
-    _globalIntensity = HapticIntensity.values[intensityIndex];
+        // Load per-feature settings
+        final featuresSettings = settings['features'] as Map<String, dynamic>? ?? {};
+        for (final feature in HapticFeature.values) {
+          final key = feature.name;
+          final featureData = featuresSettings[key] as Map<String, dynamic>? ?? {};
+          _featureEnabled[feature] = featureData['enabled'] ?? true;
+          final featureIntensityIndex = featureData['intensity'] ?? 1;
+          _featureIntensity[feature] = HapticIntensity.values[featureIntensityIndex];
+        }
+      }
 
-    // Load per-feature settings
-    for (final feature in HapticFeature.values) {
-      final key = feature.name;
-      _featureEnabled[feature] = _box!.get('${key}_enabled', defaultValue: true);
-      final featureIntensityIndex = _box!.get('${key}_intensity', defaultValue: 1);
-      _featureIntensity[feature] = HapticIntensity.values[featureIntensityIndex];
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading haptic settings: $e');
     }
-
-    notifyListeners();
   }
 
   Future<void> _saveSettings() async {
-    if (_box == null) return;
-
-    await _box!.put('enabled', _isEnabled);
-    await _box!.put('globalIntensity', _globalIntensity.index);
-
-    for (final feature in HapticFeature.values) {
-      final key = feature.name;
-      await _box!.put('${key}_enabled', _featureEnabled[feature]);
-      await _box!.put('${key}_intensity', _featureIntensity[feature]!.index);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      final featuresSettings = <String, Map<String, dynamic>>{};
+      for (final feature in HapticFeature.values) {
+        featuresSettings[feature.name] = {
+          'enabled': _featureEnabled[feature],
+          'intensity': _featureIntensity[feature]!.index,
+        };
+      }
+      
+      final settings = {
+        'enabled': _isEnabled,
+        'globalIntensity': _globalIntensity.index,
+        'features': featuresSettings,
+      };
+      
+      await prefs.setString(_prefsKey, jsonEncode(settings));
+    } catch (e) {
+      debugPrint('Error saving haptic settings: $e');
     }
   }
 

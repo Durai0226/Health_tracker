@@ -21,9 +21,26 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _profile = WaterService.getProfile();
-    _weightController.text = _profile.weightKg?.toString() ?? '';
-    _ageController.text = _profile.age?.toString() ?? '';
+    _initializeProfile();
+  }
+
+  Future<void> _initializeProfile() async {
+    try {
+      await WaterService.init();
+      _profile = WaterService.getProfile();
+      _weightController.text = _profile.weightKg?.toString() ?? '';
+      _ageController.text = _profile.age?.toString() ?? '';
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Error initializing profile: $e');
+      if (mounted) {
+        _profile = HydrationProfile(
+          id: 'profile',
+          createdAt: DateTime.now(),
+        );
+        setState(() {});
+      }
+    }
   }
 
   @override
@@ -35,48 +52,112 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
 
   Future<void> _save() async {
     if (_isSaving) return;
-    setState(() => _isSaving = true);
+    
+    // Validation
+    if (_validateInput()) {
+      setState(() => _isSaving = true);
 
-    try {
-      final weight = double.tryParse(_weightController.text);
-      final age = int.tryParse(_ageController.text);
+      try {
+        await WaterService.init(); // Ensure service is initialized
+        
+        final weight = double.tryParse(_weightController.text.trim());
+        final age = int.tryParse(_ageController.text.trim());
 
-      final updated = _profile.copyWith(
-        weightKg: weight,
-        age: age,
-        updatedAt: DateTime.now(),
-      );
+        final updated = _profile.copyWith(
+          weightKg: weight,
+          age: age,
+          updatedAt: DateTime.now(),
+        );
 
-      await WaterService.saveProfile(updated);
+        await WaterService.saveProfile(updated);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                Text('Daily goal updated to ${updated.effectiveGoalMl}ml'),
-              ],
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Profile saved! Daily goal: ${updated.effectiveGoalMl}ml',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.pop(context, true);
+          );
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        debugPrint('Error saving profile: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Failed to save profile. Please try again.',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
       }
-    } catch (e) {
-      debugPrint('Error saving profile: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving profile: $e'),
-            backgroundColor: AppColors.error,
+    }
+  }
+
+  bool _validateInput() {
+    final weight = double.tryParse(_weightController.text.trim());
+    final age = int.tryParse(_ageController.text.trim());
+    
+    if (weight != null && (weight < 20 || weight > 300)) {
+      _showValidationError('Please enter a valid weight between 20-300 kg');
+      return false;
+    }
+    
+    if (age != null && (age < 1 || age > 120)) {
+      _showValidationError('Please enter a valid age between 1-120 years');
+      return false;
+    }
+    
+    return true;
+  }
+  
+  void _showValidationError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
           ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     }
   }
 

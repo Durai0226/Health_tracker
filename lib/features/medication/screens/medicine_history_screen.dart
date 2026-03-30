@@ -5,6 +5,7 @@ import '../models/medicine_log.dart';
 import '../models/medicine_enums.dart';
 import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
+import '../services/pdf_report_service.dart';
 
 /// Premium Feature: Medicine History with Calendar View
 /// Similar to Medisafe's history and Apple Health's medication logs
@@ -24,6 +25,7 @@ class _MedicineHistoryScreenState extends State<MedicineHistoryScreen> {
   Map<DateTime, List<MedicineLog>> _logsByDate = {};
   bool _isLoading = true;
   EnhancedMedicine? _selectedMedicine;
+  List<EnhancedMedicine> _allMedicines = [];
 
   @override
   void initState() {
@@ -35,11 +37,14 @@ class _MedicineHistoryScreenState extends State<MedicineHistoryScreen> {
     setState(() => _isLoading = true);
     
     try {
+      // Load all medicines for lookup
+      _allMedicines = await MedicineCleanStorageService.getAllMedicines(includeArchived: true);
+
       if (widget.medicineId != null) {
-        _selectedMedicine = MedicineStorageService.getMedicine(widget.medicineId!);
-        _logs = MedicineStorageService.getLogsForMedicine(widget.medicineId!);
+        _selectedMedicine = await MedicineCleanStorageService.getMedicine(widget.medicineId!);
+        _logs = await MedicineCleanStorageService.getLogsForMedicine(widget.medicineId!);
       } else {
-        _logs = MedicineStorageService.getAllLogs();
+        _logs = await MedicineCleanStorageService.getAllLogs();
       }
 
       // Group logs by date
@@ -58,6 +63,27 @@ class _MedicineHistoryScreenState extends State<MedicineHistoryScreen> {
     }
 
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _exportReport(BuildContext context) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Generating PDF report...')),
+      );
+      
+      await PdfReportService.generateAndShareReport();
+      
+    } catch (e) {
+      debugPrint('Export error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate report: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   List<MedicineLog> get _logsForSelectedDate {
@@ -84,6 +110,11 @@ class _MedicineHistoryScreenState extends State<MedicineHistoryScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.primary),
+            tooltip: 'Export Report',
+            onPressed: () => _exportReport(context),
+          ),
           IconButton(
             icon: const Icon(Icons.filter_list_rounded, color: AppColors.primary),
             onPressed: _showFilterOptions,
@@ -358,7 +389,11 @@ class _MedicineHistoryScreenState extends State<MedicineHistoryScreen> {
   }
 
   Widget _buildLogCard(MedicineLog log) {
-    final medicine = MedicineStorageService.getMedicine(log.medicineId);
+    EnhancedMedicine? medicine;
+    try {
+      medicine = _allMedicines.firstWhere((m) => m.id == log.medicineId);
+    } catch (_) {}
+    
     final statusColor = _getStatusColor(log.status);
     final statusIcon = _getStatusIcon(log.status);
 

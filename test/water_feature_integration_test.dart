@@ -109,7 +109,7 @@ void main() {
       await WaterService.init();
       
       final profile = WaterService.getProfile();
-      final newGoal = 3000;
+      const newGoal = 3000;
       
       final updatedProfile = profile.copyWith(
         customGoalMl: newGoal,

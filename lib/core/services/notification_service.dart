@@ -7,13 +7,14 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'storage_service.dart';
-import 'package:hive/hive.dart';
+import 'clean_storage_service.dart';
 import '../../features/reminders/models/reminder_model.dart';
 import '../models/user_settings.dart';
 import 'background_alarm_service.dart';
 import '../../main.dart';
-import '../../features/notes/presentation/screens/note_editor_screen.dart';
+import '../../features/notes/data/services/notes_service.dart';
+import '../../features/notes/presentation/screens/premium_note_editor_screen.dart';
+import '../widgets/toast/toast.dart';
 
 // Top-level function for background notification handling
 @pragma('vm:entry-point')
@@ -118,6 +119,56 @@ class NotificationService {
   
   bool _isInitialized = false;
   bool _permissionsGranted = false;
+  bool _isAppInForeground = true;
+
+  /// Set app foreground state - call from app lifecycle observer
+  void setAppForegroundState(bool inForeground) {
+    _isAppInForeground = inForeground;
+    debugPrint('📱 App foreground state: $inForeground');
+  }
+
+  /// Show in-app toast when app is in foreground instead of system notification
+  void showInAppToast({
+    required String title,
+    String? body,
+    ToastType type = ToastType.reminder,
+    ToastFeature feature = ToastFeature.general,
+    VoidCallback? onAction,
+    String? actionLabel,
+    int? snoozeMinutes,
+  }) {
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      debugPrint('⚠️ No context available for in-app toast');
+      return;
+    }
+
+    // Show premium toast
+    if (type == ToastType.reminder) {
+      ReminderToast.triggered(
+        context,
+        title: title,
+        body: body,
+        snoozeMinutes: snoozeMinutes ?? 5,
+        onSnooze: onAction,
+      );
+    } else {
+      ToastService.show(
+        context,
+        type: type,
+        feature: feature,
+        title: title,
+        message: body,
+        action: onAction != null && actionLabel != null
+            ? ToastAction(label: actionLabel, onPressed: onAction)
+            : null,
+      );
+    }
+    debugPrint('✓ Showed in-app toast: $title');
+  }
+
+  /// Check if should show in-app toast instead of system notification
+  bool get shouldShowInAppToast => _isAppInForeground;
 
   Future<void> init() async {
     if (_isInitialized) {
@@ -294,6 +345,16 @@ class NotificationService {
             showBadge: true,
             audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
+          const AndroidNotificationChannel(
+            'mood_channel',
+            'Mood Tracker Reminders',
+            description: 'Reminders for mood check-ins and streak alerts',
+            importance: Importance.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            showBadge: true,
+          ),
         ];
 
         for (final channel in channels) {
@@ -431,7 +492,7 @@ class NotificationService {
     
     // Handle actions
     if (response.actionId == 'snooze') {
-      final settings = StorageService.getUserSettings();
+      final settings = CleanStorageService.getUserSettings();
       snoozeReminder(response.id ?? 0, settings.snoozeIntervalMinutes);
     } else if (response.actionId == 'dismiss') {
        _notifications.cancel(response.id ?? 0);
@@ -442,11 +503,17 @@ class NotificationService {
       if (payload != null && payload.startsWith('note:')) {
         final noteId = payload.substring(5);
         debugPrint('🔔 Navigating to note: $noteId');
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (context) => NoteEditorScreen(noteId: noteId),
-          ),
-        );
+        
+        final note = NotesService().getNote(noteId);
+        if (note != null) {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (context) => PremiumNoteEditorScreen(note: note),
+            ),
+          );
+        } else {
+          debugPrint('❌ Note not found: $noteId');
+        }
       }
     }
   }
@@ -997,12 +1064,12 @@ class NotificationService {
 
   Future<void> snoozeReminder(int notificationId, int minutes) async {
     try {
-      final box = Hive.box<Reminder>('reminders');
+      final reminders = CleanStorageService.getReminders();
       // Find reminder by hashcode of ID if possible, or we might need the original ID.
       // For now, looking for any reminder that matches the ID hash.
-      final reminder = box.values.firstWhere(
+      final reminder = reminders.firstWhere(
         (r) => r.id.hashCode == notificationId,
-        orElse: () => box.values.firstWhere((r) => r.id.hashCode == (notificationId - 100000))
+        orElse: () => reminders.firstWhere((r) => r.id.hashCode == (notificationId - 100000))
       );
       
       final now = tz.TZDateTime.now(tz.local);
@@ -1072,7 +1139,7 @@ class NotificationService {
     ReminderPriority priority = ReminderPriority.high,
   }) {
     // Get user settings for notification preferences
-    final settings = StorageService.getUserSettings();
+    final settings = CleanStorageService.getUserSettings();
     
     // Always use alarm_channel for proper alarm sound behavior
     // The channel has audioAttributesUsage: alarm configured
@@ -1136,7 +1203,7 @@ class NotificationService {
   
   /// Get current notification settings for display
   UserSettings getNotificationSettings() {
-    return StorageService.getUserSettings();
+    return CleanStorageService.getUserSettings();
   }
 
   Future<void> cancelNotification(int id) async {
@@ -1539,6 +1606,115 @@ class NotificationService {
         return InterruptionLevel.active;
       case ReminderPriority.low:
         return InterruptionLevel.passive;
+    }
+  }
+
+  /// Schedule a daily notification at a specific time
+  Future<bool> scheduleDailyNotification({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+  }) async {
+    try {
+      if (!_isInitialized) {
+        await init();
+      }
+      
+      await checkPermissions();
+
+      if (Platform.isAndroid) {
+        final alarmService = BackgroundAlarmService();
+        return await alarmService.scheduleDailyAlarm(
+          id: id,
+          hour: hour,
+          minute: minute,
+          title: title,
+          body: body,
+          channelId: 'reminders_channel',
+          channelName: 'General Reminders',
+        );
+      }
+
+      final now = tz.TZDateTime.now(tz.local);
+      var scheduledDate = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        hour,
+        minute,
+      );
+
+      if (scheduledDate.isBefore(now)) {
+        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      }
+
+      await _notifications.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduledDate,
+        _notificationDetails(priority: ReminderPriority.high),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+
+      debugPrint('✓ Scheduled daily notification: $title at $hour:$minute');
+      return true;
+    } catch (e) {
+      debugPrint('❌ Failed to schedule daily notification: $e');
+      return false;
+    }
+  }
+
+  /// Schedule a one-time notification at a specific date/time
+  Future<bool> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    try {
+      if (!_isInitialized) {
+        await init();
+      }
+      
+      await checkPermissions();
+
+      if (Platform.isAndroid) {
+        final alarmService = BackgroundAlarmService();
+        return await alarmService.scheduleOneTimeAlarm(
+          id: id,
+          dateTime: scheduledDate,
+          title: title,
+          body: body,
+          channelId: 'reminders_channel',
+          channelName: 'General Reminders',
+        );
+      }
+
+      final tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
+
+      await _notifications.zonedSchedule(
+        id,
+        title,
+        body,
+        tzScheduledDate,
+        _notificationDetails(priority: ReminderPriority.high),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+
+      debugPrint('✓ Scheduled notification: $title at $scheduledDate');
+      return true;
+    } catch (e) {
+      debugPrint('❌ Failed to schedule notification: $e');
+      return false;
     }
   }
 }

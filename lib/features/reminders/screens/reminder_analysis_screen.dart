@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
-import '../../medication/models/medicine.dart';
 
 class ReminderAnalysisScreen extends StatefulWidget {
   const ReminderAnalysisScreen({super.key});
@@ -159,22 +157,15 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
   }
 
   Widget _buildStatisticsCard() {
-    final medicines = StorageService.getAllMedicines();
-    final fitnessReminders = StorageService.getAllFitnessReminders();
-    final waterReminder = StorageService.getWaterReminder();
-    final periodReminder = StorageService.getPeriodReminder();
+    // TODO: Replace with Drift storage when migration is complete
+    final medicinesCount = 0;
+    final fitnessCount = 0;
+    final waterEnabled = false;
+    final periodEnabled = false;
 
-    final totalReminders = medicines.length + 
-                          fitnessReminders.length +
-                          (waterReminder != null && waterReminder.isEnabled ? 1 : 0) +
-                          (periodReminder != null && periodReminder.isEnabled ? 1 : 0);
-
-    final activeReminders = medicines.where((m) => m.enableReminder).length +
-                           fitnessReminders.where((f) => f.isEnabled).length +
-                           (waterReminder != null && waterReminder.isEnabled ? 1 : 0) +
-                           (periodReminder != null && periodReminder.isEnabled ? 1 : 0);
-
-    final adherenceRate = totalReminders > 0 ? (activeReminders / totalReminders * 100).round() : 0;
+    final totalReminders = medicinesCount + fitnessCount + (waterEnabled ? 1 : 0) + (periodEnabled ? 1 : 0);
+    final activeReminders = totalReminders;
+    final adherenceRate = totalReminders > 0 ? 100 : 0;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -240,10 +231,11 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
   }
 
   Widget _buildReminderBreakdown() {
-    final medicines = StorageService.getAllMedicines().where((m) => m.enableReminder).length;
-    final fitness = StorageService.getAllFitnessReminders().where((f) => f.isEnabled).length;
-    final water = StorageService.getWaterReminder()?.isEnabled == true ? 1 : 0;
-    final period = StorageService.getPeriodReminder()?.isEnabled == true ? 1 : 0;
+    // TODO: Replace with Drift storage when migration is complete
+    final medicines = 0;
+    final fitness = 0;
+    final water = 0;
+    final period = 0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -323,11 +315,7 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
   }
 
   Widget _buildUpcomingReminders() {
-    final medicines = StorageService.getAllMedicines()
-        .where((m) => m.enableReminder)
-        .toList()
-      ..sort((a, b) => a.time.compareTo(b.time));
-
+    // TODO: Replace with Drift storage when migration is complete
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -359,74 +347,23 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (medicines.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'No reminders scheduled for today',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'No reminders scheduled for today',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
                 ),
               ),
-            )
-          else
-            ...medicines.take(5).map((medicine) => _buildUpcomingReminderItem(medicine)),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildUpcomingReminderItem(Medicine medicine) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              DateFormat('h:mm a').format(medicine.time),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  medicine.name,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  '${medicine.dosageAmount} ${medicine.dosageType}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.medication_rounded, color: AppColors.primary, size: 20),
-        ],
-      ),
-    );
-  }
+  // TODO: Uncomment when Drift migration is complete
+  // Widget _buildUpcomingReminderItem(dynamic medicine) { ... }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
 import '../models/fitness_activity.dart';
 
 class LiveWorkoutScreen extends StatefulWidget {
@@ -949,7 +949,8 @@ class WorkoutSummaryScreen extends StatelessWidget {
     );
     
     // Save to storage
-    StorageService.saveFitnessActivity(activity);
+    // TODO: Replace with Drift storage when migration is complete
+    debugPrint('saveFitnessActivity temporarily disabled - Drift migration needed');
     
     // Also save detailed analysis if needed (mocking keys for now)
     // In a real app we'd map the splits to the analysis model

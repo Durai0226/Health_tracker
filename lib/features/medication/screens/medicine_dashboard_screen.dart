@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/analytics_service.dart';
 import '../models/medicine.dart';
 import 'add_medicine_wizard.dart';
@@ -19,7 +19,7 @@ class MedicineDashboardScreen extends StatefulWidget {
 
 class _MedicineDashboardScreenState extends State<MedicineDashboardScreen> {
   final VitaVibeService _vitaVibeService = VitaVibeService();
-  List<Medicine> _medicines = [];
+  List<dynamic> _medicines = []; // Changed from List<Medicine> for Drift migration
   bool _isLoading = true;
   int _takenToday = 0;
   int _totalToday = 0;
@@ -39,14 +39,14 @@ class _MedicineDashboardScreenState extends State<MedicineDashboardScreen> {
     try {
       await Future.delayed(const Duration(milliseconds: 100));
       
-      final medicines = StorageService.getAllMedicines();
+      final medicines = CleanStorageService.getAllMedicines();
       final analytics = AnalyticsService().getMedicineAnalytics(
         startDate: DateTime.now().subtract(const Duration(days: 30)),
         endDate: DateTime.now(),
       );
       
       // Load today's taken status from preferences
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       final todayKey = _getTodayKey();
       final todayData = prefs['medicineTakenToday_$todayKey'];
       Map<String, bool> todayStatus = {};
@@ -81,7 +81,7 @@ class _MedicineDashboardScreenState extends State<MedicineDashboardScreen> {
       final todayKey = _getTodayKey();
       _todayStatus[medicine.id] = true;
       
-      await StorageService.setAppPreference('medicineTakenToday_$todayKey', _todayStatus);
+      await CleanStorageService.setAppPreference('medicineTakenToday_$todayKey', _todayStatus);
       await AnalyticsService().logMedicineTaken(
         medicineId: medicine.id,
         medicineName: medicine.name,

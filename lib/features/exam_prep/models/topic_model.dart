@@ -1,18 +1,8 @@
-import 'package:hive/hive.dart';
-
-part 'topic_model.g.dart';
-
-@HiveType(typeId: 255)
 enum TopicStatus {
-  @HiveField(0)
   not_started,
-  @HiveField(1)
   in_progress,
-  @HiveField(2)
   completed,
-  @HiveField(3)
   revision_needed,
-  @HiveField(4)
   mastered,
 }
 
@@ -63,15 +53,10 @@ extension TopicStatusExtension on TopicStatus {
   }
 }
 
-@HiveType(typeId: 256)
 enum TopicDifficulty {
-  @HiveField(0)
   easy,
-  @HiveField(1)
   medium,
-  @HiveField(2)
   hard,
-  @HiveField(3)
   very_hard,
 }
 
@@ -103,75 +88,29 @@ extension TopicDifficultyExtension on TopicDifficulty {
   }
 }
 
-@HiveType(typeId: 257)
 class Topic {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? description;
-
-  @HiveField(3)
   final String subjectId;
-
-  @HiveField(4)
   final String? parentTopicId;
-
-  @HiveField(5)
   final TopicStatus status;
-
-  @HiveField(6)
   final TopicDifficulty difficulty;
-
-  @HiveField(7)
   final int estimatedMinutes;
-
-  @HiveField(8)
   final int actualStudyMinutes;
-
-  @HiveField(9)
   final double confidenceLevel;
-
-  @HiveField(10)
   final int timesRevised;
-
-  @HiveField(11)
   final DateTime? lastStudiedAt;
-
-  @HiveField(12)
   final DateTime? nextRevisionDate;
-
-  @HiveField(13)
   final List<String> childTopicIds;
-
-  @HiveField(14)
   final List<String> noteIds;
-
-  @HiveField(15)
   final List<String> resourceUrls;
-
-  @HiveField(16)
   final int orderIndex;
-
-  @HiveField(17)
   final double weightPercentage;
-
-  @HiveField(18)
   final bool isImportantForExam;
-
-  @HiveField(19)
   final DateTime createdAt;
-
-  @HiveField(20)
   final DateTime updatedAt;
-
-  @HiveField(21)
   final bool isSynced;
-
-  @HiveField(22)
   final List<String> tags;
 
   Topic({

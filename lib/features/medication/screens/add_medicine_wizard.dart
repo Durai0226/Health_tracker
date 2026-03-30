@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/notification_service.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
 import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/drug_interaction_service.dart';
+import '../services/medication_reminder_service.dart';
 
 /// New Step-by-Step Add Medicine Flow
 /// Flow: Health Category → Medicine Details → Schedule → Meal Timing → Visual ID → Review
@@ -189,7 +189,7 @@ class _AddMedicineWizardState extends State<AddMedicineWizard> {
   Future<void> _checkInteractions() async {
     if (_nameController.text.isEmpty) return;
 
-    final existingMedicines = MedicineStorageService.getAllMedicines();
+    final existingMedicines = await MedicineCleanStorageService.getAllMedicines();
     final drugNames = existingMedicines.map((m) => m.name).toList();
     drugNames.add(_nameController.text);
 
@@ -246,12 +246,8 @@ class _AddMedicineWizardState extends State<AddMedicineWizard> {
       final schedule = MedicineSchedule(
         frequencyType: _frequencyType,
         times: _scheduledTimes,
-        intervalHours: _frequencyType == FrequencyType.everyXHours ? _intervalHours : null,
         specificDays: _frequencyType == FrequencyType.specificDays ? _specificDays : null,
-        cycleDaysOn: _frequencyType == FrequencyType.cyclical ? _cycleDaysOn : null,
-        cycleDaysOff: _frequencyType == FrequencyType.cyclical ? _cycleDaysOff : null,
         startDate: _startDate,
-        durationDays: _durationDays,
         mealTiming: _mealTiming,
         isPRN: _frequencyType == FrequencyType.asNeeded,
       );
@@ -283,26 +279,19 @@ class _AddMedicineWizardState extends State<AddMedicineWizard> {
         customHealthCategory: _customCategoryName.isNotEmpty ? _customCategoryName : null,
       );
 
+      // Cancel old reminders if editing
       if (widget.editMedicine != null) {
-        await MedicineStorageService.updateMedicine(medicine);
+        await MedicationReminderService().cancelReminders(widget.editMedicine!);
+        await MedicineCleanStorageService.updateMedicine(medicine);
       } else {
-        await MedicineStorageService.addMedicine(medicine);
+        await MedicineCleanStorageService.addMedicine(medicine);
       }
 
-      // Schedule notifications
-      if (_reminderEnabled && _frequencyType != FrequencyType.asNeeded) {
-        final notificationService = NotificationService();
-        for (int i = 0; i < _scheduledTimes.length; i++) {
-          final time = _scheduledTimes[i];
-          await notificationService.scheduleMedicineReminder(
-            id: medicine.id.hashCode + i,
-            medicineName: medicine.name,
-            hour: time.hour,
-            minute: time.minute,
-            frequency: schedule.frequencyDescription,
-          );
-        }
-      }
+      // Schedule notifications using MedicationReminderService
+      final reminderService = MedicationReminderService();
+      final scheduledIds = await reminderService.scheduleReminders(medicine);
+      
+      debugPrint('✓ Scheduled ${scheduledIds.length} reminders for ${medicine.name}');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -884,13 +873,14 @@ class _AddMedicineWizardState extends State<AddMedicineWizard> {
             ],
 
             // Time slots (if not PRN)
-            if (_frequencyType != FrequencyType.asNeeded && _scheduledTimes.isNotEmpty) ...[
+            if (_frequencyType != FrequencyType.asNeeded) ...[
               const SizedBox(height: 24),
               const Text(
                 'Reminder Times',
                 style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 12),
+              // Time slots list
               ..._scheduledTimes.asMap().entries.map((entry) {
                 final index = entry.key;
                 final time = entry.value;
@@ -908,15 +898,72 @@ class _AddMedicineWizardState extends State<AddMedicineWizard> {
                       ),
                       child: const Icon(Icons.access_time_rounded, color: AppColors.primary),
                     ),
-                    title: Text(time.formattedTime, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: time.label != null ? Text(time.label!) : null,
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
-                      onPressed: () => _editTime(index),
+                    title: Text(time.formattedTime, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    subtitle: Text(time.label ?? _getTimeLabel(time.hour)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
+                          onPressed: () => _editTime(index),
+                        ),
+                        if (_scheduledTimes.length > 1)
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: AppColors.error),
+                            onPressed: () => _removeTime(index),
+                          ),
+                      ],
                     ),
                   ),
                 );
               }),
+              
+              // Add time button
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _addNewTime,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary, style: BorderStyle.solid),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_circle_outline, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Add Another Time',
+                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Reminder info
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: AppColors.info, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'You will receive a push notification at each scheduled time.',
+                        style: TextStyle(fontSize: 13, color: AppColors.info),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
 
             // Duration
@@ -1119,12 +1166,94 @@ class _AddMedicineWizardState extends State<AddMedicineWizard> {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: time.hour, minute: time.minute),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) {
       setState(() {
-        _scheduledTimes[index] = time.copyWith(hour: picked.hour, minute: picked.minute);
+        _scheduledTimes[index] = ScheduledTime(
+          hour: picked.hour,
+          minute: picked.minute,
+          label: _getTimeLabel(picked.hour),
+          dosageAmount: time.dosageAmount,
+        );
       });
     }
+  }
+
+  Future<void> _addNewTime() async {
+    // Default to a time not already in the list
+    int defaultHour = 12;
+    final existingHours = _scheduledTimes.map((t) => t.hour).toSet();
+    final preferredHours = [12, 18, 8, 20, 14, 10, 22, 6];
+    for (final h in preferredHours) {
+      if (!existingHours.contains(h)) {
+        defaultHour = h;
+        break;
+      }
+    }
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: defaultHour, minute: 0),
+      helpText: 'Select reminder time',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _scheduledTimes.add(ScheduledTime(
+          hour: picked.hour,
+          minute: picked.minute,
+          label: _getTimeLabel(picked.hour),
+          dosageAmount: _dosageAmount,
+        ));
+        // Sort times chronologically
+        _scheduledTimes.sort((a, b) {
+          final aMinutes = a.hour * 60 + a.minute;
+          final bMinutes = b.hour * 60 + b.minute;
+          return aMinutes.compareTo(bMinutes);
+        });
+      });
+    }
+  }
+
+  void _removeTime(int index) {
+    if (_scheduledTimes.length > 1) {
+      setState(() {
+        _scheduledTimes.removeAt(index);
+      });
+    }
+  }
+
+  String _getTimeLabel(int hour) {
+    if (hour >= 5 && hour < 12) return 'Morning';
+    if (hour >= 12 && hour < 17) return 'Afternoon';
+    if (hour >= 17 && hour < 21) return 'Evening';
+    return 'Night';
   }
 
   // ============================================

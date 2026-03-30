@@ -1,32 +1,12 @@
-import 'package:hive/hive.dart';
-
-part 'water_container.g.dart';
-
 /// Custom containers that users can save for quick access
-@HiveType(typeId: 21)
-class WaterContainer extends HiveObject {
-  @HiveField(0)
+class WaterContainer {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String emoji;
-
-  @HiveField(3)
   final int capacityMl;
-
-  @HiveField(4)
   final bool isDefault;
-
-  @HiveField(5)
   final String? colorHex;
-
-  @HiveField(6)
   final int usageCount; // Track how often this container is used
-
-  @HiveField(7)
   final DateTime? lastUsed;
 
   WaterContainer({

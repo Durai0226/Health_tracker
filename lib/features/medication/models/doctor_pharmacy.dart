@@ -1,35 +1,13 @@
-import 'package:hive/hive.dart';
-
-part 'doctor_pharmacy.g.dart';
-
 /// Doctor/Prescriber information
-@HiveType(typeId: 62)
-class Doctor extends HiveObject {
-  @HiveField(0)
+class Doctor {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? specialty;
-
-  @HiveField(3)
   final String? phone;
-
-  @HiveField(4)
   final String? email;
-
-  @HiveField(5)
   final String? address;
-
-  @HiveField(6)
   final String? clinicName;
-
-  @HiveField(7)
   final String? notes;
-
-  @HiveField(8)
   final bool isPrimary;
 
   Doctor({
@@ -94,36 +72,16 @@ class Doctor extends HiveObject {
 }
 
 /// Pharmacy information
-@HiveType(typeId: 63)
-class Pharmacy extends HiveObject {
-  @HiveField(0)
+class Pharmacy {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? phone;
-
-  @HiveField(3)
   final String? address;
-
-  @HiveField(4)
   final String? email;
-
-  @HiveField(5)
   final String? website;
-
-  @HiveField(6)
   final String? hours;
-
-  @HiveField(7)
   final bool hasDelivery;
-
-  @HiveField(8)
   final bool isPrimary;
-
-  @HiveField(9)
   final String? notes;
 
   Pharmacy({
@@ -193,42 +151,18 @@ class Pharmacy extends HiveObject {
 }
 
 /// Appointment with doctor
-@HiveType(typeId: 64)
-class Appointment extends HiveObject {
-  @HiveField(0)
+class Appointment {
   final String id;
-
-  @HiveField(1)
   final String? doctorId;
-
-  @HiveField(2)
   final String doctorName;
-
-  @HiveField(3)
   final DateTime dateTime;
-
-  @HiveField(4)
   final String? location;
-
-  @HiveField(5)
   final String? purpose;
-
-  @HiveField(6)
   final String? notes;
-
-  @HiveField(7)
   final bool reminderEnabled;
-
-  @HiveField(8)
   final int reminderMinutesBefore;
-
-  @HiveField(9)
   final bool isCompleted;
-
-  @HiveField(10)
   final String? dependentId;
-
-  @HiveField(11)
   final List<String>? medicineIds; // Related medicines to discuss
 
   Appointment({

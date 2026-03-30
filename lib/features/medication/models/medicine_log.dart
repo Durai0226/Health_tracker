@@ -1,51 +1,20 @@
-import 'package:hive/hive.dart';
 import 'medicine_enums.dart';
 
-part 'medicine_log.g.dart';
-
 /// Log entry for each medicine dose taken/skipped/missed
-@HiveType(typeId: 60)
-class MedicineLog extends HiveObject {
-  @HiveField(0)
+class MedicineLog {
   final String id;
-
-  @HiveField(1)
   final String medicineId;
-
-  @HiveField(2)
   final DateTime scheduledTime;
-
-  @HiveField(3)
   final DateTime? actionTime; // When user took action
-
-  @HiveField(4)
   final MedicineStatus status;
-
-  @HiveField(5)
   final double dosageTaken;
-
-  @HiveField(6)
   final SkipReason? skipReason;
-
-  @HiveField(7)
   final String? skipNote;
-
-  @HiveField(8)
   final String? sideEffects;
-
-  @HiveField(9)
   final int? moodRating; // 1-5
-
-  @HiveField(10)
   final int? effectivenessRating; // 1-5
-
-  @HiveField(11)
   final String? notes;
-
-  @HiveField(12)
   final String? dependentId; // For family member tracking
-
-  @HiveField(13)
   final Map<String, dynamic>? vitals; // Associated vitals reading
 
   MedicineLog({
@@ -230,30 +199,14 @@ class MedicineLog extends HiveObject {
 }
 
 /// Daily summary of medicine logs
-@HiveType(typeId: 61)
-class DailyMedicineSummary extends HiveObject {
-  @HiveField(0)
+class DailyMedicineSummary {
   final DateTime date;
-
-  @HiveField(1)
   final int totalScheduled;
-
-  @HiveField(2)
   final int taken;
-
-  @HiveField(3)
   final int skipped;
-
-  @HiveField(4)
   final int missed;
-
-  @HiveField(5)
   final double adherenceRate;
-
-  @HiveField(6)
   final List<String> medicinesTaken;
-
-  @HiveField(7)
   final List<String> medicinesMissed;
 
   DailyMedicineSummary({

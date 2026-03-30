@@ -1,45 +1,18 @@
-import 'package:hive/hive.dart';
 import 'medicine_enums.dart';
 
-part 'intake_streak.g.dart';
-
 /// Tracks continuous intake streaks and prevents skipping after consecutive takes
-@HiveType(typeId: 92)
-class IntakeStreak extends HiveObject {
-  @HiveField(0)
+class IntakeStreak {
   final String id;
-
-  @HiveField(1)
   final String medicineId;
-
-  @HiveField(2)
   final int currentStreak;
-
-  @HiveField(3)
   final int longestStreak;
-
-  @HiveField(4)
   final DateTime? lastTakenDate;
-
-  @HiveField(5)
   final List<DateTime> consecutiveTakeDates;
-
-  @HiveField(6)
   final bool canSkip;
-
-  @HiveField(7)
   final int consecutiveTakes;
-
-  @HiveField(8)
   final DateTime? lastSkipDate;
-
-  @HiveField(9)
   final int totalTaken;
-
-  @HiveField(10)
   final int totalSkipped;
-
-  @HiveField(11)
   final DateTime createdAt;
 
   IntakeStreak({
@@ -189,36 +162,16 @@ class IntakeStreak extends HiveObject {
   }
 }
 
-@HiveType(typeId: 93)
-class PatientMedicineProfile extends HiveObject {
-  @HiveField(0)
+class PatientMedicineProfile {
   final String id;
-
-  @HiveField(1)
   final String patientId;
-
-  @HiveField(2)
   final String patientName;
-
-  @HiveField(3)
   final List<HealthCategory> healthCategories;
-
-  @HiveField(4)
   final List<String> customCategories;
-
-  @HiveField(5)
   final Map<String, List<String>> categoryMedicines;
-
-  @HiveField(6)
   final DateTime createdAt;
-
-  @HiveField(7)
   final DateTime? updatedAt;
-
-  @HiveField(8)
   final Map<String, dynamic>? healthMetrics;
-
-  @HiveField(9)
   final String? notes;
 
   PatientMedicineProfile({

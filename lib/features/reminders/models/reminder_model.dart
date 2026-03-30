@@ -1,86 +1,37 @@
-
-import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
-part 'reminder_model.g.dart';
-
-@HiveType(typeId: 202)
 enum RepeatType {
-  @HiveField(0)
   none,
-  @HiveField(1)
   daily,
-  @HiveField(2)
   weekly,
-  @HiveField(3)
   weekdays,
-  @HiveField(4)
   weekends,
-  @HiveField(5)
   custom,
 }
 
-@HiveType(typeId: 203)
 enum ReminderPriority {
-  @HiveField(0)
   low,
-  @HiveField(1)
   medium,
-  @HiveField(2)
   high,
 }
 
-@HiveType(typeId: 201)
 class Reminder {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String title;
-
-  @HiveField(2)
   final String body;
-
-  @HiveField(3)
   final DateTime scheduledTime;
-
-  @HiveField(4)
   final bool isCompleted;
-
-  @HiveField(5)
   final DateTime createdAt;
-
-  @HiveField(6)
   final DateTime updatedAt;
-
-  @HiveField(7)
   final bool isSynced;
-
-  @HiveField(8)
   final RepeatType repeatType;
-
-  @HiveField(9)
   final List<int>? customDays;
-
-  @HiveField(10)
   final int? snoozeDuration; // Minutes
-
-  @HiveField(11)
   final String? sound;
-
-  @HiveField(12)
   final ReminderPriority priority;
-
-  @HiveField(13)
   final String? categoryId;
-
-  @HiveField(14)
   final String? note;
-
-  @HiveField(15)
   final String? imagePath;
-
-  @HiveField(16)
   final String? noteId;
 
   Reminder({

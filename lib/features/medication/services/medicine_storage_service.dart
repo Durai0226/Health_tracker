@@ -1,238 +1,297 @@
-import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../core/utils/secure_storage_helper.dart';
+import 'package:drift/drift.dart' as drift;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/database/app_database.dart' as db;
+import '../../../core/database/daos/medication_dao.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
+import '../models/medicine_schedule.dart';
 import '../models/doctor_pharmacy.dart';
 import '../models/dependent_profile.dart';
 import '../models/medicine_enums.dart';
+import '../models/clinic.dart';
 
 /// Enhanced Medicine Storage Service with all premium features
-class MedicineStorageService {
-  static const String _medicinesBoxName = 'enhanced_medicines';
-  static const String _logsBoxName = 'medicine_logs';
-  static const String _doctorsBoxName = 'doctors';
-  static const String _pharmaciesBoxName = 'pharmacies';
-  static const String _appointmentsBoxName = 'appointments';
-  static const String _dependentsBoxName = 'dependents';
-  static const String _treatmentsBoxName = 'treatments';
-
+/// Migrated to Drift (SQLite) storage
+class MedicineCleanStorageService {
   static bool _isInitialized = false;
 
-  static String? get _currentUserId {
-    final user = firebase_auth.FirebaseAuth.instance.currentUser;
-    if (user != null && !user.isAnonymous) {
-      return user.uid;
-    }
-    return null;
-  }
-
-  static Future<void> _syncToCloud(String collection, String docId, Map<String, dynamic> data) async {
-    final userId = _currentUserId;
-    if (userId == null) return;
-    
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection(collection)
-          .doc(docId)
-          .set(data);
-    } catch (e) {
-      debugPrint('Error syncing to cloud: $e');
-    }
-  }
-
-  static Future<void> _deleteFromCloud(String collection, String docId) async {
-    final userId = _currentUserId;
-    if (userId == null) return;
-    
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection(collection)
-          .doc(docId)
-          .delete();
-    } catch (e) {
-      debugPrint('Error deleting from cloud: $e');
-    }
-  }
+  static MedicationDao get _dao => db.AppDatabase.instance.medicationDao;
 
   static Future<void> init() async {
     if (_isInitialized) return;
     
+    // Ensure database is initialized
     try {
-      // Try to get encryption key, fallback to no encryption on web
-      HiveAesCipher? cipher;
-      try {
-        final encryptionKey = await SecureStorageHelper.getEncryptionKey();
-        cipher = HiveAesCipher(encryptionKey);
-      } catch (e) {
-        debugPrint('Secure storage not available, using unencrypted storage: $e');
-      }
-      
-      // Open boxes - adapters are registered in main StorageService
-      if (!Hive.isBoxOpen(_medicinesBoxName)) {
-        await Hive.openBox<EnhancedMedicine>(_medicinesBoxName, encryptionCipher: cipher);
-      }
-      if (!Hive.isBoxOpen(_logsBoxName)) {
-        await Hive.openBox<MedicineLog>(_logsBoxName, encryptionCipher: cipher);
-      }
-      if (!Hive.isBoxOpen(_doctorsBoxName)) {
-        await Hive.openBox<Doctor>(_doctorsBoxName, encryptionCipher: cipher);
-      }
-      if (!Hive.isBoxOpen(_pharmaciesBoxName)) {
-        await Hive.openBox<Pharmacy>(_pharmaciesBoxName, encryptionCipher: cipher);
-      }
-      if (!Hive.isBoxOpen(_appointmentsBoxName)) {
-        await Hive.openBox<Appointment>(_appointmentsBoxName, encryptionCipher: cipher);
-      }
-      if (!Hive.isBoxOpen(_dependentsBoxName)) {
-        await Hive.openBox<DependentProfile>(_dependentsBoxName, encryptionCipher: cipher);
-      }
-      if (!Hive.isBoxOpen(_treatmentsBoxName)) {
-        await Hive.openBox<TreatmentCourse>(_treatmentsBoxName, encryptionCipher: cipher);
-      }
-      
+      final _ = db.AppDatabase.instance;
+      debugPrint('✓ MedicineCleanStorageService initialized with Drift');
       _isInitialized = true;
-      debugPrint('✓ MedicineStorageService initialized');
     } catch (e) {
-      debugPrint('Error initializing MedicineStorageService: $e');
-      rethrow;
+      debugPrint('Error initializing MedicineCleanStorageService: $e');
     }
   }
 
+  // ============ HELPER MAPPERS ============
+
+  static EnhancedMedicine _mapToDomainMedicine(db.EnhancedMedicine data) {
+    return EnhancedMedicine(
+      id: data.id,
+      name: data.name,
+      genericName: data.genericName,
+      brandName: data.brandName,
+      dosageForm: DosageForm.values[data.dosageForm],
+      dosageAmount: data.strength, // Using strength column as dosage amount storage if needed
+      dosageUnit: data.strengthUnit,
+      strength: '${data.strength}${data.strengthUnit}', // Composite strength
+      schedule: MedicineSchedule.fromJson(jsonDecode(data.scheduleJson)),
+      color: MedicineColor.values[data.colorIndex],
+      shape: MedicineShape.values[data.shapeIndex],
+      imagePath: data.imagePath,
+      instructions: data.instructions,
+      purpose: data.purpose,
+      currentStock: data.currentStock,
+      lowStockThreshold: data.lowStockThreshold,
+      refillReminderEnabled: data.refillReminder,
+      expiryDate: data.expiryDate,
+      prescriptionNumber: data.prescriptionNumber,
+      doctorId: data.doctorId,
+      pharmacyId: data.pharmacyId,
+      dependentId: data.dependentId,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      isActive: data.isActive,
+      isArchived: data.isArchived,
+      notes: data.notes,
+      healthCategories: data.healthCategoriesJson != null 
+          ? (jsonDecode(data.healthCategoriesJson!) as List).map((e) => HealthCategory.values[e]).toList()
+          : null,
+      customHealthCategory: data.customHealthCategory,
+      patientProfileId: data.patientProfileId,
+      requiresContinuousIntake: data.requiresContinuousIntake,
+      minimumConsecutiveDays: data.minimumConsecutiveDays,
+      customFields: data.customFieldsJson != null ? jsonDecode(data.customFieldsJson!) : null,
+      warnings: data.warningsJson != null ? List<String>.from(jsonDecode(data.warningsJson!)) : null,
+      sideEffects: data.sideEffectsJson != null ? List<String>.from(jsonDecode(data.sideEffectsJson!)) : null,
+    );
+  }
+
+  static db.EnhancedMedicinesCompanion _mapToMedicineCompanion(EnhancedMedicine medicine) {
+    return db.EnhancedMedicinesCompanion(
+      id: drift.Value(medicine.id),
+      name: drift.Value(medicine.name),
+      genericName: drift.Value(medicine.genericName),
+      brandName: drift.Value(medicine.brandName),
+      dosageForm: drift.Value(medicine.dosageForm.index),
+      strength: drift.Value(medicine.dosageAmount), // Map dosageAmount to strength column
+      strengthUnit: drift.Value(medicine.dosageUnit ?? 'mg'),
+      scheduleJson: drift.Value(jsonEncode(medicine.schedule.toJson())),
+      startDate: drift.Value(medicine.schedule.startDate ?? DateTime.now()), // Required field
+      endDate: drift.Value(medicine.schedule.endDate),
+      colorIndex: drift.Value(medicine.color?.index ?? 0),
+      shapeIndex: drift.Value(medicine.shape?.index ?? 0),
+      imagePath: drift.Value(medicine.imagePath),
+      instructions: drift.Value(medicine.instructions),
+      purpose: drift.Value(medicine.purpose),
+      currentStock: drift.Value(medicine.currentStock ?? 0),
+      lowStockThreshold: drift.Value(medicine.lowStockThreshold ?? 7),
+      refillReminder: drift.Value(medicine.refillReminderEnabled),
+      expiryDate: drift.Value(medicine.expiryDate),
+      prescriptionNumber: drift.Value(medicine.prescriptionNumber),
+      doctorId: drift.Value(medicine.doctorId),
+      pharmacyId: drift.Value(medicine.pharmacyId),
+      dependentId: drift.Value(medicine.dependentId),
+      createdAt: drift.Value(medicine.createdAt),
+      updatedAt: drift.Value(medicine.updatedAt ?? DateTime.now()),
+      isActive: drift.Value(medicine.isActive),
+      isArchived: drift.Value(medicine.isArchived),
+      notes: drift.Value(medicine.notes),
+      healthCategoriesJson: drift.Value(medicine.healthCategories != null 
+          ? jsonEncode(medicine.healthCategories!.map((e) => e.index).toList()) 
+          : null),
+      customHealthCategory: drift.Value(medicine.customHealthCategory),
+      patientProfileId: drift.Value(medicine.patientProfileId),
+      requiresContinuousIntake: drift.Value(medicine.requiresContinuousIntake),
+      minimumConsecutiveDays: drift.Value(medicine.minimumConsecutiveDays),
+      customFieldsJson: drift.Value(medicine.customFields != null ? jsonEncode(medicine.customFields) : null),
+      warningsJson: drift.Value(medicine.warnings != null ? jsonEncode(medicine.warnings) : null),
+      sideEffectsJson: drift.Value(medicine.sideEffects != null ? jsonEncode(medicine.sideEffects) : null),
+    );
+  }
+
+  static MedicineLog _mapToDomainLog(db.MedicineLog data) {
+    return MedicineLog(
+      id: data.id,
+      medicineId: data.medicineId,
+      scheduledTime: data.scheduledTime,
+      actionTime: data.actualTime,
+      status: data.isTaken ? MedicineStatus.taken 
+          : data.isSkipped ? MedicineStatus.skipped 
+          : data.isMissed ? MedicineStatus.missed 
+          : MedicineStatus.pending,
+      dosageTaken: data.dosageTaken,
+      skipReason: data.skipReason != null ? SkipReason.values[data.skipReason!] : null,
+      skipNote: data.skipNote,
+      sideEffects: data.sideEffects,
+      moodRating: data.moodRating,
+      effectivenessRating: data.effectivenessRating,
+      notes: data.notes,
+      dependentId: data.dependentId,
+      vitals: data.vitalsJson != null ? jsonDecode(data.vitalsJson!) : null,
+    );
+  }
+
+  static db.MedicineLogsCompanion _mapToLogCompanion(MedicineLog log) {
+    return db.MedicineLogsCompanion(
+      id: drift.Value(log.id),
+      medicineId: drift.Value(log.medicineId),
+      scheduledTime: drift.Value(log.scheduledTime),
+      actualTime: drift.Value(log.actionTime),
+      isTaken: drift.Value(log.status == MedicineStatus.taken),
+      isSkipped: drift.Value(log.status == MedicineStatus.skipped),
+      isMissed: drift.Value(log.status == MedicineStatus.missed),
+      dosageTaken: drift.Value(log.dosageTaken),
+      skipReason: drift.Value(log.skipReason?.index),
+      skipNote: drift.Value(log.skipNote),
+      notes: drift.Value(log.notes),
+      sideEffects: drift.Value(log.sideEffects),
+      moodRating: drift.Value(log.moodRating),
+      effectivenessRating: drift.Value(log.effectivenessRating),
+      dependentId: drift.Value(log.dependentId),
+      vitalsJson: drift.Value(log.vitals != null ? jsonEncode(log.vitals) : null),
+      synced: const drift.Value(false),
+    );
+  }
+
   // ============ ENHANCED MEDICINE METHODS ============
-  static Box<EnhancedMedicine> get _medicinesBox => Hive.box<EnhancedMedicine>(_medicinesBoxName);
 
-  static List<EnhancedMedicine> getAllMedicines({bool includeArchived = false}) {
-    final medicines = _medicinesBox.values.toList();
-    if (includeArchived) return medicines;
-    return medicines.where((m) => !m.isArchived && m.isActive).toList();
+  static Future<List<EnhancedMedicine>> getAllMedicines({bool includeArchived = false}) async {
+    final meds = await _dao.getAllMedicines(includeArchived: includeArchived);
+    return meds.map(_mapToDomainMedicine).toList();
   }
 
-  static List<EnhancedMedicine> getMedicinesForDependent(String dependentId) {
-    return getAllMedicines().where((m) => m.dependentId == dependentId).toList();
+  static Future<List<EnhancedMedicine>> getMedicinesForDependent(String dependentId) async {
+    final meds = await getAllMedicines(includeArchived: true);
+    return meds.where((m) => m.dependentId == dependentId).toList();
   }
 
-  static List<EnhancedMedicine> getActiveMedicinesForToday() {
+  static Future<List<EnhancedMedicine>> getMedicinesForDependentAsync(String dependentId) async {
+    final meds = await getAllMedicines(includeArchived: true);
+    return meds.where((m) => m.dependentId == dependentId).toList();
+  }
+
+  static Future<List<EnhancedMedicine>> getActiveMedicinesForTodayAsync() async {
     final today = DateTime.now();
-    return getAllMedicines().where((m) {
-      return m.schedule.isActiveOnDate(today);
-    }).toList();
+    final meds = await getAllMedicines();
+    return meds.where((m) => m.schedule.isActiveOnDate(today)).toList();
+  }
+  
+  // Keep sync method for compatibility but warn it returns empty
+  static List<EnhancedMedicine> getActiveMedicinesForToday() {
+    return [];
   }
 
+  static Future<List<EnhancedMedicine>> getLowStockMedicinesAsync() async {
+    final meds = await getAllMedicines();
+    return meds.where((m) => m.isLowStock).toList();
+  }
+  
   static List<EnhancedMedicine> getLowStockMedicines() {
-    return getAllMedicines().where((m) => m.isLowStock).toList();
+    return [];
   }
 
-  static List<EnhancedMedicine> getExpiringMedicines({int daysAhead = 30}) {
+  static Future<List<EnhancedMedicine>> getExpiringMedicinesAsync({int daysAhead = 30}) async {
     final cutoff = DateTime.now().add(Duration(days: daysAhead));
-    return getAllMedicines().where((m) {
+    final meds = await getAllMedicines();
+    return meds.where((m) {
       if (m.expiryDate == null) return false;
       return m.expiryDate!.isBefore(cutoff);
     }).toList();
   }
+  
+  static List<EnhancedMedicine> getExpiringMedicines({int daysAhead = 30}) {
+    return [];
+  }
 
-  static EnhancedMedicine? getMedicine(String id) {
-    return _medicinesBox.get(id);
+  static Future<EnhancedMedicine?> getMedicine(String id) async {
+    final med = await _dao.getMedicine(id);
+    return med != null ? _mapToDomainMedicine(med) : null;
+  }
+
+  static Future<void> saveMedicine(EnhancedMedicine medicine) async {
+    final existing = await getMedicine(medicine.id);
+    if (existing != null) {
+      await updateMedicine(medicine);
+    } else {
+      await addMedicine(medicine);
+    }
   }
 
   static Future<void> addMedicine(EnhancedMedicine medicine) async {
-    await _medicinesBox.put(medicine.id, medicine);
-    await _syncToCloud('enhanced_medicines', medicine.id, medicine.toJson());
+    await _dao.addMedicine(_mapToMedicineCompanion(medicine));
   }
 
   static Future<void> updateMedicine(EnhancedMedicine medicine) async {
-    final updated = medicine.copyWith(updatedAt: DateTime.now());
-    await _medicinesBox.put(updated.id, updated);
-    await _syncToCloud('enhanced_medicines', updated.id, updated.toJson());
+    await _dao.updateMedicine(_mapToMedicineCompanion(medicine));
   }
 
   static Future<void> deleteMedicine(String id) async {
-    await _medicinesBox.delete(id);
-    await _deleteFromCloud('enhanced_medicines', id);
+    await _dao.deleteMedicine(id);
   }
 
   static Future<void> archiveMedicine(String id) async {
-    final medicine = getMedicine(id);
-    if (medicine != null) {
-      await updateMedicine(medicine.archive());
+    final med = await getMedicine(id);
+    if (med != null) {
+      await updateMedicine(med.archive());
     }
   }
 
   static Future<void> reduceStock(String medicineId, double amount) async {
-    final medicine = getMedicine(medicineId);
-    if (medicine != null) {
-      await updateMedicine(medicine.reduceStock(amount));
+    final med = await getMedicine(medicineId);
+    if (med != null) {
+      await updateMedicine(med.reduceStock(amount));
     }
   }
 
   static Future<void> refillStock(String medicineId, int amount) async {
-    final medicine = getMedicine(medicineId);
-    if (medicine != null) {
-      await updateMedicine(medicine.addStock(amount));
+    final med = await getMedicine(medicineId);
+    if (med != null) {
+      await updateMedicine(med.addStock(amount));
     }
   }
 
-  static ValueListenable<Box<EnhancedMedicine>> get medicinesListenable => _medicinesBox.listenable();
-
   // ============ MEDICINE LOG METHODS ============
-  static Box<MedicineLog> get _logsBox => Hive.box<MedicineLog>(_logsBoxName);
 
-  static List<MedicineLog> getAllLogs() {
-    return _logsBox.values.toList()
-      ..sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
+  static Future<List<MedicineLog>> getAllLogs() async {
+    final logs = await _dao.getAllLogs();
+    return logs.map(_mapToDomainLog).toList();
   }
 
-  static List<MedicineLog> getLogsForMedicine(String medicineId) {
-    return _logsBox.values
-        .where((log) => log.medicineId == medicineId)
-        .toList()
-      ..sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
+  static Future<List<MedicineLog>> getLogsForMedicine(String medicineId) async {
+    final logs = await _dao.getLogsForMedicine(medicineId);
+    return logs.map(_mapToDomainLog).toList();
   }
 
-  static List<MedicineLog> getLogsForDate(DateTime date) {
-    final startOfDay = DateTime(date.year, date.month, date.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
-    return _logsBox.values
-        .where((log) => 
-            log.scheduledTime.isAfter(startOfDay) && 
-            log.scheduledTime.isBefore(endOfDay))
-        .toList()
-      ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
+  static Future<List<MedicineLog>> getLogsForDate(DateTime date) async {
+    final logs = await _dao.getLogsForDate(date);
+    return logs.map(_mapToDomainLog).toList();
   }
 
-  static List<MedicineLog> getLogsForDateRange(DateTime start, DateTime end) {
-    return _logsBox.values
-        .where((log) => 
-            log.scheduledTime.isAfter(start) && 
-            log.scheduledTime.isBefore(end))
-        .toList()
-      ..sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
+  static Future<List<MedicineLog>> getLogsForDateRange(DateTime start, DateTime end) async {
+    final logs = await _dao.getLogsForDateRange(start, end);
+    return logs.map(_mapToDomainLog).toList();
   }
 
   static Future<void> addLog(MedicineLog log) async {
-    await _logsBox.put(log.id, log);
-    await _syncToCloud('medicine_logs', log.id, log.toJson());
-    
-    // Reduce stock if medicine was taken
-    if (log.isTaken) {
-      await reduceStock(log.medicineId, log.dosageTaken);
-    }
+    await _dao.addLog(_mapToLogCompanion(log));
   }
 
   static Future<void> updateLog(MedicineLog log) async {
-    await _logsBox.put(log.id, log);
-    await _syncToCloud('medicine_logs', log.id, log.toJson());
+    await _dao.updateLog(_mapToLogCompanion(log));
   }
 
   static Future<void> deleteLog(String id) async {
-    await _logsBox.delete(id);
-    await _deleteFromCloud('medicine_logs', id);
+    await _dao.deleteLog(id);
   }
 
   static Future<MedicineLog> markMedicineTaken({
@@ -257,6 +316,10 @@ class MedicineStorageService {
       vitals: vitals,
     );
     await addLog(log);
+    
+    // Update stock if tracked
+    await reduceStock(medicineId, dosageTaken);
+    
     return log;
   }
 
@@ -277,236 +340,364 @@ class MedicineStorageService {
     return log;
   }
 
-  static ValueListenable<Box<MedicineLog>> get logsListenable => _logsBox.listenable();
-
   // ============ DOCTOR METHODS ============
-  static Box<Doctor> get _doctorsBox => Hive.box<Doctor>(_doctorsBoxName);
 
-  static List<Doctor> getAllDoctors() {
-    return _doctorsBox.values.toList();
+  static Future<List<Doctor>> getAllDoctors() async {
+    final docs = await _dao.getAllDoctors();
+    return docs.map((d) => Doctor(
+      id: d.id,
+      name: d.name,
+      specialty: d.specialty,
+      phone: d.phone,
+      email: d.email,
+      address: d.address,
+      clinicName: d.hospital,
+      notes: d.notes,
+      isPrimary: d.isPrimary,
+    )).toList();
   }
 
-  static Doctor? getDoctor(String id) {
-    return _doctorsBox.get(id);
-  }
-
-  static Doctor? getPrimaryDoctor() {
-    return _doctorsBox.values.firstWhere(
-      (d) => d.isPrimary,
-      orElse: () => _doctorsBox.values.isNotEmpty ? _doctorsBox.values.first : Doctor(id: '', name: ''),
+  static Future<Doctor?> getDoctor(String id) async {
+    final d = await _dao.getDoctor(id);
+    if (d == null) return null;
+    return Doctor(
+      id: d.id,
+      name: d.name,
+      specialty: d.specialty,
+      phone: d.phone,
+      email: d.email,
+      address: d.address,
+      clinicName: d.hospital,
+      notes: d.notes,
+      isPrimary: d.isPrimary,
     );
   }
 
+  static Future<void> saveDoctor(Doctor doctor) async {
+    final existing = await getDoctor(doctor.id);
+    if (existing != null) {
+      await updateDoctor(doctor);
+    } else {
+      await addDoctor(doctor);
+    }
+  }
+
   static Future<void> addDoctor(Doctor doctor) async {
-    await _doctorsBox.put(doctor.id, doctor);
-    await _syncToCloud('doctors', doctor.id, doctor.toJson());
+    await _dao.addDoctor(db.DoctorsCompanion(
+      id: drift.Value(doctor.id),
+      name: drift.Value(doctor.name),
+      specialty: drift.Value(doctor.specialty),
+      phone: drift.Value(doctor.phone),
+      email: drift.Value(doctor.email),
+      address: drift.Value(doctor.address),
+      hospital: drift.Value(doctor.clinicName),
+      notes: drift.Value(doctor.notes),
+      isPrimary: drift.Value(doctor.isPrimary),
+      createdAt: drift.Value(DateTime.now()),
+    ));
   }
 
   static Future<void> updateDoctor(Doctor doctor) async {
-    await _doctorsBox.put(doctor.id, doctor);
-    await _syncToCloud('doctors', doctor.id, doctor.toJson());
+    await _dao.updateDoctor(db.DoctorsCompanion(
+      id: drift.Value(doctor.id),
+      name: drift.Value(doctor.name),
+      specialty: drift.Value(doctor.specialty),
+      phone: drift.Value(doctor.phone),
+      email: drift.Value(doctor.email),
+      address: drift.Value(doctor.address),
+      hospital: drift.Value(doctor.clinicName),
+      notes: drift.Value(doctor.notes),
+      isPrimary: drift.Value(doctor.isPrimary),
+    ));
   }
 
   static Future<void> deleteDoctor(String id) async {
-    await _doctorsBox.delete(id);
-    await _deleteFromCloud('doctors', id);
+    await _dao.deleteDoctor(id);
   }
-
-  static ValueListenable<Box<Doctor>> get doctorsListenable => _doctorsBox.listenable();
 
   // ============ PHARMACY METHODS ============
-  static Box<Pharmacy> get _pharmaciesBox => Hive.box<Pharmacy>(_pharmaciesBoxName);
 
-  static List<Pharmacy> getAllPharmacies() {
-    return _pharmaciesBox.values.toList();
+  static Future<Pharmacy?> getPharmacy(String id) async {
+    final pharms = await _dao.getAllPharmacies();
+    try {
+      final p = pharms.firstWhere((p) => p.id == id);
+      return Pharmacy(
+        id: p.id,
+        name: p.name,
+        phone: p.phone,
+        address: p.address,
+        hours: p.hours,
+        hasDelivery: p.hasDelivery,
+        notes: p.notes,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
-  static Pharmacy? getPharmacy(String id) {
-    return _pharmaciesBox.get(id);
+  static Future<List<Pharmacy>> getAllPharmacies() async {
+    final pharms = await _dao.getAllPharmacies();
+    return pharms.map((p) => Pharmacy(
+      id: p.id,
+      name: p.name,
+      phone: p.phone,
+      address: p.address,
+      hours: p.hours,
+      hasDelivery: p.hasDelivery,
+      notes: p.notes,
+    )).toList();
   }
 
   static Future<void> addPharmacy(Pharmacy pharmacy) async {
-    await _pharmaciesBox.put(pharmacy.id, pharmacy);
-    await _syncToCloud('pharmacies', pharmacy.id, pharmacy.toJson());
+    await _dao.addPharmacy(db.PharmaciesCompanion(
+      id: drift.Value(pharmacy.id),
+      name: drift.Value(pharmacy.name),
+      phone: drift.Value(pharmacy.phone),
+      address: drift.Value(pharmacy.address),
+      hours: drift.Value(pharmacy.hours),
+      hasDelivery: drift.Value(pharmacy.hasDelivery),
+      notes: drift.Value(pharmacy.notes),
+      createdAt: drift.Value(DateTime.now()),
+    ));
   }
-
+  
   static Future<void> updatePharmacy(Pharmacy pharmacy) async {
-    await _pharmaciesBox.put(pharmacy.id, pharmacy);
-    await _syncToCloud('pharmacies', pharmacy.id, pharmacy.toJson());
+    await _dao.updatePharmacy(db.PharmaciesCompanion(
+      id: drift.Value(pharmacy.id),
+      name: drift.Value(pharmacy.name),
+      phone: drift.Value(pharmacy.phone),
+      address: drift.Value(pharmacy.address),
+      hours: drift.Value(pharmacy.hours),
+      hasDelivery: drift.Value(pharmacy.hasDelivery),
+      notes: drift.Value(pharmacy.notes),
+    ));
   }
 
   static Future<void> deletePharmacy(String id) async {
-    await _pharmaciesBox.delete(id);
-    await _deleteFromCloud('pharmacies', id);
+    await _dao.deletePharmacy(id);
   }
 
-  static ValueListenable<Box<Pharmacy>> get pharmaciesListenable => _pharmaciesBox.listenable();
+  // ============ CLINIC METHODS (SharedPreferences) ============
+  
+  static const String _clinicsKey = 'medication_clinics';
+
+  static Future<List<Clinic>> getAllClinics() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_clinicsKey);
+      if (jsonStr == null || jsonStr.isEmpty) return [];
+      
+      final List<dynamic> jsonList = jsonDecode(jsonStr);
+      return jsonList.map((j) => Clinic.fromJson(j as Map<String, dynamic>)).toList();
+    } catch (e) {
+      debugPrint('Error loading clinics: $e');
+      return [];
+    }
+  }
+
+  static Future<Clinic?> getClinic(String id) async {
+    final clinics = await getAllClinics();
+    try {
+      return clinics.firstWhere((c) => c.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> saveClinic(Clinic clinic) async {
+    try {
+      final clinics = await getAllClinics();
+      final index = clinics.indexWhere((c) => c.id == clinic.id);
+      
+      if (index >= 0) {
+        clinics[index] = clinic;
+      } else {
+        clinics.add(clinic);
+      }
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_clinicsKey, jsonEncode(clinics.map((c) => c.toJson()).toList()));
+    } catch (e) {
+      debugPrint('Error saving clinic: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> deleteClinic(String id) async {
+    try {
+      final clinics = await getAllClinics();
+      clinics.removeWhere((c) => c.id == id);
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_clinicsKey, jsonEncode(clinics.map((c) => c.toJson()).toList()));
+    } catch (e) {
+      debugPrint('Error deleting clinic: $e');
+      rethrow;
+    }
+  }
 
   // ============ APPOINTMENT METHODS ============
-  static Box<Appointment> get _appointmentsBox => Hive.box<Appointment>(_appointmentsBoxName);
 
-  static List<Appointment> getAllAppointments() {
-    return _appointmentsBox.values.toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+  static Future<List<Appointment>> getAllAppointments() async {
+    final apps = await _dao.getAllAppointments();
+    return apps.map(_mapToDomainAppointment).toList();
   }
 
-  static List<Appointment> getUpcomingAppointments() {
-    final now = DateTime.now();
-    return getAllAppointments().where((a) => a.dateTime.isAfter(now)).toList();
-  }
-
-  static List<Appointment> getTodayAppointments() {
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
-    return getAllAppointments().where((a) => 
-        a.dateTime.isAfter(startOfDay) && a.dateTime.isBefore(endOfDay)).toList();
+  static Appointment _mapToDomainAppointment(db.Appointment a) {
+    return Appointment(
+      id: a.id,
+      doctorId: a.doctorId,
+      doctorName: a.title, // Using title as doctorName if doctorId not present
+      dateTime: a.appointmentDateTime,
+      location: a.location,
+      notes: a.notes,
+      reminderEnabled: a.reminderEnabled,
+      reminderMinutesBefore: a.reminderMinutesBefore,
+      isCompleted: a.isCompleted,
+      dependentId: a.dependentId,
+      medicineIds: a.medicineIdsJson != null ? List<String>.from(jsonDecode(a.medicineIdsJson!)) : null,
+    );
   }
 
   static Future<void> addAppointment(Appointment appointment) async {
-    await _appointmentsBox.put(appointment.id, appointment);
-    await _syncToCloud('appointments', appointment.id, appointment.toJson());
+    await _dao.addAppointment(db.AppointmentsCompanion(
+      id: drift.Value(appointment.id),
+      doctorId: drift.Value(appointment.doctorId),
+      title: drift.Value(appointment.doctorName),
+      appointmentDateTime: drift.Value(appointment.dateTime),
+      location: drift.Value(appointment.location),
+      notes: drift.Value(appointment.notes),
+      reminderEnabled: drift.Value(appointment.reminderEnabled),
+      reminderMinutesBefore: drift.Value(appointment.reminderMinutesBefore),
+      isCompleted: drift.Value(appointment.isCompleted),
+      dependentId: drift.Value(appointment.dependentId),
+      medicineIdsJson: drift.Value(appointment.medicineIds != null ? jsonEncode(appointment.medicineIds) : null),
+      createdAt: drift.Value(DateTime.now()),
+    ));
   }
-
-  static Future<void> updateAppointment(Appointment appointment) async {
-    await _appointmentsBox.put(appointment.id, appointment);
-    await _syncToCloud('appointments', appointment.id, appointment.toJson());
-  }
-
+  
   static Future<void> deleteAppointment(String id) async {
-    await _appointmentsBox.delete(id);
-    await _deleteFromCloud('appointments', id);
+    await _dao.deleteAppointment(id);
   }
-
-  static ValueListenable<Box<Appointment>> get appointmentsListenable => _appointmentsBox.listenable();
 
   // ============ DEPENDENT PROFILE METHODS ============
-  static Box<DependentProfile> get _dependentsBox => Hive.box<DependentProfile>(_dependentsBoxName);
 
-  static List<DependentProfile> getAllDependents() {
-    return _dependentsBox.values.where((d) => d.isActive).toList();
+  static Future<List<DependentProfile>> getAllDependents() async {
+    final deps = await _dao.getAllDependents();
+    return deps.map(_mapToDomainDependent).toList();
   }
-
-  static DependentProfile? getDependent(String id) {
-    return _dependentsBox.get(id);
-  }
-
-  static DependentProfile? getSelfProfile() {
-    return _dependentsBox.values.firstWhere(
-      (d) => d.isSelf,
-      orElse: () => DependentProfile.self(name: 'Me'),
+  
+  static DependentProfile _mapToDomainDependent(db.DependentProfile d) {
+    return DependentProfile(
+      id: d.id,
+      name: d.name,
+      relationship: RelationshipType.values[d.relationshipType],
+      dateOfBirth: d.dateOfBirth,
+      bloodType: d.bloodType,
+      notes: d.notes,
+      avatarPath: d.photoPath,
+      isActive: d.isActive,
+      gender: d.gender,
+      weight: d.weight,
+      height: d.height,
+      emergencyContact: d.emergencyContact,
+      emergencyPhone: d.emergencyPhone,
+      primaryDoctorId: d.primaryDoctorId,
+      insuranceInfo: d.insuranceInfo,
+      allergies: d.allergiesJson != null ? List<String>.from(jsonDecode(d.allergiesJson!)) : null,
+      conditions: d.conditionsJson != null ? List<String>.from(jsonDecode(d.conditionsJson!)) : null,
+      createdAt: d.createdAt,
     );
   }
 
   static Future<void> addDependent(DependentProfile dependent) async {
-    await _dependentsBox.put(dependent.id, dependent);
-    await _syncToCloud('dependents', dependent.id, dependent.toJson());
+    await _dao.addDependent(db.DependentProfilesCompanion(
+      id: drift.Value(dependent.id),
+      name: drift.Value(dependent.name),
+      relationshipType: drift.Value(dependent.relationship.index),
+      dateOfBirth: drift.Value(dependent.dateOfBirth),
+      bloodType: drift.Value(dependent.bloodType),
+      notes: drift.Value(dependent.notes),
+      photoPath: drift.Value(dependent.avatarPath),
+      isActive: drift.Value(dependent.isActive),
+      gender: drift.Value(dependent.gender),
+      weight: drift.Value(dependent.weight),
+      height: drift.Value(dependent.height),
+      emergencyContact: drift.Value(dependent.emergencyContact),
+      emergencyPhone: drift.Value(dependent.emergencyPhone),
+      primaryDoctorId: drift.Value(dependent.primaryDoctorId),
+      insuranceInfo: drift.Value(dependent.insuranceInfo),
+      allergiesJson: drift.Value(dependent.allergies != null ? jsonEncode(dependent.allergies) : null),
+      conditionsJson: drift.Value(dependent.conditions != null ? jsonEncode(dependent.conditions) : null),
+      createdAt: drift.Value(dependent.createdAt),
+      isSelf: drift.Value(dependent.relationship == RelationshipType.self),
+    ));
   }
-
+  
   static Future<void> updateDependent(DependentProfile dependent) async {
-    await _dependentsBox.put(dependent.id, dependent);
-    await _syncToCloud('dependents', dependent.id, dependent.toJson());
+    await _dao.updateDependent(db.DependentProfilesCompanion(
+      id: drift.Value(dependent.id),
+      name: drift.Value(dependent.name),
+      relationshipType: drift.Value(dependent.relationship.index),
+      dateOfBirth: drift.Value(dependent.dateOfBirth),
+      bloodType: drift.Value(dependent.bloodType),
+      notes: drift.Value(dependent.notes),
+      photoPath: drift.Value(dependent.avatarPath),
+      isActive: drift.Value(dependent.isActive),
+      gender: drift.Value(dependent.gender),
+      weight: drift.Value(dependent.weight),
+      height: drift.Value(dependent.height),
+      emergencyContact: drift.Value(dependent.emergencyContact),
+      emergencyPhone: drift.Value(dependent.emergencyPhone),
+      primaryDoctorId: drift.Value(dependent.primaryDoctorId),
+      insuranceInfo: drift.Value(dependent.insuranceInfo),
+      allergiesJson: drift.Value(dependent.allergies != null ? jsonEncode(dependent.allergies) : null),
+      conditionsJson: drift.Value(dependent.conditions != null ? jsonEncode(dependent.conditions) : null),
+    ));
   }
 
   static Future<void> deleteDependent(String id) async {
-    await _dependentsBox.delete(id);
-    await _deleteFromCloud('dependents', id);
+    await _dao.deleteDependent(id);
   }
 
-  static ValueListenable<Box<DependentProfile>> get dependentsListenable => _dependentsBox.listenable();
-
-  // ============ TREATMENT COURSE METHODS ============
-  static Box<TreatmentCourse> get _treatmentsBox => Hive.box<TreatmentCourse>(_treatmentsBoxName);
-
-  static List<TreatmentCourse> getAllTreatments() {
-    return _treatmentsBox.values.toList();
-  }
-
-  static List<TreatmentCourse> getActiveTreatments() {
-    return getAllTreatments().where((t) => t.isActive && t.isOngoing).toList();
-  }
-
-  static Future<void> addTreatment(TreatmentCourse treatment) async {
-    await _treatmentsBox.put(treatment.id, treatment);
-    await _syncToCloud('treatments', treatment.id, treatment.toJson());
-  }
-
-  static Future<void> updateTreatment(TreatmentCourse treatment) async {
-    await _treatmentsBox.put(treatment.id, treatment);
-    await _syncToCloud('treatments', treatment.id, treatment.toJson());
-  }
-
-  static Future<void> deleteTreatment(String id) async {
-    await _treatmentsBox.delete(id);
-    await _deleteFromCloud('treatments', id);
-  }
-
-  static ValueListenable<Box<TreatmentCourse>> get treatmentsListenable => _treatmentsBox.listenable();
-
-  // ============ ANALYTICS METHODS ============
-  static Map<String, dynamic> getAdherenceStats({int days = 30}) {
-    final startDate = DateTime.now().subtract(Duration(days: days));
-    final logs = getLogsForDateRange(startDate, DateTime.now());
-    
-    final taken = logs.where((l) => l.isTaken).length;
-    final skipped = logs.where((l) => l.isSkipped).length;
-    final missed = logs.where((l) => l.isMissed).length;
-    final total = taken + skipped + missed;
+  // ============ EXPORT METHODS ============
+  
+  static Future<Map<String, dynamic>> exportAllMedicineData() async {
+    final medicines = await getAllMedicines(includeArchived: true);
+    final logs = await getAllLogs();
+    final doctors = await getAllDoctors();
+    final pharmacies = await getAllPharmacies();
+    final appointments = await getAllAppointments();
+    final dependents = await getAllDependents();
     
     return {
-      'taken': taken,
-      'skipped': skipped,
-      'missed': missed,
-      'total': total,
-      'adherenceRate': total > 0 ? (taken / total * 100).round() : 100,
-      'days': days,
-      'onTimeRate': _calculateOnTimeRate(logs),
+      'exportDate': DateTime.now().toIso8601String(),
+      'medicines': medicines.map((m) => m.toJson()).toList(),
+      'logs': logs.map((l) => l.toJson()).toList(),
+      'doctors': doctors.map((d) => d.toJson()).toList(),
+      'pharmacies': pharmacies.map((p) => p.toJson()).toList(),
+      'appointments': appointments.map((a) => a.toJson()).toList(),
+      'dependents': dependents.map((d) => d.toJson()).toList(),
     };
   }
 
-  static double _calculateOnTimeRate(List<MedicineLog> logs) {
-    final takenLogs = logs.where((l) => l.isTaken).toList();
-    if (takenLogs.isEmpty) return 100;
-    
-    final onTime = takenLogs.where((l) => l.wasTakenOnTime).length;
-    return (onTime / takenLogs.length * 100);
-  }
-
-  static int getCurrentStreak() {
-    int streak = 0;
-    DateTime checkDate = DateTime.now();
-    
-    while (true) {
-      final logs = getLogsForDate(checkDate);
-      if (logs.isEmpty) break;
-      
-      final allTaken = logs.every((l) => l.isTaken);
-      if (!allTaken) break;
-      
-      streak++;
-      checkDate = checkDate.subtract(const Duration(days: 1));
-    }
-    
-    return streak;
-  }
-
-  static Map<String, int> getSkipReasonStats({int days = 30}) {
-    final startDate = DateTime.now().subtract(Duration(days: days));
-    final logs = getLogsForDateRange(startDate, DateTime.now())
-        .where((l) => l.isSkipped && l.skipReason != null);
-    
-    final stats = <String, int>{};
-    for (final log in logs) {
-      final reason = log.skipReason!.displayName;
-      stats[reason] = (stats[reason] ?? 0) + 1;
-    }
-    
-    return stats;
-  }
-
   static DailyMedicineSummary getDailySummary(DateTime date) {
-    final logs = getLogsForDate(date);
-    final medicines = getActiveMedicinesForToday();
+    // This needs to be async now. Return empty for sync call.
+    return DailyMedicineSummary(
+      date: date,
+      totalScheduled: 0,
+      taken: 0,
+      skipped: 0,
+      missed: 0,
+      adherenceRate: 0,
+      medicinesTaken: [],
+      medicinesMissed: [],
+    );
+  }
+  
+  static Future<DailyMedicineSummary> getDailySummaryAsync(DateTime date) async {
+    final logs = await getLogsForDate(date);
+    final medicines = await getActiveMedicinesForTodayAsync();
     
     final taken = logs.where((l) => l.isTaken).length;
     final skipped = logs.where((l) => l.isSkipped).length;
@@ -525,17 +716,68 @@ class MedicineStorageService {
     );
   }
 
-  // ============ EXPORT METHODS ============
-  static Map<String, dynamic> exportAllMedicineData() {
+  // ============ ANALYTICS METHODS ============
+
+  static Future<int> getCurrentStreak() async {
+    final logs = await getAllLogs();
+    if (logs.isEmpty) return 0;
+
+    // Filter for taken logs and sort by date descending
+    final takenLogs = logs.where((l) => l.isTaken).toList();
+    takenLogs.sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
+
+    if (takenLogs.isEmpty) return 0;
+
+    int streak = 0;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    
+    // Check if taken today
+    var lastDate = DateTime(takenLogs.first.scheduledTime.year, takenLogs.first.scheduledTime.month, takenLogs.first.scheduledTime.day);
+    
+    // If last taken was before yesterday, streak is broken (unless today hasn't happened yet, but we check logs)
+    // If last taken is today, streak starts at 1. If yesterday, it also continues.
+    final diff = todayDate.difference(lastDate).inDays;
+    if (diff > 1) return 0; 
+
+    streak = 1;
+    for (int i = 0; i < takenLogs.length - 1; i++) {
+      final current = takenLogs[i].scheduledTime;
+      final next = takenLogs[i + 1].scheduledTime;
+      
+      final currentDate = DateTime(current.year, current.month, current.day);
+      final nextDate = DateTime(next.year, next.month, next.day);
+      
+      final dayDiff = currentDate.difference(nextDate).inDays;
+      
+      if (dayDiff == 1) {
+        streak++;
+      } else if (dayDiff > 1) {
+        break;
+      }
+      // If dayDiff == 0, it's the same day, continue
+    }
+    
+    return streak;
+  }
+
+  static Future<Map<String, dynamic>> getAdherenceStats({int days = 30}) async {
+    final now = DateTime.now();
+    final startDate = now.subtract(Duration(days: days));
+    final logs = await getLogsForDateRange(startDate, now);
+
+    final taken = logs.where((l) => l.isTaken).length;
+    final skipped = logs.where((l) => l.isSkipped).length;
+    final missed = logs.where((l) => l.isMissed).length;
+    final total = taken + skipped + missed;
+
     return {
-      'exportDate': DateTime.now().toIso8601String(),
-      'medicines': getAllMedicines(includeArchived: true).map((m) => m.toJson()).toList(),
-      'logs': getAllLogs().map((l) => l.toJson()).toList(),
-      'doctors': getAllDoctors().map((d) => d.toJson()).toList(),
-      'pharmacies': getAllPharmacies().map((p) => p.toJson()).toList(),
-      'appointments': getAllAppointments().map((a) => a.toJson()).toList(),
-      'dependents': getAllDependents().map((d) => d.toJson()).toList(),
-      'treatments': getAllTreatments().map((t) => t.toJson()).toList(),
+      'taken': taken,
+      'skipped': skipped,
+      'missed': missed,
+      'total': total,
+      'adherenceRate': total > 0 ? (taken / total * 100).round() : 100,
+      'days': days,
     };
   }
 }

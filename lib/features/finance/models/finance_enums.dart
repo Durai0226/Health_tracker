@@ -1,59 +1,12 @@
-import 'package:hive_flutter/hive_flutter.dart';
+/// Finance module enums
 
-part 'finance_enums.g.dart';
-
-@HiveType(typeId: 80)
+/// Type of financial transaction
 enum TransactionType {
-  @HiveField(0)
   income,
-  @HiveField(1)
   expense,
-  @HiveField(2)
-  transfer,
-}
+  transfer;
 
-@HiveType(typeId: 81)
-enum AccountType {
-  @HiveField(0)
-  cash,
-  @HiveField(1)
-  bank,
-  @HiveField(2)
-  creditCard,
-  @HiveField(3)
-  savings,
-  @HiveField(4)
-  investment,
-  @HiveField(5)
-  wallet,
-}
-
-@HiveType(typeId: 82)
-enum RecurrenceType {
-  @HiveField(0)
-  none,
-  @HiveField(1)
-  daily,
-  @HiveField(2)
-  weekly,
-  @HiveField(3)
-  monthly,
-  @HiveField(4)
-  yearly,
-}
-
-@HiveType(typeId: 83)
-enum BudgetPeriod {
-  @HiveField(0)
-  weekly,
-  @HiveField(1)
-  monthly,
-  @HiveField(2)
-  yearly,
-}
-
-extension TransactionTypeExtension on TransactionType {
-  String get displayName {
+  String get label {
     switch (this) {
       case TransactionType.income:
         return 'Income';
@@ -63,10 +16,22 @@ extension TransactionTypeExtension on TransactionType {
         return 'Transfer';
     }
   }
+
+  static TransactionType fromIndex(int index) {
+    return TransactionType.values[index.clamp(0, TransactionType.values.length - 1)];
+  }
 }
 
-extension AccountTypeExtension on AccountType {
-  String get displayName {
+/// Type of financial account
+enum AccountType {
+  cash,
+  bank,
+  creditCard,
+  savings,
+  investment,
+  wallet;
+
+  String get label {
     switch (this) {
       case AccountType.cash:
         return 'Cash';
@@ -96,30 +61,22 @@ extension AccountTypeExtension on AccountType {
       case AccountType.investment:
         return '📈';
       case AccountType.wallet:
-        return '👛';
+        return '📱';
     }
+  }
+
+  static AccountType fromIndex(int index) {
+    return AccountType.values[index.clamp(0, AccountType.values.length - 1)];
   }
 }
 
-extension RecurrenceTypeExtension on RecurrenceType {
-  String get displayName {
-    switch (this) {
-      case RecurrenceType.none:
-        return 'One-time';
-      case RecurrenceType.daily:
-        return 'Daily';
-      case RecurrenceType.weekly:
-        return 'Weekly';
-      case RecurrenceType.monthly:
-        return 'Monthly';
-      case RecurrenceType.yearly:
-        return 'Yearly';
-    }
-  }
-}
+/// Budget period
+enum BudgetPeriod {
+  weekly,
+  monthly,
+  yearly;
 
-extension BudgetPeriodExtension on BudgetPeriod {
-  String get displayName {
+  String get label {
     switch (this) {
       case BudgetPeriod.weekly:
         return 'Weekly';
@@ -128,5 +85,129 @@ extension BudgetPeriodExtension on BudgetPeriod {
       case BudgetPeriod.yearly:
         return 'Yearly';
     }
+  }
+
+  static BudgetPeriod fromIndex(int index) {
+    return BudgetPeriod.values[index.clamp(0, BudgetPeriod.values.length - 1)];
+  }
+}
+
+/// Bill status
+enum BillStatus {
+  upcoming,
+  overdue,
+  paid,
+  cancelled,
+  skipped;
+
+  String get label {
+    switch (this) {
+      case BillStatus.upcoming:
+        return 'Upcoming';
+      case BillStatus.overdue:
+        return 'Overdue';
+      case BillStatus.paid:
+        return 'Paid';
+      case BillStatus.cancelled:
+        return 'Cancelled';
+      case BillStatus.skipped:
+        return 'Skipped';
+    }
+  }
+
+  static BillStatus fromIndex(int index) {
+    return BillStatus.values[index.clamp(0, BillStatus.values.length - 1)];
+  }
+}
+
+/// Bill recurrence
+enum BillRecurrence {
+  oneTime,
+  daily,
+  weekly,
+  biWeekly,
+  monthly,
+  quarterly,
+  yearly;
+
+  String get label {
+    switch (this) {
+      case BillRecurrence.oneTime:
+        return 'One Time';
+      case BillRecurrence.daily:
+        return 'Daily';
+      case BillRecurrence.weekly:
+        return 'Weekly';
+      case BillRecurrence.biWeekly:
+        return 'Bi-Weekly';
+      case BillRecurrence.monthly:
+        return 'Monthly';
+      case BillRecurrence.quarterly:
+        return 'Quarterly';
+      case BillRecurrence.yearly:
+        return 'Yearly';
+    }
+  }
+
+  static BillRecurrence fromIndex(int index) {
+    return BillRecurrence.values[index.clamp(0, BillRecurrence.values.length - 1)];
+  }
+}
+
+/// Investment type
+enum InvestmentType {
+  deposit,
+  stock,
+  bond,
+  mutualFund,
+  insurance,
+  realEstate,
+  crypto,
+  other;
+
+  String get label {
+    switch (this) {
+      case InvestmentType.deposit:
+        return 'Fixed Deposit';
+      case InvestmentType.stock:
+        return 'Stock';
+      case InvestmentType.bond:
+        return 'Bond';
+      case InvestmentType.mutualFund:
+        return 'Mutual Fund';
+      case InvestmentType.insurance:
+        return 'Insurance';
+      case InvestmentType.realEstate:
+        return 'Real Estate';
+      case InvestmentType.crypto:
+        return 'Cryptocurrency';
+      case InvestmentType.other:
+        return 'Other';
+    }
+  }
+
+  String get icon {
+    switch (this) {
+      case InvestmentType.deposit:
+        return '🏦';
+      case InvestmentType.stock:
+        return '📈';
+      case InvestmentType.bond:
+        return '📜';
+      case InvestmentType.mutualFund:
+        return '📊';
+      case InvestmentType.insurance:
+        return '🛡️';
+      case InvestmentType.realEstate:
+        return '🏠';
+      case InvestmentType.crypto:
+        return '₿';
+      case InvestmentType.other:
+        return '💰';
+    }
+  }
+
+  static InvestmentType fromIndex(int index) {
+    return InvestmentType.values[index.clamp(0, InvestmentType.values.length - 1)];
   }
 }

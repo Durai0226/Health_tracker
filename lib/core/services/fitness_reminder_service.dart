@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/user_settings.dart';
 import '../../features/fitness/models/fitness_reminder.dart';
-import 'storage_service.dart';
+import '../services/clean_storage_service.dart';
 import 'notification_service.dart';
 import 'background_alarm_service.dart';
 
@@ -83,7 +83,7 @@ class FitnessReminderService {
     // Get user settings for notification preferences
     UserSettings settings;
     try {
-      settings = StorageService.getUserSettings();
+      settings = CleanStorageService.getUserSettings();
     } catch (e) {
       settings = UserSettings();
     }
@@ -139,7 +139,7 @@ class FitnessReminderService {
     final results = <String, bool>{};
     
     try {
-      final reminders = StorageService.getAllFitnessReminders();
+      final reminders = CleanStorageService.getAllFitnessReminders();
       debugPrint('🔄 Rescheduling ${reminders.length} fitness reminders...');
       
       for (final reminder in reminders) {
@@ -170,7 +170,7 @@ class FitnessReminderService {
       await cancelReminder(oldReminder);
       
       // Save the new reminder
-      await StorageService.updateFitnessReminder(newReminder);
+      await CleanStorageService.saveFitnessReminder(newReminder);
       
       // Schedule the new reminder if enabled
       if (newReminder.isEnabled) {
@@ -188,7 +188,7 @@ class FitnessReminderService {
   Future<bool> deleteReminder(FitnessReminder reminder) async {
     try {
       await cancelReminder(reminder);
-      await StorageService.deleteFitnessReminder(reminder.id);
+      await CleanStorageService.deleteFitnessReminder(reminder.id);
       debugPrint('✓ Deleted reminder: ${reminder.id}');
       return true;
     } catch (e) {
@@ -259,7 +259,7 @@ class FitnessReminderService {
   /// Get all active reminders sorted by next fire time
   List<FitnessReminder> getActiveRemindersSorted() {
     try {
-      final reminders = StorageService.getAllFitnessReminders()
+      final reminders = CleanStorageService.getAllFitnessReminders()
           .where((r) => r.isEnabled)
           .toList();
       

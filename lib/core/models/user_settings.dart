@@ -1,71 +1,25 @@
-import 'package:hive/hive.dart';
-
-part 'user_settings.g.dart';
-
 /// Model to store persistent user settings
-@HiveType(typeId: 22)
-class UserSettings extends HiveObject {
-  @HiveField(0)
+class UserSettings {
   final int waterDailyGoalMl;
-
-  @HiveField(1)
   final bool darkModeEnabled;
-
-  @HiveField(2)
   final bool soundEnabled;
-
-  @HiveField(3)
   final bool vibrationEnabled;
-
-  @HiveField(4)
   final String? preferredRingtone;
-
-  @HiveField(5)
   final bool showCompletedReminders;
-
-  @HiveField(6)
   final int reminderSnoozeMinutes;
-
-  @HiveField(7)
   final bool autoMarkMissed;
-
-  @HiveField(8)
   final int missedThresholdMinutes;
-
-  @HiveField(9)
   final DateTime? lastSyncTime;
-
-  @HiveField(10)
   final bool analyticsEnabled;
-
-  @HiveField(11)
   final String? locale;
-
-  @HiveField(12)
   final int alarmRingDurationSeconds;
-
-  @HiveField(13)
   final bool snoozeEnabled;
-
-  @HiveField(14)
   final int snoozeIntervalMinutes;
-
-  @HiveField(15)
   final int maxSnoozeCount;
-
-  @HiveField(16)
   final String notificationSound;
-
-  @HiveField(17)
   final bool persistentNotification;
-
-  @HiveField(18)
   final bool showOnLockScreen;
-
-  @HiveField(19)
   final bool fullScreenNotification;
-
-  @HiveField(20)
   final bool isAdsDisabled;
 
   UserSettings({

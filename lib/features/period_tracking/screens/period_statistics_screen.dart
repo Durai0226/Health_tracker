@@ -27,10 +27,10 @@ class _PeriodStatisticsScreenState extends State<PeriodStatisticsScreen> {
 
   void _loadData() {
     setState(() {
-      _stats = PeriodStorageService.getCycleStatistics();
-      _cycles = PeriodStorageService.getAllCycles();
-      _symptomFrequency = PeriodStorageService.getSymptomFrequency();
-      _moodFrequency = PeriodStorageService.getMoodFrequency();
+      _stats = PeriodCleanStorageService.getCycleStatistics();
+      _cycles = PeriodCleanStorageService.getAllCycles();
+      _symptomFrequency = PeriodCleanStorageService.getSymptomFrequency();
+      _moodFrequency = PeriodCleanStorageService.getMoodFrequency();
       if (_cycles.length >= 3) {
         _irregularityResult = PeriodPredictionService.detectIrregularities(_cycles);
       }

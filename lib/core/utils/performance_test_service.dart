@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Comprehensive Performance Test Service
@@ -44,109 +44,113 @@ class PerformanceTestService {
     }
   }
 
-  // ============ HIVE PERFORMANCE TESTS ============
+  // ============ STORAGE PERFORMANCE TESTS ============
 
-  /// Test bulk insert performance (1000 items)
-  Future<Duration> testHiveBulkInsert({
-    required String boxName,
-    int itemCount = 1000,
+  /// Test bulk insert performance (using SharedPreferences)
+  Future<Duration> testStorageBulkInsert({
+    required String testName,
+    int itemCount = 100, // Reduced since SharedPreferences is slower
   }) async {
     final stopwatch = Stopwatch()..start();
     
     try {
-      final box = await Hive.openBox<Map>('perf_test_$boxName');
+      final prefs = await SharedPreferences.getInstance();
       
       for (int i = 0; i < itemCount; i++) {
-        await box.put('item_$i', {
-          'id': 'item_$i',
-          'name': 'Test Item $i',
-          'timestamp': DateTime.now().toIso8601String(),
-          'data': List.generate(10, (j) => 'value_$j'),
-        });
+        await prefs.setString('perf_test_${testName}_$i', 
+          'Test Item $i - ${DateTime.now().toIso8601String()}');
       }
       
       stopwatch.stop();
-      await box.deleteFromDisk();
+      
+      // Cleanup
+      final keys = prefs.getKeys().where((key) => key.startsWith('perf_test_$testName'));
+      for (final key in keys) {
+        await prefs.remove(key);
+      }
       
       final duration = stopwatch.elapsed;
-      String status = duration.inMilliseconds < 1000 ? '🟢 PASS' : '🔴 SLOW';
-      _testResults.add('Hive Bulk Insert ($itemCount items): ${duration.inMilliseconds}ms - $status');
-      debugPrint('📦 Hive bulk insert: ${duration.inMilliseconds}ms - $status');
+      String status = duration.inMilliseconds < 2000 ? '🟢 PASS' : '🔴 SLOW';
+      _testResults.add('Storage Bulk Insert ($itemCount items): ${duration.inMilliseconds}ms - $status');
+      debugPrint('📦 Storage bulk insert: ${duration.inMilliseconds}ms - $status');
       
       return duration;
     } catch (e) {
       stopwatch.stop();
-      debugPrint('❌ Hive bulk insert test failed: $e');
+      debugPrint('❌ Storage bulk insert test failed: $e');
       return stopwatch.elapsed;
     }
   }
 
-  /// Test read performance
-  Future<Duration> testHiveReadPerformance({
-    required String boxName,
-    int itemCount = 5000,
+  /// Test read performance (using SharedPreferences)
+  Future<Duration> testStorageReadPerformance({
+    required String testName,
+    int itemCount = 100,
   }) async {
     try {
-      final box = await Hive.openBox<Map>('perf_test_read_$boxName');
+      final prefs = await SharedPreferences.getInstance();
       
-      // First, populate the box
+      // First, populate the preferences
       for (int i = 0; i < itemCount; i++) {
-        await box.put('item_$i', {
-          'id': 'item_$i',
-          'name': 'Test Item $i',
-          'timestamp': DateTime.now().toIso8601String(),
-        });
+        await prefs.setString('perf_read_${testName}_$i', 
+          'Test Item $i - ${DateTime.now().toIso8601String()}');
       }
       
       // Now test read performance
       final stopwatch = Stopwatch()..start();
-      final allItems = box.values.toList();
+      final keys = prefs.getKeys().where((key) => key.startsWith('perf_read_$testName')).toList();
+      final allItems = <String>[];
+      for (final key in keys) {
+        final value = prefs.getString(key);
+        if (value != null) allItems.add(value);
+      }
       stopwatch.stop();
       
-      await box.deleteFromDisk();
+      // Cleanup
+      for (final key in keys) {
+        await prefs.remove(key);
+      }
       
       final duration = stopwatch.elapsed;
-      String status = duration.inMilliseconds < 500 ? '🟢 PASS' : '🔴 SLOW';
-      _testResults.add('Hive Read ($itemCount items): ${duration.inMilliseconds}ms - $status');
-      debugPrint('📖 Hive read: ${duration.inMilliseconds}ms (${allItems.length} items) - $status');
+      String status = duration.inMilliseconds < 1000 ? '🟢 PASS' : '🔴 SLOW';
+      _testResults.add('Storage Read ($itemCount items): ${duration.inMilliseconds}ms - $status');
+      debugPrint('📖 Storage read: ${duration.inMilliseconds}ms (${allItems.length} items) - $status');
       
       return duration;
     } catch (e) {
-      debugPrint('❌ Hive read test failed: $e');
+      debugPrint('❌ Storage read test failed: $e');
       return Duration.zero;
     }
   }
 
-  /// Test frequent writes (simulating rapid updates)
-  Future<Duration> testHiveFrequentWrites({
-    int writeCount = 100,
+  /// Test frequent writes (using SharedPreferences)
+  Future<Duration> testStorageFrequentWrites({
+    int writeCount = 50, // Reduced for SharedPreferences
     int delayMs = 10,
   }) async {
     try {
-      final box = await Hive.openBox<Map>('perf_test_frequent');
+      final prefs = await SharedPreferences.getInstance();
       
       final stopwatch = Stopwatch()..start();
       
       for (int i = 0; i < writeCount; i++) {
-        await box.put('rapid_item', {
-          'counter': i,
-          'timestamp': DateTime.now().toIso8601String(),
-        });
+        await prefs.setString('perf_rapid_item', 
+          'Counter: $i - ${DateTime.now().toIso8601String()}');
         if (delayMs > 0) {
           await Future.delayed(Duration(milliseconds: delayMs));
         }
       }
       
       stopwatch.stop();
-      await box.deleteFromDisk();
+      await prefs.remove('perf_rapid_item');
       
       final duration = stopwatch.elapsed;
-      _testResults.add('Hive Frequent Writes ($writeCount): ${duration.inMilliseconds}ms');
-      debugPrint('✍️ Hive frequent writes: ${duration.inMilliseconds}ms');
+      _testResults.add('Storage Frequent Writes ($writeCount): ${duration.inMilliseconds}ms');
+      debugPrint('✍️ Storage frequent writes: ${duration.inMilliseconds}ms');
       
       return duration;
     } catch (e) {
-      debugPrint('❌ Hive frequent writes test failed: $e');
+      debugPrint('❌ Storage frequent writes test failed: $e');
       return Duration.zero;
     }
   }
@@ -255,10 +259,10 @@ class PerformanceTestService {
   Future<void> runAllTests() async {
     debugPrint('\n🚀 Starting comprehensive performance tests...\n');
     
-    // Hive tests
-    await testHiveBulkInsert(boxName: 'test', itemCount: 1000);
-    await testHiveReadPerformance(boxName: 'test', itemCount: 1000);
-    await testHiveFrequentWrites(writeCount: 50, delayMs: 0);
+    // Storage tests
+    await testStorageBulkInsert(testName: 'test', itemCount: 100);
+    await testStorageReadPerformance(testName: 'test', itemCount: 100);
+    await testStorageFrequentWrites(writeCount: 50, delayMs: 0);
     
     // Firestore tests
     await testFirestoreOfflineCapability();

@@ -1,18 +1,8 @@
-import 'package:hive/hive.dart';
-
-part 'study_plan_model.g.dart';
-
-@HiveType(typeId: 264)
 enum StudyPlanStatus {
-  @HiveField(0)
   draft,
-  @HiveField(1)
   active,
-  @HiveField(2)
   paused,
-  @HiveField(3)
   completed,
-  @HiveField(4)
   abandoned,
 }
 
@@ -48,36 +38,16 @@ extension StudyPlanStatusExtension on StudyPlanStatus {
   }
 }
 
-@HiveType(typeId: 265)
 class StudyPlanItem {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String topicId;
-
-  @HiveField(2)
   final String topicName;
-
-  @HiveField(3)
   final DateTime scheduledDate;
-
-  @HiveField(4)
   final int plannedMinutes;
-
-  @HiveField(5)
   final int actualMinutes;
-
-  @HiveField(6)
   final bool isCompleted;
-
-  @HiveField(7)
   final int orderIndex;
-
-  @HiveField(8)
   final String? notes;
-
-  @HiveField(9)
   final List<String> sessionIds;
 
   StudyPlanItem({
@@ -155,63 +125,25 @@ class StudyPlanItem {
   }
 }
 
-@HiveType(typeId: 266)
 class StudyPlan {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? description;
-
-  @HiveField(3)
   final String? examId;
-
-  @HiveField(4)
   final String? subjectId;
-
-  @HiveField(5)
   final DateTime startDate;
-
-  @HiveField(6)
   final DateTime endDate;
-
-  @HiveField(7)
   final StudyPlanStatus status;
-
-  @HiveField(8)
   final List<StudyPlanItem> items;
-
-  @HiveField(9)
   final int totalPlannedMinutes;
-
-  @HiveField(10)
   final int totalActualMinutes;
-
-  @HiveField(11)
   final int dailyTargetMinutes;
-
-  @HiveField(12)
   final List<int> studyDays;
-
-  @HiveField(13)
   final String? templateId;
-
-  @HiveField(14)
   final bool autoAdjust;
-
-  @HiveField(15)
   final DateTime createdAt;
-
-  @HiveField(16)
   final DateTime updatedAt;
-
-  @HiveField(17)
   final bool isSynced;
-
-  @HiveField(18)
   final String? colorHex;
 
   StudyPlan({

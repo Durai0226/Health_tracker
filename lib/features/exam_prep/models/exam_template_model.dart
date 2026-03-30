@@ -1,25 +1,13 @@
-import 'package:hive/hive.dart';
 import 'exam_model.dart';
 
-part 'exam_template_model.g.dart';
-
-@HiveType(typeId: 267)
 enum TemplateCategory {
-  @HiveField(0)
   school,
-  @HiveField(1)
   college,
-  @HiveField(2)
   university,
-  @HiveField(3)
   competitive,
-  @HiveField(4)
   certification,
-  @HiveField(5)
   language,
-  @HiveField(6)
   professional,
-  @HiveField(7)
   custom,
 }
 
@@ -67,24 +55,12 @@ extension TemplateCategoryExtension on TemplateCategory {
   }
 }
 
-@HiveType(typeId: 268)
 class TopicTemplate {
-  @HiveField(0)
   final String name;
-
-  @HiveField(1)
   final int estimatedMinutes;
-
-  @HiveField(2)
   final int difficulty;
-
-  @HiveField(3)
   final double weightPercentage;
-
-  @HiveField(4)
   final List<TopicTemplate> subtopics;
-
-  @HiveField(5)
   final bool isImportant;
 
   TopicTemplate({
@@ -140,72 +116,28 @@ class TopicTemplate {
   }
 }
 
-@HiveType(typeId: 269)
 class ExamTemplate {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? description;
-
-  @HiveField(3)
   final TemplateCategory category;
-
-  @HiveField(4)
   final ExamType examType;
-
-  @HiveField(5)
   final List<TopicTemplate> topics;
-
-  @HiveField(6)
   final int recommendedStudyDays;
-
-  @HiveField(7)
   final int dailyStudyMinutes;
-
-  @HiveField(8)
   final double? totalMarks;
-
-  @HiveField(9)
   final double? passingMarks;
-
-  @HiveField(10)
   final List<int> defaultReminderDays;
-
-  @HiveField(11)
   final String? iconName;
-
-  @HiveField(12)
   final String? colorHex;
-
-  @HiveField(13)
   final bool isBuiltIn;
-
-  @HiveField(14)
   final bool isPublic;
-
-  @HiveField(15)
   final int usageCount;
-
-  @HiveField(16)
   final double? averageRating;
-
-  @HiveField(17)
   final String? createdBy;
-
-  @HiveField(18)
   final DateTime createdAt;
-
-  @HiveField(19)
   final DateTime updatedAt;
-
-  @HiveField(20)
   final bool isSynced;
-
-  @HiveField(21)
   final Map<String, dynamic>? metadata;
 
   ExamTemplate({

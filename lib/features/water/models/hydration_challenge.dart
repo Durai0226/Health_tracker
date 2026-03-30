@@ -1,88 +1,38 @@
-import 'package:hive/hive.dart';
-
-part 'hydration_challenge.g.dart';
-
 /// Challenge difficulty levels
-@HiveType(typeId: 35)
 enum ChallengeDifficulty {
-  @HiveField(0)
   easy,
-  @HiveField(1)
   medium,
-  @HiveField(2)
   hard,
-  @HiveField(3)
   extreme,
 }
 
 /// Challenge duration types
-@HiveType(typeId: 36)
 enum ChallengeDuration {
-  @HiveField(0)
   daily,
-  @HiveField(1)
   weekly,
-  @HiveField(2)
   monthly,
-  @HiveField(3)
   custom,
 }
 
 /// Hydration challenge model
-@HiveType(typeId: 37)
-class HydrationChallenge extends HiveObject {
-  @HiveField(0)
+class HydrationChallenge {
   final String id;
-
-  @HiveField(1)
   final String title;
-
-  @HiveField(2)
   final String description;
-
-  @HiveField(3)
   final String emoji;
-
-  @HiveField(4)
   final ChallengeDifficulty difficulty;
-
-  @HiveField(5)
   final ChallengeDuration duration;
-
-  @HiveField(6)
   final int durationDays;
-
-  @HiveField(7)
   final int targetValue;
-
-  @HiveField(8)
   final String targetUnit; // 'ml', 'days', 'drinks', 'streak'
-
-  @HiveField(9)
   final int rewardPoints;
-
-  @HiveField(10)
   final bool isActive;
-
-  @HiveField(11)
   final DateTime? startDate;
-
-  @HiveField(12)
   final DateTime? endDate;
-
-  @HiveField(13)
   final int currentProgress;
-
-  @HiveField(14)
   final bool isCompleted;
-
-  @HiveField(15)
   final DateTime? completedAt;
-
-  @HiveField(16)
   final List<String>? milestones;
-
-  @HiveField(17)
   final int milestonesCompleted;
 
   HydrationChallenge({
@@ -344,21 +294,11 @@ class HydrationChallenge extends HiveObject {
 }
 
 /// User's active and completed challenges
-@HiveType(typeId: 38)
-class UserChallenges extends HiveObject {
-  @HiveField(0)
+class UserChallenges {
   final String id;
-
-  @HiveField(1)
   final List<HydrationChallenge> activeChallenges;
-
-  @HiveField(2)
   final List<HydrationChallenge> completedChallenges;
-
-  @HiveField(3)
   final int totalChallengesCompleted;
-
-  @HiveField(4)
   final int totalPointsEarned;
 
   UserChallenges({

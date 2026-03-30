@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/notification_service.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/models/user_settings.dart';
 
 /// Clean, simple notification settings screen
@@ -44,7 +44,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       // Small delay to prevent UI blocking
       await Future.delayed(const Duration(milliseconds: 100));
       
-      final settings = StorageService.getUserSettings();
+      final settings = CleanStorageService.getUserSettings();
       
       if (mounted) {
         setState(() {
@@ -86,7 +86,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
         notificationSound: _notificationSound,
       );
       
-      await StorageService.saveUserSettings(settings);
+      await CleanStorageService.saveUserSettings(settings);
       
       // Sync snooze settings to SharedPreferences for background alarm service
       final prefs = await SharedPreferences.getInstance();

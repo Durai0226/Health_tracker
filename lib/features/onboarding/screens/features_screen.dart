@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import 'category_selection_screen.dart';
 
 class FeaturesScreen extends StatefulWidget {
@@ -287,7 +287,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> with TickerProviderStat
   }
 
   void _navigateToHome() async {
-    await StorageService.setOnboardingComplete();
+    await CleanStorageService.setFirstLaunchComplete();
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(

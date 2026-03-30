@@ -1,32 +1,11 @@
-
-import 'package:hive/hive.dart';
-
-part 'fitness_reminder.g.dart';
-
-@HiveType(typeId: 5)
-class FitnessReminder extends HiveObject {
-  @HiveField(0)
+class FitnessReminder {
   final String id;
-
-  @HiveField(1)
   final String type; // walk, gym, yoga, run, cycling, swimming
-
-  @HiveField(2)
   final String title;
-
-  @HiveField(3)
   final DateTime reminderTime;
-
-  @HiveField(4)
   final String frequency; // daily, weekdays, weekends, custom
-
-  @HiveField(5)
   final int durationMinutes;
-
-  @HiveField(6)
   final bool isEnabled;
-
-  @HiveField(7)
   final List<int>? customDays; // 1-7 for custom frequency
 
   FitnessReminder({

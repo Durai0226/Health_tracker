@@ -1,26 +1,12 @@
-import 'package:hive/hive.dart';
-
-part 'study_session_model.g.dart';
-
-@HiveType(typeId: 258)
 enum StudySessionType {
-  @HiveField(0)
   regular,
-  @HiveField(1)
   pomodoro,
-  @HiveField(2)
   revision,
-  @HiveField(3)
   practice,
-  @HiveField(4)
   reading,
-  @HiveField(5)
   notes_making,
-  @HiveField(6)
   problem_solving,
-  @HiveField(7)
   memorization,
-  @HiveField(8)
   group_study,
 }
 
@@ -72,15 +58,10 @@ extension StudySessionTypeExtension on StudySessionType {
   }
 }
 
-@HiveType(typeId: 259)
 enum SessionQuality {
-  @HiveField(0)
   poor,
-  @HiveField(1)
   average,
-  @HiveField(2)
   good,
-  @HiveField(3)
   excellent,
 }
 
@@ -125,75 +106,29 @@ extension SessionQualityExtension on SessionQuality {
   }
 }
 
-@HiveType(typeId: 260)
 class StudySession {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String? subjectId;
-
-  @HiveField(2)
   final String? topicId;
-
-  @HiveField(3)
   final String? examId;
-
-  @HiveField(4)
   final StudySessionType sessionType;
-
-  @HiveField(5)
   final DateTime startTime;
-
-  @HiveField(6)
   final DateTime? endTime;
-
-  @HiveField(7)
   final int plannedMinutes;
-
-  @HiveField(8)
   final int actualMinutes;
-
-  @HiveField(9)
   final bool isCompleted;
-
-  @HiveField(10)
   final bool wasInterrupted;
-
-  @HiveField(11)
   final int interruptionCount;
-
-  @HiveField(12)
   final SessionQuality? quality;
-
-  @HiveField(13)
   final String? notes;
-
-  @HiveField(14)
   final int pomodoroCount;
-
-  @HiveField(15)
   final int breakMinutes;
-
-  @HiveField(16)
   final double? focusScore;
-
-  @HiveField(17)
   final List<String> distractions;
-
-  @HiveField(18)
   final double? productivityRating;
-
-  @HiveField(19)
   final DateTime createdAt;
-
-  @HiveField(20)
   final DateTime updatedAt;
-
-  @HiveField(21)
   final bool isSynced;
-
-  @HiveField(22)
   final Map<String, dynamic>? metadata;
 
   StudySession({

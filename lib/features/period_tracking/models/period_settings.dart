@@ -1,61 +1,21 @@
-import 'package:hive/hive.dart';
-
-part 'period_settings.g.dart';
-
-@HiveType(typeId: 41)
-class PeriodSettings extends HiveObject {
-  @HiveField(0)
+class PeriodSettings {
   final int defaultCycleLength;
-
-  @HiveField(1)
   final int defaultPeriodDuration;
-
-  @HiveField(2)
   final bool trackOvulation;
-
-  @HiveField(3)
   final bool trackFertility;
-
-  @HiveField(4)
   final bool trackSymptoms;
-
-  @HiveField(5)
   final bool trackMood;
-
-  @HiveField(6)
   final bool enablePeriodReminders;
-
-  @HiveField(7)
   final int periodReminderDaysBefore;
-
-  @HiveField(8)
   final bool enableOvulationReminders;
-
-  @HiveField(9)
   final bool enableFertileWindowReminders;
-
-  @HiveField(10)
   final bool enablePMSReminders;
-
-  @HiveField(11)
   final int pmsReminderDaysBefore;
-
-  @HiveField(12)
   final bool showMotivationalMessages;
-
-  @HiveField(13)
   final bool enableHealthTips;
-
-  @HiveField(14)
   final bool syncWithCalendar;
-
-  @HiveField(15)
   final String? linkedCalendarId;
-
-  @HiveField(16)
   final DateTime? reminderTime;
-
-  @HiveField(17)
   final bool privacyMode; // Hide sensitive info on lock screen
 
   PeriodSettings({

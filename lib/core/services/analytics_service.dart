@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'storage_service.dart';
+import 'clean_storage_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 
@@ -93,7 +93,7 @@ class AnalyticsService {
     required DateTime startDate,
     required DateTime endDate,
   }) {
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     
     // Get logged workouts from preferences
     final workoutsData = prefs['fitnessCompletedWorkouts'];
@@ -155,7 +155,7 @@ class AnalyticsService {
     int? calories,
     String? notes,
   }) async {
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     List<Map<String, dynamic>> workouts = [];
     
     final workoutsData = prefs['fitnessCompletedWorkouts'];
@@ -179,7 +179,7 @@ class AnalyticsService {
       workouts = workouts.take(100).toList();
     }
 
-    await StorageService.setAppPreference('fitnessCompletedWorkouts', workouts);
+    await CleanStorageService.setAppPreference('fitnessCompletedWorkouts', workouts);
     debugPrint('✓ Logged workout: $type for $durationMinutes min');
   }
 
@@ -224,7 +224,7 @@ class AnalyticsService {
     required DateTime startDate,
     required DateTime endDate,
   }) {
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     
     // Get recent sessions
     final sessionsData = prefs['focusRecentSessions'];
@@ -291,8 +291,8 @@ class AnalyticsService {
     required DateTime startDate,
     required DateTime endDate,
   }) {
-    final medicines = StorageService.getAllMedicines();
-    final prefs = StorageService.getAppPreferences();
+    final medicines = CleanStorageService.getAllMedicines();
+    final prefs = CleanStorageService.getAppPreferences();
     
     // Get taken records
     final takenData = prefs['medicineTakenRecords'];
@@ -352,7 +352,7 @@ class AnalyticsService {
     required String medicineName,
     DateTime? takenAt,
   }) async {
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     List<Map<String, dynamic>> records = [];
     
     final recordsData = prefs['medicineTakenRecords'];
@@ -373,7 +373,7 @@ class AnalyticsService {
       records = records.take(500).toList();
     }
 
-    await StorageService.setAppPreference('medicineTakenRecords', records);
+    await CleanStorageService.setAppPreference('medicineTakenRecords', records);
     debugPrint('✓ Logged medicine taken: $medicineName');
   }
 

@@ -2,7 +2,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:math';
 import '../config/env_config.dart';
 
 class SecureStorageHelper {
@@ -13,14 +13,15 @@ class SecureStorageHelper {
     final keyString = await _storage.read(key: EnvConfig.secureKeyStorageKey);
     
     if (keyString == null) {
-      // Generate new key
-      final key = Hive.generateSecureKey();
+      // Generate new secure key (32 bytes for AES-256)
+      final random = Random.secure();
+      final key = Uint8List.fromList(List.generate(32, (i) => random.nextInt(256)));
       // Store as base64 string
       await _storage.write(
         key: EnvConfig.secureKeyStorageKey, 
         value: base64UrlEncode(key)
       );
-      return Uint8List.fromList(key);
+      return key;
     } else {
       // Decode existing key
       return base64Url.decode(keyString);

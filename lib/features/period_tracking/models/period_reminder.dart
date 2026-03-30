@@ -1,19 +1,7 @@
-import 'package:hive/hive.dart';
-
-part 'period_reminder.g.dart';
-
-@HiveType(typeId: 7)
-class PeriodReminder extends HiveObject {
-  @HiveField(0)
+class PeriodReminder {
   final String id;
-
-  @HiveField(1)
   final int daysBefore;
-
-  @HiveField(2)
   final DateTime reminderTime;
-
-  @HiveField(3)
   final bool isEnabled;
 
   PeriodReminder({

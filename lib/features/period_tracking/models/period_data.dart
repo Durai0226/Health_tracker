@@ -1,20 +1,7 @@
-
-import 'package:hive/hive.dart';
-
-part 'period_data.g.dart';
-
-@HiveType(typeId: 1)
-class PeriodData extends HiveObject {
-  @HiveField(0)
+class PeriodData {
   final DateTime lastPeriodDate;
-
-  @HiveField(1)
   final int cycleLength; // Default: 28 days
-
-  @HiveField(2)
   final int periodDuration; // Default: 5 days
-
-  @HiveField(3)
   final bool isEnabled;
 
   PeriodData({

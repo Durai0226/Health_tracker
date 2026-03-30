@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/haptic_service.dart';
@@ -51,26 +52,27 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      _medicines = MedicineStorageService.getAllMedicines();
-      _lowStockMedicines = MedicineStorageService.getLowStockMedicines();
-      _expiringMedicines = MedicineStorageService.getExpiringMedicines();
-      _streak = MedicineStorageService.getCurrentStreak();
+      await MedicineCleanStorageService.init();
+      _medicines = await MedicineCleanStorageService.getAllMedicines();
+      _lowStockMedicines = await MedicineCleanStorageService.getLowStockMedicinesAsync();
+      _expiringMedicines = await MedicineCleanStorageService.getExpiringMedicinesAsync();
+      _streak = await MedicineCleanStorageService.getCurrentStreak();
       
-      final stats = MedicineStorageService.getAdherenceStats();
+      final stats = await MedicineCleanStorageService.getAdherenceStats();
       _adherenceRate = (stats['adherenceRate'] as int) / 100.0;
 
       // Build today's schedule
-      _buildTodaySchedule();
+      await _buildTodaySchedule();
     } catch (e) {
       debugPrint('Error loading data: $e');
     }
     if (mounted) setState(() => _isLoading = false);
   }
 
-  void _buildTodaySchedule() {
+  Future<void> _buildTodaySchedule() async {
     _todaysDoses = [];
     final now = DateTime.now();
-    final todayLogs = MedicineStorageService.getLogsForDate(now);
+    final todayLogs = await MedicineCleanStorageService.getLogsForDate(now);
 
     for (final medicine in _medicines) {
       if (medicine.isPRN) continue;
@@ -944,7 +946,8 @@ class _EnhancedMedicineDashboardState extends State<EnhancedMedicineDashboard> w
     _hapticService.medicineTaken();
     _vitaVibeService.medicineTaken();
     
-    await MedicineStorageService.markMedicineTaken(
+    // Mark medicine as taken in Drift storage
+    await MedicineCleanStorageService.markMedicineTaken(
       medicineId: dose.medicine.id,
       scheduledTime: dose.scheduledTime,
       dosageTaken: dose.medicine.dosageAmount,

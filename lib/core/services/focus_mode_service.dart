@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'storage_service.dart';
+import '../services/clean_storage_service.dart';
 import 'notification_service.dart';
 
 /// Centralized service for Focus Mode state management with persistence
@@ -69,7 +69,7 @@ class FocusModeService extends ChangeNotifier {
   /// Load persisted state
   Future<void> _loadState() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       
       _selectedMinutes = prefs['focusSelectedMinutes'] ?? 25;
       _selectedActivity = prefs['focusSelectedActivity'] ?? 'reading';
@@ -131,23 +131,23 @@ class FocusModeService extends ChangeNotifier {
   /// Save current state
   Future<void> _saveState() async {
     try {
-      await StorageService.setAppPreference('focusSelectedMinutes', _selectedMinutes);
-      await StorageService.setAppPreference('focusSelectedActivity', _selectedActivity);
-      await StorageService.setAppPreference('focusWasRunning', _isRunning);
-      await StorageService.setAppPreference('focusRemainingSeconds', _remainingSeconds);
-      await StorageService.setAppPreference('focusStartTime', _startTime?.toIso8601String());
-      await StorageService.setAppPreference('focusIsScheduled', _isScheduled);
-      await StorageService.setAppPreference('focusAutoStartReminders', _autoStartReminders);
+      await CleanStorageService.setAppPreference('focusSelectedMinutes', _selectedMinutes);
+      await CleanStorageService.setAppPreference('focusSelectedActivity', _selectedActivity);
+      await CleanStorageService.setAppPreference('focusWasRunning', _isRunning);
+      await CleanStorageService.setAppPreference('focusRemainingSeconds', _remainingSeconds);
+      await CleanStorageService.setAppPreference('focusStartTime', _startTime?.toIso8601String());
+      await CleanStorageService.setAppPreference('focusIsScheduled', _isScheduled);
+      await CleanStorageService.setAppPreference('focusAutoStartReminders', _autoStartReminders);
       
       if (_scheduledStartTime != null) {
-        await StorageService.setAppPreference('focusScheduledStartHour', _scheduledStartTime!.hour);
-        await StorageService.setAppPreference('focusScheduledStartMinute', _scheduledStartTime!.minute);
+        await CleanStorageService.setAppPreference('focusScheduledStartHour', _scheduledStartTime!.hour);
+        await CleanStorageService.setAppPreference('focusScheduledStartMinute', _scheduledStartTime!.minute);
       }
       if (_scheduledEndTime != null) {
-        await StorageService.setAppPreference('focusScheduledEndHour', _scheduledEndTime!.hour);
-        await StorageService.setAppPreference('focusScheduledEndMinute', _scheduledEndTime!.minute);
+        await CleanStorageService.setAppPreference('focusScheduledEndHour', _scheduledEndTime!.hour);
+        await CleanStorageService.setAppPreference('focusScheduledEndMinute', _scheduledEndTime!.minute);
       }
-      await StorageService.setAppPreference('focusScheduledDays', _scheduledDays);
+      await CleanStorageService.setAppPreference('focusScheduledDays', _scheduledDays);
     } catch (e) {
       debugPrint('Error saving focus mode state: $e');
     }
@@ -156,7 +156,7 @@ class FocusModeService extends ChangeNotifier {
   /// Load stats from storage
   Future<void> _loadStats() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       final today = _getTodayKey();
       
       _todayMinutes = prefs['focusTodayMinutes_$today'] ?? 0;
@@ -266,7 +266,7 @@ class FocusModeService extends ChangeNotifier {
     _startTime = null;
     _endTime = null;
     
-    await StorageService.setAppPreference('focusWasRunning', false);
+    await CleanStorageService.setAppPreference('focusWasRunning', false);
     
     // Resume reminders
     if (_autoStartReminders) {
@@ -297,7 +297,7 @@ class FocusModeService extends ChangeNotifier {
     _startTime = null;
     _endTime = null;
     
-    await StorageService.setAppPreference('focusWasRunning', false);
+    await CleanStorageService.setAppPreference('focusWasRunning', false);
     
     // Resume reminders
     if (_autoStartReminders) {
@@ -316,12 +316,12 @@ class FocusModeService extends ChangeNotifier {
     _weekMinutes += minutes;
     _totalSessions++;
     
-    await StorageService.setAppPreference('focusTodayMinutes_$today', _todayMinutes);
-    await StorageService.setAppPreference('focusWeekMinutes', _weekMinutes);
-    await StorageService.setAppPreference('focusTotalSessions', _totalSessions);
+    await CleanStorageService.setAppPreference('focusTodayMinutes_$today', _todayMinutes);
+    await CleanStorageService.setAppPreference('focusWeekMinutes', _weekMinutes);
+    await CleanStorageService.setAppPreference('focusTotalSessions', _totalSessions);
     
     // Save to recent sessions
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     List<Map<String, dynamic>> recentSessions = [];
     final sessions = prefs['focusRecentSessions'];
     if (sessions != null && sessions is List) {
@@ -340,7 +340,7 @@ class FocusModeService extends ChangeNotifier {
       recentSessions = recentSessions.take(10).toList();
     }
     
-    await StorageService.setAppPreference('focusRecentSessions', recentSessions);
+    await CleanStorageService.setAppPreference('focusRecentSessions', recentSessions);
   }
 
   // ============ Scheduled Focus Mode ============
@@ -458,28 +458,28 @@ class FocusModeService extends ChangeNotifier {
 
   /// Pause other app reminders during Focus Mode
   Future<void> _pauseReminders() async {
-    await StorageService.setAppPreference('remindersPausedForFocus', true);
-    await StorageService.setAppPreference('remindersPausedAt', DateTime.now().toIso8601String());
+    await CleanStorageService.setAppPreference('remindersPausedForFocus', true);
+    await CleanStorageService.setAppPreference('remindersPausedAt', DateTime.now().toIso8601String());
     debugPrint('✓ Reminders paused for Focus Mode');
   }
 
   /// Resume other app reminders after Focus Mode
   Future<void> _resumeReminders() async {
-    await StorageService.setAppPreference('remindersPausedForFocus', false);
-    await StorageService.setAppPreference('remindersPausedAt', null);
+    await CleanStorageService.setAppPreference('remindersPausedForFocus', false);
+    await CleanStorageService.setAppPreference('remindersPausedAt', null);
     debugPrint('✓ Reminders resumed after Focus Mode');
   }
 
   /// Check if reminders are paused
   static bool areRemindersPaused() {
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     return prefs['remindersPausedForFocus'] ?? false;
   }
 
   /// Get recent sessions
   List<Map<String, dynamic>> getRecentSessions() {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       final sessions = prefs['focusRecentSessions'];
       if (sessions != null && sessions is List) {
         return List<Map<String, dynamic>>.from(

@@ -1,68 +1,30 @@
-import 'package:hive/hive.dart';
-
-part 'cycle_log.g.dart';
-
-@HiveType(typeId: 30)
 enum FlowIntensity {
-  @HiveField(0)
   spotting,
-  @HiveField(1)
   light,
-  @HiveField(2)
   medium,
-  @HiveField(3)
   heavy,
-  @HiveField(4)
   veryHeavy,
 }
 
-@HiveType(typeId: 31)
 enum CyclePhase {
-  @HiveField(0)
   menstrual,
-  @HiveField(1)
   follicular,
-  @HiveField(2)
   ovulation,
-  @HiveField(3)
   luteal,
-  @HiveField(4)
   pms,
 }
 
-@HiveType(typeId: 32)
-class CycleLog extends HiveObject {
-  @HiveField(0)
+class CycleLog {
   final String id;
-
-  @HiveField(1)
   final DateTime startDate;
-
-  @HiveField(2)
   final DateTime? endDate;
-
-  @HiveField(3)
   final int cycleLength;
-
-  @HiveField(4)
   final int periodDuration;
-
-  @HiveField(5)
   final bool isComplete;
-
-  @HiveField(6)
   final List<DailyLog> dailyLogs;
-
-  @HiveField(7)
   final DateTime? ovulationDate;
-
-  @HiveField(8)
   final DateTime? fertileWindowStart;
-
-  @HiveField(9)
   final DateTime? fertileWindowEnd;
-
-  @HiveField(10)
   final String? notes;
 
   CycleLog({
@@ -158,18 +120,10 @@ class CycleLog extends HiveObject {
   );
 }
 
-@HiveType(typeId: 33)
-class DailyLog extends HiveObject {
-  @HiveField(0)
+class DailyLog {
   final DateTime date;
-
-  @HiveField(1)
   final FlowIntensity? flow;
-
-  @HiveField(2)
   final bool hasSpotting;
-
-  @HiveField(3)
   final String? notes;
 
   DailyLog({

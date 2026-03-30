@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
-import '../../medication/screens/enhanced_medicine_dashboard.dart';
-import '../../medication/services/medicine_storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
+import '../../medication/screens/nunito_medication_dashboard.dart';
 import '../../fitness/screens/add_fitness_screen.dart';
 import '../../../features/settings/screens/notification_settings_screen.dart';
 import 'reminders_screen.dart';
@@ -17,6 +16,13 @@ class AllRemindersScreen extends StatefulWidget {
 class _AllRemindersScreenState extends State<AllRemindersScreen> {
   int _totalReminders = 0;
   int _activeReminders = 0;
+  int _medicineCount = 0;
+  int _fitnessCount = 0;
+  int _fitnessActive = 0;
+  int _reminderCount = 0;
+  int _reminderActive = 0;
+  bool _hasWaterReminder = false;
+  bool _hasPeriodReminder = false;
 
   @override
   void initState() {
@@ -24,31 +30,49 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
     _loadStats();
   }
 
-  void _loadStats() {
-    final medicines = MedicineStorageService.getAllMedicines();
-    final fitnessReminders = StorageService.getAllFitnessReminders();
-    final waterReminder = StorageService.getWaterReminder();
-    final periodReminder = StorageService.getPeriodReminder();
-    final reminders = StorageService.getAllReminders();
+  Future<void> _loadStats() async {
+    final medicines = CleanStorageService.getAllMedicines();
+    final fitnessReminders = CleanStorageService.getAllFitnessReminders();
+    final reminders = CleanStorageService.getReminders();
 
-    int total = medicines.length + fitnessReminders.length + reminders.length;
-    int active = medicines.where((m) => m.reminderEnabled).length +
-        fitnessReminders.where((f) => f.isEnabled).length +
-        reminders.where((r) => !r.isCompleted).length;
+    final medicineCount = medicines.length;
+    final fitnessCount = fitnessReminders.length;
+    final fitnessActive = fitnessReminders.where((f) => f.isEnabled).length;
+    final reminderCount = reminders.length;
+    final reminderActive = reminders.where((r) => !r.isCompleted).length;
 
-    if (waterReminder != null && waterReminder.isEnabled) {
+    int total = medicineCount + fitnessCount + reminderCount;
+    int active = fitnessActive + reminderActive;
+
+    // Add water and period reminders (async)
+    final waterReminder = await CleanStorageService.getWaterReminder();
+    final periodReminder = await CleanStorageService.getPeriodReminder();
+    
+    final hasWater = waterReminder != null;
+    final hasPeriod = periodReminder != null;
+    
+    if (hasWater) {
       total++;
       active++;
     }
-    if (periodReminder != null && periodReminder.isEnabled) {
+    if (hasPeriod) {
       total++;
       active++;
     }
 
-    setState(() {
-      _totalReminders = total;
-      _activeReminders = active;
-    });
+    if (mounted) {
+      setState(() {
+        _totalReminders = total;
+        _activeReminders = active;
+        _medicineCount = medicineCount;
+        _fitnessCount = fitnessCount;
+        _fitnessActive = fitnessActive;
+        _reminderCount = reminderCount;
+        _reminderActive = reminderActive;
+        _hasWaterReminder = hasWater;
+        _hasPeriodReminder = hasPeriod;
+      });
+    }
   }
 
   @override
@@ -88,8 +112,8 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
               icon: Icons.notifications_rounded,
               title: 'General Reminders',
               color: AppColors.secondary,
-              count: StorageService.getAllReminders().length,
-              activeCount: StorageService.getAllReminders().where((r) => !r.isCompleted).length,
+              count: _reminderCount,
+              activeCount: _reminderActive,
               onTap: () {
                 Navigator.push(
                   context,
@@ -102,12 +126,12 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
               icon: Icons.medication_rounded,
               title: 'Medicine Reminders',
               color: AppColors.primary,
-              count: MedicineStorageService.getAllMedicines().length,
-              activeCount: MedicineStorageService.getAllMedicines().where((m) => m.reminderEnabled).length,
+              count: _medicineCount,
+              activeCount: _medicineCount,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const EnhancedMedicineDashboard()),
+                  MaterialPageRoute(builder: (_) => const NunitoMedicationDashboard()),
                 ).then((_) => _loadStats());
               },
             ),
@@ -116,8 +140,8 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
               icon: Icons.fitness_center_rounded,
               title: 'Fitness Reminders',
               color: AppColors.warning,
-              count: StorageService.getAllFitnessReminders().length,
-              activeCount: StorageService.getAllFitnessReminders().where((f) => f.isEnabled).length,
+              count: _fitnessCount,
+              activeCount: _fitnessActive,
               onTap: () {
                 Navigator.push(
                   context,
@@ -130,8 +154,8 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
               icon: Icons.water_drop_rounded,
               title: 'Water Reminders',
               color: AppColors.info,
-              count: StorageService.getWaterReminder() != null ? 1 : 0,
-              activeCount: StorageService.getWaterReminder()?.isEnabled == true ? 1 : 0,
+              count: _hasWaterReminder ? 1 : 0,
+              activeCount: _hasWaterReminder ? 1 : 0,
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -146,8 +170,8 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
               icon: Icons.calendar_today_rounded,
               title: 'Period Reminders',
               color: AppColors.periodPrimary,
-              count: StorageService.getPeriodReminder() != null ? 1 : 0,
-              activeCount: StorageService.getPeriodReminder()?.isEnabled == true ? 1 : 0,
+              count: _hasPeriodReminder ? 1 : 0,
+              activeCount: _hasPeriodReminder ? 1 : 0,
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

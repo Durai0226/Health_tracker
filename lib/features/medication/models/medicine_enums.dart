@@ -1,43 +1,21 @@
-import 'package:hive/hive.dart';
-
-part 'medicine_enums.g.dart';
-
 /// Dosage form types - comprehensive list like Medisafe
-@HiveType(typeId: 50)
 enum DosageForm {
-  @HiveField(0)
   tablet,
-  @HiveField(1)
   capsule,
-  @HiveField(2)
   syrup,
-  @HiveField(3)
   injection,
-  @HiveField(4)
   drops,
-  @HiveField(5)
   cream,
-  @HiveField(6)
   ointment,
-  @HiveField(7)
   patch,
-  @HiveField(8)
   inhaler,
-  @HiveField(9)
   spray,
-  @HiveField(10)
   powder,
-  @HiveField(11)
   gel,
-  @HiveField(12)
   suppository,
-  @HiveField(13)
   lozenge,
-  @HiveField(14)
   solution,
-  @HiveField(15)
   suspension,
-  @HiveField(16)
   other;
 
   String get displayName {
@@ -150,25 +128,15 @@ enum DosageForm {
 }
 
 /// Frequency types for medication scheduling
-@HiveType(typeId: 51)
 enum FrequencyType {
-  @HiveField(0)
   onceDaily,
-  @HiveField(1)
   twiceDaily,
-  @HiveField(2)
   thriceDaily,
-  @HiveField(3)
   fourTimesDaily,
-  @HiveField(4)
   everyXHours,
-  @HiveField(5)
   everyXDays,
-  @HiveField(6)
   specificDays,
-  @HiveField(7)
   asNeeded,
-  @HiveField(8)
   cyclical;
 
   String get displayName {
@@ -196,21 +164,13 @@ enum FrequencyType {
 }
 
 /// Meal timing instructions
-@HiveType(typeId: 52)
 enum MealTiming {
-  @HiveField(0)
   anytime,
-  @HiveField(1)
   beforeMeal,
-  @HiveField(2)
   withMeal,
-  @HiveField(3)
   afterMeal,
-  @HiveField(4)
   emptyStomach,
-  @HiveField(5)
   beforeBed,
-  @HiveField(6)
   wakeUp;
 
   String get displayName {
@@ -253,17 +213,11 @@ enum MealTiming {
 }
 
 /// Medicine status for log entries
-@HiveType(typeId: 53)
 enum MedicineStatus {
-  @HiveField(0)
   taken,
-  @HiveField(1)
   skipped,
-  @HiveField(2)
   missed,
-  @HiveField(3)
   snoozed,
-  @HiveField(4)
   pending;
 
   String get displayName {
@@ -283,23 +237,14 @@ enum MedicineStatus {
 }
 
 /// Skip reasons for tracking missed doses
-@HiveType(typeId: 54)
 enum SkipReason {
-  @HiveField(0)
   sideEffects,
-  @HiveField(1)
   forgotToTake,
-  @HiveField(2)
   ranOut,
-  @HiveField(3)
   feelingBetter,
-  @HiveField(4)
   doctorAdvised,
-  @HiveField(5)
   tooExpensive,
-  @HiveField(6)
   notNeeded,
-  @HiveField(7)
   other;
 
   String get displayName {
@@ -325,15 +270,10 @@ enum SkipReason {
 }
 
 /// Drug interaction severity levels
-@HiveType(typeId: 55)
 enum InteractionSeverity {
-  @HiveField(0)
   mild,
-  @HiveField(1)
   moderate,
-  @HiveField(2)
   severe,
-  @HiveField(3)
   contraindicated;
 
   String get displayName {
@@ -364,31 +304,18 @@ enum InteractionSeverity {
 }
 
 /// Medicine color for pill identification
-@HiveType(typeId: 56)
 enum MedicineColor {
-  @HiveField(0)
   white,
-  @HiveField(1)
   yellow,
-  @HiveField(2)
   orange,
-  @HiveField(3)
   pink,
-  @HiveField(4)
   red,
-  @HiveField(5)
   purple,
-  @HiveField(6)
   blue,
-  @HiveField(7)
   green,
-  @HiveField(8)
   brown,
-  @HiveField(9)
   black,
-  @HiveField(10)
   gray,
-  @HiveField(11)
   multicolor;
 
   String get displayName {
@@ -451,25 +378,15 @@ enum MedicineColor {
 }
 
 /// Medicine shape for pill identification
-@HiveType(typeId: 57)
 enum MedicineShape {
-  @HiveField(0)
   round,
-  @HiveField(1)
   oval,
-  @HiveField(2)
   capsule,
-  @HiveField(3)
   rectangle,
-  @HiveField(4)
   square,
-  @HiveField(5)
   diamond,
-  @HiveField(6)
   triangle,
-  @HiveField(7)
   heart,
-  @HiveField(8)
   other;
 
   String get displayName {
@@ -496,51 +413,28 @@ enum MedicineShape {
   }
 }
 
-@HiveType(typeId: 158)
 enum HealthCategory {
-  @HiveField(0)
   heart,
-  @HiveField(1)
   kidney,
-  @HiveField(2)
   lungs,
-  @HiveField(3)
   liver,
-  @HiveField(4)
   brain,
-  @HiveField(5)
   stomach,
-  @HiveField(6)
   skin,
-  @HiveField(7)
   eye,
-  @HiveField(8)
   ear,
-  @HiveField(9)
   bone,
-  @HiveField(10)
   blood,
-  @HiveField(11)
   diabetes,
-  @HiveField(12)
   thyroid,
-  @HiveField(13)
   mentalHealth,
-  @HiveField(14)
   reproductive,
-  @HiveField(15)
   immune,
-  @HiveField(16)
   cancer,
-  @HiveField(17)
   pain,
-  @HiveField(18)
   infection,
-  @HiveField(19)
   allergy,
-  @HiveField(20)
   vitamin,
-  @HiveField(21)
   custom;
 
   String get displayName {

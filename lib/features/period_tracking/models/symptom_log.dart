@@ -1,145 +1,88 @@
-import 'package:hive/hive.dart';
-
-part 'symptom_log.g.dart';
-
-@HiveType(typeId: 34)
 enum SymptomType {
-  @HiveField(0)
   cramps,
-  @HiveField(1)
   headache,
-  @HiveField(2)
   backPain,
-  @HiveField(3)
+  backache,
   bloating,
-  @HiveField(4)
   breastTenderness,
-  @HiveField(5)
   fatigue,
-  @HiveField(6)
   acne,
-  @HiveField(7)
   nausea,
-  @HiveField(8)
   insomnia,
-  @HiveField(9)
   hotFlashes,
-  @HiveField(10)
   dizziness,
-  @HiveField(11)
   cravings,
-  @HiveField(12)
   constipation,
-  @HiveField(13)
   diarrhea,
-  @HiveField(14)
   jointPain,
+  moodSwings,
 }
 
-@HiveType(typeId: 35)
 enum SymptomSeverity {
-  @HiveField(0)
   mild,
-  @HiveField(1)
   moderate,
-  @HiveField(2)
   severe,
 }
 
-@HiveType(typeId: 36)
 enum MoodType {
-  @HiveField(0)
   happy,
-  @HiveField(1)
   calm,
-  @HiveField(2)
   energetic,
-  @HiveField(3)
   sensitive,
-  @HiveField(4)
   anxious,
-  @HiveField(5)
   irritable,
-  @HiveField(6)
   sad,
-  @HiveField(7)
   moodSwings,
-  @HiveField(8)
   stressed,
-  @HiveField(9)
   tired,
-  @HiveField(10)
   focused,
-  @HiveField(11)
   confused,
 }
 
-@HiveType(typeId: 37)
 enum EnergyLevel {
-  @HiveField(0)
   veryLow,
-  @HiveField(1)
   low,
-  @HiveField(2)
-  medium,
-  @HiveField(3)
+  moderate,
   high,
-  @HiveField(4)
   veryHigh,
 }
 
-@HiveType(typeId: 38)
 enum SleepQuality {
-  @HiveField(0)
   poor,
-  @HiveField(1)
   fair,
-  @HiveField(2)
   good,
-  @HiveField(3)
   excellent,
 }
 
-@HiveType(typeId: 39)
-class SymptomLog extends HiveObject {
-  @HiveField(0)
+class SymptomLog {
   final String id;
-
-  @HiveField(1)
   final DateTime date;
-
-  @HiveField(2)
-  final List<SymptomEntry> symptoms;
-
-  @HiveField(3)
+  final List<SymptomEntry> symptomEntries;
+  final List<SymptomType> symptoms; // Simple list of symptoms
   final List<MoodType> moods;
-
-  @HiveField(4)
+  final MoodType? mood; // Single mood for quick logging
+  final int? moodIntensity; // 1-5
+  final int? severity; // Overall severity 1-5
   final EnergyLevel? energyLevel;
-
-  @HiveField(5)
   final SleepQuality? sleepQuality;
-
-  @HiveField(6)
   final double? sleepHours;
-
-  @HiveField(7)
   final String? notes;
-
-  @HiveField(8)
   final int? stressLevel; // 1-10
-
-  @HiveField(9)
   final bool? hadIntimacy;
-
-  @HiveField(10)
   final bool? usedProtection;
+  final bool? protectedIntimacy;
+  final bool? highLibido;
+  final DateTime? createdAt;
 
   SymptomLog({
     required this.id,
     required this.date,
+    this.symptomEntries = const [],
     this.symptoms = const [],
     this.moods = const [],
+    this.mood,
+    this.moodIntensity,
+    this.severity,
     this.energyLevel,
     this.sleepQuality,
     this.sleepHours,
@@ -147,11 +90,18 @@ class SymptomLog extends HiveObject {
     this.stressLevel,
     this.hadIntimacy,
     this.usedProtection,
+    this.protectedIntimacy,
+    this.highLibido,
+    this.createdAt,
   });
 
   SymptomLog copyWith({
-    List<SymptomEntry>? symptoms,
+    List<SymptomEntry>? symptomEntries,
+    List<SymptomType>? symptoms,
     List<MoodType>? moods,
+    MoodType? mood,
+    int? moodIntensity,
+    int? severity,
     EnergyLevel? energyLevel,
     SleepQuality? sleepQuality,
     double? sleepHours,
@@ -159,12 +109,18 @@ class SymptomLog extends HiveObject {
     int? stressLevel,
     bool? hadIntimacy,
     bool? usedProtection,
+    bool? protectedIntimacy,
+    bool? highLibido,
   }) {
     return SymptomLog(
       id: id,
       date: date,
+      symptomEntries: symptomEntries ?? this.symptomEntries,
       symptoms: symptoms ?? this.symptoms,
       moods: moods ?? this.moods,
+      mood: mood ?? this.mood,
+      moodIntensity: moodIntensity ?? this.moodIntensity,
+      severity: severity ?? this.severity,
       energyLevel: energyLevel ?? this.energyLevel,
       sleepQuality: sleepQuality ?? this.sleepQuality,
       sleepHours: sleepHours ?? this.sleepHours,
@@ -172,14 +128,21 @@ class SymptomLog extends HiveObject {
       stressLevel: stressLevel ?? this.stressLevel,
       hadIntimacy: hadIntimacy ?? this.hadIntimacy,
       usedProtection: usedProtection ?? this.usedProtection,
+      protectedIntimacy: protectedIntimacy ?? this.protectedIntimacy,
+      highLibido: highLibido ?? this.highLibido,
+      createdAt: createdAt,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'date': date.toIso8601String(),
-    'symptoms': symptoms.map((s) => s.toJson()).toList(),
+    'symptomEntries': symptomEntries.map((s) => s.toJson()).toList(),
+    'symptoms': symptoms.map((s) => s.index).toList(),
     'moods': moods.map((m) => m.index).toList(),
+    'mood': mood?.index,
+    'moodIntensity': moodIntensity,
+    'severity': severity,
     'energyLevel': energyLevel?.index,
     'sleepQuality': sleepQuality?.index,
     'sleepHours': sleepHours,
@@ -187,32 +150,36 @@ class SymptomLog extends HiveObject {
     'stressLevel': stressLevel,
     'hadIntimacy': hadIntimacy,
     'usedProtection': usedProtection,
+    'protectedIntimacy': protectedIntimacy,
+    'highLibido': highLibido,
+    'createdAt': createdAt?.toIso8601String(),
   };
 
   factory SymptomLog.fromJson(Map<String, dynamic> json) => SymptomLog(
     id: json['id'],
     date: DateTime.parse(json['date']),
-    symptoms: (json['symptoms'] as List?)?.map((s) => SymptomEntry.fromJson(s)).toList() ?? [],
-    moods: (json['moods'] as List?)?.map((m) => MoodType.values[m]).toList() ?? [],
-    energyLevel: json['energyLevel'] != null ? EnergyLevel.values[json['energyLevel']] : null,
-    sleepQuality: json['sleepQuality'] != null ? SleepQuality.values[json['sleepQuality']] : null,
+    symptomEntries: (json['symptomEntries'] as List?)?.map((s) => SymptomEntry.fromJson(s)).toList() ?? [],
+    symptoms: (json['symptoms'] as List?)?.map((s) => SymptomType.values[s as int]).toList() ?? [],
+    moods: (json['moods'] as List?)?.map((m) => MoodType.values[m as int]).toList() ?? [],
+    mood: json['mood'] != null ? MoodType.values[json['mood'] as int] : null,
+    moodIntensity: json['moodIntensity'] as int?,
+    severity: json['severity'] as int?,
+    energyLevel: json['energyLevel'] != null ? EnergyLevel.values[json['energyLevel'] as int] : null,
+    sleepQuality: json['sleepQuality'] != null ? SleepQuality.values[json['sleepQuality'] as int] : null,
     sleepHours: json['sleepHours']?.toDouble(),
-    notes: json['notes'],
-    stressLevel: json['stressLevel'],
-    hadIntimacy: json['hadIntimacy'],
-    usedProtection: json['usedProtection'],
+    notes: json['notes'] as String?,
+    stressLevel: json['stressLevel'] as int?,
+    hadIntimacy: json['hadIntimacy'] as bool?,
+    usedProtection: json['usedProtection'] as bool?,
+    protectedIntimacy: json['protectedIntimacy'] as bool?,
+    highLibido: json['highLibido'] as bool?,
+    createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
   );
 }
 
-@HiveType(typeId: 40)
-class SymptomEntry extends HiveObject {
-  @HiveField(0)
+class SymptomEntry {
   final SymptomType type;
-
-  @HiveField(1)
   final SymptomSeverity severity;
-
-  @HiveField(2)
   final String? notes;
 
   SymptomEntry({

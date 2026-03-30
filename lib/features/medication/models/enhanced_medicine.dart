@@ -1,159 +1,64 @@
-import 'package:hive/hive.dart';
 import 'medicine_enums.dart';
 import 'medicine_schedule.dart';
 import 'drug_interaction.dart';
 
-part 'enhanced_medicine.g.dart';
-
 /// Enhanced Medicine model with all premium features like Medisafe/Apple Health
-@HiveType(typeId: 90)
-class EnhancedMedicine extends HiveObject {
+class EnhancedMedicine {
   // Basic Information
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? genericName;
-
-  @HiveField(3)
   final String? brandName;
-
-  @HiveField(4)
   final DosageForm dosageForm;
-
-  @HiveField(5)
   final double dosageAmount;
-
-  @HiveField(6)
   final String? dosageUnit; // mg, ml, mcg, etc.
-
-  @HiveField(7)
   final String? strength; // e.g., "500mg", "10mg/5ml"
-
   // Schedule
-  @HiveField(8)
   final MedicineSchedule schedule;
-
   // Pill Identification
-  @HiveField(9)
   final MedicineColor? color;
-
-  @HiveField(10)
   final MedicineShape? shape;
-
-  @HiveField(11)
   final String? imprint; // Text/numbers on pill
-
-  @HiveField(12)
   final String? imagePath; // Photo of medicine
-
   // Instructions
-  @HiveField(13)
   final String? instructions; // Special instructions
-
-  @HiveField(14)
   final String? purpose; // What is it for
-
-  @HiveField(15)
   final String? condition; // Medical condition being treated
-
   // Stock Management
-  @HiveField(16)
   final int? currentStock;
-
-  @HiveField(17)
   final int? lowStockThreshold;
-
-  @HiveField(18)
   final bool refillReminderEnabled;
-
-  @HiveField(19)
   final DateTime? lastRefillDate;
-
-  @HiveField(20)
   final double? costPerUnit;
-
   // Prescription Details
-  @HiveField(21)
   final String? prescriptionNumber;
-
-  @HiveField(22)
   final String? doctorId;
-
-  @HiveField(23)
   final String? pharmacyId;
-
-  @HiveField(24)
   final DateTime? prescribedDate;
-
-  @HiveField(25)
   final DateTime? expiryDate;
-
-  @HiveField(26)
   final int? refillsRemaining;
-
   // Reminders
-  @HiveField(27)
   final bool reminderEnabled;
-
-  @HiveField(28)
   final String? reminderSound;
-
-  @HiveField(29)
   final bool criticalAlert; // For critical medications
-
-  @HiveField(30)
   final int snoozeMinutes;
-
   // Drug Information
-  @HiveField(31)
   final DrugInfo? drugInfo;
-
-  @HiveField(32)
   final List<String>? warnings;
-
-  @HiveField(33)
   final List<String>? sideEffects;
-
   // Family/Dependent
-  @HiveField(34)
   final String? dependentId; // Who takes this medicine
-
   // Metadata
-  @HiveField(35)
   final DateTime createdAt;
-
-  @HiveField(36)
   final DateTime? updatedAt;
-
-  @HiveField(37)
   final bool isActive;
-
-  @HiveField(38)
   final bool isArchived;
-
-  @HiveField(39)
   final String? notes;
-
-  @HiveField(40)
   final Map<String, dynamic>? customFields;
-
-  @HiveField(41)
   final List<HealthCategory>? healthCategories;
-
-  @HiveField(42)
   final String? customHealthCategory;
-
-  @HiveField(43)
   final String? patientProfileId;
-
-  @HiveField(44)
   final bool requiresContinuousIntake;
-
-  @HiveField(45)
   final int? minimumConsecutiveDays;
 
   EnhancedMedicine({
@@ -223,6 +128,12 @@ class EnhancedMedicine extends HiveObject {
   }
 
   bool get isPRN => schedule.isPRN;
+
+  /// Returns the primary health category (first in list) or defaults to custom
+  HealthCategory get healthCategory => 
+      healthCategories?.isNotEmpty == true 
+          ? healthCategories!.first 
+          : HealthCategory.custom;
 
   int get estimatedDaysRemaining {
     if (currentStock == null) return -1;
@@ -473,39 +384,17 @@ class EnhancedMedicine extends HiveObject {
 }
 
 /// Treatment course grouping medicines by condition
-@HiveType(typeId: 91)
-class TreatmentCourse extends HiveObject {
-  @HiveField(0)
+class TreatmentCourse {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? condition;
-
-  @HiveField(3)
   final String? description;
-
-  @HiveField(4)
   final List<String> medicineIds;
-
-  @HiveField(5)
   final DateTime startDate;
-
-  @HiveField(6)
   final DateTime? endDate;
-
-  @HiveField(7)
   final String? doctorId;
-
-  @HiveField(8)
   final String? notes;
-
-  @HiveField(9)
   final bool isActive;
-
-  @HiveField(10)
   final String? dependentId;
 
   TreatmentCourse({

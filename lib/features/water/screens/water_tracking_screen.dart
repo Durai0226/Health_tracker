@@ -236,9 +236,20 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
       );
     }
   
+    final listenable = WaterService.listenToDailyData();
+    if (listenable == null) {
+      return _buildContent(context);
+    }
+    
     return ValueListenableBuilder(
-      valueListenable: WaterService.listenToDailyData()!,
-      builder: (context, box, _) {
+      valueListenable: listenable,
+      builder: (context, _, __) {
+        return _buildContent(context);
+      },
+    );
+  }
+  
+  Widget _buildContent(BuildContext context) {
         final water = WaterService.getTodayData();
         final progress = water.progress.clamp(0.0, 1.0);
 
@@ -426,8 +437,6 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
             ],
           ),
         );
-      },
-    );
   }
 
   Widget _buildWaterTank(DailyWaterData water, double progress) {

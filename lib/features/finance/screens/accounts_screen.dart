@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../services/finance_storage_service.dart';
-import '../models/finance_account.dart';
-import '../models/finance_enums.dart';
-import 'transactions_screen.dart';
-import '../../../core/constants/app_colors.dart';
+import '../theme/finance_theme.dart';
+import '../models/finance_models.dart';
+import '../services/finance_service.dart';
 
+/// Screen for managing financial accounts
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
 
@@ -14,735 +12,428 @@ class AccountsScreen extends StatefulWidget {
 }
 
 class _AccountsScreenState extends State<AccountsScreen> {
+  List<FinanceAccount> _accounts = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    await FinanceService.init();
+    setState(() {
+      _accounts = FinanceService.getAccounts(includeArchived: true);
+      _isLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final accounts = FinanceStorageService.getAllAccounts();
-    final totalBalance = FinanceStorageService.getTotalBalance();
-    final isDark = AppColors.isDark(context);
-
     return Scaffold(
-      backgroundColor: AppColors.getBackground(context),
+      backgroundColor: FinanceTheme.background,
       appBar: AppBar(
-        backgroundColor: AppColors.getBackground(context),
+        backgroundColor: FinanceTheme.background,
         elevation: 0,
+        title: Text('Accounts', style: FinanceTheme.headingL),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.getTextPrimary(context)),
+          icon: const Icon(Icons.arrow_back, color: FinanceTheme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Accounts',
-          style: TextStyle(
-            color: AppColors.getTextPrimary(context),
-            fontWeight: FontWeight.bold,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _accounts.isEmpty
+              ? _buildEmptyState()
+              : _buildAccountsList(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddAccountDialog,
+        backgroundColor: FinanceTheme.primary,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 64,
+            color: FinanceTheme.textLight,
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add_circle_outline, color: AppColors.primary),
-            onPressed: () => _showAddAccountSheet(context),
+          const SizedBox(height: FinanceTheme.spacingM),
+          Text(
+            'No accounts yet',
+            style: FinanceTheme.bodyL.copyWith(color: FinanceTheme.textSecondary),
+          ),
+          const SizedBox(height: FinanceTheme.spacingS),
+          ElevatedButton(
+            onPressed: _showAddAccountDialog,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: FinanceTheme.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Add Account'),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
+    );
+  }
+
+  Widget _buildAccountsList() {
+    final activeAccounts = _accounts.where((a) => !a.isArchived).toList();
+    final archivedAccounts = _accounts.where((a) => a.isArchived).toList();
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
+        padding: const EdgeInsets.all(FinanceTheme.spacingM),
+        children: [
+          // Total balance card
+          _buildTotalBalanceCard(),
+          const SizedBox(height: FinanceTheme.spacingL),
+
+          // Active accounts
+          if (activeAccounts.isNotEmpty) ...[
+            Text('Active Accounts', style: FinanceTheme.headingS),
+            const SizedBox(height: FinanceTheme.spacingS),
+            ...activeAccounts.map((account) => _AccountTile(
+              account: account,
+              onTap: () => _showEditAccountDialog(account),
+              onArchive: () => _archiveAccount(account),
+            )),
+          ],
+
+          // Archived accounts
+          if (archivedAccounts.isNotEmpty) ...[
+            const SizedBox(height: FinanceTheme.spacingL),
+            Text('Archived', style: FinanceTheme.headingS),
+            const SizedBox(height: FinanceTheme.spacingS),
+            ...archivedAccounts.map((account) => _AccountTile(
+              account: account,
+              onTap: () => _showEditAccountDialog(account),
+              onRestore: () => _restoreAccount(account),
+            )),
+          ],
+
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTotalBalanceCard() {
+    final totalBalance = _accounts
+        .where((a) => !a.isArchived)
+        .fold(0.0, (sum, a) => sum + a.balance);
+
+    return Container(
+      padding: const EdgeInsets.all(FinanceTheme.spacingL),
+      decoration: BoxDecoration(
+        gradient: FinanceTheme.cardGradient,
+        borderRadius: FinanceTheme.borderRadiusXL,
+        boxShadow: FinanceTheme.shadowStrong,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Total Balance',
+            style: FinanceTheme.labelM.copyWith(color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            FinanceService.formatCurrency(totalBalance),
+            style: FinanceTheme.currency.copyWith(fontSize: 32),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${_accounts.where((a) => !a.isArchived).length} active accounts',
+            style: FinanceTheme.bodyS.copyWith(color: Colors.white54),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddAccountDialog() {
+    _showAccountDialog();
+  }
+
+  void _showEditAccountDialog(FinanceAccount account) {
+    _showAccountDialog(existingAccount: account);
+  }
+
+  void _showAccountDialog({FinanceAccount? existingAccount}) {
+    final isEditing = existingAccount != null;
+    final nameController = TextEditingController(text: existingAccount?.name ?? '');
+    final balanceController = TextEditingController(
+      text: existingAccount?.balance.toStringAsFixed(2) ?? '',
+    );
+    var selectedType = existingAccount?.type ?? AccountType.bank;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          decoration: BoxDecoration(
+            color: FinanceTheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            left: FinanceTheme.spacingL,
+            right: FinanceTheme.spacingL,
+            top: FinanceTheme.spacingL,
+            bottom: MediaQuery.of(context).viewInsets.bottom + FinanceTheme.spacingL,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: FinanceTheme.textLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(24),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Total Balance',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
+              const SizedBox(height: FinanceTheme.spacingL),
+              Text(
+                isEditing ? 'Edit Account' : 'Add Account',
+                style: FinanceTheme.headingM,
+              ),
+              const SizedBox(height: FinanceTheme.spacingL),
+              
+              // Account type
+              Text('Account Type', style: FinanceTheme.labelM),
+              const SizedBox(height: FinanceTheme.spacingS),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: AccountType.values.map((type) {
+                  final isSelected = type == selectedType;
+                  return ChoiceChip(
+                    label: Text(type.label),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setSheetState(() => selectedType = type);
+                      }
+                    },
+                    selectedColor: FinanceTheme.primary,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : FinanceTheme.textPrimary,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: FinanceTheme.spacingM),
+              
+              // Name
+              TextFormField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: 'Account Name',
+                  hintText: 'e.g., Main Checking',
+                  filled: true,
+                  fillColor: FinanceTheme.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: FinanceTheme.borderRadiusM,
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: FinanceTheme.spacingM),
+              
+              // Balance
+              TextFormField(
+                controller: balanceController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Current Balance',
+                  prefixText: '\$ ',
+                  filled: true,
+                  fillColor: FinanceTheme.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: FinanceTheme.borderRadiusM,
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: FinanceTheme.spacingXL),
+              
+              // Save button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final name = nameController.text.trim();
+                    final balance = double.tryParse(balanceController.text) ?? 0;
+                    
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter account name')),
+                      );
+                      return;
+                    }
+                    
+                    if (isEditing) {
+                      final updated = existingAccount.copyWith(
+                        name: name,
+                        type: selectedType,
+                        balance: balance,
+                      );
+                      await FinanceService.updateAccount(updated);
+                    } else {
+                      final account = FinanceAccount.create(
+                        name: name,
+                        type: selectedType,
+                        balance: balance,
+                      );
+                      await FinanceService.addAccount(account);
+                    }
+                    
+                    Navigator.pop(context);
+                    _loadData();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: FinanceTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: FinanceTheme.borderRadiusM,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '₹${NumberFormat('#,##,###.##').format(totalBalance)}',
-                    style: const TextStyle(
+                  child: Text(
+                    isEditing ? 'Update Account' : 'Add Account',
+                    style: FinanceTheme.bodyL.copyWith(
                       color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${accounts.length} accounts',
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Your Accounts',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.getTextPrimary(context),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (accounts.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: AppColors.getCardBg(context),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.account_balance_wallet_outlined,
-                        size: 48,
-                        color: AppColors.getTextSecondary(context),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No accounts yet',
-                        style: TextStyle(
-                          color: AppColors.getTextSecondary(context),
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => _showAddAccountSheet(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('Add Account'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              ...accounts.map((account) => _buildAccountCard(account, isDark)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccountCard(FinanceAccount account, bool isDark) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TransactionsScreen(accountId: account.id),
-        ),
-      ),
-      onLongPress: () => _showAccountOptions(account),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.getCardBg(context),
-          borderRadius: BorderRadius.circular(16),
-          border: isDark ? Border.all(color: AppColors.darkBorder.withOpacity(0.5)) : null,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: account.color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(
-                child: Text(
-                  account.type.icon,
-                  style: const TextStyle(fontSize: 24),
                 ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    account.name,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.getTextPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    account.type.displayName,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.getTextSecondary(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '₹${NumberFormat('#,##,###.##').format(account.balance)}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: account.balance >= 0 ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () => _showEditAccountSheet(context, account),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.edit,
-                          color: AppColors.primary,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.chevron_right,
-                      color: AppColors.getTextSecondary(context),
-                      size: 20,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAddAccountSheet(BuildContext context) {
-    final nameController = TextEditingController();
-    final balanceController = TextEditingController(text: '0');
-    AccountType selectedType = AccountType.cash;
-    Color selectedColor = const Color(0xFF3B82F6);
-
-    final colors = [
-      const Color(0xFF3B82F6),
-      const Color(0xFF22C55E),
-      const Color(0xFFF59E0B),
-      const Color(0xFFEF4444),
-      const Color(0xFF8B5CF6),
-      const Color(0xFFEC4899),
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-          decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.getDivider(context),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Add Account',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.getTextPrimary(context),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Account Name',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: balanceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Initial Balance',
-                    prefixText: '₹ ',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Account Type',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.getTextSecondary(context),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: AccountType.values.map((type) {
-                    final isSelected = selectedType == type;
-                    return GestureDetector(
-                      onTap: () => setSheetState(() => selectedType = type),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? AppColors.primary : AppColors.getDivider(context),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(type.icon, style: const TextStyle(fontSize: 16)),
-                            const SizedBox(width: 6),
-                            Text(
-                              type.displayName,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Color',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.getTextSecondary(context),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: colors.map((color) {
-                    final isSelected = selectedColor == color;
-                    return GestureDetector(
-                      onTap: () => setSheetState(() => selectedColor = color),
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 12),
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: isSelected
-                              ? Border.all(color: Colors.white, width: 3)
-                              : null,
-                          boxShadow: isSelected
-                              ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)]
-                              : null,
-                        ),
-                        child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white, size: 18)
-                            : null,
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (nameController.text.isEmpty) return;
-
-                      final account = FinanceAccount(
-                        name: nameController.text,
-                        type: selectedType,
-                        balance: double.tryParse(balanceController.text) ?? 0,
-                        colorValue: selectedColor.value,
-                      );
-
-                      try {
-                        await FinanceStorageService.addAccount(account);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          setState(() {});
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Account "${account.name}" added successfully'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error adding account: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Add Account', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  void _showAccountOptions(FinanceAccount account) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColors.getCardBg(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.getDivider(context),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              account.name,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.getTextPrimary(context),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ListTile(
-              leading: const Icon(Icons.edit, color: Colors.blue),
-              title: const Text('Edit Account'),
-              onTap: () {
-                Navigator.pop(context);
-                _showEditAccountSheet(context, account);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Delete Account'),
-              onTap: () => _deleteAccount(account),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showEditAccountSheet(BuildContext context, FinanceAccount account) {
-    final nameController = TextEditingController(text: account.name);
-    final balanceController = TextEditingController(text: account.balance.toString());
-    AccountType selectedType = account.type;
-    Color selectedColor = account.color;
-
-    final colors = [
-      const Color(0xFF3B82F6),
-      const Color(0xFF22C55E),
-      const Color(0xFFF59E0B),
-      const Color(0xFFEF4444),
-      const Color(0xFF8B5CF6),
-      const Color(0xFFEC4899),
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-          decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.getDivider(context),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Edit Account',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.getTextPrimary(context),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Account Name',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: balanceController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Current Balance',
-                    prefixText: '₹ ',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Account Type',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.getTextPrimary(context),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: AccountType.values.map((type) {
-                    final isSelected = selectedType == type;
-                    return GestureDetector(
-                      onTap: () => setSheetState(() => selectedType = type),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? AppColors.primary : AppColors.getDivider(context),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(type.icon, style: const TextStyle(fontSize: 16)),
-                            const SizedBox(width: 8),
-                            Text(
-                              type.displayName,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Color',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.getTextPrimary(context),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: colors.map((color) {
-                    final isSelected = selectedColor.value == color.value;
-                    return GestureDetector(
-                      onTap: () => setSheetState(() => selectedColor = color),
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 12),
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: isSelected
-                              ? Border.all(color: Colors.white, width: 3)
-                              : null,
-                          boxShadow: isSelected
-                              ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)]
-                              : null,
-                        ),
-                        child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white, size: 18)
-                            : null,
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (nameController.text.isEmpty) return;
-
-                      final updatedAccount = account.copyWith(
-                        name: nameController.text,
-                        type: selectedType,
-                        balance: double.tryParse(balanceController.text) ?? account.balance,
-                        colorValue: selectedColor.value,
-                      );
-
-                      try {
-                        await FinanceStorageService.updateAccount(updatedAccount);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          setState(() {});
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Account "${updatedAccount.name}" updated successfully'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error updating account: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Update Account', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _deleteAccount(FinanceAccount account) {
-    Navigator.pop(context); // Close the options sheet first
-    
-    showDialog(
+  Future<void> _archiveAccount(FinanceAccount account) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: Text('Are you sure you want to delete "${account.name}"? This action cannot be undone.'),
+        title: const Text('Archive Account?'),
+        content: Text('Archive "${account.name}"? You can restore it later.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          TextButton(
-            onPressed: () async {
-              try {
-                await FinanceStorageService.deleteAccount(account.id!);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Account "${account.name}" deleted successfully'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error deleting account: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: FinanceTheme.expense,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Archive'),
           ),
         ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await FinanceService.updateAccount(account.copyWith(isArchived: true));
+      _loadData();
+    }
+  }
+
+  Future<void> _restoreAccount(FinanceAccount account) async {
+    await FinanceService.updateAccount(account.copyWith(isArchived: false));
+    _loadData();
+  }
+}
+
+class _AccountTile extends StatelessWidget {
+  final FinanceAccount account;
+  final VoidCallback onTap;
+  final VoidCallback? onArchive;
+  final VoidCallback? onRestore;
+
+  const _AccountTile({
+    required this.account,
+    required this.onTap,
+    this.onArchive,
+    this.onRestore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: FinanceTheme.surface,
+          borderRadius: FinanceTheme.borderRadiusM,
+          boxShadow: FinanceTheme.shadowSoft,
+        ),
+        child: ListTile(
+          onTap: onTap,
+          leading: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: account.color.withValues(alpha: 0.1),
+              borderRadius: FinanceTheme.borderRadiusS,
+            ),
+            child: Icon(account.icon, color: account.color),
+          ),
+          title: Text(
+            account.name,
+            style: FinanceTheme.bodyL.copyWith(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(
+            account.type.label,
+            style: FinanceTheme.bodyS.copyWith(color: FinanceTheme.textSecondary),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                FinanceService.formatCurrency(account.balance),
+                style: FinanceTheme.bodyL.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: account.balance >= 0 ? FinanceTheme.income : FinanceTheme.expense,
+                ),
+              ),
+              if (onArchive != null || onRestore != null)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: FinanceTheme.textSecondary),
+                  onSelected: (value) {
+                    if (value == 'archive') onArchive?.call();
+                    if (value == 'restore') onRestore?.call();
+                  },
+                  itemBuilder: (context) => [
+                    if (onArchive != null)
+                      const PopupMenuItem(value: 'archive', child: Text('Archive')),
+                    if (onRestore != null)
+                      const PopupMenuItem(value: 'restore', child: Text('Restore')),
+                  ],
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

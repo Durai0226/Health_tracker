@@ -72,7 +72,7 @@ class SmartNativeListAd extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -86,7 +86,7 @@ class SmartNativeListAd extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.2),
+                  color: Colors.grey.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -107,10 +107,10 @@ class SmartNativeListAd extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.star_rounded,
                   color: AppColors.primary,
                   size: 24,
@@ -151,7 +151,7 @@ class SmartNativeListAd extends StatelessWidget {
               },
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
-                side: BorderSide(color: AppColors.primary),
+                side: const BorderSide(color: AppColors.primary),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -278,7 +278,7 @@ class RewardedAdButton extends StatelessWidget {
         label: Text('Watch Ad: $rewardDescription'),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.warning,
-          side: BorderSide(color: AppColors.warning),
+          side: const BorderSide(color: AppColors.warning),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -301,16 +301,16 @@ class AdFreeMessage extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.success.withOpacity(0.1),
-            AppColors.success.withOpacity(0.05),
+            AppColors.success.withValues(alpha: 0.1),
+            AppColors.success.withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.success.withOpacity(0.3)),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle, color: AppColors.success, size: 20),
+          const Icon(Icons.check_circle, color: AppColors.success, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

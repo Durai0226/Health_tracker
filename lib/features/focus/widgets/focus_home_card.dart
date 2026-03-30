@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
+import '../screens/manrope_focus_dashboard.dart';
 import '../screens/focus_screen.dart';
 
 class FocusHomeCard extends StatelessWidget {
@@ -20,7 +21,7 @@ class FocusHomeCard extends StatelessWidget {
         return GestureDetector(
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const FocusScreen()),
+            MaterialPageRoute(builder: (_) => const ManropeFocusDashboard()),
           ),
           child: Container(
             padding: const EdgeInsets.all(20),
@@ -204,7 +205,7 @@ class FocusMiniBanner extends StatelessWidget {
         return GestureDetector(
           onTap: onTap ?? () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const FocusScreen()),
+            MaterialPageRoute(builder: (_) => FocusScreen()),
           ),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),

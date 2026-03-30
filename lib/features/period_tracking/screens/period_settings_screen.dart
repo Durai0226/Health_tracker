@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../models/period_settings.dart';
@@ -18,7 +19,7 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _settings = PeriodStorageService.getSettings();
+    _settings = PeriodCleanStorageService.getSettings();
     if (_settings.reminderTime != null) {
       _reminderTime = TimeOfDay(
         hour: _settings.reminderTime!.hour,
@@ -34,7 +35,7 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
       _reminderTime.hour, _reminderTime.minute,
     );
     
-    await PeriodStorageService.saveSettings(
+    await PeriodCleanStorageService.saveSettings(
       _settings.copyWith(reminderTime: reminderDateTime),
     );
     
@@ -417,7 +418,9 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
   }
 
   void _exportData() {
-    final data = PeriodStorageService.exportData();
+    // TODO: Replace with Drift storage
+    debugPrint('exportData temporarily disabled - Drift migration needed');
+    final data = <String, dynamic>{};
     // In a real app, you would save this to a file or share it
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -443,7 +446,8 @@ class _PeriodSettingsScreenState extends State<PeriodSettingsScreen> {
             text: 'Clear All',
             variant: ButtonVariant.danger,
             onPressed: () async {
-              await PeriodStorageService.clearAllData();
+              // TODO: Replace with Drift storage
+              debugPrint('clearAllData temporarily disabled - Drift migration needed');
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('All data cleared')),

@@ -1,39 +1,15 @@
-import 'package:hive/hive.dart';
-
-part 'beverage_type.g.dart';
-
 /// Beverage types with hydration percentages
 /// Some drinks like coffee and alcohol can have negative hydration effects
-@HiveType(typeId: 20)
-class BeverageType extends HiveObject {
-  @HiveField(0)
+class BeverageType {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String emoji;
-
-  @HiveField(3)
   final int hydrationPercent; // 100 = pure water, 80 = coffee, -50 = alcohol
-
-  @HiveField(4)
   final String colorHex;
-
-  @HiveField(5)
   final bool isDefault;
-
-  @HiveField(6)
   final bool hasCaffeine;
-
-  @HiveField(7)
   final int caffeinePerMl; // mg per 100ml
-
-  @HiveField(8)
   final bool isAlcoholic;
-
-  @HiveField(9)
   final int defaultAmountMl;
 
   BeverageType({
@@ -52,6 +28,12 @@ class BeverageType extends HiveObject {
   /// Calculate effective hydration from a given amount
   int getEffectiveHydration(int amountMl) {
     return (amountMl * hydrationPercent / 100).round();
+  }
+
+  /// Calculate caffeine amount from a given drink volume
+  int getCaffeineAmount(int amountMl) {
+    if (!hasCaffeine) return 0;
+    return (amountMl * caffeinePerMl / 100).round();
   }
 
   BeverageType copyWith({

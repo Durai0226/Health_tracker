@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_log.dart';
-import '../services/medicine_storage_service.dart';
+import '../models/doctor_pharmacy.dart';
+import '../models/dependent_profile.dart';
 import '../services/drug_interaction_service.dart';
 import '../services/intake_tracking_service.dart';
-import 'add_medicine_wizard.dart';
+import '../services/medicine_storage_service.dart';
+import '../services/medication_reminder_service.dart';
+import 'premium_add_medicine_screen.dart';
 import 'medicine_history_screen.dart';
 
 /// Medicine Detail Screen with comprehensive info like Medisafe
@@ -28,6 +32,11 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
   Map<String, dynamic>? _streakStats;
   bool _hasTakenToday = false;
   bool _hasSkippedToday = false;
+  
+  // Care Team Info
+  Doctor? _doctor;
+  Pharmacy? _pharmacy;
+  DependentProfile? _dependent;
 
   @override
   void initState() {
@@ -38,11 +47,27 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      _medicine = MedicineStorageService.getMedicine(widget.medicineId);
+      await MedicineCleanStorageService.init();
+      _medicine = await MedicineCleanStorageService.getMedicine(widget.medicineId);
       if (_medicine != null) {
-        _recentLogs = MedicineStorageService.getLogsForMedicine(widget.medicineId).take(10).toList();
-        _streakStats = IntakeTrackingService.getStreakStats(widget.medicineId);
-        _checkTodayStatus();
+        final allLogs = await MedicineCleanStorageService.getLogsForMedicine(widget.medicineId);
+        _recentLogs = allLogs.take(10).toList();
+        
+        // Load related data
+        if (_medicine!.doctorId != null) {
+          _doctor = await MedicineCleanStorageService.getDoctor(_medicine!.doctorId!);
+        }
+        if (_medicine!.pharmacyId != null) {
+          _pharmacy = await MedicineCleanStorageService.getPharmacy(_medicine!.pharmacyId!);
+        }
+        if (_medicine!.dependentId != null) {
+          final dependents = await MedicineCleanStorageService.getAllDependents();
+          try {
+            _dependent = dependents.firstWhere((d) => d.id == _medicine!.dependentId);
+          } catch (_) {}
+        }
+
+        await _checkTodayStatus();
       }
     } catch (e) {
       debugPrint('Error loading medicine: $e');
@@ -50,13 +75,12 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  void _checkTodayStatus() {
-    final today = DateTime.now();
-    final todayLogs = MedicineStorageService.getLogsForDate(today)
-        .where((log) => log.medicineId == widget.medicineId);
+  Future<void> _checkTodayStatus() async {
+    final todayLogs = await MedicineCleanStorageService.getLogsForDate(DateTime.now());
+    final medicineLogs = todayLogs.where((log) => log.medicineId == widget.medicineId).toList();
     
-    _hasTakenToday = todayLogs.any((log) => log.isTaken);
-    _hasSkippedToday = todayLogs.any((log) => log.isSkipped);
+    _hasTakenToday = medicineLogs.any((log) => log.isTaken);
+    _hasSkippedToday = medicineLogs.any((log) => log.isSkipped);
   }
 
   @override
@@ -82,9 +106,11 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
               children: [
                 _buildQuickActions(),
                 if (_streakStats != null) _buildStreakCard(),
+                if (_dependent != null) _buildDependentCard(),
                 if (_medicine!.healthCategories != null && _medicine!.healthCategories!.isNotEmpty)
                   _buildHealthCategoriesCard(),
                 _buildInfoCard(),
+                if (_doctor != null || _pharmacy != null) _buildCareTeamCard(),
                 _buildScheduleCard(),
                 _buildStockCard(),
                 if (_medicine!.drugInfo != null || _medicine!.warnings != null)
@@ -95,6 +121,128 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDependentCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            child: Text(
+              _dependent!.relationship.icon,
+              style: const TextStyle(fontSize: 20),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Prescribed for ${_dependent!.name}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              Text(
+                _dependent!.relationship.displayName,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCareTeamCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.medical_services_rounded, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text(
+                'Care Team',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_doctor != null) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.person_rounded, color: AppColors.primary),
+              ),
+              title: Text(_doctor!.name),
+              subtitle: Text(_doctor!.specialty ?? 'Doctor'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                // TODO: Navigate to doctor details
+              },
+            ),
+            if (_pharmacy != null) const Divider(),
+          ],
+          if (_pharmacy != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.local_pharmacy_rounded, color: AppColors.secondary),
+              ),
+              title: Text(_pharmacy!.name),
+              subtitle: Text(_pharmacy!.hours ?? 'Pharmacy'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                // TODO: Navigate to pharmacy details
+              },
+            ),
         ],
       ),
     );
@@ -115,7 +263,7 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => AddMedicineWizard(editMedicine: _medicine),
+              builder: (_) => PremiumAddMedicineScreen(editMedicine: _medicine),
             ),
           ).then((_) => _loadData()),
         ),
@@ -1335,7 +1483,7 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
                   text: 'Add Refill',
                   variant: ButtonVariant.primary,
                   onPressed: () async {
-                    await MedicineStorageService.refillStock(_medicine!.id, amount);
+                    await MedicineCleanStorageService.refillStock(_medicine!.id, amount);
                     if (mounted) {
                       Navigator.pop(context);
                       _loadData();
@@ -1403,7 +1551,7 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
             text: 'Archive',
             variant: ButtonVariant.secondary,
             onPressed: () async {
-              await MedicineStorageService.archiveMedicine(_medicine!.id);
+              await MedicineCleanStorageService.archiveMedicine(_medicine!.id);
               if (mounted) {
                 Navigator.pop(context);
                 Navigator.pop(context);
@@ -1423,7 +1571,7 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Medicine?'),
-        content: const Text('This action cannot be undone. All history will be lost.'),
+        content: const Text('This action cannot be undone. All history for this medicine will be permanently deleted.'),
         actions: [
           CommonButton(
             text: 'Cancel',
@@ -1434,12 +1582,15 @@ class _MedicineDetailScreenState extends State<MedicineDetailScreen> {
             text: 'Delete',
             variant: ButtonVariant.danger,
             onPressed: () async {
-              await MedicineStorageService.deleteMedicine(_medicine!.id);
+              // Cancel all scheduled reminders for this medicine
+              await MedicationReminderService().cancelReminders(_medicine!);
+              // Delete the medicine from storage
+              await MedicineCleanStorageService.deleteMedicine(_medicine!.id);
               if (mounted) {
                 Navigator.pop(context);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Medicine deleted')),
+                  const SnackBar(content: Text('Medicine and reminders deleted')),
                 );
               }
             },

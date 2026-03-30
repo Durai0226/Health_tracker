@@ -1,19 +1,7 @@
-import 'package:hive/hive.dart';
-
-part 'tag_model.g.dart';
-
-@HiveType(typeId: 102)
-class TagModel extends HiveObject {
-  @HiveField(0)
+class TagModel {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? color;
-
-  @HiveField(3)
   final bool isSynced;
 
   TagModel({

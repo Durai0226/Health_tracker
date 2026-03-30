@@ -133,6 +133,22 @@ class FeatureManager extends ChangeNotifier {
       description: 'Plan exams, track study sessions, manage subjects & grades',
       tier: FeatureTier.optional,
     ),
+    FeatureConfig(
+      id: 'mood',
+      name: 'Mood Tracker',
+      icon: Icons.mood_rounded,
+      color: Color(0xFFFF6B9D),
+      description: 'Track your daily mood, emotions, and mental wellness',
+      tier: FeatureTier.optional,
+    ),
+    FeatureConfig(
+      id: 'habit',
+      name: 'Habit Tracker',
+      icon: Icons.track_changes_rounded,
+      color: Color(0xFF7C91F4),
+      description: 'Build healthy habits with streaks, goals, and gamification',
+      tier: FeatureTier.optional,
+    ),
   ];
 
   /// Get only core features

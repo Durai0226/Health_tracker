@@ -1,10 +1,9 @@
 
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
+import '../services/period_storage_service.dart';
 import '../models/period_data.dart';
 import '../models/cycle_log.dart';
-import '../services/period_storage_service.dart';
 import '../services/period_prediction_service.dart';
 import '../services/period_health_tips_service.dart';
 import 'package:intl/intl.dart';
@@ -35,9 +34,17 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
   }
 
   void _loadData() {
-    final periodData = StorageService.getPeriodData();
+    // Load from PeriodCleanStorageService
+    final currentCycle = PeriodCleanStorageService.getCurrentCycle();
     
-    if (periodData != null) {
+    if (currentCycle != null) {
+      final periodData = PeriodData(
+        lastPeriodDate: currentCycle.startDate,
+        cycleLength: currentCycle.cycleLength,
+        periodDuration: currentCycle.periodDuration,
+        isEnabled: true,
+      );
+    
       final today = DateTime.now();
       final cycleDay = PeriodPredictionService.getCurrentCycleDay(periodData.lastPeriodDate, today);
       final phase = PeriodPredictionService.getCurrentPhase(
@@ -584,7 +591,7 @@ class _PeriodOverviewScreenState extends State<PeriodOverviewScreen> {
                   lastDate: DateTime.now(),
                 );
                 if (date != null) {
-                  await PeriodStorageService.startNewCycle(date);
+                  await PeriodCleanStorageService.startNewCycle(date);
                   _loadData();
                 }
               },

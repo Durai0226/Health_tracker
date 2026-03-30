@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../models/water_reminder.dart';
@@ -28,7 +28,8 @@ class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScree
   }
 
   void _loadExisting() {
-    final existing = StorageService.getWaterReminder();
+    // TODO: Replace with Drift storage when migration is complete
+    final existing = null; // CleanStorageService.getWaterReminder();
     if (existing != null) {
       setState(() {
         _isEnabled = existing.isEnabled;
@@ -126,7 +127,8 @@ class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScree
       endTime: DateTime(now.year, now.month, now.day, _endTime.hour, _endTime.minute),
     );
 
-    await StorageService.saveWaterReminder(reminder);
+    // TODO: Replace with Drift storage when migration is complete
+    debugPrint('saveWaterReminder temporarily disabled - Drift migration needed');
 
     final notificationService = NotificationService();
     if (_isEnabled) {

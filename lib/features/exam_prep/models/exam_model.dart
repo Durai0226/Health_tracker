@@ -1,28 +1,13 @@
-import 'package:hive/hive.dart';
-
-part 'exam_model.g.dart';
-
-@HiveType(typeId: 250)
 enum ExamType {
-  @HiveField(0)
   midterm,
-  @HiveField(1)
   final_exam,
-  @HiveField(2)
   quiz,
-  @HiveField(3)
   test,
-  @HiveField(4)
   assignment,
-  @HiveField(5)
   project,
-  @HiveField(6)
   presentation,
-  @HiveField(7)
   practical,
-  @HiveField(8)
   viva,
-  @HiveField(9)
   other,
 }
 
@@ -78,17 +63,11 @@ extension ExamTypeExtension on ExamType {
   }
 }
 
-@HiveType(typeId: 251)
 enum ExamStatus {
-  @HiveField(0)
   upcoming,
-  @HiveField(1)
   in_progress,
-  @HiveField(2)
   completed,
-  @HiveField(3)
   missed,
-  @HiveField(4)
   cancelled,
 }
 
@@ -124,15 +103,10 @@ extension ExamStatusExtension on ExamStatus {
   }
 }
 
-@HiveType(typeId: 252)
 enum ExamPriority {
-  @HiveField(0)
   low,
-  @HiveField(1)
   medium,
-  @HiveField(2)
   high,
-  @HiveField(3)
   critical,
 }
 
@@ -164,87 +138,33 @@ extension ExamPriorityExtension on ExamPriority {
   }
 }
 
-@HiveType(typeId: 253)
 class Exam {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String title;
-
-  @HiveField(2)
   final String? description;
-
-  @HiveField(3)
   final String subjectId;
-
-  @HiveField(4)
   final ExamType examType;
-
-  @HiveField(5)
   final DateTime examDate;
-
-  @HiveField(6)
   final DateTime? examEndDate;
-
-  @HiveField(7)
   final String? location;
-
-  @HiveField(8)
   final ExamStatus status;
-
-  @HiveField(9)
   final ExamPriority priority;
-
-  @HiveField(10)
   final double? totalMarks;
-
-  @HiveField(11)
   final double? obtainedMarks;
-
-  @HiveField(12)
   final double? passingMarks;
-
-  @HiveField(13)
   final String? grade;
-
-  @HiveField(14)
   final List<String> topicIds;
-
-  @HiveField(15)
   final int targetStudyMinutes;
-
-  @HiveField(16)
   final int actualStudyMinutes;
-
-  @HiveField(17)
   final List<String> attachmentUrls;
-
-  @HiveField(18)
   final List<String> noteIds;
-
-  @HiveField(19)
   final String? templateId;
-
-  @HiveField(20)
   final bool reminderEnabled;
-
-  @HiveField(21)
   final List<DateTime> reminderTimes;
-
-  @HiveField(22)
   final DateTime createdAt;
-
-  @HiveField(23)
   final DateTime updatedAt;
-
-  @HiveField(24)
   final bool isSynced;
-
-  @HiveField(25)
   final int orderIndex;
-
-  @HiveField(26)
   final String? colorHex;
 
   Exam({

@@ -1,69 +1,33 @@
-import 'package:hive/hive.dart';
-
-part 'advanced_water_reminder.g.dart';
-
 /// Day of week for scheduling
-@HiveType(typeId: 35)
 enum DayOfWeek {
-  @HiveField(0)
   monday,
-  @HiveField(1)
   tuesday,
-  @HiveField(2)
   wednesday,
-  @HiveField(3)
   thursday,
-  @HiveField(4)
   friday,
-  @HiveField(5)
   saturday,
-  @HiveField(6)
   sunday,
 }
 
 /// Reminder sound options
-@HiveType(typeId: 36)
 enum ReminderSound {
-  @HiveField(0)
   defaultSound,
-  @HiveField(1)
   waterDrop,
-  @HiveField(2)
   gentle,
-  @HiveField(3)
   chime,
-  @HiveField(4)
   none,
 }
 
 /// Advanced water reminder with day-specific scheduling
-@HiveType(typeId: 37)
-class AdvancedWaterReminder extends HiveObject {
-  @HiveField(0)
+class AdvancedWaterReminder {
   final String id;
-
-  @HiveField(1)
   final bool isEnabled;
-
-  @HiveField(2)
   final List<DaySchedule> daySchedules;
-
-  @HiveField(3)
   final ReminderSound sound;
-
-  @HiveField(4)
   final bool vibrationEnabled;
-
-  @HiveField(5)
   final bool smartReminders; // Adjust based on drinking patterns
-
-  @HiveField(6)
   final bool skipIfGoalMet; // Don't remind if daily goal is met
-
-  @HiveField(7)
   final int snoozeMinutes;
-
-  @HiveField(8)
   final String? customMessage;
 
   AdvancedWaterReminder({
@@ -129,30 +93,14 @@ class AdvancedWaterReminder extends HiveObject {
 }
 
 /// Schedule for a specific day
-@HiveType(typeId: 38)
-class DaySchedule extends HiveObject {
-  @HiveField(0)
+class DaySchedule {
   final DayOfWeek day;
-
-  @HiveField(1)
   final bool isEnabled;
-
-  @HiveField(2)
   final int startHour;
-
-  @HiveField(3)
   final int startMinute;
-
-  @HiveField(4)
   final int endHour;
-
-  @HiveField(5)
   final int endMinute;
-
-  @HiveField(6)
   final int intervalMinutes;
-
-  @HiveField(7)
   final List<TimeSlot>? customTimes; // If set, use these instead of interval
 
   DaySchedule({
@@ -270,12 +218,8 @@ class DaySchedule extends HiveObject {
 }
 
 /// Time slot for custom reminder times
-@HiveType(typeId: 39)
-class TimeSlot extends HiveObject {
-  @HiveField(0)
+class TimeSlot {
   final int hour;
-
-  @HiveField(1)
   final int minute;
 
   TimeSlot({required this.hour, required this.minute});

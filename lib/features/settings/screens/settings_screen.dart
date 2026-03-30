@@ -1,22 +1,19 @@
 
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/services/feature_manager.dart';
 import '../../../core/services/category_manager.dart';
-import '../../period_tracking/screens/period_intro_screen.dart';
-import '../../period_tracking/screens/period_overview_screen.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import 'notification_settings_screen.dart';
 import 'haptic_settings_screen.dart';
 import 'vitavibe_settings_screen.dart';
-import 'feature_settings_screen.dart';
 import '../../../core/services/vitavibe_service.dart';
-import '../../reminders/screens/reminder_analysis_screen.dart';
 import 'backup_screen.dart';
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
+import '../../onboarding/screens/welcome_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -61,93 +58,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _handleSignOut() async {
-    final categoryConfig = _categoryManager.selectedCategoryConfig;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.getCardBg(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.logout_rounded, color: AppColors.warning, size: 20),
-            ),
-            const SizedBox(width: 12),
-            const Text('Sign Out'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Are you sure you want to sign out?',
-              style: TextStyle(color: AppColors.getTextPrimary(context)),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.info.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded, color: AppColors.info, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Signing out will allow you to select a different focus category.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.getTextSecondary(context),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (categoryConfig != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Current: ${categoryConfig.name}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.getTextSecondary(context),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: AppColors.getTextSecondary(context))),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.error.withOpacity(0.1),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Sign Out', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
+    final confirm = await ConfirmationBottomSheet.showSignOut(context: context);
 
     if (confirm == true && mounted) {
       await _authService.signOut();
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/welcome',
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
           (route) => false,
         );
       }
@@ -156,20 +73,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPeriodEnabled = StorageService.isPeriodTrackingEnabled;
-
     return ListenableBuilder(
       listenable: _authService,
       builder: (context, _) {
         final isGuest = _authService.isGuest;
         final currentUser = _authService.currentUser;
         
-        return _buildSettingsScaffold(context, isPeriodEnabled, isGuest, currentUser);
+        return _buildSettingsScaffold(context, isGuest, currentUser);
       },
     );
   }
 
-  Widget _buildSettingsScaffold(BuildContext context, bool isPeriodEnabled, bool isGuest, currentUser) {
+  Widget _buildSettingsScaffold(BuildContext context, bool isGuest, currentUser) {
     return Scaffold(
       backgroundColor: AppColors.getBackground(context),
       appBar: AppBar(
@@ -210,6 +125,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         )
                       : null,
                 ),
+                _buildSettingsTile(
+                  context,
+                  icon: Icons.logout_rounded,
+                  iconColor: AppColors.error,
+                  title: "Sign Out",
+                  subtitle: "Return to welcome screen",
+                  onTap: _handleSignOut,
+                ),
               ],
             )
           else
@@ -239,9 +162,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           if (isGuest || !isGuest) const SizedBox(height: 24),
-          // Category Section
-          _buildCategorySection(),
-          const SizedBox(height: 24),
           _buildSection(
             context,
             title: "General",
@@ -260,62 +180,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 },
               ),
-              _buildSettingsTile(
-                context,
-                icon: Icons.analytics_outlined,
-                iconColor: AppColors.success,
-                title: "Reminder Analysis",
-                subtitle: "View your reminder statistics",
-                onTap: () {
-                  _hapticService.tap();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ReminderAnalysisScreen()),
-                  );
-                },
-              ),
               _buildHapticSettingsTile(),
               _buildVitaVibeSettingsTile(),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildSection(
-            context,
-            title: "Health Tracking",
-            children: [
-              _buildSettingsTile(
-                context,
-                icon: Icons.calendar_month_rounded,
-                iconColor: AppColors.periodPrimary,
-                title: "Period Tracking",
-                subtitle: isPeriodEnabled ? "Enabled • Tap to view" : "Track your cycle",
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => isPeriodEnabled
-                          ? const PeriodOverviewScreen()
-                          : const PeriodIntroScreen(),
-                    ),
-                  );
-                },
-                trailing: isPeriodEnabled
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          "ON",
-                          style: TextStyle(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      )
-                    : null,
-              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -348,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context,
                 icon: Icons.info_outline_rounded,
                 iconColor: AppColors.textSecondary,
-                title: "About Tablet Reminder",
+                title: "About Dlyminder",
                 subtitle: "Version 1.0.0",
                 onTap: () {
                   showAboutDialog(
@@ -383,7 +249,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSection(BuildContext context, {required String title, required List<Widget> children}) {
-    final isDark = AppColors.isDark(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -651,7 +516,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildThemeToggleTile() {
-    final settings = StorageService.getUserSettings();
+    final settings = CleanStorageService.getUserSettings();
     final isDarkMode = settings.darkModeEnabled;
 
     return Material(
@@ -661,7 +526,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _hapticService.tap();
           final newDarkMode = !isDarkMode;
           final updated = settings.copyWith(darkModeEnabled: newDarkMode);
-          await StorageService.saveUserSettings(updated);
+          await CleanStorageService.saveUserSettings(updated);
           
           // Update app theme
           MyApp.of(context)?.setThemeMode(
@@ -715,7 +580,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (value) async {
                   _hapticService.tap();
                   final updated = settings.copyWith(darkModeEnabled: value);
-                  await StorageService.saveUserSettings(updated);
+                  await CleanStorageService.saveUserSettings(updated);
                   
                   MyApp.of(context)?.setThemeMode(
                     value ? ThemeMode.dark : ThemeMode.light,
@@ -847,28 +712,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               // Features row - compact horizontal pills
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                 child: Row(
                   children: [
                     // Fun & Relax pill
-                    _buildFeaturePill(
-                      icon: Icons.spa_rounded,
-                      label: 'Fun & Relax',
-                      color: AppColors.focusPrimary,
-                      isDark: isDark,
+                    Flexible(
+                      child: _buildFeaturePill(
+                        icon: Icons.spa_rounded,
+                        label: 'Fun & Relax',
+                        color: AppColors.focusPrimary,
+                        isDark: isDark,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     // Features count
-                    Expanded(
-                      child: Text(
-                        '+${categoryConfig.features.length} features',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.getTextSecondary(context),
-                          fontWeight: FontWeight.w500,
-                        ),
+                    Text(
+                      '+${categoryConfig.features.length} features',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.getTextSecondary(context),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                    const Spacer(),
                     // Info icon with tooltip
                     GestureDetector(
                       onTap: () => _showCategoryInfoSheet(categoryConfig),
@@ -1089,7 +955,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildRemoveAdsTile() {
-    final settings = StorageService.getUserSettings();
+    final settings = CleanStorageService.getUserSettings();
     final isAdsDisabled = settings.isAdsDisabled;
 
     return _buildSettingsTile(
@@ -1106,7 +972,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await Future.delayed(const Duration(seconds: 1)); // Simulate network
         
         final updated = settings.copyWith(isAdsDisabled: true);
-        await StorageService.saveUserSettings(updated);
+        await CleanStorageService.saveUserSettings(updated);
         
         setState(() => _isLoading = false);
         

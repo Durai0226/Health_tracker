@@ -1,25 +1,9 @@
-import 'package:hive/hive.dart';
-
-part 'water_reminder.g.dart';
-
-@HiveType(typeId: 6)
-class WaterReminder extends HiveObject {
-  @HiveField(0)
+class WaterReminder {
   final String id;
-
-  @HiveField(1)
   final List<DateTime> reminderTimes;
-
-  @HiveField(2)
   final int intervalMinutes;
-
-  @HiveField(3)
   final bool isEnabled;
-
-  @HiveField(4)
   final DateTime? startTime;
-
-  @HiveField(5)
   final DateTime? endTime;
 
   WaterReminder({

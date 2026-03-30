@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:hive/hive.dart';
-import 'storage_service.dart';
+import 'clean_storage_service.dart';
 import '../../features/reminders/models/reminder_model.dart';
 import 'notification_service.dart';
 
@@ -14,6 +13,30 @@ class SyncService {
   SyncService._internal();
 
   StreamSubscription<QuerySnapshot>? _reminderSubscription;
+  firebase_auth.FirebaseAuth? _auth;
+  FirebaseFirestore? _firestore;
+
+  /// Safely get FirebaseAuth instance
+  firebase_auth.FirebaseAuth? get _safeAuth {
+    try {
+      _auth ??= firebase_auth.FirebaseAuth.instance;
+      return _auth;
+    } catch (e) {
+      debugPrint('SyncService: FirebaseAuth not available: $e');
+      return null;
+    }
+  }
+
+  /// Safely get Firestore instance
+  FirebaseFirestore? get _safeFirestore {
+    try {
+      _firestore ??= FirebaseFirestore.instance;
+      return _firestore;
+    } catch (e) {
+      debugPrint('SyncService: Firestore not available: $e');
+      return null;
+    }
+  }
 
   void init() {
     // Defer listener setup to avoid blocking startup
@@ -21,42 +44,56 @@ class SyncService {
       _listenToReminders();
       
       // Listen for auth changes to restart listeners if user switches
-      firebase_auth.FirebaseAuth.instance.authStateChanges().listen((user) {
-        if (user != null) {
-          _listenToReminders();
-        } else {
-          _cancelSubscriptions();
-        }
-      });
+      try {
+        _safeAuth?.authStateChanges().listen((user) {
+          if (user != null) {
+            _listenToReminders();
+          } else {
+            _cancelSubscriptions();
+          }
+        }, onError: (e) {
+          debugPrint('SyncService: Auth state listener error: $e');
+        });
+      } catch (e) {
+        debugPrint('SyncService: Error setting up auth listener: $e');
+      }
     });
   }
 
   void _listenToReminders() {
-    final user = firebase_auth.FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    try {
+      final user = _safeAuth?.currentUser;
+      final firestore = _safeFirestore;
+      if (user == null || firestore == null) return;
+      
+      // Don't sync for anonymous users
+      if (user.isAnonymous) return;
 
-    // Cancel existing subscription if any
-    _reminderSubscription?.cancel();
+      // Cancel existing subscription if any
+      _reminderSubscription?.cancel();
 
-    debugPrint('Starting cloud sync listener for user: ${user.uid}');
+      debugPrint('Starting cloud sync listener for user: ${user.uid}');
 
-    _reminderSubscription = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('reminders')
-        .snapshots()
-        .listen((snapshot) {
-      for (final change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added || 
-            change.type == DocumentChangeType.modified) {
-          _handleReminderUpdate(change.doc);
-        } else if (change.type == DocumentChangeType.removed) {
-          _handleReminderDelete(change.doc.id);
+      _reminderSubscription = firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('reminders')
+          .snapshots()
+          .listen((snapshot) {
+        for (final change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.added || 
+              change.type == DocumentChangeType.modified) {
+            _handleReminderUpdate(change.doc);
+          } else if (change.type == DocumentChangeType.removed) {
+            _handleReminderDelete(change.doc.id);
+          }
         }
-      }
-    }, onError: (e) {
-      debugPrint('Error listening to reminder changes: $e');
-    });
+      }, onError: (e) {
+        debugPrint('Error listening to reminder changes: $e');
+      });
+    } catch (e) {
+      debugPrint('SyncService: Error in _listenToReminders: $e');
+    }
   }
 
   Future<void> _handleReminderUpdate(DocumentSnapshot doc) async {
@@ -74,13 +111,16 @@ class SyncService {
       // We need to check if local version exists and compare modification times
       // To strictly follow "Last Write Wins", we should compare `updatedAt`.
       
-      final box = Hive.box<Reminder>('reminders');
-      final localReminder = box.get(cloudReminder.id);
+      final reminders = CleanStorageService.getReminders();
+      final localReminder = reminders.cast<Reminder?>().firstWhere(
+        (r) => r?.id == cloudReminder.id, 
+        orElse: () => null
+      );
 
       if (localReminder == null) {
         // New from cloud
         debugPrint('Sync: Added new reminder from cloud: ${cloudReminder.title}');
-        await StorageService.saveSyncedReminder(cloudReminder);
+        await CleanStorageService.saveSyncedReminderFromModel(cloudReminder);
         _scheduleNotification(cloudReminder);
       } else {
         // Exists locally. Compare generic equality or specific timestamp if available.
@@ -92,7 +132,7 @@ class SyncService {
         // Add 2 second buffer to avoid race conditions/echoes
         if (cloudReminder.updatedAt.isAfter(localReminder.updatedAt.add(const Duration(seconds: 2)))) {
            debugPrint('Sync: Updating local reminder from cloud: ${cloudReminder.title}');
-           await StorageService.saveSyncedReminder(cloudReminder);
+           await CleanStorageService.saveSyncedReminderFromModel(cloudReminder);
            
            // Reschedule notification
            // Cancel old one first to be safe
@@ -109,10 +149,11 @@ class SyncService {
 
   Future<void> _handleReminderDelete(String id) async {
     try {
-      final box = Hive.box<Reminder>('reminders');
-      if (box.containsKey(id)) {
+      final reminders = CleanStorageService.getReminders();
+      final exists = reminders.any((r) => r.id == id);
+      if (exists) {
         debugPrint('Sync: Removing local reminder (deleted in cloud): $id');
-        await StorageService.deleteSyncedReminder(id);
+        await CleanStorageService.deleteSyncedReminder(id);
         await NotificationService().cancelNotification(id.hashCode);
       }
     } catch (e) {

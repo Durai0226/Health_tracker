@@ -1,20 +1,9 @@
-import 'package:hive/hive.dart';
-
-part 'grade_model.g.dart';
-
-@HiveType(typeId: 261)
 enum GradeScale {
-  @HiveField(0)
   percentage,
-  @HiveField(1)
   letter,
-  @HiveField(2)
   gpa_4,
-  @HiveField(3)
   gpa_10,
-  @HiveField(4)
   points,
-  @HiveField(5)
   custom,
 }
 
@@ -37,75 +26,29 @@ extension GradeScaleExtension on GradeScale {
   }
 }
 
-@HiveType(typeId: 262)
 class Grade {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String examId;
-
-  @HiveField(2)
   final String subjectId;
-
-  @HiveField(3)
   final double obtainedMarks;
-
-  @HiveField(4)
   final double totalMarks;
-
-  @HiveField(5)
   final double? passingMarks;
-
-  @HiveField(6)
   final String? letterGrade;
-
-  @HiveField(7)
   final double? gradePoints;
-
-  @HiveField(8)
   final GradeScale gradeScale;
-
-  @HiveField(9)
   final double? weightPercentage;
-
-  @HiveField(10)
   final String? feedback;
-
-  @HiveField(11)
   final String? teacherRemarks;
-
-  @HiveField(12)
   final int? rank;
-
-  @HiveField(13)
   final int? totalStudents;
-
-  @HiveField(14)
   final double? classAverage;
-
-  @HiveField(15)
   final double? highestScore;
-
-  @HiveField(16)
   final double? lowestScore;
-
-  @HiveField(17)
   final bool isPublished;
-
-  @HiveField(18)
   final DateTime? publishedAt;
-
-  @HiveField(19)
   final DateTime createdAt;
-
-  @HiveField(20)
   final DateTime updatedAt;
-
-  @HiveField(21)
   final bool isSynced;
-
-  @HiveField(22)
   final String? semesterId;
 
   Grade({
@@ -313,42 +256,18 @@ class Grade {
   }
 }
 
-@HiveType(typeId: 263)
 class SemesterGPA {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String semesterId;
-
-  @HiveField(2)
   final String semesterName;
-
-  @HiveField(3)
   final double gpa;
-
-  @HiveField(4)
   final int totalCredits;
-
-  @HiveField(5)
   final int completedCredits;
-
-  @HiveField(6)
   final List<String> gradeIds;
-
-  @HiveField(7)
   final DateTime startDate;
-
-  @HiveField(8)
   final DateTime endDate;
-
-  @HiveField(9)
   final DateTime createdAt;
-
-  @HiveField(10)
   final DateTime updatedAt;
-
-  @HiveField(11)
   final bool isSynced;
 
   SemesterGPA({

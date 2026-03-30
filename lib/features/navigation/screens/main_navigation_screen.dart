@@ -1,16 +1,19 @@
-
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/bottom_nav/bottom_nav.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../../../core/services/category_manager.dart';
-import '../../dashboard/screens/dashboard_screen.dart';
-import '../../home/screens/home_screen.dart';
-import '../../tracking/screens/tracking_screen.dart';
+
 import '../../settings/screens/settings_screen.dart';
 import '../../focus/screens/focus_screen.dart';
 import '../../fun/screens/fun_relax_dashboard.dart';
+import '../../medication/screens/nunito_medication_dashboard.dart';
+import '../../fitness/screens/fitness_home_screen.dart';
+import '../../finance/screens/finance_home_screen.dart';
+import '../../period_tracking/screens/luna_dashboard_screen.dart';
+import 'category_home_screen.dart';
+import 'category_dashboard_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -29,15 +32,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final category = _categoryManager.selectedCategory;
     
     // Dynamic screens based on selected category
-    // Always include: Dashboard, Home, Settings
-    // Category-specific: varies
+    // Dashboard: Analytics overview for selected category
+    // Category-specific: Primary feature screen
+    // Home: All features for selected category
     // Fun/Relax: always available
+    // Settings: App settings
     
     return [
-      const DashboardScreen(),
+      const CategoryDashboardScreen(),
       _getCategorySpecificScreen(category),
-      const HomeScreen(),
-      const FunRelaxDashboard(), // Fun/Relax always available
+      const CategoryHomeScreen(),
+      const FunRelaxDashboard(),
       const SettingsScreen(),
     ];
   }
@@ -45,17 +50,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget _getCategorySpecificScreen(AppCategory? category) {
     switch (category) {
       case AppCategory.health:
-        return const TrackingScreen();
+        return const NunitoMedicationDashboard();
       case AppCategory.productivity:
         return const FocusScreen();
       case AppCategory.fitness:
-        return const TrackingScreen();
+        return const FitnessHomeScreen();
       case AppCategory.finance:
-        return const TrackingScreen();
+        return const FinanceHomeScreen();
       case AppCategory.periodTracking:
-        return const TrackingScreen();
+        return const LunaDashboardScreen();
       case null:
-        return const TrackingScreen();
+        return const CategoryHomeScreen();
     }
   }
   
@@ -87,7 +92,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       case AppCategory.finance:
         return 'Finance';
       case AppCategory.periodTracking:
-        return 'Cycle';
+        return 'Her Elara';
       case null:
         return 'Tracking';
     }
@@ -113,161 +118,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-  Widget _buildNavBar() {
-    final isDark = AppColors.isDark(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-      height: 72,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark 
-                  ? Colors.black.withOpacity(0.6)
-                  : Colors.white.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.1)
-                    : Colors.black.withOpacity(0.05),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                  spreadRadius: 0,
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
-                  blurRadius: 60,
-                  offset: const Offset(0, 20),
-                  spreadRadius: 0,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildNavItem(
-                    index: 0,
-                    icon: Icons.dashboard_outlined,
-                    activeIcon: Icons.dashboard_rounded,
-                    label: 'Dashboard',
-                  ),
-                  _buildNavItem(
-                    index: 1,
-                    icon: _getCategoryIcon(_categoryManager.selectedCategory, active: false),
-                    activeIcon: _getCategoryIcon(_categoryManager.selectedCategory, active: true),
-                    label: _getCategoryLabel(_categoryManager.selectedCategory),
-                  ),
-                  _buildNavItem(
-                    index: 2,
-                    icon: Icons.home_outlined,
-                    activeIcon: Icons.home_rounded,
-                    label: 'Home',
-                  ),
-                  _buildNavItem(
-                    index: 3,
-                    icon: Icons.spa_outlined,
-                    activeIcon: Icons.spa_rounded,
-                    label: 'Relax',
-                  ),
-                  _buildNavItem(
-                    index: 4,
-                    icon: Icons.settings_outlined,
-                    activeIcon: Icons.settings_rounded,
-                    label: 'Settings',
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  List<GlassNavItem> get _navItems {
+    final category = _categoryManager.selectedCategory;
+    return [
+      const GlassNavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard'),
+      GlassNavItem(icon: _getCategoryIcon(category, active: false), activeIcon: _getCategoryIcon(category, active: true), label: _getCategoryLabel(category)),
+      const GlassNavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
+      const GlassNavItem(icon: Icons.spa_outlined, activeIcon: Icons.spa_rounded, label: 'Relax'),
+      const GlassNavItem(icon: Icons.settings_outlined, activeIcon: Icons.settings_rounded, label: 'Settings'),
+    ];
   }
 
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-  }) {
-    final isSelected = _currentIndex == index;
+  Widget _buildNavBar() {
+    final category = _categoryManager.selectedCategory;
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _onItemTapped(index),
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 8,
-          ),
-          decoration: BoxDecoration(
-            gradient: isSelected
-                ? LinearGradient(
-                    colors: [
-                      AppColors.primary.withOpacity(0.15),
-                      AppColors.primary.withOpacity(0.08),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AnimatedScale(
-                scale: isSelected ? 1.1 : 1.0,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                child: Icon(
-                  isSelected ? activeIcon : icon,
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.getTextSecondary(context),
-                  size: 24,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.getTextSecondary(context),
-                  letterSpacing: 0.1,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
+    return MainBottomNav(
+      currentIndex: _currentIndex,
+      onTap: _onItemTapped,
+      items: _navItems,
+      featureColor: AppColors.primary,
+      dynamicCategoryIcon: _getCategoryIcon(category, active: _currentIndex == 1),
+      dynamicCategoryLabel: _getCategoryLabel(category),
     );
   }
 }
+

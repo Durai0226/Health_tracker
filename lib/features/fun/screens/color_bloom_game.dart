@@ -2,8 +2,8 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/relaxation_game_service.dart';
-import '../widgets/relaxation_game_widgets.dart';
+import '../../focus/services/relaxation_game_service.dart';
+import '../../focus/widgets/relaxation_game_widgets.dart';
 
 /// Color Bloom - Fluid ink relaxation game
 class ColorBloomGame extends StatefulWidget {

@@ -1,33 +1,14 @@
-import 'package:hive/hive.dart';
 import 'medicine_enums.dart';
 
-part 'drug_interaction.g.dart';
-
 /// Drug interaction information
-@HiveType(typeId: 65)
-class DrugInteraction extends HiveObject {
-  @HiveField(0)
+class DrugInteraction {
   final String id;
-
-  @HiveField(1)
   final String drug1Name;
-
-  @HiveField(2)
   final String drug2Name;
-
-  @HiveField(3)
   final InteractionSeverity severity;
-
-  @HiveField(4)
   final String description;
-
-  @HiveField(5)
   final String? recommendation;
-
-  @HiveField(6)
   final String? mechanism;
-
-  @HiveField(7)
   final List<String>? references;
 
   DrugInteraction({
@@ -65,18 +46,10 @@ class DrugInteraction extends HiveObject {
 }
 
 /// Side effect information
-@HiveType(typeId: 66)
-class SideEffect extends HiveObject {
-  @HiveField(0)
+class SideEffect {
   final String name;
-
-  @HiveField(1)
   final String frequency; // "common", "uncommon", "rare"
-
-  @HiveField(2)
   final String? description;
-
-  @HiveField(3)
   final bool isSerious;
 
   SideEffect({
@@ -102,45 +75,19 @@ class SideEffect extends HiveObject {
 }
 
 /// Drug information from database
-@HiveType(typeId: 67)
-class DrugInfo extends HiveObject {
-  @HiveField(0)
+class DrugInfo {
   final String genericName;
-
-  @HiveField(1)
   final List<String> brandNames;
-
-  @HiveField(2)
   final String drugClass;
-
-  @HiveField(3)
   final String? description;
-
-  @HiveField(4)
   final List<String>? uses;
-
-  @HiveField(5)
   final List<String>? warnings;
-
-  @HiveField(6)
   final List<SideEffect>? sideEffects;
-
-  @HiveField(7)
   final List<String>? contraindications;
-
-  @HiveField(8)
   final String? pregnancyCategory;
-
-  @HiveField(9)
   final bool? requiresPrescription;
-
-  @HiveField(10)
   final String? storage;
-
-  @HiveField(11)
   final String? halfLife;
-
-  @HiveField(12)
   final List<String>? foodInteractions;
 
   DrugInfo({

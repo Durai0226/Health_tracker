@@ -1,47 +1,17 @@
-import 'package:hive/hive.dart';
-
-part 'enhanced_water_log.g.dart';
-
 /// Enhanced water log with beverage type and container info
-@HiveType(typeId: 28)
-class EnhancedWaterLog extends HiveObject {
-  @HiveField(0)
+class EnhancedWaterLog {
   final String id;
-
-  @HiveField(1)
   final DateTime time;
-
-  @HiveField(2)
   final int amountMl;
-
-  @HiveField(3)
   final int effectiveHydrationMl; // After applying hydration percentage
-
-  @HiveField(4)
   final String beverageId;
-
-  @HiveField(5)
   final String beverageName;
-
-  @HiveField(6)
   final String beverageEmoji;
-
-  @HiveField(7)
   final int hydrationPercent;
-
-  @HiveField(8)
   final String? containerId;
-
-  @HiveField(9)
   final String? containerName;
-
-  @HiveField(10)
   final int caffeineAmount; // mg
-
-  @HiveField(11)
   final bool isAlcoholic;
-
-  @HiveField(12)
   final String? note;
 
   EnhancedWaterLog({
@@ -125,36 +95,16 @@ class EnhancedWaterLog extends HiveObject {
 }
 
 /// Daily water data with enhanced logs
-@HiveType(typeId: 29)
-class DailyWaterData extends HiveObject {
-  @HiveField(0)
+class DailyWaterData {
   final String id; // Format: YYYY-MM-DD
-
-  @HiveField(1)
   final DateTime date;
-
-  @HiveField(2)
   final int dailyGoalMl;
-
-  @HiveField(3)
   final int totalIntakeMl; // Total raw amount
-
-  @HiveField(4)
   final int effectiveHydrationMl; // Total after hydration %
-
-  @HiveField(5)
   final List<EnhancedWaterLog> logs;
-
-  @HiveField(6)
   final int totalCaffeineMg;
-
-  @HiveField(7)
   final int alcoholicDrinksCount;
-
-  @HiveField(8)
   final bool goalReached;
-
-  @HiveField(9)
   final DateTime? goalReachedAt;
 
   DailyWaterData({

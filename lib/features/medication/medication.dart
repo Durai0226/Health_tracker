@@ -14,14 +14,19 @@ export 'models/dependent_profile.dart';
 export 'services/drug_interaction_service.dart';
 export 'services/medicine_storage_service.dart';
 
-// Screens (New Enhanced Flow)
+// Screens (Premium 2025/2026 UI - Recommended)
+export 'screens/pillmate_dashboard.dart';
+export 'screens/premium_medicine_dashboard.dart';
+export 'screens/premium_add_medicine_screen.dart';
+
+// Screens (Enhanced Flow)
 export 'screens/enhanced_medicine_dashboard.dart';
 export 'screens/enhanced_add_medicine_screen.dart';
 export 'screens/medicine_detail_screen.dart';
 export 'screens/medicine_history_screen.dart';
 export 'screens/medicine_list_screen.dart';
 
-// Legacy screens (deprecated - use enhanced versions above)
+// Legacy screens (deprecated)
 // export 'screens/medicine_dashboard_screen.dart';
 // export 'screens/add_medicine_flow.dart';
 // export 'screens/edit_medicine_screen.dart';

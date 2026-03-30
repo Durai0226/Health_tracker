@@ -36,8 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_fonts: ^8.0.1
   intl: ^0.20.2
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
+  drift: ^2.22.0
+  sqlite3_flutter_libs: ^0.5.28
+  drift_flutter: ^0.2.4
+  path: ^1.9.1
   flutter_svg: ^2.2.3
   provider: ^6.1.5+1
   uuid: ^4.5.2
@@ -72,6 +74,19 @@ dependencies:
   geolocator: ^13.0.1
   home_widget: ^0.7.0
   google_mobile_ads: ^5.1.0
+  lottie: ^3.1.0
+  flutter_tts: ^4.2.5
+  webview_flutter: ^4.10.0
+  flutter_markdown: ^0.7.4
+  url_launcher: ^6.2.5
+  # Premium Bottom Navigation Packages
+  google_nav_bar: ^5.0.7
+  curved_navigation_bar: ^1.0.6
+  water_drop_nav_bar: ^2.2.2
+  stylish_bottom_bar: ^1.1.1
+  animated_bottom_navigation_bar: ^1.4.0
+  webview_flutter_wkwebview: ^3.24.2
+  webview_flutter_android: ^4.10.15
 
 dependency_overrides:
   intl: ^0.19.0
@@ -88,7 +103,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  hive_generator: ^2.0.1
+  drift_dev: ^2.22.0
   build_runner: ^2.4.13
   flutter_launcher_icons: ^0.14.3
 
@@ -114,6 +129,15 @@ flutter:
   assets:
     - assets/images/
     - assets/sounds/
+    - assets/questions/
+    - assets/questions/banking/
+    - assets/questions/ssc/
+    - assets/questions/upsc/
+    - assets/questions/jee/
+    - assets/questions/neet/
+    - assets/questions/cat/
+    - assets/questions/gate/
+    - assets/questions/clat/
 
 
   # An image asset can refer to one or more resolution-specific "variants", see

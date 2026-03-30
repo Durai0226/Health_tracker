@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/feature_flag_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/reminder_category_model.dart';
 import '../models/reminder_model.dart';
 import 'category_management_screen.dart';
@@ -245,11 +245,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         noteId: widget.noteId ?? widget.reminder?.noteId,
       );
 
-      if (widget.reminder != null) {
-        await StorageService.updateReminder(reminder);
-      } else {
-        await StorageService.addReminder(reminder);
-      }
+      // Save reminder using Drift storage
+      await CleanStorageService.saveReminder(reminder);
 
       // Schedule notification
       final notificationId = reminderId.hashCode;
@@ -676,51 +673,30 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              ValueListenableBuilder<Box<ReminderCategory>>(
-                valueListenable: StorageService.categoriesListenable,
-                builder: (context, box, _) {
-                  final categories = box.values.toList();
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String?>(
-                        value: _selectedCategoryId,
-                        isExpanded: true,
-                        hint: const Text('Select Category'),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('None'),
-                          ),
-                          ...categories.map((category) {
-                            return DropdownMenuItem<String?>(
-                              value: category.id,
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 8,
-                                    backgroundColor: category.colorObj,
-                                    child: Icon(category.iconObj, size: 10, color: Colors.white),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(category.name),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ],
-                        onChanged: (value) {
-                          setState(() => _selectedCategoryId = value);
-                        },
+              // TODO: Replace with Drift stream when migration is complete
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    value: _selectedCategoryId,
+                    isExpanded: true,
+                    hint: const Text('Select Category'),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
+                    items: const [
+                      DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('None'),
                       ),
-                    ),
-                  );
-                },
+                    ],
+                    onChanged: (value) {
+                      setState(() => _selectedCategoryId = value);
+                    },
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               // Note Field

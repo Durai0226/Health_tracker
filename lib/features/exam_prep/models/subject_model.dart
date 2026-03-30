@@ -1,67 +1,23 @@
-import 'package:hive/hive.dart';
-
-part 'subject_model.g.dart';
-
-@HiveType(typeId: 254)
 class Subject {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String? description;
-
-  @HiveField(3)
   final String? teacherName;
-
-  @HiveField(4)
   final String colorHex;
-
-  @HiveField(5)
   final String iconName;
-
-  @HiveField(6)
   final int creditHours;
-
-  @HiveField(7)
   final double? targetGrade;
-
-  @HiveField(8)
   final double? currentGrade;
-
-  @HiveField(9)
   final List<String> topicIds;
-
-  @HiveField(10)
   final List<String> examIds;
-
-  @HiveField(11)
   final int totalStudyMinutes;
-
-  @HiveField(12)
   final int weeklyTargetMinutes;
-
-  @HiveField(13)
   final String? parentId;
-
-  @HiveField(14)
   final int orderIndex;
-
-  @HiveField(15)
   final bool isArchived;
-
-  @HiveField(16)
   final DateTime createdAt;
-
-  @HiveField(17)
   final DateTime updatedAt;
-
-  @HiveField(18)
   final bool isSynced;
-
-  @HiveField(19)
   final String? semesterId;
 
   Subject({

@@ -1,57 +1,23 @@
-import 'package:hive/hive.dart';
-
-part 'action_log.g.dart';
-
 /// Enum for different types of actions that can be logged
-@HiveType(typeId: 20)
 enum ActionType {
-  @HiveField(0)
   medicineTaken,
-  
-  @HiveField(1)
   medicineSkipped,
-  
-  @HiveField(2)
   fitnessCompleted,
-  
-  @HiveField(3)
   fitnessSkipped,
-  
-  @HiveField(4)
   waterLogged,
-  
-  @HiveField(5)
   healthCheckDone,
-  
-  @HiveField(6)
   periodStarted,
-  
-  @HiveField(7)
   periodEnded,
 }
 
 /// Model to track all user actions for data persistence and analytics
-@HiveType(typeId: 21)
-class ActionLog extends HiveObject {
-  @HiveField(0)
+class ActionLog {
   final String id;
-
-  @HiveField(1)
   final ActionType type;
-
-  @HiveField(2)
   final DateTime timestamp;
-
-  @HiveField(3)
   final String? referenceId; // ID of the related item (medicine id, fitness id, etc.)
-
-  @HiveField(4)
   final String? title; // Display title for the action
-
-  @HiveField(5)
   final Map<String, dynamic>? metadata; // Additional data specific to action type
-
-  @HiveField(6)
   final bool synced; // Whether synced to cloud
 
   ActionLog({

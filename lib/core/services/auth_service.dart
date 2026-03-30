@@ -2,7 +2,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'cloud_sync_service.dart';
 import 'category_manager.dart';
 import '../config/env_config.dart';
@@ -64,8 +65,12 @@ class AuthService extends ChangeNotifier {
   bool get isLoggedIn => _currentUser != null;
   bool get isLoading => _isLoading;
   bool get isGuest => _isGuestMode;
+  
+  /// Returns true only if user is authenticated with a real account (Google, email, etc.)
+  /// Returns false for offline guests and anonymous Firebase users
+  bool get isAuthenticated => _currentUser != null && !_isGuestMode && _currentUser!.email.isNotEmpty;
 
-  static const String _userBoxName = 'user_data';
+  static const String _userPrefKey = 'current_user_data';
 
   // Mock sign-in method for testing/development
   Future<bool> mockSignIn(String email, String password) async {
@@ -79,20 +84,21 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    await Hive.openBox(_userBoxName);
-    
     try {
       _firebaseAuth = firebase_auth.FirebaseAuth.instance;
       
-      // Check if there's an existing Firebase user
-      final currentFirebaseUser = _firebaseAuth?.currentUser;
+      // Wait for Firebase Auth to restore the persisted auth state
+      // This is crucial - currentUser may be null immediately but restored shortly after
+      debugPrint('AuthService Init: Waiting for auth state to be restored...');
+      final restoredUser = await _firebaseAuth!.authStateChanges().first;
+      debugPrint('AuthService Init: Auth state restored - user: ${restoredUser?.uid ?? "null"}');
       
-      if (currentFirebaseUser != null) {
-        // Update state based on existing Firebase user
-        _isGuestMode = currentFirebaseUser.isAnonymous;
-        _currentUser = UserModel.fromFirebaseUser(currentFirebaseUser);
-        debugPrint('AuthService Init: User exists - isAnonymous: ${currentFirebaseUser.isAnonymous}, name: ${_currentUser?.name}');
-        if (!currentFirebaseUser.isAnonymous) {
+      if (restoredUser != null) {
+        // Update state based on restored Firebase user
+        _isGuestMode = restoredUser.isAnonymous;
+        _currentUser = UserModel.fromFirebaseUser(restoredUser);
+        debugPrint('AuthService Init: User exists - isAnonymous: ${restoredUser.isAnonymous}, name: ${_currentUser?.name}');
+        if (!restoredUser.isAnonymous) {
           _saveUser(_currentUser!);
         } else {
           // Clear any saved user data if current user is anonymous
@@ -105,8 +111,8 @@ class AuthService extends ChangeNotifier {
         await signInAnonymously();
       }
       
-      // Listen to Firebase auth state changes
-      _firebaseAuth?.authStateChanges().listen((firebase_auth.User? user) {
+      // Listen to subsequent Firebase auth state changes
+      _firebaseAuth?.authStateChanges().skip(1).listen((firebase_auth.User? user) {
         if (user != null) {
           _isGuestMode = user.isAnonymous;
           _currentUser = UserModel.fromFirebaseUser(user);
@@ -123,19 +129,21 @@ class AuthService extends ChangeNotifier {
         }
         notifyListeners();
       });
+      
+      notifyListeners();
     } catch (e) {
       debugPrint("Firebase Auth initialization failed: $e");
     }
   }
 
   Future<void> _clearSavedUser() async {
-    final box = Hive.box(_userBoxName);
-    await box.delete('current_user');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_userPrefKey);
   }
 
   Future<void> _saveUser(UserModel user) async {
-    final box = Hive.box(_userBoxName);
-    await box.put('current_user', user.toJson());
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userPrefKey, jsonEncode(user.toJson()));
   }
 
   /// Sign in with email and password using Firebase Auth
@@ -177,7 +185,9 @@ class AuthService extends ChangeNotifier {
   /// Sign in anonymously (Guest Mode)
   Future<String?> signInAnonymously() async {
     if (_firebaseAuth == null) {
-      return 'Firebase is not initialized.';
+      debugPrint('Guest Auth: Firebase not initialized, enabling offline guest mode');
+      _enableOfflineGuestMode();
+      return null; // Allow offline guest mode
     }
     try {
       _isLoading = true;
@@ -190,17 +200,60 @@ class AuthService extends ChangeNotifier {
       return null; // Success
     } on firebase_auth.FirebaseAuthException catch (e) {
       _isLoading = false;
-      notifyListeners();
-      debugPrint("Guest Auth Error: ${e.code} - ${e.message}");
+      debugPrint("Guest Auth Error: ${e.code} - ${e.message}\n${e.stackTrace}");
+      
+      // Handle specific error codes
       if (e.code == 'admin-restricted-operation' || e.code == 'operation-not-allowed') {
-        return "Guest mode is not enabled in Firebase Console.";
+        _enableOfflineGuestMode();
+        notifyListeners();
+        return null; // Allow offline guest mode as fallback
       }
-      return "Error: ${e.code}";
+      
+      if (e.code == 'internal-error' || e.code == 'network-request-failed') {
+        debugPrint('Guest Auth: Network/internal error, enabling offline guest mode');
+        _enableOfflineGuestMode();
+        notifyListeners();
+        return null; // Allow offline guest mode as fallback
+      }
+      
+      notifyListeners();
+      return _getGuestAuthErrorMessage(e.code);
     } catch (e) {
       _isLoading = false;
-      notifyListeners();
       debugPrint("Guest Auth Unexpected Error: $e");
-      return 'Unexpected error: $e';
+      // Enable offline guest mode as fallback for any error
+      _enableOfflineGuestMode();
+      notifyListeners();
+      return null; // Allow offline guest mode
+    }
+  }
+
+  /// Enable offline guest mode when Firebase auth fails
+  void _enableOfflineGuestMode() {
+    _isGuestMode = true;
+    _currentUser = UserModel(
+      id: 'offline_guest_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Guest',
+      email: '',
+      photoUrl: null,
+    );
+    debugPrint('Offline guest mode enabled: ${_currentUser?.id}');
+  }
+
+  /// Get user-friendly error message for guest auth errors
+  String _getGuestAuthErrorMessage(String code) {
+    switch (code) {
+      case 'admin-restricted-operation':
+      case 'operation-not-allowed':
+        return 'Guest mode is not enabled. Please sign in with Google.';
+      case 'internal-error':
+        return 'Service temporarily unavailable. Please try again.';
+      case 'network-request-failed':
+        return 'No internet connection. Using offline mode.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a moment.';
+      default:
+        return 'Authentication error. Please try again.';
     }
   }
 

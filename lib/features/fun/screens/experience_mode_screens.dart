@@ -1,9 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/relaxation_game_models.dart';
-import '../services/relaxation_game_service.dart';
-import '../widgets/relaxation_game_widgets.dart';
+import '../../focus/models/relaxation_game_models.dart';
+import '../../focus/services/relaxation_game_service.dart';
+import '../../focus/widgets/relaxation_game_widgets.dart';
 import 'ocean_aquarium_game.dart';
 import 'starry_night_game.dart';
 import 'color_bloom_game.dart';

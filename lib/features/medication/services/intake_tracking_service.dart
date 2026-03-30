@@ -1,16 +1,14 @@
 import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import '../models/intake_streak.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
+import '../models/dependent_profile.dart';
 import 'medicine_storage_service.dart';
 
+/// Intake tracking service using Drift storage via MedicineCleanStorageService
 class IntakeTrackingService {
-  static const String _streaksBoxName = 'intake_streaks';
-  static const String _patientProfilesBoxName = 'patient_medicine_profiles';
-  
   static bool _isInitialized = false;
 
   static String? get _currentUserId {
@@ -39,55 +37,56 @@ class IntakeTrackingService {
 
   static Future<void> init() async {
     if (_isInitialized) return;
+    await MedicineCleanStorageService.init();
+    debugPrint('✓ IntakeTrackingService initialized');
+    _isInitialized = true;
+  }
+
+  static Future<IntakeStreak?> getStreak(String medicineId) async {
+    final logs = await MedicineCleanStorageService.getLogsForMedicine(medicineId);
+    if (logs.isEmpty) return null;
     
-    try {
-      if (!Hive.isBoxOpen(_streaksBoxName)) {
-        await Hive.openBox<IntakeStreak>(_streaksBoxName);
-      }
-      if (!Hive.isBoxOpen(_patientProfilesBoxName)) {
-        await Hive.openBox<PatientMedicineProfile>(_patientProfilesBoxName);
-      }
-      
-      _isInitialized = true;
-      debugPrint('✓ IntakeTrackingService initialized');
-    } catch (e) {
-      debugPrint('Error initializing IntakeTrackingService: $e');
-      rethrow;
-    }
-  }
-
-  static Box<IntakeStreak> get _streaksBox => Hive.box<IntakeStreak>(_streaksBoxName);
-  static Box<PatientMedicineProfile> get _profilesBox => Hive.box<PatientMedicineProfile>(_patientProfilesBoxName);
-
-  static IntakeStreak? getStreak(String medicineId) {
-    return _streaksBox.get(medicineId);
-  }
-
-  static IntakeStreak getOrCreateStreak(String medicineId) {
-    var streak = getStreak(medicineId);
-    if (streak == null) {
-      streak = IntakeStreak(
-        id: medicineId,
-        medicineId: medicineId,
-      );
-      _streaksBox.put(medicineId, streak);
-    }
-    return streak;
-  }
-
-  static bool canSkipMedicine(String medicineId) {
-    final medicine = MedicineStorageService.getMedicine(medicineId);
-    if (medicine == null) return true;
-
-    if (!medicine.requiresContinuousIntake) return true;
-
-    final streak = getOrCreateStreak(medicineId);
+    // Calculate streak from logs
+    int currentStreak = 0;
+    int longestStreak = 0;
+    final sortedLogs = logs.where((l) => l.isTaken).toList()
+      ..sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
     
-    if (medicine.minimumConsecutiveDays != null) {
-      return streak.consecutiveTakes < medicine.minimumConsecutiveDays!;
+    if (sortedLogs.isNotEmpty) {
+      currentStreak = 1;
+      var prevDate = sortedLogs.first.scheduledTime;
+      for (int i = 1; i < sortedLogs.length; i++) {
+        final diff = prevDate.difference(sortedLogs[i].scheduledTime).inDays;
+        if (diff == 1) {
+          currentStreak++;
+          prevDate = sortedLogs[i].scheduledTime;
+        } else {
+          break;
+        }
+      }
+      longestStreak = currentStreak;
     }
+    
+    return IntakeStreak(
+      id: medicineId,
+      medicineId: medicineId,
+      currentStreak: currentStreak,
+      longestStreak: longestStreak,
+      lastTakenDate: sortedLogs.isNotEmpty ? sortedLogs.first.scheduledTime : null,
+    );
+  }
 
-    return streak.canSkip;
+  static Future<IntakeStreak> getOrCreateStreak(String medicineId) async {
+    var streak = await getStreak(medicineId);
+    return streak ?? IntakeStreak(
+      id: medicineId,
+      medicineId: medicineId,
+    );
+  }
+
+  static Future<bool> canSkipMedicine(String medicineId) async {
+    final streak = await getStreak(medicineId);
+    return streak?.canSkip ?? true;
   }
 
   static Future<Map<String, dynamic>> recordMedicineTaken({
@@ -99,30 +98,35 @@ class IntakeTrackingService {
     int? moodRating,
     int? effectivenessRating,
   }) async {
-    final streak = getOrCreateStreak(medicineId);
-    final updatedStreak = streak.recordTake(takenDate);
-    
-    await _streaksBox.put(medicineId, updatedStreak);
-    await _syncToCloud('intake_streaks', medicineId, updatedStreak.toJson());
-
-    await MedicineStorageService.markMedicineTaken(
-      medicineId: medicineId,
-      scheduledTime: takenDate,
-      dosageTaken: dosageTaken,
-      notes: notes,
-      sideEffects: sideEffects,
-      moodRating: moodRating,
-      effectivenessRating: effectivenessRating,
-    );
-
-    return {
-      'success': true,
-      'streak': updatedStreak.currentStreak,
-      'longestStreak': updatedStreak.longestStreak,
-      'canSkip': updatedStreak.canSkip,
-      'consecutiveTakes': updatedStreak.consecutiveTakes,
-      'message': _getStreakMessage(updatedStreak),
-    };
+    try {
+      await MedicineCleanStorageService.markMedicineTaken(
+        medicineId: medicineId,
+        scheduledTime: takenDate,
+        dosageTaken: dosageTaken,
+        notes: notes,
+        sideEffects: sideEffects,
+        moodRating: moodRating,
+        effectivenessRating: effectivenessRating,
+      );
+      
+      final streak = await getStreak(medicineId);
+      final currentStreak = streak?.currentStreak ?? 1;
+      
+      return {
+        'success': true,
+        'streak': currentStreak,
+        'longestStreak': streak?.longestStreak ?? currentStreak,
+        'canSkip': true,
+        'consecutiveTakes': currentStreak,
+        'message': _getStreakMessage(streak ?? IntakeStreak(id: medicineId, medicineId: medicineId)),
+      };
+    } catch (e) {
+      debugPrint('Error recording medicine taken: $e');
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
+    }
   }
 
   static Future<Map<String, dynamic>> recordMedicineSkipped({
@@ -131,34 +135,26 @@ class IntakeTrackingService {
     required SkipReason reason,
     String? skipNote,
   }) async {
-    final canSkip = canSkipMedicine(medicineId);
-    
-    if (!canSkip) {
+    try {
+      await MedicineCleanStorageService.markMedicineSkipped(
+        medicineId: medicineId,
+        scheduledTime: skipDate,
+        reason: reason,
+        skipNote: skipNote,
+      );
+      
+      return {
+        'success': true,
+        'canSkip': true,
+        'message': 'Dose skipped',
+      };
+    } catch (e) {
+      debugPrint('Error recording medicine skipped: $e');
       return {
         'success': false,
-        'canSkip': false,
-        'message': 'Cannot skip - continuous intake required. You must take this medicine consecutively.',
+        'message': 'Error: $e',
       };
     }
-
-    final streak = getOrCreateStreak(medicineId);
-    final updatedStreak = streak.recordSkip(skipDate);
-    
-    await _streaksBox.put(medicineId, updatedStreak);
-    await _syncToCloud('intake_streaks', medicineId, updatedStreak.toJson());
-
-    await MedicineStorageService.markMedicineSkipped(
-      medicineId: medicineId,
-      scheduledTime: skipDate,
-      reason: reason,
-      skipNote: skipNote,
-    );
-
-    return {
-      'success': true,
-      'canSkip': true,
-      'message': 'Medicine skipped. Your streak has been reset.',
-    };
   }
 
   static String _getStreakMessage(IntakeStreak streak) {
@@ -173,196 +169,171 @@ class IntakeTrackingService {
     }
   }
 
-  static Map<String, dynamic> getStreakStats(String medicineId) {
-    final streak = getOrCreateStreak(medicineId);
+  static Future<Map<String, dynamic>> getStreakStats(String medicineId) async {
+    final logs = await MedicineCleanStorageService.getLogsForMedicine(medicineId);
+    final totalTaken = logs.where((l) => l.isTaken).length;
+    final totalSkipped = logs.where((l) => l.isSkipped).length;
+    final total = totalTaken + totalSkipped;
+    final adherenceRate = total > 0 ? (totalTaken / total) * 100 : 100.0;
+    
+    final streak = await getStreak(medicineId);
+    
     return {
-      'currentStreak': streak.currentStreak,
-      'longestStreak': streak.longestStreak,
-      'totalTaken': streak.totalTaken,
-      'totalSkipped': streak.totalSkipped,
-      'adherenceRate': streak.adherenceRate,
-      'canSkip': canSkipMedicine(medicineId),
-      'consecutiveTakes': streak.consecutiveTakes,
-      'isActiveStreak': streak.isActiveStreak,
+      'currentStreak': streak?.currentStreak ?? 0,
+      'longestStreak': streak?.longestStreak ?? 0,
+      'totalTaken': totalTaken,
+      'totalSkipped': totalSkipped,
+      'adherenceRate': adherenceRate,
+      'canSkip': true,
+      'consecutiveTakes': streak?.currentStreak ?? 0,
+      'isActiveStreak': (streak?.currentStreak ?? 0) > 0,
     };
   }
 
-  static PatientMedicineProfile? getPatientProfile(String patientId) {
-    return _profilesBox.get(patientId);
-  }
-
-  static PatientMedicineProfile getOrCreatePatientProfile({
-    required String patientId,
-    required String patientName,
-  }) {
-    var profile = getPatientProfile(patientId);
-    if (profile == null) {
-      profile = PatientMedicineProfile(
-        id: patientId,
-        patientId: patientId,
-        patientName: patientName,
-      );
-      _profilesBox.put(patientId, profile);
-    }
-    return profile;
-  }
-
-  static Future<void> addHealthCategoryToProfile({
-    required String patientId,
-    required HealthCategory category,
-  }) async {
-    final profile = getPatientProfile(patientId);
-    if (profile != null) {
-      final updated = profile.addCategory(category);
-      await _profilesBox.put(patientId, updated);
-      await _syncToCloud('patient_profiles', patientId, updated.toJson());
+  /// Get dependent profile by ID
+  static Future<DependentProfile?> getDependentProfile(String dependentId) async {
+    final dependents = await MedicineCleanStorageService.getAllDependents();
+    try {
+      return dependents.firstWhere((d) => d.id == dependentId);
+    } catch (_) {
+      return null;
     }
   }
 
-  static Future<void> addCustomCategoryToProfile({
-    required String patientId,
-    required String categoryName,
-  }) async {
-    final profile = getPatientProfile(patientId);
-    if (profile != null) {
-      final updated = profile.addCustomCategory(categoryName);
-      await _profilesBox.put(patientId, updated);
-      await _syncToCloud('patient_profiles', patientId, updated.toJson());
-    }
+  /// Get all dependent profiles
+  static Future<List<DependentProfile>> getAllDependentProfiles() async {
+    return await MedicineCleanStorageService.getAllDependents();
   }
 
-  static Future<void> linkMedicineToCategory({
-    required String patientId,
-    required String categoryName,
-    required String medicineId,
-  }) async {
-    final profile = getPatientProfile(patientId);
-    if (profile != null) {
-      final updated = profile.addMedicineToCategory(categoryName, medicineId);
-      await _profilesBox.put(patientId, updated);
-      await _syncToCloud('patient_profiles', patientId, updated.toJson());
-    }
-  }
-
-  static List<PatientMedicineProfile> getAllPatientProfiles() {
-    return _profilesBox.values.toList();
-  }
-
-  static Map<String, dynamic> getPatientHealthAnalytics(String patientId) {
-    final profile = getPatientProfile(patientId);
-    if (profile == null) {
-      return {
-        'totalCategories': 0,
-        'totalMedicines': 0,
-        'categoryBreakdown': {},
-      };
-    }
-
+  /// Get health analytics for a dependent
+  static Future<Map<String, dynamic>> getDependentHealthAnalytics(String dependentId) async {
+    final medicines = await MedicineCleanStorageService.getMedicinesForDependent(dependentId);
+    
+    // Group medicines by health category
     final categoryBreakdown = <String, int>{};
-    for (final category in profile.healthCategories) {
-      final medicines = profile.getMedicinesForCategory(category.displayName);
-      categoryBreakdown[category.displayName] = medicines.length;
-    }
-    for (final category in profile.customCategories) {
-      final medicines = profile.getMedicinesForCategory(category);
-      categoryBreakdown[category] = medicines.length;
-    }
-
-    return {
-      'totalCategories': profile.totalCategories,
-      'totalMedicines': profile.totalMedicines,
-      'categoryBreakdown': categoryBreakdown,
-      'healthCategories': profile.healthCategories.map((c) => c.displayName).toList(),
-      'customCategories': profile.customCategories,
-    };
-  }
-
-  static List<EnhancedMedicine> getMedicinesByHealthCategory({
-    required String patientId,
-    required String categoryName,
-  }) {
-    final profile = getPatientProfile(patientId);
-    if (profile == null) return [];
-
-    final medicineIds = profile.getMedicinesForCategory(categoryName);
-    final medicines = <EnhancedMedicine>[];
-    
-    for (final id in medicineIds) {
-      final medicine = MedicineStorageService.getMedicine(id);
-      if (medicine != null) {
-        medicines.add(medicine);
-      }
-    }
-    
-    return medicines;
-  }
-
-  static Map<String, dynamic> getComprehensiveHealthReport(String patientId) {
-    final profile = getPatientProfile(patientId);
-    if (profile == null) {
-      return {'error': 'Patient profile not found'};
-    }
-
-    final allMedicines = MedicineStorageService.getAllMedicines()
-        .where((m) => m.patientProfileId == patientId)
-        .toList();
-
-    final categoryStats = <String, Map<String, dynamic>>{};
-    
-    for (final category in profile.healthCategories) {
-      final categoryMeds = allMedicines
-          .where((m) => m.healthCategories?.contains(category) ?? false)
-          .toList();
-      
-      int totalTaken = 0;
-      int totalSkipped = 0;
-      double avgAdherence = 0;
-      
-      for (final med in categoryMeds) {
-        final streak = getStreak(med.id);
-        if (streak != null) {
-          totalTaken += streak.totalTaken;
-          totalSkipped += streak.totalSkipped;
-        }
-      }
-      
-      final total = totalTaken + totalSkipped;
-      avgAdherence = total > 0 ? (totalTaken / total) * 100 : 100;
-      
-      categoryStats[category.displayName] = {
-        'medicineCount': categoryMeds.length,
-        'totalTaken': totalTaken,
-        'totalSkipped': totalSkipped,
-        'adherenceRate': avgAdherence,
-        'medicines': categoryMeds.map((m) => m.name).toList(),
-      };
-    }
-
-    return {
-      'patientName': profile.patientName,
-      'totalCategories': profile.totalCategories,
-      'totalMedicines': allMedicines.length,
-      'categoryStats': categoryStats,
-      'overallAdherence': _calculateOverallAdherence(allMedicines),
-    };
-  }
-
-  static double _calculateOverallAdherence(List<EnhancedMedicine> medicines) {
-    int totalTaken = 0;
-    int totalSkipped = 0;
+    final healthCategories = <String>{};
     
     for (final med in medicines) {
-      final streak = getStreak(med.id);
-      if (streak != null) {
-        totalTaken += streak.totalTaken;
-        totalSkipped += streak.totalSkipped;
+      final category = med.healthCategory.displayName;
+      categoryBreakdown[category] = (categoryBreakdown[category] ?? 0) + 1;
+      healthCategories.add(category);
+    }
+    
+    return {
+      'totalCategories': healthCategories.length,
+      'totalMedicines': medicines.length,
+      'categoryBreakdown': categoryBreakdown,
+      'healthCategories': healthCategories.toList(),
+    };
+  }
+
+  /// Get medicines by health category for a dependent
+  static Future<List<EnhancedMedicine>> getMedicinesByHealthCategory({
+    required String dependentId,
+    required HealthCategory category,
+  }) async {
+    final medicines = await MedicineCleanStorageService.getMedicinesForDependent(dependentId);
+    return medicines.where((m) => m.healthCategory == category).toList();
+  }
+
+  /// Get comprehensive health report for a dependent
+  static Future<Map<String, dynamic>> getComprehensiveHealthReport(String dependentId) async {
+    final dependent = await getDependentProfile(dependentId);
+    final medicines = await MedicineCleanStorageService.getMedicinesForDependent(dependentId);
+    
+    // Calculate stats per category
+    final categoryStats = <String, Map<String, dynamic>>{};
+    for (final med in medicines) {
+      final category = med.healthCategory.displayName;
+      if (!categoryStats.containsKey(category)) {
+        categoryStats[category] = {
+          'count': 0,
+          'medicines': <String>[],
+        };
+      }
+      categoryStats[category]!['count'] = (categoryStats[category]!['count'] as int) + 1;
+      (categoryStats[category]!['medicines'] as List<String>).add(med.name);
+    }
+    
+    // Calculate overall adherence
+    final adherence = await _calculateOverallAdherence(medicines);
+    
+    return {
+      'dependentName': dependent?.name ?? 'Unknown',
+      'totalCategories': categoryStats.length,
+      'totalMedicines': medicines.length,
+      'categoryStats': categoryStats,
+      'overallAdherence': adherence,
+    };
+  }
+
+  /// Calculate overall adherence rate across all medicines
+  static Future<double> _calculateOverallAdherence(List<EnhancedMedicine> medicines) async {
+    if (medicines.isEmpty) return 100.0;
+    
+    double totalAdherence = 0;
+    int count = 0;
+    
+    for (final med in medicines) {
+      final stats = await getStreakStats(med.id);
+      totalAdherence += stats['adherenceRate'] as double;
+      count++;
+    }
+    
+    return count > 0 ? totalAdherence / count : 100.0;
+  }
+
+  /// Get all medicines grouped by health category
+  static Future<Map<HealthCategory, List<EnhancedMedicine>>> getMedicinesGroupedByCategory() async {
+    final medicines = await MedicineCleanStorageService.getAllMedicines();
+    final grouped = <HealthCategory, List<EnhancedMedicine>>{};
+    
+    for (final med in medicines) {
+      if (!grouped.containsKey(med.healthCategory)) {
+        grouped[med.healthCategory] = [];
+      }
+      grouped[med.healthCategory]!.add(med);
+    }
+    
+    return grouped;
+  }
+
+  /// Get adherence summary for all active medicines
+  static Future<Map<String, dynamic>> getOverallAdherenceSummary() async {
+    final medicines = await MedicineCleanStorageService.getAllMedicines();
+    final activeMedicines = medicines.where((m) => m.isActive).toList();
+    
+    if (activeMedicines.isEmpty) {
+      return {
+        'totalMedicines': 0,
+        'averageAdherence': 100.0,
+        'totalTaken': 0,
+        'totalSkipped': 0,
+        'activeSteaks': 0,
+      };
+    }
+    
+    int totalTaken = 0;
+    int totalSkipped = 0;
+    int activeStreaks = 0;
+    double totalAdherence = 0;
+    
+    for (final med in activeMedicines) {
+      final stats = await getStreakStats(med.id);
+      totalTaken += stats['totalTaken'] as int;
+      totalSkipped += stats['totalSkipped'] as int;
+      totalAdherence += stats['adherenceRate'] as double;
+      if (stats['isActiveStreak'] as bool) {
+        activeStreaks++;
       }
     }
     
-    final total = totalTaken + totalSkipped;
-    return total > 0 ? (totalTaken / total) * 100 : 100;
+    return {
+      'totalMedicines': activeMedicines.length,
+      'averageAdherence': totalAdherence / activeMedicines.length,
+      'totalTaken': totalTaken,
+      'totalSkipped': totalSkipped,
+      'activeStreaks': activeStreaks,
+    };
   }
-
-  static ValueListenable<Box<IntakeStreak>> get streaksListenable => _streaksBox.listenable();
-  static ValueListenable<Box<PatientMedicineProfile>> get profilesListenable => _profilesBox.listenable();
 }

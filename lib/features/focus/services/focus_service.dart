@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/audio_service.dart';
 import '../models/focus_plant.dart';
@@ -124,13 +124,20 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _loadData() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       
       _selectedMinutes = prefs['focusSelectedMinutes'] ?? 25;
       _selectedPlant = PlantType.values[prefs['focusSelectedPlant'] ?? 0];
       _selectedActivity = FocusActivityType.values[prefs['focusSelectedActivityType'] ?? 0];
       _selectedSound = AmbientSoundType.values[prefs['focusSelectedSound'] ?? 0];
-      _soundVolume = (prefs['focusSoundVolume'] ?? 0.5).toDouble();
+      final dynamic volumeValue = prefs['focusSoundVolume'] ?? 0.5;
+      if (volumeValue is String) {
+        _soundVolume = double.tryParse(volumeValue) ?? 0.5;
+      } else if (volumeValue is num) {
+        _soundVolume = volumeValue.toDouble();
+      } else {
+        _soundVolume = 0.5;
+      }
 
       // Load stats
       final statsJson = prefs['focusStats'];
@@ -195,18 +202,18 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _saveData() async {
     try {
-      await StorageService.setAppPreference('focusSelectedMinutes', _selectedMinutes);
-      await StorageService.setAppPreference('focusSelectedPlant', _selectedPlant.index);
-      await StorageService.setAppPreference('focusSelectedActivityType', _selectedActivity.index);
-      await StorageService.setAppPreference('focusSelectedSound', _selectedSound.index);
-      await StorageService.setAppPreference('focusSoundVolume', _soundVolume);
-      await StorageService.setAppPreference('focusStats', _stats.toJson());
-      await StorageService.setAppPreference('focusGarden', _garden.map((p) => p.toJson()).toList());
-      await StorageService.setAppPreference('focusSessions', _sessions.take(100).map((s) => s.toJson()).toList());
-      await StorageService.setAppPreference('focusAchievements', 
+      await CleanStorageService.setAppPreference('focusSelectedMinutes', _selectedMinutes);
+      await CleanStorageService.setAppPreference('focusSelectedPlant', _selectedPlant.index);
+      await CleanStorageService.setAppPreference('focusSelectedActivityType', _selectedActivity.index);
+      await CleanStorageService.setAppPreference('focusSelectedSound', _selectedSound.index);
+      await CleanStorageService.setAppPreference('focusSoundVolume', _soundVolume);
+      await CleanStorageService.setAppPreference('focusStats', _stats.toJson());
+      await CleanStorageService.setAppPreference('focusGarden', _garden.map((p) => p.toJson()).toList());
+      await CleanStorageService.setAppPreference('focusSessions', _sessions.take(100).map((s) => s.toJson()).toList());
+      await CleanStorageService.setAppPreference('focusAchievements', 
         _achievements.map((k, v) => MapEntry(k.index.toString(), v.toJson())));
-      await StorageService.setAppPreference('focusUnlockedPlants', _unlockedPlants.map((p) => p.index).toList());
-      await StorageService.setAppPreference('focusUsedSounds', _usedSounds.map((s) => s.index).toList());
+      await CleanStorageService.setAppPreference('focusUnlockedPlants', _unlockedPlants.map((p) => p.index).toList());
+      await CleanStorageService.setAppPreference('focusUsedSounds', _usedSounds.map((s) => s.index).toList());
     } catch (e) {
       debugPrint('Error saving focus data: $e');
     }
@@ -572,10 +579,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void incrementBreathingCount() async {
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     int breathingCount = prefs['focusBreathingCount'] ?? 0;
     breathingCount++;
-    await StorageService.setAppPreference('focusBreathingCount', breathingCount);
+    await CleanStorageService.setAppPreference('focusBreathingCount', breathingCount);
     _updateAchievement(AchievementType.breathingMaster, breathingCount);
     await _saveData();
   }

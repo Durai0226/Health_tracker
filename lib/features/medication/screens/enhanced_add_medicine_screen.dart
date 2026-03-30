@@ -40,6 +40,8 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
   DateTime _startDate = DateTime.now();
   final List<int> _specificDays = [];
   int _intervalHours = 8;
+  int _cycleDaysOn = 21;
+  int _cycleDaysOff = 7;
   bool _isPRN = false;
 
   // Stock & Refill
@@ -93,6 +95,8 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
     _mealTiming = med.schedule.mealTiming;
     _durationDays = med.schedule.durationDays;
     _startDate = med.schedule.startDate ?? DateTime.now();
+    _cycleDaysOn = med.schedule.cycleDaysOn ?? 21;
+    _cycleDaysOff = med.schedule.cycleDaysOff ?? 7;
     _trackStock = med.currentStock != null;
     _currentStock = med.currentStock ?? 30;
     _lowStockThreshold = med.lowStockThreshold ?? 7;
@@ -145,7 +149,7 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
   Future<void> _checkInteractions() async {
     if (_nameController.text.isEmpty) return;
 
-    final existingMedicines = MedicineStorageService.getAllMedicines();
+    final existingMedicines = await MedicineCleanStorageService.getAllMedicines();
     final drugNames = existingMedicines.map((m) => m.name).toList();
     drugNames.add(_nameController.text);
 
@@ -169,6 +173,8 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
         times: _scheduledTimes,
         intervalHours: _frequencyType == FrequencyType.everyXHours ? _intervalHours : null,
         specificDays: _frequencyType == FrequencyType.specificDays ? _specificDays : null,
+        cycleDaysOn: _frequencyType == FrequencyType.cyclical ? _cycleDaysOn : null,
+        cycleDaysOff: _frequencyType == FrequencyType.cyclical ? _cycleDaysOff : null,
         startDate: _startDate,
         durationDays: _durationDays,
         mealTiming: _mealTiming,
@@ -205,9 +211,9 @@ class _EnhancedAddMedicineScreenState extends State<EnhancedAddMedicineScreen> {
       );
 
       if (widget.editMedicine != null) {
-        await MedicineStorageService.updateMedicine(medicine);
+        await MedicineCleanStorageService.updateMedicine(medicine);
       } else {
-        await MedicineStorageService.addMedicine(medicine);
+        await MedicineCleanStorageService.addMedicine(medicine);
       }
 
       // Schedule notifications

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../services/exam_prep_service.dart';
 import '../models/subject_model.dart';
 import '../models/topic_model.dart';
@@ -37,253 +39,498 @@ class _SubjectListScreenState extends State<SubjectListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Subjects'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.archive_outlined),
-            onPressed: _showArchivedSubjects,
-            tooltip: 'Archived',
+        title: Text(
+          'Subjects',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
           ),
+        ),
+        centerTitle: false,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        actions: [
+          CommonIconButton(
+            icon: Icons.archive_rounded,
+            onPressed: _showArchivedSubjects,
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            iconColor: AppColors.primary,
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: subjects.isEmpty
           ? _buildEmptyState(theme)
-          : ReorderableListView.builder(
-              padding: const EdgeInsets.all(16),
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
               itemCount: subjects.length,
-              onReorder: _reorderSubjects,
               itemBuilder: (context, index) {
                 final subject = subjects[index];
-                return _buildSubjectCard(subject, theme, key: ValueKey(subject.id));
+                return _buildPremiumSubjectCard(subject, theme, index);
               },
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddSubjectDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Subject'),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(ThemeData theme) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.school_outlined, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            'No subjects yet',
-            style: theme.textTheme.titleLarge?.copyWith(color: Colors.grey),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.primary, Color(0xFF26A69A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Add your first subject to start organizing your studies',
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _showAddSubjectDialog,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Subject'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubjectCard(Subject subject, ThemeData theme, {Key? key}) {
-    final topics = _examPrepService.getTopicsBySubject(subject.id);
-    final exams = _examPrepService.getExamsBySubject(subject.id);
-    final upcomingExams = exams.where((e) => e.daysRemaining >= 0).length;
-    final color = Color(int.parse(subject.colorHex.replaceAll('#', '0xFF')));
-
-    return Card(
-      key: key,
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () => _showSubjectDetails(subject),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(Icons.book, color: color),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          subject.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (subject.teacherName != null)
-                          Text(
-                            subject.teacherName!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  PopupMenuButton(
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'archive',
-                        child: Row(
-                          children: [
-                            Icon(Icons.archive),
-                            SizedBox(width: 8),
-                            Text('Archive'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: Colors.red)),
-                          ],
-                        ),
-                      ),
-                    ],
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'edit':
-                          _showEditSubjectDialog(subject);
-                          break;
-                        case 'archive':
-                          _archiveSubject(subject);
-                          break;
-                        case 'delete':
-                          _deleteSubject(subject);
-                          break;
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _buildStatChip(
-                    icon: Icons.topic,
-                    label: '${topics.length} topics',
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStatChip(
-                    icon: Icons.event,
-                    label: '$upcomingExams exams',
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStatChip(
-                    icon: Icons.timer,
-                    label: '${subject.studyHours.toStringAsFixed(1)}h',
-                    color: Colors.green,
-                  ),
-                ],
-              ),
-              if (subject.currentGrade != null || subject.targetGrade != null) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (subject.currentGrade != null)
-                      Text(
-                        'Current: ${subject.currentGrade!.toStringAsFixed(1)}%',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    if (subject.currentGrade != null && subject.targetGrade != null)
-                      const Text(' • '),
-                    if (subject.targetGrade != null)
-                      Text(
-                        'Target: ${subject.targetGrade!.toStringAsFixed(1)}%',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: subject.weeklyProgress,
-                backgroundColor: Colors.grey.withOpacity(0.2),
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Weekly: ${subject.totalStudyMinutes} / ${subject.weeklyTargetMinutes} min',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-              ),
-            ],
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: _showAddSubjectDialog,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: const Text(
+            'Add Subject',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStatChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: color),
-          ),
-        ],
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.school_rounded,
+                size: 64,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No subjects yet',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.getTextPrimary(context),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add your first subject to start organizing your studies and track your progress',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: AppColors.getTextSecondary(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            CommonButton(
+              text: 'Add Subject',
+              icon: Icons.add_rounded,
+              variant: ButtonVariant.primary,
+              onPressed: _showAddSubjectDialog,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _reorderSubjects(int oldIndex, int newIndex) async {
-    final subjects = _examPrepService.getActiveSubjects();
-    if (newIndex > oldIndex) newIndex--;
-    
-    final subject = subjects[oldIndex];
-    await _examPrepService.updateSubject(
-      subject.copyWith(orderIndex: newIndex),
+  Widget _buildPremiumSubjectCard(Subject subject, ThemeData theme, int index) {
+    final topics = _examPrepService.getTopicsBySubject(subject.id);
+    final exams = _examPrepService.getExamsBySubject(subject.id);
+    final upcomingExams = exams.where((e) => e.daysRemaining >= 0).length;
+    final color = Color(int.parse(subject.colorHex.replaceAll('#', '0xFF')));
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ElevatedCard(
+        onTap: () => _showSubjectDetails(subject),
+        padding: const EdgeInsets.all(20),
+        borderRadius: 20,
+        shadowColor: color,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [color, color.withOpacity(0.8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.book_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        subject.name,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.getTextPrimary(context),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (subject.teacherName != null)
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.person_outline_rounded,
+                              size: 16,
+                              color: AppColors.getTextSecondary(context),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              subject.teacherName!,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AppColors.getTextSecondary(context),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                CommonIconButton(
+                  icon: Icons.more_vert_rounded,
+                  size: 36,
+                  iconSize: 18,
+                  backgroundColor: AppColors.getGrey100(context),
+                  iconColor: AppColors.getTextSecondary(context),
+                  onPressed: () => _showSubjectMenu(context, subject),
+                ),
+                ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildPremiumStatItem(
+                    icon: Icons.topic_rounded,
+                    label: 'Topics',
+                    value: '${topics.length}',
+                    color: AppColors.info,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: AppColors.getDivider(context),
+                ),
+                Expanded(
+                  child: _buildPremiumStatItem(
+                    icon: Icons.event_note_rounded,
+                    label: 'Exams',
+                    value: '$upcomingExams',
+                    color: AppColors.warning,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: AppColors.getDivider(context),
+                ),
+                Expanded(
+                  child: _buildPremiumStatItem(
+                    icon: Icons.timer_outlined,
+                    label: 'Hours',
+                    value: '${subject.studyHours.toStringAsFixed(1)}',
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+            if (subject.currentGrade != null || subject.targetGrade != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    if (subject.currentGrade != null) ...[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Current Grade',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppColors.getTextSecondary(context),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              '${subject.currentGrade!.toStringAsFixed(1)}%',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: color,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (subject.targetGrade != null) ...[
+                      if (subject.currentGrade != null)
+                        Container(
+                          width: 1,
+                          height: 24,
+                          color: AppColors.getDivider(context),
+                          margin: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Target Grade',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppColors.getTextSecondary(context),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              '${subject.targetGrade!.toStringAsFixed(1)}%',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.getGrey50(context),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Weekly Progress',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.getTextPrimary(context),
+                        ),
+                      ),
+                      Text(
+                        '${subject.totalStudyMinutes}/${subject.weeklyTargetMinutes} min',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: color.withOpacity(0.1),
+                    ),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: subject.weeklyProgress.clamp(0.0, 1.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          gradient: LinearGradient(
+                            colors: [color, color.withOpacity(0.8)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+
+  Widget _buildPremiumStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 16),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.getTextPrimary(context),
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.getTextSecondary(context),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showSubjectMenu(BuildContext context, Subject subject) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.getModalBackground(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.getDivider(context),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Color(int.parse(subject.colorHex.replaceAll('#', '0xFF'))).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.book_rounded,
+                    color: Color(int.parse(subject.colorHex.replaceAll('#', '0xFF'))),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        subject.name,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.getTextPrimary(context),
+                        ),
+                      ),
+                      Text(
+                        'Subject Options',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.getTextSecondary(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            ListTileCard(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit Subject'),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+              onTap: () {
+                Navigator.pop(context);
+                _showEditSubjectDialog(subject);
+              },
+            ),
+            ListTileCard(
+              leading: const Icon(Icons.archive_rounded),
+              title: const Text('Archive Subject'),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+              onTap: () {
+                Navigator.pop(context);
+                _archiveSubject(subject);
+              },
+            ),
+            ListTileCard(
+              leading: const Icon(Icons.delete_rounded, color: AppColors.error),
+              title: const Text('Delete Subject', style: TextStyle(color: AppColors.error)),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.error),
+              onTap: () {
+                Navigator.pop(context);
+                _deleteSubject(subject);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   void _showAddSubjectDialog() {
     _showSubjectDialog();

@@ -1,23 +1,11 @@
-import 'package:hive/hive.dart';
-
-part 'dependent_profile.g.dart';
-
 /// Relationship type for dependents
-@HiveType(typeId: 68)
 enum RelationshipType {
-  @HiveField(0)
   self,
-  @HiveField(1)
   child,
-  @HiveField(2)
   parent,
-  @HiveField(3)
   spouse,
-  @HiveField(4)
   grandparent,
-  @HiveField(5)
   sibling,
-  @HiveField(6)
   other;
 
   String get displayName {
@@ -60,60 +48,24 @@ enum RelationshipType {
 }
 
 /// Family member/dependent profile for managing their medications
-@HiveType(typeId: 69)
-class DependentProfile extends HiveObject {
-  @HiveField(0)
+class DependentProfile {
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final RelationshipType relationship;
-
-  @HiveField(3)
   final DateTime? dateOfBirth;
-
-  @HiveField(4)
   final String? gender;
-
-  @HiveField(5)
   final String? bloodType;
-
-  @HiveField(6)
   final double? weight; // in kg
-
-  @HiveField(7)
   final double? height; // in cm
-
-  @HiveField(8)
   final List<String>? allergies;
-
-  @HiveField(9)
   final List<String>? conditions; // Medical conditions
-
-  @HiveField(10)
   final String? emergencyContact;
-
-  @HiveField(11)
   final String? emergencyPhone;
-
-  @HiveField(12)
   final String? primaryDoctorId;
-
-  @HiveField(13)
   final String? insuranceInfo;
-
-  @HiveField(14)
   final String? notes;
-
-  @HiveField(15)
   final String? avatarPath;
-
-  @HiveField(16)
   final bool isActive;
-
-  @HiveField(17)
   final DateTime createdAt;
 
   DependentProfile({

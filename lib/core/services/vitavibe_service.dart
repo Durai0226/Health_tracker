@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:vibration/vibration.dart';
-import 'storage_service.dart';
+import '../services/clean_storage_service.dart';
 
 enum VibeCategory {
   basic,
@@ -86,7 +86,7 @@ class VitaVibeService extends ChangeNotifier {
 
   Future<void> init() async {
     try {
-       final settings = StorageService.getAppPreferences()['vitavibe_settings'];
+       final settings = CleanStorageService.getAppPreferences()['vitavibe_settings'];
        if (settings != null && settings is Map) {
          _isEnabled = settings['enabled'] ?? true;
          final intensityIndex = settings['intensity'] ?? 2;
@@ -120,7 +120,7 @@ class VitaVibeService extends ChangeNotifier {
       'patterns': patternsMap,
     };
     
-    await StorageService.setAppPreference('vitavibe_settings', settings);
+    await CleanStorageService.setAppPreference('vitavibe_settings', settings);
   }
 
   Future<void> toggleEnabled(bool value) async {

@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/focus_session.dart';
 import '../models/detailed_stats.dart';
 
@@ -21,7 +21,7 @@ class StatsService extends ChangeNotifier {
 
   Future<void> _loadData() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       
       final statsJson = prefs['focusDailyStats'];
       if (statsJson != null && statsJson is List) {
@@ -38,7 +38,7 @@ class StatsService extends ChangeNotifier {
 
   Future<void> _saveData() async {
     try {
-      await StorageService.setAppPreference(
+      await CleanStorageService.setAppPreference(
         'focusDailyStats',
         _dailyStats.take(365).map((s) => s.toJson()).toList(),
       );
@@ -194,7 +194,7 @@ class StatsService extends ChangeNotifier {
 
     if (pattern == null) return [];
 
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     final currentStreak = prefs['focusStats']?['currentStreak'] ?? 0;
 
     return InsightsGenerator.generate(

@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/focus_coins.dart';
 
 class CoinsService extends ChangeNotifier {
@@ -24,7 +24,7 @@ class CoinsService extends ChangeNotifier {
 
   Future<void> _loadData() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       final coinsJson = prefs['focusCoins'];
       if (coinsJson != null && coinsJson is Map) {
         _coins = FocusCoins.fromJson(Map<String, dynamic>.from(coinsJson));
@@ -37,7 +37,7 @@ class CoinsService extends ChangeNotifier {
 
   Future<void> _saveData() async {
     try {
-      await StorageService.setAppPreference('focusCoins', _coins.toJson());
+      await CleanStorageService.setAppPreference('focusCoins', _coins.toJson());
     } catch (e) {
       debugPrint('Error saving coins data: $e');
     }

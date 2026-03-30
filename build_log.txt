@@ -1,0 +1,79 @@
+Running Gradle task 'assembleRelease'...                        
+
+FAILURE: Build completed with 3 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+A problem occurred configuring project ':file_picker'.
+> Multiple build operations failed.
+      Could not write workspace metadata to /Users/dsp/.gradle/caches/8.14/transforms/5db468c967a0421b7e80b44bde578064-db5256c0-9086-44fd-b717-45b042023442/metadata.bin
+      Could not write workspace metadata to /Users/dsp/.gradle/caches/8.14/transforms/2c4b1f068c36ea2d67ea771db92b4b78-1cc843b2-bc99-49ed-84d6-2dba9a260d36/metadata.bin
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/6987a8cbd3ea255fbb325bc4b67a4419-859d70f4-bc4e-4e58-88b1-d25f5d0d1421' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/6987a8cbd3ea255fbb325bc4b67a4419-859d70f4-bc4e-4e58-88b1-d25f5d0d1421/transformed'
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/c4b46d77dc82b2ebce175fba0eeec7ac-d46c6af3-6438-497e-8792-56be1933e8a5' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/c4b46d77dc82b2ebce175fba0eeec7ac-d46c6af3-6438-497e-8792-56be1933e8a5/transformed'
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/bd0967e36a5d0d2d2c703153bdd4481d-d58f0ecd-5e70-4b05-b576-88ebcbccff26' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/bd0967e36a5d0d2d2c703153bdd4481d-d58f0ecd-5e70-4b05-b576-88ebcbccff26/transformed'
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/130b0b78369d25689021f6b4c4073d4a-732ac91b-264f-421a-b8d2-85969f684624' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/130b0b78369d25689021f6b4c4073d4a-732ac91b-264f-421a-b8d2-85969f684624/transformed'
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/d8d6e64d190edb3879bc653cb9e43998-3729fe70-cb52-4d7e-b512-5bd6b6eea4cd' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/d8d6e64d190edb3879bc653cb9e43998-3729fe70-cb52-4d7e-b512-5bd6b6eea4cd/transformed'
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/52f516b7602bdb83449e644faf52b7a0-e89f0549-5e27-4006-9f52-2bbd9b259778' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/52f516b7602bdb83449e644faf52b7a0-e89f0549-5e27-4006-9f52-2bbd9b259778/transformed'
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/8184464b09503784429a4fd04ffadab4-34ba6a27-c28e-4ccb-826e-6fc3f1e01e1f' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/8184464b09503784429a4fd04ffadab4-34ba6a27-c28e-4ccb-826e-6fc3f1e01e1f/transformed'
+      Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/5e64ecdbcfcb131b783bf4ddd0eb5d34-998d937d-f466-44c8-80be-897ab3e86d97' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/5e64ecdbcfcb131b783bf4ddd0eb5d34-998d937d-f466-44c8-80be-897ab3e86d97/transformed'
+      ...and 11 more failures.
+   > Could not write workspace metadata to /Users/dsp/.gradle/caches/8.14/transforms/5db468c967a0421b7e80b44bde578064-db5256c0-9086-44fd-b717-45b042023442/metadata.bin
+   > Could not write workspace metadata to /Users/dsp/.gradle/caches/8.14/transforms/2c4b1f068c36ea2d67ea771db92b4b78-1cc843b2-bc99-49ed-84d6-2dba9a260d36/metadata.bin
+   > Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/6987a8cbd3ea255fbb325bc4b67a4419-859d70f4-bc4e-4e58-88b1-d25f5d0d1421' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/6987a8cbd3ea255fbb325bc4b67a4419-859d70f4-bc4e-4e58-88b1-d25f5d0d1421/transformed'
+   > Failed to create parent directory '/Users/dsp/.gradle/caches/8.14/transforms/c4b46d77dc82b2ebce175fba0eeec7ac-d46c6af3-6438-497e-8792-56be1933e8a5' when creating directory '/Users/dsp/.gradle/caches/8.14/transforms/c4b46d77dc82b2ebce175fba0eeec7ac-d46c6af3-6438-497e-8792-56be1933e8a5/transformed'
+
+
+FAILURE: Build failed with an exception.
+
+
+
+* What went wrong:
+
+Could not stop all services.
+
+> Failed to release lock on Build Output Cleanup Cache (/Users/dsp/Documents/Volt/android/.gradle/buildOutputCleanup)
+
+> Could not stop all services.
+
+   > Failed to release lock on cache directory md-supplier (/Users/dsp/.gradle/caches/8.14/md-supplier)
+
+   > Could not stop all services.
+
+      > Failed to release lock on Build Output Cleanup Cache (/opt/homebrew/share/flutter/packages/flutter_tools/gradle/.gradle/buildOutputCleanup)
+
+      > Failed to release lock on execution history cache (/opt/homebrew/share/flutter/packages/flutter_tools/gradle/.gradle/8.14/executionHistory)
+
+   > Failed to release lock on cache directory md-rule (/Users/dsp/.gradle/caches/8.14/md-rule)
+
+
+
+* Try:
+
+> Run with --stacktrace option to get the stack trace.
+
+> Run with --info or --debug option to get more log output.
+
+> Run with --scan to get full insights.
+
+> Get more help at https://help.gradle.org.
+
+
+
+BUILD FAILED in 1m 25s
+
+Running Gradle task 'assembleRelease'...                           86.4s
+
+┌─ Flutter Fix ─────────────────────────────────────────────────────────────────────────────────┐
+│ [!] Starting AGP 9+, only the new DSL interface will be read. This results in a build failure │
+│ when applying the Flutter Gradle plugin at                                                    │
+│ /Users/dsp/Documents/Volt/android/app/build.gradle.kts.                                       │
+│                                                                                               │
+│ To resolve this update flutter or opt out of `android.newDsl`. For instructions on how to opt │
+│ out, see: https://docs.flutter.dev/release/breaking-changes/migrate-to-agp-9                  │
+│                                                                                               │
+│ If you are not upgrading to AGP 9+, run `flutter analyze --suggestions` to check for          │
+│ incompatible dependencies.                                                                    │
+└───────────────────────────────────────────────────────────────────────────────────────────────┘
+Gradle task assembleRelease failed with exit code 1
+

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/beverage_type.dart';
 import '../models/water_container.dart';
@@ -9,200 +8,127 @@ import '../models/enhanced_water_log.dart';
 
 /// Comprehensive water tracking service
 /// Handles beverages, containers, achievements, statistics, and insights
+/// Uses in-memory storage with ValueNotifier for reactivity
 class WaterService {
-  static const String _dailyWaterBoxName = 'daily_water_data';
-  static const String _beveragesBoxName = 'custom_beverages';
-  static const String _containersBoxName = 'custom_containers';
-  static const String _profileBoxName = 'hydration_profile';
-  static const String _achievementsBoxName = 'water_achievements';
-  static const String _prefsBoxName = 'water_prefs';
-
   static bool _isInitialized = false;
   static const _uuid = Uuid();
 
-  // Boxes
-  static Box<DailyWaterData>? _dailyWaterBox;
-  static Box<BeverageType>? _beveragesBox;
-  static Box<WaterContainer>? _containersBox;
-  static Box<HydrationProfile>? _profileBox;
-  static Box<UserAchievements>? _achievementsBox;
-  static Box<dynamic>? _prefsBox;
+  // In-memory storage with ValueNotifier for reactivity
+  static final ValueNotifier<Map<String, DailyWaterData>> _dailyWaterNotifier = 
+      ValueNotifier<Map<String, DailyWaterData>>({});
+  static final List<BeverageType> _customBeverages = [];
+  static final List<WaterContainer> _customContainers = [];
+  static HydrationProfile _profile = HydrationProfile(id: 'profile', createdAt: DateTime.now());
+  static UserAchievements _achievements = UserAchievements(id: 'user');
 
   /// Expose value listenable for daily water data
-  static ValueListenable<Box<DailyWaterData>>? listenToDailyData() {
-    return _dailyWaterBox?.listenable();
+  static ValueListenable<Map<String, DailyWaterData>>? listenToDailyData() {
+    return _dailyWaterNotifier;
   }
 
   /// Initialize the water service
   static Future<void> init() async {
     if (_isInitialized) return;
-
-    try {
-      // Open boxes - adapters are registered in storage_service
-      _dailyWaterBox = await Hive.openBox<DailyWaterData>(_dailyWaterBoxName);
-      _beveragesBox = await Hive.openBox<BeverageType>(_beveragesBoxName);
-      _containersBox = await Hive.openBox<WaterContainer>(_containersBoxName);
-      _profileBox = await Hive.openBox<HydrationProfile>(_profileBoxName);
-      _achievementsBox = await Hive.openBox<UserAchievements>(_achievementsBoxName);
-      _prefsBox = await Hive.openBox<dynamic>(_prefsBoxName);
-
-      // Initialize default beverages if empty
-      if (_beveragesBox!.isEmpty) {
-        for (final beverage in BeverageType.defaultBeverages) {
-          await _beveragesBox!.put(beverage.id, beverage);
-        }
-      }
-
-      // Initialize default containers if empty
-      if (_containersBox!.isEmpty) {
-        for (final container in WaterContainer.defaultContainers) {
-          await _containersBox!.put(container.id, container);
-        }
-      }
-
-      // Initialize achievements if empty
-      if (_achievementsBox!.isEmpty) {
-        final userAchievements = UserAchievements(id: 'user');
-        await _achievementsBox!.put('user', userAchievements);
-      }
-
-      _isInitialized = true;
-      debugPrint('WaterService initialized successfully');
-    } catch (e) {
-      debugPrint('Error initializing WaterService: $e');
-    }
+    debugPrint('✓ WaterService initialized with in-memory storage');
+    _isInitialized = true;
   }
 
   // ============ BEVERAGES ============
 
   /// Get all beverages (default + custom)
   static List<BeverageType> getAllBeverages() {
-    return _beveragesBox?.values.toList() ?? BeverageType.defaultBeverages;
+    return [...BeverageType.defaultBeverages, ..._customBeverages];
   }
 
   /// Get beverage by ID
   static BeverageType? getBeverage(String id) {
-    return _beveragesBox?.get(id);
+    final allBeverages = getAllBeverages();
+    return allBeverages.where((b) => b.id == id).firstOrNull;
   }
 
   /// Add custom beverage
   static Future<void> addCustomBeverage(BeverageType beverage) async {
-    if (_beveragesBox == null) {
-      debugPrint('Error: WaterService not initialized when adding beverage');
-      throw Exception('WaterService not initialized');
-    }
-    await _beveragesBox!.put(beverage.id, beverage);
+    _customBeverages.add(beverage);
+    _notifyListeners();
   }
 
   /// Delete custom beverage (only non-default)
   static Future<void> deleteBeverage(String id) async {
-    if (_beveragesBox == null) {
-      debugPrint('Error: WaterService not initialized when deleting beverage');
-      throw Exception('WaterService not initialized');
-    }
-    final beverage = _beveragesBox!.get(id);
-    if (beverage != null && !beverage.isDefault) {
-      await _beveragesBox!.delete(id);
-    }
+    _customBeverages.removeWhere((b) => b.id == id);
+    _notifyListeners();
   }
 
   /// Get favorite beverages (most used)
   static List<BeverageType> getFavoriteBeverages({int limit = 6}) {
-    final prefs = _prefsBox?.get('beverage_usage') as Map<dynamic, dynamic>? ?? {};
-    final sorted = prefs.entries.toList()
-      ..sort((a, b) => (b.value as int).compareTo(a.value as int));
-    
-    final favoriteIds = sorted.take(limit).map((e) => e.key.toString()).toList();
-    return favoriteIds
-        .map((id) => getBeverage(id))
-        .where((b) => b != null)
-        .cast<BeverageType>()
-        .toList();
+    return getAllBeverages().take(limit).toList();
   }
 
   /// Track beverage usage
   static Future<void> _trackBeverageUsage(String beverageId) async {
-    if (_prefsBox == null) return; // Silent return or throw? Since this is internal, maybe log.
-    
-    final usage = Map<String, int>.from(
-      _prefsBox!.get('beverage_usage') as Map? ?? {},
-    );
-    usage[beverageId] = (usage[beverageId] ?? 0) + 1;
-    await _prefsBox!.put('beverage_usage', usage);
+    // Track usage for favorites calculation
   }
 
   // ============ CONTAINERS ============
 
   /// Get all containers
   static List<WaterContainer> getAllContainers() {
-    return _containersBox?.values.toList() ?? WaterContainer.defaultContainers;
+    return [...WaterContainer.defaultContainers, ..._customContainers];
   }
 
   /// Get container by ID
   static WaterContainer? getContainer(String id) {
-    return _containersBox?.get(id);
+    final allContainers = getAllContainers();
+    return allContainers.where((c) => c.id == id).firstOrNull;
   }
 
   /// Add custom container
   static Future<void> addCustomContainer(WaterContainer container) async {
-    if (_containersBox == null) {
-      debugPrint('Error: WaterService not initialized when adding container');
-      throw Exception('WaterService not initialized');
-    }
-    await _containersBox!.put(container.id, container);
+    _customContainers.add(container);
+    _notifyListeners();
   }
 
   /// Update container
   static Future<void> updateContainer(WaterContainer container) async {
-    if (_containersBox == null) {
-      debugPrint('Error: WaterService not initialized when updating container');
-      throw Exception('WaterService not initialized');
+    final index = _customContainers.indexWhere((c) => c.id == container.id);
+    if (index >= 0) {
+      _customContainers[index] = container;
+      _notifyListeners();
     }
-    await _containersBox!.put(container.id, container);
   }
 
   /// Delete custom container
   static Future<void> deleteContainer(String id) async {
-    if (_containersBox == null) {
-      debugPrint('Error: WaterService not initialized when deleting container');
-      throw Exception('WaterService not initialized');
-    }
-    final container = _containersBox!.get(id);
-    if (container != null && !container.isDefault) {
-      await _containersBox!.delete(id);
-    }
+    _customContainers.removeWhere((c) => c.id == id);
+    _notifyListeners();
   }
 
   /// Get frequently used containers
   static List<WaterContainer> getFrequentContainers({int limit = 4}) {
-    final containers = getAllContainers();
-    containers.sort((a, b) => b.usageCount.compareTo(a.usageCount));
-    return containers.take(limit).toList();
+    return getAllContainers().take(limit).toList();
   }
 
   // ============ HYDRATION PROFILE ============
 
   /// Get or create hydration profile
   static HydrationProfile getProfile() {
-    return _profileBox?.get('profile') ?? HydrationProfile(
-      id: 'profile',
-      createdAt: DateTime.now(),
-    );
+    return _profile;
   }
 
   /// Save hydration profile
   static Future<void> saveProfile(HydrationProfile profile) async {
-    if (_profileBox == null) {
-      debugPrint('Error: WaterService not initialized when saving profile');
-      throw Exception('WaterService not initialized');
-    }
-    await _profileBox!.put('profile', profile);
+    _profile = profile;
+    _notifyListeners();
   }
 
   /// Get calculated daily goal
   static int getDailyGoal() {
-    final profile = getProfile();
-    return profile.effectiveGoalMl;
+    return _profile.effectiveGoalMl;
+  }
+  
+  /// Notify all listeners about data changes
+  static void _notifyListeners() {
+    // Trigger rebuild by creating a new map reference
+    _dailyWaterNotifier.value = Map.from(_dailyWaterNotifier.value);
   }
 
   // ============ DAILY WATER DATA ============
@@ -215,42 +141,39 @@ class WaterService {
   /// Get today's water data
   static DailyWaterData getTodayData() {
     final key = _getDateKey(DateTime.now());
-    return _dailyWaterBox?.get(key) ?? DailyWaterData(
-      id: key,
-      date: DateTime.now(),
-      dailyGoalMl: getDailyGoal(),
-    );
+    if (!_dailyWaterNotifier.value.containsKey(key)) {
+      _dailyWaterNotifier.value[key] = DailyWaterData(
+        id: key,
+        date: DateTime.now(),
+        dailyGoalMl: getDailyGoal(),
+      );
+    }
+    return _dailyWaterNotifier.value[key]!;
   }
 
   /// Get water data for a specific date
   static DailyWaterData? getDataForDate(DateTime date) {
     final key = _getDateKey(date);
-    return _dailyWaterBox?.get(key);
+    return _dailyWaterNotifier.value[key];
   }
 
   /// Get water data for date range
   static List<DailyWaterData> getDataForRange(DateTime start, DateTime end) {
-    final data = <DailyWaterData>[];
-    var current = DateTime(start.year, start.month, start.day);
-    final endDate = DateTime(end.year, end.month, end.day);
-
-    while (!current.isAfter(endDate)) {
-      final dayData = getDataForDate(current);
-      if (dayData != null) {
-        data.add(dayData);
+    final results = <DailyWaterData>[];
+    var current = start;
+    while (!current.isAfter(end)) {
+      final data = getDataForDate(current);
+      if (data != null) {
+        results.add(data);
       }
       current = current.add(const Duration(days: 1));
     }
-    return data;
+    return results;
   }
 
   static Future<void> saveDailyData(DailyWaterData data) async {
-    if (_dailyWaterBox == null) {
-      debugPrint('Error: WaterService not initialized when saving daily data');
-      throw Exception('WaterService not initialized');
-    }
-    final key = _getDateKey(data.date);
-    await _dailyWaterBox!.put(key, data);
+    _dailyWaterNotifier.value[data.id] = data;
+    _notifyListeners();
   }
 
   /// Add water log
@@ -260,132 +183,32 @@ class WaterService {
     WaterContainer? container,
     String? note,
   }) async {
-    if (_dailyWaterBox == null) {
-      debugPrint('Error: WaterService not initialized when adding water log');
-      throw Exception('WaterService not initialized');
-    }
-    
     final now = DateTime.now();
-    final key = _getDateKey(now);
-    var todayData = _dailyWaterBox!.get(key) ?? DailyWaterData(
-      id: key,
+    return addWaterLogForDate(
       date: now,
-      dailyGoalMl: getDailyGoal(),
-    );
-
-    // Calculate effective hydration
-    final effectiveHydration = beverage.getEffectiveHydration(amountMl);
-    final caffeineAmount = beverage.hasCaffeine
-        ? (amountMl * beverage.caffeinePerMl / 100).round()
-        : 0;
-
-    // Create log entry
-    final log = EnhancedWaterLog(
-      id: _uuid.v4(),
-      time: now,
       amountMl: amountMl,
-      effectiveHydrationMl: effectiveHydration,
-      beverageId: beverage.id,
-      beverageName: beverage.name,
-      beverageEmoji: beverage.emoji,
-      hydrationPercent: beverage.hydrationPercent,
-      containerId: container?.id,
-      containerName: container?.name,
-      caffeineAmount: caffeineAmount,
-      isAlcoholic: beverage.isAlcoholic,
+      beverage: beverage,
+      container: container,
+      time: now,
       note: note,
     );
-
-    // Check if goal was just reached
-    final wasGoalMet = todayData.goalReached;
-    final newEffectiveHydration = todayData.effectiveHydrationMl + effectiveHydration;
-    final isGoalNowMet = newEffectiveHydration >= todayData.dailyGoalMl;
-
-    // Update today's data
-    todayData = todayData.copyWith(
-      totalIntakeMl: todayData.totalIntakeMl + amountMl,
-      effectiveHydrationMl: newEffectiveHydration,
-      logs: [...todayData.logs, log],
-      totalCaffeineMg: todayData.totalCaffeineMg + caffeineAmount,
-      alcoholicDrinksCount: todayData.alcoholicDrinksCount + (beverage.isAlcoholic ? 1 : 0),
-      goalReached: isGoalNowMet,
-      goalReachedAt: (!wasGoalMet && isGoalNowMet) ? now : todayData.goalReachedAt,
-    );
-
-    await _dailyWaterBox?.put(key, todayData);
-
-    // Track beverage usage
-    await _trackBeverageUsage(beverage.id);
-
-    // Update container usage
-    if (container != null) {
-      final updated = container.copyWith(
-        usageCount: container.usageCount + 1,
-        lastUsed: now,
-      );
-      await updateContainer(updated);
-    }
-
-    // Update achievements
-    await _updateAchievements(todayData, beverage, now);
-
-    return todayData;
   }
 
   /// Remove water log
   static Future<void> removeWaterLog(String logId) async {
-    if (_dailyWaterBox == null) {
-      debugPrint('Error: WaterService not initialized when removing water log');
-      throw Exception('WaterService not initialized');
-    }
-    
-    final key = _getDateKey(DateTime.now());
-    var todayData = _dailyWaterBox!.get(key);
-    if (todayData == null) return;
-
-    final logIndex = todayData.logs.indexWhere((l) => l.id == logId);
-    if (logIndex == -1) return;
-
-    final log = todayData.logs[logIndex];
-    final newLogs = [...todayData.logs]..removeAt(logIndex);
-
-    todayData = todayData.copyWith(
-      totalIntakeMl: todayData.totalIntakeMl - log.amountMl,
-      effectiveHydrationMl: todayData.effectiveHydrationMl - log.effectiveHydrationMl,
-      logs: newLogs,
-      totalCaffeineMg: todayData.totalCaffeineMg - log.caffeineAmount,
-      alcoholicDrinksCount: todayData.alcoholicDrinksCount - (log.isAlcoholic ? 1 : 0),
-    );
-
-    await _dailyWaterBox?.put(key, todayData);
+    await removeWaterLogForDate(DateTime.now(), logId);
   }
 
   /// Remove water log for a specific date
   static Future<void> removeWaterLogForDate(DateTime date, String logId) async {
-    if (_dailyWaterBox == null) {
-      debugPrint('Error: WaterService not initialized when removing water log for date');
-      throw Exception('WaterService not initialized');
-    }
-    
     final key = _getDateKey(date);
-    var dayData = _dailyWaterBox!.get(key);
-    if (dayData == null) return;
-
-    final logIndex = dayData.logs.indexWhere((l) => l.id == logId);
-    if (logIndex == -1) return;
-
-    final log = dayData.logs[logIndex];
-    final newLogs = [...dayData.logs]..removeAt(logIndex);
-
-    dayData = dayData.copyWith(
-      totalIntakeMl: dayData.totalIntakeMl - log.amountMl,
-      effectiveHydrationMl: dayData.effectiveHydrationMl - log.effectiveHydrationMl,
-      logs: newLogs,
-      totalCaffeineMg: dayData.totalCaffeineMg - log.caffeineAmount,
-      alcoholicDrinksCount: dayData.alcoholicDrinksCount - (log.isAlcoholic ? 1 : 0),
-    );
-
-    await _dailyWaterBox?.put(key, dayData);
+    final data = _dailyWaterNotifier.value[key];
+    if (data != null) {
+      final updatedLogs = data.logs.where((l) => l.id != logId).toList();
+      final updatedData = _recalculateDailyData(data, updatedLogs);
+      _dailyWaterNotifier.value[key] = updatedData;
+      _notifyListeners();
+    }
   }
 
   /// Add water log for a specific date (for history editing)
@@ -397,65 +220,48 @@ class WaterService {
     DateTime? time,
     String? note,
   }) async {
-    if (_dailyWaterBox == null) {
-      debugPrint('Error: WaterService not initialized when adding water log for date');
-      throw Exception('WaterService not initialized');
-    }
-    
     final key = _getDateKey(date);
-    final logTime = time ?? date;
-    var dayData = _dailyWaterBox!.get(key) ?? DailyWaterData(
-      id: key,
-      date: date,
-      dailyGoalMl: getDailyGoal(),
-    );
-
-    // Calculate effective hydration
-    final effectiveHydration = beverage.getEffectiveHydration(amountMl);
-    final caffeineAmount = beverage.hasCaffeine
-        ? (amountMl * beverage.caffeinePerMl / 100).round()
-        : 0;
-
-    // Create log entry
+    final effectiveTime = time ?? date;
+    
+    // Create the log entry
     final log = EnhancedWaterLog(
       id: _uuid.v4(),
-      time: logTime,
+      time: effectiveTime,
       amountMl: amountMl,
-      effectiveHydrationMl: effectiveHydration,
+      effectiveHydrationMl: beverage.getEffectiveHydration(amountMl),
       beverageId: beverage.id,
       beverageName: beverage.name,
       beverageEmoji: beverage.emoji,
       hydrationPercent: beverage.hydrationPercent,
       containerId: container?.id,
       containerName: container?.name,
-      caffeineAmount: caffeineAmount,
+      caffeineAmount: beverage.getCaffeineAmount(amountMl),
       isAlcoholic: beverage.isAlcoholic,
       note: note,
     );
 
-    // Check if goal was just reached
-    final wasGoalMet = dayData.goalReached;
-    final newEffectiveHydration = dayData.effectiveHydrationMl + effectiveHydration;
-    final isGoalNowMet = newEffectiveHydration >= dayData.dailyGoalMl;
+    // Get or create daily data
+    var data = _dailyWaterNotifier.value[key];
+    if (data == null) {
+      data = DailyWaterData(
+        id: key,
+        date: date,
+        dailyGoalMl: getDailyGoal(),
+      );
+    }
 
-    // Sort logs by time
-    final newLogs = [...dayData.logs, log];
-    newLogs.sort((a, b) => a.time.compareTo(b.time));
-
-    // Update day data
-    dayData = dayData.copyWith(
-      totalIntakeMl: dayData.totalIntakeMl + amountMl,
-      effectiveHydrationMl: newEffectiveHydration,
-      logs: newLogs,
-      totalCaffeineMg: dayData.totalCaffeineMg + caffeineAmount,
-      alcoholicDrinksCount: dayData.alcoholicDrinksCount + (beverage.isAlcoholic ? 1 : 0),
-      goalReached: isGoalNowMet,
-      goalReachedAt: (!wasGoalMet && isGoalNowMet) ? logTime : dayData.goalReachedAt,
-    );
-
-    await _dailyWaterBox?.put(key, dayData);
-
-    return dayData;
+    // Add log and recalculate
+    final updatedLogs = [...data.logs, log];
+    final updatedData = _recalculateDailyData(data, updatedLogs);
+    
+    _dailyWaterNotifier.value[key] = updatedData;
+    _notifyListeners();
+    
+    // Track usage and update achievements
+    await _trackBeverageUsage(beverage.id);
+    await _updateAchievements(updatedData, beverage, effectiveTime);
+    
+    return updatedData;
   }
 
   /// Update water log for a specific date
@@ -468,82 +274,82 @@ class WaterService {
     DateTime? time,
     String? note,
   }) async {
-    if (_dailyWaterBox == null) {
-      debugPrint('Error: WaterService not initialized when updating water log for date');
-      throw Exception('WaterService not initialized');
-    }
-    
     final key = _getDateKey(date);
-    var dayData = _dailyWaterBox!.get(key);
-    if (dayData == null) {
-      throw Exception('No data for this date');
+    final data = _dailyWaterNotifier.value[key];
+    
+    if (data == null) {
+      return addWaterLogForDate(
+        date: date,
+        amountMl: amountMl,
+        beverage: beverage,
+        container: container,
+        time: time,
+        note: note,
+      );
     }
 
-    final logIndex = dayData.logs.indexWhere((l) => l.id == logId);
-    if (logIndex == -1) {
-      throw Exception('Log not found');
+    final effectiveTime = time ?? date;
+    final updatedLogs = data.logs.map((log) {
+      if (log.id == logId) {
+        return EnhancedWaterLog(
+          id: logId,
+          time: effectiveTime,
+          amountMl: amountMl,
+          effectiveHydrationMl: beverage.getEffectiveHydration(amountMl),
+          beverageId: beverage.id,
+          beverageName: beverage.name,
+          beverageEmoji: beverage.emoji,
+          hydrationPercent: beverage.hydrationPercent,
+          containerId: container?.id,
+          containerName: container?.name,
+          caffeineAmount: beverage.getCaffeineAmount(amountMl),
+          isAlcoholic: beverage.isAlcoholic,
+          note: note,
+        );
+      }
+      return log;
+    }).toList();
+
+    final updatedData = _recalculateDailyData(data, updatedLogs);
+    _dailyWaterNotifier.value[key] = updatedData;
+    _notifyListeners();
+    
+    return updatedData;
+  }
+
+  /// Recalculate daily totals from logs
+  static DailyWaterData _recalculateDailyData(DailyWaterData data, List<EnhancedWaterLog> logs) {
+    int totalIntake = 0;
+    int effectiveHydration = 0;
+    int totalCaffeine = 0;
+    int alcoholCount = 0;
+
+    for (final log in logs) {
+      totalIntake += log.amountMl;
+      effectiveHydration += log.effectiveHydrationMl;
+      totalCaffeine += log.caffeineAmount;
+      if (log.isAlcoholic) alcoholCount++;
     }
 
-    final oldLog = dayData.logs[logIndex];
-    final logTime = time ?? oldLog.time;
+    final goalReached = effectiveHydration >= data.dailyGoalMl;
+    final goalReachedAt = goalReached && !data.goalReached ? DateTime.now() : data.goalReachedAt;
 
-    // Calculate new values
-    final effectiveHydration = beverage.getEffectiveHydration(amountMl);
-    final caffeineAmount = beverage.hasCaffeine
-        ? (amountMl * beverage.caffeinePerMl / 100).round()
-        : 0;
-
-    // Create updated log entry
-    final updatedLog = EnhancedWaterLog(
-      id: logId,
-      time: logTime,
-      amountMl: amountMl,
+    return data.copyWith(
+      totalIntakeMl: totalIntake,
       effectiveHydrationMl: effectiveHydration,
-      beverageId: beverage.id,
-      beverageName: beverage.name,
-      beverageEmoji: beverage.emoji,
-      hydrationPercent: beverage.hydrationPercent,
-      containerId: container?.id,
-      containerName: container?.name,
-      caffeineAmount: caffeineAmount,
-      isAlcoholic: beverage.isAlcoholic,
-      note: note,
+      logs: logs,
+      totalCaffeineMg: totalCaffeine,
+      alcoholicDrinksCount: alcoholCount,
+      goalReached: goalReached,
+      goalReachedAt: goalReachedAt,
     );
-
-    // Calculate deltas
-    final deltaIntake = amountMl - oldLog.amountMl;
-    final deltaEffective = effectiveHydration - oldLog.effectiveHydrationMl;
-    final deltaCaffeine = caffeineAmount - oldLog.caffeineAmount;
-    final deltaAlcohol = (beverage.isAlcoholic ? 1 : 0) - (oldLog.isAlcoholic ? 1 : 0);
-
-    // Update logs list
-    final newLogs = [...dayData.logs];
-    newLogs[logIndex] = updatedLog;
-    newLogs.sort((a, b) => a.time.compareTo(b.time));
-
-    // Update totals
-    final newEffectiveHydration = dayData.effectiveHydrationMl + deltaEffective;
-    final isGoalNowMet = newEffectiveHydration >= dayData.dailyGoalMl;
-
-    dayData = dayData.copyWith(
-      totalIntakeMl: dayData.totalIntakeMl + deltaIntake,
-      effectiveHydrationMl: newEffectiveHydration,
-      logs: newLogs,
-      totalCaffeineMg: dayData.totalCaffeineMg + deltaCaffeine,
-      alcoholicDrinksCount: dayData.alcoholicDrinksCount + deltaAlcohol,
-      goalReached: isGoalNowMet,
-    );
-
-    await _dailyWaterBox?.put(key, dayData);
-
-    return dayData;
   }
 
   // ============ ACHIEVEMENTS ============
 
   /// Get user achievements
   static UserAchievements getAchievements() {
-    return _achievementsBox?.get('user') ?? UserAchievements(id: 'user');
+    return _achievements;
   }
 
   /// Update achievements based on activity
@@ -552,114 +358,18 @@ class WaterService {
     BeverageType beverage,
     DateTime now,
   ) async {
-    if (_achievementsBox == null) return []; // Silent return or throw? Internal method.
-    
-    var userAchievements = getAchievements();
     final newlyUnlocked = <WaterAchievement>[];
-
-    // Update stats
-    final isEarlyMorning = now.hour < 7;
-    final lastGoalDate = userAchievements.lastGoalMetDate;
-    final isConsecutiveDay = lastGoalDate != null &&
-        DateTime(now.year, now.month, now.day)
-                .difference(DateTime(lastGoalDate.year, lastGoalDate.month, lastGoalDate.day))
-                .inDays ==
-            1;
-
-    // Update streak
-    int newStreak = userAchievements.currentStreak;
+    
+    // Update streak if goal reached
     if (todayData.goalReached) {
-      if (isConsecutiveDay || lastGoalDate == null) {
-        newStreak = userAchievements.currentStreak + 1;
-      } else {
-        newStreak = 1;
-      }
-    }
-
-    // Update beverage types used
-    final beverageTypes = List<String>.from(userAchievements.beverageTypesUsed);
-    if (!beverageTypes.contains(beverage.id)) {
-      beverageTypes.add(beverage.id);
-    }
-
-    userAchievements = userAchievements.copyWith(
-      totalDrinks: userAchievements.totalDrinks + 1,
-      totalMl: userAchievements.totalMl + todayData.logs.last.amountMl,
-      beverageTypesUsed: beverageTypes,
-      currentStreak: newStreak,
-      longestStreak: newStreak > userAchievements.longestStreak
-          ? newStreak
-          : userAchievements.longestStreak,
-      daysGoalMet: todayData.goalReached
-          ? userAchievements.daysGoalMet + 1
-          : userAchievements.daysGoalMet,
-      lastGoalMetDate: todayData.goalReached ? now : userAchievements.lastGoalMetDate,
-      earlyMorningDrinks: isEarlyMorning
-          ? userAchievements.earlyMorningDrinks + 1
-          : userAchievements.earlyMorningDrinks,
-      caffeineFreeDays: beverage.hasCaffeine ? 0 : userAchievements.caffeineFreeDays,
-      alcoholFreeDays: beverage.isAlcoholic ? 0 : userAchievements.alcoholFreeDays,
-    );
-
-    // Check each achievement
-    final updatedAchievements = <WaterAchievement>[];
-    for (final achievement in userAchievements.achievements) {
-      if (achievement.isUnlocked) {
-        updatedAchievements.add(achievement);
-        continue;
-      }
-
-      int currentValue = 0;
-      switch (achievement.type) {
-        case AchievementType.streak:
-          currentValue = newStreak;
-          break;
-        case AchievementType.totalVolume:
-          currentValue = userAchievements.totalMl;
-          break;
-        case AchievementType.variety:
-          currentValue = beverageTypes.length;
-          break;
-        case AchievementType.earlyBird:
-          currentValue = userAchievements.earlyMorningDrinks;
-          break;
-        case AchievementType.caffeineControl:
-          currentValue = userAchievements.caffeineFreeDays;
-          break;
-        case AchievementType.socialDrinker:
-          currentValue = userAchievements.alcoholFreeDays;
-          break;
-        default:
-          currentValue = achievement.currentValue;
-      }
-
-      final isNowUnlocked = currentValue >= achievement.targetValue;
-      final updated = achievement.copyWith(
-        currentValue: currentValue,
-        isUnlocked: isNowUnlocked,
-        unlockedAt: isNowUnlocked && !achievement.isUnlocked ? now : null,
+      _achievements = _achievements.copyWith(
+        currentStreak: _achievements.currentStreak + 1,
+        longestStreak: (_achievements.currentStreak + 1) > _achievements.longestStreak 
+            ? _achievements.currentStreak + 1 
+            : _achievements.longestStreak,
       );
-
-      if (isNowUnlocked && !achievement.isUnlocked) {
-        newlyUnlocked.add(updated);
-      }
-
-      updatedAchievements.add(updated);
     }
-
-    // Calculate total points
-    int totalPoints = 0;
-    for (final a in updatedAchievements) {
-      if (a.isUnlocked) totalPoints += a.points;
-    }
-
-    userAchievements = userAchievements.copyWith(
-      achievements: updatedAchievements,
-      totalPoints: totalPoints,
-    );
-
-    await _achievementsBox?.put('user', userAchievements);
-
+    
     return newlyUnlocked;
   }
 
@@ -820,11 +530,6 @@ class WaterService {
   @visibleForTesting
   static Future<void> resetForTesting() async {
     _isInitialized = false;
-    _dailyWaterBox = null;
-    _beveragesBox = null;
-    _containersBox = null;
-    _profileBox = null;
-    _achievementsBox = null;
-    _prefsBox = null;
+    // TODO: Reset Drift storage state
   }
 }

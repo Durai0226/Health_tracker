@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/app_allow_list.dart';
 
 class AppAllowListScreen extends StatefulWidget {
@@ -21,7 +21,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
   }
 
   Future<void> _loadData() async {
-    final prefs = StorageService.getAppPreferences();
+    final prefs = CleanStorageService.getAppPreferences();
     final allowListJson = prefs['focusAppAllowList'];
     if (allowListJson != null && allowListJson is Map) {
       setState(() {
@@ -34,7 +34,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
   }
 
   Future<void> _saveData() async {
-    await StorageService.setAppPreference('focusAppAllowList', _allowList.toJson());
+    await CleanStorageService.setAppPreference('focusAppAllowList', _allowList.toJson());
   }
 
   @override

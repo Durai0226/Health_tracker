@@ -1,18 +1,26 @@
-import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cycle_log.dart';
 import '../models/symptom_log.dart';
 import '../models/period_settings.dart';
-import '../../../core/utils/secure_storage_helper.dart';
 
-class PeriodStorageService {
-  static const String _cycleLogBoxName = 'cycle_logs';
-  static const String _symptomLogBoxName = 'symptom_logs';
-  static const String _periodSettingsBoxName = 'period_settings';
+/// Period tracking storage service
+/// Uses SharedPreferences for local storage with Firestore sync
+class PeriodCleanStorageService {
+  static const String _cyclesKey = 'period_cycles';
+  static const String _symptomsKey = 'period_symptoms';
+  static const String _settingsKey = 'period_settings';
 
   static bool _isInitialized = false;
+  static SharedPreferences? _prefs;
+  
+  // In-memory cache for faster access
+  static List<CycleLog> _cyclesCache = [];
+  static List<SymptomLog> _symptomsCache = [];
+  static PeriodSettings? _settingsCache;
 
   static String? get _currentUserId {
     final user = firebase_auth.FirebaseAuth.instance.currentUser;
@@ -56,139 +64,109 @@ class PeriodStorageService {
 
   static Future<void> init() async {
     if (_isInitialized) return;
-
-    try {
-      // Register adapters
-      _safeRegisterAdapter(FlowIntensityAdapter());
-      _safeRegisterAdapter(CyclePhaseAdapter());
-      _safeRegisterAdapter(CycleLogAdapter());
-      _safeRegisterAdapter(DailyLogAdapter());
-      _safeRegisterAdapter(SymptomTypeAdapter());
-      _safeRegisterAdapter(SymptomSeverityAdapter());
-      _safeRegisterAdapter(MoodTypeAdapter());
-      _safeRegisterAdapter(EnergyLevelAdapter());
-      _safeRegisterAdapter(SleepQualityAdapter());
-      _safeRegisterAdapter(SymptomLogAdapter());
-      _safeRegisterAdapter(SymptomEntryAdapter());
-      _safeRegisterAdapter(PeriodSettingsAdapter());
-
-      // Open boxes
-      await _safeOpenBox<CycleLog>(_cycleLogBoxName);
-      await _safeOpenBox<SymptomLog>(_symptomLogBoxName);
-      await _safeOpenBox<PeriodSettings>(_periodSettingsBoxName);
-
-      _isInitialized = true;
-      debugPrint('PeriodStorageService initialized successfully');
-    } catch (e) {
-      debugPrint('Error initializing PeriodStorageService: $e');
-    }
+    _prefs = await SharedPreferences.getInstance();
+    await _loadFromPrefs();
+    debugPrint('✓ PeriodCleanStorageService initialized');
+    _isInitialized = true;
   }
 
-  static void _safeRegisterAdapter<T>(TypeAdapter<T> adapter) {
-    try {
-      if (!Hive.isAdapterRegistered(adapter.typeId)) {
-        Hive.registerAdapter(adapter);
-      }
-    } catch (e) {
-      debugPrint('Error registering adapter ${adapter.runtimeType}: $e');
-    }
-  }
-
-  static Future<Box<T>> _safeOpenBox<T>(String boxName) async {
-    try {
-      if (Hive.isBoxOpen(boxName)) {
-        return Hive.box<T>(boxName);
-      }
-      final encryptionKey = await SecureStorageHelper.getEncryptionKey();
-      return await Hive.openBox<T>(
-        boxName,
-        encryptionCipher: HiveAesCipher(encryptionKey),
-      );
-    } catch (e) {
-      debugPrint('Error opening box $boxName: $e');
+  static Future<void> _loadFromPrefs() async {
+    if (_prefs == null) return;
+    
+    // Load cycles
+    final cyclesJson = _prefs!.getString(_cyclesKey);
+    if (cyclesJson != null) {
       try {
-        await Hive.deleteBoxFromDisk(boxName);
-        final encryptionKey = await SecureStorageHelper.getEncryptionKey();
-        return await Hive.openBox<T>(
-          boxName,
-          encryptionCipher: HiveAesCipher(encryptionKey),
-        );
-      } catch (deleteError) {
-        debugPrint('Error recovering box $boxName: $deleteError');
-        rethrow;
+        final List<dynamic> cyclesList = jsonDecode(cyclesJson);
+        _cyclesCache = cyclesList.map((e) => CycleLog.fromJson(e)).toList();
+        _cyclesCache.sort((a, b) => b.startDate.compareTo(a.startDate));
+      } catch (e) {
+        debugPrint('Error loading cycles: $e');
+        _cyclesCache = [];
       }
     }
+    
+    // Load symptoms
+    final symptomsJson = _prefs!.getString(_symptomsKey);
+    if (symptomsJson != null) {
+      try {
+        final List<dynamic> symptomsList = jsonDecode(symptomsJson);
+        _symptomsCache = symptomsList.map((e) => SymptomLog.fromJson(e)).toList();
+      } catch (e) {
+        debugPrint('Error loading symptoms: $e');
+        _symptomsCache = [];
+      }
+    }
+    
+    // Load settings
+    final settingsJson = _prefs!.getString(_settingsKey);
+    if (settingsJson != null) {
+      try {
+        _settingsCache = PeriodSettings.fromJson(jsonDecode(settingsJson));
+      } catch (e) {
+        debugPrint('Error loading settings: $e');
+        _settingsCache = null;
+      }
+    }
+  }
+
+  static Future<void> _saveCycles() async {
+    if (_prefs == null) return;
+    final json = jsonEncode(_cyclesCache.map((c) => c.toJson()).toList());
+    await _prefs!.setString(_cyclesKey, json);
+  }
+
+  static Future<void> _saveSymptoms() async {
+    if (_prefs == null) return;
+    final json = jsonEncode(_symptomsCache.map((s) => s.toJson()).toList());
+    await _prefs!.setString(_symptomsKey, json);
+  }
+
+  static Future<void> _saveSettings() async {
+    if (_prefs == null || _settingsCache == null) return;
+    final json = jsonEncode(_settingsCache!.toJson());
+    await _prefs!.setString(_settingsKey, json);
   }
 
   // ============ Cycle Log Methods ============
-  static Box<CycleLog> get _cycleLogBox => Hive.box<CycleLog>(_cycleLogBoxName);
 
   static List<CycleLog> getAllCycles() {
-    try {
-      final cycles = _cycleLogBox.values.toList();
-      cycles.sort((a, b) => b.startDate.compareTo(a.startDate));
-      return cycles;
-    } catch (e) {
-      debugPrint('Error getting cycles: $e');
-      return [];
-    }
+    return List.from(_cyclesCache);
   }
 
   static CycleLog? getCurrentCycle() {
-    try {
-      final cycles = getAllCycles();
-      if (cycles.isEmpty) return null;
-      return cycles.firstWhere(
-        (c) => !c.isComplete,
-        orElse: () => cycles.first,
-      );
-    } catch (e) {
-      debugPrint('Error getting current cycle: $e');
-      return null;
-    }
+    final cycles = getAllCycles();
+    if (cycles.isEmpty) return null;
+    return cycles.firstWhere(
+      (c) => !c.isComplete,
+      orElse: () => cycles.first,
+    );
   }
 
   static Future<void> addCycle(CycleLog cycle) async {
-    try {
-      await _cycleLogBox.put(cycle.id, cycle);
-      await _syncToCloud('cycle_logs', cycle.id, cycle.toJson());
-    } catch (e) {
-      debugPrint('Error adding cycle: $e');
-    }
+    _cyclesCache.add(cycle);
+    _cyclesCache.sort((a, b) => b.startDate.compareTo(a.startDate));
+    await _saveCycles();
+    await _syncToCloud('period_cycles', cycle.id, cycle.toJson());
   }
 
   static Future<void> updateCycle(CycleLog cycle) async {
-    try {
-      await _cycleLogBox.put(cycle.id, cycle);
-      await _syncToCloud('cycle_logs', cycle.id, cycle.toJson());
-    } catch (e) {
-      debugPrint('Error updating cycle: $e');
+    final index = _cyclesCache.indexWhere((c) => c.id == cycle.id);
+    if (index != -1) {
+      _cyclesCache[index] = cycle;
+      await _saveCycles();
+      await _syncToCloud('period_cycles', cycle.id, cycle.toJson());
     }
   }
 
   static Future<void> deleteCycle(String id) async {
-    try {
-      await _cycleLogBox.delete(id);
-      await _deleteFromCloud('cycle_logs', id);
-    } catch (e) {
-      debugPrint('Error deleting cycle: $e');
-    }
+    _cyclesCache.removeWhere((c) => c.id == id);
+    await _saveCycles();
+    await _deleteFromCloud('period_cycles', id);
   }
 
   static Future<CycleLog> startNewCycle(DateTime startDate, {int? cycleLength, int? periodDuration}) async {
-    // Complete any existing open cycles
-    final openCycles = getAllCycles().where((c) => !c.isComplete).toList();
-    for (final cycle in openCycles) {
-      final completedCycle = cycle.copyWith(
-        isComplete: true,
-        endDate: startDate.subtract(const Duration(days: 1)),
-      );
-      await updateCycle(completedCycle);
-    }
-
-    // Get settings for defaults
     final settings = getSettings();
-    
     final cycle = CycleLog(
       id: 'cycle_${startDate.millisecondsSinceEpoch}',
       startDate: startDate,
@@ -202,93 +180,84 @@ class PeriodStorageService {
   static Future<void> endCurrentPeriod(DateTime endDate) async {
     final current = getCurrentCycle();
     if (current == null) return;
-
     final periodDuration = endDate.difference(current.startDate).inDays + 1;
-    final updated = current.copyWith(
-      periodDuration: periodDuration,
-    );
+    final updated = current.copyWith(periodDuration: periodDuration);
     await updateCycle(updated);
   }
 
-  static ValueListenable<Box<CycleLog>> get cycleLogListenable => _cycleLogBox.listenable();
+  // TODO: Replace with Drift stream/listener
+  // static ValueListenable<Box<CycleLog>> get cycleLogListenable => ...
 
   // ============ Symptom Log Methods ============
-  static Box<SymptomLog> get _symptomLogBox => Hive.box<SymptomLog>(_symptomLogBoxName);
+  // TODO: Replace Hive box with Drift storage
+  // static Box<SymptomLog> get _symptomLogBox => ...
 
   static List<SymptomLog> getAllSymptomLogs() {
-    try {
-      final logs = _symptomLogBox.values.toList();
-      logs.sort((a, b) => b.date.compareTo(a.date));
-      return logs;
-    } catch (e) {
-      debugPrint('Error getting symptom logs: $e');
-      return [];
-    }
+    return List.from(_symptomsCache);
   }
 
   static SymptomLog? getSymptomLogForDate(DateTime date) {
+    final dateOnly = DateTime(date.year, date.month, date.day);
     try {
-      final key = '${date.year}-${date.month}-${date.day}';
-      return _symptomLogBox.get(key);
-    } catch (e) {
-      debugPrint('Error getting symptom log for date: $e');
+      return _symptomsCache.firstWhere(
+        (log) => DateTime(log.date.year, log.date.month, log.date.day) == dateOnly,
+      );
+    } catch (_) {
       return null;
     }
   }
 
   static List<SymptomLog> getSymptomLogsForDateRange(DateTime start, DateTime end) {
-    try {
-      return _symptomLogBox.values.where((log) {
-        return log.date.isAfter(start.subtract(const Duration(days: 1))) &&
-               log.date.isBefore(end.add(const Duration(days: 1)));
-      }).toList()..sort((a, b) => a.date.compareTo(b.date));
-    } catch (e) {
-      debugPrint('Error getting symptom logs for range: $e');
-      return [];
-    }
+    return getAllSymptomLogs().where((log) {
+      return log.date.isAfter(start.subtract(const Duration(days: 1))) &&
+             log.date.isBefore(end.add(const Duration(days: 1)));
+    }).toList();
   }
 
   static Future<void> saveSymptomLog(SymptomLog log) async {
-    try {
-      final key = '${log.date.year}-${log.date.month}-${log.date.day}';
-      await _symptomLogBox.put(key, log);
-      await _syncToCloud('symptom_logs', key, log.toJson());
-    } catch (e) {
-      debugPrint('Error saving symptom log: $e');
-    }
+    final dateOnly = DateTime(log.date.year, log.date.month, log.date.day);
+    _symptomsCache.removeWhere(
+      (s) => DateTime(s.date.year, s.date.month, s.date.day) == dateOnly,
+    );
+    _symptomsCache.add(log);
+    _symptomsCache.sort((a, b) => b.date.compareTo(a.date));
+    await _saveSymptoms();
+    await _syncToCloud('period_symptoms', log.id, log.toJson());
+  }
+
+  /// Alias for saveSymptomLog for consistency
+  static Future<void> addSymptomLog(SymptomLog log) async {
+    await saveSymptomLog(log);
   }
 
   static Future<void> deleteSymptomLog(DateTime date) async {
-    try {
-      final key = '${date.year}-${date.month}-${date.day}';
-      await _symptomLogBox.delete(key);
-      await _deleteFromCloud('symptom_logs', key);
-    } catch (e) {
-      debugPrint('Error deleting symptom log: $e');
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    final log = _symptomsCache.firstWhere(
+      (s) => DateTime(s.date.year, s.date.month, s.date.day) == dateOnly,
+      orElse: () => SymptomLog(id: '', date: date, symptoms: [], moods: []),
+    );
+    if (log.id.isNotEmpty) {
+      _symptomsCache.removeWhere((s) => s.id == log.id);
+      await _saveSymptoms();
+      await _deleteFromCloud('period_symptoms', log.id);
     }
   }
 
-  static ValueListenable<Box<SymptomLog>> get symptomLogListenable => _symptomLogBox.listenable();
+  // TODO: Replace with Drift stream/listener
+  // static ValueListenable<Box<SymptomLog>> get symptomLogListenable => ...
 
   // ============ Settings Methods ============
-  static Box<PeriodSettings> get _settingsBox => Hive.box<PeriodSettings>(_periodSettingsBoxName);
+  // TODO: Replace Hive box with Drift storage
+  // static Box<PeriodSettings> get _settingsBox => ...
 
   static PeriodSettings getSettings() {
-    try {
-      return _settingsBox.get('settings') ?? PeriodSettings();
-    } catch (e) {
-      debugPrint('Error getting period settings: $e');
-      return PeriodSettings();
-    }
+    return _settingsCache ?? PeriodSettings();
   }
 
   static Future<void> saveSettings(PeriodSettings settings) async {
-    try {
-      await _settingsBox.put('settings', settings);
-      await _syncToCloud('period_settings', 'settings', settings.toJson());
-    } catch (e) {
-      debugPrint('Error saving period settings: $e');
-    }
+    _settingsCache = settings;
+    await _saveSettings();
+    await _syncToCloud('period_settings', 'user_settings', settings.toJson());
   }
 
   // ============ Statistics Methods ============
@@ -324,8 +293,12 @@ class PeriodStorageService {
     final Map<SymptomType, int> frequency = {};
 
     for (final log in logs) {
+      // Handle both simple symptoms list and symptomEntries
       for (final symptom in log.symptoms) {
-        frequency[symptom.type] = (frequency[symptom.type] ?? 0) + 1;
+        frequency[symptom] = (frequency[symptom] ?? 0) + 1;
+      }
+      for (final entry in log.symptomEntries) {
+        frequency[entry.type] = (frequency[entry.type] ?? 0) + 1;
       }
     }
 
@@ -376,12 +349,15 @@ class PeriodStorageService {
   }
 
   static Future<void> clearAllData() async {
-    try {
-      await _cycleLogBox.clear();
-      await _symptomLogBox.clear();
-      // Keep settings
-    } catch (e) {
-      debugPrint('Error clearing data: $e');
+    _cyclesCache.clear();
+    _symptomsCache.clear();
+    _settingsCache = null;
+    
+    if (_prefs != null) {
+      await _prefs!.remove(_cyclesKey);
+      await _prefs!.remove(_symptomsKey);
+      await _prefs!.remove(_settingsKey);
     }
+    debugPrint('✓ Period tracking data cleared');
   }
 }

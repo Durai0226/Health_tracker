@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/custom_tag.dart';
 import '../models/focus_session.dart';
 
@@ -27,7 +27,7 @@ class TagService extends ChangeNotifier {
 
   Future<void> _loadData() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       
       final tagsJson = prefs['focusTags'];
       if (tagsJson != null && tagsJson is List) {
@@ -52,11 +52,11 @@ class TagService extends ChangeNotifier {
 
   Future<void> _saveData() async {
     try {
-      await StorageService.setAppPreference(
+      await CleanStorageService.setAppPreference(
         'focusTags',
         _tags.map((t) => t.toJson()).toList(),
       );
-      await StorageService.setAppPreference('focusSessionTags', _sessionTags);
+      await CleanStorageService.setAppPreference('focusSessionTags', _sessionTags);
     } catch (e) {
       debugPrint('Error saving tags data: $e');
     }

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 
 class BackupService {
   
@@ -15,7 +15,7 @@ class BackupService {
   Future<File?> createBackup() async {
     try {
       // 1. Export data from Hive
-      final data = await StorageService.exportAllData();
+      final data = await CleanStorageService.exportAllData();
       final jsonString = jsonEncode(data);
       
       // 2. Create Archive
@@ -75,7 +75,7 @@ class BackupService {
       final data = jsonDecode(jsonContent);
       
       // 3. Import to Hive
-      await StorageService.importData(data);
+      await CleanStorageService.importData(data);
       return true;
       
     } catch (e) {

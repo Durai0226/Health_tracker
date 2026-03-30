@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/exam_model.dart';
+import '../data/question_bank_data.dart';
+import 'question_loader_service.dart';
+import 'question_cloud_service.dart';
 import '../models/subject_model.dart';
 import '../models/topic_model.dart';
 import '../models/study_session_model.dart';
@@ -14,6 +18,8 @@ import '../models/grade_model.dart';
 import '../models/study_plan_model.dart';
 import '../models/exam_template_model.dart';
 import '../models/study_analytics_model.dart';
+import '../models/flashcard_model.dart';
+import '../models/practice_test_model.dart';
 import '../../../core/services/notification_service.dart';
 import '../../reminders/models/reminder_model.dart';
 
@@ -30,15 +36,12 @@ class ExamPrepService extends ChangeNotifier {
   static const String _studyPlansBoxName = 'study_plans';
   static const String _templatesBoxName = 'exam_templates';
   static const String _analyticsBoxName = 'study_analytics';
+  static const String _flashcardDecksBoxName = 'flashcard_decks';
+  static const String _flashcardsBoxName = 'flashcards';
+  static const String _practiceTestsBoxName = 'practice_tests';
+  static const String _questionsBoxName = 'questions';
 
-  Box<Exam>? _examsBox;
-  Box<Subject>? _subjectsBox;
-  Box<Topic>? _topicsBox;
-  Box<StudySession>? _studySessionsBox;
-  Box<Grade>? _gradesBox;
-  Box<StudyPlan>? _studyPlansBox;
-  Box<ExamTemplate>? _templatesBox;
-  Box<StudyAnalytics>? _analyticsBox;
+  SharedPreferences? _prefs;
 
   bool _isInitialized = false;
   final _uuid = const Uuid();
@@ -52,6 +55,16 @@ class ExamPrepService extends ChangeNotifier {
   List<StudyPlan> _studyPlans = [];
   List<ExamTemplate> _templates = [];
   StudyAnalytics? _analytics;
+  List<FlashcardDeck> _flashcardDecks = [];
+  List<Flashcard> _flashcards = [];
+  List<PracticeTest> _practiceTests = [];
+  List<Question> _questions = [];
+  
+  // Question loader services
+  QuestionLoaderService? _questionLoaderService;
+  QuestionCloudService? _questionCloudService;
+  List<QuestionBankItem> _questionBank = [];
+  bool _questionsLoaded = false;
 
   // Active study session
   StudySession? _activeSession;
@@ -60,15 +73,21 @@ class ExamPrepService extends ChangeNotifier {
   DateTime? _sessionStartTime;
   bool _isPaused = false;
 
-  // Getters
-  List<Exam> get exams => List.unmodifiable(_exams);
-  List<Subject> get subjects => List.unmodifiable(_subjects);
-  List<Topic> get topics => List.unmodifiable(_topics);
-  List<StudySession> get studySessions => List.unmodifiable(_studySessions);
-  List<Grade> get grades => List.unmodifiable(_grades);
-  List<StudyPlan> get studyPlans => List.unmodifiable(_studyPlans);
-  List<ExamTemplate> get templates => List.unmodifiable(_templates);
+  // Getters - return mutable copies to allow UI sorting/filtering
+  List<Exam> get exams => List.from(_exams);
+  List<Subject> get subjects => List.from(_subjects);
+  List<Topic> get topics => List.from(_topics);
+  List<StudySession> get studySessions => List.from(_studySessions);
+  List<Grade> get grades => List.from(_grades);
+  List<StudyPlan> get studyPlans => List.from(_studyPlans);
+  List<ExamTemplate> get templates => List.from(_templates);
   StudyAnalytics? get analytics => _analytics;
+  List<FlashcardDeck> get flashcardDecks => List.from(_flashcardDecks);
+  List<Flashcard> get flashcards => List.from(_flashcards);
+  List<PracticeTest> get practiceTests => List.from(_practiceTests);
+  List<Question> get questions => List.from(_questions);
+  List<QuestionBankItem> get questionBank => List.from(_questionBank);
+  bool get questionsLoaded => _questionsLoaded;
   StudySession? get activeSession => _activeSession;
   int get remainingSeconds => _remainingSeconds;
   bool get hasActiveSession => _activeSession != null;
@@ -88,15 +107,8 @@ class ExamPrepService extends ChangeNotifier {
     if (_isInitialized) return;
 
     try {
-      // Open Hive boxes
-      _examsBox = await Hive.openBox<Exam>(_examsBoxName);
-      _subjectsBox = await Hive.openBox<Subject>(_subjectsBoxName);
-      _topicsBox = await Hive.openBox<Topic>(_topicsBoxName);
-      _studySessionsBox = await Hive.openBox<StudySession>(_studySessionsBoxName);
-      _gradesBox = await Hive.openBox<Grade>(_gradesBoxName);
-      _studyPlansBox = await Hive.openBox<StudyPlan>(_studyPlansBoxName);
-      _templatesBox = await Hive.openBox<ExamTemplate>(_templatesBoxName);
-      _analyticsBox = await Hive.openBox<StudyAnalytics>(_analyticsBoxName);
+      // Initialize SharedPreferences
+      _prefs = await SharedPreferences.getInstance();
 
       // Load cached data
       await _loadLocalData();
@@ -109,6 +121,9 @@ class ExamPrepService extends ChangeNotifier {
 
       // Load built-in templates
       await _loadBuiltInTemplates();
+      
+      // Initialize question loader service
+      await _initializeQuestionServices();
 
       _isInitialized = true;
       debugPrint('✓ ExamPrepService initialized');
@@ -120,20 +135,154 @@ class ExamPrepService extends ChangeNotifier {
   }
 
   Future<void> _loadLocalData() async {
-    _exams = _examsBox?.values.toList() ?? [];
-    _subjects = _subjectsBox?.values.toList() ?? [];
-    _topics = _topicsBox?.values.toList() ?? [];
-    _studySessions = _studySessionsBox?.values.toList() ?? [];
-    _grades = _gradesBox?.values.toList() ?? [];
-    _studyPlans = _studyPlansBox?.values.toList() ?? [];
-    _templates = _templatesBox?.values.toList() ?? [];
-    
-    final analyticsList = _analyticsBox?.values.toList() ?? [];
-    _analytics = analyticsList.isNotEmpty ? analyticsList.first : null;
+    if (_prefs == null) return;
 
-    // Sort by date
-    _exams.sort((a, b) => a.examDate.compareTo(b.examDate));
-    _studySessions.sort((a, b) => b.startTime.compareTo(a.startTime));
+    try {
+      // Load exams
+      final examsJson = _prefs!.getString('exam_prep_$_examsBoxName');
+      if (examsJson != null) {
+        final List<dynamic> examsList = jsonDecode(examsJson);
+        _exams = examsList.map((e) => Exam.fromJson(e)).toList();
+        _exams.sort((a, b) => a.examDate.compareTo(b.examDate));
+      }
+
+      // Load subjects
+      final subjectsJson = _prefs!.getString('exam_prep_$_subjectsBoxName');
+      if (subjectsJson != null) {
+        final List<dynamic> subjectsList = jsonDecode(subjectsJson);
+        _subjects = subjectsList.map((e) => Subject.fromJson(e)).toList();
+      }
+
+      // Load topics
+      final topicsJson = _prefs!.getString('exam_prep_$_topicsBoxName');
+      if (topicsJson != null) {
+        final List<dynamic> topicsList = jsonDecode(topicsJson);
+        _topics = topicsList.map((e) => Topic.fromJson(e)).toList();
+      }
+
+      // Load study sessions
+      final sessionsJson = _prefs!.getString('exam_prep_$_studySessionsBoxName');
+      if (sessionsJson != null) {
+        final List<dynamic> sessionsList = jsonDecode(sessionsJson);
+        _studySessions = sessionsList.map((e) => StudySession.fromJson(e)).toList();
+      }
+
+      // Load grades
+      final gradesJson = _prefs!.getString('exam_prep_$_gradesBoxName');
+      if (gradesJson != null) {
+        final List<dynamic> gradesList = jsonDecode(gradesJson);
+        _grades = gradesList.map((e) => Grade.fromJson(e)).toList();
+      }
+
+      // Load study plans
+      final plansJson = _prefs!.getString('exam_prep_$_studyPlansBoxName');
+      if (plansJson != null) {
+        final List<dynamic> plansList = jsonDecode(plansJson);
+        _studyPlans = plansList.map((e) => StudyPlan.fromJson(e)).toList();
+      }
+
+      // Load analytics
+      final analyticsJson = _prefs!.getString('exam_prep_$_analyticsBoxName');
+      if (analyticsJson != null) {
+        _analytics = StudyAnalytics.fromJson(jsonDecode(analyticsJson));
+      }
+
+      // Load flashcard decks
+      final decksJson = _prefs!.getString('exam_prep_$_flashcardDecksBoxName');
+      if (decksJson != null) {
+        final List<dynamic> decksList = jsonDecode(decksJson);
+        _flashcardDecks = decksList.map((e) => FlashcardDeck.fromJson(e)).toList();
+      }
+
+      // Load flashcards
+      final cardsJson = _prefs!.getString('exam_prep_$_flashcardsBoxName');
+      if (cardsJson != null) {
+        final List<dynamic> cardsList = jsonDecode(cardsJson);
+        _flashcards = cardsList.map((e) => Flashcard.fromJson(e)).toList();
+      }
+
+      // Load practice tests
+      final testsJson = _prefs!.getString('exam_prep_$_practiceTestsBoxName');
+      if (testsJson != null) {
+        final List<dynamic> testsList = jsonDecode(testsJson);
+        _practiceTests = testsList.map((e) => PracticeTest.fromJson(e)).toList();
+      }
+
+      // Load questions
+      final questionsJson = _prefs!.getString('exam_prep_$_questionsBoxName');
+      if (questionsJson != null) {
+        final List<dynamic> questionsList = jsonDecode(questionsJson);
+        _questions = questionsList.map((e) => Question.fromJson(e)).toList();
+      }
+
+      debugPrint('✓ ExamPrepService: Loaded local data successfully');
+    } catch (e) {
+      debugPrint('Error loading local data: $e');
+      // Initialize with empty lists on error
+      _exams = [];
+      _subjects = [];
+      _topics = [];
+      _studySessions = [];
+      _grades = [];
+      _studyPlans = [];
+      _templates = [];
+      _analytics = null;
+      _flashcardDecks = [];
+      _flashcards = [];
+      _practiceTests = [];
+      _questions = [];
+    }
+  }
+
+  // Save methods for SharedPreferences persistence
+  Future<void> _saveExams() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_examsBoxName', jsonEncode(_exams.map((e) => e.toJson()).toList()));
+  }
+
+  Future<void> _saveSubjects() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_subjectsBoxName', jsonEncode(_subjects.map((s) => s.toJson()).toList()));
+  }
+
+  Future<void> _saveTopics() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_topicsBoxName', jsonEncode(_topics.map((t) => t.toJson()).toList()));
+  }
+
+  Future<void> _saveStudySessions() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_studySessionsBoxName', jsonEncode(_studySessions.map((s) => s.toJson()).toList()));
+  }
+
+  Future<void> _saveGrades() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_gradesBoxName', jsonEncode(_grades.map((g) => g.toJson()).toList()));
+  }
+
+  Future<void> _saveStudyPlans() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_studyPlansBoxName', jsonEncode(_studyPlans.map((p) => p.toJson()).toList()));
+  }
+
+  Future<void> _saveFlashcardDecks() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_flashcardDecksBoxName', jsonEncode(_flashcardDecks.map((d) => d.toJson()).toList()));
+  }
+
+  Future<void> _saveFlashcards() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_flashcardsBoxName', jsonEncode(_flashcards.map((c) => c.toJson()).toList()));
+  }
+
+  Future<void> _savePracticeTests() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_practiceTestsBoxName', jsonEncode(_practiceTests.map((t) => t.toJson()).toList()));
+  }
+
+  Future<void> _saveQuestions() async {
+    if (_prefs == null) return;
+    await _prefs!.setString('exam_prep_$_questionsBoxName', jsonEncode(_questions.map((q) => q.toJson()).toList()));
   }
 
   // ==================== EXAM CRUD ====================
@@ -143,7 +292,7 @@ class ExamPrepService extends ChangeNotifier {
     
     _exams.add(newExam);
     _exams.sort((a, b) => a.examDate.compareTo(b.examDate));
-    await _examsBox?.put(newExam.id, newExam);
+    await _saveExams();
     
     // Schedule reminders
     if (newExam.reminderEnabled) {
@@ -162,7 +311,7 @@ class ExamPrepService extends ChangeNotifier {
     if (index != -1) {
       _exams[index] = exam;
       _exams.sort((a, b) => a.examDate.compareTo(b.examDate));
-      await _examsBox?.put(exam.id, exam);
+      await _saveExams();
       
       // Update reminders
       if (exam.reminderEnabled) {
@@ -176,7 +325,7 @@ class ExamPrepService extends ChangeNotifier {
 
   Future<void> deleteExam(String examId) async {
     _exams.removeWhere((e) => e.id == examId);
-    await _examsBox?.delete(examId);
+    await _saveExams();
     await _deleteFromCloud('exams', examId);
     
     // Cancel reminders
@@ -222,7 +371,7 @@ class ExamPrepService extends ChangeNotifier {
     
     _subjects.add(newSubject);
     _subjects.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-    await _subjectsBox?.put(newSubject.id, newSubject);
+    await _saveSubjects();
     await _syncToCloud('subjects', newSubject.id, newSubject.toJson());
     
     notifyListeners();
@@ -233,7 +382,7 @@ class ExamPrepService extends ChangeNotifier {
     final index = _subjects.indexWhere((s) => s.id == subject.id);
     if (index != -1) {
       _subjects[index] = subject;
-      await _subjectsBox?.put(subject.id, subject);
+      await _saveSubjects();
       await _syncToCloud('subjects', subject.id, subject.toJson());
       notifyListeners();
     }
@@ -241,7 +390,7 @@ class ExamPrepService extends ChangeNotifier {
 
   Future<void> deleteSubject(String subjectId) async {
     _subjects.removeWhere((s) => s.id == subjectId);
-    await _subjectsBox?.delete(subjectId);
+    await _saveSubjects();
     await _deleteFromCloud('subjects', subjectId);
     
     // Delete related topics
@@ -271,7 +420,7 @@ class ExamPrepService extends ChangeNotifier {
     final newTopic = topic.copyWith(id: _uuid.v4());
     
     _topics.add(newTopic);
-    await _topicsBox?.put(newTopic.id, newTopic);
+    await _saveTopics();
     await _syncToCloud('topics', newTopic.id, newTopic.toJson());
     
     // Update subject's topic list
@@ -289,7 +438,7 @@ class ExamPrepService extends ChangeNotifier {
     final index = _topics.indexWhere((t) => t.id == topic.id);
     if (index != -1) {
       _topics[index] = topic;
-      await _topicsBox?.put(topic.id, topic);
+      await _saveTopics();
       await _syncToCloud('topics', topic.id, topic.toJson());
       notifyListeners();
     }
@@ -312,7 +461,7 @@ class ExamPrepService extends ChangeNotifier {
     }
     
     _topics.removeWhere((t) => t.id == topicId);
-    await _topicsBox?.delete(topicId);
+    await _saveTopics();
     await _deleteFromCloud('topics', topicId);
     
     notifyListeners();
@@ -433,7 +582,7 @@ class ExamPrepService extends ChangeNotifier {
     );
 
     _studySessions.insert(0, completedSession);
-    await _studySessionsBox?.put(completedSession.id, completedSession);
+    await _saveStudySessions();
     await _syncToCloud('study_sessions', completedSession.id, completedSession.toJson());
 
     // Update topic study time
@@ -511,7 +660,7 @@ class ExamPrepService extends ChangeNotifier {
     final newGrade = grade.copyWith(id: _uuid.v4());
     
     _grades.add(newGrade);
-    await _gradesBox?.put(newGrade.id, newGrade);
+    await _saveGrades();
     await _syncToCloud('grades', newGrade.id, newGrade.toJson());
 
     // Update exam with grade info
@@ -537,7 +686,7 @@ class ExamPrepService extends ChangeNotifier {
     final index = _grades.indexWhere((g) => g.id == grade.id);
     if (index != -1) {
       _grades[index] = grade;
-      await _gradesBox?.put(grade.id, grade);
+      await _saveGrades();
       await _syncToCloud('grades', grade.id, grade.toJson());
       notifyListeners();
     }
@@ -545,7 +694,7 @@ class ExamPrepService extends ChangeNotifier {
 
   Future<void> deleteGrade(String gradeId) async {
     _grades.removeWhere((g) => g.id == gradeId);
-    await _gradesBox?.delete(gradeId);
+    await _saveGrades();
     await _deleteFromCloud('grades', gradeId);
     notifyListeners();
   }
@@ -576,7 +725,7 @@ class ExamPrepService extends ChangeNotifier {
     final newPlan = plan.copyWith(id: _uuid.v4());
     
     _studyPlans.add(newPlan);
-    await _studyPlansBox?.put(newPlan.id, newPlan);
+    await _saveStudyPlans();
     await _syncToCloud('study_plans', newPlan.id, newPlan.toJson());
     
     notifyListeners();
@@ -587,7 +736,7 @@ class ExamPrepService extends ChangeNotifier {
     final index = _studyPlans.indexWhere((p) => p.id == plan.id);
     if (index != -1) {
       _studyPlans[index] = plan;
-      await _studyPlansBox?.put(plan.id, plan);
+      await _saveStudyPlans();
       await _syncToCloud('study_plans', plan.id, plan.toJson());
       notifyListeners();
     }
@@ -595,7 +744,7 @@ class ExamPrepService extends ChangeNotifier {
 
   Future<void> deleteStudyPlan(String planId) async {
     _studyPlans.removeWhere((p) => p.id == planId);
-    await _studyPlansBox?.delete(planId);
+    await _saveStudyPlans();
     await _deleteFromCloud('study_plans', planId);
     notifyListeners();
   }
@@ -661,6 +810,197 @@ class ExamPrepService extends ChangeNotifier {
 
   // ==================== TEMPLATES ====================
 
+  // ==================== QUESTION LOADER INTEGRATION ====================
+
+  Future<void> _initializeQuestionServices() async {
+    try {
+      // Initialize question loader service
+      _questionLoaderService = QuestionLoaderService();
+      await _questionLoaderService!.init();
+      
+      // Initialize cloud service if user is authenticated
+      if (_currentUserId != null) {
+        _questionCloudService = QuestionCloudService();
+      }
+      
+      debugPrint('✓ Question services initialized');
+    } catch (e) {
+      debugPrint('Error initializing question services: $e');
+    }
+  }
+
+  /// Load questions for a specific exam category
+  Future<List<QuestionBankItem>> loadQuestionsForCategory(String category) async {
+    if (_questionLoaderService == null) {
+      await _initializeQuestionServices();
+    }
+    
+    try {
+      // First try to load from local assets
+      final localQuestions = await _questionLoaderService!.loadCategoryQuestions(category);
+      _questionBank = localQuestions;
+      _questionsLoaded = true;
+      
+      // If user is authenticated, also fetch cloud questions
+      if (_questionCloudService != null && _currentUserId != null) {
+        try {
+          final cloudQuestions = await _questionCloudService!.fetchQuestionsByCategory(
+            category,
+            limit: 100,
+          );
+          
+          // Merge cloud questions with local (avoid duplicates by ID)
+          final existingIds = _questionBank.map((q) => q.id).toSet();
+          for (final cloudQ in cloudQuestions) {
+            if (!existingIds.contains(cloudQ.id)) {
+              _questionBank.add(cloudQ);
+            }
+          }
+        } catch (e) {
+          debugPrint('Cloud questions fetch failed (using local only): $e');
+        }
+      }
+      
+      notifyListeners();
+      return _questionBank;
+    } catch (e) {
+      debugPrint('Error loading questions for category $category: $e');
+      return [];
+    }
+  }
+
+  /// Load questions filtered by subject
+  Future<List<QuestionBankItem>> loadQuestionsForSubject(String category, String subjectId) async {
+    if (_questionLoaderService == null) {
+      await _initializeQuestionServices();
+    }
+    
+    try {
+      final questions = await _questionLoaderService!.getFilteredQuestions(
+        categoryId: category,
+        subjectId: subjectId,
+      );
+      return questions;
+    } catch (e) {
+      debugPrint('Error loading questions for subject $subjectId: $e');
+      return [];
+    }
+  }
+
+  /// Get random questions for a practice test
+  Future<List<QuestionBankItem>> getRandomQuestions({
+    required String category,
+    String? subjectId,
+    String? difficulty,
+    int count = 10,
+  }) async {
+    if (_questionLoaderService == null) {
+      await _initializeQuestionServices();
+    }
+    
+    try {
+      List<QuestionBankItem> pool;
+      
+      if (subjectId != null) {
+        pool = await _questionLoaderService!.getFilteredQuestions(
+          categoryId: category,
+          subjectId: subjectId,
+        );
+      } else {
+        pool = await _questionLoaderService!.loadCategoryQuestions(category);
+      }
+      
+      // Filter by difficulty if specified
+      if (difficulty != null) {
+        pool = pool.where((q) => q.difficulty == difficulty).toList();
+      }
+      
+      // Shuffle and take requested count
+      pool.shuffle(Random());
+      return pool.take(count).toList();
+    } catch (e) {
+      debugPrint('Error getting random questions: $e');
+      return [];
+    }
+  }
+
+  /// Search questions by keyword
+  Future<List<QuestionBankItem>> searchQuestions(String category, String query) async {
+    if (_questionLoaderService == null) {
+      await _initializeQuestionServices();
+    }
+    
+    try {
+      // Load category questions and filter by query
+      final questions = await _questionLoaderService!.loadCategoryQuestions(category);
+      final lowerQuery = query.toLowerCase();
+      return questions.where((q) =>
+        q.question.toLowerCase().contains(lowerQuery) ||
+        q.explanation.toLowerCase().contains(lowerQuery) ||
+        q.tags.any((t) => t.toLowerCase().contains(lowerQuery))
+      ).toList();
+    } catch (e) {
+      debugPrint('Error searching questions: $e');
+      return [];
+    }
+  }
+
+  /// Get available exam categories
+  Future<List<String>> getAvailableCategories() async {
+    if (_questionLoaderService == null) {
+      await _initializeQuestionServices();
+    }
+    
+    try {
+      final categories = _questionLoaderService!.getCategories();
+      return categories.map((c) => c['id'] as String).toList();
+    } catch (e) {
+      debugPrint('Error getting categories: $e');
+      return [];
+    }
+  }
+
+  /// Get question count for a category
+  Future<int> getQuestionCount(String category) async {
+    if (_questionLoaderService == null) {
+      await _initializeQuestionServices();
+    }
+    
+    try {
+      // First ensure category is loaded
+      await _questionLoaderService!.loadCategoryQuestions(category);
+      return _questionLoaderService!.getCategoryQuestionCount(category);
+    } catch (e) {
+      debugPrint('Error getting question count: $e');
+      return 0;
+    }
+  }
+
+  /// Upload questions to cloud (for admin/content creators)
+  Future<void> uploadQuestionsToCloud(List<QuestionBankItem> questions) async {
+    if (_questionCloudService == null || _currentUserId == null) {
+      debugPrint('Cannot upload: user not authenticated');
+      return;
+    }
+    
+    try {
+      await _questionCloudService!.uploadQuestions(questions);
+      debugPrint('✓ Uploaded ${questions.length} questions to cloud');
+    } catch (e) {
+      debugPrint('Error uploading questions: $e');
+    }
+  }
+
+  /// Clear question cache
+  Future<void> clearQuestionCache() async {
+    if (_questionLoaderService != null) {
+      await _questionLoaderService!.clearCache();
+      _questionBank = [];
+      _questionsLoaded = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> _loadBuiltInTemplates() async {
     final builtInTemplates = [
       ExamTemplate(
@@ -718,7 +1058,6 @@ class ExamPrepService extends ChangeNotifier {
     for (final template in builtInTemplates) {
       if (!_templates.any((t) => t.id == template.id)) {
         _templates.add(template);
-        await _templatesBox?.put(template.id, template);
       }
     }
   }
@@ -727,7 +1066,6 @@ class ExamPrepService extends ChangeNotifier {
     final newTemplate = template.copyWith(id: _uuid.v4());
     
     _templates.add(newTemplate);
-    await _templatesBox?.put(newTemplate.id, newTemplate);
     await _syncToCloud('exam_templates', newTemplate.id, newTemplate.toJson());
     
     notifyListeners();
@@ -767,8 +1105,7 @@ class ExamPrepService extends ChangeNotifier {
     );
 
     // Update template usage count
-    final updatedTemplate = template.copyWith(usageCount: template.usageCount + 1);
-    await _templatesBox?.put(template.id, updatedTemplate);
+    // Template usage tracking is handled in-memory
 
     return await createExam(exam);
   }
@@ -878,8 +1215,8 @@ class ExamPrepService extends ChangeNotifier {
   }
 
   Future<void> _saveAnalytics() async {
-    if (_analytics != null) {
-      await _analyticsBox?.put(_analytics!.id, _analytics!);
+    if (_analytics != null && _prefs != null) {
+      await _prefs!.setString('exam_prep_$_analyticsBoxName', jsonEncode(_analytics!.toJson()));
       await _syncToCloud('study_analytics', _analytics!.id, _analytics!.toJson());
     }
   }
@@ -979,6 +1316,218 @@ class ExamPrepService extends ChangeNotifier {
     );
   }
 
+  // ==================== FLASHCARD CRUD ====================
+
+  Future<FlashcardDeck> createFlashcardDeck(FlashcardDeck deck) async {
+    final newDeck = deck.copyWith(id: _uuid.v4());
+    _flashcardDecks.add(newDeck);
+    await _syncToCloud(_flashcardDecksBoxName, newDeck.id, newDeck.toJson());
+    notifyListeners();
+    return newDeck;
+  }
+
+  Future<void> updateFlashcardDeck(FlashcardDeck deck) async {
+    final index = _flashcardDecks.indexWhere((d) => d.id == deck.id);
+    if (index != -1) {
+      _flashcardDecks[index] = deck;
+      await _syncToCloud(_flashcardDecksBoxName, deck.id, deck.toJson());
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteFlashcardDeck(String deckId) async {
+    _flashcardDecks.removeWhere((d) => d.id == deckId);
+    _flashcards.removeWhere((c) => c.deckId == deckId);
+    await _deleteFromCloud(_flashcardDecksBoxName, deckId);
+    notifyListeners();
+  }
+
+  FlashcardDeck? getFlashcardDeckById(String id) {
+    try {
+      return _flashcardDecks.firstWhere((d) => d.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<FlashcardDeck> getFlashcardDecksBySubject(String subjectId) {
+    return _flashcardDecks.where((d) => d.subjectId == subjectId).toList();
+  }
+
+  Future<Flashcard> createFlashcard(Flashcard card) async {
+    final newCard = card.copyWith(id: _uuid.v4());
+    _flashcards.add(newCard);
+    await _syncToCloud(_flashcardsBoxName, newCard.id, newCard.toJson());
+    
+    // Update deck card count
+    final deck = getFlashcardDeckById(newCard.deckId);
+    if (deck != null) {
+      await updateFlashcardDeck(deck.copyWith(cardCount: deck.cardCount + 1));
+    }
+    
+    notifyListeners();
+    return newCard;
+  }
+
+  Future<void> updateFlashcard(Flashcard card) async {
+    final index = _flashcards.indexWhere((c) => c.id == card.id);
+    if (index != -1) {
+      _flashcards[index] = card;
+      await _syncToCloud(_flashcardsBoxName, card.id, card.toJson());
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteFlashcard(String cardId) async {
+    final card = _flashcards.firstWhere((c) => c.id == cardId, orElse: () => throw Exception('Card not found'));
+    _flashcards.removeWhere((c) => c.id == cardId);
+    await _deleteFromCloud(_flashcardsBoxName, cardId);
+    
+    // Update deck card count
+    final deck = getFlashcardDeckById(card.deckId);
+    if (deck != null) {
+      await updateFlashcardDeck(deck.copyWith(cardCount: max(0, deck.cardCount - 1)));
+    }
+    
+    notifyListeners();
+  }
+
+  List<Flashcard> getFlashcardsByDeck(String deckId) {
+    return _flashcards.where((c) => c.deckId == deckId).toList();
+  }
+
+  List<Flashcard> getDueFlashcards(String deckId) {
+    return _flashcards.where((c) => c.deckId == deckId && c.isDue).toList();
+  }
+
+  Future<void> reviewFlashcard(String cardId, FlashcardDifficulty difficulty) async {
+    final index = _flashcards.indexWhere((c) => c.id == cardId);
+    if (index != -1) {
+      final updatedCard = _flashcards[index].updateAfterReview(difficulty);
+      _flashcards[index] = updatedCard;
+      await _syncToCloud(_flashcardsBoxName, updatedCard.id, updatedCard.toJson());
+      
+      // Update deck stats
+      final deck = getFlashcardDeckById(updatedCard.deckId);
+      if (deck != null) {
+        final masteredCount = _flashcards
+            .where((c) => c.deckId == deck.id && c.status == FlashcardStatus.mastered)
+            .length;
+        final dueCount = getDueFlashcards(deck.id).length;
+        await updateFlashcardDeck(deck.copyWith(
+          masteredCount: masteredCount,
+          dueCount: dueCount,
+          lastStudiedAt: DateTime.now(),
+          totalReviews: deck.totalReviews + 1,
+        ));
+      }
+      
+      notifyListeners();
+    }
+  }
+
+  // ==================== PRACTICE TEST CRUD ====================
+
+  Future<PracticeTest> createPracticeTest(PracticeTest test) async {
+    final newTest = test.copyWith(id: _uuid.v4());
+    _practiceTests.add(newTest);
+    await _syncToCloud(_practiceTestsBoxName, newTest.id, newTest.toJson());
+    notifyListeners();
+    return newTest;
+  }
+
+  Future<void> updatePracticeTest(PracticeTest test) async {
+    final index = _practiceTests.indexWhere((t) => t.id == test.id);
+    if (index != -1) {
+      _practiceTests[index] = test;
+      await _syncToCloud(_practiceTestsBoxName, test.id, test.toJson());
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePracticeTest(String testId) async {
+    _practiceTests.removeWhere((t) => t.id == testId);
+    _questions.removeWhere((q) => q.testId == testId);
+    await _deleteFromCloud(_practiceTestsBoxName, testId);
+    notifyListeners();
+  }
+
+  PracticeTest? getPracticeTestById(String id) {
+    try {
+      return _practiceTests.firstWhere((t) => t.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<PracticeTest> getPracticeTestsBySubject(String subjectId) {
+    return _practiceTests.where((t) => t.subjectId == subjectId).toList();
+  }
+
+  Future<Question> createQuestion(Question question) async {
+    final newQuestion = question.copyWith(id: _uuid.v4());
+    _questions.add(newQuestion);
+    await _syncToCloud(_questionsBoxName, newQuestion.id, newQuestion.toJson());
+    
+    // Update test question count
+    final test = getPracticeTestById(newQuestion.testId);
+    if (test != null) {
+      await updatePracticeTest(test.copyWith(
+        questionCount: test.questionCount + 1,
+        totalPoints: test.totalPoints + newQuestion.points,
+      ));
+    }
+    
+    notifyListeners();
+    return newQuestion;
+  }
+
+  Future<void> updateQuestion(Question question) async {
+    final index = _questions.indexWhere((q) => q.id == question.id);
+    if (index != -1) {
+      _questions[index] = question;
+      await _syncToCloud(_questionsBoxName, question.id, question.toJson());
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteQuestion(String questionId) async {
+    final question = _questions.firstWhere((q) => q.id == questionId, orElse: () => throw Exception('Question not found'));
+    _questions.removeWhere((q) => q.id == questionId);
+    await _deleteFromCloud(_questionsBoxName, questionId);
+    
+    // Update test question count
+    final test = getPracticeTestById(question.testId);
+    if (test != null) {
+      await updatePracticeTest(test.copyWith(
+        questionCount: max(0, test.questionCount - 1),
+        totalPoints: max(0, test.totalPoints - question.points),
+      ));
+    }
+    
+    notifyListeners();
+  }
+
+  List<Question> getQuestionsByTest(String testId) {
+    return _questions.where((q) => q.testId == testId).toList();
+  }
+
+  Future<void> recordTestAttempt(String testId, TestAttempt attempt) async {
+    final test = getPracticeTestById(testId);
+    if (test != null) {
+      final newAttemptCount = test.attemptCount + 1;
+      final newBestScore = attempt.score > test.bestScore ? attempt.score : test.bestScore;
+      final newAverageScore = ((test.averageScore * test.attemptCount) + attempt.score) / newAttemptCount;
+      
+      await updatePracticeTest(test.copyWith(
+        attemptCount: newAttemptCount,
+        bestScore: newBestScore,
+        averageScore: newAverageScore,
+        lastAttemptAt: DateTime.now(),
+      ));
+    }
+  }
+
   // ==================== REMINDERS ====================
 
   Future<void> _scheduleExamReminders(Exam exam) async {
@@ -1057,7 +1606,8 @@ class ExamPrepService extends ChangeNotifier {
         final exam = Exam.fromJson(doc.data());
         if (!_exams.any((e) => e.id == exam.id) || 
             _exams.firstWhere((e) => e.id == exam.id).updatedAt.isBefore(exam.updatedAt)) {
-          await _examsBox?.put(exam.id, exam);
+          _exams.removeWhere((e) => e.id == exam.id);
+          _exams.add(exam);
         }
       }
 

@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../models/relaxation_game_models.dart';
+import '../../focus/models/relaxation_game_models.dart';
 
 /// Glassmorphism container widget
 class GlassmorphicContainer extends StatelessWidget {

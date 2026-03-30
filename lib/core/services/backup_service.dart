@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'storage_service.dart';
+import 'clean_storage_service.dart';
 
 class BackupService {
   static final BackupService _instance = BackupService._internal();
@@ -21,7 +21,7 @@ class BackupService {
 
     try {
       debugPrint('Creating backup...');
-      final data = StorageService.exportAllData();
+      final data = CleanStorageService.exportAllData();
       
       // Store backup metadata and data in Firestore
       // For large datasets, Firebase Storage is better, but for text JSON < 1MB, Firestore is fine.
@@ -89,10 +89,10 @@ class BackupService {
       final data = jsonDecode(jsonString) as Map<String, dynamic>;
 
       // Clear existing data
-      await StorageService.clearAllData();
+      await CleanStorageService.clearAllData();
       
       // Restore data
-      await StorageService.importData(data);
+      await CleanStorageService.importData(data);
       
       debugPrint('Backup restored successfully');
     } catch (e) {

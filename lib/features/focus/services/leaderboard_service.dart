@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/focus_leaderboard.dart';
 
 class LeaderboardService extends ChangeNotifier {
@@ -28,7 +28,7 @@ class LeaderboardService extends ChangeNotifier {
 
   Future<void> _loadData() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       
       final profileJson = prefs['focusUserProfile'];
       if (profileJson != null && profileJson is Map) {
@@ -58,13 +58,13 @@ class LeaderboardService extends ChangeNotifier {
   Future<void> _saveData() async {
     try {
       if (_userProfile != null) {
-        await StorageService.setAppPreference('focusUserProfile', _userProfile!.toJson());
+        await CleanStorageService.setAppPreference('focusUserProfile', _userProfile!.toJson());
       }
-      await StorageService.setAppPreference(
+      await CleanStorageService.setAppPreference(
         'focusFriends',
         _friends.map((f) => f.toJson()).toList(),
       );
-      await StorageService.setAppPreference(
+      await CleanStorageService.setAppPreference(
         'focusFriendRequests',
         _pendingRequests.map((r) => r.toJson()).toList(),
       );

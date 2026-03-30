@@ -1,48 +1,18 @@
-import 'package:hive/hive.dart';
-
-part 'fitness_activity.g.dart';
-
 /// FitnessActivity - Tracks completed workout sessions
 /// Inspired by Fitbit, Strava, Apple Health, Google Fit best practices
-@HiveType(typeId: 25)
-class FitnessActivity extends HiveObject {
-  @HiveField(0)
+class FitnessActivity {
   final String id;
-
-  @HiveField(1)
   final String type; // walk, gym, yoga, run, cycling, swimming
-
-  @HiveField(2)
   final String title;
-
-  @HiveField(3)
   final DateTime startTime;
-
-  @HiveField(4)
   final DateTime? endTime;
-
-  @HiveField(5)
   final int durationMinutes;
-
-  @HiveField(6)
   final int? caloriesBurned;
-
-  @HiveField(7)
   final double? distanceKm;
-
-  @HiveField(8)
   final int? steps;
-
-  @HiveField(9)
   final int? heartRateAvg;
-
-  @HiveField(10)
   final String? notes;
-
-  @HiveField(11)
   final bool isCompleted;
-
-  @HiveField(12)
   final String? reminderId; // Link to FitnessReminder if triggered by one
 
   FitnessActivity({
@@ -214,21 +184,11 @@ class FitnessActivity extends HiveObject {
 }
 
 /// Weekly fitness goal tracking
-@HiveType(typeId: 26)
-class FitnessGoal extends HiveObject {
-  @HiveField(0)
+class FitnessGoal {
   final int weeklyWorkoutTarget; // Number of workouts per week
-
-  @HiveField(1)
   final int weeklyMinutesTarget; // Total minutes per week
-
-  @HiveField(2)
   final int weeklyCaloriesTarget; // Total calories per week
-
-  @HiveField(3)
   final int dailyStepsTarget; // Daily steps goal
-
-  @HiveField(4)
   final List<String> preferredActivities; // Preferred workout types
 
   FitnessGoal({

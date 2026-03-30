@@ -1,21 +1,10 @@
-import 'package:hive/hive.dart';
 import 'medicine_enums.dart';
 
-part 'medicine_schedule.g.dart';
-
 /// Represents a single scheduled time for medication
-@HiveType(typeId: 58)
-class ScheduledTime extends HiveObject {
-  @HiveField(0)
+class ScheduledTime {
   final int hour;
-
-  @HiveField(1)
   final int minute;
-
-  @HiveField(2)
   final String? label; // e.g., "Morning", "Afternoon", "Evening", "Bedtime"
-
-  @HiveField(3)
   final double dosageAmount;
 
   ScheduledTime({
@@ -66,48 +55,20 @@ class ScheduledTime extends HiveObject {
 }
 
 /// Schedule configuration for a medicine
-@HiveType(typeId: 59)
-class MedicineSchedule extends HiveObject {
-  @HiveField(0)
+class MedicineSchedule {
   final FrequencyType frequencyType;
-
-  @HiveField(1)
   final List<ScheduledTime> times;
-
-  @HiveField(2)
   final int? intervalHours; // For "every X hours"
-
-  @HiveField(3)
   final int? intervalDays; // For "every X days"
-
-  @HiveField(4)
   final List<int>? specificDays; // 1-7 for Mon-Sun
-
-  @HiveField(5)
   final DateTime? startDate;
-
-  @HiveField(6)
   final DateTime? endDate;
-
-  @HiveField(7)
   final int? durationDays;
-
-  @HiveField(8)
   final int? cycleDaysOn; // For cyclical: days on
-
-  @HiveField(9)
   final int? cycleDaysOff; // For cyclical: days off
-
-  @HiveField(10)
   final MealTiming mealTiming;
-
-  @HiveField(11)
   final bool isPRN; // As-needed medication
-
-  @HiveField(12)
   final int? maxDailyDoses; // For PRN meds
-
-  @HiveField(13)
   final int? minHoursBetweenDoses; // For PRN meds
 
   MedicineSchedule({

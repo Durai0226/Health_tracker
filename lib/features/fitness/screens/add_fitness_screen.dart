@@ -1,8 +1,8 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/services/fitness_reminder_service.dart';
 import '../models/fitness_reminder.dart';
 
@@ -85,7 +85,8 @@ class _AddFitnessScreenState extends State<AddFitnessScreen> {
             : 'Saved but reminder may not work. Check permissions.';
       } else {
         // Save to storage first
-        await StorageService.addFitnessReminder(reminder);
+        // TODO: Replace with Drift storage when migration is complete
+        debugPrint('addFitnessReminder temporarily disabled - Drift migration needed');
         
         if (_enableReminder) {
           // Schedule with retry logic

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/symptom_log.dart';
@@ -31,7 +32,7 @@ class _SymptomLogScreenState extends State<SymptomLogScreen> {
   }
 
   void _loadExistingLog() {
-    final existing = PeriodStorageService.getSymptomLogForDate(widget.date);
+    final existing = PeriodCleanStorageService.getSymptomLogForDate(widget.date);
     if (existing != null) {
       _selectedSymptoms.addAll(existing.symptoms);
       _selectedMoods.addAll(existing.moods);
@@ -66,7 +67,7 @@ class _SymptomLogScreenState extends State<SymptomLogScreen> {
       notes: _notesController.text.isEmpty ? null : _notesController.text,
     );
 
-    await PeriodStorageService.saveSymptomLog(log);
+    await PeriodCleanStorageService.saveSymptomLog(log);
     if (mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(

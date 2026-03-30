@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/audio_service.dart';
 import '../models/relaxation_music.dart';
@@ -71,7 +71,7 @@ class RelaxationService extends ChangeNotifier {
 
   Future<void> _loadData() async {
     try {
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       
       _selectedMinutes = prefs['relaxationSelectedMinutes'] ?? 15;
       _selectedCategory = RelaxationCategory.values[prefs['relaxationSelectedCategory'] ?? 0];
@@ -104,12 +104,12 @@ class RelaxationService extends ChangeNotifier {
 
   Future<void> _saveData() async {
     try {
-      await StorageService.setAppPreference('relaxationSelectedMinutes', _selectedMinutes);
-      await StorageService.setAppPreference('relaxationSelectedCategory', _selectedCategory.index);
-      await StorageService.setAppPreference('relaxationVolume', _volume);
-      await StorageService.setAppPreference('relaxationSelectedMusic', _selectedMusic?.index);
-      await StorageService.setAppPreference('relaxationStats', _stats.toJson());
-      await StorageService.setAppPreference('relaxationSessions', _sessions.take(100).map((s) => s.toJson()).toList());
+      await CleanStorageService.setAppPreference('relaxationSelectedMinutes', _selectedMinutes);
+      await CleanStorageService.setAppPreference('relaxationSelectedCategory', _selectedCategory.index);
+      await CleanStorageService.setAppPreference('relaxationVolume', _volume);
+      await CleanStorageService.setAppPreference('relaxationSelectedMusic', _selectedMusic?.index);
+      await CleanStorageService.setAppPreference('relaxationStats', _stats.toJson());
+      await CleanStorageService.setAppPreference('relaxationSessions', _sessions.take(100).map((s) => s.toJson()).toList());
     } catch (e) {
       debugPrint('Error saving relaxation data: $e');
     }

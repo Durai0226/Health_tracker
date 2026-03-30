@@ -28,10 +28,10 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
 
   void _loadData() {
     setState(() {
-      _currentCycle = PeriodStorageService.getCurrentCycle();
+      _currentCycle = PeriodCleanStorageService.getCurrentCycle();
       final startOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
       final endOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
-      _symptomLogs = PeriodStorageService.getSymptomLogsForDateRange(startOfMonth, endOfMonth);
+      _symptomLogs = PeriodCleanStorageService.getSymptomLogsForDateRange(startOfMonth, endOfMonth);
     });
   }
 
@@ -485,7 +485,7 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
       ),
     );
     if (date != null) {
-      await PeriodStorageService.startNewCycle(date);
+      await PeriodCleanStorageService.startNewCycle(date);
       _loadData();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -510,7 +510,7 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
       ),
     );
     if (date != null) {
-      await PeriodStorageService.endCurrentPeriod(date);
+      await PeriodCleanStorageService.endCurrentPeriod(date);
       _loadData();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

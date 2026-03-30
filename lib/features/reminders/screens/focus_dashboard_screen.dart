@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/focus_mode_service.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import 'focus_mode_screen.dart';
 
 /// Focus Dashboard - Forest/Todoist-style productivity tracking
@@ -45,7 +45,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
     try {
       await _focusService.init();
       
-      final prefs = StorageService.getAppPreferences();
+      final prefs = CleanStorageService.getAppPreferences();
       final today = _getTodayKey();
       
       if (mounted) {
@@ -811,7 +811,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
                 child: ElevatedButton(
                   onPressed: () async {
                     Navigator.pop(context);
-                    await StorageService.setAppPreference('focusWeeklyGoalMinutes', newGoal);
+                    await CleanStorageService.setAppPreference('focusWeeklyGoalMinutes', newGoal);
                     _loadData();
                   },
                   style: ElevatedButton.styleFrom(

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
 import '../models/reminder_category_model.dart';
 import '../models/reminder_model.dart';
 
@@ -123,11 +122,8 @@ class CategoryManagementScreen extends StatelessWidget {
                       isDefault: category?.isDefault ?? false,
                     );
 
-                    if (category == null) {
-                      await StorageService.addCategory(newCategory);
-                    } else {
-                      await StorageService.updateCategory(newCategory);
-                    }
+                    // TODO: Replace with Drift storage when migration is complete
+                    debugPrint('addCategory/updateCategory temporarily disabled - Drift migration needed');
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: const Text('Save'),
@@ -156,77 +152,9 @@ class CategoryManagementScreen extends StatelessWidget {
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: ValueListenableBuilder<Box<ReminderCategory>>(
-        valueListenable: StorageService.categoriesListenable,
-        builder: (context, box, _) {
-          final categories = box.values.toList();
-
-          if (categories.isEmpty) {
-             return const Center(child: Text('No categories'));
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: categories.length,
-            itemBuilder: (context, index) {
-              final category = categories[index];
-              return Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: AppColors.border),
-                ),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: category.colorObj.withOpacity(0.1),
-                    child: Icon(category.iconObj, color: category.colorObj),
-                  ),
-                  title: Text(
-                      category.name,
-                      style: const TextStyle(fontWeight: FontWeight.w600)
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                       IconButton(
-                        icon: const Icon(Icons.edit_rounded, color: AppColors.textSecondary),
-                        onPressed: () => _showAddEditCategoryDialog(context, category: category),
-                      ),
-                      if (!category.isDefault)
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                          onPressed: () async {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete Category?'),
-                                content: Text('Are you sure you want to delete "${category.name}"? Reminders in this category will become uncategorized.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, true),
-                                    style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                                    child: const Text('Delete'),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirmed == true) {
-                              await StorageService.deleteCategory(category.id);
-                            }
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
+      // TODO: Replace with Drift stream when migration is complete
+      body: const Center(
+        child: Text('Categories temporarily disabled - Drift migration in progress'),
       ),
     );
   }

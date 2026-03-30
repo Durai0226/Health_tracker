@@ -171,7 +171,10 @@ class PeriodPredictionService {
 
     for (final log in symptomHistory) {
       for (final symptom in log.symptoms) {
-        symptomFrequency[symptom.type] = (symptomFrequency[symptom.type] ?? 0) + 1;
+        symptomFrequency[symptom] = (symptomFrequency[symptom] ?? 0) + 1;
+      }
+      for (final entry in log.symptomEntries) {
+        symptomFrequency[entry.type] = (symptomFrequency[entry.type] ?? 0) + 1;
       }
       for (final mood in log.moods) {
         moodFrequency[mood] = (moodFrequency[mood] ?? 0) + 1;
@@ -244,7 +247,7 @@ class PeriodPredictionService {
         date: periodStart.add(Duration(days: i)),
         phase: CyclePhase.luteal,
         predictedMoods: [MoodType.calm, MoodType.focused],
-        energyLevel: EnergyLevel.medium,
+        energyLevel: EnergyLevel.moderate,
         tips: 'Good for detail-oriented tasks and completing projects.',
       ));
     }

@@ -1,14 +1,43 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../widgets/smart_ad_widgets.dart';
-import '../../../core/services/simple_ad_service.dart';
 import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
 import 'add_medicine_wizard.dart';
 import 'medicine_detail_screen.dart';
 
-class MedicineListScreen extends StatelessWidget {
+class MedicineListScreen extends StatefulWidget {
   const MedicineListScreen({super.key});
+
+  @override
+  State<MedicineListScreen> createState() => _MedicineListScreenState();
+}
+
+class _MedicineListScreenState extends State<MedicineListScreen> {
+  List<EnhancedMedicine> _medicines = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMedicines();
+  }
+
+  Future<void> _loadMedicines() async {
+    setState(() => _isLoading = true);
+    try {
+      await MedicineCleanStorageService.init();
+      final allMedicines = await MedicineCleanStorageService.getAllMedicines();
+      if (mounted) {
+        setState(() {
+          _medicines = allMedicines.where((m) => !m.isArchived && m.isActive).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading medicines: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +55,7 @@ class MedicineListScreen extends StatelessWidget {
           style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
+            fontSize: 24,
           ),
         ),
         centerTitle: true,
@@ -36,50 +66,29 @@ class MedicineListScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
-              );
+              ).then((_) => _loadMedicines());
             },
           ),
         ],
       ),
-      body: ValueListenableBuilder(
-        valueListenable: MedicineStorageService.medicinesListenable,
-        builder: (context, box, _) {
-          final medicines = box.values.where((m) => !m.isArchived && m.isActive).toList();
-          
-          if (medicines.isEmpty) {
-            return _buildEmptyState(context);
-          }
-          
-          return ListView.builder(
-            padding: const EdgeInsets.all(24),
-            itemCount: medicines.length + (medicines.length ~/ 5), // Add ad slots
-            itemBuilder: (context, index) {
-              // Show native ad every 5th position
-              if (index > 0 && index % 6 == 5) {
-                return SmartNativeListAd(
-                  placement: AdPlacement.medicationNative,
-                  index: index,
-                );
-              }
-              
-              // Adjust index for actual medicine item
-              final medicineIndex = index - (index ~/ 6);
-              if (medicineIndex >= medicines.length) {
-                return const SizedBox.shrink();
-              }
-              
-              final medicine = medicines[medicineIndex];
-              return _buildMedicineCard(context, medicine);
-            },
-          );
-        },
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _medicines.isEmpty
+              ? _buildEmptyState(context)
+              : ListView.builder(
+                  padding: const EdgeInsets.all(24),
+                  itemCount: _medicines.length,
+                  itemBuilder: (context, index) {
+                    final medicine = _medicines[index];
+                    return _buildMedicineCard(context, medicine);
+                  },
+                ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
-          );
+          ).then((_) => _loadMedicines());
         },
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded),
@@ -132,7 +141,7 @@ class MedicineListScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AddMedicineWizard()),
-                );
+                ).then((_) => _loadMedicines());
               },
               icon: const Icon(Icons.add_rounded),
               label: const Text('Add Medicine'),
@@ -165,7 +174,7 @@ class MedicineListScreen extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => MedicineDetailScreen(medicineId: medicine.id),
             ),
-          );
+          ).then((_) => _loadMedicines());
         },
         borderRadius: BorderRadius.circular(20),
         child: Container(

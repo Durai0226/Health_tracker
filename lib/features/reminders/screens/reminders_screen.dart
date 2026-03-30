@@ -1,9 +1,7 @@
-
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
@@ -43,33 +41,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
       body: Column(
         children: [
           _buildCategoryFilter(),
+          // TODO: Replace with Drift stream when migration is complete
           Expanded(
-            child: ValueListenableBuilder<Box<Reminder>>(
-              valueListenable: StorageService.remindersListenable,
-              builder: (context, box, _) {
-                var reminders = box.values.toList();
-                
-                // Filter by category
-                if (_selectedCategoryId != null) {
-                  reminders = reminders.where((r) => r.categoryId == _selectedCategoryId).toList();
-                }
-
-                reminders.sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
-
-                if (reminders.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: reminders.length,
-                  itemBuilder: (context, index) {
-                    final reminder = reminders[index];
-                    return _buildReminderCard(context, reminder);
-                  },
-                );
-              },
-            ),
+            child: _buildEmptyState(),
           ),
         ],
       ),
@@ -77,27 +51,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
   }
 
   Widget _buildCategoryFilter() {
-    return ValueListenableBuilder<Box<ReminderCategory>>(
-      valueListenable: StorageService.categoriesListenable,
-      builder: (context, box, _) {
-        final categories = box.values.toList();
-        if (categories.isEmpty) return const SizedBox.shrink();
-
-        return SizedBox(
-          height: 60,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            children: [
-              _buildFilterChip(null, 'All', Colors.grey, Icons.all_inclusive_rounded),
-              ...categories.map((category) {
-                return _buildFilterChip(category.id, category.name, category.colorObj, category.iconObj);
-              }).toList(),
-            ],
-          ),
-        );
-      },
-    );
+    // TODO: Replace with Drift stream when migration is complete
+    return const SizedBox.shrink();
   }
 
   Widget _buildFilterChip(String? id, String label, Color color, IconData icon) {
@@ -180,8 +135,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
     final timeFormat = DateFormat('h:mm a');
     final dateFormat = DateFormat('MMM d, y');
     
-    // Get category if exists
-    final category = reminder.categoryId != null ? StorageService.getCategory(reminder.categoryId!) : null;
+    // TODO: Replace with Drift storage
+    // final category = reminder.categoryId != null ? ... : null;
 
     return Dismissible(
       key: Key(reminder.id),
@@ -197,7 +152,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
         child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
       ),
       onDismissed: (_) async {
-        await StorageService.deleteReminder(reminder.id);
+        // TODO: Replace with Drift storage
+        debugPrint('deleteReminder temporarily disabled - Drift migration needed');
         await NotificationService().cancelNotification(reminder.id.hashCode);
       },
       child: GestureDetector(
@@ -235,7 +191,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 child: GestureDetector(
                   key: Key('checkbox_${reminder.id}'),
                   onTap: () async {
-                    await StorageService.toggleReminderCompletion(reminder);
+                    // TODO: Replace with Drift storage
+                    debugPrint('toggleReminderCompletion temporarily disabled - Drift migration needed');
                   },
                   child: Container(
                     width: 24,
@@ -277,10 +234,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
                             ),
                           ),
                         ),
-                        if (category != null) ...[
-                          const SizedBox(width: 8),
-                          Icon(category.iconObj, size: 14, color: category.colorObj),
-                        ],
+                        // TODO: Show category when Drift migration is complete
+                        // if (category != null) ...[
+                        //   const SizedBox(width: 8),
+                        //   Icon(category.iconObj, size: 14, color: category.colorObj),
+                        // ],
                       ],
                     ),
                     if (reminder.body.isNotEmpty) ...[

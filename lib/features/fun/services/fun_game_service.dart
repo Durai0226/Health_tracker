@@ -2,18 +2,18 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vibration/vibration.dart';
-import '../models/relaxation_game_models.dart';
+import '../../focus/models/relaxation_game_models.dart';
 
 /// Advanced Relaxation Game Service with Haptic Therapy Engine
-class RelaxationGameService extends ChangeNotifier {
-  static final RelaxationGameService _instance = RelaxationGameService._internal();
-  factory RelaxationGameService() => _instance;
-  RelaxationGameService._internal();
+class FunGameService extends ChangeNotifier {
+  static final FunGameService _instance = FunGameService._internal();
+  factory FunGameService() => _instance;
+  FunGameService._internal();
 
-  static const String _boxName = 'relaxation_game_settings';
-  Box? _box;
+  // TODO: Migrate from Hive to SharedPreferences/Drift
+  SharedPreferences? _prefs;
   bool _isInitialized = false;
 
   RelaxationGameSettings _settings = const RelaxationGameSettings();
@@ -55,33 +55,27 @@ class RelaxationGameService extends ChangeNotifier {
       _hasVibrator = (await Vibration.hasVibrator()) == true;
       _hasAmplitudeControl = (await Vibration.hasAmplitudeControl()) == true;
 
-      _box = await Hive.openBox(_boxName);
+      _prefs = await SharedPreferences.getInstance();
       _loadSettings();
       _checkUnlocks();
       _isInitialized = true;
       notifyListeners();
     } catch (e) {
-      debugPrint('RelaxationGameService: Error initializing - $e');
+      debugPrint('FunGameService: Error initializing - $e');
       _isInitialized = true;
     }
   }
 
   void _loadSettings() {
-    if (_box == null) return;
-    
-    final data = _box!.get('settings');
-    if (data != null) {
-      try {
-        _settings = RelaxationGameSettings.fromJson(Map<String, dynamic>.from(data));
-      } catch (e) {
-        debugPrint('Error loading settings: $e');
-      }
-    }
+    if (_prefs == null) return;
+    // TODO: Implement SharedPreferences-based settings loading
+    debugPrint('FunGameService: Settings loading temporarily disabled');
   }
 
   Future<void> _saveSettings() async {
-    if (_box == null) return;
-    await _box!.put('settings', _settings.toJson());
+    if (_prefs == null) return;
+    // TODO: Implement SharedPreferences-based settings saving
+    debugPrint('FunGameService: Settings saving temporarily disabled');
   }
 
   /// Check and update unlocked modes based on usage
