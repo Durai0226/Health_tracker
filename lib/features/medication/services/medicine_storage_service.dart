@@ -335,6 +335,78 @@ class MedicineCleanStorageService {
     return log;
   }
 
+  /// Reconcile missed doses by writing a `missed` MedicineLog for every past
+  /// scheduled slot that was neither taken nor skipped. Without this, adherence
+  /// stats have no denominator of reality (a user who never opens the app would
+  /// otherwise show 100% adherence forever).
+  ///
+  /// Rules:
+  /// - Only ACTIVE (non-archived) medicines are considered.
+  /// - PRN / as-needed medicines are skipped (a "missed" dose is meaningless).
+  /// - A slot is only marked missed once its scheduled time is older than a
+  ///   grace window ([graceHours]); today's future slots are never touched.
+  /// - Slots that fall before the medicine was created are ignored.
+  /// - Idempotent: a slot that already has ANY log (taken/skipped/missed) is left
+  ///   alone, so repeated calls never double-insert.
+  static Future<void> reconcileMissedDoses({int lookbackDays = 14}) async {
+    const graceHours = 3;
+    final now = DateTime.now();
+    final graceCutoff = now.subtract(const Duration(hours: graceHours));
+    final startDate = now.subtract(Duration(days: lookbackDays));
+    final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+    final today = DateTime(now.year, now.month, now.day);
+
+    final medicines = await getAllMedicines();
+    // Fetch from the midnight of the first day so every slot we iterate over is
+    // covered by the idempotency check below (slots can precede `startDate`).
+    final existingLogs = await getLogsForDateRange(startDay, now);
+
+    final toInsert = <MedicineLog>[];
+
+    for (final med in medicines) {
+      if (!med.isActive || med.isArchived) continue;
+      if (med.schedule.isPRN) continue;
+
+      final createdDay = DateTime(
+          med.createdAt.year, med.createdAt.month, med.createdAt.day);
+      final medLogs =
+          existingLogs.where((l) => l.medicineId == med.id).toList();
+
+      for (var day = startDay;
+          !day.isAfter(today);
+          day = day.add(const Duration(days: 1))) {
+        if (day.isBefore(createdDay)) continue;
+
+        final slots = med.schedule.getScheduledTimesForDate(day);
+        for (final slot in slots) {
+          // Only past slots older than the grace window; never future slots.
+          if (!slot.isBefore(graceCutoff)) continue;
+          // Ignore slots that predate the medicine's creation.
+          if (slot.isBefore(med.createdAt)) continue;
+          // Idempotency: skip if a log already exists for this exact slot.
+          final exists = medLogs.any((l) =>
+              l.scheduledTime.year == slot.year &&
+              l.scheduledTime.month == slot.month &&
+              l.scheduledTime.day == slot.day &&
+              l.scheduledTime.hour == slot.hour &&
+              l.scheduledTime.minute == slot.minute);
+          if (exists) continue;
+
+          toInsert.add(MedicineLog.missed(
+            id: '${med.id}_missed_${slot.millisecondsSinceEpoch}',
+            medicineId: med.id,
+            scheduledTime: slot,
+            dependentId: med.dependentId,
+          ));
+        }
+      }
+    }
+
+    for (final log in toInsert) {
+      await addLog(log);
+    }
+  }
+
   static Future<MedicineLog> markMedicineSkipped({
     required String medicineId,
     required DateTime scheduledTime,
@@ -709,20 +781,35 @@ class MedicineCleanStorageService {
   
   static Future<DailyMedicineSummary> getDailySummaryAsync(DateTime date) async {
     final logs = await getLogsForDate(date);
-    final medicines = await getActiveMedicinesForTodayAsync();
-    
+    final medicines = await getAllMedicines();
+    final now = DateTime.now();
+
+    // Denominator = scheduled (non-PRN) slots for this date that are already
+    // due (past slots for prior days, or up to now for today). Future slots are
+    // not counted so today's remaining doses don't drag adherence down.
+    int scheduled = 0;
+    for (final m in medicines) {
+      if (!m.isActive || m.isArchived) continue;
+      if (m.schedule.isPRN) continue;
+      final slots = m.schedule.getScheduledTimesForDate(date);
+      for (final slot in slots) {
+        if (slot.isBefore(m.createdAt)) continue;
+        if (slot.isAfter(now)) continue;
+        scheduled++;
+      }
+    }
+
     final taken = logs.where((l) => l.isTaken).length;
     final skipped = logs.where((l) => l.isSkipped).length;
     final missed = logs.where((l) => l.isMissed).length;
-    final total = medicines.fold<int>(0, (sum, m) => sum + m.schedule.times.length);
-    
+
     return DailyMedicineSummary(
       date: date,
-      totalScheduled: total,
+      totalScheduled: scheduled,
       taken: taken,
       skipped: skipped,
       missed: missed,
-      adherenceRate: total > 0 ? taken / total : 1.0,
+      adherenceRate: scheduled > 0 ? taken / scheduled : 1.0,
       medicinesTaken: logs.where((l) => l.isTaken).map((l) => l.medicineId).toList(),
       medicinesMissed: logs.where((l) => l.isMissed).map((l) => l.medicineId).toList(),
     );
@@ -777,18 +864,46 @@ class MedicineCleanStorageService {
     final now = DateTime.now();
     final startDate = now.subtract(Duration(days: days));
     final logs = await getLogsForDateRange(startDate, now);
+    final medicines = await getAllMedicines();
 
     final taken = logs.where((l) => l.isTaken).length;
     final skipped = logs.where((l) => l.isSkipped).length;
     final missed = logs.where((l) => l.isMissed).length;
     final total = taken + skipped + missed;
 
+    // The denominator that makes adherence meaningful: the number of scheduled
+    // (non-PRN) doses that were actually due within the window, NOT logs.length.
+    // Only due slots are counted (past days in full, today up to now), and only
+    // from the day each medicine was created.
+    final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+    final today = DateTime(now.year, now.month, now.day);
+    int scheduled = 0;
+    for (final med in medicines) {
+      if (!med.isActive || med.isArchived) continue;
+      if (med.schedule.isPRN) continue;
+      final createdDay = DateTime(
+          med.createdAt.year, med.createdAt.month, med.createdAt.day);
+      for (var day = startDay;
+          !day.isAfter(today);
+          day = day.add(const Duration(days: 1))) {
+        if (day.isBefore(createdDay)) continue;
+        final slots = med.schedule.getScheduledTimesForDate(day);
+        for (final slot in slots) {
+          if (slot.isBefore(startDate)) continue;
+          if (slot.isBefore(med.createdAt)) continue;
+          if (slot.isAfter(now)) continue;
+          scheduled++;
+        }
+      }
+    }
+
     return {
       'taken': taken,
       'skipped': skipped,
       'missed': missed,
       'total': total,
-      'adherenceRate': total > 0 ? (taken / total * 100).round() : 100,
+      'scheduled': scheduled,
+      'adherenceRate': scheduled > 0 ? (taken / scheduled * 100).round() : 100,
       'days': days,
     };
   }

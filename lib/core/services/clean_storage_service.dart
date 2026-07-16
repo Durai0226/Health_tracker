@@ -216,9 +216,10 @@ class CleanStorageService {
           name: row.name,
           color: row.colorValue,
           icon: row.iconCodePoint,
+          isDefault: row.isDefault,
         );
       }).toList();
-      
+
       _categoriesCache.clear();
       _categoriesCache.addAll(categories);
       return categories;
@@ -227,7 +228,36 @@ class CleanStorageService {
       return [];
     }
   }
-  
+
+  /// Create or update a reminder category (upsert) and refresh the cache.
+  static Future<void> saveCategory(
+      ReminderCategoryModel.ReminderCategory category) async {
+    try {
+      await _remindersDao.saveCategory(ReminderCategoriesCompanion.insert(
+        id: category.id,
+        name: category.name,
+        colorValue: category.color,
+        iconCodePoint: category.icon,
+        isDefault: Value(category.isDefault),
+      ));
+      await getAllCategoriesAsync(); // refresh sync cache
+      debugPrint('✓ Category saved: ${category.name}');
+    } catch (e) {
+      debugPrint('Error saving category: $e');
+    }
+  }
+
+  /// Delete a reminder category and refresh the cache.
+  static Future<void> deleteCategory(String id) async {
+    try {
+      await _remindersDao.deleteCategory(id);
+      await getAllCategoriesAsync(); // refresh sync cache
+      debugPrint('✓ Category deleted: $id');
+    } catch (e) {
+      debugPrint('Error deleting category: $e');
+    }
+  }
+
 
   /// Toggle reminder completion
   static Future<void> toggleReminderCompletion(ReminderModel.Reminder reminder) async {

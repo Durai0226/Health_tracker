@@ -91,6 +91,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     setState(() => _isLoading = true);
     try {
       await MedicineCleanStorageService.init();
+      // Backfill `missed` logs for past-due slots so adherence reflects reality.
+      await MedicineCleanStorageService.reconcileMissedDoses();
       _medicines = await MedicineCleanStorageService.getAllMedicines();
       _streak = await MedicineCleanStorageService.getCurrentStreak();
       final stats = await MedicineCleanStorageService.getAdherenceStats();

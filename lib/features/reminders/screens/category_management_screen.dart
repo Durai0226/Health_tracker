@@ -1,161 +1,281 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/database/app_database.dart' as db;
+import '../../../core/services/clean_storage_service.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../models/reminder_category_model.dart';
-import '../models/reminder_model.dart';
 
+/// Manage reminder categories — real Drift-backed list with create / edit /
+/// swipe-to-delete. Calm Clarity, dark-aware.
 class CategoryManagementScreen extends StatelessWidget {
   const CategoryManagementScreen({super.key});
 
-  void _showAddEditCategoryDialog(BuildContext context, {ReminderCategory? category}) {
-    final nameController = TextEditingController(text: category?.name ?? '');
-    int selectedColor = category?.color ?? Colors.blue.value;
-    int selectedIcon = category?.icon ?? Icons.label_rounded.codePoint;
+  ReminderCategory _toModel(db.ReminderCategory row) => ReminderCategory(
+        id: row.id,
+        name: row.name,
+        color: row.colorValue,
+        icon: row.iconCodePoint,
+        isDefault: row.isDefault,
+      );
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text(category == null ? 'New Category' : 'Edit Category'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Category Name',
-                        border: OutlineInputBorder(),
-                      ),
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Color', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        Colors.blue,
-                        Colors.red,
-                        Colors.green,
-                        Colors.orange,
-                        Colors.purple,
-                        Colors.teal,
-                        Colors.pink,
-                        Colors.indigo,
-                      ].map((color) {
-                        final isSelected = selectedColor == color.value;
-                        return GestureDetector(
-                          onTap: () => setState(() => selectedColor = color.value),
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
-                            ),
-                            child: isSelected ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Icon', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        Icons.label_rounded,
-                        Icons.work_rounded,
-                        Icons.person_rounded,
-                        Icons.favorite_rounded,
-                        Icons.attach_money_rounded,
-                        Icons.school_rounded,
-                        Icons.shopping_cart_rounded,
-                        Icons.flight_rounded,
-                        Icons.home_rounded,
-                        Icons.directions_car_rounded,
-                      ].map((iconData) {
-                        final isSelected = selectedIcon == iconData.codePoint;
-                        return GestureDetector(
-                          onTap: () => setState(() => selectedIcon = iconData.codePoint),
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                                color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                border: isSelected ? Border.all(color: AppColors.primary) : null
-                            ),
-                            child: Icon(
-                                iconData,
-                                color: isSelected ? AppColors.primary : Colors.grey,
-                                size: 24
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    return AccentScope(
+      feature: FeatureAccent.reminders,
+      child: AppScaffold(
+        floatingActionButton: AppFab(
+          icon: Icons.add_rounded,
+          accent: ext.reminders,
+          onPressed: () => _showEditor(context),
+        ),
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Categories',
+              accent: ext.reminders,
+              leading: AppIconButton(
+                icon: Icons.arrow_back_rounded,
+                filled: false,
+                accent: ext.reminders,
+                onPressed: () => Navigator.pop(context),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    if (nameController.text.trim().isEmpty) return;
+            ),
+            Expanded(
+              child: StreamBuilder<List<db.ReminderCategory>>(
+                stream: db.AppDatabase.instance.remindersDao.watchCategories(),
+                builder: (context, snapshot) {
+                  final rows = snapshot.data;
+                  if (rows == null) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (rows.isEmpty) {
+                    return EmptyState(
+                      icon: Icons.label_outline_rounded,
+                      title: 'No categories yet',
+                      message: 'Tap + to create your first category.',
+                      accent: ext.reminders,
+                    );
+                  }
+                  final categories = rows.map(_toModel).toList();
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                        AppSpacing.sm, AppSpacing.gutter, 120),
+                    itemCount: categories.length,
+                    itemBuilder: (context, i) =>
+                        _categoryTile(context, ext, categories[i]),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                    final newCategory = ReminderCategory(
+  Widget _categoryTile(
+      BuildContext context, AppColorsExt ext, ReminderCategory category) {
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Dismissible(
+        key: Key(category.id),
+        direction: DismissDirection.endToStart,
+        confirmDismiss: (_) async {
+          final ok = await AppBottomSheet.confirm(
+            context,
+            title: 'Delete category?',
+            message:
+                '"${category.name}" will be removed. Reminders using it keep '
+                'their data but lose the label.',
+            confirmLabel: 'Delete',
+            danger: true,
+            icon: Icons.delete_outline_rounded,
+          );
+          if (ok == true) {
+            await CleanStorageService.deleteCategory(category.id);
+            return true;
+          }
+          return false;
+        },
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 24),
+          decoration: BoxDecoration(
+            color: ext.error.container,
+            borderRadius: AppRadius.brCard,
+          ),
+          child: Icon(Icons.delete_outline_rounded, color: ext.error.onContainer),
+        ),
+        child: AppCard(
+          onTap: () => _showEditor(context, category: category),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: category.colorObj.withOpacity(0.16),
+                  borderRadius: AppRadius.brMd,
+                ),
+                child: Icon(category.iconObj, size: 22, color: category.colorObj),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: Text(category.name, style: tt.titleLarge),
+              ),
+              if (category.isDefault)
+                AppChip(label: 'Default', accent: ext.reminders),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditor(BuildContext context, {ReminderCategory? category}) {
+    final nameController = TextEditingController(text: category?.name ?? '');
+    int selectedColor = category?.color ?? ReminderCategory.availableColors.first;
+    int selectedIcon =
+        category?.icon ?? ReminderCategory.availableIcons.first.codePoint;
+
+    AppBottomSheet.show(
+      context,
+      title: category == null ? 'New Category' : 'Edit Category',
+      icon: Icons.label_rounded,
+      accent: AppColorsExt.of(context).reminders,
+      builder: (ctx) {
+        final ext = AppColorsExt.of(ctx);
+        final tt = Theme.of(ctx).textTheme;
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameController,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Category name',
+                    hintStyle:
+                        tt.bodyLarge?.copyWith(color: ext.textTertiary),
+                    filled: true,
+                    fillColor: ext.surfaceVariant,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: AppRadius.brMd,
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: AppRadius.brMd,
+                      borderSide: BorderSide(color: ext.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: AppRadius.brMd,
+                      borderSide: BorderSide(color: ext.mark(ext.reminders)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Text('Color', style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: ReminderCategory.availableColors.map((c) {
+                    final isSelected = selectedColor == c;
+                    return GestureDetector(
+                      onTap: () => setSheet(() => selectedColor = c),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected
+                                ? ext.textPrimary
+                                : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Color(c),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Text('Icon', style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: ReminderCategory.availableIcons.map((iconData) {
+                    final isSelected = selectedIcon == iconData.codePoint;
+                    return GestureDetector(
+                      onTap: () =>
+                          setSheet(() => selectedIcon = iconData.codePoint),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? ext.reminders.container
+                              : ext.surfaceVariant,
+                          borderRadius: AppRadius.brMd,
+                          border: Border.all(
+                            color: isSelected
+                                ? ext.mark(ext.reminders)
+                                : ext.outline,
+                          ),
+                        ),
+                        child: Icon(
+                          iconData,
+                          size: 24,
+                          color: isSelected
+                              ? ext.reminders.onContainer
+                              : ext.textSecondary,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  label: 'Save',
+                  fullWidth: true,
+                  accent: ext.reminders,
+                  onPressed: () async {
+                    final name = nameController.text.trim();
+                    if (name.isEmpty) return;
+                    final saved = ReminderCategory(
                       id: category?.id ?? const Uuid().v4(),
-                      name: nameController.text.trim(),
+                      name: name,
                       color: selectedColor,
                       icon: selectedIcon,
                       isDefault: category?.isDefault ?? false,
                     );
-
-                    // TODO: Replace with Drift storage when migration is complete
-                    debugPrint('addCategory/updateCategory temporarily disabled - Drift migration needed');
-                    if (context.mounted) Navigator.pop(context);
+                    await CleanStorageService.saveCategory(saved);
+                    if (ctx.mounted) Navigator.pop(ctx);
                   },
-                  child: const Text('Save'),
                 ),
               ],
             );
           },
         );
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Manage Categories'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEditCategoryDialog(context),
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      // TODO: Replace with Drift stream when migration is complete
-      body: const Center(
-        child: Text('Categories temporarily disabled - Drift migration in progress'),
-      ),
     );
   }
 }

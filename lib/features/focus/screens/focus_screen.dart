@@ -32,6 +32,7 @@ class FocusScreen extends StatefulWidget {
 
 class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin {
   final FocusService _focusService = FocusService();
+  final CoinsService _coinsService = CoinsService();
   final HapticService _hapticService = HapticService();
   final VitaVibeService _vitaVibeService = VitaVibeService();
   
@@ -115,7 +116,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     final isDark = AppColors.isDark(context);
     
     return ListenableBuilder(
-      listenable: _focusService,
+      listenable: Listenable.merge([_focusService, _coinsService]),
       builder: (context, _) {
         if (_showBreathing && _selectedBreathingPattern != null) {
           return Scaffold(
@@ -1443,7 +1444,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
   }
 
   Widget _buildPremiumFeaturesGrid(bool isDark) {
-    final coinsService = CoinsService();
+    final coinsService = _coinsService;
     final plantColor = _focusService.selectedPlant.primaryColor;
     
     return Padding(

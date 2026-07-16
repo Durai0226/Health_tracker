@@ -4,6 +4,7 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/reminder_model.dart';
+import '../models/reminder_category_model.dart';
 import 'add_reminder_screen.dart';
 
 /// The Reminders destination — Calm Clarity, dark-aware, lists real reminders.
@@ -16,11 +17,15 @@ class RemindersScreen extends StatefulWidget {
 
 class _RemindersScreenState extends State<RemindersScreen> {
   List<Reminder> _reminders = [];
+  List<ReminderCategory> _categories = [];
+  String? _filterCategoryId; // null = All
 
   @override
   void initState() {
     super.initState();
+    _categories = CleanStorageService.getAllCategories();
     _load();
+    _loadCategories();
   }
 
   void _load() {
@@ -29,16 +34,36 @@ class _RemindersScreenState extends State<RemindersScreen> {
     setState(() => _reminders = all);
   }
 
+  Future<void> _loadCategories() async {
+    final categories = await CleanStorageService.getAllCategoriesAsync();
+    if (mounted) {
+      setState(() {
+        _categories = categories;
+        // Clear a filter that points at a now-deleted category.
+        if (_filterCategoryId != null &&
+            !categories.any((c) => c.id == _filterCategoryId)) {
+          _filterCategoryId = null;
+        }
+      });
+    }
+  }
+
+  List<Reminder> get _visibleReminders => _filterCategoryId == null
+      ? _reminders
+      : _reminders.where((r) => r.categoryId == _filterCategoryId).toList();
+
   Future<void> _addReminder() async {
     await Navigator.push(
         context, MaterialPageRoute(builder: (_) => const AddReminderScreen()));
     _load();
+    _loadCategories();
   }
 
   Future<void> _edit(Reminder r) async {
     await Navigator.push(
         context, MaterialPageRoute(builder: (_) => AddReminderScreen(reminder: r)));
     _load();
+    _loadCategories();
   }
 
   Future<void> _toggle(Reminder r) async {
@@ -66,12 +91,17 @@ class _RemindersScreenState extends State<RemindersScreen> {
         body: Column(
           children: [
             AppHeader(title: 'Reminders', accent: ext.reminders),
+            if (_categories.isNotEmpty) _categoryFilterBar(ext),
             Expanded(
-              child: _reminders.isEmpty
+              child: _visibleReminders.isEmpty
                   ? EmptyState(
                       icon: Icons.notifications_none_rounded,
-                      title: 'No reminders yet',
-                      message: 'Tap + to create your first reminder.',
+                      title: _filterCategoryId == null
+                          ? 'No reminders yet'
+                          : 'Nothing in this category',
+                      message: _filterCategoryId == null
+                          ? 'Tap + to create your first reminder.'
+                          : 'Try a different category or tap + to add one.',
                       accent: ext.reminders,
                     )
                   : ListView(
@@ -82,6 +112,40 @@ class _RemindersScreenState extends State<RemindersScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Horizontal filter row: All + one chip per category.
+  Widget _categoryFilterBar(AppColorsExt ext) {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: AppChip(
+              label: 'All',
+              selected: _filterCategoryId == null,
+              accent: ext.reminders,
+              onTap: () => setState(() => _filterCategoryId = null),
+            ),
+          ),
+          ..._categories.map(
+            (c) => Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: AppChip(
+                label: c.name,
+                icon: c.iconObj,
+                selected: _filterCategoryId == c.id,
+                accent: ext.reminders,
+                onTap: () => setState(() => _filterCategoryId = c.id),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -99,7 +163,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
     final upcoming = <Reminder>[];
     final completed = <Reminder>[];
 
-    for (final r in _reminders) {
+    for (final r in _visibleReminders) {
       if (r.isCompleted) {
         completed.add(r);
       } else if (r.scheduledTime.isBefore(now)) {

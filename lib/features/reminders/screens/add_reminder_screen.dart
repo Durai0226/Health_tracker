@@ -44,6 +44,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   String? _selectedImagePath;
   bool _isLoading = false;
   bool _isPlayingPreview = false;
+  List<ReminderCategory> _categories = [];
 
   // Sound options with categories and preview URLs
   static const Map<String, Map<String, String>> _soundOptions = {
@@ -99,6 +100,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       final now = DateTime.now();
       _selectedDate = now;
       _selectedTime = TimeOfDay(hour: now.hour + 1, minute: 0);
+    }
+
+    // Seed from the sync cache, then refresh from Drift.
+    _categories = CleanStorageService.getAllCategories();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final categories = await CleanStorageService.getAllCategoriesAsync();
+    if (mounted) {
+      setState(() => _categories = categories);
     }
   }
 
@@ -662,18 +674,18 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {
-                      Navigator.push(
+                    onPressed: () async {
+                      await Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const CategoryManagementScreen()),
                       );
+                      _loadCategories();
                     },
                     child: const Text('Manage'),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              // TODO: Replace with Drift stream when migration is complete
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
@@ -682,15 +694,38 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String?>(
-                    value: _selectedCategoryId,
+                    value: _categories.any((c) => c.id == _selectedCategoryId)
+                        ? _selectedCategoryId
+                        : null,
                     isExpanded: true,
                     hint: const Text('Select Category'),
                     icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
-                    items: const [
-                      DropdownMenuItem<String?>(
+                    items: [
+                      const DropdownMenuItem<String?>(
                         value: null,
                         child: Text('None'),
                       ),
+                      ..._categories.map((category) {
+                        return DropdownMenuItem<String?>(
+                          value: category.id,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: category.colorObj,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Icon(category.iconObj, size: 18, color: category.colorObj),
+                              const SizedBox(width: 8),
+                              Text(category.name),
+                            ],
+                          ),
+                        );
+                      }),
                     ],
                     onChanged: (value) {
                       setState(() => _selectedCategoryId = value);

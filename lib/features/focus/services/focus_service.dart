@@ -9,6 +9,7 @@ import '../models/focus_plant.dart';
 import '../models/ambient_sound.dart';
 import '../models/focus_session.dart';
 import '../models/focus_achievement.dart';
+import 'coins_service.dart';
 
 class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   static final FocusService _instance = FocusService._internal();
@@ -94,6 +95,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> init() async {
     WidgetsBinding.instance.addObserver(this);
     await _audioService.init();
+    await CoinsService().init();
     await _loadData();
     _initAchievements();
     await _checkAndUpdateStreak();
@@ -385,7 +387,12 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _completeSession() async {
     _timer?.cancel();
     await _audioService.stop();
-    
+
+    // Track whether this is the first completed session today (for streak bonus)
+    final isFirstCompletedToday = !_sessions.any(
+      (s) => s.wasCompleted && _isSameDay(s.startedAt, DateTime.now()),
+    );
+
     // Create healthy plant
     final plant = FocusPlant(
       id: _generateId(),
@@ -440,7 +447,18 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     
     // Update streak
     await _checkAndUpdateStreak();
-    
+
+    // Award focus coins for the completed session (Forest-style earn loop)
+    final coinsService = CoinsService();
+    await coinsService.earnCoins(
+      minutes: _selectedMinutes,
+      sessionId: session.id,
+    );
+    // Award a streak bonus once per day on the first completed session
+    if (isFirstCompletedToday) {
+      await coinsService.addStreakBonus(_stats.currentStreak);
+    }
+
     // Show notification
     await NotificationService().showImmediateNotification(
       title: 'Focus Session Complete! 🌱',

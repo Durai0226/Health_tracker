@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' show Value;
@@ -50,6 +51,48 @@ class WaterService {
     } catch (e) {
       debugPrint('⚠️ WaterService load failed (using empty): $e');
     }
+
+    // Load persisted hydration profile.
+    try {
+      final row = await _dao.getProfile();
+      if (row != null) {
+        _profile = _profileFromRow(row);
+        debugPrint('✓ WaterService loaded hydration profile from Drift');
+      }
+    } catch (e) {
+      debugPrint('⚠️ WaterService profile load failed: $e');
+    }
+
+    // Load persisted custom beverages (merged with defaults, no default dupes).
+    try {
+      final rows = await _dao.getAllBeverages();
+      final defaultIds =
+          BeverageType.defaultBeverages.map((b) => b.id).toSet();
+      _customBeverages
+        ..clear()
+        ..addAll(rows
+            .where((r) => !defaultIds.contains(r.id))
+            .map(_beverageFromRow));
+      debugPrint('✓ WaterService loaded ${_customBeverages.length} custom beverages');
+    } catch (e) {
+      debugPrint('⚠️ WaterService beverages load failed: $e');
+    }
+
+    // Load persisted custom containers (merged with defaults, no default dupes).
+    try {
+      final rows = await _dao.getAllContainers();
+      final defaultIds =
+          WaterContainer.defaultContainers.map((c) => c.id).toSet();
+      _customContainers
+        ..clear()
+        ..addAll(rows
+            .where((r) => !defaultIds.contains(r.id))
+            .map(_containerFromRow));
+      debugPrint('✓ WaterService loaded ${_customContainers.length} custom containers');
+    } catch (e) {
+      debugPrint('⚠️ WaterService containers load failed: $e');
+    }
+
     _isInitialized = true;
   }
 
@@ -127,6 +170,138 @@ class WaterService {
     }
   }
 
+  // ---- Color <-> int helpers (colorValue column stores 0xAARRGGBB) --------
+  static int _hexToColorValue(String? hex) {
+    if (hex == null || hex.isEmpty) return 0xFF2196F3;
+    var h = hex.replaceFirst('#', '');
+    if (h.length == 6) h = 'FF$h';
+    return int.tryParse(h, radix: 16) ?? 0xFF2196F3;
+  }
+
+  static String _colorValueToHex(int value) {
+    final hex = value.toRadixString(16).padLeft(8, '0');
+    return '#${hex.substring(2)}';
+  }
+
+  // ---- Profile <-> Drift mapping / persistence ---------------------------
+  static HydrationProfile _profileFromRow(db.HydrationProfile r) {
+    Map<String, dynamic> extra = const {};
+    final raw = r.healthConditionsJson;
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) extra = decoded;
+      } catch (_) {}
+    }
+    final activityIdx =
+        r.activityLevel.clamp(0, ActivityLevel.values.length - 1);
+    final climateIdx = r.climateType.clamp(0, ClimateType.values.length - 1);
+    return HydrationProfile(
+      id: r.id,
+      weightKg: r.weightKg,
+      heightCm: extra['heightCm'] as int?,
+      age: extra['age'] as int?,
+      isMale: extra['isMale'] as bool? ?? true,
+      activityLevel: ActivityLevel.values[activityIdx],
+      climate: ClimateType.values[climateIdx],
+      isPregnant: extra['isPregnant'] as bool? ?? r.pregnantOrNursing,
+      isBreastfeeding: extra['isBreastfeeding'] as bool? ?? false,
+      customGoalMl: r.customGoalMl ?? 2500,
+      useCustomGoal: r.useCustomGoal,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      wakeUpReminderEnabled: extra['wakeUpReminderEnabled'] as bool? ?? true,
+      wakeUpHour: extra['wakeUpHour'] as int? ?? 7,
+      bedtimeHour: extra['bedtimeHour'] as int? ?? 22,
+    );
+  }
+
+  static Future<void> _persistProfile(HydrationProfile p) async {
+    try {
+      // Fields with no dedicated column overflow into healthConditionsJson.
+      final extra = <String, dynamic>{
+        'heightCm': p.heightCm,
+        'age': p.age,
+        'isMale': p.isMale,
+        'isPregnant': p.isPregnant,
+        'isBreastfeeding': p.isBreastfeeding,
+        'wakeUpReminderEnabled': p.wakeUpReminderEnabled,
+        'wakeUpHour': p.wakeUpHour,
+        'bedtimeHour': p.bedtimeHour,
+      };
+      await _dao.saveProfile(db.HydrationProfilesCompanion(
+        id: const Value('profile'),
+        weightKg: Value(p.weightKg),
+        activityLevel: Value(p.activityLevel.index),
+        climateType: Value(p.climate.index),
+        customGoalMl: Value(p.customGoalMl),
+        useCustomGoal: Value(p.useCustomGoal),
+        pregnantOrNursing: Value(p.isPregnant || p.isBreastfeeding),
+        healthConditionsJson: Value(jsonEncode(extra)),
+        createdAt: Value(p.createdAt ?? DateTime.now()),
+        updatedAt: Value(p.updatedAt ?? DateTime.now()),
+      ));
+    } catch (e) {
+      debugPrint('⚠️ persist profile failed: $e');
+    }
+  }
+
+  // ---- Beverage <-> Drift mapping / persistence --------------------------
+  static BeverageType _beverageFromRow(db.BeverageType r) => BeverageType(
+        id: r.id,
+        name: r.name,
+        emoji: r.emoji,
+        hydrationPercent: r.hydrationPercent,
+        colorHex: _colorValueToHex(r.colorValue),
+        isDefault: r.isDefault,
+        hasCaffeine: r.hasCaffeine,
+        caffeinePerMl: r.caffeinePerMl.round(),
+        isAlcoholic: r.isAlcoholic,
+      );
+
+  static Future<void> _persistBeverage(BeverageType b) async {
+    try {
+      await _dao.addBeverage(db.BeverageTypesCompanion(
+        id: Value(b.id),
+        name: Value(b.name),
+        emoji: Value(b.emoji),
+        hydrationPercent: Value(b.hydrationPercent),
+        colorValue: Value(_hexToColorValue(b.colorHex)),
+        hasCaffeine: Value(b.hasCaffeine),
+        caffeinePerMl: Value(b.caffeinePerMl.toDouble()),
+        isAlcoholic: Value(b.isAlcoholic),
+        isDefault: Value(b.isDefault),
+      ));
+    } catch (e) {
+      debugPrint('⚠️ persist beverage failed: $e');
+    }
+  }
+
+  // ---- Container <-> Drift mapping / persistence -------------------------
+  static WaterContainer _containerFromRow(db.WaterContainer r) =>
+      WaterContainer(
+        id: r.id,
+        name: r.name,
+        emoji: r.emoji,
+        capacityMl: r.capacityMl,
+        isDefault: r.isDefault,
+        colorHex: _colorValueToHex(r.colorValue),
+        usageCount: r.usageCount,
+        lastUsed: r.lastUsed,
+      );
+
+  static db.WaterContainersCompanion _containerCompanion(WaterContainer c) =>
+      db.WaterContainersCompanion(
+        id: Value(c.id),
+        name: Value(c.name),
+        capacityMl: Value(c.capacityMl),
+        emoji: Value(c.emoji),
+        colorValue: Value(_hexToColorValue(c.colorHex)),
+        isDefault: Value(c.isDefault),
+        usageCount: Value(c.usageCount),
+        lastUsed: Value(c.lastUsed),
+      );
+
   // ============ BEVERAGES ============
 
   /// Get all beverages (default + custom)
@@ -144,12 +319,18 @@ class WaterService {
   static Future<void> addCustomBeverage(BeverageType beverage) async {
     _customBeverages.add(beverage);
     _notifyListeners();
+    await _persistBeverage(beverage);
   }
 
   /// Delete custom beverage (only non-default)
   static Future<void> deleteBeverage(String id) async {
     _customBeverages.removeWhere((b) => b.id == id);
     _notifyListeners();
+    try {
+      await _dao.deleteBeverage(id);
+    } catch (e) {
+      debugPrint('⚠️ delete beverage failed: $e');
+    }
   }
 
   /// Get favorite beverages (most used)
@@ -179,6 +360,11 @@ class WaterService {
   static Future<void> addCustomContainer(WaterContainer container) async {
     _customContainers.add(container);
     _notifyListeners();
+    try {
+      await _dao.addContainer(_containerCompanion(container));
+    } catch (e) {
+      debugPrint('⚠️ persist container failed: $e');
+    }
   }
 
   /// Update container
@@ -187,6 +373,11 @@ class WaterService {
     if (index >= 0) {
       _customContainers[index] = container;
       _notifyListeners();
+      try {
+        await _dao.updateContainer(_containerCompanion(container));
+      } catch (e) {
+        debugPrint('⚠️ update container failed: $e');
+      }
     }
   }
 
@@ -194,6 +385,11 @@ class WaterService {
   static Future<void> deleteContainer(String id) async {
     _customContainers.removeWhere((c) => c.id == id);
     _notifyListeners();
+    try {
+      await _dao.deleteContainer(id);
+    } catch (e) {
+      debugPrint('⚠️ delete container failed: $e');
+    }
   }
 
   /// Get frequently used containers
@@ -212,6 +408,28 @@ class WaterService {
   static Future<void> saveProfile(HydrationProfile profile) async {
     _profile = profile;
     _notifyListeners();
+
+    // Persist the profile itself.
+    await _persistProfile(profile);
+
+    // Recompute today's daily goal from the profile's effective goal and
+    // persist the day so progress/goal-reached stay consistent.
+    final key = _getDateKey(DateTime.now());
+    final newGoal = profile.effectiveGoalMl;
+    final today = _dailyWaterNotifier.value[key];
+    if (today != null) {
+      if (today.dailyGoalMl != newGoal) {
+        final updated = _recalculateDailyData(
+          today.copyWith(dailyGoalMl: newGoal),
+          today.logs,
+        );
+        await saveDailyData(updated);
+      }
+    } else {
+      await saveDailyData(
+        DailyWaterData(id: key, date: DateTime.now(), dailyGoalMl: newGoal),
+      );
+    }
   }
 
   /// Get calculated daily goal

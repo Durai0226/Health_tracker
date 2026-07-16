@@ -11,6 +11,7 @@ import 'haptic_settings_screen.dart';
 import 'vitavibe_settings_screen.dart';
 import '../../../core/services/vitavibe_service.dart';
 import 'backup_screen.dart';
+import '../../backup/presentation/screens/backup_settings_screen.dart';
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
 import '../../onboarding/screens/welcome_screen.dart';
@@ -190,17 +191,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _buildSettingsTile(
                 context,
-                icon: Icons.cloud_upload_outlined,
+                icon: Icons.save_alt_rounded,
                 iconColor: AppColors.warning,
-                title: "Backup Data",
-                subtitle: "Manage your cloud backups",
+                title: "Backup & Restore",
+                subtitle: "Export or import your data as a file",
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const BackupScreen()),
+                    MaterialPageRoute(builder: (_) => const BackupSettingsScreen()),
                   );
                 },
                 enabled: true,
+              ),
+              _buildSettingsTile(
+                context,
+                icon: Icons.cloud_upload_outlined,
+                iconColor: AppColors.info,
+                title: "Cloud Backup",
+                subtitle: _authService.isAuthenticated
+                    ? "Manage your cloud backups"
+                    : "Sign in to enable cloud backup",
+                onTap: () {
+                  if (_authService.isAuthenticated) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const BackupScreen()),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Sign in with Google to enable cloud backup.'),
+                      ),
+                    );
+                  }
+                },
+                enabled: true,
+                trailing: _authService.isAuthenticated
+                    ? null
+                    : Icon(Icons.lock_outline_rounded,
+                        color: AppColors.getDivider(context)),
               ),
             ],
           ),
