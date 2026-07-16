@@ -744,8 +744,34 @@ class MedicineCleanStorageService {
     await _dao.deleteDependent(id);
   }
 
+  // ============ BACKUP HELPERS ============
+
+  /// Export all medicines (domain models) as JSON for inclusion in the full
+  /// app backup. Uses the DOMAIN [EnhancedMedicine] (with toJson) this service
+  /// imports, so it avoids the generated-Drift naming clash in clean_storage.
+  static Future<List<Map<String, dynamic>>> exportMedicinesJson() async {
+    final medicines = await getAllMedicines(includeArchived: true);
+    return medicines.map((m) => m.toJson()).toList();
+  }
+
+  /// Restore medicines from a full-app backup. Non-destructive: each medicine
+  /// is upserted by id via [saveMedicine], so restoring over existing data
+  /// merges rather than duplicating or clobbering. Malformed entries are
+  /// skipped so a single bad record can't fail the whole restore.
+  static Future<void> importMedicinesJson(List<dynamic> data) async {
+    for (final raw in data) {
+      try {
+        final medicine =
+            EnhancedMedicine.fromJson(Map<String, dynamic>.from(raw as Map));
+        await saveMedicine(medicine);
+      } catch (e) {
+        debugPrint('Import medicine failed: $e');
+      }
+    }
+  }
+
   // ============ EXPORT METHODS ============
-  
+
   static Future<Map<String, dynamic>> exportAllMedicineData() async {
     final medicines = await getAllMedicines(includeArchived: true);
     final logs = await getAllLogs();

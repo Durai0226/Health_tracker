@@ -228,6 +228,34 @@ class MedicationReminderService {
       return false;
     }
   }
+
+  /// Snooze the reminder for a specific dose of [medicine].
+  ///
+  /// Resolves [scheduledTime] to its time-slot index (matching the same
+  /// notification-id scheme used when the reminder was originally scheduled)
+  /// and reschedules that notification [minutes] into the future.
+  Future<bool> snoozeReminderForDose(
+    EnhancedMedicine medicine,
+    DateTime scheduledTime,
+    int minutes,
+  ) async {
+    final timeIndex = _resolveTimeIndex(medicine, scheduledTime);
+    final notificationId = _generateNotificationId(medicine.id, timeIndex);
+    return snoozeReminder(notificationId, minutes);
+  }
+
+  /// Find the index of the schedule time slot matching [scheduledTime].
+  /// Falls back to 0 if no exact hour/minute match is found.
+  int _resolveTimeIndex(EnhancedMedicine medicine, DateTime scheduledTime) {
+    final times = medicine.schedule.times;
+    for (int i = 0; i < times.length; i++) {
+      if (times[i].hour == scheduledTime.hour &&
+          times[i].minute == scheduledTime.minute) {
+        return i;
+      }
+    }
+    return 0;
+  }
 }
 
 /// Extension to add pending notifications getter

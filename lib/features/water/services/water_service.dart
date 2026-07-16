@@ -93,6 +93,23 @@ class WaterService {
       debugPrint('⚠️ WaterService containers load failed: $e');
     }
 
+    // Load persisted achievements, then re-evaluate against the loaded daily
+    // data so streaks/points/unlock states are fresh and survive restart.
+    try {
+      final row = await _dao.getAchievements();
+      if (row != null) {
+        _achievements = _achievementsFromRow(row);
+        debugPrint('✓ WaterService loaded achievements from Drift');
+      }
+    } catch (e) {
+      debugPrint('⚠️ WaterService achievements load failed: $e');
+    }
+    try {
+      await _evaluateAchievements();
+    } catch (e) {
+      debugPrint('⚠️ WaterService achievements evaluation failed: $e');
+    }
+
     _isInitialized = true;
   }
 
@@ -523,6 +540,7 @@ class WaterService {
       _notifyListeners();
       await _dao.deleteWaterLog(logId);
       await _persistDay(updatedData);
+      await _evaluateAchievements();
     }
   }
 
@@ -578,8 +596,9 @@ class WaterService {
 
     // Track usage and update achievements
     await _trackBeverageUsage(beverage.id);
-    await _updateAchievements(updatedData, beverage, effectiveTime);
-    
+    _lastNewlyUnlocked =
+        await _updateAchievements(updatedData, beverage, effectiveTime);
+
     return updatedData;
   }
 
@@ -671,24 +690,259 @@ class WaterService {
     return _achievements;
   }
 
-  /// Update achievements based on activity
+  // ---- Achievements <-> Drift mapping / persistence ----------------------
+  static UserAchievements _achievementsFromRow(db.WaterAchievement r) {
+    List<WaterAchievement>? achs;
+    final rawAchs = r.achievementsJson;
+    if (rawAchs != null && rawAchs.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawAchs);
+        if (decoded is List) {
+          achs = decoded
+              .whereType<Map<String, dynamic>>()
+              .map(WaterAchievement.fromJson)
+              .toList();
+        }
+      } catch (_) {}
+    }
+    List<String>? bevUsed;
+    final rawBev = r.beverageTypesUsedJson;
+    if (rawBev != null && rawBev.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawBev);
+        if (decoded is List) bevUsed = decoded.map((e) => e.toString()).toList();
+      } catch (_) {}
+    }
+    return UserAchievements(
+      id: r.id,
+      achievements: achs,
+      totalPoints: r.totalPoints,
+      currentStreak: r.currentStreak,
+      longestStreak: r.longestStreak,
+      totalDrinks: r.totalDrinks,
+      totalMl: r.totalMl,
+      beverageTypesUsed: bevUsed,
+      daysGoalMet: r.daysGoalMet,
+      lastGoalMetDate: r.lastGoalMetDate,
+      caffeineFreeDays: r.caffeineFreeDays,
+      alcoholFreeDays: r.alcoholFreeDays,
+      earlyMorningDrinks: r.earlyMorningDrinks,
+    );
+  }
+
+  static Future<void> _persistAchievements() async {
+    try {
+      await _dao.saveAchievements(db.WaterAchievementsCompanion(
+        id: const Value('user'),
+        totalDrinks: Value(_achievements.totalDrinks),
+        totalMl: Value(_achievements.totalMl),
+        currentStreak: Value(_achievements.currentStreak),
+        longestStreak: Value(_achievements.longestStreak),
+        daysGoalMet: Value(_achievements.daysGoalMet),
+        lastGoalMetDate: Value(_achievements.lastGoalMetDate),
+        earlyMorningDrinks: Value(_achievements.earlyMorningDrinks),
+        caffeineFreeDays: Value(_achievements.caffeineFreeDays),
+        alcoholFreeDays: Value(_achievements.alcoholFreeDays),
+        totalPoints: Value(_achievements.totalPoints),
+        beverageTypesUsedJson:
+            Value(jsonEncode(_achievements.beverageTypesUsed)),
+        achievementsJson: Value(jsonEncode(
+            _achievements.achievements.map((a) => a.toJson()).toList())),
+      ));
+    } catch (e) {
+      debugPrint('⚠️ persist achievements failed: $e');
+    }
+  }
+
+  /// Newly-unlocked achievements from the most recent log, buffered so a
+  /// dashboard can pick them up and show a celebratory toast.
+  static List<WaterAchievement> _lastNewlyUnlocked = [];
+
+  /// Consume (read + clear) achievements unlocked by the last water log.
+  /// A dashboard calls this after [addWaterLog] to show a celebration toast.
+  static List<WaterAchievement> consumeNewlyUnlockedAchievements() {
+    final unlocked = _lastNewlyUnlocked;
+    _lastNewlyUnlocked = [];
+    return unlocked;
+  }
+
+  /// Update achievements based on activity. Re-evaluates all achievements from
+  /// persisted daily data and returns any that were newly unlocked.
   static Future<List<WaterAchievement>> _updateAchievements(
     DailyWaterData todayData,
     BeverageType beverage,
     DateTime now,
   ) async {
-    final newlyUnlocked = <WaterAchievement>[];
-    
-    // Update streak if goal reached
-    if (todayData.goalReached) {
-      _achievements = _achievements.copyWith(
-        currentStreak: _achievements.currentStreak + 1,
-        longestStreak: (_achievements.currentStreak + 1) > _achievements.longestStreak 
-            ? _achievements.currentStreak + 1 
-            : _achievements.longestStreak,
-      );
+    return _evaluateAchievements();
+  }
+
+  static DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Consecutive goal-reached days ending at (or just before) today.
+  static int _computeCurrentStreak() {
+    final map = _dailyWaterNotifier.value;
+    var streak = 0;
+    var cursor = _dayOnly(DateTime.now());
+
+    // Today counts only if the goal is already reached (it may be in progress).
+    final today = map[_getDateKey(cursor)];
+    if (today != null && today.goalReached) streak++;
+
+    // Walk backwards from yesterday while each day reached its goal.
+    cursor = cursor.subtract(const Duration(days: 1));
+    while (true) {
+      final day = map[_getDateKey(cursor)];
+      if (day != null && day.goalReached) {
+        streak++;
+        cursor = cursor.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
     }
-    
+    return streak;
+  }
+
+  /// Longest run of consecutive calendar days satisfying [predicate].
+  static int _computeLongestRun(bool Function(DailyWaterData) predicate) {
+    final entries = _dailyWaterNotifier.value.values.toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    var longest = 0;
+    var run = 0;
+    DateTime? prevDay;
+    for (final d in entries) {
+      final day = _dayOnly(d.date);
+      if (predicate(d)) {
+        if (prevDay != null && day.difference(prevDay).inDays == 1) {
+          run++;
+        } else {
+          run = 1;
+        }
+        if (run > longest) longest = run;
+        prevDay = day;
+      } else {
+        run = 0;
+        prevDay = null;
+      }
+    }
+    return longest;
+  }
+
+  static int _computeLongestStreak() =>
+      _computeLongestRun((d) => d.goalReached);
+
+  /// Recompute every achievement against persisted daily data, flip
+  /// [WaterAchievement.isUnlocked], accumulate points, and persist. Returns the
+  /// achievements that flipped from locked to unlocked in this pass.
+  static Future<List<WaterAchievement>> _evaluateAchievements(
+      {bool persist = true}) async {
+    final days = _dailyWaterNotifier.value.values.toList();
+
+    // ---- Aggregate metrics across all persisted days --------------------
+    var totalMl = 0;
+    var totalDrinks = 0;
+    var daysGoalMet = 0;
+    var overachieverDays = 0;
+    final beverageTypes = <String>{};
+    final earlyMorningDays = <String>{}; // distinct days with a pre-7AM drink
+    DateTime? lastGoalMetDate;
+
+    for (final d in days) {
+      totalMl += d.totalIntakeMl;
+      totalDrinks += d.logs.length;
+      if (d.goalReached) {
+        daysGoalMet++;
+        if (lastGoalMetDate == null || d.date.isAfter(lastGoalMetDate)) {
+          lastGoalMetDate = d.date;
+        }
+      }
+      if (d.dailyGoalMl > 0 && d.effectiveHydrationMl >= d.dailyGoalMl * 1.2) {
+        overachieverDays++;
+      }
+      for (final log in d.logs) {
+        beverageTypes.add(log.beverageId);
+        if (log.time.hour < 7) earlyMorningDays.add(d.id);
+      }
+    }
+
+    final currentStreak = _computeCurrentStreak();
+    final longestStreak = _computeLongestStreak();
+    final caffeineFreeRun =
+        _computeLongestRun((d) => d.logs.isNotEmpty && d.totalCaffeineMg == 0);
+    final alcoholFreeRun = _computeLongestRun(
+        (d) => d.logs.isNotEmpty && d.alcoholicDrinksCount == 0);
+
+    // ---- Evaluate each achievement definition ---------------------------
+    final prevById = {for (final a in _achievements.achievements) a.id: a};
+    final newlyUnlocked = <WaterAchievement>[];
+    final updated = <WaterAchievement>[];
+    var totalPoints = 0;
+
+    for (final def in WaterAchievement.allAchievements) {
+      final prev = prevById[def.id];
+      final wasUnlocked = prev?.isUnlocked ?? false;
+
+      int currentValue;
+      switch (def.type) {
+        case AchievementType.streak:
+        case AchievementType.perfectWeek:
+        case AchievementType.perfectMonth:
+          currentValue = longestStreak;
+          break;
+        case AchievementType.totalVolume:
+          currentValue = totalMl;
+          break;
+        case AchievementType.variety:
+          currentValue = beverageTypes.length;
+          break;
+        case AchievementType.earlyBird:
+          currentValue = earlyMorningDays.length;
+          break;
+        case AchievementType.overachiever:
+          currentValue = overachieverDays;
+          break;
+        case AchievementType.caffeineControl:
+          currentValue = caffeineFreeRun;
+          break;
+        case AchievementType.socialDrinker:
+          currentValue = alcoholFreeRun;
+          break;
+        case AchievementType.consistency:
+        case AchievementType.nightOwl:
+          currentValue = prev?.currentValue ?? 0;
+          break;
+      }
+
+      final nowUnlocked = wasUnlocked || currentValue >= def.targetValue;
+      final unlockedAt = wasUnlocked
+          ? prev?.unlockedAt
+          : (nowUnlocked ? DateTime.now() : null);
+
+      final ach = def.copyWith(
+        currentValue: currentValue,
+        isUnlocked: nowUnlocked,
+        unlockedAt: unlockedAt,
+      );
+      updated.add(ach);
+      if (nowUnlocked) totalPoints += ach.points;
+      if (nowUnlocked && !wasUnlocked) newlyUnlocked.add(ach);
+    }
+
+    _achievements = _achievements.copyWith(
+      achievements: updated,
+      totalPoints: totalPoints,
+      currentStreak: currentStreak,
+      longestStreak: longestStreak,
+      totalDrinks: totalDrinks,
+      totalMl: totalMl,
+      beverageTypesUsed: beverageTypes.toList(),
+      daysGoalMet: daysGoalMet,
+      lastGoalMetDate: lastGoalMetDate,
+      caffeineFreeDays: caffeineFreeRun,
+      alcoholFreeDays: alcoholFreeRun,
+      earlyMorningDrinks: earlyMorningDays.length,
+    );
+
+    if (persist) await _persistAchievements();
     return newlyUnlocked;
   }
 
@@ -777,9 +1031,14 @@ class WaterService {
     );
   }
 
-  /// Get current streak
+  /// Get current streak.
+  ///
+  /// Derived from persisted [DailyWaterData] (survives restart): walk backwards
+  /// from today over consecutive calendar days where the goal was reached.
+  /// Today may still be in progress, so it only adds to the streak once already
+  /// reached; the streak otherwise counts from yesterday backwards.
   static int getCurrentStreak() {
-    return getAchievements().currentStreak;
+    return _computeCurrentStreak();
   }
 
   // ============ INSIGHTS ============

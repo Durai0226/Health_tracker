@@ -14,7 +14,6 @@ import '../widgets/ambient_sound_widget.dart';
 import '../models/ambient_sound.dart';
 import '../models/custom_tag.dart';
 import 'focus_garden_screen.dart';
-import 'focus_stats_screen.dart';
 import 'relaxation_screen.dart';
 import 'plant_real_trees_screen.dart';
 import 'app_allow_list_screen.dart';
@@ -172,7 +171,7 @@ class _FocusScreenState extends State<FocusScreen> {
           accent: ext.info,
           onPressed: () {
             _hapticService.navigation();
-            Navigator.push(context, _buildPageRoute(const FocusStatsScreen()));
+            Navigator.push(context, _buildPageRoute(const DetailedStatsScreen()));
           },
         ),
       ],

@@ -12,6 +12,8 @@ import '../../features/reminders/models/reminder_model.dart' as ReminderModel;
 import '../../features/reminders/models/reminder_category_model.dart' as ReminderCategoryModel;
 import 'package:uuid/uuid.dart';
 import '../../features/medication/models/medicine.dart';
+import '../../features/medication/services/medicine_storage_service.dart';
+import '../../features/focus/services/focus_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 
@@ -476,15 +478,23 @@ class CleanStorageService {
     await setAppPreference('themeMode', settings.themeModePreference);
   }
   
-  /// Full backup snapshot: reminders, water, settings & preferences.
-  /// (Medicines round-trip separately via the medication service.)
+  /// Full backup snapshot: medicines, focus sessions, reminders, water,
+  /// settings & preferences. Medicines and focus are delegated to their own
+  /// services so this service never names the generated Drift `EnhancedMedicine`
+  /// (which it imports unprefixed) and avoids the naming clash.
   static Future<Map<String, dynamic>> exportAllData() async {
     final water = WaterService.listenToDailyData()?.value.values.toList() ??
         const <DailyWaterData>[];
     return {
-      'version': '2.0',
+      // v3: adds 'medicines' and 'focus' sections; older backups (v2/no version)
+      // simply omit them and are restored non-destructively by importData.
+      'version': 3,
       'timestamp': DateTime.now().toIso8601String(),
       'settings': getUserSettings().toJson(),
+      'medicines': await MedicineCleanStorageService.exportMedicinesJson(),
+      'focus': {
+        'sessions': FocusService().exportSessionsJson(),
+      },
       'reminders': getReminders().map((r) => r.toJson()).toList(),
       'water': water.map((d) => d.toJson()).toList(),
       'preferences': Map<String, dynamic>.from(_appPreferencesCache),
@@ -498,11 +508,37 @@ class CleanStorageService {
   }
 
   /// Restore a backup snapshot produced by [exportAllData].
+  ///
+  /// NON-DESTRUCTIVE by design: every section is MERGED into existing data, and
+  /// a section that is ABSENT from the backup is left completely untouched (an
+  /// old/partial backup can never erase, e.g., medicines that it doesn't carry).
+  /// Medicines and focus are delegated to their own services so this method
+  /// never names the generated Drift `EnhancedMedicine` (avoids the clash).
   static Future<void> importData(Map<String, dynamic> data) async {
     try {
       if (data['settings'] is Map) {
         await saveUserSettings(
             UserSettings.fromJson(Map<String, dynamic>.from(data['settings'])));
+      }
+      // Medicines (v3+). Missing key → leave existing medicines intact.
+      if (data['medicines'] is List) {
+        try {
+          await MedicineCleanStorageService.importMedicinesJson(
+              data['medicines'] as List);
+        } catch (e) {
+          debugPrint('Import medicines failed: $e');
+        }
+      }
+      // Focus sessions (v3+). Missing key → leave existing sessions intact.
+      if (data['focus'] is Map) {
+        try {
+          final focus = Map<String, dynamic>.from(data['focus'] as Map);
+          if (focus['sessions'] is List) {
+            await FocusService().importSessionsJson(focus['sessions'] as List);
+          }
+        } catch (e) {
+          debugPrint('Import focus failed: $e');
+        }
       }
       for (final r in (data['reminders'] as List? ?? const [])) {
         try {

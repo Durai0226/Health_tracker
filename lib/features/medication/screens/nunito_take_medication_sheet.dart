@@ -5,6 +5,7 @@ import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
 import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
+import '../services/medication_reminder_service.dart';
 import '../../../core/services/haptic_service.dart';
 
 class NunitoTakeMedicationSheet extends StatefulWidget {
@@ -133,9 +134,50 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     );
   }
 
-  void _snoozeMedication() {
+  Future<void> _snoozeMedication() async {
     _hapticService.light();
-    Navigator.pop(context, {'snoozed': true, 'minutes': 10});
+
+    // Use the medicine's configured snooze duration; fall back to 10 min.
+    final minutes = widget.medicine.snoozeMinutes > 0
+        ? widget.medicine.snoozeMinutes
+        : 10;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Actually reschedule the notification instead of just closing the sheet.
+      await MedicationReminderService().snoozeReminderForDose(
+        widget.medicine,
+        widget.scheduledTime,
+        minutes,
+      );
+
+      // Record a snooze log so history reflects the deferred dose.
+      final log = MedicineLog(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        medicineId: widget.medicine.id,
+        scheduledTime: widget.scheduledTime,
+        actionTime: DateTime.now(),
+        status: MedicineStatus.snoozed,
+        notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+      );
+      await MedicineCleanStorageService.addLog(log);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Snoozed for $minutes min')),
+        );
+        Navigator.pop(context, {'snoozed': true, 'minutes': minutes, 'log': log});
+      }
+    } catch (e) {
+      debugPrint('Error snoozing medication: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 
   @override

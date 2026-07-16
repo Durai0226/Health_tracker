@@ -666,6 +666,38 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     return grouped;
   }
 
+  // ============ BACKUP HELPERS ============
+
+  /// Export completed/abandoned focus sessions as JSON for the full app backup.
+  /// (Other focus state — stats, garden, coins, achievements — already round-trips
+  /// via the `preferences` section of the backup.)
+  List<Map<String, dynamic>> exportSessionsJson() {
+    return _sessions.map((s) => s.toJson()).toList();
+  }
+
+  /// Restore focus sessions from a backup. Non-destructive: sessions are merged
+  /// by id (existing sessions are kept, new ones added) so restoring can't wipe
+  /// the running session history. Malformed entries are skipped. After merging,
+  /// the in-memory service and its persisted copy are refreshed so the UI updates.
+  Future<void> importSessionsJson(List<dynamic> data) async {
+    if (data.isEmpty) return;
+    final existingIds = _sessions.map((s) => s.id).toSet();
+    for (final raw in data) {
+      try {
+        final session = FocusSession.fromJson(Map<String, dynamic>.from(raw as Map));
+        if (existingIds.add(session.id)) {
+          _sessions.add(session);
+        }
+      } catch (e) {
+        debugPrint('Import focus session failed: $e');
+      }
+    }
+    // Keep newest-first ordering used throughout the service.
+    _sessions.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    await _saveData();
+    notifyListeners();
+  }
+
   /// Check if audio is currently playing
   bool get isAudioPlaying => _audioService.isPlaying;
 

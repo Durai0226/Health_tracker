@@ -98,13 +98,24 @@ class _RemindersScreenState extends State<RemindersScreen> {
     } else {
       // Non-repeating reminders keep the simple toggle behavior.
       await CleanStorageService.toggleReminderCompletion(r);
+
+      // A completed one-off shouldn't keep a pending notification firing.
+      // (Repeating reminders are handled above via roll-forward reschedule.)
+      if (markingComplete) {
+        await NotificationService()
+            .cancelGenericReminder(r.id.hashCode, r.repeatType, r.customDays);
+      }
     }
     _load();
   }
 
   Future<void> _delete(Reminder r) async {
     await CleanStorageService.deleteReminder(r.id);
-    await NotificationService().cancelNotification(r.id.hashCode);
+    // Recurring weekday/weekends/custom reminders schedule one notification per
+    // day, so cancel ALL sub-notifications — not just the base id — otherwise
+    // 2–5 alerts keep firing forever after delete.
+    await NotificationService()
+        .cancelGenericReminder(r.id.hashCode, r.repeatType, r.customDays);
     _load();
   }
 

@@ -125,7 +125,31 @@ class MedicineSchedule {
 
   List<DateTime> getScheduledTimesForDate(DateTime date) {
     if (!isActiveOnDate(date)) return [];
-    
+
+    // PRN / as-needed meds have no fixed slots — they are taken ad-hoc and must
+    // never generate missed doses or timeline entries.
+    if (isPRN || frequencyType == FrequencyType.asNeeded) return [];
+
+    // "Every X hours" fans a single anchor time out across the whole day at the
+    // given interval, so the timeline / adherence sees every dose slot.
+    if (frequencyType == FrequencyType.everyXHours &&
+        intervalHours != null &&
+        intervalHours! > 0) {
+      final anchor = times.isNotEmpty
+          ? times.first
+          : ScheduledTime(hour: 8, minute: 0);
+      final slots = <DateTime>[];
+      var slot = DateTime(date.year, date.month, date.day, anchor.hour, anchor.minute);
+      final endOfDay = DateTime(date.year, date.month, date.day, 23, 59);
+      while (!slot.isAfter(endOfDay)) {
+        slots.add(slot);
+        slot = slot.add(Duration(hours: intervalHours!));
+      }
+      return slots;
+    }
+
+    // Day-based filtering (specificDays / everyXDays / cyclical) is handled by
+    // isActiveOnDate above; on active days the fixed [times] are the slots.
     return times.map((t) => t.toDateTime(date)).toList()
       ..sort((a, b) => a.compareTo(b));
   }
