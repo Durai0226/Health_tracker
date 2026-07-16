@@ -145,7 +145,11 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     BeverageThemeData beverage,
     bool isDark,
   ) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: 'Add ${container.capacityMl} millilitres from ${container.emoji} cup',
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: widget.onContainerAdd == null
           ? null
           : () {
@@ -177,11 +181,16 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
           ],
         ),
       ),
+    ),
     );
   }
 
   Widget _buildNewCupChip(BeverageThemeData beverage, bool isDark) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: 'Create new cup',
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: widget.onCreateCup == null
           ? null
           : () {
@@ -209,6 +218,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -224,7 +234,12 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
           final bev = AquaTheme.themeFromBeverage(beverageList[index]);
           final isSelected = bev.id == widget.selectedBeverageId;
 
-          return GestureDetector(
+          return Semantics(
+            button: true,
+            selected: isSelected,
+            label: '${bev.name}, select beverage',
+            excludeSemantics: true,
+            child: GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
               widget.onBeverageSelect();
@@ -279,6 +294,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                 ],
               ),
             ),
+          ),
           );
         },
       ),
@@ -293,7 +309,11 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     bool isPressed,
     int index,
   ) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: 'Add ${option.amount} millilitres, ${option.label}',
+      excludeSemantics: true,
+      child: GestureDetector(
       onTapDown: (_) => setState(() => _pressedIndex = index),
       onTapUp: (_) {
         setState(() => _pressedIndex = null);
@@ -353,11 +373,16 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
           ],
         ),
       ),
+    ),
     );
   }
 
   Widget _buildCustomAmountButton(BeverageThemeData beverage, bool isDark) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: 'Custom amount',
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
         widget.onCustomAmount();
@@ -391,6 +416,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
           ],
         ),
       ),
+    ),
     );
   }
 }

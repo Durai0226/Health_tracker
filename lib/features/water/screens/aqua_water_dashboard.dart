@@ -291,9 +291,9 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
               const SizedBox(height: AquaTheme.spacingL),
               Text(
                 'Daily Goal',
-                style: AquaTheme.heading2.copyWith(
-                  color: AquaTheme.getTextPrimary(context),
-                ),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: AquaTheme.getTextPrimary(context),
+                    ),
               ),
               const SizedBox(height: AquaTheme.spacingXL),
               Row(
@@ -322,16 +322,17 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
                         child: Text(
                           '${newGoal}ml',
-                          style: AquaTheme.displayLarge.copyWith(
-                            color: Colors.white,
-                          ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .displayLarge
+                              ?.copyWith(color: Colors.white),
                         ),
                       ),
                       Text(
                         '${(newGoal / 250).round()} glasses',
-                        style: AquaTheme.bodySmall.copyWith(
-                          color: AquaTheme.getTextSecondary(context),
-                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AquaTheme.getTextSecondary(context),
+                            ),
                       ),
                     ],
                   ),
@@ -395,10 +396,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                       const SizedBox(width: 8),
                       Text(
                         'Save Goal',
-                        style: AquaTheme.labelLarge.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                     ],
                   ),
@@ -600,19 +601,27 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       pinned: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
-      leading: GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Container(
-          margin: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AquaTheme.getCardBg(context),
-            shape: BoxShape.circle,
-            boxShadow: AquaTheme.subtleShadow,
-          ),
-          child: Icon(
-            Icons.arrow_back_ios_rounded,
-            color: AquaTheme.getTextPrimary(context),
-            size: 18,
+      leading: Semantics(
+        button: true,
+        label: 'Back',
+        excludeSemantics: true,
+        child: Tooltip(
+          message: 'Back',
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AquaTheme.getCardBg(context),
+                shape: BoxShape.circle,
+                boxShadow: AquaTheme.subtleShadow,
+              ),
+              child: Icon(
+                Icons.arrow_back_ios_rounded,
+                color: AquaTheme.getTextPrimary(context),
+                size: 18,
+              ),
+            ),
           ),
         ),
       ),
@@ -621,16 +630,19 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           Icons.flag_outlined,
           () => _showGoalDialog(),
           beverage,
+          label: 'Set daily goal',
         ),
         _buildHeaderAction(
           Icons.bar_chart_rounded,
           () => _navigateToStats(),
           beverage,
+          label: 'Statistics',
         ),
         _buildHeaderAction(
           Icons.settings_outlined,
           () => _navigateToProfile(),
           beverage,
+          label: 'Settings',
         ),
         const SizedBox(width: 8),
       ],
@@ -651,9 +663,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
                           child: Text(
                             'Hydration',
-                            style: AquaTheme.displayMedium.copyWith(
-                              color: Colors.white,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .displayMedium
+                                ?.copyWith(color: Colors.white),
                           ),
                         ),
                         const Spacer(),
@@ -663,9 +676,9 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                     const SizedBox(height: 4),
                     Text(
                       _getGreeting(),
-                      style: AquaTheme.bodyMedium.copyWith(
-                        color: AquaTheme.getTextSecondary(context),
-                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AquaTheme.getTextSecondary(context),
+                          ),
                     ),
                   ],
                 ),
@@ -677,21 +690,31 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     );
   }
 
-  Widget _buildHeaderAction(IconData icon, VoidCallback onTap, BeverageThemeData beverage) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AquaTheme.getCardBg(context).withOpacity(0.9),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: AquaTheme.subtleShadow,
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: beverage.primary,
+  Widget _buildHeaderAction(
+      IconData icon, VoidCallback onTap, BeverageThemeData beverage,
+      {required String label}) {
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AquaTheme.getCardBg(context).withOpacity(0.9),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: AquaTheme.subtleShadow,
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: beverage.primary,
+            ),
+          ),
         ),
       ),
     );
@@ -758,7 +781,11 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   }) {
     final isDark = AquaTheme.isDark(context);
 
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
         onTap();
@@ -796,6 +823,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           ],
         ),
       ),
+    ),
     );
   }
 

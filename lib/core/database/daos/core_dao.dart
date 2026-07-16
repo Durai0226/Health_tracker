@@ -129,6 +129,10 @@ class CoreDao extends DatabaseAccessor<AppDatabase> with _$CoreDaoMixin {
     );
   }
 
+  Future<void> deletePreference(String key) async {
+    await (delete(appPreferences)..where((t) => t.key.equals(key))).go();
+  }
+
   Future<Map<String, dynamic>> getAllPreferences() async {
     final prefs = await select(appPreferences).get();
     final map = <String, dynamic>{};

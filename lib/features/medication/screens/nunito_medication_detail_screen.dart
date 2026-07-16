@@ -203,6 +203,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                     SliverToBoxAdapter(child: _buildStatsSection()),
                     SliverToBoxAdapter(child: _buildScheduleSection()),
                     SliverToBoxAdapter(child: _buildDetailsSection()),
+                    SliverToBoxAdapter(child: _buildStockSection()),
                     SliverToBoxAdapter(child: _buildInteractionsSection()),
                     SliverToBoxAdapter(child: _buildSafetySection()),
                     SliverToBoxAdapter(child: _buildHistorySection()),
@@ -465,14 +466,6 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               const SizedBox(height: AppSpacing.sm),
               _buildDetailRow('Purpose', _medicine.purpose!),
             ],
-            if (_medicine.currentStock != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _buildDetailRow(
-                'Stock',
-                '${_medicine.currentStock} remaining',
-                highlight: (_medicine.currentStock ?? 0) <= (_medicine.lowStockThreshold ?? 5),
-              ),
-            ],
           ],
         ),
       ),
@@ -503,6 +496,138 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         ),
       ],
     );
+  }
+
+  Widget _buildStockSection() {
+    // Untracked medicines (never given a stock count) don't show a stock card.
+    if (_medicine.currentStock == null) return const SizedBox.shrink();
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final stock = _medicine.currentStock!;
+    final low = _medicine.isLowStock;
+    // -1 when supply can't be derived (no fixed schedule / PRN).
+    final days = _medicine.estimatedDaysRemaining;
+    final swatch = low ? ext.warning : ext.medicine;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.gutter),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.inventory_2_rounded,
+                    color: ext.mark(swatch), size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Stock', style: tt.titleLarge),
+                const Spacer(),
+                if (days >= 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: swatch.container,
+                      borderRadius: AppRadius.brMd,
+                    ),
+                    child: Text(
+                      '$days ${days == 1 ? 'day' : 'days'} left',
+                      style: tt.labelMedium?.copyWith(
+                          color: swatch.onContainer,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  '$stock',
+                  style: tt.displaySmall?.copyWith(
+                      color: ext.textPrimary, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '${_medicine.dosageForm.unit} remaining',
+                    style:
+                        tt.bodyMedium?.copyWith(color: ext.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+            if (low) ...[
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: ext.warning.container,
+                  borderRadius: AppRadius.brMd,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        color: ext.warning.onContainer, size: 18),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Running low — only $stock left. Time to refill.',
+                        style: tt.bodySmall?.copyWith(
+                            color: ext.warning.onContainer,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            AppButton(
+              label: 'Refill',
+              leadingIcon: Icons.add_rounded,
+              variant:
+                  low ? AppButtonVariant.primary : AppButtonVariant.secondary,
+              accent: ext.medicine,
+              fullWidth: true,
+              onPressed: _refillStock,
+            ),
+            if (!_medicine.refillReminderEnabled) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Refill reminders are off — enable them in Edit.',
+                style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refillStock() async {
+    _hapticService.light();
+    final amount = await AppBottomSheet.show<int>(
+      context,
+      title: 'Refill ${_medicine.name}',
+      icon: Icons.inventory_2_rounded,
+      accent: AppColorsExt.of(context).medicine,
+      builder: (_) => _RefillSheet(medicine: _medicine),
+    );
+    if (amount != null && amount > 0) {
+      await MedicineCleanStorageService.refillStock(_medicine.id, amount);
+      _hapticService.success();
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added $amount to ${_medicine.name}')),
+        );
+      }
+    }
   }
 
   Widget _buildInteractionsSection() {
@@ -824,6 +949,106 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Bottom-sheet body for choosing a refill amount. Returns the chosen top-up
+/// count via [Navigator.pop] so the caller can apply it through
+/// [MedicineCleanStorageService.refillStock].
+class _RefillSheet extends StatefulWidget {
+  final EnhancedMedicine medicine;
+
+  const _RefillSheet({required this.medicine});
+
+  @override
+  State<_RefillSheet> createState() => _RefillSheetState();
+}
+
+class _RefillSheetState extends State<_RefillSheet> {
+  int _amount = 30;
+  static const List<int> _presets = [10, 30, 60, 90];
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    final newTotal = (widget.medicine.currentStock ?? 0) + _amount;
+
+    Widget stepButton(IconData icon, bool enabled, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: enabled ? med.container : ext.surfaceVariant,
+            borderRadius: AppRadius.brSm,
+            border: Border.all(color: enabled ? med.base : ext.outline),
+          ),
+          child: Icon(icon,
+              color: enabled ? med.onContainer : ext.textTertiary),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'How many units are you adding?',
+          style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            stepButton(Icons.remove_rounded, _amount > 1,
+                () => setState(() => _amount = (_amount - 1).clamp(1, 9999))),
+            Container(
+              constraints: const BoxConstraints(minWidth: 96),
+              alignment: Alignment.center,
+              child: Text(
+                '$_amount',
+                style: tt.displaySmall?.copyWith(
+                    color: ext.textPrimary, fontWeight: FontWeight.w800),
+              ),
+            ),
+            stepButton(Icons.add_rounded, true,
+                () => setState(() => _amount = (_amount + 1).clamp(1, 9999))),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: _presets
+              .map((p) => AppChip(
+                    label: '+$p',
+                    selected: _amount == p,
+                    accent: med,
+                    onTap: () => setState(() => _amount = p),
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'New total: $newTotal',
+          textAlign: TextAlign.center,
+          style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          label: 'Add to stock',
+          variant: AppButtonVariant.primary,
+          accent: med,
+          fullWidth: true,
+          onPressed: () => Navigator.pop(context, _amount),
+        ),
+      ],
     );
   }
 }

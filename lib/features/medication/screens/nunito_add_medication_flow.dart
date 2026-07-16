@@ -36,6 +36,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   final _strengthController = TextEditingController();
   String _dosageUnit = 'pill(s)';
 
+  // Step 2: Stock & refill (optional — blank quantity means untracked)
+  final _stockController = TextEditingController();
+  int _lowStockThreshold = 7;
+  bool _refillReminderEnabled = false;
+
   // Step 3: Schedule
   FrequencyType _frequencyType = FrequencyType.onceDaily;
   List<TimeOfDay> _scheduleTimes = [const TimeOfDay(hour: 8, minute: 0)];
@@ -97,6 +102,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _dosageController.text = m.dosageAmount.toString();
     _strengthController.text = m.strength ?? '';
     _dosageUnit = m.dosageUnit ?? m.dosageForm.unit;
+    // Stock: treat a stored 0 as "untracked" so the field starts blank rather
+    // than pre-filling a meaningless zero (the mapper defaults untracked to 0).
+    _stockController.text =
+        (m.currentStock != null && m.currentStock! > 0) ? '${m.currentStock}' : '';
+    _lowStockThreshold = m.lowStockThreshold ?? 7;
+    _refillReminderEnabled = m.refillReminderEnabled;
     final sched = m.schedule;
     _frequencyType = sched.frequencyType;
     _scheduleTimes = sched.times.map((t) => TimeOfDay(hour: t.hour, minute: t.minute)).toList();
@@ -135,6 +146,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _nameController.dispose();
     _dosageController.dispose();
     _strengthController.dispose();
+    _stockController.dispose();
     _instructionsController.dispose();
     _purposeController.dispose();
     super.dispose();
@@ -259,6 +271,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         dosageAmount: double.parse(_dosageController.text),
         dosageUnit: _dosageUnit,
         strength: _strengthController.text.isNotEmpty ? _strengthController.text : null,
+        currentStock: _stockController.text.trim().isNotEmpty
+            ? int.tryParse(_stockController.text.trim())
+            : null,
+        lowStockThreshold: _lowStockThreshold,
+        refillReminderEnabled: _refillReminderEnabled,
         schedule: schedule,
         color: _selectedColor,
         shape: _selectedShape,
@@ -497,8 +514,96 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             hint: 'e.g., 500mg, 10mg/5ml',
             accent: med,
           ),
+          const SizedBox(height: AppSpacing.xl),
+          _buildStockSection(context),
         ],
       ),
+    );
+  }
+
+  /// Optional stock & refill tracking. Leaving the quantity blank keeps the
+  /// medicine untracked (no low-stock alerts). When a quantity is entered, the
+  /// low-stock threshold and refill-reminder toggle drive the refill pipeline.
+  Widget _buildStockSection(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    final tracked = _stockController.text.trim().isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Stock & refill',
+            style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Track your supply to get refill reminders (optional)',
+          style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _stockController,
+          keyboardType: TextInputType.number,
+          label: 'Current quantity',
+          hint: 'e.g., 30 (leave blank to skip)',
+          accent: med,
+          onChanged: (_) => setState(() {}),
+        ),
+        if (tracked) ...[
+          _buildStepperRow(
+            context: context,
+            label: 'Low-stock alert at',
+            value: _lowStockThreshold,
+            suffix: 'left',
+            min: 1,
+            max: 180,
+            onChanged: (v) => setState(() => _lowStockThreshold = v),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            onTap: () {
+              _hapticService.toggle();
+              setState(() => _refillReminderEnabled = !_refillReminderEnabled);
+            },
+            child: Row(
+              children: [
+                Icon(
+                  _refillReminderEnabled
+                      ? Icons.inventory_2_rounded
+                      : Icons.inventory_2_outlined,
+                  color:
+                      _refillReminderEnabled ? ext.mark(med) : ext.textTertiary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Refill reminders', style: tt.titleLarge),
+                      Text(
+                        _refillReminderEnabled
+                            ? 'Alert me when stock runs low'
+                            : 'No refill alerts',
+                        style:
+                            tt.bodySmall?.copyWith(color: ext.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _refillReminderEnabled,
+                  onChanged: (v) {
+                    _hapticService.toggle();
+                    setState(() => _refillReminderEnabled = v);
+                  },
+                  activeColor: ext.mark(med),
+                  activeTrackColor: med.container,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 

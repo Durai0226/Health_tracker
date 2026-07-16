@@ -303,11 +303,13 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         AppIconButton(
           icon: Icons.bar_chart_rounded,
           accent: ext.medicine,
+          tooltip: 'Adherence report',
           onPressed: _navigateToAnalytics,
         ),
         AppIconButton(
           icon: Icons.list_rounded,
           accent: ext.medicine,
+          tooltip: 'All medications',
           onPressed: _navigateToMedicationList,
         ),
       ],
@@ -686,7 +688,10 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: AppCard(
+                child: MergeSemantics(
+                  child: Semantics(
+                  button: !isTaken,
+                  child: AppCard(
                   color: isTaken ? ext.success.container : ext.surface,
                   onTap: isTaken ? null : () => _onTakeMedication(dose),
                   child: Row(
@@ -740,6 +745,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                             color: ext.success.base, size: 28),
                     ],
                   ),
+                ),
+                ),
                 ),
               ),
             ),

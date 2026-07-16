@@ -1104,6 +1104,17 @@ class WaterService {
 
     return buffer.toString();
   }
+  /// Clears all in-memory water state after a full data wipe.
+  ///
+  /// The Drift rows are removed by [CleanStorageService.clearAllPersistentData];
+  /// this resets the reactive notifier and cached custom beverages/containers so
+  /// the water UI drops to an empty state without needing an app restart.
+  static void clearInMemory() {
+    _dailyWaterNotifier.value = {};
+    _customBeverages.clear();
+    _customContainers.clear();
+  }
+
   /// Reset service state for testing
   @visibleForTesting
   static Future<void> resetForTesting() async {

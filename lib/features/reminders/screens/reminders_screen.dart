@@ -243,6 +243,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   : IconButton(
                       icon: Icon(Icons.close_rounded,
                           size: 18, color: ext.textTertiary),
+                      tooltip: 'Clear search',
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
@@ -520,7 +521,14 @@ class _RemindersScreenState extends State<RemindersScreen> {
               ),
               const SizedBox(width: AppSpacing.md),
               Center(
-                child: GestureDetector(
+                child: Semantics(
+                  button: true,
+                  checked: r.isCompleted,
+                  label: r.isCompleted
+                      ? 'Mark "${r.title}" not done'
+                      : 'Mark "${r.title}" done',
+                  excludeSemantics: true,
+                  child: GestureDetector(
                   onTap: () => _toggle(r),
                   behavior: HitTestBehavior.opaque,
                   child: Container(
@@ -542,6 +550,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                             size: 16, color: ext.reminders.on)
                         : null,
                   ),
+                ),
                 ),
               ),
               const SizedBox(width: AppSpacing.lg),

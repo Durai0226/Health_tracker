@@ -73,7 +73,12 @@ class AppNavBar extends StatelessWidget {
                   children: [
                     for (var i = 0; i < n; i++)
                       Expanded(
-                        child: GestureDetector(
+                        child: Semantics(
+                          button: true,
+                          selected: i == currentIndex,
+                          label: items[i].label,
+                          excludeSemantics: true,
+                          child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
                             if (i != currentIndex) {
@@ -108,6 +113,7 @@ class AppNavBar extends StatelessWidget {
                               ),
                             ],
                           ),
+                        ),
                         ),
                       ),
                   ],

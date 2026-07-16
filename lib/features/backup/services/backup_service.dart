@@ -72,10 +72,12 @@ class BackupService {
       }
       
       final jsonContent = utf8.decode(jsonFile.content);
-      final data = jsonDecode(jsonContent);
-      
-      // 3. Import to Hive
-      await CleanStorageService.importData(data);
+      final data = jsonDecode(jsonContent) as Map<String, dynamic>;
+
+      // 3. Restore (merge) with rollback protection: the current data is
+      // snapshotted first so a failed/partial import is rolled back instead of
+      // leaving the app in a half-imported state.
+      await CleanStorageService.restoreBackup(data);
       return true;
       
     } catch (e) {

@@ -11,6 +11,7 @@ import 'vitavibe_settings_screen.dart';
 import '../../../core/services/vitavibe_service.dart';
 import 'backup_screen.dart';
 import '../../backup/presentation/screens/backup_settings_screen.dart';
+import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
 import '../../onboarding/screens/welcome_screen.dart';
@@ -26,7 +27,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _authService = AuthService();
   final _hapticService = HapticService();
   final _vitaVibeService = VitaVibeService();
+  final _localBackupService = local_backup.BackupService();
   bool _isLoading = false;
+  bool _isExporting = false;
+  bool _isClearing = false;
 
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
@@ -70,6 +74,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     }
+  }
+
+  /// One-tap "Export a copy": builds the local ZIP backup and opens the system
+  /// share sheet so the user can save it anywhere.
+  Future<void> _exportCopy() async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+    _hapticService.tap();
+    try {
+      final file = await _localBackupService.createBackup();
+      if (!mounted) return;
+      if (file != null) {
+        await _localBackupService.shareBackup(file);
+        if (!mounted) return;
+        _showResultSnack('Backup ready to share.', isError: false);
+      } else {
+        _showResultSnack('Could not create the backup file.', isError: true);
+      }
+    } catch (e) {
+      if (mounted) _showResultSnack('Export failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  /// Destructive "Delete all data": confirmation-guarded wipe of the four core
+  /// features. Deletes the kept Drift rows and focus preferences, then routes
+  /// the UI back to a clean state.
+  Future<void> _deleteAllData() async {
+    final confirm = await ConfirmationBottomSheet.show(
+      context: context,
+      title: 'Delete all data?',
+      message:
+          'This permanently removes your medicines, water history, focus data '
+          'and reminders from this device. This cannot be undone. Consider '
+          'exporting a copy first.',
+      confirmText: 'Delete everything',
+      icon: Icons.delete_forever_rounded,
+      isDangerous: true,
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _isClearing = true);
+    try {
+      // Clears the in-memory caches, then the persistent Drift rows / focus prefs.
+      await CleanStorageService.clearAllData();
+      await CleanStorageService.clearAllPersistentData();
+      if (!mounted) return;
+      _showResultSnack('All data deleted.', isError: false);
+    } catch (e) {
+      if (mounted) _showResultSnack('Delete failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isClearing = false);
+    }
+  }
+
+  void _showResultSnack(String message, {required bool isError}) {
+    if (!mounted) return;
+    final ext = AppColorsExt.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ext.fillBg(isError ? ext.error : ext.success),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
@@ -154,7 +226,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: "You'll continue as a guest",
                           onTap: _handleSignOut,
                         ),
-                        _buildRemoveAdsTile(),
                       ],
                     ),
 
@@ -197,6 +268,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.storage_rounded,
                     tiles: [
                       AppListTile(
+                        icon: Icons.ios_share_rounded,
+                        iconColor: ext.mark(ext.success),
+                        title: 'Export a copy',
+                        subtitle: 'Save a backup file and share it',
+                        onTap: _isExporting ? null : _exportCopy,
+                        trailing: _isExporting
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      ext.mark(ext.success)),
+                                ),
+                              )
+                            : null,
+                      ),
+                      AppListTile(
                         icon: Icons.save_alt_rounded,
                         iconColor: ext.mark(ext.warning),
                         title: 'Backup & Restore',
@@ -236,6 +325,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? null
                             : Icon(Icons.lock_outline_rounded,
                                 color: ext.textTertiary),
+                      ),
+                      AppListTile(
+                        icon: Icons.delete_forever_rounded,
+                        iconColor: ext.mark(ext.error),
+                        title: 'Delete all data',
+                        subtitle: 'Permanently erase everything on this device',
+                        onTap: _isClearing ? null : _deleteAllData,
+                        trailing: _isClearing
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      ext.mark(ext.error)),
+                                ),
+                              )
+                            : null,
                       ),
                     ],
                   ),
@@ -470,40 +577,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildRemoveAdsTile() {
-    final ext = AppColorsExt.of(context);
-    final settings = CleanStorageService.getUserSettings();
-    final isAdsDisabled = settings.isAdsDisabled;
-
-    return AppListTile(
-      icon: isAdsDisabled ? Icons.verified_rounded : Icons.ad_units_rounded,
-      iconColor: ext.mark(isAdsDisabled ? ext.success : ext.brand),
-      title: isAdsDisabled ? 'Ads Disabled' : 'Ad Settings',
-      subtitle: isAdsDisabled
-          ? 'Ads are currently disabled'
-          : 'Manage ad preferences',
-      onTap: () async {
-        if (isAdsDisabled) return;
-
-        // Simulate purchase
-        setState(() => _isLoading = true);
-        await Future.delayed(const Duration(seconds: 1)); // Simulate network
-
-        final updated = settings.copyWith(isAdsDisabled: true);
-        await CleanStorageService.saveUserSettings(updated);
-
-        setState(() => _isLoading = false);
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ads removed successfully!')),
-        );
-        // Force rebuild to update UI
-        setState(() {});
-      },
-      trailing: isAdsDisabled
-          ? Icon(Icons.check_circle_outline, color: ext.mark(ext.success))
-          : null,
-    );
-  }
 }

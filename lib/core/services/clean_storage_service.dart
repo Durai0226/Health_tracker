@@ -528,6 +528,91 @@ class CleanStorageService {
     debugPrint('✓ All cached data cleared');
   }
 
+  /// Permanently deletes the user's data for the four core features.
+  ///
+  /// Unlike [clearAllData] (which only clears the in-memory caches), this
+  /// deletes the actual rows from the kept Drift tables — medicines & their
+  /// logs, water consumption data/logs/achievements, and reminders — and
+  /// removes the focus state that is persisted as `focus*` app preferences.
+  /// It then drops the in-memory caches and refreshes the reactive notifiers so
+  /// the UI falls back to a clean state without an app restart.
+  ///
+  /// KNOWN LIMITATION: the [FocusService] singleton keeps its sessions, garden
+  /// and stats in memory for the current process and re-persists them on its
+  /// next save, so a complete focus reset only takes full effect after an app
+  /// restart. Everything backed purely by Drift/preferences is cleared here.
+  static Future<void> clearAllPersistentData() async {
+    final db = database;
+    try {
+      // Reminders
+      await db.delete(db.reminders).go();
+      // Medicines + their logs
+      await db.delete(db.medicineLogs).go();
+      await db.delete(db.enhancedMedicines).go();
+      // Water consumption data + logs + achievements
+      await db.delete(db.enhancedWaterLogs).go();
+      await db.delete(db.dailyWaterDataTable).go();
+      await db.delete(db.waterAchievements).go();
+
+      // Focus state persisted as app-preference JSON (focus* keys). App config
+      // (theme, haptics, onboarding flags) is intentionally left untouched.
+      final focusKeys = _appPreferencesCache.keys
+          .where((k) => k.startsWith('focus'))
+          .toList();
+      for (final k in focusKeys) {
+        await _coreDao.deletePreference(k);
+        _appPreferencesCache.remove(k);
+      }
+
+      // Drop in-memory caches and refresh reactive state so the UI updates now.
+      _medicinesCache.clear();
+      _remindersCache.clear();
+      WaterService.clearInMemory();
+
+      debugPrint('✓ All persistent data cleared');
+    } catch (e) {
+      debugPrint('Error clearing persistent data: $e');
+      rethrow;
+    }
+  }
+
+  /// Safely restore an [exportAllData] snapshot with rollback protection.
+  ///
+  /// Before touching anything it snapshots the current data so a failed import
+  /// can be undone. When [clearExisting] is true the kept tables are wiped
+  /// first (an "overwrite" restore); otherwise the backup is MERGED
+  /// non-destructively by [importData]. On any failure the pre-restore snapshot
+  /// is put back and the error is rethrown for the caller to surface.
+  static Future<void> restoreBackup(
+    Map<String, dynamic> data, {
+    bool clearExisting = false,
+  }) async {
+    Map<String, dynamic>? snapshot;
+    try {
+      snapshot = await exportAllData();
+    } catch (e) {
+      debugPrint('Pre-restore snapshot failed (continuing without rollback): $e');
+    }
+    try {
+      if (clearExisting) {
+        await clearAllPersistentData();
+      }
+      await importData(data);
+    } catch (e) {
+      debugPrint('Restore failed: $e — attempting rollback');
+      if (snapshot != null) {
+        try {
+          await clearAllPersistentData();
+          await importData(snapshot);
+          debugPrint('✓ Rolled back to pre-restore snapshot');
+        } catch (rollbackError) {
+          debugPrint('⚠️ Rollback failed: $rollbackError');
+        }
+      }
+      rethrow;
+    }
+  }
+
   /// Restore a backup snapshot produced by [exportAllData].
   ///
   /// NON-DESTRUCTIVE by design: every section is MERGED into existing data, and

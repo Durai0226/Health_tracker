@@ -1,5 +1,6 @@
 
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
@@ -22,11 +23,12 @@ class BackupService {
     try {
       debugPrint('Creating backup...');
       final data = await CleanStorageService.exportAllData();
-      
+      final jsonString = jsonEncode(data);
+
       // Store backup metadata and data in Firestore
       // For large datasets, Firebase Storage is better, but for text JSON < 1MB, Firestore is fine.
       // Assuming dataset is reasonable size.
-      
+
       final backupId = DateTime.now().toIso8601String();
       final backupRef = _firestore
           .collection('users')
@@ -37,8 +39,11 @@ class BackupService {
       await backupRef.set({
         'id': backupId,
         'createdAt': FieldValue.serverTimestamp(),
-        'deviceName': 'Device', // Could use device_info_plus if needed
-        'data': jsonEncode(data), // Store as string to avoid map depth issues
+        // Real platform name (dart:io) — no device_info_plus dependency.
+        'deviceName': Platform.operatingSystem,
+        'data': jsonString, // Store as string to avoid map depth issues
+        // True UTF-8 byte length, not the character count of the JSON string.
+        'sizeBytes': utf8.encode(jsonString).length,
         'version': 1,
       });
       
@@ -88,12 +93,11 @@ class BackupService {
 
       final data = jsonDecode(jsonString) as Map<String, dynamic>;
 
-      // Clear existing data
-      await CleanStorageService.clearAllData();
-      
-      // Restore data
-      await CleanStorageService.importData(data);
-      
+      // Overwrite restore with rollback protection: the current data is
+      // snapshotted first, the kept tables are wiped, then the backup is
+      // imported. If anything fails the snapshot is put back automatically.
+      await CleanStorageService.restoreBackup(data, clearExisting: true);
+
       debugPrint('Backup restored successfully');
     } catch (e) {
       debugPrint('Error restoring backup: $e');
@@ -134,11 +138,17 @@ class BackupModel {
 
   factory BackupModel.fromSnapshot(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    // Prefer the stored real byte length; fall back to the UTF-8 byte length of
+    // the payload for older backups that only persisted the JSON string.
+    final storedSize = data['sizeBytes'];
+    final sizeBytes = storedSize is int
+        ? storedSize
+        : utf8.encode((data['data'] as String?) ?? '').length;
     return BackupModel(
       id: doc.id,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       deviceName: data['deviceName'] ?? 'Unknown Device',
-      sizeBytes: (data['data'] as String?)?.length ?? 0,
+      sizeBytes: sizeBytes,
     );
   }
 }
