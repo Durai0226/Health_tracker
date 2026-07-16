@@ -457,6 +457,8 @@ class _FocusScreenState extends State<FocusScreen> {
         title: 'Focus coach',
         icon: Icons.psychology_rounded,
         accent: ext.focus,
+        cacheKey:
+            'focus:${_focusService.todayMinutes ~/ 15}:${_focusService.stats.currentStreak}:${_focusService.stats.totalSessions}',
         loader: () {
           final stats = _focusService.stats;
           return AiAssistant().focusCoach(

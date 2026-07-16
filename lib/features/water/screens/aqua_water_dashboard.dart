@@ -536,6 +536,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           title: 'Hydration tips',
                           icon: Icons.water_drop_rounded,
                           accent: AppColorsExt.of(context).water,
+                          // Cache per data signature (100ml + 3h buckets) so
+                          // re-opening the tab doesn't re-hit a cloud engine.
+                          cacheKey:
+                              'hydration:${todayData.effectiveHydrationMl ~/ 100}:${todayData.dailyGoalMl}:${DateTime.now().hour ~/ 3}',
                           loader: () => AiAssistant().hydrationTip(
                             intakeMl: todayData.effectiveHydrationMl,
                             goalMl: todayData.dailyGoalMl,

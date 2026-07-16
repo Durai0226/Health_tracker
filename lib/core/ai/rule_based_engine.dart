@@ -68,22 +68,40 @@ class RuleBasedEngine {
     // Date.
     DateTime date = DateTime(now.year, now.month, now.day);
     final explicitToday = lower.contains('today') || lower.contains('tonight');
+    bool weekdayNamed = false;
     if (lower.contains('tomorrow')) {
       date = date.add(const Duration(days: 1));
     } else if (!explicitToday) {
       final wd = _weekday(lower);
-      if (wd != null) date = _nextWeekday(date, wd);
+      if (wd != null) {
+        date = _nextWeekday(date, wd);
+        weekdayNamed = true;
+      }
     }
+    final isToday = date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
 
     DateTime when;
     if (hour != null) {
       when = DateTime(date.year, date.month, date.day, hour, minute);
-      // No explicit day + time already past today + one-off → roll to tomorrow.
-      if (when.isBefore(now) && !explicitToday && repeat == 'none') {
-        when = when.add(const Duration(days: 1));
+      // If the chosen instant is already past for a one-off, roll forward:
+      // a named weekday jumps a full week; otherwise (a today-ish time) +1 day.
+      if (when.isBefore(now) && repeat == 'none') {
+        if (weekdayNamed) {
+          when = when.add(const Duration(days: 7));
+        } else if (!explicitToday) {
+          when = when.add(const Duration(days: 1));
+        }
       }
+    } else if (isToday) {
+      // No time given, and the date is today → next hour (guard 23→next day).
+      final h = now.hour + 1;
+      when = DateTime(now.year, now.month, now.day).add(Duration(hours: h));
     } else {
-      when = DateTime(now.year, now.month, now.day, now.hour + 1, 0);
+      // No time given on a future date → sensible default of 9:00 AM (keeps the
+      // parsed date instead of collapsing back to today).
+      when = DateTime(date.year, date.month, date.day, 9, 0);
     }
 
     return ParsedReminder(

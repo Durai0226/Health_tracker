@@ -314,7 +314,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       _showError('Failed to save medication');
     }
 
-    setState(() => _isLoading = false);
+    // Guard: the success path pops this screen, so it may be unmounted here.
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -589,6 +590,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final freq = _parseFrequency(data['frequency']);
     if (freq != null) {
       _frequencyType = freq;
+      // Carry the interval for every-X-hours schedules (was silently dropped).
+      if (freq == FrequencyType.everyXHours) {
+        final iv = data['intervalHours'];
+        final ivNum = iv is num ? iv.toInt() : int.tryParse('${iv ?? ''}');
+        if (ivNum != null && ivNum > 0) _intervalHours = ivNum;
+      }
       _updateTimesForFrequency();
     }
 
@@ -642,6 +649,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     }
     if (v.contains('four') || v == '4') {
       return FrequencyType.fourTimesDaily;
+    }
+    if (v.contains('everyxhours') ||
+        v.contains('every x hours') ||
+        RegExp(r'every\s*\d+\s*hour').hasMatch(v) ||
+        v.contains('hour')) {
+      return FrequencyType.everyXHours;
     }
     return null;
   }

@@ -61,7 +61,9 @@ class AiAssistant {
       case AiEnginePreference.cloud:
         return cloud ?? onDevice;
       case AiEnginePreference.onDevice:
-        return onDevice ?? cloud;
+        // Do NOT fall back to cloud — the user explicitly chose on-device
+        // (privacy). If unavailable, null → the local rule engine handles it.
+        return onDevice;
       case AiEnginePreference.auto:
       default:
         // Prefer on-device (private, free) over cloud when both exist.
@@ -81,7 +83,7 @@ class AiAssistant {
             'Keys: title (string), datetimeIso (ISO-8601 for the next occurrence), '
             'repeat (one of none|daily|weekly|weekdays|weekends), category (string or empty), '
             'priority (low|medium|high).',
-        user: _redact(text),
+        user: _redact(text, llm),
       );
       if (json != null) {
         final title = (json['title'] ?? '').toString().trim();
@@ -111,7 +113,7 @@ class AiAssistant {
             'form (tablet|capsule|liquid|injection|drops|other), '
             'frequency (once daily|twice daily|thrice daily|four times daily|asNeeded|everyXHours), '
             'times (array of HH:mm strings if implied).',
-        user: _redact(text),
+        user: _redact(text, llm),
       );
       if (json != null && (json['name']?.toString().trim().isNotEmpty ?? false)) {
         return json;
@@ -226,7 +228,7 @@ class AiAssistant {
             'You are a careful medication information assistant. The medicine is '
             '$name${dose != null ? ', dose $dose' : ''}. Answer concisely, add a '
             'one-line safety note, and never give a diagnosis.',
-        user: _redact(question),
+        user: _redact(question, llm),
       );
       if (t != null) return t;
     }
@@ -241,17 +243,18 @@ class AiAssistant {
         system:
             'Explain these medication interactions simply for a patient in 2-3 '
             'short bullets, then add "talk to your pharmacist".',
-        user: descriptions.join('\n'),
+        user: _redact(descriptions.join('\n'), llm),
       );
       if (t != null) return t;
     }
     return _rule.explainInteractions(descriptions);
   }
 
-  /// Light-touch PII scrub before any off-device call (defense-in-depth; cloud
-  /// use is already consent-gated). Strips emails / phone-like / long digit runs.
-  String _redact(String s) {
-    if (_activeLlm()?.id != 'cloud') return s; // on-device stays on device
+  /// Light-touch PII scrub before an off-device (cloud) call (defense-in-depth;
+  /// cloud use is already consent-gated). Only redacts when the payload will
+  /// actually leave the device — decided from the engine that will receive it.
+  String _redact(String s, LlmEngine engine) {
+    if (engine.id != 'cloud') return s; // on-device stays on device
     var out = s.replaceAll(RegExp(r'[\w.+-]+@[\w-]+\.[\w.-]+'), '[email]');
     out = out.replaceAll(RegExp(r'\+?\d[\d ()-]{7,}\d'), '[number]');
     return out;

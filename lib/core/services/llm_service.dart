@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import '../config/env_config.dart';
 import '../utils/secure_storage_helper.dart';
 
 /// Provider-agnostic LLM client over an OpenAI-compatible Chat Completions API.
@@ -27,7 +29,15 @@ class LlmService {
   // A --dart-define=LLM_API_KEY=... acts as a CLI fallback for the on-device key.
   String _apiKey = const String.fromEnvironment('LLM_API_KEY', defaultValue: '');
 
-  bool get isConfigured => _apiKey.trim().isNotEmpty;
+  /// True when a managed proxy is deployed (Phase C) — the production-safe path
+  /// where the key lives server-side and the client sends a Firebase ID token.
+  bool get usesProxy => EnvConfig.aiProxyUrl.isNotEmpty;
+
+  /// Configured when either a proxy is deployed, or (DEBUG builds only) a key is
+  /// pasted for dev testing. A raw provider key is never used in release —
+  /// production must go through the managed proxy.
+  bool get isConfigured =>
+      usesProxy || (_apiKey.trim().isNotEmpty && kDebugMode);
   String get model => _model;
   String get baseUrl => _baseUrl;
 
@@ -125,12 +135,26 @@ class LlmService {
   }) async {
     if (!isConfigured) return null;
     try {
+      // Production-safe path: call the managed proxy with a Firebase ID token;
+      // the proxy holds the provider key and enforces auth/quota. Dev path:
+      // call the provider directly with the pasted key (debug builds).
+      final Uri uri;
+      final String authHeader;
+      if (usesProxy) {
+        final token = await _firebaseIdToken();
+        if (token == null) return null; // proxy requires a signed-in user
+        uri = Uri.parse(EnvConfig.aiProxyUrl);
+        authHeader = 'Bearer $token';
+      } else {
+        uri = Uri.parse('$_baseUrl/chat/completions');
+        authHeader = 'Bearer $_apiKey';
+      }
       final resp = await http
           .post(
-            Uri.parse('$_baseUrl/chat/completions'),
+            uri,
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $_apiKey',
+              'Authorization': authHeader,
               'Accept': 'application/json',
             },
             body: jsonEncode({
@@ -157,6 +181,15 @@ class LlmService {
       return content is String && content.trim().isNotEmpty ? content.trim() : null;
     } catch (e) {
       debugPrint('LlmService request failed: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _firebaseIdToken() async {
+    try {
+      return await FirebaseAuth.instance.currentUser?.getIdToken();
+    } catch (e) {
+      debugPrint('LlmService: no Firebase ID token: $e');
       return null;
     }
   }

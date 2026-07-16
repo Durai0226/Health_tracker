@@ -29,9 +29,13 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    // Source the real goal from WaterService (the app uses the hydration
+    // profile's effective goal), not just the local pref.
+    await WaterService.init();
+    final effectiveGoal = WaterService.getDailyGoal();
     if (mounted) {
       setState(() {
-        _dailyGoalMl = prefs.getInt('water_daily_goal') ?? 2000;
+        _dailyGoalMl = effectiveGoal > 0 ? effectiveGoal : 2000;
         _unit = prefs.getString('water_unit') ?? 'ml';
         _isLoading = false;
       });
@@ -41,8 +45,12 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
   Future<void> _saveSettings() async {
     HapticFeedback.mediumImpact();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('water_daily_goal', _dailyGoalMl);
     await prefs.setString('water_unit', _unit);
+
+    // Persist through WaterService so the goal actually takes effect app-wide.
+    final profile = WaterService.getProfile();
+    await WaterService.saveProfile(
+        profile.copyWith(customGoalMl: _dailyGoalMl, useCustomGoal: true));
 
     if (mounted) {
       final ext = AppColorsExt.of(context);

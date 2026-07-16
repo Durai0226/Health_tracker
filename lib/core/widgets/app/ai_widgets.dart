@@ -18,12 +18,19 @@ class AiInsightCard extends StatefulWidget {
   final AccentSwatch accent;
   final Future<String?> Function() loader;
 
+  /// Optional signature of the underlying data (e.g. 'hydration:1200:2500:14').
+  /// When set, the result is cached by this key so re-opening the screen doesn't
+  /// re-run the loader (important cost/latency saver for the cloud engine); the
+  /// card also reloads automatically when the key changes.
+  final String? cacheKey;
+
   const AiInsightCard({
     super.key,
     required this.title,
     required this.icon,
     required this.accent,
     required this.loader,
+    this.cacheKey,
   });
 
   @override
@@ -31,6 +38,9 @@ class AiInsightCard extends StatefulWidget {
 }
 
 class _AiInsightCardState extends State<AiInsightCard> {
+  // Process-lifetime cache shared by all insight cards, keyed by cacheKey.
+  static final Map<String, String> _cache = {};
+
   String? _text;
   bool _loading = false;
   bool _failed = false;
@@ -38,6 +48,29 @@ class _AiInsightCardState extends State<AiInsightCard> {
   @override
   void initState() {
     super.initState();
+    _loading = true; // set directly (no setState in initState)
+    _init();
+  }
+
+  @override
+  void didUpdateWidget(covariant AiInsightCard old) {
+    super.didUpdateWidget(old);
+    // Reload when the underlying data signature changes.
+    if (widget.cacheKey != null && widget.cacheKey != old.cacheKey) {
+      _init();
+    }
+  }
+
+  void _init() {
+    final key = widget.cacheKey;
+    if (key != null && _cache.containsKey(key)) {
+      setState(() {
+        _text = _cache[key];
+        _loading = false;
+        _failed = false;
+      });
+      return;
+    }
     _load();
   }
 
@@ -48,9 +81,11 @@ class _AiInsightCardState extends State<AiInsightCard> {
     });
     final t = await widget.loader();
     if (!mounted) return;
+    final ok = t != null && t.trim().isNotEmpty;
+    if (ok && widget.cacheKey != null) _cache[widget.cacheKey!] = t;
     setState(() {
-      _text = t;
-      _failed = t == null;
+      _text = ok ? t : null;
+      _failed = !ok;
       _loading = false;
     });
   }
@@ -196,9 +231,10 @@ class _AiAskBodyState extends State<_AiAskBody> {
     });
     final a = await widget.onAsk(q);
     if (!mounted) return;
+    final ok = a != null && a.trim().isNotEmpty;
     setState(() {
-      _answer = a;
-      _failed = a == null;
+      _answer = ok ? a : null;
+      _failed = !ok;
       _loading = false;
     });
   }

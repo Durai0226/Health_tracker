@@ -179,6 +179,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   ),
                 );
               }
+              if (!mounted) return;
               _load();
               _loadCategories();
             }
@@ -210,7 +211,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
           },
         );
       },
-    );
+    ).whenComplete(controller.dispose);
   }
 
   /// Extracts structured reminder fields from free text via the AiAssistant

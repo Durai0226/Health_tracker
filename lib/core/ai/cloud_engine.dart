@@ -16,15 +16,13 @@ class CloudEngine implements LlmEngine {
   @override
   String get id => 'cloud';
 
-  /// Set true once a Firebase Cloud Function proxy URL is wired (Phase C).
-  /// Until then, cloud is developer-only.
-  static bool proxyConfigured = false;
-
   @override
   bool get isAvailable {
-    final hasEndpoint = LlmService().isConfigured; // key or proxy configured
-    if (!hasEndpoint) return false;
-    return proxyConfigured || kDebugMode;
+    // Production-safe: available whenever a managed proxy is deployed (key is
+    // server-side). Otherwise (dev), only in DEBUG builds with a pasted key —
+    // never ship a client key in release.
+    if (LlmService().usesProxy) return true;
+    return LlmService().isConfigured && kDebugMode;
   }
 
   @override
