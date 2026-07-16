@@ -18,7 +18,24 @@ class AddReminderScreen extends StatefulWidget {
   final Reminder? reminder;
   final String? noteId;
 
-  const AddReminderScreen({super.key, this.reminder, this.noteId});
+  // Optional pre-fill values for a NEW reminder (e.g. from AI "Smart Add").
+  // Applied only when [reminder] is null so the edit flow is unaffected.
+  final String? initialTitle;
+  final DateTime? initialTime;
+  final RepeatType? initialRepeat;
+  final String? initialCategoryId;
+  final ReminderPriority? initialPriority;
+
+  const AddReminderScreen({
+    super.key,
+    this.reminder,
+    this.noteId,
+    this.initialTitle,
+    this.initialTime,
+    this.initialRepeat,
+    this.initialCategoryId,
+    this.initialPriority,
+  });
 
   @override
   State<AddReminderScreen> createState() => _AddReminderScreenState();
@@ -90,6 +107,24 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       final now = DateTime.now();
       _selectedDate = now;
       _selectedTime = TimeOfDay(hour: now.hour + 1, minute: 0);
+
+      // Apply AI "Smart Add" pre-fill values (new reminders only).
+      if (widget.initialTitle != null) {
+        _titleController.text = widget.initialTitle!;
+      }
+      if (widget.initialTime != null) {
+        _selectedDate = widget.initialTime!;
+        _selectedTime = TimeOfDay.fromDateTime(widget.initialTime!);
+      }
+      if (widget.initialRepeat != null) {
+        _repeatType = widget.initialRepeat!;
+      }
+      if (widget.initialCategoryId != null) {
+        _selectedCategoryId = widget.initialCategoryId;
+      }
+      if (widget.initialPriority != null) {
+        _priority = widget.initialPriority!;
+      }
     }
 
     // Seed from the sync cache, then refresh from Drift.

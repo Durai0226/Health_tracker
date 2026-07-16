@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/design/app_design.dart';
+import '../../../core/services/llm_service.dart';
+import '../../../core/widgets/app/ai_widgets.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/water_hero_gauge.dart';
 import '../widgets/aqua_glass_card.dart';
@@ -525,7 +528,27 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         ),
                         
                         const SizedBox(height: AquaTheme.spacingXL),
-                        
+
+                        // AI hydration insight — self-loading Calm Clarity card.
+                        // Degrades gracefully: when no AI key is configured it
+                        // shows a gentle "enable AI in Settings" prompt and the
+                        // manual flow above stays fully intact.
+                        AiInsightCard(
+                          title: 'Hydration tips',
+                          icon: Icons.water_drop_rounded,
+                          accent: AppColorsExt.of(context).water,
+                          loader: () => LlmService().completeText(
+                            system:
+                                'You are a friendly hydration coach. Give ONE short, specific, encouraging tip (max 2 sentences).',
+                            user:
+                                'Today: ${todayData.effectiveHydrationMl} ml of ${todayData.dailyGoalMl} ml goal; '
+                                'current streak ${WaterService.getCurrentStreak()} days; '
+                                'time now ${DateTime.now().hour}.',
+                          ),
+                        ),
+
+                        const SizedBox(height: AquaTheme.spacingXL),
+
                         // Today's log
                         AquaSectionHeader(
                           title: "Today's Log",

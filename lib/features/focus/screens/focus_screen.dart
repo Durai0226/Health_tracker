@@ -1,6 +1,7 @@
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/services/llm_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../models/focus_session.dart';
@@ -107,6 +108,8 @@ class _FocusScreenState extends State<FocusScreen> {
                                 _buildDurationSelector(ext)
                               else
                                 _buildPomodoroConfig(ext),
+                              const SizedBox(height: AppSpacing.xl),
+                              _buildFocusCoachCard(ext),
                               const SizedBox(height: AppSpacing.xl),
                               _buildActivitySelector(ext),
                               const SizedBox(height: AppSpacing.xl),
@@ -437,6 +440,44 @@ class _FocusScreenState extends State<FocusScreen> {
           SegmentItem(icon: Icons.timer_outlined, label: 'Single'),
           SegmentItem(icon: Icons.repeat_rounded, label: 'Pomodoro'),
         ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI focus coach
+  // ---------------------------------------------------------------------------
+
+  /// Self-loading AI card offering one short, actionable focus suggestion based
+  /// on real stats. Degrades gracefully: when no AI key is set, AiInsightCard
+  /// shows a gentle "enable in Settings" prompt and the manual flow is untouched.
+  Widget _buildFocusCoachCard(AppColorsExt ext) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: AiInsightCard(
+        title: 'Focus coach',
+        icon: Icons.psychology_rounded,
+        accent: ext.focus,
+        loader: () {
+          final stats = _focusService.stats;
+          final tagNames = _tagService.tags
+              .where((t) => _focusService.selectedTagIds.contains(t.id))
+              .map((t) => t.name)
+              .toList();
+          final activity = _focusService.selectedActivity.name;
+          final tagsPart =
+              tagNames.isEmpty ? activity : '$activity (${tagNames.join(', ')})';
+          return LlmService().completeText(
+            system:
+                'You are a supportive focus/productivity coach. Give ONE short, '
+                'actionable suggestion (max 2 sentences) — e.g. a session length '
+                'or a tip — based on the stats.',
+            user:
+                'Today minutes: ${_focusService.todayMinutes}, current streak: '
+                '${stats.currentStreak} days, total sessions: '
+                '${stats.totalSessions}, recent activity/tags: $tagsPart.',
+          );
+        },
       ),
     );
   }

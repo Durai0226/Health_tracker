@@ -33,6 +33,19 @@ class SecureStorageHelper {
     await _storage.delete(key: EnvConfig.secureKeyStorageKey);
   }
 
+  // ---- LLM (AI) API key — stored on-device only (dev/beta) ----
+  static Future<String?> getLlmApiKey() async {
+    return _storage.read(key: EnvConfig.llmApiKeyStorageKey);
+  }
+
+  static Future<void> setLlmApiKey(String key) async {
+    await _storage.write(key: EnvConfig.llmApiKeyStorageKey, value: key);
+  }
+
+  static Future<void> clearLlmApiKey() async {
+    await _storage.delete(key: EnvConfig.llmApiKeyStorageKey);
+  }
+
   /// Returns a 32-byte key for content encryption.
   /// Reuses the Hive key logic for simplicity, ensuring consistency.
   static Future<Uint8List> getContentEncryptionKey() async {

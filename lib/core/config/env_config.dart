@@ -10,4 +10,5 @@ class EnvConfig {
   // Secure Storage Keys
   static const String secureKeyStorageKey = 'hive_encryption_key';
   static const String userTokenKey = 'user_auth_token';
+  static const String llmApiKeyStorageKey = 'llm_api_key';
 }

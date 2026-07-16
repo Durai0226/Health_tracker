@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/llm_service.dart';
 import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
 import '../utils/reminder_helper.dart';
@@ -123,6 +124,179 @@ class _RemindersScreenState extends State<RemindersScreen> {
     _loadCategories();
   }
 
+  /// AI "Smart Add": type a reminder in plain English; AI fills the form for
+  /// review. Degrades gracefully — if AI isn't configured, hints the user to
+  /// enable it in Settings and the manual + FAB flow stays intact.
+  void _openSmartAdd() {
+    final ext = AppColorsExt.of(context);
+    final rem = ext.reminders;
+    final controller = TextEditingController();
+    var submitting = false;
+
+    AppBottomSheet.show<void>(
+      context,
+      title: 'Smart Add',
+      icon: Icons.auto_awesome_rounded,
+      accent: rem,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            Future<void> submit() async {
+              final text = controller.text.trim();
+              if (text.isEmpty || submitting) return;
+
+              if (!LlmService().isConfigured) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Enable AI in Settings')),
+                );
+                return;
+              }
+
+              setSheetState(() => submitting = true);
+              final result = await _parseSmartReminder(text);
+              if (!mounted) return;
+              Navigator.pop(sheetCtx); // close the sheet
+
+              if (result == null) {
+                // Couldn't parse — open a blank form so the user can fill it.
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AddReminderScreen()),
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text("Couldn't parse — fill it in manually")),
+                  );
+                }
+              } else {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddReminderScreen(
+                      initialTitle: result.title,
+                      initialTime: result.time,
+                      initialRepeat: result.repeat,
+                      initialCategoryId: result.categoryId,
+                      initialPriority: result.priority,
+                    ),
+                  ),
+                );
+              }
+              _load();
+              _loadCategories();
+            }
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppTextField(
+                  controller: controller,
+                  hint: 'e.g. Take vitamin D every morning at 8am',
+                  accent: rem,
+                  maxLines: 2,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => submit(),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppButton(
+                  label: 'Create',
+                  accent: rem,
+                  fullWidth: true,
+                  loading: submitting,
+                  leadingIcon: Icons.auto_awesome_rounded,
+                  onPressed: submit,
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Calls the LLM to extract structured reminder fields from free text.
+  /// Returns null on any failure so the caller falls back to a blank form.
+  Future<_SmartReminder?> _parseSmartReminder(String text) async {
+    final now = DateTime.now();
+    final json = await LlmService().completeJson(
+      system:
+          "Extract a reminder from the user's text. Today is ${now.toIso8601String()}. "
+          'Return keys: title (string), datetimeIso (ISO-8601 for the next occurrence), '
+          'repeat (one of none|daily|weekly|weekdays|weekends), '
+          'category (string or empty), priority (low|medium|high).',
+      user: text,
+    );
+    if (json == null) return null;
+
+    final title = (json['title'] as String?)?.trim();
+    if (title == null || title.isEmpty) return null;
+
+    DateTime? time;
+    final iso = json['datetimeIso'];
+    if (iso is String && iso.trim().isNotEmpty) {
+      time = DateTime.tryParse(iso.trim());
+    }
+
+    final repeat = _repeatFromString(json['repeat']?.toString());
+    final priority = _priorityFromString(json['priority']?.toString());
+    final categoryId = await _categoryIdForName(json['category']?.toString());
+
+    return _SmartReminder(
+      title: title,
+      time: time,
+      repeat: repeat,
+      priority: priority,
+      categoryId: categoryId,
+    );
+  }
+
+  RepeatType? _repeatFromString(String? s) {
+    switch (s?.trim().toLowerCase()) {
+      case 'daily':
+        return RepeatType.daily;
+      case 'weekly':
+        return RepeatType.weekly;
+      case 'weekdays':
+        return RepeatType.weekdays;
+      case 'weekends':
+        return RepeatType.weekends;
+      case 'none':
+        return RepeatType.none;
+      default:
+        return null;
+    }
+  }
+
+  ReminderPriority? _priorityFromString(String? s) {
+    switch (s?.trim().toLowerCase()) {
+      case 'low':
+        return ReminderPriority.low;
+      case 'medium':
+        return ReminderPriority.medium;
+      case 'high':
+        return ReminderPriority.high;
+      default:
+        return null;
+    }
+  }
+
+  /// Match an AI-suggested category name (case-insensitive) to an existing
+  /// category id, or null if there's no match / it's empty.
+  Future<String?> _categoryIdForName(String? name) async {
+    final n = name?.trim().toLowerCase();
+    if (n == null || n.isEmpty) return null;
+    final categories = await CleanStorageService.getAllCategoriesAsync();
+    for (final c in categories) {
+      if (c.name.trim().toLowerCase() == n) return c.id;
+    }
+    return null;
+  }
+
   Future<void> _edit(Reminder r) async {
     await Navigator.push(
         context, MaterialPageRoute(builder: (_) => AddReminderScreen(reminder: r)));
@@ -199,7 +373,18 @@ class _RemindersScreenState extends State<RemindersScreen> {
         ),
         body: Column(
           children: [
-            AppHeader(title: 'Reminders', accent: ext.reminders),
+            AppHeader(
+              title: 'Reminders',
+              accent: ext.reminders,
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.auto_awesome_rounded,
+                      color: ext.mark(ext.reminders)),
+                  tooltip: 'Smart Add',
+                  onPressed: _openSmartAdd,
+                ),
+              ],
+            ),
             if (_reminders.isNotEmpty) _searchRow(ext),
             if (_reminders.isNotEmpty) _filterBar(ext),
             Expanded(
@@ -600,4 +785,22 @@ class _RemindersScreenState extends State<RemindersScreen> {
       ),
     );
   }
+}
+
+/// Parsed result of an AI "Smart Add" query — all fields optional (except
+/// title) so the review form can fill in whatever the model extracted.
+class _SmartReminder {
+  final String title;
+  final DateTime? time;
+  final RepeatType? repeat;
+  final ReminderPriority? priority;
+  final String? categoryId;
+
+  _SmartReminder({
+    required this.title,
+    this.time,
+    this.repeat,
+    this.priority,
+    this.categoryId,
+  });
 }

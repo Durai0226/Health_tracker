@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'core/services/clean_storage_service.dart';
+import 'core/services/llm_service.dart';
 import 'core/database/app_database.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/haptic_service.dart';
@@ -149,6 +150,7 @@ void main() async {
       _initService('MedicineCleanStorageService', () => MedicineCleanStorageService.init()),
       _initService('IntakeTrackingService', () => IntakeTrackingService.init()),
       _initService('WaterService', () => WaterService.init()),
+      _initService('LlmService', () => LlmService().init()),
     ]);
     
     // Sync snooze settings asynchronously (non-blocking)

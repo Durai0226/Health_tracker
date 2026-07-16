@@ -7,6 +7,7 @@ import '../models/medicine_schedule.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/llm_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 
 /// How the end of a medication course is expressed in the wizard.
@@ -30,6 +31,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   // Step 1: Basic Info
   final _nameController = TextEditingController();
   DosageForm _selectedForm = DosageForm.tablet;
+
+  // Step 1: Smart add (AI) — describe a medicine in plain language and let the
+  // assistant pre-fill the wizard fields. Purely optional; the manual flow is
+  // untouched when there's no AI key.
+  final _aiDescController = TextEditingController();
+  bool _aiFilling = false;
 
   // Step 2: Dosage
   final _dosageController = TextEditingController(text: '1');
@@ -149,6 +156,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _stockController.dispose();
     _instructionsController.dispose();
     _purposeController.dispose();
+    _aiDescController.dispose();
     super.dispose();
   }
 
@@ -416,6 +424,10 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         children: [
           Text('What medication are you adding?', style: tt.headlineMedium),
           const SizedBox(height: AppSpacing.xl),
+          if (LlmService().isConfigured) ...[
+            _buildSmartAddSection(context),
+            const SizedBox(height: AppSpacing.xl),
+          ],
           AppTextField(
             controller: _nameController,
             label: 'Medication Name',
@@ -461,6 +473,203 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         ],
       ),
     );
+  }
+
+  /// Smart add: a plain-language description + "Fill with AI" button. Extracts
+  /// medicine details via the shared LLM service and pre-fills the wizard state
+  /// so the user can review and continue. Only shown when AI is configured.
+  Widget _buildSmartAddSection(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
+    return AppCard(
+      color: med.container,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded,
+                  color: med.onContainer, size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Describe it (AI)',
+                  style: tt.titleMedium?.copyWith(color: med.onContainer),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'e.g. "Amoxicillin 500mg capsule, one three times a day"',
+            style: tt.bodySmall?.copyWith(color: med.onContainer.withOpacity(0.8)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: _aiDescController,
+            hint: 'Describe your medication…',
+            accent: med,
+            maxLines: 2,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _fillWithAi(),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: 'Fill with AI',
+            leadingIcon: Icons.auto_awesome_rounded,
+            variant: AppButtonVariant.primary,
+            size: AppButtonSize.sm,
+            accent: med,
+            loading: _aiFilling,
+            onPressed: _aiFilling ? null : _fillWithAi,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _fillWithAi() async {
+    final desc = _aiDescController.text.trim();
+    if (desc.isEmpty) {
+      _showError('Describe the medication first');
+      return;
+    }
+    if (!LlmService().isConfigured) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() => _aiFilling = true);
+
+    final result = await LlmService().completeJson(
+      system:
+          'Extract medication details. Return keys: name (string), dosageAmount (number), '
+          'dosageUnit (e.g. mg/ml/tablet), form (tablet|capsule|liquid|injection|other), '
+          'frequency (once|twice|thrice|four times daily or asNeeded), '
+          'times (array of HH:mm strings if implied).',
+      user: desc,
+    );
+
+    if (!mounted) return;
+    setState(() => _aiFilling = false);
+
+    if (result == null) {
+      _showError('Couldn\'t read that. Try rephrasing or fill it in manually.');
+      return;
+    }
+
+    setState(() => _applyAiExtraction(result));
+    _hapticService.success();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Filled from AI — please review each step')),
+      );
+    }
+  }
+
+  /// Map a loosely-typed AI JSON payload onto the wizard's existing state.
+  /// Every field is defensive: anything missing/unrecognized is left as-is so
+  /// the manual defaults survive.
+  void _applyAiExtraction(Map<String, dynamic> data) {
+    final name = data['name'];
+    if (name is String && name.trim().isNotEmpty) {
+      _nameController.text = name.trim();
+    }
+
+    final form = _parseForm(data['form']);
+    if (form != null) {
+      _selectedForm = form;
+      _dosageUnit = form.unit;
+    }
+
+    final amount = data['dosageAmount'];
+    if (amount is num) {
+      _dosageController.text =
+          amount == amount.roundToDouble() ? '${amount.toInt()}' : '$amount';
+    } else if (amount is String && double.tryParse(amount.trim()) != null) {
+      _dosageController.text = amount.trim();
+    }
+
+    final unit = data['dosageUnit'];
+    if (unit is String && unit.trim().isNotEmpty) {
+      _dosageUnit = unit.trim();
+    }
+
+    final freq = _parseFrequency(data['frequency']);
+    if (freq != null) {
+      _frequencyType = freq;
+      _updateTimesForFrequency();
+    }
+
+    final times = _parseTimes(data['times']);
+    if (times.isNotEmpty && !_isPRN) {
+      _scheduleTimes = times;
+    }
+  }
+
+  DosageForm? _parseForm(dynamic raw) {
+    if (raw is! String) return null;
+    final v = raw.trim().toLowerCase();
+    if (v.isEmpty) return null;
+    switch (v) {
+      case 'tablet':
+      case 'pill':
+        return DosageForm.tablet;
+      case 'capsule':
+        return DosageForm.capsule;
+      case 'liquid':
+      case 'syrup':
+      case 'suspension':
+      case 'solution':
+        return DosageForm.syrup;
+      case 'injection':
+      case 'shot':
+        return DosageForm.injection;
+    }
+    // Fall back to an exact enum-name match, else leave unchanged.
+    for (final f in DosageForm.values) {
+      if (f.name == v) return f;
+    }
+    return null;
+  }
+
+  FrequencyType? _parseFrequency(dynamic raw) {
+    if (raw is! String) return null;
+    final v = raw.trim().toLowerCase();
+    if (v.isEmpty) return null;
+    if (v.contains('asneeded') || v.contains('as needed') || v.contains('prn')) {
+      return FrequencyType.asNeeded;
+    }
+    if (v.contains('once') || v == '1' || v.startsWith('one')) {
+      return FrequencyType.onceDaily;
+    }
+    if (v.contains('twice') || v == '2' || v.startsWith('two')) {
+      return FrequencyType.twiceDaily;
+    }
+    if (v.contains('thrice') || v.contains('three') || v == '3') {
+      return FrequencyType.thriceDaily;
+    }
+    if (v.contains('four') || v == '4') {
+      return FrequencyType.fourTimesDaily;
+    }
+    return null;
+  }
+
+  List<TimeOfDay> _parseTimes(dynamic raw) {
+    if (raw is! List) return const [];
+    final out = <TimeOfDay>[];
+    for (final item in raw) {
+      if (item is! String) continue;
+      final parts = item.trim().split(':');
+      if (parts.length < 2) continue;
+      final h = int.tryParse(parts[0].trim());
+      final m = int.tryParse(parts[1].trim());
+      if (h == null || m == null) continue;
+      if (h < 0 || h > 23 || m < 0 || m > 59) continue;
+      out.add(TimeOfDay(hour: h, minute: m));
+    }
+    return out;
   }
 
   Widget _buildStep2Dosage(BuildContext context) {

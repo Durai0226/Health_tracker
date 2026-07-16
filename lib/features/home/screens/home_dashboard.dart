@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/llm_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/models/medicine_log.dart';
@@ -266,7 +267,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// One subtle line above the quick actions, sourced from live insights:
   /// remaining medicine doses first, else how far behind today's water goal.
   /// Renders nothing (no spacing) when there's nothing worth nudging about.
+  ///
+  /// When the AI Assistant is configured, this is upgraded to a warm one/two-
+  /// sentence "daily briefing" across all four features. When it is NOT
+  /// configured, the original computed line below stays fully intact.
   Widget _buildContextLine(AppColorsExt ext) {
+    if (LlmService().isConfigured) return _buildAiBriefing(ext);
+
     final waterListenable = WaterService.listenToDailyData();
     return ValueListenableBuilder<int>(
       valueListenable: MedicineCleanStorageService.revision,
@@ -326,6 +333,70 @@ class _HomeDashboardState extends State<HomeDashboard> {
         );
       },
     );
+  }
+
+  /// AI "daily briefing" — a warm one/two-sentence summary across the four
+  /// features. Only reached when [LlmService] is configured; the [AiInsightCard]
+  /// self-loads, shows a thinking/retry state, and offers a manual refresh.
+  Widget _buildAiBriefing(AppColorsExt ext) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: AiInsightCard(
+        title: 'Daily briefing',
+        icon: Icons.auto_awesome_rounded,
+        accent: ext.brand,
+        loader: () async {
+          final status = await _briefingStatus();
+          return LlmService().completeText(
+            system:
+                'Give a short, warm daily briefing (max 2 sentences) from the '
+                "user's day. Be encouraging and specific; no lists, no headings.",
+            user: status,
+            temperature: 0.5,
+            maxTokens: 120,
+          );
+        },
+      ),
+    );
+  }
+
+  /// A compact, plain-text snapshot of today's four features for the briefing
+  /// prompt. Reuses the exact same live sources the manual dashboard reads.
+  Future<String> _briefingStatus() async {
+    final now = DateTime.now();
+
+    final med = await _medicineData(MedicineCleanStorageService.revision.value);
+    final s = med.summary;
+    final medTotal = s.totalScheduled;
+    final medTaken = s.taken;
+    final medLeft = (medTotal - medTaken).clamp(0, medTotal);
+    final medLine = !med.hasMedicines
+        ? 'no medicines tracked'
+        : (medTotal == 0
+            ? 'no doses scheduled'
+            : '$medTaken of $medTotal doses taken, $medLeft left');
+
+    final goal = WaterService.getDailyGoal();
+    final water = WaterService.getTodayData();
+    final waterLine = goal > 0
+        ? '${water.effectiveHydrationMl} of $goal ml (goal ${water.goalReached ? 'reached' : 'not yet reached'})'
+        : 'no hydration goal set';
+
+    final focusMins = _focus.todayMinutes;
+    final focusLine = focusMins > 0 ? '$focusMins minutes' : 'none yet';
+
+    final todays = CleanStorageService.getReminders()
+        .where((r) => _isSameDay(r.scheduledTime, now))
+        .toList();
+    final remindersDone = todays.where((r) => r.isCompleted).length;
+    final remindersLine = todays.isEmpty
+        ? 'none today'
+        : '$remindersDone of ${todays.length} done today';
+
+    return 'Medicine: $medLine. '
+        'Water: $waterLine. '
+        'Focus: $focusLine. '
+        'Reminders: $remindersLine.';
   }
 
   // ---- quick actions -------------------------------------------------------

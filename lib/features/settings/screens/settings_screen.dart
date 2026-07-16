@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/services/llm_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/haptic_service.dart';
@@ -262,6 +263,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
 
+                  // ---- AI Assistant ----
+                  _section(
+                    title: 'AI Assistant',
+                    icon: Icons.auto_awesome_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Icons.auto_awesome_rounded,
+                        iconColor: ext.mark(ext.focus),
+                        title: 'AI Assistant (beta)',
+                        subtitle: LlmService().isConfigured
+                            ? 'Enabled · key stored on this device'
+                            : 'Add a free NVIDIA key to enable AI features',
+                        onTap: _manageAiKey,
+                        trailing: LlmService().isConfigured
+                            ? Icon(Icons.check_circle_rounded,
+                                color: ext.mark(ext.success))
+                            : null,
+                      ),
+                    ],
+                  ),
+
                   // ---- Data ----
                   _section(
                     title: 'Data',
@@ -376,6 +398,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Manage the AI (LLM) API key — paste/remove, stored on-device only.
+  Future<void> _manageAiKey() async {
+    final ext = AppColorsExt.of(context);
+    final controller = TextEditingController();
+    await AppBottomSheet.show<void>(
+      context,
+      title: 'AI Assistant',
+      icon: Icons.auto_awesome_rounded,
+      accent: ext.focus,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Enable AI to smart-add reminders, explain medicines, and get '
+            'hydration & focus tips. Paste a free NVIDIA API key from '
+            'build.nvidia.com to turn it on.',
+            style: Theme.of(ctx)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: ext.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: controller,
+            label: 'API key',
+            hint: 'nvapi-…',
+            accent: ext.focus,
+            obscureText: true,
+            prefixIcon: Icons.key_rounded,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: 'Save key',
+            accent: ext.focus,
+            fullWidth: true,
+            onPressed: () async {
+              await LlmService().setApiKey(controller.text);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) setState(() {});
+            },
+          ),
+          if (LlmService().isConfigured) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: 'Remove key',
+              variant: AppButtonVariant.ghost,
+              accent: ext.error,
+              fullWidth: true,
+              onPressed: () async {
+                await LlmService().clearApiKey();
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) setState(() {});
+              },
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Beta: the key is stored on this device only, for development/testing. '
+            'The free NVIDIA tier is not licensed for production use.',
+            style: Theme.of(ctx)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: ext.textTertiary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ),
+    );
+    controller.dispose();
   }
 
   /// A titled group: [SectionHeader] + an [AppCard] of divider-separated tiles.

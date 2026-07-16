@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
+import '../../../../core/services/llm_service.dart';
+import '../../services/water_service.dart';
 
 /// Water Daily Goal Settings Screen
 class WaterGoalSettingsScreen extends StatefulWidget {
@@ -15,6 +17,7 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
   int _dailyGoalMl = 2000;
   String _unit = 'ml';
   bool _isLoading = true;
+  bool _suggesting = false;
 
   final List<int> _presetGoals = [1500, 2000, 2500, 3000, 3500, 4000];
 
@@ -52,6 +55,79 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
         ),
       );
       Navigator.pop(context);
+    }
+  }
+
+  /// Ask the AI to suggest a daily goal from the hydration profile, then set the
+  /// goal field so the user can review and Save. Degrades gracefully: with no AI
+  /// key configured it nudges the user to Settings; on any failure it leaves the
+  /// current goal untouched. Manual entry stays fully intact either way.
+  Future<void> _suggestGoalWithAi() async {
+    final ext = AppColorsExt.of(context);
+
+    if (!LlmService().isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Turn on the AI Assistant in Settings to get a suggested goal.'),
+          backgroundColor: ext.water.base,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _suggesting = true);
+    HapticFeedback.mediumImpact();
+
+    try {
+      await WaterService.init();
+      final p = WaterService.getProfile();
+      final weight =
+          p.weightKg != null ? '${p.weightKg!.round()} kg' : 'unknown';
+      final age = p.age != null ? '${p.age} years' : 'unknown';
+      final sex = p.isMale ? 'male' : 'female';
+
+      final result = await LlmService().completeJson(
+        system:
+            'Suggest a daily water goal in ml. Return key: goalMl (integer, 1500-4000).',
+        user: 'Weight: $weight; activity level: ${p.activityLevelString}; '
+            'climate: ${p.climateString}; age: $age; sex: $sex.',
+      );
+
+      if (!mounted) return;
+
+      final raw = result?['goalMl'];
+      final goalMl = raw is int
+          ? raw
+          : (raw is num ? raw.round() : int.tryParse('${raw ?? ''}'));
+
+      if (goalMl == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Couldn't suggest a goal right now. Try again."),
+            backgroundColor: ext.water.base,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+          ),
+        );
+        return;
+      }
+
+      final clamped = goalMl.clamp(1500, 4000);
+      setState(() => _dailyGoalMl = clamped);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'AI suggests ${_formatGoal(clamped)}. Review, then tap Save Goal.'),
+          backgroundColor: ext.water.base,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _suggesting = false);
     }
   }
 
@@ -97,6 +173,17 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
                         const SizedBox(height: AppSpacing.xl),
                         _buildUnitSelector(ext, water),
                         const SizedBox(height: AppSpacing.xl),
+                        AppButton(
+                          label: 'Suggest my goal (AI)',
+                          accent: water,
+                          variant: AppButtonVariant.secondary,
+                          size: AppButtonSize.lg,
+                          fullWidth: true,
+                          leadingIcon: Icons.auto_awesome_rounded,
+                          loading: _suggesting,
+                          onPressed: _suggesting ? null : _suggestGoalWithAi,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
                         AppButton(
                           label: 'Save Goal',
                           accent: water,
