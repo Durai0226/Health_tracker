@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
+import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../services/backup_service.dart';
-import 'package:share_plus/share_plus.dart';
 
+/// Calm Clarity, dark-aware Backup & Restore screen.
+///
+/// Backup: builds a ZIP snapshot and opens the system share sheet.
+/// Restore: picks a ZIP and merges it (destructive-overwrite warning shown).
+/// Every action reports a success OR error SnackBar; a user-canceled restore
+/// reports a neutral "canceled" message rather than silently doing nothing.
 class BackupSettingsScreen extends StatefulWidget {
   const BackupSettingsScreen({super.key});
 
@@ -12,212 +18,227 @@ class BackupSettingsScreen extends StatefulWidget {
 
 class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   final _backupService = BackupService();
-  bool _isLoading = false;
+  bool _isBackingUp = false;
+  bool _isRestoring = false;
+
+  bool get _busy => _isBackingUp || _isRestoring;
+
+  void _snack(String message, {required bool isError, bool neutral = false}) {
+    if (!mounted) return;
+    final ext = AppColorsExt.of(context);
+    final swatch = neutral ? ext.info : (isError ? ext.error : ext.success);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ext.fillBg(swatch),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
 
   Future<void> _createBackup() async {
-    setState(() => _isLoading = true);
-    
+    if (_busy) return;
+    setState(() => _isBackingUp = true);
     try {
       final file = await _backupService.createBackup();
+      if (!mounted) return;
       if (file != null) {
-        if (mounted) {
-          // Offer to share immediately
-          await _backupService.shareBackup(file);
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Backup created successfully!')),
-          );
-        }
+        await _backupService.shareBackup(file);
+        if (!mounted) return;
+        _snack('Backup ready to share.', isError: false);
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to create backup')),
-          );
-        }
+        _snack('Could not create the backup file.', isError: true);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      if (mounted) _snack('Backup failed: $e', isError: true);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isBackingUp = false);
     }
   }
 
   Future<void> _restoreBackup() async {
-    // Confirm first - this is destructive
-    final confirmed = await showDialog<bool>(
+    if (_busy) return;
+
+    final confirmed = await ConfirmationBottomSheet.show(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Restore Backup?'),
-        content: const Text(
-          'WARNING: This will overwrite ALL current data with the backup file. '
-          'Any changes not in the backup will be lost forever.\n\n'
-          'Locked notes will require the encryption key from the device that created them to be readable.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Restore & Overwrite'),
-          ),
-        ],
-      ),
+      title: 'Restore backup?',
+      message:
+          'This overwrites current data with the backup file. Any changes not '
+          'in the backup will be lost. Locked notes need the encryption key '
+          'from the device that created them to be readable.',
+      confirmText: 'Restore & overwrite',
+      icon: Icons.restore_page_rounded,
+      isDangerous: true,
     );
+    if (confirmed != true || !mounted) return;
 
-    if (confirmed != true) return;
-
-    setState(() => _isLoading = true);
-    
+    setState(() => _isRestoring = true);
     try {
-      final success = await _backupService.restoreBackup();
-      if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Data restored successfully! Please restart the app.')),
-          );
-        }
-      } 
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore failed: $e')),
-        );
+      final restored = await _backupService.restoreBackup();
+      if (!mounted) return;
+      if (restored) {
+        _snack('Data restored. Please restart the app.', isError: false);
+      } else {
+        // false == user canceled the file picker (not an error).
+        _snack('Restore canceled.', isError: false, neutral: true);
       }
+    } catch (e) {
+      if (mounted) _snack('Restore failed: $e', isError: true);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isRestoring = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Data Backup & Recovery'),
-        elevation: 0,
-      ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildSectionHeader('Backup'),
-              _buildCard(
-                icon: Icons.cloud_upload_outlined,
-                title: 'Create Backup',
-                subtitle: 'Export your notes, folders, and tags to a file.',
-                onTap: _createBackup,
+    final ext = AppColorsExt.of(context);
+    return AccentScope(
+      feature: FeatureAccent.brand,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Backup & Restore',
+              accent: ext.brand,
+              leading: AppIconButton(
+                icon: Icons.arrow_back_rounded,
+                filled: false,
+                accent: ext.brand,
+                onPressed: () => Navigator.pop(context),
               ),
-              const SizedBox(height: 24),
-              _buildSectionHeader('Restore'),
-              _buildCard(
-                icon: Icons.restore_page_outlined,
-                title: 'Restore Data',
-                subtitle: 'Import data from a backup file. Warning: Overwrites current data.',
-                isDestructive: true,
-                onTap: _restoreBackup,
-              ),
-              const SizedBox(height: 24),
-              const Card(
-                color: Color(0xFFFFF3E0), // Warning orange tint
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                      SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          "Important: Locked notes are encrypted. To read them after restoring on a new device, ensures you have the same security setup (biometrics/pin) or they may remain inaccessible.",
-                          style: TextStyle(fontSize: 12, color: Colors.brown),
-                        ),
-                      ),
-                    ],
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 40),
+                children: [
+                  SectionHeader(
+                    title: 'Backup',
+                    icon: Icons.cloud_upload_outlined,
+                    accent: ext.success,
                   ),
-                ),
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _rowHeader(
+                          icon: Icons.cloud_upload_outlined,
+                          title: 'Create backup',
+                          subtitle:
+                              'Export your data to a file and share it anywhere.',
+                          swatch: ext.success,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        AppButton(
+                          label: 'Create backup',
+                          leadingIcon: Icons.ios_share_rounded,
+                          accent: ext.success,
+                          fullWidth: true,
+                          loading: _isBackingUp,
+                          onPressed: _busy ? null : _createBackup,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SectionHeader(
+                    title: 'Restore',
+                    icon: Icons.restore_page_outlined,
+                    accent: ext.warning,
+                  ),
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _rowHeader(
+                          icon: Icons.restore_page_outlined,
+                          title: 'Restore data',
+                          subtitle:
+                              'Import data from a backup file. This overwrites '
+                              'current data.',
+                          swatch: ext.warning,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        AppButton(
+                          label: 'Restore from file',
+                          leadingIcon: Icons.folder_open_rounded,
+                          accent: ext.warning,
+                          variant: AppButtonVariant.tonal,
+                          fullWidth: true,
+                          loading: _isRestoring,
+                          onPressed: _busy ? null : _restoreBackup,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _infoBanner(ext),
+                ],
               ),
-            ],
-        ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: Colors.grey,
-          letterSpacing: 1.2,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCard({
+  Widget _rowHeader({
     required IconData icon,
     required String title,
     required String subtitle,
-    required VoidCallback onTap,
-    bool isDestructive = false,
+    required AccentSwatch swatch,
   }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: swatch.container,
+            borderRadius: AppRadius.brMd,
+          ),
+          child: Icon(icon, size: 22, color: swatch.onContainer),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDestructive ? AppColors.error.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  color: isDestructive ? AppColors.error : AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: isDestructive ? AppColors.error : AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
+              Text(title, style: tt.titleMedium),
+              const SizedBox(height: 3),
+              Text(subtitle,
+                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _infoBanner(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
+      color: ext.warning.container,
+      pressEffect: false,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded,
+              size: 20, color: ext.warning.onContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Locked notes are encrypted. To read them after restoring on a '
+              'new device, use the same security setup (biometrics/PIN) or they '
+              'may remain inaccessible.',
+              style: tt.bodySmall?.copyWith(color: ext.warning.onContainer),
+            ),
+          ),
+        ],
       ),
     );
   }

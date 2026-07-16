@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../../theme/aqua_theme.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 
 /// Water Cup Sizes Settings Screen
 class WaterCupsSettingsScreen extends StatefulWidget {
@@ -49,14 +49,15 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
     HapticFeedback.mediumImpact();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('water_cups', jsonEncode(_cups));
-    
+
     if (mounted) {
+      final ext = AppColorsExt.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Cup sizes saved!'),
-          backgroundColor: AquaTheme.waterPrimary,
+          backgroundColor: ext.water.base,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
         ),
       );
       Navigator.pop(context);
@@ -65,150 +66,147 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
 
   void _editCup(int index) {
     final cup = _cups[index];
-    final nameController = TextEditingController(text: cup['name']);
+    final nameController = TextEditingController(text: cup['name'].toString());
     final mlController = TextEditingController(text: cup['ml'].toString());
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          left: 24, right: 24, top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AquaTheme.textTertiary, borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 24),
-            const Text('Edit Cup Size', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AquaTheme.textPrimary)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AquaTheme.waterPrimary)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: mlController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Amount (ml)',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AquaTheme.waterPrimary)),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _cups[index] = {
-                      'name': nameController.text,
-                      'ml': int.tryParse(mlController.text) ?? cup['ml'],
-                      'icon': cup['icon'],
-                    };
-                  });
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: AquaTheme.waterPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            ),
-          ],
-        ),
+    final water = AppColorsExt.of(context).water;
+
+    AppBottomSheet.show(
+      context,
+      title: 'Edit Cup Size',
+      icon: Icons.local_drink_rounded,
+      accent: water,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
+            controller: nameController,
+            label: 'Name',
+            accent: water,
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: mlController,
+            label: 'Amount (ml)',
+            accent: water,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            label: 'Save',
+            accent: water,
+            size: AppButtonSize.lg,
+            fullWidth: true,
+            leadingIcon: Icons.check_rounded,
+            onPressed: () {
+              setState(() {
+                _cups[index] = {
+                  'name': nameController.text,
+                  'ml': int.tryParse(mlController.text) ?? cup['ml'],
+                  'icon': cup['icon'],
+                };
+              });
+              Navigator.pop(ctx);
+            },
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AquaTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: AquaTheme.backgroundLight,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: AquaTheme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Cup Sizes', style: TextStyle(color: AquaTheme.textPrimary, fontWeight: FontWeight.w600)),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AquaTheme.waterPrimary))
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+    final ext = AppColorsExt.of(context);
+    final water = ext.water;
+
+    return AppScaffold(
+      safeTop: true,
+      body: Column(
+        children: [
+          AppHeader(
+            title: 'Cup Sizes',
+            icon: Icons.local_drink_rounded,
+            accent: water,
+            leading: AppIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              accent: water,
+              filled: false,
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: ext.mark(water)))
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                        AppSpacing.sm, AppSpacing.gutter, AppSpacing.lg),
                     itemCount: _cups.length,
-                    itemBuilder: (context, index) => _buildCupCard(_cups[index], index),
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: AppSpacing.md),
+                    itemBuilder: (context, index) =>
+                        _buildCupCard(_cups[index], index, ext, water),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildSaveButton(),
-                ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.sm,
+                AppSpacing.gutter, AppSpacing.lg),
+            child: AppButton(
+              label: 'Save Cup Sizes',
+              accent: water,
+              size: AppButtonSize.lg,
+              fullWidth: true,
+              leadingIcon: Icons.check_rounded,
+              onPressed: _saveSettings,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCupCard(
+      Map<String, dynamic> cup, int index, AppColorsExt ext, AccentSwatch water) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: water.container,
+              borderRadius: AppRadius.brMd,
+            ),
+            child: Center(
+                child: Text(cup['icon'].toString(),
+                    style: const TextStyle(fontSize: 24))),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(cup['name'].toString(),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(color: ext.textPrimary)),
+                const SizedBox(height: 2),
+                Text('${cup['ml']} ml',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: ext.textSecondary)),
               ],
             ),
-    );
-  }
-
-  Widget _buildCupCard(Map<String, dynamic> cup, int index) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          width: 48, height: 48,
-          decoration: BoxDecoration(
-            color: AquaTheme.waterPrimary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
           ),
-          child: Center(child: Text(cup['icon'], style: const TextStyle(fontSize: 24))),
-        ),
-        title: Text(cup['name'], style: const TextStyle(fontWeight: FontWeight.w600, color: AquaTheme.textPrimary)),
-        subtitle: Text('${cup['ml']} ml', style: const TextStyle(color: AquaTheme.textSecondary)),
-        trailing: IconButton(
-          icon: const Icon(Icons.edit_outlined, color: AquaTheme.waterPrimary),
-          onPressed: () => _editCup(index),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        onPressed: _saveSettings,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AquaTheme.waterPrimary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: const Text('Save Cup Sizes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          IconButton(
+            icon: Icon(Icons.edit_outlined, color: ext.mark(water)),
+            onPressed: () => _editCup(index),
+          ),
+        ],
       ),
     );
   }

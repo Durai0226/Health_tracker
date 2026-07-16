@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../models/beverage_type.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
@@ -9,7 +9,7 @@ import '../services/water_service.dart';
 /// Screen for creating and customizing cups/containers
 class CustomCupCreatorScreen extends StatefulWidget {
   final WaterContainer? existingContainer;
-  
+
   const CustomCupCreatorScreen({super.key, this.existingContainer});
 
   @override
@@ -20,11 +20,11 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _capacityController = TextEditingController();
-  
+
   String _selectedEmoji = '🥛';
-  Color _selectedColor = AppColors.info;
+  Color _selectedColor = const Color(0xFF3B82F6);
   bool _isSaving = false;
-  
+
   // Multi-ingredient support
   final List<CupIngredient> _ingredients = [];
   bool _isMultiIngredient = false;
@@ -35,7 +35,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
   ];
 
   final List<Color> _colorOptions = [
-    AppColors.info,
+    const Color(0xFF3B82F6),
     Colors.lightBlue,
     Colors.cyan,
     Colors.teal,
@@ -48,7 +48,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     Colors.purple,
     Colors.indigo,
     Colors.brown,
-    Colors.grey,
+    Colors.blueGrey,
   ];
 
   @override
@@ -64,7 +64,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           _selectedColor = Color(int.parse(c.colorHex!.replaceFirst('#', '0xFF')));
         } catch (e) {
           debugPrint('Error parsing color: $e');
-          _selectedColor = AppColors.info;
+          _selectedColor = const Color(0xFF3B82F6);
         }
       }
     } else {
@@ -100,55 +100,39 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     return int.tryParse(_capacityController.text) ?? 0;
   }
 
+  void _snack(String message, {bool error = false}) {
+    final ext = AppColorsExt.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? ext.error.base : ext.water.base,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter a name'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) _snack('Please enter a name', error: true);
       return;
     }
 
     if (name.length > 50) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Name is too long (max 50 characters)'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) _snack('Name is too long (max 50 characters)', error: true);
       return;
     }
 
     if (_totalCapacity <= 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter a valid capacity'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) _snack('Please enter a valid capacity', error: true);
       return;
     }
 
     if (_totalCapacity > 10000) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Capacity cannot exceed 10000ml'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) _snack('Capacity cannot exceed 10000ml', error: true);
       return;
     }
 
@@ -167,26 +151,10 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
 
       if (widget.existingContainer != null) {
         await WaterService.updateContainer(container);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cup updated successfully'),
-              backgroundColor: AppColors.success,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
+        if (mounted) _snack('Cup updated successfully');
       } else {
         await WaterService.addCustomContainer(container);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cup created successfully'),
-              backgroundColor: AppColors.success,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
+        if (mounted) _snack('Cup created successfully');
       }
 
       if (mounted) {
@@ -194,15 +162,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
       }
     } catch (e) {
       debugPrint('Error saving container: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+      if (mounted) _snack('Error: ${e.toString()}', error: true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -210,21 +170,17 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
 
   void _addIngredient() {
     final beverages = WaterService.getAllBeverages();
-    
+
     if (beverages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No beverages available'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _snack('No beverages available', error: true);
       return;
     }
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+
+    AppBottomSheet.show(
+      context,
+      title: 'Add Ingredient',
+      icon: Icons.local_drink_rounded,
+      accent: AppColorsExt.of(context).water,
       builder: (context) => _IngredientSelector(
         beverages: beverages,
         onSelected: (beverageId, amount) {
@@ -251,145 +207,143 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(widget.existingContainer != null ? 'Edit Cup' : 'Create Custom Cup'),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _save,
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
-          ),
-        ],
-      ),
+    final ext = AppColorsExt.of(context);
+    final water = ext.water;
+    final isEditing = widget.existingContainer != null;
+
+    return AppScaffold(
+      safeTop: true,
       body: Form(
         key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildPreview(),
-              const SizedBox(height: 24),
-              _buildNameField(),
-              const SizedBox(height: 20),
-              _buildEmojiSelector(),
-              const SizedBox(height: 20),
-              _buildColorSelector(),
-              const SizedBox(height: 20),
-              _buildCapacitySection(),
-              const SizedBox(height: 20),
-              _buildMultiIngredientToggle(),
-              if (_isMultiIngredient) ...[
-                const SizedBox(height: 16),
-                _buildIngredientsList(),
+        child: Column(
+          children: [
+            AppHeader(
+              title: isEditing ? 'Edit Cup' : 'New Cup',
+              icon: Icons.local_drink_rounded,
+              accent: water,
+              leading: AppIconButton(
+                icon: Icons.close_rounded,
+                accent: water,
+                filled: false,
+                onPressed: () => Navigator.pop(context),
+              ),
+              actions: [
+                AppButton(
+                  label: 'Save',
+                  accent: water,
+                  size: AppButtonSize.sm,
+                  loading: _isSaving,
+                  onPressed: _isSaving ? null : _save,
+                ),
               ],
-              const SizedBox(height: 100),
-            ],
-          ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, AppSpacing.huge),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildPreview(ext, water),
+                    const SizedBox(height: AppSpacing.xl),
+                    _buildDetailsCard(ext, water),
+                    const SizedBox(height: AppSpacing.lg),
+                    _buildEmojiCard(ext, water),
+                    const SizedBox(height: AppSpacing.lg),
+                    _buildColorCard(ext, water),
+                    const SizedBox(height: AppSpacing.lg),
+                    _buildCapacityCard(ext, water),
+                    const SizedBox(height: AppSpacing.lg),
+                    _buildMultiIngredientCard(ext, water),
+                    if (_isMultiIngredient) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      _buildIngredientsCard(ext, water),
+                    ],
+                    const SizedBox(height: AppSpacing.xl),
+                    AppButton(
+                      label: isEditing ? 'Save Changes' : 'Create Cup',
+                      accent: water,
+                      size: AppButtonSize.lg,
+                      fullWidth: true,
+                      loading: _isSaving,
+                      leadingIcon: Icons.check_rounded,
+                      onPressed: _isSaving ? null : _save,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildPreview() {
+  Widget _buildPreview(AppColorsExt ext, AccentSwatch water) {
+    final tt = Theme.of(context).textTheme;
     return Center(
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: _selectedColor.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xxl, vertical: AppSpacing.xl),
         child: Column(
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 84,
+              height: 84,
               decoration: BoxDecoration(
-                color: _selectedColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
+                color: _selectedColor.withOpacity(0.12),
+                borderRadius: AppRadius.brLg,
                 border: Border.all(color: _selectedColor, width: 2),
               ),
               child: Center(
-                child: Text(_selectedEmoji, style: const TextStyle(fontSize: 40)),
+                child: Text(_selectedEmoji, style: const TextStyle(fontSize: 42)),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Text(
               _nameController.text.isEmpty ? 'Cup Name' : _nameController.text,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: tt.headlineSmall?.copyWith(color: ext.textPrimary),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               '${_totalCapacity}ml',
-              style: TextStyle(
-                fontSize: 14,
+              style: tt.titleMedium?.copyWith(
                 color: _selectedColor,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            if (_isMultiIngredient && _effectiveHydration != _totalCapacity)
+            if (_isMultiIngredient && _effectiveHydration != _totalCapacity) ...[
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 'Effective: ${_effectiveHydration}ml',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary),
               ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNameField() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+  Widget _buildDetailsCard(AppColorsExt ext, AccentSwatch water) {
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Cup Name',
-            style: TextStyle(fontWeight: FontWeight.w600),
+          SectionHeader(
+            title: 'Details',
+            icon: Icons.edit_note_rounded,
+            accent: water,
           ),
-          const SizedBox(height: 8),
-          TextFormField(
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
             controller: _nameController,
-            decoration: InputDecoration(
-              hintText: 'e.g., My Favorite Mug',
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
+            label: 'Cup name',
+            hint: 'e.g. My Favorite Mug',
+            prefixIcon: Icons.local_cafe_rounded,
+            accent: water,
+            textCapitalization: TextCapitalization.words,
             onChanged: (_) => setState(() {}),
             validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
           ),
@@ -398,24 +352,20 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     );
   }
 
-  Widget _buildEmojiSelector() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+  Widget _buildEmojiCard(AppColorsExt ext, AccentSwatch water) {
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Icon',
-            style: TextStyle(fontWeight: FontWeight.w600),
+          SectionHeader(
+            title: 'Icon',
+            icon: Icons.emoji_emotions_outlined,
+            accent: water,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: _emojiOptions.map((emoji) {
               final isSelected = emoji == _selectedEmoji;
               return GestureDetector(
@@ -427,9 +377,12 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: isSelected ? _selectedColor.withOpacity(0.1) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: isSelected ? Border.all(color: _selectedColor, width: 2) : null,
+                    color: isSelected ? water.container : ext.surfaceVariant,
+                    borderRadius: AppRadius.brMd,
+                    border: Border.all(
+                      color: isSelected ? ext.mark(water) : ext.outline,
+                      width: isSelected ? 2 : 1,
+                    ),
                   ),
                   child: Center(
                     child: Text(emoji, style: const TextStyle(fontSize: 24)),
@@ -443,24 +396,20 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     );
   }
 
-  Widget _buildColorSelector() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+  Widget _buildColorCard(AppColorsExt ext, AccentSwatch water) {
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Color',
-            style: TextStyle(fontWeight: FontWeight.w600),
+          SectionHeader(
+            title: 'Color',
+            icon: Icons.palette_outlined,
+            accent: water,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
             children: _colorOptions.map((color) {
               final isSelected = color == _selectedColor;
               return GestureDetector(
@@ -469,20 +418,18 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                   setState(() => _selectedColor = color);
                 },
                 child: Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
-                    border: isSelected
-                        ? Border.all(color: Colors.white, width: 3)
-                        : null,
-                    boxShadow: isSelected
-                        ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)]
-                        : null,
+                    border: Border.all(
+                      color: isSelected ? ext.textPrimary : Colors.transparent,
+                      width: 3,
+                    ),
                   ),
                   child: isSelected
-                      ? const Icon(Icons.check, color: Colors.white, size: 20)
+                      ? Icon(Icons.check_rounded, color: _onColor(color), size: 22)
                       : null,
                 ),
               );
@@ -493,42 +440,42 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     );
   }
 
-  Widget _buildCapacitySection() {
+  // Contrast-safe check mark color on top of an arbitrary swatch.
+  Color _onColor(Color c) =>
+      c.computeLuminance() > 0.5 ? const Color(0xFF1A1A1A) : Colors.white;
+
+  Widget _buildCapacityCard(AppColorsExt ext, AccentSwatch water) {
+    final tt = Theme.of(context).textTheme;
     if (_isMultiIngredient) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
+      return AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Total Capacity',
-              style: TextStyle(fontWeight: FontWeight.w600),
+            SectionHeader(
+              title: 'Total Capacity',
+              icon: Icons.straighten_rounded,
+              accent: water,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: water.container,
+                borderRadius: AppRadius.brMd,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     '${_totalCapacity}ml',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.info,
+                    style: tt.headlineMedium?.copyWith(
+                      color: water.onContainer,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
                     'from ${_ingredients.length} ingredients',
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: tt.bodyMedium?.copyWith(color: water.onContainer),
                   ),
                 ],
               ),
@@ -538,33 +485,23 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Capacity (ml)',
-            style: TextStyle(fontWeight: FontWeight.w600),
+          SectionHeader(
+            title: 'Capacity',
+            icon: Icons.straighten_rounded,
+            accent: water,
           ),
-          const SizedBox(height: 8),
-          TextFormField(
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
             controller: _capacityController,
+            label: 'Capacity (ml)',
+            hint: 'Enter capacity',
+            prefixIcon: Icons.water_drop_outlined,
+            accent: water,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              hintText: 'Enter capacity',
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              suffixText: 'ml',
-            ),
             onChanged: (_) => setState(() {}),
             validator: (v) {
               if (v == null || v.isEmpty) return 'Required';
@@ -574,25 +511,21 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
               return null;
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: [100, 150, 250, 350, 500, 750, 1000].map((ml) {
-              return GestureDetector(
+              final selected = int.tryParse(_capacityController.text) == ml;
+              return AppChip(
+                label: '${ml}ml',
+                selected: selected,
+                accent: water,
                 onTap: () {
                   HapticFeedback.selectionClick();
                   _capacityController.text = ml.toString();
                   setState(() {});
                 },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text('${ml}ml'),
-                ),
               );
             }).toList(),
           ),
@@ -601,35 +534,36 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     );
   }
 
-  Widget _buildMultiIngredientToggle() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+  Widget _buildMultiIngredientCard(AppColorsExt ext, AccentSwatch water) {
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
       child: Row(
         children: [
-          const Expanded(
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: water.container,
+              borderRadius: AppRadius.brSm,
+            ),
+            child: Icon(Icons.blender_outlined, size: 20, color: water.onContainer),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Multi-Ingredient Cup',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  'Mix different beverages for accurate hydration',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+                Text('Multi-Ingredient Cup',
+                    style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
+                const SizedBox(height: 2),
+                Text('Mix different beverages for accurate hydration',
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
               ],
             ),
           ),
           Switch(
             value: _isMultiIngredient,
+            activeThumbColor: water.base,
+            activeTrackColor: water.container,
             onChanged: (v) {
               HapticFeedback.selectionClick();
               setState(() {
@@ -637,44 +571,32 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                 if (!v) _ingredients.clear();
               });
             },
-            activeThumbColor: AppColors.info,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildIngredientsList() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+  Widget _buildIngredientsCard(AppColorsExt ext, AccentSwatch water) {
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Ingredients',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              TextButton.icon(
-                onPressed: _addIngredient,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add'),
-              ),
-            ],
+          SectionHeader(
+            title: 'Ingredients',
+            icon: Icons.science_outlined,
+            accent: water,
+            actionLabel: 'Add',
+            onAction: _addIngredient,
           ),
           if (_ingredients.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
               child: Center(
                 child: Text(
                   'Tap "Add" to add ingredients',
-                  style: TextStyle(color: AppColors.textSecondary),
+                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
                 ),
               ),
             )
@@ -683,13 +605,13 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
               final index = entry.key;
               final ingredient = entry.value;
               final beverage = WaterService.getBeverage(ingredient.beverageId);
-              
+
               return Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(top: AppSpacing.sm),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
+                  color: ext.surfaceVariant,
+                  borderRadius: AppRadius.brMd,
                 ),
                 child: Row(
                   children: [
@@ -697,27 +619,24 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                       beverage?.emoji ?? '💧',
                       style: const TextStyle(fontSize: 24),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             beverage?.name ?? 'Unknown',
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                            style: tt.titleSmall?.copyWith(color: ext.textPrimary),
                           ),
                           Text(
                             '${ingredient.amountMl}ml (${beverage?.hydrationPercent ?? 100}% hydration)',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
+                            style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.remove_circle_outline, color: AppColors.error),
+                      icon: Icon(Icons.remove_circle_outline, color: ext.error.base),
                       onPressed: () => _removeIngredient(index),
                     ),
                   ],
@@ -738,7 +657,7 @@ class CupIngredient {
   CupIngredient({required this.beverageId, required this.amountMl});
 }
 
-/// Bottom sheet for selecting ingredients
+/// Bottom sheet content for selecting ingredients
 class _IngredientSelector extends StatefulWidget {
   final List<BeverageType> beverages;
   final Function(String beverageId, int amount) onSelected;
@@ -762,158 +681,130 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
     super.dispose();
   }
 
+  void _snack(String message) {
+    final ext = AppColorsExt.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ext.error.base,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Add Ingredient',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            const Text('Select Beverage', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 80,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: widget.beverages.length,
-                itemBuilder: (context, index) {
-                  final bev = widget.beverages[index];
-                  final isSelected = _selectedBeverage?.id == bev.id;
-                  return GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selectedBeverage = bev);
-                    },
-                    child: Container(
-                      width: 70,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.info.withOpacity(0.1) : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                        border: isSelected ? Border.all(color: AppColors.info, width: 2) : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(bev.emoji, style: const TextStyle(fontSize: 24)),
-                          const SizedBox(height: 4),
-                          Text(
-                            bev.name,
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              color: isSelected ? AppColors.info : AppColors.textSecondary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
+    final ext = AppColorsExt.of(context);
+    final water = ext.water;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Select Beverage',
+            style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: AppSpacing.sm),
+        SizedBox(
+          height: 84,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: widget.beverages.length,
+            itemBuilder: (context, index) {
+              final bev = widget.beverages[index];
+              final isSelected = _selectedBeverage?.id == bev.id;
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _selectedBeverage = bev);
                 },
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text('Amount (ml)', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                suffixText: 'ml',
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: [50, 100, 150, 200, 250].map((ml) {
-                return GestureDetector(
-                  onTap: () {
-                    _amountController.text = ml.toString();
-                  },
-                  child: Chip(label: Text('${ml}ml')),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _selectedBeverage == null
-                    ? null
-                    : () {
-                        final amount = int.tryParse(_amountController.text) ?? 0;
-                        if (amount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter a valid amount'),
-                              backgroundColor: AppColors.error,
-                            ),
-                          );
-                          return;
-                        }
-                        if (amount > 5000) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Amount cannot exceed 5000ml'),
-                              backgroundColor: AppColors.error,
-                            ),
-                          );
-                          return;
-                        }
-                        widget.onSelected(_selectedBeverage!.id, amount);
-                        Navigator.pop(context);
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.info,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 74,
+                  margin: const EdgeInsets.only(right: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: isSelected ? water.container : ext.surfaceVariant,
+                    borderRadius: AppRadius.brMd,
+                    border: Border.all(
+                      color: isSelected ? ext.mark(water) : ext.outline,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(bev.emoji, style: const TextStyle(fontSize: 26)),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          bev.name,
+                          style: tt.labelSmall?.copyWith(
+                            color: isSelected
+                                ? water.onContainer
+                                : ext.textSecondary,
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: const Text(
-                  'Add Ingredient',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        AppTextField(
+          controller: _amountController,
+          label: 'Amount (ml)',
+          accent: water,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [50, 100, 150, 200, 250].map((ml) {
+            return AppChip(
+              label: '${ml}ml',
+              accent: water,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _amountController.text = ml.toString();
+                setState(() {});
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(
+          label: 'Add Ingredient',
+          accent: water,
+          size: AppButtonSize.lg,
+          fullWidth: true,
+          leadingIcon: Icons.add_rounded,
+          onPressed: _selectedBeverage == null
+              ? null
+              : () {
+                  final amount = int.tryParse(_amountController.text) ?? 0;
+                  if (amount <= 0) {
+                    _snack('Please enter a valid amount');
+                    return;
+                  }
+                  if (amount > 5000) {
+                    _snack('Amount cannot exceed 5000ml');
+                    return;
+                  }
+                  widget.onSelected(_selectedBeverage!.id, amount);
+                  Navigator.pop(context);
+                },
+        ),
+      ],
     );
   }
 }

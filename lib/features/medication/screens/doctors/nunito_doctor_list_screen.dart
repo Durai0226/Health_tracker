@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../theme/nunito_theme.dart';
-import '../../widgets/nunito_glass_card.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -68,7 +67,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
 
   Future<void> _callDoctor(Doctor doctor) async {
     if (doctor.phone == null || doctor.phone!.isEmpty) return;
-    
+
     final uri = Uri.parse('tel:${doctor.phone}');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
@@ -77,7 +76,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
 
   Future<void> _emailDoctor(Doctor doctor) async {
     if (doctor.email == null || doctor.email!.isEmpty) return;
-    
+
     final uri = Uri.parse('mailto:${doctor.email}');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
@@ -85,22 +84,31 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
   }
 
   Future<void> _deleteDoctor(Doctor doctor) async {
+    final ext = AppColorsExt.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-        ),
-        title: Text('Delete Doctor', style: NunitoTheme.heading3),
-        content: Text('Are you sure you want to delete Dr. ${doctor.name}?'),
+        backgroundColor: ext.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
+        title: Text('Delete Doctor',
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(color: ext.textPrimary)),
+        content: Text('Are you sure you want to delete Dr. ${doctor.name}?',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: ext.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel',
+                style: TextStyle(color: ext.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: NunitoTheme.error),
+            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
             child: const Text('Delete'),
           ),
         ],
@@ -116,147 +124,136 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = AppColorsExt.of(context);
+    final accent = ext.medicine;
 
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_rounded,
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
-          onPressed: () => Navigator.pop(context),
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        floatingActionButton: AppFab(
+          icon: Icons.add_rounded,
+          label: 'Add Doctor',
+          accent: accent,
+          onPressed: () => _navigateToAddEdit(),
         ),
-        title: Text(
-          widget.isSelectionMode ? 'Select Doctor' : 'My Doctors',
-          style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
+        body: Column(
+          children: [
+            AppHeader(
+              title: widget.isSelectionMode ? 'Select Doctor' : 'Doctors',
+              accent: accent,
+              leading: AppIconButton(
+                icon: Icons.arrow_back_rounded,
+                filled: false,
+                accent: accent,
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _doctors.isEmpty
+                      ? EmptyState(
+                          icon: Icons.person_add_rounded,
+                          title: 'No doctors added',
+                          message: 'Add your doctors to keep their info handy.',
+                          accent: accent,
+                          action: AppButton(
+                            label: 'Add Doctor',
+                            accent: accent,
+                            leadingIcon: Icons.add_rounded,
+                            onPressed: () => _navigateToAddEdit(),
+                          ),
+                        )
+                      : _buildDoctorList(ext, accent),
+            ),
+          ],
         ),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _doctors.isEmpty
-              ? _buildEmptyState(isDark)
-              : _buildDoctorList(isDark),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _navigateToAddEdit(),
-        backgroundColor: NunitoTheme.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text('Add Doctor', style: NunitoTheme.labelLarge.copyWith(color: Colors.white)),
       ),
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.person_add_rounded,
-            size: 64,
-            color: NunitoTheme.primary.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No doctors added',
-            style: NunitoTheme.heading3.copyWith(
-              color: NunitoTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add your doctors to keep their info handy',
-            style: NunitoTheme.bodyMedium.copyWith(
-              color: NunitoTheme.textTertiary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDoctorList(bool isDark) {
+  Widget _buildDoctorList(AppColorsExt ext, AccentSwatch accent) {
     return ListView.builder(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 96),
       itemCount: _doctors.length,
       itemBuilder: (context, index) {
         final doctor = _doctors[index];
-        return _buildDoctorCard(doctor, isDark);
+        return _buildDoctorCard(doctor, ext, accent);
       },
     );
   }
 
-  Widget _buildDoctorCard(Doctor doctor, bool isDark) {
+  Widget _buildDoctorCard(Doctor doctor, AppColorsExt ext, AccentSwatch accent) {
+    final tt = Theme.of(context).textTheme;
     return Dismissible(
       key: Key(doctor.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.only(bottom: NunitoTheme.spacingS),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
         decoration: BoxDecoration(
-          color: NunitoTheme.error,
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
+          color: ext.error.base,
+          borderRadius: AppRadius.brCard,
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_rounded, color: Colors.white),
+        child: Icon(Icons.delete_rounded, color: ext.error.on),
       ),
       confirmDismiss: (direction) async {
         _deleteDoctor(doctor);
         return false;
       },
-      child: NunitoAnimatedCard(
+      child: AppCard(
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
         onTap: () => _selectDoctor(doctor),
-        margin: const EdgeInsets.only(bottom: NunitoTheme.spacingS),
         child: Row(
           children: [
             Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: NunitoTheme.accentBlue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
+                color: accent.container,
+                borderRadius: AppRadius.brLg,
               ),
               child: Center(
                 child: Text(
                   _getInitials(doctor.name),
-                  style: NunitoTheme.heading3.copyWith(
-                    color: NunitoTheme.accentBlue,
+                  style: tt.titleLarge?.copyWith(
+                    color: accent.onContainer,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Text(
-                        'Dr. ${doctor.name}',
-                        style: NunitoTheme.labelLarge.copyWith(
-                          color: isDark ? Colors.white : NunitoTheme.textPrimary,
+                      Flexible(
+                        child: Text(
+                          'Dr. ${doctor.name}',
+                          style: tt.titleLarge?.copyWith(color: ext.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (doctor.isPrimary) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: NunitoTheme.success.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            color: ext.success.container,
+                            borderRadius: AppRadius.brSm,
                           ),
                           child: Text(
                             'Primary',
-                            style: NunitoTheme.caption.copyWith(
-                              color: NunitoTheme.success,
-                              fontWeight: FontWeight.w600,
+                            style: tt.labelSmall?.copyWith(
+                              color: ext.success.onContainer,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -267,14 +264,14 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
                     const SizedBox(height: 2),
                     Text(
                       doctor.specialty!,
-                      style: NunitoTheme.bodySmall.copyWith(color: NunitoTheme.primary),
+                      style: tt.bodySmall?.copyWith(color: ext.mark(accent)),
                     ),
                   ],
                   if (doctor.clinicName != null && doctor.clinicName!.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
                       doctor.clinicName!,
-                      style: NunitoTheme.caption,
+                      style: tt.bodySmall?.copyWith(color: ext.textTertiary),
                     ),
                   ],
                 ],
@@ -283,13 +280,15 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
             if (doctor.phone != null && doctor.phone!.isNotEmpty)
               IconButton(
                 onPressed: () => _callDoctor(doctor),
-                icon: Icon(Icons.phone_rounded, color: NunitoTheme.success, size: 22),
+                icon: Icon(Icons.phone_rounded,
+                    color: ext.success.strong, size: 22),
                 tooltip: 'Call',
               ),
             if (doctor.email != null && doctor.email!.isNotEmpty)
               IconButton(
                 onPressed: () => _emailDoctor(doctor),
-                icon: Icon(Icons.email_rounded, color: NunitoTheme.accentBlue, size: 22),
+                icon: Icon(Icons.email_rounded,
+                    color: ext.mark(accent), size: 22),
                 tooltip: 'Email',
               ),
           ],

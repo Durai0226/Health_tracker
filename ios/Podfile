@@ -28,7 +28,10 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
+  # Static linkage — the supported setup for Firebase/Firestore (gRPC, BoringSSL,
+  # leveldb). Dynamic frameworks trigger module-map / header-visibility failures
+  # for these C/C++ pods.
+  use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -37,10 +40,38 @@ target 'Runner' do
 end
 
 post_install do |installer|
+  # Firestore's native deps (leveldb, gRPC, BoringSSL) expose headers under
+  # their own `include`/`src/include` dirs, but with use_frameworks! on recent
+  # Xcode those search paths don't always propagate to consumers, causing
+  # "'leveldb/iterator.h' file not found" etc. Add them to every target.
+  grpc_header_paths = [
+    '"${PODS_ROOT}/leveldb-library/include"',
+    '"${PODS_ROOT}/BoringSSL-GRPC/src/include"',
+    '"${PODS_ROOT}/gRPC-Core/include"',
+    '"${PODS_ROOT}/gRPC-Core"',
+    '"${PODS_ROOT}/gRPC-C++/include"',
+    '"${PODS_ROOT}/gRPC-C++"',
+    '"${PODS_ROOT}/abseil"',
+  ]
+
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      existing = config.build_settings['HEADER_SEARCH_PATHS']
+      existing = existing.is_a?(Array) ? existing : [existing || '$(inherited)']
+      config.build_settings['HEADER_SEARCH_PATHS'] = (existing + grpc_header_paths).uniq
     end
+  end
+
+  # BoringSSL-GRPC: its sources #include <openssl_grpc/...> but the pod's
+  # prepare step doesn't always create that header dir (it ships headers under
+  # `openssl/`). Alias `openssl_grpc` -> `openssl` so the includes resolve.
+  boringssl_include = File.join(installer.sandbox.root, 'BoringSSL-GRPC', 'src', 'include')
+  openssl_dir = File.join(boringssl_include, 'openssl')
+  openssl_grpc_dir = File.join(boringssl_include, 'openssl_grpc')
+  if File.directory?(openssl_dir) && !File.exist?(openssl_grpc_dir)
+    File.symlink('openssl', openssl_grpc_dir)
+    Pod::UI.puts "→ Created BoringSSL-GRPC openssl_grpc header alias"
   end
 end

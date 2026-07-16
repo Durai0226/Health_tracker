@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/aqua_theme.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 
 /// Water Daily Goal Settings Screen
 class WaterGoalSettingsScreen extends StatefulWidget {
@@ -40,14 +40,15 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('water_daily_goal', _dailyGoalMl);
     await prefs.setString('water_unit', _unit);
-    
+
     if (mounted) {
+      final ext = AppColorsExt.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Goal saved!'),
-          backgroundColor: AquaTheme.waterPrimary,
+          backgroundColor: ext.water.base,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
         ),
       );
       Navigator.pop(context);
@@ -63,170 +64,138 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AquaTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: AquaTheme.backgroundLight,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: AquaTheme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Daily Goal', style: TextStyle(color: AquaTheme.textPrimary, fontWeight: FontWeight.w600)),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AquaTheme.waterPrimary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCurrentGoalCard(),
-                  const SizedBox(height: 24),
-                  _buildPresetGoals(),
-                  const SizedBox(height: 24),
-                  _buildUnitSelector(),
-                  const SizedBox(height: 32),
-                  _buildSaveButton(),
-                ],
-              ),
-            ),
-    );
-  }
+    final ext = AppColorsExt.of(context);
+    final water = ext.water;
 
-  Widget _buildCurrentGoalCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AquaTheme.waterPrimary, AquaTheme.waterSecondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AquaTheme.waterPrimary.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+    return AppScaffold(
+      safeTop: true,
+      body: Column(
+        children: [
+          AppHeader(
+            title: 'Daily Goal',
+            icon: Icons.flag_rounded,
+            accent: water,
+            leading: AppIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              accent: water,
+              filled: false,
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: ext.mark(water)))
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                        AppSpacing.sm, AppSpacing.gutter, AppSpacing.huge),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildCurrentGoalCard(ext, water),
+                        const SizedBox(height: AppSpacing.xl),
+                        _buildPresetGoals(ext, water),
+                        const SizedBox(height: AppSpacing.xl),
+                        _buildUnitSelector(ext, water),
+                        const SizedBox(height: AppSpacing.xl),
+                        AppButton(
+                          label: 'Save Goal',
+                          accent: water,
+                          size: AppButtonSize.lg,
+                          fullWidth: true,
+                          leadingIcon: Icons.check_rounded,
+                          onPressed: _saveSettings,
+                        ),
+                      ],
+                    ),
+                  ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCurrentGoalCard(AppColorsExt ext, AccentSwatch water) {
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
+      color: water.container,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          children: [
+            Icon(Icons.water_drop_rounded, color: water.onContainer, size: 48),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              _formatGoal(_dailyGoalMl),
+              style: tt.displaySmall?.copyWith(
+                color: water.onContainer,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text('Daily Target',
+                style: tt.bodyMedium?.copyWith(color: water.onContainer)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetGoals(AppColorsExt ext, AccentSwatch water) {
+    return AppCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.water_drop, color: Colors.white, size: 48),
-          const SizedBox(height: 12),
-          Text(
-            _formatGoal(_dailyGoalMl),
-            style: const TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+          SectionHeader(
+            title: 'Quick Select',
+            icon: Icons.bolt_rounded,
+            accent: water,
           ),
-          const SizedBox(height: 4),
-          const Text('Daily Target', style: TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: _presetGoals.map((goal) {
+              final isSelected = _dailyGoalMl == goal;
+              return AppChip(
+                label: _formatGoal(goal),
+                selected: isSelected,
+                accent: water,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _dailyGoalMl = goal);
+                },
+              );
+            }).toList(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildPresetGoals() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Quick Select', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AquaTheme.textPrimary)),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: _presetGoals.map((goal) {
-            final isSelected = _dailyGoalMl == goal;
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                setState(() => _dailyGoalMl = goal);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? AquaTheme.waterPrimary : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected ? AquaTheme.waterPrimary : AquaTheme.textTertiary.withValues(alpha: 0.3),
-                  ),
-                  boxShadow: isSelected ? [
-                    BoxShadow(color: AquaTheme.waterPrimary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4)),
-                  ] : null,
-                ),
-                child: Text(
-                  _formatGoal(goal),
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : AquaTheme.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUnitSelector() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Row(
+  Widget _buildUnitSelector(AppColorsExt ext, AccentSwatch water) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.straighten, color: AquaTheme.textSecondary),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text('Measurement Unit', style: TextStyle(color: AquaTheme.textPrimary, fontWeight: FontWeight.w500)),
+          SectionHeader(
+            title: 'Measurement Unit',
+            icon: Icons.straighten_rounded,
+            accent: water,
           ),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'ml', label: Text('ml')),
-              ButtonSegment(value: 'oz', label: Text('oz')),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedToggle(
+            index: _unit == 'oz' ? 1 : 0,
+            accent: water,
+            items: const [
+              SegmentItem(icon: Icons.water_drop_outlined, label: 'ml'),
+              SegmentItem(icon: Icons.local_drink_outlined, label: 'oz'),
             ],
-            selected: {_unit},
-            onSelectionChanged: (v) {
+            onChanged: (i) {
               HapticFeedback.lightImpact();
-              setState(() => _unit = v.first);
+              setState(() => _unit = i == 1 ? 'oz' : 'ml');
             },
-            style: ButtonStyle(
-              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return AquaTheme.waterPrimary;
-                return Colors.transparent;
-              }),
-            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        onPressed: _saveSettings,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AquaTheme.waterPrimary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: const Text('Save Goal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ),
     );
   }

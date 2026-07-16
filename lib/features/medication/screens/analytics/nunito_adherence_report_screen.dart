@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../theme/nunito_theme.dart';
-import '../../widgets/nunito_glass_card.dart';
 import '../../models/enhanced_medicine.dart';
 import '../../services/medicine_storage_service.dart';
-import '../../../../core/design/app_colors_ext.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/services/haptic_service.dart';
 
 class NunitoAdherenceReportScreen extends StatefulWidget {
@@ -145,203 +143,146 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = AppColorsExt.of(context);
 
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_rounded,
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Adherence Report',
-          style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : FadeTransition(
-              opacity: _fadeAnimation,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(NunitoTheme.spacingM),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildPeriodSelector(isDark),
-                    const SizedBox(height: NunitoTheme.spacingL),
-                    _buildOverallStats(isDark),
-                    const SizedBox(height: NunitoTheme.spacingL),
-                    _buildAdherenceChart(isDark),
-                    const SizedBox(height: NunitoTheme.spacingL),
-                    _buildMedicineBreakdown(isDark),
-                    const SizedBox(height: NunitoTheme.spacingL),
-                    _buildInsights(isDark),
-                    const SizedBox(height: 50),
-                  ],
-                ),
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Adherence',
+              icon: Icons.insights_rounded,
+              accent: ext.medicine,
+              leading: AppIconButton(
+                icon: Icons.arrow_back_rounded,
+                filled: false,
+                accent: ext.medicine,
+                onPressed: () => Navigator.pop(context),
+              ),
+              bottom: SegmentedToggle(
+                index: _selectedPeriod,
+                onChanged: _onPeriodChanged,
+                accent: ext.medicine,
+                items: const [
+                  SegmentItem(icon: Icons.view_week_rounded, label: 'Week'),
+                  SegmentItem(icon: Icons.calendar_month_rounded, label: 'Month'),
+                  SegmentItem(icon: Icons.calendar_today_rounded, label: 'Year'),
+                ],
               ),
             ),
-    );
-  }
-
-  Widget _buildPeriodSelector(bool isDark) {
-    final periods = ['Week', 'Month', 'Year'];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? NunitoTheme.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-      ),
-      child: Row(
-        children: List.generate(periods.length, (index) {
-          final isSelected = _selectedPeriod == index;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => _onPeriodChanged(index),
-              child: AnimatedContainer(
-                duration: NunitoTheme.animationFast,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? NunitoTheme.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
-                ),
-                child: Text(
-                  periods[index],
-                  textAlign: TextAlign.center,
-                  style: NunitoTheme.labelMedium.copyWith(
-                    color: isSelected ? Colors.white : NunitoTheme.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildOverallStats(bool isDark) {
-    final adherenceRate = _summary.adherenceRate;
-
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: NunitoCard(
-            gradient: NunitoTheme.primaryGradient,
-            padding: const EdgeInsets.all(NunitoTheme.spacingL),
-            child: Column(
-              children: [
-                Text(
-                  '$adherenceRate%',
-                  style: NunitoTheme.displayLarge.copyWith(
-                    color: Colors.white,
-                    fontSize: 48,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Overall Adherence',
-                  style: NunitoTheme.labelMedium.copyWith(color: Colors.white70),
-                ),
-                const SizedBox(height: 12),
-                _buildMiniProgressBar(adherenceRate / 100),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            children: [
-              NunitoCard(
-                child: Column(
-                  children: [
-                    Icon(Icons.local_fire_department_rounded,
-                        color: Colors.orange, size: 28),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$_streak',
-                      style: NunitoTheme.heading2.copyWith(
-                        color: isDark ? Colors.white : NunitoTheme.textPrimary,
+            Expanded(
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: ext.mark(ext.medicine),
+                      ),
+                    )
+                  : FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.gutter,
+                          AppSpacing.sm,
+                          AppSpacing.gutter,
+                          AppSpacing.huge,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildOverallStats(),
+                            const SizedBox(height: AppSpacing.lg),
+                            _buildAdherenceChart(),
+                            const SizedBox(height: AppSpacing.lg),
+                            _buildMedicineBreakdown(),
+                            const SizedBox(height: AppSpacing.lg),
+                            _buildInsights(),
+                          ],
+                        ),
                       ),
                     ),
-                    Text('Day Streak', style: NunitoTheme.caption),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverallStats() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final adherenceRate = _summary.adherenceRate;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Overview',
+          icon: Icons.donut_large_rounded,
+          accent: ext.medicine,
+        ),
+        AppCard(
+          child: Column(
+            children: [
+              ProgressRing(
+                progress: adherenceRate / 100,
+                size: 148,
+                stroke: 13,
+                accent: ext.medicine,
+                center: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$adherenceRate%',
+                      style: tt.displaySmall?.copyWith(
+                        color: ext.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      'Adherence',
+                      style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              NunitoCard(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Column(
-                      children: [
-                        Text(
-                          '${_summary.taken}',
-                          style: NunitoTheme.labelLarge.copyWith(
-                            color: NunitoTheme.success,
-                          ),
-                        ),
-                        Text('Taken', style: NunitoTheme.caption),
-                      ],
-                    ),
-                    Container(
-                      width: 1,
-                      height: 30,
-                      color: NunitoTheme.textTertiary.withOpacity(0.2),
-                    ),
-                    Column(
-                      children: [
-                        Text(
-                          '${_summary.missed}',
-                          style: NunitoTheme.labelLarge.copyWith(
-                            color: NunitoTheme.error,
-                          ),
-                        ),
-                        Text('Missed', style: NunitoTheme.caption),
-                      ],
-                    ),
-                  ],
-                ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                '${_summary.taken} of ${_summary.scheduled} scheduled doses taken',
+                style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        StatTileRow(
+          tiles: [
+            StatTile(
+              icon: Icons.local_fire_department_rounded,
+              value: '$_streak',
+              label: 'Day Streak',
+              accent: ext.warning,
+            ),
+            StatTile(
+              icon: Icons.check_circle_rounded,
+              value: '${_summary.taken}',
+              label: 'Taken',
+              accent: ext.success,
+            ),
+            StatTile(
+              icon: Icons.cancel_rounded,
+              value: '${_summary.missed}',
+              label: 'Missed',
+              accent: ext.error,
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildMiniProgressBar(double progress) {
-    return Container(
-      height: 6,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: progress.clamp(0.0, 1.0),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdherenceChart(bool isDark) {
+  Widget _buildAdherenceChart() {
     final c = AppColorsExt.of(context);
     final bars = _buildChartBars();
     final hasAnyData = bars.any((b) => b.hasData);
@@ -349,12 +290,12 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Daily Adherence', style: NunitoTheme.heading3.copyWith(
-          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-        )),
-        const SizedBox(height: 12),
-        NunitoCard(
-          padding: const EdgeInsets.all(NunitoTheme.spacingM),
+        SectionHeader(
+          title: 'Daily Adherence',
+          icon: Icons.bar_chart_rounded,
+          accent: c.medicine,
+        ),
+        AppCard(
           child: hasAnyData
               ? _buildChartBody(c, bars)
               : _buildChartEmptyState(c),
@@ -364,6 +305,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
   }
 
   Widget _buildChartEmptyState(AppColorsExt c) {
+    final tt = Theme.of(context).textTheme;
     return SizedBox(
       height: 150,
       child: Center(
@@ -374,7 +316,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
             const SizedBox(height: 8),
             Text(
               'No doses scheduled in this period',
-              style: NunitoTheme.bodySmall.copyWith(color: c.textSecondary),
+              style: tt.bodySmall?.copyWith(color: c.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -384,6 +326,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
   }
 
   Widget _buildChartBody(AppColorsExt c, List<_ChartBar> bars) {
+    final tt = Theme.of(context).textTheme;
     // Subtle gridlines at 0% / 50% / 100% behind the bars.
     Widget gridline() => Container(height: 1, color: c.outline.withOpacity(0.5));
 
@@ -426,7 +369,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.clip,
-                  style: NunitoTheme.caption.copyWith(
+                  style: tt.bodySmall?.copyWith(
                     fontSize: 10,
                     color: c.textTertiary,
                   ),
@@ -541,7 +484,8 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     return c.mark(c.error);
   }
 
-  Widget _buildMedicineBreakdown(bool isDark) {
+  Widget _buildMedicineBreakdown() {
+    final ext = AppColorsExt.of(context);
     final activeMedicines = _medicines.where((m) => m.isActive && !m.isArchived).toList();
 
     if (activeMedicines.isEmpty) {
@@ -551,17 +495,19 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('By Medication', style: NunitoTheme.heading3.copyWith(
-          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-        )),
-        const SizedBox(height: 12),
-        ...activeMedicines.map((medicine) => _buildMedicineStatCard(medicine, isDark)),
+        SectionHeader(
+          title: 'By Medication',
+          icon: Icons.medication_rounded,
+          accent: ext.medicine,
+        ),
+        ...activeMedicines.map((medicine) => _buildMedicineStatCard(medicine)),
       ],
     );
   }
 
-  Widget _buildMedicineStatCard(EnhancedMedicine medicine, bool isDark) {
+  Widget _buildMedicineStatCard(EnhancedMedicine medicine) {
     final c = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     // Real per-medicine adherence over the selected period.
     final stats = _medStats[medicine.id];
     final scheduled = (stats?['scheduled'] as int?) ?? 0;
@@ -569,72 +515,74 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     final hasData = scheduled > 0;
     final accentColor = hasData ? _adherenceColor(c, rate / 100) : c.textTertiary;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: NunitoCard(
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 40,
-              decoration: BoxDecoration(
-                color: accentColor,
-                borderRadius: BorderRadius.circular(4),
-              ),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accentColor,
+              borderRadius: BorderRadius.circular(4),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    medicine.name,
-                    style: NunitoTheme.labelLarge.copyWith(
-                      color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    hasData
-                        ? '${stats?['taken'] ?? 0} of $scheduled doses taken'
-                        : medicine.schedule.frequencyType.displayName,
-                    style: NunitoTheme.caption,
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  medicine.name,
+                  style: tt.titleLarge?.copyWith(color: c.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hasData
+                      ? '${stats?['taken'] ?? 0} of $scheduled doses taken'
+                      : medicine.schedule.frequencyType.displayName,
+                  style: tt.bodySmall?.copyWith(color: c.textSecondary),
+                ),
+              ],
             ),
-            Text(
-              hasData ? '$rate%' : '—',
-              style: NunitoTheme.heading3.copyWith(color: accentColor),
+          ),
+          Text(
+            hasData ? '$rate%' : '—',
+            style: tt.headlineSmall?.copyWith(
+              color: accentColor,
+              fontWeight: FontWeight.w800,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInsights(bool isDark) {
+  Widget _buildInsights() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final adherenceRate = _summary.adherenceRate;
 
-    List<_Insight> insights = [];
+    final List<_Insight> insights = [];
 
     if (adherenceRate >= 90) {
       insights.add(_Insight(
         icon: Icons.emoji_events_rounded,
-        color: NunitoTheme.warning,
+        swatch: ext.success,
         title: 'Excellent Adherence!',
         description: 'You\'re doing great! Keep up the good work.',
       ));
     } else if (adherenceRate >= 70) {
       insights.add(_Insight(
         icon: Icons.trending_up_rounded,
-        color: NunitoTheme.accentBlue,
+        swatch: ext.info,
         title: 'Good Progress',
         description: 'You\'re on the right track. Try to improve a bit more.',
       ));
     } else {
       insights.add(_Insight(
         icon: Icons.tips_and_updates_rounded,
-        color: NunitoTheme.warning,
+        swatch: ext.warning,
         title: 'Room for Improvement',
         description: 'Set reminders to help you remember your medications.',
       ));
@@ -642,7 +590,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
 
     insights.add(_Insight(
       icon: Icons.lightbulb_rounded,
-      color: NunitoTheme.primary,
+      swatch: ext.medicine,
       title: 'Tip',
       description: 'Taking medications at the same time daily can improve adherence.',
     ));
@@ -650,45 +598,44 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Insights', style: NunitoTheme.heading3.copyWith(
-          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-        )),
-        const SizedBox(height: 12),
-        ...insights.map((insight) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: NunitoCard(
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: insight.color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+        SectionHeader(
+          title: 'Insights',
+          icon: Icons.auto_awesome_rounded,
+          accent: ext.medicine,
+        ),
+        ...insights.map((insight) => AppCard(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: insight.swatch.container,
+                      borderRadius: AppRadius.brMd,
+                    ),
+                    child: Icon(insight.icon,
+                        color: insight.swatch.onContainer, size: 24),
                   ),
-                  child: Icon(insight.icon, color: insight.color, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        insight.title,
-                        style: NunitoTheme.labelLarge.copyWith(
-                          color: isDark ? Colors.white : NunitoTheme.textPrimary,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          insight.title,
+                          style: tt.titleLarge?.copyWith(color: ext.textPrimary),
                         ),
-                      ),
-                      Text(
-                        insight.description,
-                        style: NunitoTheme.bodySmall,
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Text(
+                          insight.description,
+                          style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        )),
+                ],
+              ),
+            )),
       ],
     );
   }
@@ -763,13 +710,13 @@ class _ChartBar {
 
 class _Insight {
   final IconData icon;
-  final Color color;
+  final AccentSwatch swatch;
   final String title;
   final String description;
 
   _Insight({
     required this.icon,
-    required this.color,
+    required this.swatch,
     required this.title,
     required this.description,
   });

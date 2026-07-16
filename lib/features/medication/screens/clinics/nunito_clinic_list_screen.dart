@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../theme/nunito_theme.dart';
-import '../../widgets/nunito_glass_card.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/clinic.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -68,7 +67,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
 
   Future<void> _callClinic(Clinic clinic) async {
     if (clinic.phone == null || clinic.phone!.isEmpty) return;
-    
+
     final uri = Uri.parse('tel:${clinic.phone}');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
@@ -77,7 +76,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
 
   Future<void> _openMap(Clinic clinic) async {
     if (!clinic.hasLocation) return;
-    
+
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=${clinic.latitude},${clinic.longitude}'
     );
@@ -87,22 +86,26 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
   }
 
   Future<void> _deleteClinic(Clinic clinic) async {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-        ),
-        title: Text('Delete Clinic', style: NunitoTheme.heading3),
-        content: Text('Are you sure you want to delete ${clinic.name}?'),
+        backgroundColor: ext.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brCard),
+        title: Text('Delete Clinic',
+            style: tt.headlineSmall?.copyWith(color: ext.textPrimary)),
+        content: Text('Are you sure you want to delete ${clinic.name}?',
+            style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel',
+                style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: NunitoTheme.error),
+            style: TextButton.styleFrom(foregroundColor: ext.mark(ext.error)),
             child: const Text('Delete'),
           ),
         ],
@@ -118,105 +121,85 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
 
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_rounded,
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
-          onPressed: () => Navigator.pop(context),
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppHeader(
+              title: widget.isSelectionMode ? 'Select Clinic' : 'Clinics',
+              icon: Icons.local_hospital_rounded,
+              accent: med,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back_rounded, color: ext.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Expanded(
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator(color: ext.mark(med)))
+                  : _clinics.isEmpty
+                      ? EmptyState(
+                          icon: Icons.local_hospital_rounded,
+                          title: 'No clinics added',
+                          message: 'Add clinics and hospitals you visit',
+                          accent: med,
+                        )
+                      : _buildClinicList(ext, med),
+            ),
+          ],
         ),
-        title: Text(
-          widget.isSelectionMode ? 'Select Clinic' : 'My Clinics',
-          style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
+        floatingActionButton: AppFab(
+          icon: Icons.add_rounded,
+          label: 'Add Clinic',
+          accent: med,
+          onPressed: () => _navigateToAddEdit(),
         ),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _clinics.isEmpty
-              ? _buildEmptyState(isDark)
-              : _buildClinicList(isDark),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _navigateToAddEdit(),
-        backgroundColor: NunitoTheme.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text('Add Clinic', style: NunitoTheme.labelLarge.copyWith(color: Colors.white)),
       ),
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.local_hospital_rounded,
-            size: 64,
-            color: NunitoTheme.primary.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No clinics added',
-            style: NunitoTheme.heading3.copyWith(
-              color: NunitoTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add clinics and hospitals you visit',
-            style: NunitoTheme.bodyMedium.copyWith(
-              color: NunitoTheme.textTertiary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildClinicList(bool isDark) {
+  Widget _buildClinicList(AppColorsExt ext, AccentSwatch med) {
     return ListView.builder(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, AppSpacing.xxl * 2),
       itemCount: _clinics.length,
       itemBuilder: (context, index) {
         final clinic = _clinics[index];
-        return _buildClinicCard(clinic, isDark);
+        return _buildClinicCard(clinic, ext, med);
       },
     );
   }
 
-  Widget _buildClinicCard(Clinic clinic, bool isDark) {
+  Widget _buildClinicCard(Clinic clinic, AppColorsExt ext, AccentSwatch med) {
+    final tt = Theme.of(context).textTheme;
     final isOpen = clinic.operatingHours?.isOpenNow ?? false;
+    final statusSwatch = isOpen ? ext.success : ext.error;
 
     return Dismissible(
       key: Key(clinic.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.only(bottom: NunitoTheme.spacingS),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
         decoration: BoxDecoration(
-          color: NunitoTheme.error,
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
+          color: ext.error.base,
+          borderRadius: AppRadius.brCard,
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_rounded, color: Colors.white),
+        child: Icon(Icons.delete_rounded, color: ext.error.on),
       ),
       confirmDismiss: (direction) async {
         _deleteClinic(clinic);
         return false;
       },
-      child: NunitoAnimatedCard(
+      child: AppCard(
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
         onTap: () => _selectClinic(clinic),
-        margin: const EdgeInsets.only(bottom: NunitoTheme.spacingS),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -226,31 +209,29 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: NunitoTheme.accent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
+                    color: med.container,
+                    borderRadius: AppRadius.brMd,
                   ),
                   child: Icon(
                     _getClinicIcon(clinic.type),
-                    color: NunitoTheme.accent,
+                    color: med.onContainer,
                     size: 28,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         clinic.name,
-                        style: NunitoTheme.labelLarge.copyWith(
-                          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                        ),
+                        style: tt.titleLarge?.copyWith(color: ext.textPrimary),
                       ),
                       if (clinic.type != null) ...[
                         const SizedBox(height: 2),
                         Text(
                           clinic.displayType,
-                          style: NunitoTheme.bodySmall.copyWith(color: NunitoTheme.primary),
+                          style: tt.bodyMedium?.copyWith(color: ext.mark(med)),
                         ),
                       ],
                       const SizedBox(height: 4),
@@ -260,22 +241,25 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: isOpen ? NunitoTheme.success : NunitoTheme.error,
+                              color: statusSwatch.base,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 6),
                           Text(
                             isOpen ? 'Open Now' : 'Closed',
-                            style: NunitoTheme.caption.copyWith(
-                              color: isOpen ? NunitoTheme.success : NunitoTheme.error,
-                            ),
+                            style: tt.bodySmall
+                                ?.copyWith(color: ext.mark(statusSwatch)),
                           ),
                           if (clinic.hasOperatingHours) ...[
                             const SizedBox(width: 8),
-                            Text(
-                              clinic.operatingHours!.todayHoursText,
-                              style: NunitoTheme.caption,
+                            Flexible(
+                              child: Text(
+                                clinic.operatingHours!.todayHoursText,
+                                style: tt.bodySmall
+                                    ?.copyWith(color: ext.textTertiary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ],
@@ -286,15 +270,16 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
               ],
             ),
             if (clinic.address != null && clinic.address!.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  Icon(Icons.location_on_rounded, size: 16, color: NunitoTheme.textTertiary),
+                  Icon(Icons.location_on_rounded,
+                      size: 16, color: ext.textTertiary),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       clinic.address!,
-                      style: NunitoTheme.caption,
+                      style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -302,37 +287,38 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                 ],
               ),
             ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                if (clinic.phone != null && clinic.phone!.isNotEmpty)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _callClinic(clinic),
-                      icon: Icon(Icons.phone_rounded, size: 18, color: NunitoTheme.success),
-                      label: Text('Call', style: TextStyle(color: NunitoTheme.success)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: NunitoTheme.success.withOpacity(0.3)),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+            if ((clinic.phone != null && clinic.phone!.isNotEmpty) ||
+                clinic.hasLocation) ...[
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  if (clinic.phone != null && clinic.phone!.isNotEmpty)
+                    Expanded(
+                      child: AppButton(
+                        label: 'Call',
+                        leadingIcon: Icons.phone_rounded,
+                        variant: AppButtonVariant.secondary,
+                        size: AppButtonSize.sm,
+                        accent: ext.success,
+                        onPressed: () => _callClinic(clinic),
                       ),
                     ),
-                  ),
-                if (clinic.phone != null && clinic.hasLocation)
-                  const SizedBox(width: 8),
-                if (clinic.hasLocation)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _openMap(clinic),
-                      icon: Icon(Icons.map_rounded, size: 18, color: NunitoTheme.accentBlue),
-                      label: Text('Map', style: TextStyle(color: NunitoTheme.accentBlue)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: NunitoTheme.accentBlue.withOpacity(0.3)),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                  if (clinic.phone != null && clinic.hasLocation)
+                    const SizedBox(width: AppSpacing.sm),
+                  if (clinic.hasLocation)
+                    Expanded(
+                      child: AppButton(
+                        label: 'Map',
+                        leadingIcon: Icons.map_rounded,
+                        variant: AppButtonVariant.secondary,
+                        size: AppButtonSize.sm,
+                        accent: ext.info,
+                        onPressed: () => _openMap(clinic),
                       ),
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import '../../theme/nunito_theme.dart';
-import '../../widgets/nunito_glass_card.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -98,205 +97,227 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = AppColorsExt.of(context);
+    final accent = ext.medicine;
 
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.close_rounded, color: isDark ? Colors.white : NunitoTheme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _isEditing ? 'Edit Doctor' : 'Add Doctor',
-          style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _save,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    'Save',
-                    style: NunitoTheme.labelLarge.copyWith(color: NunitoTheme.primary),
-                  ),
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(NunitoTheme.spacingM),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSection('Basic Information', [
-                _buildTextField(
-                  controller: _nameController,
-                  label: 'Name *',
-                  hint: 'Doctor\'s name',
-                  validator: (v) => v == null || v.isEmpty ? 'Name is required' : null,
-                  isDark: isDark,
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(
+              title: _isEditing ? 'Edit Doctor' : 'Add Doctor',
+              accent: accent,
+              leading: AppIconButton(
+                icon: Icons.close_rounded,
+                filled: false,
+                accent: accent,
+                onPressed: () => Navigator.pop(context),
+              ),
+              actions: [
+                AppButton(
+                  label: 'Save',
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.tonal,
+                  accent: accent,
+                  loading: _isLoading,
+                  onPressed: _isLoading ? null : _save,
                 ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildTextField(
-                  controller: _specialtyController,
-                  label: 'Specialty',
-                  hint: 'e.g., Cardiologist, General Physician',
-                  isDark: isDark,
-                ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildTextField(
-                  controller: _hospitalController,
-                  label: 'Hospital/Clinic',
-                  hint: 'Where they practice',
-                  isDark: isDark,
-                ),
-              ], isDark),
-              const SizedBox(height: NunitoTheme.spacingL),
-              _buildSection('Contact Information', [
-                _buildTextField(
-                  controller: _phoneController,
-                  label: 'Phone',
-                  hint: 'Phone number',
-                  keyboardType: TextInputType.phone,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildTextField(
-                  controller: _emailController,
-                  label: 'Email',
-                  hint: 'Email address',
-                  keyboardType: TextInputType.emailAddress,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildTextField(
-                  controller: _addressController,
-                  label: 'Address',
-                  hint: 'Office address',
-                  maxLines: 2,
-                  isDark: isDark,
-                ),
-              ], isDark),
-              const SizedBox(height: NunitoTheme.spacingL),
-              _buildSection('Additional', [
-                _buildTextField(
-                  controller: _notesController,
-                  label: 'Notes',
-                  hint: 'Any additional notes',
-                  maxLines: 3,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                NunitoCard(
-                  onTap: () {
-                    _hapticService.toggle();
-                    setState(() => _isPrimary = !_isPrimary);
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        _isPrimary ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: _isPrimary ? NunitoTheme.warning : NunitoTheme.textTertiary,
+              ],
+            ),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 40),
+                  children: [
+                    // Basic Information
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SectionHeader(
+                            title: 'Basic Information',
+                            icon: Icons.badge_rounded,
+                            accent: accent,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          AppTextField(
+                            controller: _nameController,
+                            label: 'Name',
+                            hint: "Doctor's name",
+                            prefixIcon: Icons.person_rounded,
+                            accent: accent,
+                            textCapitalization: TextCapitalization.words,
+                            validator: (v) =>
+                                v == null || v.trim().isEmpty ? 'Name is required' : null,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppTextField(
+                            controller: _specialtyController,
+                            label: 'Specialty',
+                            hint: 'e.g., Cardiologist, General Physician',
+                            prefixIcon: Icons.medical_services_rounded,
+                            accent: accent,
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppTextField(
+                            controller: _hospitalController,
+                            label: 'Hospital / Clinic',
+                            hint: 'Where they practice',
+                            prefixIcon: Icons.local_hospital_rounded,
+                            accent: accent,
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Primary Doctor',
-                              style: NunitoTheme.labelLarge.copyWith(
-                                color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                              ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // Contact Information
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SectionHeader(
+                            title: 'Contact Information',
+                            icon: Icons.contact_phone_rounded,
+                            accent: accent,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          AppTextField(
+                            controller: _phoneController,
+                            label: 'Phone',
+                            hint: 'Phone number',
+                            prefixIcon: Icons.phone_rounded,
+                            accent: accent,
+                            keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppTextField(
+                            controller: _emailController,
+                            label: 'Email',
+                            hint: 'Email address',
+                            prefixIcon: Icons.email_rounded,
+                            accent: accent,
+                            keyboardType: TextInputType.emailAddress,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppTextField(
+                            controller: _addressController,
+                            label: 'Address',
+                            hint: 'Office address',
+                            prefixIcon: Icons.location_on_rounded,
+                            accent: accent,
+                            maxLines: 2,
+                            textCapitalization: TextCapitalization.sentences,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // Additional
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SectionHeader(
+                            title: 'Additional',
+                            icon: Icons.notes_rounded,
+                            accent: accent,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          AppTextField(
+                            controller: _notesController,
+                            label: 'Notes',
+                            hint: 'Any additional notes',
+                            prefixIcon: Icons.sticky_note_2_rounded,
+                            accent: accent,
+                            maxLines: 3,
+                            textCapitalization: TextCapitalization.sentences,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // Primary doctor toggle
+                    AppCard(
+                      onTap: () {
+                        _hapticService.toggle();
+                        setState(() => _isPrimary = !_isPrimary);
+                      },
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: ext.warning.container,
+                              borderRadius: AppRadius.brSm,
                             ),
-                            Text(
-                              'Mark as your main healthcare provider',
-                              style: NunitoTheme.caption,
+                            child: Icon(
+                              _isPrimary ? Icons.star_rounded : Icons.star_outline_rounded,
+                              color: ext.warning.onContainer,
+                              size: 20,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Primary Doctor',
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        color: ext.textPrimary,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Mark as your main healthcare provider',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: ext.textSecondary,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _isPrimary,
+                            onChanged: (v) {
+                              _hapticService.toggle();
+                              setState(() => _isPrimary = v);
+                            },
+                            activeColor: ext.fillBg(accent),
+                          ),
+                        ],
                       ),
-                      Switch(
-                        value: _isPrimary,
-                        onChanged: (v) {
-                          _hapticService.toggle();
-                          setState(() => _isPrimary = v);
-                        },
-                        activeColor: NunitoTheme.warning,
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+
+                    // Primary save action
+                    AppButton(
+                      label: _isEditing ? 'Save Changes' : 'Add Doctor',
+                      accent: accent,
+                      fullWidth: true,
+                      size: AppButtonSize.lg,
+                      leadingIcon: Icons.check_rounded,
+                      loading: _isLoading,
+                      onPressed: _isLoading ? null : _save,
+                    ),
+                  ],
                 ),
-              ], isDark),
-              const SizedBox(height: 100),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSection(String title, List<Widget> children, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: NunitoTheme.labelLarge.copyWith(
-            color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-          ),
-        ),
-        const SizedBox(height: NunitoTheme.spacingS),
-        ...children,
-      ],
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required bool isDark,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      validator: validator,
-      style: NunitoTheme.bodyMedium.copyWith(
-        color: isDark ? Colors.white : NunitoTheme.textPrimary,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        filled: true,
-        fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-          borderSide: BorderSide.none,
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-          borderSide: BorderSide(color: NunitoTheme.error),
+              ),
+            ),
+          ],
         ),
       ),
     );

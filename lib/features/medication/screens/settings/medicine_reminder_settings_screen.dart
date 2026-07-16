@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/nunito_theme.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../services/medication_reminder_service.dart';
 import '../../../../core/services/clean_storage_service.dart';
 
@@ -17,7 +17,7 @@ class MedicineReminderSettingsScreen extends StatefulWidget {
 
 class _MedicineReminderSettingsScreenState
     extends State<MedicineReminderSettingsScreen> {
-  static const _featureColor = Color(0xFF6366F1);
+  static const _snoozeOptions = [5, 10, 15, 30];
 
   bool _masterEnabled = true;
   bool _soundEnabled = true;
@@ -78,112 +78,223 @@ class _MedicineReminderSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor:
-          isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text('Reminder Settings',
-            style: NunitoTheme.heading2.copyWith(
-                color: isDark ? Colors.white : NunitoTheme.textPrimary)),
-        iconTheme: IconThemeData(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _card(isDark, [
-                  SwitchListTile(
-                    value: _masterEnabled,
-                    activeColor: _featureColor,
-                    title: const Text('Medicine reminders'),
-                    subtitle: const Text('Turn all medication reminders on/off'),
-                    onChanged: (v) => setState(() => _masterEnabled = v),
-                  ),
-                ]),
-                const SizedBox(height: 12),
-                _card(isDark, [
-                  SwitchListTile(
-                    value: _soundEnabled,
-                    activeColor: _featureColor,
-                    title: const Text('Sound'),
-                    onChanged: _masterEnabled
-                        ? (v) => setState(() => _soundEnabled = v)
-                        : null,
-                  ),
-                  SwitchListTile(
-                    value: _vibrationEnabled,
-                    activeColor: _featureColor,
-                    title: const Text('Vibration'),
-                    onChanged: _masterEnabled
-                        ? (v) => setState(() => _vibrationEnabled = v)
-                        : null,
-                  ),
-                ]),
-                const SizedBox(height: 12),
-                _card(isDark, [
-                  SwitchListTile(
-                    value: _snoozeEnabled,
-                    activeColor: _featureColor,
-                    title: const Text('Allow snooze'),
-                    subtitle: const Text('Show a snooze action on reminders'),
-                    onChanged: _masterEnabled
-                        ? (v) => setState(() => _snoozeEnabled = v)
-                        : null,
-                  ),
-                  ListTile(
-                    enabled: _masterEnabled && _snoozeEnabled,
-                    title: const Text('Snooze interval'),
-                    trailing: DropdownButton<int>(
-                      value: _snoozeMinutes,
-                      items: const [5, 10, 15, 30]
-                          .map((m) => DropdownMenuItem(
-                              value: m, child: Text('$m min')))
-                          .toList(),
-                      onChanged: (_masterEnabled && _snoozeEnabled)
-                          ? (v) => setState(() => _snoozeMinutes = v ?? 5)
-                          : null,
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _featureColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: _saving ? null : _saveAndReschedule,
-                    child: _saving
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Text('Save',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
-                  ),
+    final ext = AppColorsExt.of(context);
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Reminder Settings',
+              icon: Icons.notifications_active_rounded,
+              accent: ext.medicine,
+              leading: AppIconButton(
+                icon: Icons.arrow_back_rounded,
+                filled: false,
+                accent: ext.medicine,
+                onPressed: () => Navigator.pop(context),
+              ),
+              actions: [
+                AppButton(
+                  label: 'Save',
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.tonal,
+                  accent: ext.medicine,
+                  loading: _saving,
+                  onPressed: _saving ? null : _saveAndReschedule,
                 ),
               ],
             ),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                          AppSpacing.md, AppSpacing.gutter, 40),
+                      children: [
+                        SectionHeader(
+                          title: 'Reminders',
+                          icon: Icons.medication_rounded,
+                          accent: ext.medicine,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        AppCard(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+                          child: _switchRow(
+                            icon: Icons.notifications_active_rounded,
+                            title: 'Medicine reminders',
+                            subtitle: 'Turn all medication reminders on/off',
+                            value: _masterEnabled,
+                            onChanged: (v) => setState(() => _masterEnabled = v),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+                        SectionHeader(
+                          title: 'Alerts',
+                          icon: Icons.volume_up_rounded,
+                          accent: ext.medicine,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        AppCard(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+                          child: Column(
+                            children: [
+                              _switchRow(
+                                icon: Icons.volume_up_rounded,
+                                title: 'Sound',
+                                subtitle: 'Play a sound with each reminder',
+                                value: _soundEnabled,
+                                onChanged: _masterEnabled
+                                    ? (v) => setState(() => _soundEnabled = v)
+                                    : null,
+                              ),
+                              _divider(ext),
+                              _switchRow(
+                                icon: Icons.vibration_rounded,
+                                title: 'Vibration',
+                                subtitle: 'Vibrate the device with each reminder',
+                                value: _vibrationEnabled,
+                                onChanged: _masterEnabled
+                                    ? (v) =>
+                                        setState(() => _vibrationEnabled = v)
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+                        SectionHeader(
+                          title: 'Snooze',
+                          icon: Icons.snooze_rounded,
+                          accent: ext.medicine,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        AppCard(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _switchRow(
+                                icon: Icons.snooze_rounded,
+                                title: 'Allow snooze',
+                                subtitle: 'Show a snooze action on reminders',
+                                value: _snoozeEnabled,
+                                onChanged: _masterEnabled
+                                    ? (v) => setState(() => _snoozeEnabled = v)
+                                    : null,
+                              ),
+                              if (_masterEnabled && _snoozeEnabled) ...[
+                                _divider(ext),
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  'Snooze interval',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(color: ext.textSecondary),
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                Wrap(
+                                  spacing: AppSpacing.sm,
+                                  runSpacing: AppSpacing.sm,
+                                  children: _snoozeOptions.map((m) {
+                                    return AppChip(
+                                      label: '$m min',
+                                      selected: _snoozeMinutes == m,
+                                      accent: ext.medicine,
+                                      onTap: () {
+                                        HapticFeedback.selectionClick();
+                                        setState(() => _snoozeMinutes = m);
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+                        AppButton(
+                          label: 'Save',
+                          fullWidth: true,
+                          accent: ext.medicine,
+                          leadingIcon: Icons.check_rounded,
+                          loading: _saving,
+                          onPressed: _saving ? null : _saveAndReschedule,
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _card(bool isDark, List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? NunitoTheme.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+  Widget _divider(AppColorsExt ext) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Divider(height: 1, color: ext.outline),
+      );
+
+  Widget _switchRow({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required bool value,
+    required ValueChanged<bool>? onChanged,
+  }) {
+    final ext = AppColorsExt.of(context);
+    final enabled = onChanged != null;
+    final s = ext.medicine;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: enabled ? s.container : ext.surfaceVariant,
+              borderRadius: AppRadius.brSm,
+            ),
+            child: Icon(icon,
+                size: 20,
+                color: enabled ? s.onContainer : ext.textTertiary),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: enabled ? ext.textPrimary : ext.textDisabled,
+                      ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color:
+                              enabled ? ext.textSecondary : ext.textDisabled,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: ext.fillFg(s),
+            activeTrackColor: ext.mark(s),
+          ),
+        ],
       ),
-      child: Column(children: children),
     );
   }
 }

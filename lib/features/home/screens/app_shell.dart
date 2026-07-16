@@ -61,7 +61,10 @@ class _AppShellState extends State<AppShell> {
     ];
 
     return Scaffold(
-      extendBody: true,
+      // Docked nav (not floating): keep the body ABOVE the nav so each tab's
+      // FAB / bottom content isn't hidden behind the bar. (extendBody:true was
+      // swallowing the Medicine + Reminders add buttons.)
+      extendBody: false,
       backgroundColor: ext.background,
       body: IndexedStack(index: _currentIndex, children: screens),
       bottomNavigationBar: ValueListenableBuilder<FeatureAccent>(

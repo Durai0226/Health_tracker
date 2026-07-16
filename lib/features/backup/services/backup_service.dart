@@ -47,42 +47,45 @@ class BackupService {
     await Share.shareXFiles([XFile(file.path)], text: 'DailyMinder Backup');
   }
 
-  /// Allow user to pick a backup file and restore data
+  /// Allow user to pick a backup file and restore data.
+  ///
+  /// Returns `true` on a successful restore and `false` ONLY when the user
+  /// cancels the file picker. Any real failure (bad file, decode/import error)
+  /// is rethrown so the caller can surface a clear error message — it is NOT
+  /// swallowed as `false`, which previously made restore failures invisible.
   Future<bool> restoreBackup() async {
-    try {
-      // 1. Pick file
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['zip'],
-      );
+    // 1. Pick file — a null/empty result means the user canceled.
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+    );
 
-      if (result == null || result.files.single.path == null) {
-        return false; // User canceled
-      }
-
-      final file = File(result.files.single.path!);
-      
-      // 2. Read and Unzip
-      final bytes = await file.readAsBytes();
-      final archive = ZipDecoder().decodeBytes(bytes);
-      
-      final jsonFile = archive.findFile('dlyminder_data.json');
-      if (jsonFile == null) {
-        throw Exception("Invalid backup file: missing data.json");
-      }
-      
-      final jsonContent = utf8.decode(jsonFile.content);
-      final data = jsonDecode(jsonContent) as Map<String, dynamic>;
-
-      // 3. Restore (merge) with rollback protection: the current data is
-      // snapshotted first so a failed/partial import is rolled back instead of
-      // leaving the app in a half-imported state.
-      await CleanStorageService.restoreBackup(data);
-      return true;
-      
-    } catch (e) {
-      debugPrint("Restore failed: $e");
-      return false; // Or rethrow to show error in UI
+    if (result == null || result.files.single.path == null) {
+      return false; // User canceled — not an error.
     }
+
+    final file = File(result.files.single.path!);
+
+    // 2. Read and Unzip. Any failure here throws to the caller.
+    final bytes = await file.readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    final jsonFile = archive.findFile('dlyminder_data.json');
+    if (jsonFile == null) {
+      throw Exception('Invalid backup file: missing dlyminder_data.json');
+    }
+
+    final jsonContent = utf8.decode(jsonFile.content);
+    final decoded = jsonDecode(jsonContent);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid backup file: unexpected data format');
+    }
+
+    // 3. Restore (merge) with rollback protection: the current data is
+    // snapshotted first so a failed/partial import is rolled back instead of
+    // leaving the app in a half-imported state. Errors are rethrown after
+    // rollback by CleanStorageService.restoreBackup.
+    await CleanStorageService.restoreBackup(decoded);
+    return true;
   }
 }

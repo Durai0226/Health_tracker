@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/nunito_theme.dart';
-import '../widgets/nunito_glass_card.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
@@ -15,38 +14,31 @@ class NunitoMedicationListScreen extends StatefulWidget {
   State<NunitoMedicationListScreen> createState() => _NunitoMedicationListScreenState();
 }
 
-class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
-    with SingleTickerProviderStateMixin {
+class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen> {
   List<EnhancedMedicine> _medicines = [];
   List<EnhancedMedicine> _filteredMedicines = [];
   bool _isLoading = true;
   int _selectedTab = 0;
   String _searchQuery = '';
 
-  late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   final HapticService _hapticService = HapticService();
-
-  final List<String> _tabs = ['Active', 'Archived', 'All'];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
-    _tabController.addListener(_onTabChanged);
     _loadMedicines();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _onTabChanged() {
-    if (_tabController.indexIsChanging) return;
-    setState(() => _selectedTab = _tabController.index);
+  void _onTabChanged(int index) {
+    _hapticService.light();
+    setState(() => _selectedTab = index);
     _filterMedicines();
   }
 
@@ -63,7 +55,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
 
   void _filterMedicines() {
     List<EnhancedMedicine> filtered;
-    
+
     switch (_selectedTab) {
       case 0: // Active
         filtered = _medicines.where((m) => m.isActive && !m.isArchived).toList();
@@ -115,7 +107,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     final updated = medicine.copyWith(isArchived: !medicine.isArchived);
     await MedicineCleanStorageService.saveMedicine(updated);
     _loadMedicines();
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -133,25 +125,29 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
   }
 
   Future<void> _deleteMedicine(EnhancedMedicine medicine) async {
+    final ext = AppColorsExt.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-        ),
-        title: Text('Delete ${medicine.name}?', style: NunitoTheme.heading3),
+        backgroundColor: ext.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
+        title: Text('Delete ${medicine.name}?',
+            style: Theme.of(context).textTheme.headlineSmall),
         content: Text(
           'This action cannot be undone.',
-          style: NunitoTheme.bodyMedium,
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: ext.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: NunitoTheme.error),
+            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
             child: const Text('Delete'),
           ),
         ],
@@ -167,177 +163,125 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = AppColorsExt.of(context);
 
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: _buildAppBar(isDark),
-      body: Column(
-        children: [
-          _buildSearchBar(isDark),
-          _buildTabBar(isDark),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredMedicines.isEmpty
-                    ? _buildEmptyState(isDark)
-                    : _buildMedicineList(isDark),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _navigateToAdd,
-        backgroundColor: NunitoTheme.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text('Add', style: NunitoTheme.labelLarge.copyWith(color: Colors.white)),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(bool isDark) {
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      leading: IconButton(
-        icon: Icon(
-          Icons.arrow_back_rounded,
-          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-        ),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text(
-        'My Medications',
-        style: NunitoTheme.heading2.copyWith(
-          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-        ),
-      ),
-      centerTitle: true,
-    );
-  }
-
-  Widget _buildSearchBar(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        style: NunitoTheme.bodyMedium.copyWith(
-          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-        ),
-        decoration: InputDecoration(
-          hintText: 'Search medications...',
-          hintStyle: NunitoTheme.bodyMedium.copyWith(color: NunitoTheme.textTertiary),
-          prefixIcon: Icon(Icons.search_rounded, color: NunitoTheme.textTertiary),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: Icon(Icons.clear_rounded, color: NunitoTheme.textTertiary),
-                  onPressed: () {
-                    _searchController.clear();
-                    _onSearchChanged('');
-                  },
-                )
-              : null,
-          filled: true,
-          fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabBar(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: NunitoTheme.spacingM),
-      decoration: BoxDecoration(
-        color: isDark ? NunitoTheme.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: NunitoTheme.primary,
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        dividerColor: Colors.transparent,
-        labelColor: Colors.white,
-        unselectedLabelColor: NunitoTheme.textSecondary,
-        labelStyle: NunitoTheme.labelMedium,
-        tabs: _tabs.map((t) => Tab(text: t)).toList(),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.medication_rounded,
-            size: 64,
-            color: NunitoTheme.primary.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _selectedTab == 0
-                ? 'No active medications'
-                : _selectedTab == 1
-                    ? 'No archived medications'
-                    : 'No medications found',
-            style: NunitoTheme.heading3.copyWith(
-              color: NunitoTheme.textSecondary,
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Medications',
+              icon: Icons.medication_rounded,
+              accent: ext.medicine,
+              leading: AppIconButton(
+                icon: Icons.arrow_back_rounded,
+                filled: false,
+                accent: ext.medicine,
+                onPressed: () => Navigator.pop(context),
+              ),
+              bottom: Column(
+                children: [
+                  AppTextField(
+                    controller: _searchController,
+                    hint: 'Search medications...',
+                    prefixIcon: Icons.search_rounded,
+                    accent: ext.medicine,
+                    onChanged: _onSearchChanged,
+                    textInputAction: TextInputAction.search,
+                    suffix: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear_rounded,
+                                color: ext.textTertiary),
+                            onPressed: () {
+                              _searchController.clear();
+                              _onSearchChanged('');
+                            },
+                          )
+                        : null,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SegmentedToggle(
+                    index: _selectedTab,
+                    onChanged: _onTabChanged,
+                    accent: ext.medicine,
+                    items: const [
+                      SegmentItem(icon: Icons.medication_rounded, label: 'Active'),
+                      SegmentItem(icon: Icons.archive_rounded, label: 'Archived'),
+                      SegmentItem(icon: Icons.apps_rounded, label: 'All'),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Tap + to add a medication',
-            style: NunitoTheme.bodyMedium.copyWith(
-              color: NunitoTheme.textTertiary,
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredMedicines.isEmpty
+                      ? _buildEmptyState()
+                      : _buildMedicineList(),
             ),
-          ),
-        ],
+          ],
+        ),
+        floatingActionButton: AppFab(
+          icon: Icons.add_rounded,
+          label: 'Add',
+          accent: ext.medicine,
+          onPressed: _navigateToAdd,
+        ),
       ),
     );
   }
 
-  Widget _buildMedicineList(bool isDark) {
+  Widget _buildEmptyState() {
+    final ext = AppColorsExt.of(context);
+    return EmptyState(
+      icon: Icons.medication_rounded,
+      accent: ext.medicine,
+      title: _selectedTab == 0
+          ? 'No active medications'
+          : _selectedTab == 1
+              ? 'No archived medications'
+              : 'No medications found',
+      message: 'Tap the + button to add a medication.',
+    );
+  }
+
+  Widget _buildMedicineList() {
     return ListView.builder(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.md, AppSpacing.gutter, 96),
       itemCount: _filteredMedicines.length,
       itemBuilder: (context, index) {
         final medicine = _filteredMedicines[index];
-        return _buildMedicineCard(medicine, isDark);
+        return _buildMedicineCard(medicine);
       },
     );
   }
 
-  Widget _buildMedicineCard(EnhancedMedicine medicine, bool isDark) {
+  Widget _buildMedicineCard(EnhancedMedicine medicine) {
+    final ext = AppColorsExt.of(context);
     return Dismissible(
       key: Key(medicine.id),
       background: Container(
-        margin: const EdgeInsets.only(bottom: NunitoTheme.spacingS),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
         decoration: BoxDecoration(
-          color: NunitoTheme.warning,
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
+          color: ext.warning.container,
+          borderRadius: AppRadius.brLg,
         ),
         alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.only(left: 20),
-        child: const Icon(Icons.archive_rounded, color: Colors.white),
+        padding: const EdgeInsets.only(left: 24),
+        child: Icon(Icons.archive_rounded, color: ext.warning.onContainer),
       ),
       secondaryBackground: Container(
-        margin: const EdgeInsets.only(bottom: NunitoTheme.spacingS),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
         decoration: BoxDecoration(
-          color: NunitoTheme.error,
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
+          color: ext.error.container,
+          borderRadius: AppRadius.brLg,
         ),
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_rounded, color: Colors.white),
+        padding: const EdgeInsets.only(right: 24),
+        child: Icon(Icons.delete_rounded, color: ext.error.onContainer),
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
@@ -348,9 +292,10 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
           return false;
         }
       },
-      child: NunitoAnimatedCard(
+      child: AppCard(
         onTap: () => _navigateToDetail(medicine),
-        margin: const EdgeInsets.only(bottom: NunitoTheme.spacingS),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Row(
           children: [
             NunitoPillIndicator(
@@ -358,55 +303,101 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
               shape: medicine.shape,
               size: 48,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.lg),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          medicine.name,
-                          style: NunitoTheme.labelLarge.copyWith(
-                            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                          ),
-                        ),
-                      ),
-                      if (medicine.isArchived)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: NunitoTheme.warning.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'Archived',
-                            style: NunitoTheme.caption.copyWith(color: NunitoTheme.warning),
-                          ),
-                        ),
-                    ],
+                  Text(
+                    medicine.name,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(color: ext.textPrimary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     '${medicine.displayDosage} • ${medicine.schedule.frequencyType.displayName}',
-                    style: NunitoTheme.bodySmall,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: ext.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  if (medicine.instructions != null) ...[
+                  if (medicine.instructions != null &&
+                      medicine.instructions!.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
                       medicine.instructions!,
-                      style: NunitoTheme.caption.copyWith(color: NunitoTheme.primary),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: ext.mark(ext.medicine)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  if (medicine.isLowStock || medicine.isArchived) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        if (medicine.isLowStock)
+                          _statusPill(
+                            label: medicine.currentStock != null
+                                ? 'Low stock · ${medicine.currentStock}'
+                                : 'Low stock',
+                            icon: Icons.warning_amber_rounded,
+                            swatch: ext.warning,
+                          ),
+                        if (medicine.isArchived)
+                          _statusPill(
+                            label: 'Archived',
+                            icon: Icons.archive_rounded,
+                            swatch: ext.info,
+                          ),
+                      ],
                     ),
                   ],
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: NunitoTheme.textTertiary),
+            const SizedBox(width: AppSpacing.sm),
+            Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _statusPill({
+    required String label,
+    required IconData icon,
+    required AccentSwatch swatch,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: swatch.container,
+        borderRadius: AppRadius.brSm,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: swatch.onContainer),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context)
+                .textTheme
+                .labelMedium
+                ?.copyWith(color: swatch.onContainer),
+          ),
+        ],
       ),
     );
   }

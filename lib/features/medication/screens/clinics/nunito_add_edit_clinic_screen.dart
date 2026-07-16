@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import '../../theme/nunito_theme.dart';
-import '../../widgets/nunito_glass_card.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/clinic.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -99,209 +98,194 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
       debugPrint('Error saving clinic: $e');
       _hapticService.error();
       if (mounted) {
+        final ext = AppColorsExt.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            backgroundColor: ext.error.base,
+            content: Text('Error: $e', style: TextStyle(color: ext.error.on)),
+          ),
         );
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
 
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.close_rounded, color: isDark ? Colors.white : NunitoTheme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _isEditing ? 'Edit Clinic' : 'Add Clinic',
-          style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _save,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    'Save',
-                    style: NunitoTheme.labelLarge.copyWith(color: NunitoTheme.primary),
-                  ),
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(NunitoTheme.spacingM),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSection('Basic Information', [
-                _buildTextField(
-                  controller: _nameController,
-                  label: 'Name *',
-                  hint: 'Clinic or hospital name',
-                  validator: (v) => v == null || v.isEmpty ? 'Name is required' : null,
-                  isDark: isDark,
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppHeader(
+              title: _isEditing ? 'Edit Clinic' : 'Add Clinic',
+              icon: Icons.local_hospital_rounded,
+              accent: med,
+              leading: IconButton(
+                icon: Icon(Icons.close_rounded, color: ext.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              ),
+              actions: [
+                AppButton(
+                  label: 'Save',
+                  size: AppButtonSize.sm,
+                  accent: med,
+                  loading: _isLoading,
+                  onPressed: _save,
                 ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                Text('Type', style: NunitoTheme.labelMedium.copyWith(
-                  color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-                )),
-                const SizedBox(height: NunitoTheme.spacingS),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: ClinicType.all.map((type) {
-                    final isSelected = _selectedType == type;
-                    return GestureDetector(
-                      onTap: () {
-                        _hapticService.selection();
-                        setState(() => _selectedType = type);
-                      },
-                      child: AnimatedContainer(
-                        duration: NunitoTheme.animationFast,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected ? NunitoTheme.primary : (isDark ? NunitoTheme.cardDark : Colors.white),
-                          borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
-                          border: Border.all(
-                            color: isSelected ? NunitoTheme.primary : NunitoTheme.textTertiary.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Text(
-                          type,
-                          style: NunitoTheme.labelMedium.copyWith(
-                            color: isSelected ? Colors.white : (isDark ? Colors.white : NunitoTheme.textPrimary),
-                          ),
-                        ),
+              ],
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, AppSpacing.xxl),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ---- Basic Information ----
+                      SectionHeader(
+                        title: 'Basic Information',
+                        icon: Icons.info_outline_rounded,
+                        accent: med,
                       ),
-                    );
-                  }).toList(),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _nameController,
+                        label: 'Name',
+                        hint: 'Clinic or hospital name',
+                        prefixIcon: Icons.local_hospital_rounded,
+                        accent: med,
+                        textCapitalization: TextCapitalization.words,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Name is required' : null,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Type',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(color: ext.textSecondary),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: ClinicType.all.map((type) {
+                          return AppChip(
+                            label: type,
+                            selected: _selectedType == type,
+                            accent: med,
+                            onTap: () {
+                              _hapticService.selection();
+                              setState(() => _selectedType = type);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Location & Contact ----
+                      SectionHeader(
+                        title: 'Location & Contact',
+                        icon: Icons.place_rounded,
+                        accent: med,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _addressController,
+                        label: 'Address',
+                        hint: 'Full address',
+                        prefixIcon: Icons.location_on_rounded,
+                        accent: med,
+                        maxLines: 2,
+                        textCapitalization: TextCapitalization.sentences,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppTextField(
+                        controller: _phoneController,
+                        label: 'Phone',
+                        hint: 'Phone number',
+                        prefixIcon: Icons.phone_rounded,
+                        accent: med,
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppTextField(
+                        controller: _emailController,
+                        label: 'Email',
+                        hint: 'Email address',
+                        prefixIcon: Icons.email_rounded,
+                        accent: med,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppTextField(
+                        controller: _websiteController,
+                        label: 'Website',
+                        hint: 'Website URL',
+                        prefixIcon: Icons.language_rounded,
+                        accent: med,
+                        keyboardType: TextInputType.url,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Operating Hours ----
+                      SectionHeader(
+                        title: 'Operating Hours',
+                        icon: Icons.schedule_rounded,
+                        accent: med,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildOperatingHoursEditor(ext, med),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Additional ----
+                      SectionHeader(
+                        title: 'Additional',
+                        icon: Icons.sticky_note_2_rounded,
+                        accent: med,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _notesController,
+                        label: 'Notes',
+                        hint: 'Any additional notes',
+                        accent: med,
+                        maxLines: 3,
+                        textCapitalization: TextCapitalization.sentences,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Save ----
+                      AppButton(
+                        label: _isEditing ? 'Save Changes' : 'Add Clinic',
+                        accent: med,
+                        fullWidth: true,
+                        size: AppButtonSize.lg,
+                        loading: _isLoading,
+                        leadingIcon: Icons.check_rounded,
+                        onPressed: _save,
+                      ),
+                    ],
+                  ),
                 ),
-              ], isDark),
-              const SizedBox(height: NunitoTheme.spacingL),
-              _buildSection('Location & Contact', [
-                _buildTextField(
-                  controller: _addressController,
-                  label: 'Address',
-                  hint: 'Full address',
-                  maxLines: 2,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildTextField(
-                  controller: _phoneController,
-                  label: 'Phone',
-                  hint: 'Phone number',
-                  keyboardType: TextInputType.phone,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildTextField(
-                  controller: _emailController,
-                  label: 'Email',
-                  hint: 'Email address',
-                  keyboardType: TextInputType.emailAddress,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildTextField(
-                  controller: _websiteController,
-                  label: 'Website',
-                  hint: 'Website URL',
-                  keyboardType: TextInputType.url,
-                  isDark: isDark,
-                ),
-              ], isDark),
-              const SizedBox(height: NunitoTheme.spacingL),
-              _buildSection('Operating Hours', [
-                _buildOperatingHoursEditor(isDark),
-              ], isDark),
-              const SizedBox(height: NunitoTheme.spacingL),
-              _buildSection('Additional', [
-                _buildTextField(
-                  controller: _notesController,
-                  label: 'Notes',
-                  hint: 'Any additional notes',
-                  maxLines: 3,
-                  isDark: isDark,
-                ),
-              ], isDark),
-              const SizedBox(height: 100),
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSection(String title, List<Widget> children, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: NunitoTheme.labelLarge.copyWith(
-            color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-          ),
-        ),
-        const SizedBox(height: NunitoTheme.spacingS),
-        ...children,
-      ],
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required bool isDark,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      validator: validator,
-      style: NunitoTheme.bodyMedium.copyWith(
-        color: isDark ? Colors.white : NunitoTheme.textPrimary,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        filled: true,
-        fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-          borderSide: BorderSide.none,
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-          borderSide: BorderSide(color: NunitoTheme.error),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOperatingHoursEditor(bool isDark) {
+  Widget _buildOperatingHoursEditor(AppColorsExt ext, AccentSwatch med) {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final dayHours = [
       _operatingHours.monday,
@@ -312,84 +296,91 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
       _operatingHours.saturday,
       _operatingHours.sunday,
     ];
+    final tt = Theme.of(context).textTheme;
 
-    return NunitoCard(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+    return AppCard(
       child: Column(
         children: List.generate(7, (index) {
           final day = days[index];
           final hours = dayHours[index];
-          
+
           return Padding(
-            padding: EdgeInsets.only(bottom: index < 6 ? 12 : 0),
+            padding: EdgeInsets.only(bottom: index < 6 ? AppSpacing.md : 0),
             child: Row(
               children: [
                 SizedBox(
                   width: 40,
                   child: Text(
                     day,
-                    style: NunitoTheme.labelMedium.copyWith(
-                      color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                    ),
+                    style: tt.titleLarge?.copyWith(color: ext.textPrimary),
                   ),
                 ),
                 Switch(
                   value: hours.isOpen,
-                  onChanged: (v) => _updateDayHours(index, hours.copyWith(isOpen: v)),
-                  activeColor: NunitoTheme.primary,
+                  onChanged: (v) {
+                    _hapticService.toggle();
+                    _updateDayHours(index, hours.copyWith(isOpen: v));
+                  },
+                  activeColor: ext.mark(med),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 if (hours.isOpen) ...[
                   Expanded(
-                    child: GestureDetector(
-                      onTap: () => _selectTime(index, true),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: NunitoTheme.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          hours.openTime ?? '09:00',
-                          style: NunitoTheme.bodySmall.copyWith(color: NunitoTheme.primary),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
+                    child: _buildTimeChip(
+                      ext,
+                      med,
+                      hours.openTime ?? '09:00',
+                      () => _selectTime(index, true),
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text('-', style: NunitoTheme.bodySmall),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Text('-',
+                        style: tt.bodyMedium?.copyWith(color: ext.textTertiary)),
                   ),
                   Expanded(
-                    child: GestureDetector(
-                      onTap: () => _selectTime(index, false),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: NunitoTheme.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          hours.closeTime ?? '17:00',
-                          style: NunitoTheme.bodySmall.copyWith(color: NunitoTheme.primary),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
+                    child: _buildTimeChip(
+                      ext,
+                      med,
+                      hours.closeTime ?? '17:00',
+                      () => _selectTime(index, false),
                     ),
                   ),
                 ] else
                   Expanded(
                     child: Text(
                       'Closed',
-                      style: NunitoTheme.bodySmall.copyWith(color: NunitoTheme.textTertiary),
+                      style: tt.bodyMedium?.copyWith(color: ext.textTertiary),
                     ),
                   ),
               ],
             ),
           );
         }),
+      ),
+    );
+  }
+
+  Widget _buildTimeChip(
+      AppColorsExt ext, AccentSwatch med, String value, VoidCallback onTap) {
+    return Material(
+      color: med.container,
+      borderRadius: AppRadius.brSm,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            value,
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(color: med.onContainer),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
