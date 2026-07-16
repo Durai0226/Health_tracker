@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/auth_service.dart';
-import '../../../core/services/llm_service.dart';
+import '../../../core/ai/ai_assistant.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/models/medicine_log.dart';
@@ -265,79 +265,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
   // ---- contextual nudge ----------------------------------------------------
 
   /// One subtle line above the quick actions, sourced from live insights:
-  /// remaining medicine doses first, else how far behind today's water goal.
-  /// Renders nothing (no spacing) when there's nothing worth nudging about.
-  ///
-  /// When the AI Assistant is configured, this is upgraded to a warm one/two-
-  /// sentence "daily briefing" across all four features. When it is NOT
-  /// configured, the original computed line below stays fully intact.
-  Widget _buildContextLine(AppColorsExt ext) {
-    if (LlmService().isConfigured) return _buildAiBriefing(ext);
-
-    final waterListenable = WaterService.listenToDailyData();
-    return ValueListenableBuilder<int>(
-      valueListenable: MedicineCleanStorageService.revision,
-      builder: (context, rev, _) {
-        Widget content() => FutureBuilder<_MedicineHomeData>(
-              future: _medicineData(rev),
-              builder: (context, snapshot) {
-                final s = snapshot.data?.summary;
-                final medTotal = s?.totalScheduled ?? 0;
-                final medTaken = s?.taken ?? 0;
-                final medLeft = (medTotal - medTaken).clamp(0, medTotal);
-
-                final goal = WaterService.getDailyGoal();
-                final water = WaterService.getTodayData();
-                final behindMl =
-                    goal > 0 ? (goal - water.effectiveHydrationMl).clamp(0, goal) : 0;
-
-                String? line;
-                IconData? icon;
-                if (medLeft > 0) {
-                  icon = Icons.medication_rounded;
-                  line = medLeft == 1
-                      ? '1 dose still due today'
-                      : '$medLeft doses still due today';
-                } else if (behindMl > 0) {
-                  icon = Icons.water_drop_rounded;
-                  line = 'Behind by $behindMl ml — a quick top-up keeps you on track';
-                }
-
-                if (line == null) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                  child: Row(
-                    children: [
-                      Icon(icon, size: 16, color: ext.textTertiary),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          line,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: ext.textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-        if (waterListenable == null) return content();
-        return ValueListenableBuilder<Map<String, DailyWaterData>>(
-          valueListenable: waterListenable,
-          builder: (context, _, __) => content(),
-        );
-      },
-    );
-  }
+  /// A warm one/two-sentence AI "daily briefing" across all four features.
+  /// Always shown — the AiAssistant always answers (free on-device rule engine),
+  /// so there is no configured/unconfigured branch anymore.
+  Widget _buildContextLine(AppColorsExt ext) => _buildAiBriefing(ext);
 
   /// AI "daily briefing" — a warm one/two-sentence summary across the four
-  /// features. Only reached when [LlmService] is configured; the [AiInsightCard]
-  /// self-loads, shows a thinking/retry state, and offers a manual refresh.
+  /// features. Always available; the [AiInsightCard] self-loads, shows a
+  /// thinking/retry state, and offers a manual refresh.
   Widget _buildAiBriefing(AppColorsExt ext) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -346,57 +281,51 @@ class _HomeDashboardState extends State<HomeDashboard> {
         icon: Icons.auto_awesome_rounded,
         accent: ext.brand,
         loader: () async {
-          final status = await _briefingStatus();
-          return LlmService().completeText(
-            system:
-                'Give a short, warm daily briefing (max 2 sentences) from the '
-                "user's day. Be encouraging and specific; no lists, no headings.",
-            user: status,
-            temperature: 0.5,
-            maxTokens: 120,
+          final d = await _briefingData();
+          return AiAssistant().dailyBriefing(
+            medsTaken: d.medsTaken,
+            medsTotal: d.medsTotal,
+            waterPct: d.waterPct,
+            focusMinutes: d.focusMinutes,
+            remindersLeft: d.remindersLeft,
+            hour: DateTime.now().hour,
           );
         },
       ),
     );
   }
 
-  /// A compact, plain-text snapshot of today's four features for the briefing
-  /// prompt. Reuses the exact same live sources the manual dashboard reads.
-  Future<String> _briefingStatus() async {
+  /// Gathers today's four-feature roll-up as the numeric inputs the
+  /// [AiAssistant.dailyBriefing] intent expects. Reuses the exact same live
+  /// sources the manual dashboard reads.
+  Future<_BriefingData> _briefingData() async {
     final now = DateTime.now();
 
     final med = await _medicineData(MedicineCleanStorageService.revision.value);
     final s = med.summary;
-    final medTotal = s.totalScheduled;
-    final medTaken = s.taken;
-    final medLeft = (medTotal - medTaken).clamp(0, medTotal);
-    final medLine = !med.hasMedicines
-        ? 'no medicines tracked'
-        : (medTotal == 0
-            ? 'no doses scheduled'
-            : '$medTaken of $medTotal doses taken, $medLeft left');
+    final medsTotal = s.totalScheduled;
+    final medsTaken = s.taken;
 
     final goal = WaterService.getDailyGoal();
     final water = WaterService.getTodayData();
-    final waterLine = goal > 0
-        ? '${water.effectiveHydrationMl} of $goal ml (goal ${water.goalReached ? 'reached' : 'not yet reached'})'
-        : 'no hydration goal set';
+    final waterPct = goal > 0
+        ? ((water.effectiveHydrationMl / goal) * 100).round().clamp(0, 100)
+        : 0;
 
-    final focusMins = _focus.todayMinutes;
-    final focusLine = focusMins > 0 ? '$focusMins minutes' : 'none yet';
+    final focusMinutes = _focus.todayMinutes;
 
     final todays = CleanStorageService.getReminders()
         .where((r) => _isSameDay(r.scheduledTime, now))
         .toList();
-    final remindersDone = todays.where((r) => r.isCompleted).length;
-    final remindersLine = todays.isEmpty
-        ? 'none today'
-        : '$remindersDone of ${todays.length} done today';
+    final remindersLeft = todays.where((r) => !r.isCompleted).length;
 
-    return 'Medicine: $medLine. '
-        'Water: $waterLine. '
-        'Focus: $focusLine. '
-        'Reminders: $remindersLine.';
+    return _BriefingData(
+      medsTaken: medsTaken,
+      medsTotal: medsTotal,
+      waterPct: waterPct,
+      focusMinutes: focusMinutes,
+      remindersLeft: remindersLeft,
+    );
   }
 
   // ---- quick actions -------------------------------------------------------
@@ -952,6 +881,23 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final m = t.minute.toString().padLeft(2, '0');
     return '$h:$m ${t.hour >= 12 ? 'PM' : 'AM'}';
   }
+}
+
+/// Numeric roll-up of today's four features, fed to [AiAssistant.dailyBriefing].
+class _BriefingData {
+  final int medsTaken;
+  final int medsTotal;
+  final int waterPct;
+  final int focusMinutes;
+  final int remindersLeft;
+
+  const _BriefingData({
+    required this.medsTaken,
+    required this.medsTotal,
+    required this.waterPct,
+    required this.focusMinutes,
+    required this.remindersLeft,
+  });
 }
 
 /// Bundled medicine data for the Home dashboard, loaded once per revision.

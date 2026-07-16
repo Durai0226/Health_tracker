@@ -3,7 +3,8 @@ import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
-import '../../../core/services/llm_service.dart';
+import '../../../core/ai/ai_assistant.dart';
+import '../../../core/ai/ai_types.dart';
 import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
 import '../utils/reminder_helper.dart';
@@ -125,8 +126,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
   }
 
   /// AI "Smart Add": type a reminder in plain English; AI fills the form for
-  /// review. Degrades gracefully — if AI isn't configured, hints the user to
-  /// enable it in Settings and the manual + FAB flow stays intact.
+  /// review. Always available — the free on-device rule engine parses offline,
+  /// and the manual + FAB flow stays intact as a fallback.
   void _openSmartAdd() {
     final ext = AppColorsExt.of(context);
     final rem = ext.reminders;
@@ -144,13 +145,6 @@ class _RemindersScreenState extends State<RemindersScreen> {
             Future<void> submit() async {
               final text = controller.text.trim();
               if (text.isEmpty || submitting) return;
-
-              if (!LlmService().isConfigured) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Enable AI in Settings')),
-                );
-                return;
-              }
 
               setSheetState(() => submitting = true);
               final result = await _parseSmartReminder(text);
@@ -219,36 +213,20 @@ class _RemindersScreenState extends State<RemindersScreen> {
     );
   }
 
-  /// Calls the LLM to extract structured reminder fields from free text.
-  /// Returns null on any failure so the caller falls back to a blank form.
+  /// Extracts structured reminder fields from free text via the AiAssistant
+  /// facade (always available — the free on-device rule engine parses offline).
+  /// Returns null only when parseReminder returns null (blank/empty input).
   Future<_SmartReminder?> _parseSmartReminder(String text) async {
-    final now = DateTime.now();
-    final json = await LlmService().completeJson(
-      system:
-          "Extract a reminder from the user's text. Today is ${now.toIso8601String()}. "
-          'Return keys: title (string), datetimeIso (ISO-8601 for the next occurrence), '
-          'repeat (one of none|daily|weekly|weekdays|weekends), '
-          'category (string or empty), priority (low|medium|high).',
-      user: text,
-    );
-    if (json == null) return null;
+    final parsed = await AiAssistant().parseReminder(text);
+    if (parsed == null) return null;
 
-    final title = (json['title'] as String?)?.trim();
-    if (title == null || title.isEmpty) return null;
-
-    DateTime? time;
-    final iso = json['datetimeIso'];
-    if (iso is String && iso.trim().isNotEmpty) {
-      time = DateTime.tryParse(iso.trim());
-    }
-
-    final repeat = _repeatFromString(json['repeat']?.toString());
-    final priority = _priorityFromString(json['priority']?.toString());
-    final categoryId = await _categoryIdForName(json['category']?.toString());
+    final repeat = _repeatFromString(parsed.repeat);
+    final priority = _priorityFromString(parsed.priority);
+    final categoryId = await _categoryIdForName(parsed.categoryHint);
 
     return _SmartReminder(
-      title: title,
-      time: time,
+      title: parsed.title,
+      time: parsed.time,
       repeat: repeat,
       priority: priority,
       categoryId: categoryId,

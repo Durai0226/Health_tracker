@@ -10,7 +10,7 @@ import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../services/drug_interaction_service.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/services/llm_service.dart';
+import '../../../core/ai/ai_assistant.dart';
 import 'nunito_add_medication_flow.dart';
 
 class NunitoMedicationDetailScreen extends StatefulWidget {
@@ -133,7 +133,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   /// Rephrase the rules-based interaction findings in plain language for the
   /// patient. The rules data stays the source of truth; AI only restates it.
   Future<void> _explainInteractions() async {
-    if (_interactions.isEmpty || !LlmService().isConfigured) return;
+    if (_interactions.isEmpty) return;
     _hapticService.light();
     setState(() {
       _explainingInteractions = true;
@@ -147,14 +147,9 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           : i.drug1Name;
       final rec = i.recommendation != null ? ' Recommendation: ${i.recommendation}' : '';
       return '${_medicine.name} + $other (${i.severity.displayName}): ${i.description}.$rec';
-    }).join('\n');
+    }).toList();
 
-    final result = await LlmService().completeText(
-      system:
-          'Explain these medication interactions simply for a patient, 2-3 short '
-          'bullets, plus \'talk to your pharmacist\'.',
-      user: descriptions,
-    );
+    final result = await AiAssistant().explainInteractions(descriptions);
 
     if (!mounted) return;
     setState(() {
@@ -176,8 +171,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     }
   }
 
-  /// Open the shared Ask-AI sheet scoped to this medicine. Gated on
-  /// isConfigured at the call site; the sheet also self-guards.
+  /// Open the shared Ask-AI sheet scoped to this medicine. Always available
+  /// (free on-device engine); the sheet also self-guards.
   void _askAi() {
     _hapticService.light();
     final name = _medicine.name;
@@ -189,12 +184,11 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       hint: 'e.g. Should I take this with food?',
       disclaimer:
           'AI info — not medical advice. Consult your doctor/pharmacist.',
-      onAsk: (q) => LlmService().completeText(
-        system:
-            'You are a careful medication information assistant. The medicine is '
-            '$name, dose $dose. Answer concisely; add a one-line safety note; '
-            'never give a diagnosis.',
-        user: q,
+      onAsk: (q) => AiAssistant().medicineAnswer(
+        name: name,
+        dose: dose,
+        question: q,
+        instructions: _medicine.instructions,
       ),
     );
   }
@@ -296,12 +290,11 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
-        if (LlmService().isConfigured)
-          IconButton(
-            icon: Icon(Icons.auto_awesome_rounded, color: onHeader),
-            tooltip: 'Ask AI about this medicine',
-            onPressed: _askAi,
-          ),
+        IconButton(
+          icon: Icon(Icons.auto_awesome_rounded, color: onHeader),
+          tooltip: 'Ask AI about this medicine',
+          onPressed: _askAi,
+        ),
         IconButton(
           icon: Icon(Icons.edit_rounded, color: onHeader),
           onPressed: _editMedicine,
@@ -735,56 +728,54 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               ),
               const SizedBox(height: AppSpacing.sm),
               ..._interactions.map(_buildInteractionTile),
-              if (LlmService().isConfigured) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
+                label: 'Explain in plain language',
+                leadingIcon: Icons.auto_awesome_rounded,
+                variant: AppButtonVariant.secondary,
+                size: AppButtonSize.sm,
+                accent: ext.medicine,
+                loading: _explainingInteractions,
+                onPressed: _explainingInteractions ? null : _explainInteractions,
+              ),
+              if (_interactionExplanation != null ||
+                  _interactionExplainFailed) ...[
                 const SizedBox(height: AppSpacing.sm),
-                AppButton(
-                  label: 'Explain in plain language',
-                  leadingIcon: Icons.auto_awesome_rounded,
-                  variant: AppButtonVariant.secondary,
-                  size: AppButtonSize.sm,
-                  accent: ext.medicine,
-                  loading: _explainingInteractions,
-                  onPressed: _explainingInteractions ? null : _explainInteractions,
-                ),
-                if (_interactionExplanation != null ||
-                    _interactionExplainFailed) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  AppCard(
-                    color: ext.medicine.container,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.auto_awesome_rounded,
-                                color: ext.medicine.onContainer, size: 16),
-                            const SizedBox(width: AppSpacing.sm),
-                            Text(
-                              'In plain language',
-                              style: tt.labelLarge?.copyWith(
-                                  color: ext.medicine.onContainer,
-                                  fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          _interactionExplainFailed
-                              ? 'Couldn\'t generate an explanation right now. Please try again.'
-                              : _interactionExplanation!,
-                          style: tt.bodyMedium?.copyWith(
-                              color: ext.medicine.onContainer, height: 1.4),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'AI info — not medical advice. Consult your doctor/pharmacist.',
-                          style: tt.bodySmall?.copyWith(
-                              color: ext.medicine.onContainer.withOpacity(0.75)),
-                        ),
-                      ],
-                    ),
+                AppCard(
+                  color: ext.medicine.container,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.auto_awesome_rounded,
+                              color: ext.medicine.onContainer, size: 16),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            'In plain language',
+                            style: tt.labelLarge?.copyWith(
+                                color: ext.medicine.onContainer,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        _interactionExplainFailed
+                            ? 'Couldn\'t generate an explanation right now. Please try again.'
+                            : _interactionExplanation!,
+                        style: tt.bodyMedium?.copyWith(
+                            color: ext.medicine.onContainer, height: 1.4),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'AI info — not medical advice. Consult your doctor/pharmacist.',
+                        style: tt.bodySmall?.copyWith(
+                            color: ext.medicine.onContainer.withOpacity(0.75)),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ],
             ],
             if (_foodWarnings.isNotEmpty) ...[

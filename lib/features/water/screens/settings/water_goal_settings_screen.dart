@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
-import '../../../../core/services/llm_service.dart';
+import '../../../../core/ai/ai_assistant.dart';
 import '../../services/water_service.dart';
 
 /// Water Daily Goal Settings Screen
@@ -59,24 +59,11 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
   }
 
   /// Ask the AI to suggest a daily goal from the hydration profile, then set the
-  /// goal field so the user can review and Save. Degrades gracefully: with no AI
-  /// key configured it nudges the user to Settings; on any failure it leaves the
+  /// goal field so the user can review and Save. Always available: backed by the
+  /// free on-device rule engine via AiAssistant. On any failure it leaves the
   /// current goal untouched. Manual entry stays fully intact either way.
   Future<void> _suggestGoalWithAi() async {
     final ext = AppColorsExt.of(context);
-
-    if (!LlmService().isConfigured) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-              'Turn on the AI Assistant in Settings to get a suggested goal.'),
-          backgroundColor: ext.water.base,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        ),
-      );
-      return;
-    }
 
     setState(() => _suggesting = true);
     HapticFeedback.mediumImpact();
@@ -84,24 +71,14 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
     try {
       await WaterService.init();
       final p = WaterService.getProfile();
-      final weight =
-          p.weightKg != null ? '${p.weightKg!.round()} kg' : 'unknown';
-      final age = p.age != null ? '${p.age} years' : 'unknown';
-      final sex = p.isMale ? 'male' : 'female';
 
-      final result = await LlmService().completeJson(
-        system:
-            'Suggest a daily water goal in ml. Return key: goalMl (integer, 1500-4000).',
-        user: 'Weight: $weight; activity level: ${p.activityLevelString}; '
-            'climate: ${p.climateString}; age: $age; sex: $sex.',
+      final goalMl = await AiAssistant().suggestWaterGoal(
+        weightKg: p.weightKg,
+        activity: p.activityLevelString,
+        climate: p.climateString,
       );
 
       if (!mounted) return;
-
-      final raw = result?['goalMl'];
-      final goalMl = raw is int
-          ? raw
-          : (raw is num ? raw.round() : int.tryParse('${raw ?? ''}'));
 
       if (goalMl == null) {
         ScaffoldMessenger.of(context).showSnackBar(

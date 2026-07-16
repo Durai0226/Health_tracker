@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/llm_service.dart';
+import '../../../core/ai/ai_assistant.dart';
+import '../../../core/ai/ai_types.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/haptic_service.dart';
@@ -271,15 +273,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       AppListTile(
                         icon: Icons.auto_awesome_rounded,
                         iconColor: ext.mark(ext.focus),
-                        title: 'AI Assistant (beta)',
-                        subtitle: LlmService().isConfigured
-                            ? 'Enabled · key stored on this device'
-                            : 'Add a free NVIDIA key to enable AI features',
+                        title: 'AI Assistant',
+                        subtitle:
+                            'On-device AI is on (free). Tap to manage cloud AI.\n'
+                            'Active: ${_activeEngineLabel()}',
                         onTap: _manageAiKey,
-                        trailing: LlmService().isConfigured
-                            ? Icon(Icons.check_circle_rounded,
-                                color: ext.mark(ext.success))
-                            : null,
+                      ),
+                      AppListTile(
+                        icon: Icons.cloud_outlined,
+                        iconColor: ext.mark(ext.info),
+                        title: 'Use cloud AI (optional)',
+                        subtitle:
+                            'Off by default. Uses a cloud model for richer answers '
+                            '— sends data off-device; needs a key (dev/beta).',
+                        trailing: Switch(
+                          value: AiAssistant().cloudConsent,
+                          onChanged: (value) async {
+                            await AiAssistant().setCloudConsent(value);
+                            if (mounted) setState(() {});
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -398,6 +411,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Human-readable label for the engine that will serve AI requests now.
+  String _activeEngineLabel() {
+    switch (AiAssistant().activeKind) {
+      case AiEngineKind.cloud:
+        return 'Cloud';
+      case AiEngineKind.onDevice:
+        return 'On-device';
+      case AiEngineKind.ruleBased:
+        return 'On-device';
+    }
   }
 
   /// Manage the AI (LLM) API key — paste/remove, stored on-device only.

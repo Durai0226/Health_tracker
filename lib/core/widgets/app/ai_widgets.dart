@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../design/app_design.dart';
-import '../../services/llm_service.dart';
 import 'app_card.dart';
 import 'app_button.dart';
 import 'primitives.dart';
 import 'app_bottom_sheet.dart';
 
-/// Shared AI UI kit (Calm Clarity). Both pieces degrade gracefully when no AI
-/// key is configured — they nudge the user to Settings and never block.
+/// Shared AI UI kit (Calm Clarity). Backed by AiAssistant, which always answers
+/// (free on-device rule engine by default, richer engines when available), so
+/// these always load — no "enable AI" gating.
 
 /// A self-loading insight card: runs [loader] once, renders the markdown result,
-/// and offers a refresh. Shows a gentle "enable AI" state when unconfigured.
+/// and offers a refresh.
 class AiInsightCard extends StatefulWidget {
   final String title;
   final IconData icon;
@@ -38,7 +38,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
   @override
   void initState() {
     super.initState();
-    if (LlmService().isConfigured) _load();
+    _load();
   }
 
   Future<void> _load() async {
@@ -60,25 +60,6 @@ class _AiInsightCardState extends State<AiInsightCard> {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     final s = widget.accent;
-
-    // Not configured → subtle prompt (never intrusive).
-    if (!LlmService().isConfigured) {
-      return AppCard(
-        color: s.container,
-        child: Row(
-          children: [
-            Icon(Icons.auto_awesome_rounded, color: s.onContainer, size: 20),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                'Turn on the AI Assistant in Settings for personalized ${widget.title.toLowerCase()}.',
-                style: tt.bodyMedium?.copyWith(color: s.onContainer),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
 
     return AppCard(
       child: Column(
@@ -226,26 +207,6 @@ class _AiAskBodyState extends State<_AiAskBody> {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-
-    if (!LlmService().isConfigured) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Add your AI key in Settings → AI Assistant to use this.',
-                style: tt.bodyLarge?.copyWith(color: ext.textSecondary)),
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              label: 'Close',
-              variant: AppButtonVariant.secondary,
-              accent: widget.accent,
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-      );
-    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,

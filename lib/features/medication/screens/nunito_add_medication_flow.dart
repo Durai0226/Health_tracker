@@ -7,7 +7,7 @@ import '../models/medicine_schedule.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/services/llm_service.dart';
+import '../../../core/ai/ai_assistant.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 
 /// How the end of a medication course is expressed in the wizard.
@@ -424,10 +424,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         children: [
           Text('What medication are you adding?', style: tt.headlineMedium),
           const SizedBox(height: AppSpacing.xl),
-          if (LlmService().isConfigured) ...[
-            _buildSmartAddSection(context),
-            const SizedBox(height: AppSpacing.xl),
-          ],
+          _buildSmartAddSection(context),
+          const SizedBox(height: AppSpacing.xl),
           AppTextField(
             controller: _nameController,
             label: 'Medication Name',
@@ -476,8 +474,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   }
 
   /// Smart add: a plain-language description + "Fill with AI" button. Extracts
-  /// medicine details via the shared LLM service and pre-fills the wizard state
-  /// so the user can review and continue. Only shown when AI is configured.
+  /// medicine details via the AI assistant and pre-fills the wizard state so the
+  /// user can review and continue. Always available (free on-device engine).
   Widget _buildSmartAddSection(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final med = ext.medicine;
@@ -537,19 +535,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       _showError('Describe the medication first');
       return;
     }
-    if (!LlmService().isConfigured) return;
 
     FocusScope.of(context).unfocus();
     setState(() => _aiFilling = true);
 
-    final result = await LlmService().completeJson(
-      system:
-          'Extract medication details. Return keys: name (string), dosageAmount (number), '
-          'dosageUnit (e.g. mg/ml/tablet), form (tablet|capsule|liquid|injection|other), '
-          'frequency (once|twice|thrice|four times daily or asNeeded), '
-          'times (array of HH:mm strings if implied).',
-      user: desc,
-    );
+    final result = await AiAssistant().parseMedicine(desc);
 
     if (!mounted) return;
     setState(() => _aiFilling = false);

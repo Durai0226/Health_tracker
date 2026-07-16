@@ -1,7 +1,7 @@
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app/app_widgets.dart';
-import '../../../core/services/llm_service.dart';
+import '../../../core/ai/ai_assistant.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../models/focus_session.dart';
@@ -449,8 +449,7 @@ class _FocusScreenState extends State<FocusScreen> {
   // ---------------------------------------------------------------------------
 
   /// Self-loading AI card offering one short, actionable focus suggestion based
-  /// on real stats. Degrades gracefully: when no AI key is set, AiInsightCard
-  /// shows a gentle "enable in Settings" prompt and the manual flow is untouched.
+  /// on real stats. Always available via the free on-device rule engine.
   Widget _buildFocusCoachCard(AppColorsExt ext) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
@@ -460,22 +459,10 @@ class _FocusScreenState extends State<FocusScreen> {
         accent: ext.focus,
         loader: () {
           final stats = _focusService.stats;
-          final tagNames = _tagService.tags
-              .where((t) => _focusService.selectedTagIds.contains(t.id))
-              .map((t) => t.name)
-              .toList();
-          final activity = _focusService.selectedActivity.name;
-          final tagsPart =
-              tagNames.isEmpty ? activity : '$activity (${tagNames.join(', ')})';
-          return LlmService().completeText(
-            system:
-                'You are a supportive focus/productivity coach. Give ONE short, '
-                'actionable suggestion (max 2 sentences) — e.g. a session length '
-                'or a tip — based on the stats.',
-            user:
-                'Today minutes: ${_focusService.todayMinutes}, current streak: '
-                '${stats.currentStreak} days, total sessions: '
-                '${stats.totalSessions}, recent activity/tags: $tagsPart.',
+          return AiAssistant().focusCoach(
+            todayMinutes: _focusService.todayMinutes,
+            streakDays: stats.currentStreak,
+            totalSessions: stats.totalSessions,
           );
         },
       ),
