@@ -4,8 +4,11 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
+import '../models/drug_interaction.dart';
+import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
+import '../services/drug_interaction_service.dart';
 import '../../../core/services/haptic_service.dart';
 import 'nunito_add_medication_flow.dart';
 
@@ -27,6 +30,10 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   List<MedicineLog> _recentLogs = [];
   bool _isLoading = true;
   Map<String, dynamic> _stats = {};
+
+  final DrugInteractionService _interactionService = DrugInteractionService();
+  List<DrugInteraction> _interactions = [];
+  List<String> _foodWarnings = [];
 
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -62,6 +69,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         _medicine = updated;
       }
 
+      _computeInteractions(medicines);
+
       // Load recent logs
       _recentLogs = await MedicineCleanStorageService.getLogsForMedicine(_medicine.id);
       _recentLogs.sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
@@ -84,6 +93,46 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       debugPrint('Error loading data: $e');
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  /// This medicine's representative name for interaction lookups
+  /// (generic when known, otherwise the display name).
+  String get _lookupName =>
+      (_medicine.genericName != null && _medicine.genericName!.trim().isNotEmpty)
+          ? _medicine.genericName!
+          : _medicine.name;
+
+  /// Check this medicine against every other active medicine and collect any
+  /// food interactions from the built-in drug database.
+  void _computeInteractions(List<EnhancedMedicine> allMedicines) {
+    final results = <DrugInteraction>[];
+    for (final other in allMedicines) {
+      if (other.id == _medicine.id) continue;
+      if (!other.isActive || other.isArchived) continue;
+      final otherName = (other.genericName != null &&
+              other.genericName!.trim().isNotEmpty)
+          ? other.genericName!
+          : other.name;
+      results.addAll(_interactionService.checkInteraction(_lookupName, otherName));
+    }
+    // De-duplicate by interaction id, then sort most-severe first.
+    final seen = <String>{};
+    _interactions = results.where((i) => seen.add(i.id)).toList()
+      ..sort((a, b) => b.severity.index.compareTo(a.severity.index));
+
+    _foodWarnings = _interactionService.checkFoodInteractions(_lookupName);
+  }
+
+  AccentSwatch _severitySwatch(InteractionSeverity severity) {
+    final ext = AppColorsExt.of(context);
+    switch (severity) {
+      case InteractionSeverity.mild:
+      case InteractionSeverity.moderate:
+        return ext.warning;
+      case InteractionSeverity.severe:
+      case InteractionSeverity.contraindicated:
+        return ext.error;
+    }
   }
 
   void _editMedicine() {
@@ -154,6 +203,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                     SliverToBoxAdapter(child: _buildStatsSection()),
                     SliverToBoxAdapter(child: _buildScheduleSection()),
                     SliverToBoxAdapter(child: _buildDetailsSection()),
+                    SliverToBoxAdapter(child: _buildInteractionsSection()),
+                    SliverToBoxAdapter(child: _buildSafetySection()),
                     SliverToBoxAdapter(child: _buildHistorySection()),
                     SliverToBoxAdapter(child: _buildActionsSection()),
                     const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -451,6 +502,196 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInteractionsSection() {
+    if (_interactions.isEmpty && _foodWarnings.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    // Headline accent escalates to error when a serious interaction exists.
+    final hasSerious = _interactions.any((i) =>
+        i.severity == InteractionSeverity.severe ||
+        i.severity == InteractionSeverity.contraindicated);
+    final headerSwatch = hasSerious ? ext.error : ext.warning;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.gutter),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    color: ext.mark(headerSwatch), size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Interactions & Cautions', style: tt.titleLarge),
+              ],
+            ),
+            if (_interactions.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'With your other active medicines',
+                style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              ..._interactions.map(_buildInteractionTile),
+            ],
+            if (_foodWarnings.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Food & lifestyle',
+                style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              ..._foodWarnings.map(
+                (w) => _buildBulletRow(
+                    w, Icons.restaurant_rounded, ext.warning),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInteractionTile(DrugInteraction interaction) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final swatch = _severitySwatch(interaction.severity);
+    final other = interaction.drug1Name.toLowerCase() ==
+            _lookupName.toLowerCase()
+        ? interaction.drug2Name
+        : interaction.drug1Name;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: swatch.container,
+        borderRadius: AppRadius.brMd,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'With $other',
+                  style: tt.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700, color: swatch.onContainer),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: ext.surface,
+                  borderRadius: AppRadius.brSm,
+                ),
+                child: Text(
+                  interaction.severity.displayName,
+                  style: tt.labelSmall?.copyWith(
+                      color: ext.mark(swatch), fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            interaction.description,
+            style: tt.bodySmall?.copyWith(
+                color: swatch.onContainer.withOpacity(0.9)),
+          ),
+          if (interaction.recommendation != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              interaction.recommendation!,
+              style: tt.bodySmall?.copyWith(
+                  color: swatch.onContainer,
+                  fontWeight: FontWeight.w600),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSafetySection() {
+    final warnings = _medicine.warnings ?? const [];
+    final sideEffects = _medicine.sideEffects ?? const [];
+    if (warnings.isEmpty && sideEffects.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.gutter),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.health_and_safety_rounded,
+                    color: ext.mark(ext.warning), size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Warnings & Side Effects', style: tt.titleLarge),
+              ],
+            ),
+            if (warnings.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text('Warnings',
+                  style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
+              const SizedBox(height: AppSpacing.sm),
+              ...warnings.map((w) =>
+                  _buildBulletRow(w, Icons.error_outline_rounded, ext.error)),
+            ],
+            if (sideEffects.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text('Possible side effects',
+                  style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
+              const SizedBox(height: AppSpacing.sm),
+              ...sideEffects.map((s) =>
+                  _buildBulletRow(s, Icons.circle, ext.warning, small: true)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBulletRow(String text, IconData icon, AccentSwatch accent,
+      {bool small = false}) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: small ? 6 : 2),
+            child: Icon(icon,
+                size: small ? 8 : 16, color: ext.mark(accent)),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: tt.bodyMedium?.copyWith(color: ext.textPrimary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

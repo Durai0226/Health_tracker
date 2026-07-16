@@ -47,7 +47,7 @@ class Reminder {
     this.customDays,
     this.snoozeDuration,
     this.sound = 'default',
-    this.priority = ReminderPriority.high,
+    this.priority = ReminderPriority.medium,
     this.categoryId,
     this.note,
     this.imagePath,
@@ -137,9 +137,9 @@ class Reminder {
       priority: json['priority'] != null
           ? ReminderPriority.values.firstWhere(
               (e) => e.toString().split('.').last == json['priority'],
-              orElse: () => ReminderPriority.high,
+              orElse: () => ReminderPriority.medium,
             )
-          : ReminderPriority.high,
+          : ReminderPriority.medium,
       categoryId: json['categoryId'],
       note: json['note'],
       imagePath: json['imagePath'],

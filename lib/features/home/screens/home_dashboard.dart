@@ -124,6 +124,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   AppSpacing.gutter, AppSpacing.xs, AppSpacing.gutter, 120),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  _buildContextLine(ext),
                   _buildQuickActions(ext),
                   const SizedBox(height: AppSpacing.xl),
                   _buildRollup(ext),
@@ -136,9 +137,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   const SizedBox(height: AppSpacing.lg),
                   _buildWeeklyStrip(ext),
                   const SizedBox(height: AppSpacing.lg),
-                  SizedBox(
-                    height: 132,
+                  // IntrinsicHeight keeps the two cards equal to the taller one
+                  // and lets them grow with text scale instead of overflowing a
+                  // fixed 132px box. Stretch makes both fill that shared height.
+                  IntrinsicHeight(
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(child: _buildFocusCard(ext)),
                         const SizedBox(width: AppSpacing.lg),
@@ -254,6 +258,73 @@ class _HomeDashboardState extends State<HomeDashboard> {
           ),
         ],
       ),
+    );
+  }
+
+  // ---- contextual nudge ----------------------------------------------------
+
+  /// One subtle line above the quick actions, sourced from live insights:
+  /// remaining medicine doses first, else how far behind today's water goal.
+  /// Renders nothing (no spacing) when there's nothing worth nudging about.
+  Widget _buildContextLine(AppColorsExt ext) {
+    final waterListenable = WaterService.listenToDailyData();
+    return ValueListenableBuilder<int>(
+      valueListenable: MedicineCleanStorageService.revision,
+      builder: (context, rev, _) {
+        Widget content() => FutureBuilder<_MedicineHomeData>(
+              future: _medicineData(rev),
+              builder: (context, snapshot) {
+                final s = snapshot.data?.summary;
+                final medTotal = s?.totalScheduled ?? 0;
+                final medTaken = s?.taken ?? 0;
+                final medLeft = (medTotal - medTaken).clamp(0, medTotal);
+
+                final goal = WaterService.getDailyGoal();
+                final water = WaterService.getTodayData();
+                final behindMl =
+                    goal > 0 ? (goal - water.effectiveHydrationMl).clamp(0, goal) : 0;
+
+                String? line;
+                IconData? icon;
+                if (medLeft > 0) {
+                  icon = Icons.medication_rounded;
+                  line = medLeft == 1
+                      ? '1 dose still due today'
+                      : '$medLeft doses still due today';
+                } else if (behindMl > 0) {
+                  icon = Icons.water_drop_rounded;
+                  line = 'Behind by $behindMl ml — a quick top-up keeps you on track';
+                }
+
+                if (line == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                  child: Row(
+                    children: [
+                      Icon(icon, size: 16, color: ext.textTertiary),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          line,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: ext.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+        if (waterListenable == null) return content();
+        return ValueListenableBuilder<Map<String, DailyWaterData>>(
+          valueListenable: waterListenable,
+          builder: (context, _, __) => content(),
+        );
+      },
     );
   }
 
@@ -765,6 +836,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final today = pending
         .where((r) => _isSameDay(r.scheduledTime, now))
         .toList();
+    // Today's reminders split by urgency: overdue (slot already passed) vs later.
+    final overdue = today.where((r) => r.scheduledTime.isBefore(now)).toList();
     final upcoming = pending.where((r) => r.scheduledTime.isAfter(now)).toList();
     final Reminder? next =
         today.isNotEmpty ? today.first : (upcoming.isNotEmpty ? upcoming.first : null);
@@ -784,14 +857,19 @@ class _HomeDashboardState extends State<HomeDashboard> {
       accent: ext.reminders,
       icon: Icons.notifications_rounded,
       title: 'Reminders',
-      value: today.isNotEmpty
-          ? '${today.length} today'
-          : (next != null ? _formatTime(next.scheduledTime) : 'All clear'),
+      value: overdue.isNotEmpty
+          ? '${overdue.length} overdue'
+          : (today.isNotEmpty
+              ? '${today.length} today'
+              : (next != null ? _formatTime(next.scheduledTime) : 'All clear')),
       sub: next == null ? 'Nothing upcoming' : next.title,
       onTap: () => widget.onNavigate(3),
-      badge: today.isNotEmpty
-          ? CountBadge(count: today.length, accent: ext.reminders)
-          : null,
+      // Overdue gets a warning-tone count; otherwise the calm today count.
+      badge: overdue.isNotEmpty
+          ? CountBadge(count: overdue.length, accent: ext.warning)
+          : (today.isNotEmpty
+              ? CountBadge(count: today.length, accent: ext.reminders)
+              : null),
     );
   }
 

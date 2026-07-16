@@ -26,8 +26,21 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
   static const List<String> _moodEmojis = ['😄', '🙂', '😐', '😕', '😢'];
   static const List<String> _moodLabels = ['Great', 'Good', 'Okay', 'Bad', 'Terrible'];
 
+  // Common side-effects the user can flag on the details expander.
+  static const List<String> _sideEffectOptions = [
+    'Nausea',
+    'Headache',
+    'Dizziness',
+    'Drowsiness',
+    'Fatigue',
+    'Upset stomach',
+    'Rash',
+    'Dry mouth',
+  ];
+
   int _selectedMood = -1;
-  String? _sideEffects;
+  final Set<String> _selectedSideEffects = {};
+  bool _showDetails = false;
   bool _isLoading = false;
 
   final HapticService _hapticService = HapticService();
@@ -53,7 +66,9 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
         dosageTaken: widget.medicine.dosageAmount,
         moodRating: _selectedMood >= 0 ? _selectedMood + 1 : null,
         notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-        sideEffects: _sideEffects,
+        sideEffects: _selectedSideEffects.isNotEmpty
+            ? _selectedSideEffects.join(', ')
+            : null,
       );
 
       if (mounted) {
@@ -86,7 +101,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
         scheduledTime: widget.scheduledTime,
         actionTime: DateTime.now(),
         status: MedicineStatus.skipped,
-        skipReason: SkipReason.values[reason],
+        skipReason: reason,
         skipNote: _notesController.text.isNotEmpty ? _notesController.text : null,
       );
 
@@ -102,17 +117,12 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<int?> _showSkipReasonSheet() {
+  Future<SkipReason?> _showSkipReasonSheet() {
     final ext = AppColorsExt.of(context);
-    const reasons = [
-      'Side effects',
-      'Forgot to take',
-      'Ran out',
-      'Feeling better',
-      'Doctor advised',
-      'Other',
-    ];
-    return AppBottomSheet.show<int>(
+    // Render options straight from the enum and return the selected enum value
+    // directly — no positional index remapping, so the stored reason always
+    // matches the label the user tapped.
+    return AppBottomSheet.show<SkipReason>(
       context,
       title: 'Why are you skipping?',
       icon: Icons.help_outline_rounded,
@@ -121,13 +131,13 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (int i = 0; i < reasons.length; i++)
+          for (final reason in SkipReason.values)
             AppListTile(
               icon: Icons.radio_button_unchecked_rounded,
-              title: reasons[i],
+              title: reason.displayName,
               accent: ext.medicine,
               trailing: const SizedBox.shrink(),
-              onTap: () => Navigator.pop(ctx, i),
+              onTap: () => Navigator.pop(ctx, reason),
             ),
         ],
       ),
@@ -205,14 +215,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
                   const SizedBox(height: AppSpacing.lg),
                   _buildMedicineInfo(ext),
                   const SizedBox(height: AppSpacing.lg),
-                  _buildMoodSelector(ext),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    controller: _notesController,
-                    hint: 'Add notes (optional)',
-                    accent: ext.medicine,
-                    maxLines: 2,
-                  ),
+                  _buildDetailsExpander(ext),
                   const SizedBox(height: AppSpacing.lg),
                   _buildActionButtons(ext),
                   const SizedBox(height: AppSpacing.sm),
@@ -273,6 +276,52 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     );
   }
 
+  /// Collapsible extras so the default "Take" path stays one-tap. Mood, side
+  /// effects and notes only appear once the user taps "Add details".
+  Widget _buildDetailsExpander(AppColorsExt ext) {
+    final count = (_selectedMood >= 0 ? 1 : 0) +
+        _selectedSideEffects.length +
+        (_notesController.text.isNotEmpty ? 1 : 0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppListTile(
+          icon: Icons.tune_rounded,
+          title: 'Add details',
+          subtitle: _showDetails
+              ? 'Mood, side effects and notes'
+              : (count > 0
+                  ? '$count added'
+                  : 'Optional — mood, side effects, notes'),
+          accent: ext.medicine,
+          trailing: Icon(
+            _showDetails
+                ? Icons.expand_less_rounded
+                : Icons.expand_more_rounded,
+            color: ext.textSecondary,
+          ),
+          onTap: () {
+            _hapticService.selection();
+            setState(() => _showDetails = !_showDetails);
+          },
+        ),
+        if (_showDetails) ...[
+          const SizedBox(height: AppSpacing.md),
+          _buildMoodSelector(ext),
+          const SizedBox(height: AppSpacing.lg),
+          _buildSideEffectSelector(ext),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: _notesController,
+            hint: 'Add notes (optional)',
+            accent: ext.medicine,
+            maxLines: 2,
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildMoodSelector(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
     return Column(
@@ -298,6 +347,40 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
               },
             );
           }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSideEffectSelector(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Any side effects?',
+          style: tt.labelLarge?.copyWith(color: ext.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final effect in _sideEffectOptions)
+              AppChip(
+                label: effect,
+                selected: _selectedSideEffects.contains(effect),
+                accent: ext.warning,
+                onTap: () {
+                  _hapticService.selection();
+                  setState(() {
+                    if (!_selectedSideEffects.add(effect)) {
+                      _selectedSideEffects.remove(effect);
+                    }
+                  });
+                },
+              ),
+          ],
         ),
       ],
     );

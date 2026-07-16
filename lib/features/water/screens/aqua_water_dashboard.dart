@@ -158,39 +158,58 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       }
 
       // addWaterLog computes effective hydration / caffeine / alcohol from the
-      // BeverageType, so beer/energy drinks are recorded correctly.
-      await WaterService.addWaterLog(
+      // BeverageType, so beer/energy drinks are recorded correctly. It returns
+      // the updated day whose last log is the one we just added — capture its
+      // id so the SnackBar can undo it.
+      final updated = await WaterService.addWaterLog(
         amountMl: amountMl,
         beverage: beverage,
         container: container,
       );
+      final addedLogId =
+          updated.logs.isNotEmpty ? updated.logs.last.id : null;
 
       await _loadData();
 
       if (mounted) {
         HapticFeedback.mediumImpact();
-        final beverageTheme = AquaTheme.themeFromBeverage(beverage);
+        // The SnackBar reads as the water app, not the beverage — keep the
+        // chrome on the single water accent.
+        final water = AquaTheme.getBeverage('water');
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Text(beverage.emoji, style: const TextStyle(fontSize: 20)),
-                const SizedBox(width: 12),
-                Text(
-                  '+${amountMl}ml ${beverage.name}',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ],
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Text(beverage.emoji, style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 12),
+                  Text(
+                    '+${amountMl}ml ${beverage.name}',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              backgroundColor: water.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
+              ),
+              duration: const Duration(seconds: 3),
+              action: addedLogId == null
+                  ? null
+                  : SnackBarAction(
+                      label: 'Undo',
+                      textColor: Colors.white,
+                      onPressed: () async {
+                        HapticFeedback.lightImpact();
+                        await WaterService.removeWaterLog(addedLogId);
+                        await _loadData();
+                      },
+                    ),
             ),
-            backgroundColor: beverageTheme.primary,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+          );
       }
     } catch (e) {
       debugPrint('Error adding water: $e');
@@ -237,7 +256,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
 
   void _showGoalDialog() {
     int newGoal = _dailyGoal;
-    final beverage = AquaTheme.getBeverage(_selectedBeverageId);
+    // Goal editing is a chrome/header CTA — keep it on the water accent.
+    final beverage = AquaTheme.getBeverage('water');
 
     showModalBottomSheet(
       context: context,
@@ -444,14 +464,18 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
 
   Widget _buildContentWithData(BuildContext context, DailyWaterData todayData) {
     final isDark = AquaTheme.isDark(context);
-    final beverage = AquaTheme.getBeverage(_selectedBeverageId);
+    // The screen chrome (background, app bar, gauge, primary CTAs) always reads
+    // as the water app — the selected beverage only tints its own chip in the
+    // quick-add selector, so switching to coffee/juice no longer turns the whole
+    // dashboard brown/orange.
+    final water = AquaTheme.getBeverage('water');
     final progress = todayData.progress.clamp(0.0, 1.0);
     final currentStreak = WaterService.getCurrentStreak();
 
     final body = Stack(
         children: [
           // Background gradient
-          if (!widget.embedded) _buildBackground(beverage, isDark),
+          if (!widget.embedded) _buildBackground(water, isDark),
 
           // Main content
           CustomScrollView(
@@ -459,7 +483,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             physics: const BouncingScrollPhysics(),
             slivers: [
               // App bar
-              if (!widget.embedded) _buildSliverAppBar(beverage, currentStreak),
+              if (!widget.embedded) _buildSliverAppBar(water, currentStreak),
               if (widget.embedded)
                 const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
@@ -529,7 +553,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         const SizedBox(height: AquaTheme.spacingXL),
                         
                         // Quick access menu
-                        _buildQuickAccessMenu(beverage, isDark),
+                        _buildQuickAccessMenu(water, isDark),
                         
                         const SizedBox(height: 100),
                       ],
@@ -673,14 +697,36 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     );
   }
 
-  Widget _buildQuickAccessMenu(BeverageThemeData beverage, bool isDark) {
+  Widget _buildQuickAccessMenu(BeverageThemeData water, bool isDark) {
+    // A single calm water accent (no rainbow). Entries already reachable from
+    // the app bar (Stats via bar-chart, Profile via settings) are dropped when
+    // the app bar is present; in embedded mode the hub owns the header, so we
+    // keep them here to preserve access. "Cups" routes to the cup creator; a
+    // "Drinks" tile is omitted since the beverage selector already surfaces it.
+    final entries = <_FeatureEntry>[
+      if (widget.embedded)
+        _FeatureEntry(Icons.analytics_outlined, 'Stats', _navigateToStats),
+      _FeatureEntry(
+          Icons.calendar_month_outlined, 'Calendar', _navigateToCalendar),
+      _FeatureEntry(
+          Icons.local_cafe_outlined, 'Cups', _openCupCreator),
+      _FeatureEntry(
+          Icons.emoji_events_outlined, 'Awards', _navigateToAchievements),
+      _FeatureEntry(Icons.flag_outlined, 'Challenges', _navigateToChallenges),
+      _FeatureEntry(Icons.coffee_outlined, 'Caffeine', _navigateToCaffeine),
+      _FeatureEntry(
+          Icons.notifications_outlined, 'Reminders', _navigateToReminders),
+      if (widget.embedded)
+        _FeatureEntry(Icons.person_outline, 'Profile', _navigateToProfile),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AquaSectionHeader(
           title: 'More Features',
           icon: Icons.apps_rounded,
-          beverageId: _selectedBeverageId,
+          beverageId: 'water',
         ),
         const SizedBox(height: AquaTheme.spacingS),
         GridView.count(
@@ -691,54 +737,13 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           crossAxisSpacing: 12,
           childAspectRatio: 0.85,
           children: [
-            _buildFeatureCard(
-              icon: Icons.analytics_outlined,
-              label: 'Stats',
-              color: const Color(0xFF8B5CF6),
-              onTap: () => _navigateToStats(),
-            ),
-            _buildFeatureCard(
-              icon: Icons.calendar_month_outlined,
-              label: 'Calendar',
-              color: const Color(0xFFF59E0B),
-              onTap: () => _navigateToCalendar(),
-            ),
-            _buildFeatureCard(
-              icon: Icons.emoji_events_outlined,
-              label: 'Awards',
-              color: const Color(0xFFEAB308),
-              onTap: () => _navigateToAchievements(),
-            ),
-            _buildFeatureCard(
-              icon: Icons.flag_outlined,
-              label: 'Challenges',
-              color: const Color(0xFFEF4444),
-              onTap: () => _navigateToChallenges(),
-            ),
-            _buildFeatureCard(
-              icon: Icons.coffee_outlined,
-              label: 'Caffeine',
-              color: const Color(0xFF78350F),
-              onTap: () => _navigateToCaffeine(),
-            ),
-            _buildFeatureCard(
-              icon: Icons.person_outline,
-              label: 'Profile',
-              color: const Color(0xFF6366F1),
-              onTap: () => _navigateToProfile(),
-            ),
-            _buildFeatureCard(
-              icon: Icons.notifications_outlined,
-              label: 'Reminders',
-              color: const Color(0xFF10B981),
-              onTap: () => _navigateToReminders(),
-            ),
-            _buildFeatureCard(
-              icon: Icons.local_drink_outlined,
-              label: 'Drinks',
-              color: beverage.primary,
-              onTap: _showBeverageSelector,
-            ),
+            for (final e in entries)
+              _buildFeatureCard(
+                icon: e.icon,
+                label: e.label,
+                water: water,
+                onTap: e.onTap,
+              ),
           ],
         ),
       ],
@@ -748,7 +753,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   Widget _buildFeatureCard({
     required IconData icon,
     required String label,
-    required Color color,
+    required BeverageThemeData water,
     required VoidCallback onTap,
   }) {
     final isDark = AquaTheme.isDark(context);
@@ -762,7 +767,11 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
         decoration: BoxDecoration(
           color: AquaTheme.getCardBg(context),
           borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-          boxShadow: AquaTheme.cardShadow(color),
+          border: Border.all(
+            color: water.primary.withOpacity(isDark ? 0.18 : 0.12),
+            width: 1,
+          ),
+          boxShadow: AquaTheme.subtleShadow,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -770,12 +779,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [color.withOpacity(0.2), color.withOpacity(0.1)],
-                ),
+                color: water.primary.withOpacity(isDark ? 0.18 : 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(icon, color: water.primary, size: 22),
             ),
             const SizedBox(height: 8),
             Text(
@@ -859,4 +866,13 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           builder: (_) => WaterHistoryEditScreen(date: DateTime.now())),
     ).then((_) => _loadData());
   }
+}
+
+/// A single calm "More Features" tile entry (icon + label + destination).
+class _FeatureEntry {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _FeatureEntry(this.icon, this.label, this.onTap);
 }

@@ -4,7 +4,10 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
+import '../models/drug_interaction.dart';
+import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
+import '../services/drug_interaction_service.dart';
 import 'nunito_medication_list_screen.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
@@ -31,6 +34,10 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   int _streak = 0;
   double _adherenceRate = 0.0;
   DateTime _selectedDate = DateTime.now();
+
+  final DrugInteractionService _interactionService = DrugInteractionService();
+  List<DrugInteraction> _interactions = [];
+  bool _interactionsExpanded = false;
 
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -66,6 +73,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       // Backfill `missed` logs for past-due slots so adherence reflects reality.
       await MedicineCleanStorageService.reconcileMissedDoses();
       _medicines = await MedicineCleanStorageService.getAllMedicines();
+      _computeInteractions();
       _streak = await MedicineCleanStorageService.getCurrentStreak();
       final stats = await MedicineCleanStorageService.getAdherenceStats();
       _adherenceRate = (stats['adherenceRate'] as int) / 100.0;
@@ -76,6 +84,31 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       debugPrint('Error loading data: $e');
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  /// Scan the user's active medicines for drug-drug interactions using the
+  /// built-in interaction database. One representative name per medicine
+  /// (generic when known) avoids pairing a brand against its own generic.
+  void _computeInteractions() {
+    final names = _medicines
+        .where((m) => m.isActive && !m.isArchived)
+        .map((m) => (m.genericName != null && m.genericName!.trim().isNotEmpty)
+            ? m.genericName!
+            : m.name)
+        .toList();
+    _interactions = _interactionService.checkAllInteractions(names);
+  }
+
+  AccentSwatch _severitySwatch(InteractionSeverity severity) {
+    final ext = AppColorsExt.of(context);
+    switch (severity) {
+      case InteractionSeverity.mild:
+      case InteractionSeverity.moderate:
+        return ext.warning;
+      case InteractionSeverity.severe:
+      case InteractionSeverity.contraindicated:
+        return ext.error;
+    }
   }
 
   Future<void> _buildTodaySchedule() async {
@@ -188,6 +221,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                   SliverToBoxAdapter(child: _buildHeader())
                 else
                   const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+                if (_interactions.isNotEmpty)
+                  SliverToBoxAdapter(child: _buildInteractionBanner()),
                 SliverToBoxAdapter(child: _buildSummaryCard()),
                 SliverToBoxAdapter(child: _buildStatsRow()),
                 SliverToBoxAdapter(child: _buildDateSelector()),
@@ -276,6 +311,133 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           onPressed: _navigateToMedicationList,
         ),
       ],
+    );
+  }
+
+  Widget _buildInteractionBanner() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    // Interactions are pre-sorted most-severe first, so the first drives accent.
+    final topSeverity = _interactions.first.severity;
+    final swatch = _severitySwatch(topSeverity);
+    final count = _interactions.length;
+
+    return AppCard(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 0),
+      color: swatch.container,
+      onTap: () => setState(() => _interactionsExpanded = !_interactionsExpanded),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: swatch.onContainer, size: 24),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$count potential interaction${count == 1 ? '' : 's'}',
+                      style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: swatch.onContainer),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _interactionsExpanded
+                          ? 'Tap to collapse'
+                          : 'Between your active medicines — tap to review',
+                      style: tt.bodySmall
+                          ?.copyWith(color: swatch.onContainer.withOpacity(0.85)),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                _interactionsExpanded
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+                color: swatch.onContainer,
+              ),
+            ],
+          ),
+          if (_interactionsExpanded) ...[
+            const SizedBox(height: AppSpacing.md),
+            ..._interactions.map(_buildInteractionRow),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInteractionRow(DrugInteraction interaction) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final swatch = _severitySwatch(interaction.severity);
+
+    return Container(
+      margin: const EdgeInsets.only(top: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: ext.surface,
+        borderRadius: AppRadius.brMd,
+        border: Border.all(color: ext.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${interaction.drug1Name} + ${interaction.drug2Name}',
+                  style: tt.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700, color: ext.textPrimary),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: swatch.container,
+                  borderRadius: AppRadius.brSm,
+                ),
+                child: Text(
+                  interaction.severity.displayName,
+                  style: tt.labelSmall?.copyWith(
+                      color: swatch.onContainer, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            interaction.description,
+            style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+          ),
+          if (interaction.recommendation != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.lightbulb_outline_rounded,
+                    size: 15, color: ext.mark(ext.info)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    interaction.recommendation!,
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 

@@ -44,24 +44,28 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   @override
   Widget build(BuildContext context) {
     final selected = WaterService.getBeverage(widget.selectedBeverageId);
+    // The beverage theme only tints the selected chip in the selector row.
     final beverage = selected != null
         ? AquaTheme.themeFromBeverage(selected)
         : AquaTheme.getBeverage(widget.selectedBeverageId);
+    // Everything else (amount buttons, custom CTA, cups) stays on the single
+    // water accent so the card doesn't turn brown/orange with coffee/juice.
+    final water = AquaTheme.getBeverage('water');
     final isDark = AquaTheme.isDark(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Beverage selector row
+        // Beverage selector row (the only place the beverage color appears)
         _buildBeverageSelector(beverage, isDark),
         const SizedBox(height: AquaTheme.spacingM),
 
-        // Quick add amount buttons
+        // Quick add amount buttons — water accent, selected beverage emoji.
         Row(
           children: List.generate(_amounts.length, (index) {
             final option = _amounts[index];
             final isPressed = _pressedIndex == index;
-            
+
             return Expanded(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -69,7 +73,8 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                 ),
                 child: _buildAmountButton(
                   option,
-                  beverage,
+                  water,
+                  beverage.emoji,
                   isDark,
                   isPressed,
                   index,
@@ -78,16 +83,16 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
             );
           }),
         ),
-        
+
         const SizedBox(height: AquaTheme.spacingS),
 
         // Custom amount button
-        _buildCustomAmountButton(beverage, isDark),
+        _buildCustomAmountButton(water, isDark),
 
         // Cups / saved containers (one-tap logging + create)
         if (widget.onContainerAdd != null || widget.onCreateCup != null) ...[
           const SizedBox(height: AquaTheme.spacingM),
-          _buildCupsSection(beverage, isDark),
+          _buildCupsSection(water, isDark),
         ],
       ],
     );
@@ -283,6 +288,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   Widget _buildAmountButton(
     _QuickAddOption option,
     BeverageThemeData beverage,
+    String emoji,
     bool isDark,
     bool isPressed,
     int index,
@@ -324,7 +330,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              beverage.emoji,
+              emoji,
               style: const TextStyle(fontSize: 24),
             ),
             const SizedBox(height: 6),
