@@ -253,7 +253,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         child: Stack(
           children: [
             Positioned.fill(child: content),
-            Positioned(right: 16, bottom: 16, child: _buildFAB()),
+            Positioned(right: 16, bottom: 24, child: _buildFAB()),
           ],
         ),
       );
@@ -816,9 +816,9 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
 
   Widget _buildFAB() {
     final ext = AppColorsExt.of(context);
+    // Circular + (matches Reminders, doesn't overlap the empty-state text).
     return AppFab(
       icon: Icons.add_rounded,
-      label: 'Add Medication',
       accent: ext.medicine,
       onPressed: _navigateToAddMedication,
     );

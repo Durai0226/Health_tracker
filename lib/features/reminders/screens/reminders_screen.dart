@@ -188,10 +188,14 @@ class _RemindersScreenState extends State<RemindersScreen> {
     return AccentScope(
       feature: FeatureAccent.reminders,
       child: AppScaffold(
-        floatingActionButton: AppFab(
-          icon: Icons.add_rounded,
-          accent: ext.reminders,
-          onPressed: _addReminder,
+        // Lift the FAB clear of the docked bottom nav so it isn't cramped.
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: AppFab(
+            icon: Icons.add_rounded,
+            accent: ext.reminders,
+            onPressed: _addReminder,
+          ),
         ),
         body: Column(
           children: [

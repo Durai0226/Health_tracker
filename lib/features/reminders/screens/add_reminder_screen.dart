@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -57,19 +58,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     'meditation': {'label': 'Meditation', 'category': 'Gentle', 'icon': 'self_improvement'},
   };
 
-  // Preview sound URLs (using free sounds from Pixabay)
-  static const Map<String, String> _previewUrls = {
-    'default': 'https://cdn.pixabay.com/audio/2022/03/10/audio_d6a4c6a7f4.mp3',
-    'gentle_chime': 'https://cdn.pixabay.com/audio/2022/03/15/audio_115b9c3c1a.mp3',
-    'soft_bells': 'https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3',
-    'morning_bird': 'https://cdn.pixabay.com/audio/2022/02/07/audio_bc594618f0.mp3',
-    'ocean_wave': 'https://cdn.pixabay.com/audio/2021/08/09/audio_dc39aae018.mp3',
-    'sunrise': 'https://cdn.pixabay.com/audio/2022/07/08/audio_dc39bde808.mp3',
-    'galaxy': 'https://cdn.pixabay.com/audio/2024/02/14/audio_8e0db3cf42.mp3',
-    'urgent_alert': 'https://cdn.pixabay.com/audio/2022/03/24/audio_2e89e16de4.mp3',
-    'digital_alarm': 'https://cdn.pixabay.com/audio/2022/10/30/audio_1c3fa4ed6a.mp3',
-    'meditation': 'https://cdn.pixabay.com/audio/2023/06/14/audio_af7fc9b7f0.mp3',
-  };
+  /// A custom sound is stored as an absolute file path (from the device audio
+  /// picker); built-in presets are stored as their key ('default', etc.).
+  bool get _isCustomSound => _sound.startsWith('/');
+  String get _customSoundName =>
+      _isCustomSound ? _sound.split('/').last : _sound;
 
   @override
   void initState() {
@@ -120,20 +113,39 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     super.dispose();
   }
 
-  Future<void> _previewSound(String soundKey) async {
+  /// Let the user pick a sound from their device's audio files.
+  Future<void> _pickCustomSound() async {
     try {
-      final url = _previewUrls[soundKey];
-      if (url == null) return;
+      final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+      final path = result?.files.single.path;
+      if (path != null && mounted) {
+        setState(() => _sound = path);
+        _previewSound(); // instant confirmation it plays
+      }
+    } catch (e) {
+      debugPrint('Pick sound error: $e');
+      if (mounted) {
+        final ext = AppColorsExt.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: ext.error.base,
+          content: Text('Could not open audio files: $e',
+              style: TextStyle(color: ext.error.on)),
+        ));
+      }
+    }
+  }
 
+  /// Preview only plays a picked device file locally (no network). Built-in
+  /// presets are the OS notification sound and play with the alarm itself.
+  Future<void> _previewSound() async {
+    if (!_isCustomSound) return;
+    try {
       setState(() => _isPlayingPreview = true);
-
       await _audioPlayer.stop();
-      await _audioPlayer.setUrl(url);
-      await _audioPlayer.setVolume(0.7);
+      await _audioPlayer.setFilePath(_sound);
+      await _audioPlayer.setVolume(0.8);
       await _audioPlayer.play();
-
-      // Stop after 3 seconds for preview
-      Future.delayed(const Duration(seconds: 3), () {
+      Future.delayed(const Duration(seconds: 4), () {
         if (mounted) {
           _audioPlayer.stop();
           setState(() => _isPlayingPreview = false);
@@ -144,15 +156,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       if (mounted) {
         setState(() => _isPlayingPreview = false);
         final ext = AppColorsExt.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: ext.error.base,
-            content: Text(
-              'Could not play sound preview. Check your connection.',
-              style: TextStyle(color: ext.error.on),
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: ext.error.base,
+          content: Text('Could not play this audio file.',
+              style: TextStyle(color: ext.error.on)),
+        ));
       }
     }
   }
@@ -500,7 +508,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                       borderRadius: AppRadius.brSm,
                                     ),
                                     child: Icon(
-                                      _getSoundIcon(_soundOptions[_sound]?['icon'] ?? 'notifications'),
+                                      _isCustomSound
+                                          ? Icons.audiotrack_rounded
+                                          : _getSoundIcon(_soundOptions[_sound]
+                                                  ?['icon'] ??
+                                              'notifications'),
                                       color: rem.onContainer,
                                       size: 22,
                                     ),
@@ -511,35 +523,47 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _soundOptions[_sound]?['label'] ?? 'Default',
+                                          _isCustomSound
+                                              ? _customSoundName
+                                              : (_soundOptions[_sound]?['label'] ??
+                                                  'Default'),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: tt.titleLarge
                                               ?.copyWith(color: ext.textPrimary),
                                         ),
                                         Text(
-                                          _soundOptions[_sound]?['category'] ?? 'Classic',
+                                          _isCustomSound
+                                              ? 'Custom sound from device'
+                                              : (_soundOptions[_sound]
+                                                      ?['category'] ??
+                                                  'Classic'),
                                           style: tt.bodyMedium
                                               ?.copyWith(color: ext.textSecondary),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  IconButton(
-                                    onPressed: _isPlayingPreview
-                                        ? _stopPreview
-                                        : () => _previewSound(_sound),
-                                    icon: Icon(
-                                      _isPlayingPreview
-                                          ? Icons.stop_circle_rounded
-                                          : Icons.play_circle_rounded,
-                                      color: _isPlayingPreview
-                                          ? ext.mark(ext.error)
-                                          : ext.mark(rem),
-                                      size: 32,
+                                  // Preview only applies to a picked device file
+                                  // (presets play with the notification itself).
+                                  if (_isCustomSound)
+                                    IconButton(
+                                      onPressed: _isPlayingPreview
+                                          ? _stopPreview
+                                          : _previewSound,
+                                      icon: Icon(
+                                        _isPlayingPreview
+                                            ? Icons.stop_circle_rounded
+                                            : Icons.play_circle_rounded,
+                                        color: _isPlayingPreview
+                                            ? ext.mark(ext.error)
+                                            : ext.mark(rem),
+                                        size: 32,
+                                      ),
+                                      tooltip: _isPlayingPreview
+                                          ? 'Stop preview'
+                                          : 'Preview sound',
                                     ),
-                                    tooltip: _isPlayingPreview
-                                        ? 'Stop preview'
-                                        : 'Preview sound',
-                                  ),
                                 ],
                               ),
                             ),
@@ -550,18 +574,29 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                               child: Wrap(
                                 spacing: AppSpacing.sm,
                                 runSpacing: AppSpacing.sm,
-                                children: _soundOptions.entries.map((entry) {
-                                  return AppChip(
-                                    label: entry.value['label'] ?? entry.key,
-                                    icon: _getSoundIcon(entry.value['icon'] ?? 'notifications'),
-                                    selected: _sound == entry.key,
+                                children: [
+                                  // Pick any audio file from the device.
+                                  AppChip(
+                                    label: 'Choose from device',
+                                    icon: Icons.folder_open_rounded,
+                                    selected: _isCustomSound,
                                     accent: rem,
-                                    onTap: () {
-                                      setState(() => _sound = entry.key);
-                                      _previewSound(entry.key);
-                                    },
-                                  );
-                                }).toList(),
+                                    onTap: _pickCustomSound,
+                                  ),
+                                  ..._soundOptions.entries.map((entry) {
+                                    return AppChip(
+                                      label: entry.value['label'] ?? entry.key,
+                                      icon: _getSoundIcon(
+                                          entry.value['icon'] ?? 'notifications'),
+                                      selected: _sound == entry.key,
+                                      accent: rem,
+                                      // Presets are OS notification sounds — just
+                                      // select (no network preview → no error).
+                                      onTap: () =>
+                                          setState(() => _sound = entry.key),
+                                    );
+                                  }),
+                                ],
                               ),
                             ),
                           ],
