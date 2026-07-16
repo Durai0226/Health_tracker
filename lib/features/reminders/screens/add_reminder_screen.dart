@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/feature_flag_service.dart';
 import '../../../core/services/clean_storage_service.dart';
@@ -32,7 +29,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _bodyController = TextEditingController();
   final _noteController = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
-  
+
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   RepeatType _repeatType = RepeatType.none;
@@ -77,7 +74,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     if (widget.reminder != null) {
       _titleController.text = widget.reminder!.title;
       _bodyController.text = widget.reminder!.body;
@@ -85,8 +82,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _selectedDate = widget.reminder!.scheduledTime;
       _selectedTime = TimeOfDay.fromDateTime(widget.reminder!.scheduledTime);
       _repeatType = widget.reminder!.repeatType;
-      _customDays = widget.reminder!.customDays != null 
-          ? List<int>.from(widget.reminder!.customDays!) 
+      _customDays = widget.reminder!.customDays != null
+          ? List<int>.from(widget.reminder!.customDays!)
           : [];
       _snoozeDuration = widget.reminder?.snoozeDuration ?? 5;
       _sound = widget.reminder?.sound ?? 'default';
@@ -94,7 +91,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _selectedCategoryId = widget.reminder?.categoryId;
       _selectedImagePath = widget.reminder?.imagePath; // Load image path
     }
-    
+
     // If creating new reminder, default time to next hour
     if (widget.reminder == null) {
       final now = DateTime.now();
@@ -129,12 +126,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       if (url == null) return;
 
       setState(() => _isPlayingPreview = true);
-      
+
       await _audioPlayer.stop();
       await _audioPlayer.setUrl(url);
       await _audioPlayer.setVolume(0.7);
       await _audioPlayer.play();
-      
+
       // Stop after 3 seconds for preview
       Future.delayed(const Duration(seconds: 3), () {
         if (mounted) {
@@ -146,6 +143,16 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       debugPrint('Sound preview error: $e');
       if (mounted) {
         setState(() => _isPlayingPreview = false);
+        final ext = AppColorsExt.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: ext.error.base,
+            content: Text(
+              'Could not play sound preview. Check your connection.',
+              style: TextStyle(color: ext.error.on),
+            ),
+          ),
+        );
       }
     }
   }
@@ -177,19 +184,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime.now().subtract(const Duration(days: 1)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() {
@@ -202,19 +196,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() {
@@ -238,7 +219,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       );
 
       final reminderId = widget.reminder?.id ?? const Uuid().v4();
-      
+
       final reminder = Reminder(
         id: reminderId,
         title: _titleController.text.trim(),
@@ -262,7 +243,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
       // Schedule notification
       final notificationId = reminderId.hashCode;
-      
+
       await NotificationService().scheduleGenericReminder(
         id: notificationId,
         title: reminder.title,
@@ -281,8 +262,15 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final ext = AppColorsExt.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving reminder: $e')),
+          SnackBar(
+            backgroundColor: ext.error.base,
+            content: Text(
+              'Error saving reminder: $e',
+              style: TextStyle(color: ext.error.on),
+            ),
+          ),
         );
       }
     } finally {
@@ -294,526 +282,461 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final rem = ext.reminders;
+    final tt = Theme.of(context).textTheme;
     final dateFormat = DateFormat('EEE, MMM d, y');
-    
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(widget.reminder != null ? 'Edit Reminder' : 'New Reminder'),
-        actions: [
-          if (_isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(right: 16),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+    final isEditing = widget.reminder != null;
+
+    return AccentScope(
+      feature: FeatureAccent.reminders,
+      child: AppScaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppHeader(
+              title: isEditing ? 'Edit Reminder' : 'New Reminder',
+              icon: Icons.notifications_active_rounded,
+              accent: rem,
+              leading: IconButton(
+                icon: Icon(Icons.close_rounded, color: ext.textPrimary),
+                onPressed: () => Navigator.pop(context),
               ),
-            )
-          else
-            TextButton(
-              onPressed: _saveReminder,
-              child: const Text(
-                'Save',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
+              actions: [
+                AppButton(
+                  label: 'Save',
+                  size: AppButtonSize.sm,
+                  accent: rem,
+                  loading: _isLoading,
+                  onPressed: _saveReminder,
                 ),
-              ),
+              ],
             ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: 'Title',
-                  hintText: 'What needs to be done?',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Please enter a title' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _bodyController,
-                decoration: InputDecoration(
-                  labelText: 'Description (Optional)',
-                  hintText: 'Add details...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Schedule',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              CommonCard(
-                child: Column(
-                  children: [
-                    _buildTimeRow(
-                      icon: Icons.calendar_today_rounded,
-                      label: 'Date',
-                      value: dateFormat.format(_selectedDate),
-                      onTap: _selectDate,
-                    ),
-                    const Divider(height: 24),
-                    _buildTimeRow(
-                      icon: Icons.access_time_rounded,
-                      label: 'Time',
-                      value: _selectedTime.format(context),
-                      onTap: _selectTime,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Repeat',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              CommonCard(
-                child: Column(
-                  children: [
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<RepeatType>(
-                        value: _repeatType,
-                        isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
-                        items: RepeatType.values
-                            .where((type) {
-                              if (type == RepeatType.custom) {
-                                return FeatureFlagService().isAdvancedRepeatEnabled || _repeatType == RepeatType.custom;
-                              }
-                              return true;
-                            })
-                            .map((type) {
-                          String label;
-                          switch (type) {
-                            case RepeatType.none: label = 'Does not repeat'; break;
-                            case RepeatType.daily: label = 'Every Day'; break;
-                            case RepeatType.weekly: label = 'Every Week'; break;
-                            case RepeatType.weekdays: label = 'Every Weekday (Mon-Fri)'; break;
-                            case RepeatType.weekends: label = 'Every Weekend (Sat-Sun)'; break;
-                            case RepeatType.custom: label = 'Custom'; break;
-                          }
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Text(label, style: const TextStyle(fontSize: 16)),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _repeatType = value;
-                              if (value == RepeatType.custom && _customDays.isEmpty) {
-                                // Default to today if empty
-                                _customDays.add(_selectedDate.weekday);
-                              }
-                            });
-                          }
-                        },
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, AppSpacing.xxl),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ---- Details ----
+                      AppTextField(
+                        controller: _titleController,
+                        label: 'Title',
+                        hint: 'What needs to be done?',
+                        accent: rem,
+                        textCapitalization: TextCapitalization.sentences,
+                        validator: (value) =>
+                            value == null || value.isEmpty ? 'Please enter a title' : null,
                       ),
-                    ),
-                    if (_repeatType == RepeatType.custom) ...[
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildDayToggle('M', 1),
-                          _buildDayToggle('T', 2),
-                          _buildDayToggle('W', 3),
-                          _buildDayToggle('T', 4),
-                          _buildDayToggle('F', 5),
-                          _buildDayToggle('S', 6),
-                          _buildDayToggle('S', 7),
-                        ],
+                      const SizedBox(height: AppSpacing.lg),
+                      AppTextField(
+                        controller: _bodyController,
+                        label: 'Description (Optional)',
+                        hint: 'Add details...',
+                        accent: rem,
+                        maxLines: 3,
+                        textCapitalization: TextCapitalization.sentences,
                       ),
-                      const SizedBox(height: 8),
-                  ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Snooze Duration',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              CommonCard(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: _snoozeDuration,
-                    isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
-                    items: [5, 10, 15, 30, 60].map((int value) {
-                      return DropdownMenuItem<int>(
-                        value: value,
-                        child: Text(
-                          value >= 60 ? '${value ~/ 60} hour' : '$value minutes',
-                           style: const TextStyle(fontSize: 16),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Schedule ----
+                      SectionHeader(
+                        title: 'Schedule',
+                        icon: Icons.event_rounded,
+                        accent: rem,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppCard(
+                        child: Column(
+                          children: [
+                            _buildTimeRow(
+                              icon: Icons.calendar_today_rounded,
+                              label: 'Date',
+                              value: dateFormat.format(_selectedDate),
+                              onTap: _selectDate,
+                            ),
+                            Divider(height: AppSpacing.xl, color: ext.outline),
+                            _buildTimeRow(
+                              icon: Icons.access_time_rounded,
+                              label: 'Time',
+                              value: _selectedTime.format(context),
+                              onTap: _selectTime,
+                            ),
+                          ],
                         ),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      if (newValue != null) {
-                        setState(() => _snoozeDuration = newValue);
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Alarm Sound',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  if (_isPlayingPreview)
-                    TextButton.icon(
-                      onPressed: _stopPreview,
-                      icon: const Icon(Icons.stop_rounded, size: 18),
-                      label: const Text('Stop'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.error,
                       ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              CommonCard(
-                child: Column(
-                  children: [
-                    // Current selection with preview button
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              _getSoundIcon(_soundOptions[_sound]?['icon'] ?? 'notifications'),
-                              color: AppColors.primary,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _soundOptions[_sound]?['label'] ?? 'Default',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  _soundOptions[_sound]?['category'] ?? 'Classic',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _isPlayingPreview ? _stopPreview : () => _previewSound(_sound),
-                            icon: Icon(
-                              _isPlayingPreview ? Icons.stop_circle_rounded : Icons.play_circle_rounded,
-                              color: _isPlayingPreview ? AppColors.error : AppColors.primary,
-                              size: 32,
-                            ),
-                            tooltip: _isPlayingPreview ? 'Stop preview' : 'Preview sound',
-                          ),
-                        ],
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Repeat ----
+                      SectionHeader(
+                        title: 'Repeat',
+                        icon: Icons.repeat_rounded,
+                        accent: rem,
                       ),
-                    ),
-                    const Divider(height: 1),
-                    // Sound selection grid
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _soundOptions.entries.map((entry) {
-                          final isSelected = _sound == entry.key;
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() => _sound = entry.key);
-                              _previewSound(entry.key);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected 
-                                    ? AppColors.primary 
-                                    : AppColors.primary.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(20),
-                                border: isSelected 
-                                    ? null 
-                                    : Border.all(color: AppColors.border.withOpacity(0.3)),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildDropdownShell(
+                        ext: ext,
+                        rem: rem,
+                        child: DropdownButton<RepeatType>(
+                          value: _repeatType,
+                          isExpanded: true,
+                          borderRadius: AppRadius.brMd,
+                          dropdownColor: ext.surface,
+                          style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
+                          icon: Icon(Icons.keyboard_arrow_down_rounded,
+                              color: ext.mark(rem)),
+                          items: RepeatType.values.where((type) {
+                            if (type == RepeatType.custom) {
+                              return FeatureFlagService().isAdvancedRepeatEnabled ||
+                                  _repeatType == RepeatType.custom;
+                            }
+                            return true;
+                          }).map((type) {
+                            String label;
+                            switch (type) {
+                              case RepeatType.none: label = 'Does not repeat'; break;
+                              case RepeatType.daily: label = 'Every Day'; break;
+                              case RepeatType.weekly: label = 'Every Week'; break;
+                              case RepeatType.weekdays: label = 'Every Weekday (Mon-Fri)'; break;
+                              case RepeatType.weekends: label = 'Every Weekend (Sat-Sun)'; break;
+                              case RepeatType.custom: label = 'Custom'; break;
+                            }
+                            return DropdownMenuItem(
+                              value: type,
+                              child: Text(label),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _repeatType = value;
+                                if (value == RepeatType.custom && _customDays.isEmpty) {
+                                  // Default to today if empty
+                                  _customDays.add(_selectedDate.weekday);
+                                }
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      if (_repeatType == RepeatType.custom) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            _buildDayToggle('M', 1),
+                            _buildDayToggle('T', 2),
+                            _buildDayToggle('W', 3),
+                            _buildDayToggle('T', 4),
+                            _buildDayToggle('F', 5),
+                            _buildDayToggle('S', 6),
+                            _buildDayToggle('S', 7),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Snooze ----
+                      SectionHeader(
+                        title: 'Snooze Duration',
+                        icon: Icons.snooze_rounded,
+                        accent: rem,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildDropdownShell(
+                        ext: ext,
+                        rem: rem,
+                        child: DropdownButton<int>(
+                          value: _snoozeDuration,
+                          isExpanded: true,
+                          borderRadius: AppRadius.brMd,
+                          dropdownColor: ext.surface,
+                          style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
+                          icon: Icon(Icons.keyboard_arrow_down_rounded,
+                              color: ext.mark(rem)),
+                          items: [5, 10, 15, 30, 60].map((int value) {
+                            return DropdownMenuItem<int>(
+                              value: value,
+                              child: Text(
+                                value >= 60 ? '${value ~/ 60} hour' : '$value minutes',
                               ),
+                            );
+                          }).toList(),
+                          onChanged: (newValue) {
+                            if (newValue != null) {
+                              setState(() => _snoozeDuration = newValue);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Alarm Sound ----
+                      SectionHeader(
+                        title: 'Alarm Sound',
+                        icon: Icons.music_note_rounded,
+                        accent: rem,
+                        actionLabel: _isPlayingPreview ? 'Stop' : null,
+                        onAction: _isPlayingPreview ? _stopPreview : null,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppCard(
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            // Current selection with preview button
+                            Padding(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
                               child: Row(
-                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    _getSoundIcon(entry.value['icon'] ?? 'notifications'),
-                                    size: 16,
-                                    color: isSelected ? Colors.white : AppColors.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    entry.value['label'] ?? entry.key,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: rem.container,
+                                      borderRadius: AppRadius.brSm,
                                     ),
+                                    child: Icon(
+                                      _getSoundIcon(_soundOptions[_sound]?['icon'] ?? 'notifications'),
+                                      color: rem.onContainer,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.lg),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _soundOptions[_sound]?['label'] ?? 'Default',
+                                          style: tt.titleLarge
+                                              ?.copyWith(color: ext.textPrimary),
+                                        ),
+                                        Text(
+                                          _soundOptions[_sound]?['category'] ?? 'Classic',
+                                          style: tt.bodyMedium
+                                              ?.copyWith(color: ext.textSecondary),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: _isPlayingPreview
+                                        ? _stopPreview
+                                        : () => _previewSound(_sound),
+                                    icon: Icon(
+                                      _isPlayingPreview
+                                          ? Icons.stop_circle_rounded
+                                          : Icons.play_circle_rounded,
+                                      color: _isPlayingPreview
+                                          ? ext.mark(ext.error)
+                                          : ext.mark(rem),
+                                      size: 32,
+                                    ),
+                                    tooltip: _isPlayingPreview
+                                        ? 'Stop preview'
+                                        : 'Preview sound',
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Priority',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: _buildPriorityOption(ReminderPriority.low, 'Low', AppColors.success)),
-                    Expanded(child: _buildPriorityOption(ReminderPriority.medium, 'Medium', AppColors.warning)),
-                    Expanded(child: _buildPriorityOption(ReminderPriority.high, 'High', AppColors.error)),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Category',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const CategoryManagementScreen()),
-                      );
-                      _loadCategories();
-                    },
-                    child: const Text('Manage'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: _categories.any((c) => c.id == _selectedCategoryId)
-                        ? _selectedCategoryId
-                        : null,
-                    isExpanded: true,
-                    hint: const Text('Select Category'),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('None'),
-                      ),
-                      ..._categories.map((category) {
-                        return DropdownMenuItem<String?>(
-                          value: category.id,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: category.colorObj,
-                                  shape: BoxShape.circle,
-                                ),
+                            Divider(height: 1, color: ext.outline),
+                            // Sound selection grid
+                            Padding(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              child: Wrap(
+                                spacing: AppSpacing.sm,
+                                runSpacing: AppSpacing.sm,
+                                children: _soundOptions.entries.map((entry) {
+                                  return AppChip(
+                                    label: entry.value['label'] ?? entry.key,
+                                    icon: _getSoundIcon(entry.value['icon'] ?? 'notifications'),
+                                    selected: _sound == entry.key,
+                                    accent: rem,
+                                    onTap: () {
+                                      setState(() => _sound = entry.key);
+                                      _previewSound(entry.key);
+                                    },
+                                  );
+                                }).toList(),
                               ),
-                              const SizedBox(width: 10),
-                              Icon(category.iconObj, size: 18, color: category.colorObj),
-                              const SizedBox(width: 8),
-                              Text(category.name),
-                            ],
-                          ),
-                        );
-                      }),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _selectedCategoryId = value);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Note Field
-              const Text(
-                'Note',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _noteController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: 'Add additional details...',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.all(16),
-                ),
-                textCapitalization: TextCapitalization.sentences,
-              ),
-              const SizedBox(height: 24),
-              
-              // Image Attachments
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Attachments',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  if (_selectedImagePath == null)
-                    TextButton.icon(
-                      onPressed: _pickImage,
-                      icon: const Icon(Icons.add_photo_alternate_rounded),
-                      label: const Text('Add Image'),
-                    ),
-                ],
-              ),
-              if (_selectedImagePath != null) ...[
-                const SizedBox(height: 12),
-                Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.file(
-                        File(_selectedImagePath!),
-                        width: double.infinity,
-                        height: 200,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: GestureDetector(
-                        onTap: _removeImage,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.black54,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close, color: Colors.white, size: 20),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Priority ----
+                      SectionHeader(
+                        title: 'Priority',
+                        icon: Icons.flag_rounded,
+                        accent: rem,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildPriorityOption(
+                                ReminderPriority.low, 'Low', ext.success, ext),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: _buildPriorityOption(
+                                ReminderPriority.medium, 'Medium', ext.warning, ext),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: _buildPriorityOption(
+                                ReminderPriority.high, 'High', ext.error, ext),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Category ----
+                      SectionHeader(
+                        title: 'Category',
+                        icon: Icons.label_rounded,
+                        accent: rem,
+                        actionLabel: 'Manage',
+                        onAction: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const CategoryManagementScreen()),
+                          );
+                          _loadCategories();
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildDropdownShell(
+                        ext: ext,
+                        rem: rem,
+                        child: DropdownButton<String?>(
+                          value: _categories.any((c) => c.id == _selectedCategoryId)
+                              ? _selectedCategoryId
+                              : null,
+                          isExpanded: true,
+                          borderRadius: AppRadius.brMd,
+                          dropdownColor: ext.surface,
+                          style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
+                          hint: Text('Select Category',
+                              style: tt.bodyLarge?.copyWith(color: ext.textTertiary)),
+                          icon: Icon(Icons.keyboard_arrow_down_rounded,
+                              color: ext.mark(rem)),
+                          items: [
+                            DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('None',
+                                  style: tt.bodyLarge?.copyWith(color: ext.textPrimary)),
+                            ),
+                            ..._categories.map((category) {
+                              return DropdownMenuItem<String?>(
+                                value: category.id,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: category.colorObj,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Icon(category.iconObj, size: 18, color: category.colorObj),
+                                    const SizedBox(width: 8),
+                                    Text(category.name),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                          onChanged: (value) {
+                            setState(() => _selectedCategoryId = value);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Note ----
+                      SectionHeader(
+                        title: 'Note',
+                        icon: Icons.sticky_note_2_rounded,
+                        accent: rem,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _noteController,
+                        hint: 'Add additional details...',
+                        accent: rem,
+                        maxLines: 3,
+                        textCapitalization: TextCapitalization.sentences,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Attachments ----
+                      SectionHeader(
+                        title: 'Attachments',
+                        icon: Icons.attach_file_rounded,
+                        accent: rem,
+                        actionLabel: _selectedImagePath == null ? 'Add Image' : null,
+                        onAction: _selectedImagePath == null ? _pickImage : null,
+                      ),
+                      if (_selectedImagePath != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: AppRadius.brCard,
+                              child: Image.file(
+                                File(_selectedImagePath!),
+                                width: double.infinity,
+                                height: 200,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: AppSpacing.sm,
+                              right: AppSpacing.sm,
+                              child: Material(
+                                color: ext.surface,
+                                shape: const CircleBorder(),
+                                clipBehavior: Clip.antiAlias,
+                                child: InkWell(
+                                  onTap: _removeImage,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: Icon(Icons.close_rounded,
+                                        color: ext.mark(ext.error), size: 20),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Save ----
+                      AppButton(
+                        label: isEditing ? 'Save Changes' : 'Create Reminder',
+                        accent: rem,
+                        fullWidth: true,
+                        size: AppButtonSize.lg,
+                        loading: _isLoading,
+                        leadingIcon: Icons.check_rounded,
+                        onPressed: _saveReminder,
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -842,32 +765,53 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     });
   }
 
-  Widget _buildPriorityOption(ReminderPriority priority, String label, Color color) {
+  /// Token-styled shell for the native DropdownButton.
+  Widget _buildDropdownShell({
+    required AppColorsExt ext,
+    required AccentSwatch rem,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: ext.surfaceVariant,
+        borderRadius: AppRadius.brMd,
+        border: Border.all(color: ext.outline),
+      ),
+      child: DropdownButtonHideUnderline(child: child),
+    );
+  }
+
+  Widget _buildPriorityOption(
+      ReminderPriority priority, String label, AccentSwatch swatch, AppColorsExt ext) {
     final isSelected = _priority == priority;
     return GestureDetector(
       onTap: () => setState(() => _priority = priority),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: color, width: 2) : null,
+          color: isSelected ? swatch.container : ext.surfaceVariant,
+          borderRadius: AppRadius.brMd,
+          border: Border.all(
+            color: isSelected ? ext.mark(swatch) : ext.outline,
+            width: isSelected ? 1.6 : 1,
+          ),
         ),
         child: Column(
           children: [
             Icon(
               _getPriorityIcon(priority),
-              color: isSelected ? color : Colors.grey,
+              color: isSelected ? ext.mark(swatch) : ext.textSecondary,
               size: 24,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               label,
-              style: TextStyle(
-                color: isSelected ? color : Colors.grey,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: isSelected ? ext.mark(swatch) : ext.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
           ],
         ),
@@ -889,9 +833,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     required String value,
     required VoidCallback onTap,
   }) {
+    final ext = AppColorsExt.of(context);
+    final rem = ext.reminders;
+    final tt = Theme.of(context).textTheme;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: AppRadius.brSm,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
@@ -899,34 +846,26 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: rem.container,
+                borderRadius: AppRadius.brSm,
               ),
-              child: Icon(icon, color: AppColors.primary, size: 20),
+              child: Icon(icon, color: rem.onContainer, size: 20),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.lg),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
-              ),
+              style: tt.titleLarge?.copyWith(color: ext.textPrimary),
             ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(8),
+                color: ext.surfaceVariant,
+                borderRadius: AppRadius.brSm,
               ),
               child: Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
+                style: tt.labelLarge?.copyWith(color: ext.mark(rem)),
               ),
             ),
           ],
@@ -936,6 +875,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Widget _buildDayToggle(String label, int day) {
+    final ext = AppColorsExt.of(context);
+    final rem = ext.reminders;
     final isSelected = _customDays.contains(day);
     return GestureDetector(
       onTap: () {
@@ -948,22 +889,23 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         });
       },
       child: Container(
-        width: 36,
-        height: 36,
+        width: 40,
+        height: 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
+          color: isSelected ? rem.container : ext.surfaceVariant,
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
+            color: isSelected ? ext.mark(rem) : ext.outline,
+            width: isSelected ? 1.6 : 1,
           ),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: isSelected ? rem.onContainer : ext.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
         ),
       ),
     );

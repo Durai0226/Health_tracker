@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/design/app_colors_ext.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
 import 'water_history_edit_screen.dart';
@@ -66,8 +66,9 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ext.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -88,6 +89,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
   }
 
   Widget _buildMonthSelector() {
+    final ext = AppColorsExt.of(context);
     final monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
@@ -97,11 +99,11 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -116,9 +118,10 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
           ),
           Text(
             '${monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           IconButton(
@@ -134,6 +137,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
   }
 
   Widget _buildCalendarGrid() {
+    final ext = AppColorsExt.of(context);
     final firstDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
     final lastDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
     final startWeekday = firstDayOfMonth.weekday;
@@ -153,11 +157,11 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -171,8 +175,8 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
               child: Center(
                 child: Text(
                   name,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: ext.textSecondary,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
@@ -221,13 +225,13 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                   margin: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? AppColors.info
+                        ? ext.water.base
                         : isToday
-                            ? AppColors.info.withOpacity(0.1)
+                            ? ext.water.base.withOpacity(0.12)
                             : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                     border: isToday && !isSelected
-                        ? Border.all(color: AppColors.info, width: 2)
+                        ? Border.all(color: ext.mark(ext.water), width: 2)
                         : null,
                   ),
                   child: Stack(
@@ -241,9 +245,9 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                             child: CircularProgressIndicator(
                               value: progress.clamp(0.0, 1.0),
                               strokeWidth: 2,
-                              backgroundColor: Colors.grey.shade200,
+                              backgroundColor: ext.surfaceVariant,
                               valueColor: AlwaysStoppedAnimation(
-                                progress >= 1 ? AppColors.success : AppColors.info,
+                                progress >= 1 ? ext.success.base : ext.water.base,
                               ),
                             ),
                           ),
@@ -253,10 +257,10 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                         '$day',
                         style: TextStyle(
                           color: isSelected
-                              ? Colors.white
+                              ? ext.fillFg(ext.water)
                               : isFuture
-                                  ? AppColors.textSecondary.withOpacity(0.4)
-                                  : AppColors.textPrimary,
+                                  ? ext.textSecondary.withOpacity(0.4)
+                                  : ext.textPrimary,
                           fontWeight: isToday || isSelected
                               ? FontWeight.bold
                               : FontWeight.normal,
@@ -270,8 +274,8 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                           child: Container(
                             width: 6,
                             height: 6,
-                            decoration: const BoxDecoration(
-                              color: AppColors.success,
+                            decoration: BoxDecoration(
+                              color: ext.success.base,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -290,29 +294,29 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
               Container(
                 width: 10,
                 height: 10,
-                decoration: const BoxDecoration(
-                  color: AppColors.success,
+                decoration: BoxDecoration(
+                  color: ext.success.base,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'Goal met',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 11, color: ext.textSecondary),
               ),
               const SizedBox(width: 16),
               Container(
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.info, width: 2),
+                  border: Border.all(color: ext.mark(ext.water), width: 2),
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'Today',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 11, color: ext.textSecondary),
               ),
             ],
           ),
@@ -326,6 +330,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
       return _buildEmptyDayDetails();
     }
 
+    final ext = AppColorsExt.of(context);
     final data = _selectedDayData!;
     final goal = WaterService.getDailyGoal();
     final progress = goal > 0 ? data.effectiveHydrationMl / goal : 0.0;
@@ -333,11 +338,11 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -350,8 +355,8 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: progress >= 1
-                  ? AppColors.success.withOpacity(0.1)
-                  : AppColors.info.withOpacity(0.1),
+                  ? ext.success.base.withOpacity(0.12)
+                  : ext.water.base.withOpacity(0.12),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
@@ -359,12 +364,12 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: progress >= 1 ? AppColors.success : AppColors.info,
+                    color: progress >= 1 ? ext.success.base : ext.water.base,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     progress >= 1 ? Icons.check : Icons.water_drop,
-                    color: Colors.white,
+                    color: progress >= 1 ? ext.success.on : ext.water.on,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -374,15 +379,16 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                     children: [
                       Text(
                         _formatDate(_selectedDate!),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: ext.textPrimary,
                         ),
                       ),
                       Text(
                         progress >= 1 ? 'Goal Achieved!' : '${(progress * 100).toInt()}% of goal',
                         style: TextStyle(
-                          color: progress >= 1 ? AppColors.success : AppColors.info,
+                          color: progress >= 1 ? ext.mark(ext.success) : ext.mark(ext.water),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -394,15 +400,16 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                   children: [
                     Text(
                       '${data.effectiveHydrationMl}ml',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
+                        color: ext.textPrimary,
                       ),
                     ),
                     Text(
                       'of ${goal}ml',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: ext.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -410,7 +417,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: AppColors.info),
+                  icon: Icon(Icons.edit_outlined, color: ext.mark(ext.water)),
                   onPressed: () => _openHistoryEdit(),
                   tooltip: 'Edit',
                 ),
@@ -426,7 +433,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                   icon: Icons.local_drink,
                   value: '${data.drinksCount}',
                   label: 'Drinks',
-                  color: AppColors.info,
+                  color: ext.mark(ext.water),
                 ),
                 _buildDayStatItem(
                   icon: Icons.coffee,
@@ -446,10 +453,10 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
           // Logs list
           Expanded(
             child: data.logs.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'No drinks logged',
-                      style: TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: ext.textSecondary),
                     ),
                   )
                 : ListView.builder(
@@ -467,11 +474,12 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
   }
 
   Widget _buildEmptyDayDetails() {
+    final ext = AppColorsExt.of(context);
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -480,13 +488,13 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
           Icon(
             Icons.water_drop_outlined,
             size: 64,
-            color: AppColors.textSecondary.withOpacity(0.5),
+            color: ext.textSecondary.withOpacity(0.5),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No data for this day',
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: ext.textSecondary,
               fontSize: 16,
             ),
           ),
@@ -496,7 +504,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
               child: Text(
                 _formatDate(_selectedDate!),
                 style: TextStyle(
-                  color: AppColors.textSecondary.withOpacity(0.7),
+                  color: ext.textSecondary.withOpacity(0.7),
                   fontSize: 14,
                 ),
               ),
@@ -512,13 +520,14 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
     required String label,
     required Color color,
   }) {
+    final ext = AppColorsExt.of(context);
     return Expanded(
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withOpacity(ext.isDark ? 0.18 : 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -533,9 +542,9 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
           ),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
-              color: AppColors.textSecondary,
+              color: ext.textSecondary,
             ),
           ),
         ],
@@ -544,11 +553,12 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
   }
 
   Widget _buildLogItem(EnhancedWaterLog log) {
+    final ext = AppColorsExt.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: ext.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -561,13 +571,13 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
               children: [
                 Text(
                   log.beverageName,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary),
                 ),
                 Text(
                   '${log.time.hour.toString().padLeft(2, '0')}:${log.time.minute.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: ext.textSecondary,
                   ),
                 ),
               ],
@@ -578,15 +588,15 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
             children: [
               Text(
                 '+${log.amountMl}ml',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(fontWeight: FontWeight.bold, color: ext.textPrimary),
               ),
               Text(
                 'Hydration: ${log.effectiveHydrationMl}ml',
                 style: TextStyle(
                   fontSize: 10,
                   color: log.effectiveHydrationMl >= 0
-                      ? AppColors.success
-                      : AppColors.error,
+                      ? ext.mark(ext.success)
+                      : ext.mark(ext.error),
                 ),
               ),
             ],

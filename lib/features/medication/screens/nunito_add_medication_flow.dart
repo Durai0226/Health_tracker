@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import '../theme/nunito_theme.dart';
-import '../widgets/nunito_glass_card.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
@@ -9,6 +7,7 @@ import '../models/medicine_schedule.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 
 class NunitoAddMedicationFlow extends StatefulWidget {
   final EnhancedMedicine? editMedicine;
@@ -114,7 +113,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (_currentStep < _totalSteps - 1) {
       setState(() => _currentStep++);
       _pageController.nextPage(
-        duration: NunitoTheme.animationMedium,
+        duration: AppMotion.base,
         curve: Curves.easeOutCubic,
       );
       _updateProgress();
@@ -128,7 +127,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (_currentStep > 0) {
       setState(() => _currentStep--);
       _pageController.previousPage(
-        duration: NunitoTheme.animationMedium,
+        duration: AppMotion.base,
         curve: Curves.easeOutCubic,
       );
       _updateProgress();
@@ -164,8 +163,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   void _showError(String message) {
     _hapticService.error();
+    final ext = AppColorsExt.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: NunitoTheme.error),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ext.fillBg(ext.error),
+      ),
     );
   }
 
@@ -173,7 +176,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     setState(() => _isLoading = true);
 
     try {
-      final scheduleTimesList = _scheduleTimes.map((t) => 
+      final scheduleTimesList = _scheduleTimes.map((t) =>
         ScheduledTime(hour: t.hour, minute: t.minute)
       ).toList();
 
@@ -211,7 +214,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       }
 
       _hapticService.success();
-      
+
       if (mounted) {
         Navigator.pop(context, true);
       }
@@ -225,71 +228,70 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      appBar: _buildAppBar(isDark),
-      body: Column(
-        children: [
-          _buildProgressIndicator(isDark),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildStep1BasicInfo(isDark),
-                _buildStep2Dosage(isDark),
-                _buildStep3Schedule(isDark),
-                _buildStep4Appearance(isDark),
-                _buildStep5Additional(isDark),
-              ],
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            _buildHeader(context),
+            _buildProgressIndicator(context),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildStep1BasicInfo(context),
+                  _buildStep2Dosage(context),
+                  _buildStep3Schedule(context),
+                  _buildStep4Appearance(context),
+                  _buildStep5Additional(context),
+                ],
+              ),
             ),
-          ),
-          _buildBottomButtons(isDark),
-        ],
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(bool isDark) {
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      leading: IconButton(
-        icon: Icon(Icons.close_rounded, color: isDark ? Colors.white : NunitoTheme.textPrimary),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text(
-        _isEditing ? 'Edit Medication' : 'Add Medication',
-        style: NunitoTheme.heading2.copyWith(
-          color: isDark ? Colors.white : NunitoTheme.textPrimary,
+            _buildBottomButtons(context),
+          ],
         ),
       ),
-      centerTitle: true,
     );
   }
 
-  Widget _buildProgressIndicator(bool isDark) {
+  Widget _buildHeader(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    return AppHeader(
+      title: _isEditing ? 'Edit Medication' : 'Add Medication',
+      accent: ext.medicine,
+      leading: AppIconButton(
+        icon: Icons.close_rounded,
+        filled: false,
+        accent: ext.medicine,
+        onPressed: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  Widget _buildProgressIndicator(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
     final steps = ['Info', 'Dosage', 'Schedule', 'Look', 'More'];
-    
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: NunitoTheme.spacingM, vertical: NunitoTheme.spacingS),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.gutter, vertical: AppSpacing.sm),
       child: Column(
         children: [
           Row(
             children: List.generate(_totalSteps, (index) {
               final isActive = index <= _currentStep;
-              final isCurrent = index == _currentStep;
               return Expanded(
                 child: Row(
                   children: [
                     Expanded(
                       child: AnimatedContainer(
-                        duration: NunitoTheme.animationFast,
+                        duration: AppMotion.fast,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: isActive ? NunitoTheme.primary : NunitoTheme.textTertiary.withOpacity(0.2),
+                          color: isActive ? ext.mark(med) : ext.outline,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -307,9 +309,9 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               final isCurrent = index == _currentStep;
               return Text(
                 steps[index],
-                style: NunitoTheme.caption.copyWith(
-                  color: isCurrent ? NunitoTheme.primary : NunitoTheme.textTertiary,
-                  fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                style: tt.bodySmall?.copyWith(
+                  color: isCurrent ? ext.mark(med) : ext.textTertiary,
+                  fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
                 ),
               );
             }),
@@ -319,43 +321,37 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
-  Widget _buildStep1BasicInfo(bool isDark) {
+  Widget _buildStep1BasicInfo(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('What medication are you adding?', style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingL),
-          TextField(
+          Text('What medication are you adding?', style: tt.headlineMedium),
+          const SizedBox(height: AppSpacing.xl),
+          AppTextField(
             controller: _nameController,
-            style: NunitoTheme.bodyLarge.copyWith(
-              color: isDark ? Colors.white : NunitoTheme.textPrimary,
-            ),
-            decoration: InputDecoration(
-              labelText: 'Medication Name',
-              hintText: 'e.g., Aspirin, Vitamin D',
-              filled: true,
-              fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                borderSide: BorderSide.none,
-              ),
-            ),
+            label: 'Medication Name',
+            hint: 'e.g., Aspirin, Vitamin D',
+            accent: med,
+            textCapitalization: TextCapitalization.words,
           ),
-          const SizedBox(height: NunitoTheme.spacingL),
-          Text('Type', style: NunitoTheme.labelLarge.copyWith(
-            color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingS),
+          const SizedBox(height: AppSpacing.xl),
+          Text('Type',
+              style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: DosageForm.values.take(8).map((form) {
               final isSelected = _selectedForm == form;
-              return GestureDetector(
+              return _buildSelectablePill(
+                context: context,
+                selected: isSelected,
                 onTap: () {
                   _hapticService.selection();
                   setState(() {
@@ -363,29 +359,18 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                     _dosageUnit = form.unit;
                   });
                 },
-                child: AnimatedContainer(
-                  duration: NunitoTheme.animationFast,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isSelected ? NunitoTheme.primary : (isDark ? NunitoTheme.cardDark : Colors.white),
-                    borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
-                    border: Border.all(
-                      color: isSelected ? NunitoTheme.primary : NunitoTheme.textTertiary.withOpacity(0.2),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(form.icon, style: const TextStyle(fontSize: 18)),
-                      const SizedBox(width: 8),
-                      Text(
-                        form.displayName,
-                        style: NunitoTheme.labelMedium.copyWith(
-                          color: isSelected ? Colors.white : (isDark ? Colors.white : NunitoTheme.textPrimary),
-                        ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(form.icon, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                    Text(
+                      form.displayName,
+                      style: tt.labelMedium?.copyWith(
+                        color: isSelected ? med.onContainer : ext.textPrimary,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             }).toList(),
@@ -395,92 +380,77 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
-  Widget _buildStep2Dosage(bool isDark) {
+  Widget _buildStep2Dosage(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('How much do you take?', style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingL),
+          Text('How much do you take?', style: tt.headlineMedium),
+          const SizedBox(height: AppSpacing.xl),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 flex: 2,
-                child: TextField(
+                child: AppTextField(
                   controller: _dosageController,
                   keyboardType: TextInputType.number,
-                  style: NunitoTheme.displayMedium.copyWith(
-                    color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                  ),
-                  textAlign: TextAlign.center,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+                  hint: 'Amount',
+                  accent: med,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 flex: 3,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                  height: 52,
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   decoration: BoxDecoration(
-                    color: isDark ? NunitoTheme.cardDark : Colors.white,
-                    borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
+                    color: ext.surfaceVariant,
+                    borderRadius: AppRadius.brMd,
+                    border: Border.all(color: ext.outline),
                   ),
                   child: Text(
                     _dosageUnit,
-                    style: NunitoTheme.bodyLarge.copyWith(
-                      color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-                    ),
+                    style: tt.bodyLarge?.copyWith(color: ext.textSecondary),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: NunitoTheme.spacingL),
-          TextField(
+          const SizedBox(height: AppSpacing.xl),
+          AppTextField(
             controller: _strengthController,
-            style: NunitoTheme.bodyLarge.copyWith(
-              color: isDark ? Colors.white : NunitoTheme.textPrimary,
-            ),
-            decoration: InputDecoration(
-              labelText: 'Strength (optional)',
-              hintText: 'e.g., 500mg, 10mg/5ml',
-              filled: true,
-              fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                borderSide: BorderSide.none,
-              ),
-            ),
+            label: 'Strength (optional)',
+            hint: 'e.g., 500mg, 10mg/5ml',
+            accent: med,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStep3Schedule(bool isDark) {
+  Widget _buildStep3Schedule(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('When do you take it?', style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingL),
-          Text('Frequency', style: NunitoTheme.labelLarge.copyWith(
-            color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingS),
+          Text('When do you take it?', style: tt.headlineMedium),
+          const SizedBox(height: AppSpacing.xl),
+          Text('Frequency',
+              style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
           ...FrequencyType.values.take(5).map((freq) {
             final isSelected = _frequencyType == freq;
             return GestureDetector(
@@ -495,23 +465,27 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isSelected ? NunitoTheme.primary.withOpacity(0.1) : (isDark ? NunitoTheme.cardDark : Colors.white),
-                  borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
+                  color: isSelected ? med.container : ext.surface,
+                  borderRadius: AppRadius.brMd,
                   border: Border.all(
-                    color: isSelected ? NunitoTheme.primary : NunitoTheme.textTertiary.withOpacity(0.2),
+                    color: isSelected ? med.base : ext.outline,
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                      color: isSelected ? NunitoTheme.primary : NunitoTheme.textTertiary,
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      color: isSelected ? ext.mark(med) : ext.textTertiary,
                     ),
                     const SizedBox(width: 12),
                     Text(
                       freq.displayName,
-                      style: NunitoTheme.bodyMedium.copyWith(
-                        color: isDark ? Colors.white : NunitoTheme.textPrimary,
+                      style: tt.bodyMedium?.copyWith(
+                        color: isSelected
+                            ? med.onContainer
+                            : ext.textPrimary,
                       ),
                     ),
                   ],
@@ -519,21 +493,23 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               ),
             );
           }),
-          const SizedBox(height: NunitoTheme.spacingL),
+          const SizedBox(height: AppSpacing.xl),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Times', style: NunitoTheme.labelLarge.copyWith(
-                color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-              )),
-              TextButton.icon(
+              Text('Times',
+                  style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+              AppButton(
+                label: 'Add Time',
+                leadingIcon: Icons.add_rounded,
+                variant: AppButtonVariant.ghost,
+                size: AppButtonSize.sm,
+                accent: med,
                 onPressed: _addTime,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Add Time'),
               ),
             ],
           ),
-          const SizedBox(height: NunitoTheme.spacingS),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -543,26 +519,30 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               return GestureDetector(
                 onTap: () => _editTime(index),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: NunitoTheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
-                    border: Border.all(color: NunitoTheme.primary.withOpacity(0.3)),
+                    color: med.container,
+                    borderRadius: AppRadius.brSm,
+                    border: Border.all(color: med.base),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time_rounded, size: 18, color: NunitoTheme.primary),
+                      Icon(Icons.access_time_rounded,
+                          size: 18, color: med.onContainer),
                       const SizedBox(width: 8),
                       Text(
                         time.format(context),
-                        style: NunitoTheme.labelMedium.copyWith(color: NunitoTheme.primary),
+                        style: tt.labelMedium
+                            ?.copyWith(color: med.onContainer),
                       ),
                       if (_scheduleTimes.length > 1) ...[
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => _removeTime(index),
-                          child: Icon(Icons.close_rounded, size: 16, color: NunitoTheme.primary),
+                          child: Icon(Icons.close_rounded,
+                              size: 16, color: med.onContainer),
                         ),
                       ],
                     ],
@@ -633,20 +613,21 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     }
   }
 
-  Widget _buildStep4Appearance(bool isDark) {
+  Widget _buildStep4Appearance(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('What does it look like?', style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingS),
-          Text('This helps identify your medication', style: NunitoTheme.bodyMedium.copyWith(
-            color: NunitoTheme.textSecondary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingL),
+          Text('What does it look like?', style: tt.headlineMedium),
+          const SizedBox(height: AppSpacing.sm),
+          Text('This helps identify your medication',
+              style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.xl),
           Center(
             child: NunitoPillVisual(
               color: _selectedColor,
@@ -654,16 +635,16 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               size: 100,
             ),
           ),
-          const SizedBox(height: NunitoTheme.spacingL),
-          Text('Color', style: NunitoTheme.labelLarge.copyWith(
-            color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingS),
+          const SizedBox(height: AppSpacing.xl),
+          Text('Color',
+              style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: MedicineColor.values.map((color) {
               final isSelected = _selectedColor == color;
+              final swatchColor = Color(color.colorValue);
               return GestureDetector(
                 onTap: () {
                   _hapticService.selection();
@@ -673,57 +654,50 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Color(color.colorValue),
+                    color: swatchColor,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isSelected ? NunitoTheme.primary : Colors.grey.withOpacity(0.3),
+                      color: isSelected ? ext.mark(med) : ext.outlineStrong,
                       width: isSelected ? 3 : 1,
                     ),
-                    boxShadow: isSelected ? [
-                      BoxShadow(
-                        color: NunitoTheme.primary.withOpacity(0.3),
-                        blurRadius: 8,
-                        spreadRadius: 2,
-                      ),
-                    ] : null,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: med.base.withOpacity(0.3),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
                   ),
                   child: isSelected
-                      ? const Icon(Icons.check_rounded, color: Colors.black54, size: 20)
+                      ? Icon(Icons.check_rounded,
+                          color: _contrastOn(swatchColor), size: 20)
                       : null,
                 ),
               );
             }).toList(),
           ),
-          const SizedBox(height: NunitoTheme.spacingL),
-          Text('Shape', style: NunitoTheme.labelLarge.copyWith(
-            color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingS),
+          const SizedBox(height: AppSpacing.xl),
+          Text('Shape',
+              style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: MedicineShape.values.map((shape) {
               final isSelected = _selectedShape == shape;
-              return GestureDetector(
+              return _buildSelectablePill(
+                context: context,
+                selected: isSelected,
                 onTap: () {
                   _hapticService.selection();
                   setState(() => _selectedShape = shape);
                 },
-                child: AnimatedContainer(
-                  duration: NunitoTheme.animationFast,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isSelected ? NunitoTheme.primary : (isDark ? NunitoTheme.cardDark : Colors.white),
-                    borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
-                    border: Border.all(
-                      color: isSelected ? NunitoTheme.primary : NunitoTheme.textTertiary.withOpacity(0.2),
-                    ),
-                  ),
-                  child: Text(
-                    shape.displayName,
-                    style: NunitoTheme.labelMedium.copyWith(
-                      color: isSelected ? Colors.white : (isDark ? Colors.white : NunitoTheme.textPrimary),
-                    ),
+                child: Text(
+                  shape.displayName,
+                  style: tt.labelMedium?.copyWith(
+                    color: isSelected ? med.onContainer : ext.textPrimary,
                   ),
                 ),
               );
@@ -734,52 +708,36 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
-  Widget _buildStep5Additional(bool isDark) {
+  Widget _buildStep5Additional(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Additional Details', style: NunitoTheme.heading2.copyWith(
-            color: isDark ? Colors.white : NunitoTheme.textPrimary,
-          )),
-          const SizedBox(height: NunitoTheme.spacingL),
-          TextField(
+          Text('Additional Details', style: tt.headlineMedium),
+          const SizedBox(height: AppSpacing.xl),
+          AppTextField(
             controller: _instructionsController,
             maxLines: 2,
-            style: NunitoTheme.bodyMedium.copyWith(
-              color: isDark ? Colors.white : NunitoTheme.textPrimary,
-            ),
-            decoration: InputDecoration(
-              labelText: 'Instructions (optional)',
-              hintText: 'e.g., Take with food',
-              filled: true,
-              fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                borderSide: BorderSide.none,
-              ),
-            ),
+            label: 'Instructions (optional)',
+            hint: 'e.g., Take with food',
+            accent: med,
+            textCapitalization: TextCapitalization.sentences,
           ),
-          const SizedBox(height: NunitoTheme.spacingM),
-          TextField(
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
             controller: _purposeController,
-            style: NunitoTheme.bodyMedium.copyWith(
-              color: isDark ? Colors.white : NunitoTheme.textPrimary,
-            ),
-            decoration: InputDecoration(
-              labelText: 'Purpose (optional)',
-              hintText: 'e.g., Blood pressure, Pain relief',
-              filled: true,
-              fillColor: isDark ? NunitoTheme.cardDark : Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                borderSide: BorderSide.none,
-              ),
-            ),
+            label: 'Purpose (optional)',
+            hint: 'e.g., Blood pressure, Pain relief',
+            accent: med,
+            textCapitalization: TextCapitalization.sentences,
           ),
-          const SizedBox(height: NunitoTheme.spacingL),
-          NunitoCard(
+          const SizedBox(height: AppSpacing.xl),
+          AppCard(
             onTap: () {
               _hapticService.toggle();
               setState(() => _reminderEnabled = !_reminderEnabled);
@@ -787,8 +745,10 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             child: Row(
               children: [
                 Icon(
-                  _reminderEnabled ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
-                  color: _reminderEnabled ? NunitoTheme.primary : NunitoTheme.textTertiary,
+                  _reminderEnabled
+                      ? Icons.notifications_active_rounded
+                      : Icons.notifications_off_rounded,
+                  color: _reminderEnabled ? ext.mark(med) : ext.textTertiary,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -797,13 +757,14 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                     children: [
                       Text(
                         'Reminders',
-                        style: NunitoTheme.labelLarge.copyWith(
-                          color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                        ),
+                        style: tt.titleLarge,
                       ),
                       Text(
-                        _reminderEnabled ? 'You\'ll receive notifications' : 'No notifications',
-                        style: NunitoTheme.caption,
+                        _reminderEnabled
+                            ? 'You\'ll receive notifications'
+                            : 'No notifications',
+                        style: tt.bodySmall
+                            ?.copyWith(color: ext.textSecondary),
                       ),
                     ],
                   ),
@@ -814,7 +775,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                     _hapticService.toggle();
                     setState(() => _reminderEnabled = v);
                   },
-                  activeColor: NunitoTheme.primary,
+                  activeColor: ext.mark(med),
+                  activeTrackColor: med.container,
                 ),
               ],
             ),
@@ -824,71 +786,82 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
-  Widget _buildBottomButtons(bool isDark) {
+  Widget _buildBottomButtons(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
     final isLastStep = _currentStep == _totalSteps - 1;
-    
+
     return Container(
       padding: EdgeInsets.fromLTRB(
-        NunitoTheme.spacingM,
-        NunitoTheme.spacingM,
-        NunitoTheme.spacingM,
-        NunitoTheme.spacingM + MediaQuery.of(context).padding.bottom,
+        AppSpacing.gutter,
+        AppSpacing.lg,
+        AppSpacing.gutter,
+        AppSpacing.lg + MediaQuery.of(context).padding.bottom,
       ),
       decoration: BoxDecoration(
-        color: isDark ? NunitoTheme.cardDark : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
+        color: ext.surface,
+        border: Border(top: BorderSide(color: ext.outline)),
       ),
       child: Row(
         children: [
-          if (_currentStep > 0)
+          if (_currentStep > 0) ...[
             Expanded(
-              child: OutlinedButton(
+              child: AppButton(
+                label: 'Back',
+                variant: AppButtonVariant.secondary,
+                accent: med,
+                fullWidth: true,
                 onPressed: _previousStep,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: NunitoTheme.primary,
-                  side: BorderSide(color: NunitoTheme.primary.withOpacity(0.3)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                  ),
-                ),
-                child: const Text('Back'),
               ),
             ),
-          if (_currentStep > 0) const SizedBox(width: 12),
+            const SizedBox(width: 12),
+          ],
           Expanded(
-            flex: _currentStep == 0 ? 1 : 1,
-            child: ElevatedButton(
+            child: AppButton(
+              label: isLastStep
+                  ? (_isEditing ? 'Save Changes' : 'Add Medication')
+                  : 'Continue',
+              variant: AppButtonVariant.primary,
+              accent: med,
+              fullWidth: true,
+              loading: _isLoading,
               onPressed: _isLoading ? null : _nextStep,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: NunitoTheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                ),
-                elevation: 0,
-              ),
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Text(isLastStep ? (_isEditing ? 'Save Changes' : 'Add Medication') : 'Continue'),
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Reusable selectable pill for the Type / Shape choosers.
+  Widget _buildSelectablePill({
+    required BuildContext context,
+    required bool selected,
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? med.container : ext.surfaceVariant,
+          borderRadius: AppRadius.brSm,
+          border: Border.all(color: selected ? med.base : ext.outline),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  /// Contrast foreground for a check mark drawn on an arbitrary medication
+  /// swatch color (not a theme token — must be computed against the fill).
+  Color _contrastOn(Color color) {
+    final luminance =
+        (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255;
+    return luminance > 0.5 ? const Color(0xDD000000) : const Color(0xFFFFFFFF);
   }
 }

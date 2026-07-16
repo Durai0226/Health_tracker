@@ -458,15 +458,22 @@ class CleanStorageService {
       vibrationEnabled: getAppPreference('vibrationEnabled', true) == true,
       snoozeIntervalMinutes: getAppPreference('snoozeInterval', 5) as int? ?? 5,
       snoozeEnabled: getAppPreference('snoozeEnabled', true) == true,
+      // Migrate legacy darkMode flag → 3-way theme preference when unset.
+      themeModePreference: getAppPreference(
+              'themeMode',
+              getAppPreference('darkMode', false) == true ? 'dark' : 'system')
+          as String? ??
+          'system',
     );
   }
-  
+
   static Future<void> saveUserSettings(UserSettings settings) async {
     await setAppPreference('darkMode', settings.darkModeEnabled);
     await setAppPreference('soundEnabled', settings.soundEnabled);
     await setAppPreference('vibrationEnabled', settings.vibrationEnabled);
     await setAppPreference('snoozeInterval', settings.snoozeIntervalMinutes);
     await setAppPreference('snoozeEnabled', settings.snoozeEnabled);
+    await setAppPreference('themeMode', settings.themeModePreference);
   }
   
   /// Full backup snapshot: reminders, water, settings & preferences.

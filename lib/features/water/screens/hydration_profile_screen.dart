@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/design/app_colors_ext.dart';
 import '../models/hydration_profile.dart';
 import '../services/water_service.dart';
 
@@ -52,14 +52,14 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
 
   Future<void> _save() async {
     if (_isSaving) return;
-    
+
     // Validation
     if (_validateInput()) {
       setState(() => _isSaving = true);
 
       try {
         await WaterService.init(); // Ensure service is initialized
-        
+
         final weight = double.tryParse(_weightController.text.trim());
         final age = int.tryParse(_ageController.text.trim());
 
@@ -72,6 +72,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         await WaterService.saveProfile(updated);
 
         if (mounted) {
+          final ext = AppColorsExt.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -81,12 +82,12 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                   Expanded(
                     child: Text(
                       'Profile saved! Daily goal: ${updated.effectiveGoalMl}ml',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
                     ),
                   ),
                 ],
               ),
-              backgroundColor: AppColors.success,
+              backgroundColor: ext.success.base,
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.all(16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -97,6 +98,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
       } catch (e) {
         debugPrint('Error saving profile: $e');
         if (mounted) {
+          final ext = AppColorsExt.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -106,12 +108,12 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                   Expanded(
                     child: Text(
                       'Failed to save profile. Please try again.',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
                     ),
                   ),
                 ],
               ),
-              backgroundColor: AppColors.error,
+              backgroundColor: ext.error.base,
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.all(16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -127,32 +129,33 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   bool _validateInput() {
     final weight = double.tryParse(_weightController.text.trim());
     final age = int.tryParse(_ageController.text.trim());
-    
+
     if (weight != null && (weight < 20 || weight > 300)) {
       _showValidationError('Please enter a valid weight between 20-300 kg');
       return false;
     }
-    
+
     if (age != null && (age < 1 || age > 120)) {
       _showValidationError('Please enter a valid age between 1-120 years');
       return false;
     }
-    
+
     return true;
   }
-  
+
   void _showValidationError(String message) {
     if (mounted) {
+      final ext = AppColorsExt.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
               const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
               const SizedBox(width: 12),
-              Expanded(child: Text(message)),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
             ],
           ),
-          backgroundColor: AppColors.warning,
+          backgroundColor: ext.warning.base,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -163,8 +166,9 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ext.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -200,18 +204,21 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   }
 
   Widget _buildGoalCard() {
+    final ext = AppColorsExt.of(context);
+    // Saturated teal that keeps white text readable in both themes.
+    final heroBg = ext.isDark ? ext.water.container : ext.water.strong;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.info, AppColors.info.withOpacity(0.7)],
+          colors: [heroBg, heroBg.withOpacity(0.75)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.info.withOpacity(0.3),
+            color: ext.water.base.withOpacity(0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -267,6 +274,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   }
 
   Widget _buildPersonalInfo() {
+    final ext = AppColorsExt.of(context);
     return _buildSection(
       title: 'Personal Information',
       icon: Icons.person_outline,
@@ -306,7 +314,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('Gender:', style: TextStyle(fontWeight: FontWeight.w500)),
+              Text('Gender:', style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary)),
               const SizedBox(width: 16),
               _buildGenderChip('Male', true),
               const SizedBox(width: 8),
@@ -319,6 +327,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   }
 
   Widget _buildGenderChip(String label, bool isMale) {
+    final ext = AppColorsExt.of(context);
     final isSelected = _profile.isMale == isMale;
     return GestureDetector(
       onTap: () {
@@ -330,13 +339,13 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.info : Colors.grey.shade100,
+          color: isSelected ? ext.fillBg(ext.water) : ext.surfaceVariant,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textPrimary,
+            color: isSelected ? ext.fillFg(ext.water) : ext.textPrimary,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -345,6 +354,8 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   }
 
   Widget _buildActivityLevel() {
+    final ext = AppColorsExt.of(context);
+    final waterMark = ext.mark(ext.water);
     return _buildSection(
       title: 'Activity Level',
       icon: Icons.directions_run,
@@ -362,10 +373,10 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.info.withOpacity(0.1) : Colors.grey.shade50,
+                color: isSelected ? waterMark.withOpacity(0.12) : ext.surfaceVariant,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isSelected ? AppColors.info : Colors.transparent,
+                  color: isSelected ? waterMark : Colors.transparent,
                   width: 2,
                 ),
               ),
@@ -373,7 +384,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                 children: [
                   Icon(
                     _getActivityIcon(level),
-                    color: isSelected ? AppColors.info : AppColors.textSecondary,
+                    color: isSelected ? waterMark : ext.textSecondary,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -384,21 +395,21 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                           _getActivityLabel(level),
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? AppColors.info : AppColors.textPrimary,
+                            color: isSelected ? waterMark : ext.textPrimary,
                           ),
                         ),
                         Text(
                           _getActivityDescription(level),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: ext.textSecondary,
                           ),
                         ),
                       ],
                     ),
                   ),
                   if (isSelected)
-                    const Icon(Icons.check_circle, color: AppColors.info),
+                    Icon(Icons.check_circle, color: waterMark),
                 ],
               ),
             ),
@@ -454,6 +465,8 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   }
 
   Widget _buildClimate() {
+    final ext = AppColorsExt.of(context);
+    final waterMark = ext.mark(ext.water);
     return _buildSection(
       title: 'Climate',
       icon: Icons.thermostat,
@@ -472,10 +485,10 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.info.withOpacity(0.1) : Colors.grey.shade50,
+                color: isSelected ? waterMark.withOpacity(0.12) : ext.surfaceVariant,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isSelected ? AppColors.info : Colors.transparent,
+                  color: isSelected ? waterMark : Colors.transparent,
                   width: 2,
                 ),
               ),
@@ -491,7 +504,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                     _getClimateLabel(climate),
                     style: TextStyle(
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? AppColors.info : AppColors.textPrimary,
+                      color: isSelected ? waterMark : ext.textPrimary,
                     ),
                   ),
                 ],
@@ -534,6 +547,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   }
 
   Widget _buildSpecialConditions() {
+    final ext = AppColorsExt.of(context);
     return _buildSection(
       title: 'Special Conditions',
       icon: Icons.favorite_outline,
@@ -563,10 +577,10 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             ),
           ],
           if (_profile.isMale)
-            const Center(
+            Center(
               child: Text(
                 'No special conditions applicable',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: ext.textSecondary),
               ),
             ),
         ],
@@ -580,10 +594,11 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: value ? AppColors.info.withOpacity(0.1) : Colors.grey.shade50,
+        color: value ? ext.mark(ext.water).withOpacity(0.12) : ext.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -593,13 +608,13 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary),
             ),
           ),
           Switch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: AppColors.info,
+            activeThumbColor: ext.water.base,
           ),
         ],
       ),
@@ -607,6 +622,8 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   }
 
   Widget _buildCustomGoal() {
+    final ext = AppColorsExt.of(context);
+    final waterMark = ext.mark(ext.water);
     return _buildSection(
       title: 'Custom Goal',
       icon: Icons.tune,
@@ -614,10 +631,10 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Use custom goal instead of calculated',
-                  style: TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: ext.textSecondary),
                 ),
               ),
               Switch(
@@ -627,7 +644,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                     _profile = _profile.copyWith(useCustomGoal: value);
                   });
                 },
-                activeThumbColor: AppColors.info,
+                activeThumbColor: ext.water.base,
               ),
             ],
           ),
@@ -647,19 +664,19 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                   icon: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.info.withOpacity(0.1),
+                      color: waterMark.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.remove, color: AppColors.info),
+                    child: Icon(Icons.remove, color: waterMark),
                   ),
                 ),
                 const SizedBox(width: 24),
                 Text(
                   '${_profile.customGoalMl}ml',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.info,
+                    color: waterMark,
                   ),
                 ),
                 const SizedBox(width: 24),
@@ -674,10 +691,10 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                   icon: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.info.withOpacity(0.1),
+                      color: waterMark.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.add, color: AppColors.info),
+                    child: Icon(Icons.add, color: waterMark),
                   ),
                 ),
               ],
@@ -693,14 +710,15 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     required IconData icon,
     required Widget child,
   }) {
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -711,13 +729,14 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppColors.info),
+              Icon(icon, color: ext.mark(ext.water)),
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: ext.textPrimary,
                 ),
               ),
             ],
@@ -735,10 +754,12 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     TextInputType? keyboardType,
     ValueChanged<String>? onChanged,
   }) {
+    final ext = AppColorsExt.of(context);
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       onChanged: onChanged,
+      style: TextStyle(color: ext.textPrimary),
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(
@@ -746,31 +767,32 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.info, width: 2),
+          borderSide: BorderSide(color: ext.mark(ext.water), width: 2),
         ),
       ),
     );
   }
 
   Widget _buildSaveButton() {
+    final ext = AppColorsExt.of(context);
     return SizedBox(
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
         onPressed: _isSaving ? null : _save,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.info,
-          foregroundColor: Colors.white,
+          backgroundColor: ext.fillBg(ext.water),
+          foregroundColor: ext.fillFg(ext.water),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
         child: _isSaving
-            ? const SizedBox(
+            ? SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
-                  color: Colors.white,
+                  color: ext.fillFg(ext.water),
                   strokeWidth: 2,
                 ),
               )

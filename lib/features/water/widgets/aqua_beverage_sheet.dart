@@ -3,8 +3,9 @@ import 'package:flutter/services.dart';
 import '../theme/aqua_theme.dart';
 import '../models/beverage_type.dart';
 import '../services/water_service.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 
-/// Modern beverage selection bottom sheet
+/// Modern beverage selection bottom sheet (Calm Clarity chrome).
 class AquaBeverageSheet extends StatefulWidget {
   final String selectedBeverageId;
   final Function(String beverageId) onSelect;
@@ -16,13 +17,15 @@ class AquaBeverageSheet extends StatefulWidget {
   });
 
   static Future<String?> show(BuildContext context, String currentBeverageId) {
-    return showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => AquaBeverageSheet(
+    final ext = AppColorsExt.of(context);
+    return AppBottomSheet.show<String>(
+      context,
+      title: 'Select Beverage',
+      icon: Icons.local_drink_rounded,
+      accent: ext.water,
+      builder: (ctx) => AquaBeverageSheet(
         selectedBeverageId: currentBeverageId,
-        onSelect: (id) => Navigator.pop(context, id),
+        onSelect: (id) => Navigator.pop(ctx, id),
       ),
     );
   }
@@ -42,98 +45,47 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AquaTheme.isDark(context);
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    // Preserve the WaterService-driven catalog (22 items, hydration %, customs).
     final beverages = WaterService.getAllBeverages();
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.8,
-      ),
-      decoration: BoxDecoration(
-        color: AquaTheme.getCardBg(context),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AquaTheme.radiusLarge),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Choose what you\'re drinking',
+          style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
+        const SizedBox(height: AppSpacing.lg),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 0.9,
+            crossAxisSpacing: AppSpacing.md,
+            mainAxisSpacing: AppSpacing.md,
           ),
-          
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(AquaTheme.spacingL),
-            child: Row(
-              children: [
-                const Text('🥤', style: TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Select Beverage',
-                      style: AquaTheme.heading2.copyWith(
-                        color: AquaTheme.getTextPrimary(context),
-                      ),
-                    ),
-                    Text(
-                      'Choose what you\'re drinking',
-                      style: AquaTheme.bodySmall.copyWith(
-                        color: AquaTheme.getTextSecondary(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          
-          // Beverage grid
-          Flexible(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(
-                AquaTheme.spacingM,
-                0,
-                AquaTheme.spacingM,
-                AquaTheme.spacingM,
-              ),
-              physics: const BouncingScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.9,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: beverages.length,
-              itemBuilder: (context, index) {
-                final beverage = beverages[index];
-                final isSelected = beverage.id == _selectedId;
+          itemCount: beverages.length,
+          itemBuilder: (context, index) {
+            final beverage = beverages[index];
+            final isSelected = beverage.id == _selectedId;
 
-                return _BeverageCard(
-                  beverage: beverage,
-                  isSelected: isSelected,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() => _selectedId = beverage.id);
-                    widget.onSelect(beverage.id);
-                  },
-                );
+            return _BeverageCard(
+              beverage: beverage,
+              isSelected: isSelected,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _selectedId = beverage.id);
+                widget.onSelect(beverage.id);
               },
-            ),
-          ),
-
-          SizedBox(height: MediaQuery.of(context).padding.bottom + AquaTheme.spacingL),
-        ],
-      ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -151,33 +103,22 @@ class _BeverageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AquaTheme.isDark(context);
-    final style = AquaTheme.themeFromBeverage(beverage);
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: AquaTheme.animationFast,
-        padding: const EdgeInsets.all(12),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          gradient: isSelected ? style.gradient : null,
-          color: isSelected
-              ? null
-              : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade50),
-          borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
+          color: isSelected ? ext.water.container : ext.surfaceVariant,
+          borderRadius: AppRadius.brMd,
           border: Border.all(
-            color: isSelected
-                ? Colors.transparent
-                : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200),
-            width: 1.5,
+            color: isSelected ? ext.mark(ext.water) : ext.outline,
+            width: isSelected ? 1.5 : 1,
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: style.primary.withOpacity(0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ] : null,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -186,12 +127,12 @@ class _BeverageCard extends StatelessWidget {
               beverage.emoji,
               style: TextStyle(fontSize: isSelected ? 32 : 28),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               beverage.name,
-              style: AquaTheme.labelMedium.copyWith(
-                color: isSelected ? Colors.white : AquaTheme.getTextPrimary(context),
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              style: tt.labelMedium?.copyWith(
+                color: isSelected ? ext.water.onContainer : ext.textPrimary,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
               textAlign: TextAlign.center,
               maxLines: 1,
@@ -202,14 +143,14 @@ class _BeverageCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? Colors.white.withOpacity(0.2)
-                    : style.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+                    ? ext.water.onContainer.withOpacity(0.15)
+                    : ext.water.container,
+                borderRadius: AppRadius.brFull,
               ),
               child: Text(
                 '${beverage.hydrationPercent}%',
-                style: AquaTheme.caption.copyWith(
-                  color: isSelected ? Colors.white70 : style.primary,
+                style: tt.labelSmall?.copyWith(
+                  color: isSelected ? ext.water.onContainer : ext.mark(ext.water),
                   fontSize: 10,
                 ),
               ),
@@ -221,7 +162,7 @@ class _BeverageCard extends StatelessWidget {
   }
 }
 
-/// Quick beverage chip for inline selection
+/// Quick beverage chip for inline selection (Calm Clarity tokens).
 class AquaBeverageChip extends StatelessWidget {
   final String beverageId;
   final bool isSelected;
@@ -238,53 +179,53 @@ class AquaBeverageChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+
+    // Resolve display data from the WaterService catalog; fall back to the
+    // AquaTheme lookup only for name/emoji when the id isn't in the catalog.
     final resolved = WaterService.getBeverage(beverageId);
-    final beverage = resolved != null
-        ? AquaTheme.themeFromBeverage(resolved)
-        : AquaTheme.getBeverage(beverageId);
-    final isDark = AquaTheme.isDark(context);
+    final String emoji;
+    final String name;
+    if (resolved != null) {
+      emoji = resolved.emoji;
+      name = resolved.name;
+    } else {
+      final fallback = AquaTheme.getBeverage(beverageId);
+      emoji = fallback.emoji;
+      name = fallback.name;
+    }
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: AquaTheme.animationFast,
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 10 : 14,
           vertical: compact ? 6 : 10,
         ),
         decoration: BoxDecoration(
-          gradient: isSelected ? beverage.gradient : null,
-          color: isSelected 
-              ? null 
-              : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100),
-          borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+          color: isSelected ? ext.water.container : ext.surfaceVariant,
+          borderRadius: AppRadius.brFull,
           border: Border.all(
-            color: isSelected 
-                ? Colors.transparent 
-                : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade300),
+            color: isSelected ? ext.mark(ext.water) : ext.outline,
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: beverage.primary.withOpacity(0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ] : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              beverage.emoji,
+              emoji,
               style: TextStyle(fontSize: compact ? 14 : 18),
             ),
             if (!compact || isSelected) ...[
               const SizedBox(width: 6),
               Text(
-                beverage.name,
-                style: AquaTheme.labelMedium.copyWith(
-                  color: isSelected ? Colors.white : AquaTheme.getTextPrimary(context),
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                name,
+                style: tt.labelMedium?.copyWith(
+                  color: isSelected ? ext.water.onContainer : ext.textPrimary,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   fontSize: compact ? 11 : 12,
                 ),
               ),

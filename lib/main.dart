@@ -30,6 +30,24 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+/// Global theme-mode notifier so a settings change rebuilds [MaterialApp]
+/// instantly (ONB-5 follow-system support). Updated on save in Settings.
+final ValueNotifier<ThemeMode> themeModeNotifier =
+    ValueNotifier<ThemeMode>(ThemeMode.system);
+
+/// Maps the persisted `themeModePreference` string to a [ThemeMode].
+ThemeMode themeModeFromPreference(String pref) {
+  switch (pref) {
+    case 'light':
+      return ThemeMode.light;
+    case 'dark':
+      return ThemeMode.dark;
+    case 'system':
+    default:
+      return ThemeMode.system;
+  }
+}
+
 /// Helper function to initialize a service with error handling
 Future<void> _initService(String name, Future<void> Function() init) async {
   try {
@@ -190,8 +208,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = ThemeMode.light;
-
   @override
   void initState() {
     super.initState();
@@ -200,43 +216,47 @@ class _MyAppState extends State<MyApp> {
 
   void _loadThemePreference() {
     final settings = CleanStorageService.getUserSettings();
-    setState(() {
-      _themeMode = settings.darkModeEnabled ? ThemeMode.dark : ThemeMode.light;
-    });
+    themeModeNotifier.value =
+        themeModeFromPreference(settings.themeModePreference);
   }
 
+  /// Kept for backward compatibility — delegates to [themeModeNotifier] so any
+  /// caller using `MyApp.of(context)?.setThemeMode(...)` still works.
   void setThemeMode(ThemeMode mode) {
-    setState(() {
-      _themeMode = mode;
-    });
+    themeModeNotifier.value = mode;
   }
 
   @override
   Widget build(BuildContext context) {
     final isFirstLaunch = CleanStorageService.isFirstLaunch;
-    
+
     // Determine initial route based on launch state
     String determineInitialRoute() {
       if (widget.initialRoute != null) return widget.initialRoute!;
       if (isFirstLaunch) return '/welcome';
       return '/home';
     }
-    
-    return MaterialApp(
-      title: 'DailyMinder',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: _themeMode,
-      navigatorKey: navigatorKey,
-      initialRoute: determineInitialRoute(),
-      routes: {
-        '/welcome': (context) => const WelcomeScreen(),
-        '/home': (context) => const AppShell(),
-        '/alarm': (context) => AlarmScreen(
-          payload: widget.alarmPayload ??
-            (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {}),
-        ),
+
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, themeMode, _) {
+        return MaterialApp(
+          title: 'DailyMinder',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeMode,
+          navigatorKey: navigatorKey,
+          initialRoute: determineInitialRoute(),
+          routes: {
+            '/welcome': (context) => const WelcomeScreen(),
+            '/home': (context) => const AppShell(),
+            '/alarm': (context) => AlarmScreen(
+              payload: widget.alarmPayload ??
+                (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {}),
+            ),
+          },
+        );
       },
     );
   }

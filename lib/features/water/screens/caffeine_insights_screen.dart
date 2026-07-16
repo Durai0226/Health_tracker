@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../../../core/constants/app_colors.dart';
+import '../../../core/design/app_colors_ext.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
@@ -48,11 +48,20 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Color get _caffeineColor {
+    final ext = AppColorsExt.of(context);
     final mg = _todayData?.totalCaffeineMg ?? 0;
-    if (mg >= _recommendedMax) return AppColors.error;
+    if (mg >= _recommendedMax) return ext.error.base;
     if (mg >= _warningThreshold) return Colors.orange;
-    return Colors.brown;
+    return ext.isDark ? Colors.brown.shade300 : Colors.brown;
   }
+
+  /// Caffeine's brown identity kept readable as a mark on app surfaces in dark.
+  Color get _brownMark =>
+      AppColorsExt.of(context).isDark ? Colors.brown.shade200 : Colors.brown.shade700;
+
+  /// Subtle brown tint for chips/badges that stays legible in dark mode.
+  Color _brownTint(AppColorsExt ext) =>
+      Colors.brown.withOpacity(ext.isDark ? 0.22 : 0.1);
 
   String get _caffeineStatus {
     final mg = _todayData?.totalCaffeineMg ?? 0;
@@ -64,8 +73,9 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ext.background,
       appBar: AppBar(
         backgroundColor: Colors.brown.shade700,
         elevation: 0,
@@ -86,7 +96,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 64, color: AppColors.error),
+                Icon(Icons.error_outline, size: 64, color: ext.error.base),
                 const SizedBox(height: 16),
                 const Text('Failed to load caffeine data'),
                 const SizedBox(height: 16),
@@ -137,6 +147,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     if (_todayData == null) {
       return const SizedBox.shrink();
     }
+    final ext = AppColorsExt.of(context);
     final todayData = _todayData!;
     final progress = (todayData.totalCaffeineMg / _recommendedMax).clamp(0.0, 1.0);
     
@@ -167,7 +178,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                   strokeWidth: 12,
                   backgroundColor: Colors.white24,
                   valueColor: AlwaysStoppedAnimation(
-                    progress >= 1 ? AppColors.error : Colors.white,
+                    progress >= 1 ? ext.error.base : Colors.white,
                   ),
                 ),
               ),
@@ -220,17 +231,18 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     if (_todayData == null) {
       return const SizedBox.shrink();
     }
+    final ext = AppColorsExt.of(context);
     final todayData = _todayData!;
     final caffeinedrinks = todayData.logs.where((l) => l.caffeineAmount > 0).toList();
-    
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -239,9 +251,9 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Today\'s Summary',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
           ),
           const SizedBox(height: 16),
           Row(
@@ -264,7 +276,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                 icon: Icons.water_drop,
                 value: '${_calculateHydrationImpact()}ml',
                 label: 'Hydration Impact',
-                color: AppColors.info,
+                color: ext.mark(ext.water),
               ),
             ],
           ),
@@ -279,11 +291,12 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     required String label,
     required Color color,
   }) {
+    final ext = AppColorsExt.of(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withOpacity(ext.isDark ? 0.18 : 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -300,9 +313,9 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
             ),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
-                color: AppColors.textSecondary,
+                color: ext.textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -326,17 +339,18 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildWeeklyChart() {
+    final ext = AppColorsExt.of(context);
     if (_weeklyData.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: ext.surface,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'No weekly data available',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: ext.textSecondary),
           ),
         ),
       );
@@ -350,11 +364,11 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -366,20 +380,20 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'This Week',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.brown.shade50,
+                  color: _brownTint(ext),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${_calculateWeeklyAverage()}mg avg',
                   style: TextStyle(
-                    color: Colors.brown.shade700,
+                    color: _brownMark,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -407,11 +421,11 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
 
                 Color barColor = Colors.brown.shade300;
                 if (caffeine >= _recommendedMax) {
-                  barColor = AppColors.error;
+                  barColor = ext.error.base;
                 } else if (caffeine >= _warningThreshold) {
                   barColor = Colors.orange;
                 } else if (isToday) {
-                  barColor = Colors.brown.shade600;
+                  barColor = ext.isDark ? Colors.brown.shade400 : Colors.brown.shade600;
                 }
 
                 return Column(
@@ -421,7 +435,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                       caffeine > 0 ? '${caffeine}mg' : '-',
                       style: TextStyle(
                         fontSize: 9,
-                        color: AppColors.textSecondary,
+                        color: ext.textSecondary,
                         fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
@@ -439,7 +453,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                       dayNames[day.weekday - 1],
                       style: TextStyle(
                         fontSize: 12,
-                        color: isToday ? Colors.brown : AppColors.textSecondary,
+                        color: isToday ? _brownMark : ext.textSecondary,
                         fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
@@ -456,7 +470,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
               const SizedBox(width: 16),
               _buildLegendItem(Colors.orange, 'Warning'),
               const SizedBox(width: 16),
-              _buildLegendItem(AppColors.error, 'High'),
+              _buildLegendItem(ext.error.base, 'High'),
             ],
           ),
         ],
@@ -465,6 +479,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildLegendItem(Color color, String label) {
+    final ext = AppColorsExt.of(context);
     return Row(
       children: [
         Container(
@@ -478,7 +493,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 10, color: ext.textSecondary),
         ),
       ],
     );
@@ -513,17 +528,18 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
       return const SizedBox.shrink();
     }
 
+    final ext = AppColorsExt.of(context);
     final sortedEntries = caffeineBreakdown.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -532,9 +548,9 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Caffeine Sources Today',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
           ),
           const SizedBox(height: 16),
           ...sortedEntries.map((entry) {
@@ -559,14 +575,14 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                       children: [
                         Text(
                           beverage?.name ?? entry.key,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                          style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary),
                         ),
                         const SizedBox(height: 4),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: percent / 100,
-                            backgroundColor: Colors.grey.shade200,
+                            backgroundColor: ext.surfaceVariant,
                             valueColor: const AlwaysStoppedAnimation(Colors.brown),
                             minHeight: 6,
                           ),
@@ -579,7 +595,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                     '${entry.value}mg',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.brown.shade700,
+                      color: _brownMark,
                     ),
                   ),
                 ],
@@ -592,24 +608,31 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildHealthInfo() {
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.amber.shade100, Colors.orange.shade100],
+          colors: ext.isDark
+              ? [ext.surfaceVariant, ext.surfaceVariant]
+              : [Colors.amber.shade100, Colors.orange.shade100],
         ),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.lightbulb_outline, color: Colors.amber),
-              SizedBox(width: 8),
+              Icon(Icons.lightbulb_outline,
+                  color: ext.isDark ? ext.mark(ext.warning) : Colors.orange.shade800),
+              const SizedBox(width: 8),
               Text(
                 'Caffeine Tips',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: ext.isDark ? ext.textPrimary : Colors.brown.shade900),
               ),
             ],
           ),
@@ -624,6 +647,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildTip(String emoji, String text) {
+    final ext = AppColorsExt.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -634,9 +658,9 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                color: ext.isDark ? ext.textSecondary : Colors.brown.shade800,
               ),
             ),
           ),
@@ -653,21 +677,22 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     final allLogs = _todayData!.logs;
     final caffeineDrinks = allLogs.where((l) => l.caffeineAmount > 0).toList();
     
+    final ext = AppColorsExt.of(context);
     if (caffeineDrinks.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: ext.surface,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Column(
+        child: Column(
           children: [
-            Text('☕', style: TextStyle(fontSize: 48)),
-            SizedBox(height: 12),
+            const Text('☕', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 12),
             Text(
               'No caffeinated drinks today',
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: ext.textSecondary,
                 fontSize: 16,
               ),
             ),
@@ -679,11 +704,11 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -695,20 +720,20 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Today\'s Caffeine Drinks',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.brown.shade50,
+                  color: _brownTint(ext),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${caffeineDrinks.length} drinks',
                   style: TextStyle(
-                    color: Colors.brown.shade700,
+                    color: _brownMark,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -724,13 +749,14 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   }
 
   Widget _buildDrinkItem(EnhancedWaterLog log) {
+    final ext = AppColorsExt.of(context);
     final time = '${log.time.hour.toString().padLeft(2, '0')}:${log.time.minute.toString().padLeft(2, '0')}';
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: ext.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -739,7 +765,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: Colors.brown.shade100,
+              color: _brownTint(ext),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
@@ -753,11 +779,11 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
               children: [
                 Text(
                   log.beverageName,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(fontWeight: FontWeight.w600, color: ext.textPrimary),
                 ),
                 Text(
                   '$time • ${log.amountMl}ml',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: TextStyle(fontSize: 12, color: ext.textSecondary),
                 ),
               ],
             ),
@@ -765,17 +791,18 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.brown.shade100,
+              color: _brownTint(ext),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               '${log.caffeineAmount}mg',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.brown.shade700,
+                color: _brownMark,
               ),
             ),
           ),
+
         ],
       ),
     );

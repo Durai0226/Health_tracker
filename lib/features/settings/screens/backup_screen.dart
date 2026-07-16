@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/backup_service.dart';
 
 class BackupScreen extends StatefulWidget {
@@ -30,7 +30,7 @@ class _BackupScreenState extends State<BackupScreen> {
     } catch (e) {
       _showError('Failed to load backups: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -45,11 +45,12 @@ class _BackupScreenState extends State<BackupScreen> {
       _loadBackups();
     } catch (e) {
       _showError('Failed to create backup: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _restoreBackup(BackupModel backup) async {
+    final ext = AppColorsExt.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -64,7 +65,7 @@ class _BackupScreenState extends State<BackupScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
             child: const Text('Restore'),
           ),
         ],
@@ -85,11 +86,12 @@ class _BackupScreenState extends State<BackupScreen> {
     } catch (e) {
       _showError('Failed to restore backup: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
-  
-    Future<void> _deleteBackup(BackupModel backup) async {
+
+  Future<void> _deleteBackup(BackupModel backup) async {
+    final ext = AppColorsExt.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -104,7 +106,7 @@ class _BackupScreenState extends State<BackupScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-             style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
             child: const Text('Delete'),
           ),
         ],
@@ -123,105 +125,129 @@ class _BackupScreenState extends State<BackupScreen> {
       _loadBackups();
     } catch (e) {
       _showError('Failed to delete backup: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-
   void _showError(String message) {
     if (!mounted) return;
+    final ext = AppColorsExt.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.error),
+      SnackBar(content: Text(message), backgroundColor: ext.fillBg(ext.error)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Backup & Restore'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+    final ext = AppColorsExt.of(context);
+    return AccentScope(
+      feature: FeatureAccent.brand,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Backup & Restore',
+              accent: ext.brand,
+              leading: AppIconButton(
+                icon: Icons.arrow_back_rounded,
+                filled: false,
+                accent: ext.brand,
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Expanded(
+              child: _isLoading ? _buildLoading(ext) : _buildContent(ext),
+            ),
+          ],
+        ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: AppColors.surface,
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Create backups of your data (Reminders, Health, etc.) to the cloud. Restoring will overwrite current local data.',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _createBackup,
-                          icon: const Icon(Icons.cloud_upload_outlined),
-                          label: const Text('Create New Backup'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
+    );
+  }
+
+  Widget _buildLoading(AppColorsExt ext) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 40),
+      children: const [
+        LoadingSkeleton.card(),
+        SizedBox(height: AppSpacing.lg),
+        LoadingSkeleton.card(),
+        SizedBox(height: AppSpacing.md),
+        LoadingSkeleton.card(),
+      ],
+    );
+  }
+
+  Widget _buildContent(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 40),
+      children: [
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Create backups of your data (Reminders, Health, etc.) to the cloud. Restoring will overwrite current local data.',
+                style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                label: 'Create New Backup',
+                leadingIcon: Icons.cloud_upload_outlined,
+                accent: ext.brand,
+                fullWidth: true,
+                onPressed: _createBackup,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (_backups.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xxl),
+            child: EmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'No backups found',
+              message: 'Create your first cloud backup to keep your data safe.',
+              accent: ext.brand,
+            ),
+          )
+        else
+          ..._backups.map((backup) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: AppCard(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  child: AppListTile(
+                    icon: Icons.history_rounded,
+                    iconColor: ext.mark(ext.brand),
+                    title: DateFormat('MMM d, y • h:mm a')
+                        .format(backup.createdAt),
+                    subtitle:
+                        '${(backup.sizeBytes / 1024).toStringAsFixed(1)} KB • ${backup.deviceName}',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.restore_rounded,
+                              color: ext.textPrimary),
+                          onPressed: () => _restoreBackup(backup),
+                          tooltip: 'Restore',
                         ),
-                      ),
-                    ],
+                        IconButton(
+                          icon: Icon(Icons.delete_outline_rounded,
+                              color: ext.mark(ext.error)),
+                          onPressed: () => _deleteBackup(backup),
+                          tooltip: 'Delete',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                Expanded(
-                  child: _backups.isEmpty
-                      ? const Center(child: Text('No backups found'))
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _backups.length,
-                          itemBuilder: (context, index) {
-                            final backup = _backups[index];
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ListTile(
-                                leading: const Icon(Icons.history, color: AppColors.primary),
-                                title: Text(
-                                  DateFormat('MMM d, y • h:mm a').format(backup.createdAt),
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                subtitle: Text(
-                                  '${(backup.sizeBytes / 1024).toStringAsFixed(1)} KB • ${backup.deviceName}',
-                                ),
-                                trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                        IconButton(
-                                            icon: const Icon(Icons.restore, color: AppColors.textPrimary),
-                                            onPressed: () => _restoreBackup(backup),
-                                            tooltip: 'Restore',
-                                        ),
-                                        IconButton(
-                                            icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                                            onPressed: () => _deleteBackup(backup),
-                                            tooltip: 'Delete',
-                                        ),
-                                    ]
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
+              )),
+      ],
     );
   }
 }

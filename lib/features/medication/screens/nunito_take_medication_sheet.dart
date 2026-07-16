@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/nunito_theme.dart';
-import '../widgets/nunito_glass_card.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
@@ -22,36 +21,19 @@ class NunitoTakeMedicationSheet extends StatefulWidget {
   State<NunitoTakeMedicationSheet> createState() => _NunitoTakeMedicationSheetState();
 }
 
-class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
-    with SingleTickerProviderStateMixin {
+class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
+  static const List<String> _moodEmojis = ['😄', '🙂', '😐', '😕', '😢'];
+  static const List<String> _moodLabels = ['Great', 'Good', 'Okay', 'Bad', 'Terrible'];
+
   int _selectedMood = -1;
   String? _sideEffects;
-  String? _notes;
   bool _isLoading = false;
-
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
 
   final HapticService _hapticService = HapticService();
   final TextEditingController _notesController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _scaleAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutBack,
-    );
-    _controller.forward();
-  }
-
-  @override
   void dispose() {
-    _controller.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -84,14 +66,14 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
         );
       }
     }
-    
-    setState(() => _isLoading = false);
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _skipMedication() async {
     _hapticService.medicineSkipped();
-    
-    final reason = await _showSkipReasonDialog();
+
+    final reason = await _showSkipReasonSheet();
     if (reason == null) return;
 
     setState(() => _isLoading = true);
@@ -108,46 +90,45 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
       );
 
       await MedicineCleanStorageService.addLog(log);
-      
+
       if (mounted) {
         Navigator.pop(context, {'skipped': true, 'log': log});
       }
     } catch (e) {
       debugPrint('Error skipping medication: $e');
     }
-    
-    setState(() => _isLoading = false);
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<int?> _showSkipReasonDialog() async {
-    return showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-        ),
-        title: Text('Why are you skipping?', style: NunitoTheme.heading3),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildSkipReasonOption(0, 'Side effects'),
-            _buildSkipReasonOption(1, 'Forgot to take'),
-            _buildSkipReasonOption(2, 'Ran out'),
-            _buildSkipReasonOption(3, 'Feeling better'),
-            _buildSkipReasonOption(4, 'Doctor advised'),
-            _buildSkipReasonOption(5, 'Other'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSkipReasonOption(int index, String label) {
-    return ListTile(
-      title: Text(label),
-      onTap: () => Navigator.pop(context, index),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(NunitoTheme.radiusSmall),
+  Future<int?> _showSkipReasonSheet() {
+    final ext = AppColorsExt.of(context);
+    const reasons = [
+      'Side effects',
+      'Forgot to take',
+      'Ran out',
+      'Feeling better',
+      'Doctor advised',
+      'Other',
+    ];
+    return AppBottomSheet.show<int>(
+      context,
+      title: 'Why are you skipping?',
+      icon: Icons.help_outline_rounded,
+      accent: ext.medicine,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (int i = 0; i < reasons.length; i++)
+            AppListTile(
+              icon: Icons.radio_button_unchecked_rounded,
+              title: reasons[i],
+              accent: ext.medicine,
+              trailing: const SizedBox.shrink(),
+              onTap: () => Navigator.pop(ctx, i),
+            ),
+        ],
       ),
     );
   }
@@ -159,36 +140,42 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = AppColorsExt.of(context);
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
 
-    return ScaleTransition(
-      scale: _scaleAnimation,
+    return AccentScope(
+      feature: FeatureAccent.medicine,
       child: Container(
         margin: EdgeInsets.only(bottom: bottomPadding),
         decoration: BoxDecoration(
-          color: isDark ? NunitoTheme.cardDark : Colors.white,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(NunitoTheme.radiusLarge),
-          ),
+          color: ext.surfaceElevated,
+          borderRadius: AppRadius.topSheet,
         ),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(NunitoTheme.spacingL),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildHandle(),
-                const SizedBox(height: NunitoTheme.spacingL),
-                _buildMedicineInfo(isDark),
-                const SizedBox(height: NunitoTheme.spacingL),
-                _buildMoodSelector(isDark),
-                const SizedBox(height: NunitoTheme.spacingM),
-                _buildNotesField(isDark),
-                const SizedBox(height: NunitoTheme.spacingL),
-                _buildActionButtons(isDark),
-                const SizedBox(height: NunitoTheme.spacingM),
-              ],
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.gutter),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildHandle(ext),
+                  const SizedBox(height: AppSpacing.lg),
+                  _buildMedicineInfo(ext),
+                  const SizedBox(height: AppSpacing.lg),
+                  _buildMoodSelector(ext),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    controller: _notesController,
+                    hint: 'Add notes (optional)',
+                    accent: ext.medicine,
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _buildActionButtons(ext),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+              ),
             ),
           ),
         ),
@@ -196,18 +183,19 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
     );
   }
 
-  Widget _buildHandle() {
+  Widget _buildHandle(AppColorsExt ext) {
     return Container(
       width: 40,
       height: 4,
       decoration: BoxDecoration(
-        color: NunitoTheme.textTertiary.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(2),
+        color: ext.outlineStrong,
+        borderRadius: AppRadius.brFull,
       ),
     );
   }
 
-  Widget _buildMedicineInfo(bool isDark) {
+  Widget _buildMedicineInfo(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
     return Row(
       children: [
         NunitoPillVisual(
@@ -215,31 +203,25 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
           shape: widget.medicine.shape,
           size: 64,
         ),
-        const SizedBox(width: NunitoTheme.spacingM),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 widget.medicine.name,
-                style: NunitoTheme.heading2.copyWith(
-                  color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                ),
+                style: tt.headlineSmall?.copyWith(color: ext.textPrimary),
               ),
               const SizedBox(height: 4),
               Text(
                 widget.medicine.displayDosage,
-                style: NunitoTheme.bodyMedium.copyWith(
-                  color: NunitoTheme.textSecondary,
-                ),
+                style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
               ),
               if (widget.medicine.instructions != null) ...[
                 const SizedBox(height: 4),
                 Text(
                   widget.medicine.instructions!,
-                  style: NunitoTheme.bodySmall.copyWith(
-                    color: NunitoTheme.primary,
-                  ),
+                  style: tt.bodySmall?.copyWith(color: ext.mark(ext.medicine)),
                 ),
               ],
             ],
@@ -249,60 +231,29 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
     );
   }
 
-  Widget _buildMoodSelector(bool isDark) {
+  Widget _buildMoodSelector(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'How are you feeling?',
-          style: NunitoTheme.labelLarge.copyWith(
-            color: isDark ? Colors.white70 : NunitoTheme.textSecondary,
-          ),
+          style: tt.labelLarge?.copyWith(color: ext.textSecondary),
         ),
-        const SizedBox(height: NunitoTheme.spacingS),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: List.generate(5, (index) {
             final isSelected = _selectedMood == index;
-            return GestureDetector(
+            return AppChip(
+              label: '${_moodEmojis[index]}  ${_moodLabels[index]}',
+              selected: isSelected,
+              accent: ext.medicine,
               onTap: () {
                 _hapticService.selection();
                 setState(() => _selectedMood = index);
               },
-              child: AnimatedContainer(
-                duration: NunitoTheme.animationFast,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? NunitoTheme.moodColors[index].withOpacity(0.2)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? NunitoTheme.moodColors[index]
-                        : NunitoTheme.textTertiary.withOpacity(0.2),
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      NunitoTheme.moodEmojis[index],
-                      style: const TextStyle(fontSize: 28),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      NunitoTheme.moodLabels[index],
-                      style: NunitoTheme.caption.copyWith(
-                        color: isSelected
-                            ? NunitoTheme.moodColors[index]
-                            : NunitoTheme.textTertiary,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             );
           }),
         ),
@@ -310,112 +261,41 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
     );
   }
 
-  Widget _buildNotesField(bool isDark) {
-    return TextField(
-      controller: _notesController,
-      maxLines: 2,
-      style: NunitoTheme.bodyMedium.copyWith(
-        color: isDark ? Colors.white : NunitoTheme.textPrimary,
-      ),
-      decoration: InputDecoration(
-        hintText: 'Add notes (optional)',
-        hintStyle: NunitoTheme.bodyMedium.copyWith(
-          color: NunitoTheme.textTertiary,
-        ),
-        filled: true,
-        fillColor: isDark
-            ? NunitoTheme.surfaceDark
-            : NunitoTheme.backgroundLight,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.all(NunitoTheme.spacingM),
-      ),
-    );
-  }
-
-  Widget _buildActionButtons(bool isDark) {
+  Widget _buildActionButtons(AppColorsExt ext) {
     return Column(
       children: [
         // Primary action - Take
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _takeMedication,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: NunitoTheme.success,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-              ),
-              elevation: 0,
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.check_rounded, size: 24),
-                      const SizedBox(width: 8),
-                      Text('Take Medication', style: NunitoTheme.labelLarge.copyWith(color: Colors.white)),
-                    ],
-                  ),
-          ),
+        AppButton(
+          label: 'Take Medication',
+          leadingIcon: Icons.check_rounded,
+          variant: AppButtonVariant.primary,
+          size: AppButtonSize.lg,
+          accent: ext.success,
+          fullWidth: true,
+          loading: _isLoading,
+          onPressed: _isLoading ? null : _takeMedication,
         ),
-        const SizedBox(height: NunitoTheme.spacingS),
+        const SizedBox(height: AppSpacing.sm),
         // Secondary actions
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
+              child: AppButton(
+                label: 'Snooze',
+                leadingIcon: Icons.snooze_rounded,
+                variant: AppButtonVariant.secondary,
+                accent: ext.medicine,
                 onPressed: _isLoading ? null : _snoozeMedication,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: NunitoTheme.primary,
-                  side: BorderSide(color: NunitoTheme.primary.withOpacity(0.3)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.snooze_rounded, size: 20, color: NunitoTheme.primary),
-                    const SizedBox(width: 6),
-                    Text('Snooze', style: NunitoTheme.labelMedium.copyWith(color: NunitoTheme.primary)),
-                  ],
-                ),
               ),
             ),
-            const SizedBox(width: NunitoTheme.spacingS),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: OutlinedButton(
+              child: AppButton(
+                label: 'Skip',
+                leadingIcon: Icons.close_rounded,
+                variant: AppButtonVariant.tonal,
+                accent: ext.warning,
                 onPressed: _isLoading ? null : _skipMedication,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: NunitoTheme.warning,
-                  side: BorderSide(color: NunitoTheme.warning.withOpacity(0.3)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.close_rounded, size: 20, color: NunitoTheme.warning),
-                    const SizedBox(width: 6),
-                    Text('Skip', style: NunitoTheme.labelMedium.copyWith(color: NunitoTheme.warning)),
-                  ],
-                ),
               ),
             ),
           ],

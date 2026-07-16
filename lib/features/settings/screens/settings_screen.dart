@@ -1,7 +1,6 @@
 
 import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/widgets/app/app_logo.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/haptic_service.dart';
@@ -33,24 +32,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isLoading = true);
     final result = await _authService.signInWithGoogle();
     setState(() => _isLoading = false);
-    
-    if (result == null && mounted) {
+
+    if (!mounted) return;
+    final ext = AppColorsExt.of(context);
+    if (result == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Successfully signed in with Google!'),
-          backgroundColor: AppColors.success,
+          backgroundColor: ext.fillBg(ext.success),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
           margin: const EdgeInsets.all(16),
         ),
       );
-    } else if (result != null && result != 'cancelled' && mounted) {
+    } else if (result != 'cancelled') {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result),
-          backgroundColor: AppColors.error,
+          backgroundColor: ext.fillBg(ext.error),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -78,289 +79,295 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context, _) {
         final isGuest = _authService.isGuest;
         final currentUser = _authService.currentUser;
-        
+
         return _buildSettingsScaffold(context, isGuest, currentUser);
       },
     );
   }
 
   Widget _buildSettingsScaffold(BuildContext context, bool isGuest, currentUser) {
-    return Scaffold(
-      backgroundColor: AppColors.getBackground(context),
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          "Settings",
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-        children: [
-          // App is 100% Free - Ad Supported
-          const AdFreeMessage(),
-          const SizedBox(height: 24),
-          if (isGuest)
-            _buildSection(
-              context,
-              title: "Account",
-              children: [
-                _buildSettingsTile(
-                  context,
-                  icon: Icons.person_add_rounded,
-                  iconColor: AppColors.primary,
-                  title: "Sign in with Google",
-                  subtitle: "Sync your data and access from anywhere",
-                  onTap: _isLoading ? () {} : _handleGoogleSignIn,
-                  trailing: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                          ),
-                        )
-                      : null,
-                ),
-                _buildSettingsTile(
-                  context,
-                  icon: Icons.logout_rounded,
-                  iconColor: AppColors.error,
-                  title: "Sign Out",
-                  subtitle: "Return to welcome screen",
-                  onTap: _handleSignOut,
-                ),
-              ],
-            )
-          else
-            _buildSection(
-              context,
-              title: "Account",
-              children: [
-                _buildSettingsTile(
-                  context,
-                  icon: Icons.person_rounded,
-                  iconColor: AppColors.primary,
-                  title: currentUser?.name ?? 'User',
-                  subtitle: currentUser?.email ?? '',
-                  onTap: () {},
-                  enabled: false,
-                ),
-                _buildSettingsTile(
-                  context,
-                  icon: Icons.logout_rounded,
-                  iconColor: AppColors.error,
-                  title: "Sign Out",
-                  subtitle: "You'll continue as a guest",
-                  onTap: _handleSignOut,
-                ),
-                // Remove Ads Option
-                 _buildRemoveAdsTile(),
-              ],
-            ),
-          if (isGuest || !isGuest) const SizedBox(height: 24),
-          _buildSection(
-            context,
-            title: "General",
-            children: [
-              _buildThemeToggleTile(),
-              _buildSettingsTile(
-                context,
-                icon: Icons.notifications_outlined,
-                iconColor: AppColors.info,
-                title: "Notifications",
-                subtitle: "Reminder sounds and timing",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()),
-                  );
-                },
-              ),
-              _buildHapticSettingsTile(),
-              _buildVitaVibeSettingsTile(),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildSection(
-            context,
-            title: "Data",
-            children: [
-              _buildSettingsTile(
-                context,
-                icon: Icons.save_alt_rounded,
-                iconColor: AppColors.warning,
-                title: "Backup & Restore",
-                subtitle: "Export or import your data as a file",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const BackupSettingsScreen()),
-                  );
-                },
-                enabled: true,
-              ),
-              _buildSettingsTile(
-                context,
-                icon: Icons.cloud_upload_outlined,
-                iconColor: AppColors.info,
-                title: "Cloud Backup",
-                subtitle: _authService.isAuthenticated
-                    ? "Manage your cloud backups"
-                    : "Sign in to enable cloud backup",
-                onTap: () {
-                  if (_authService.isAuthenticated) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const BackupScreen()),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sign in with Google to enable cloud backup.'),
+    final ext = AppColorsExt.of(context);
+    return AccentScope(
+      feature: FeatureAccent.brand,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(title: 'Settings', accent: ext.brand),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter, AppSpacing.xs, AppSpacing.gutter, 100),
+                children: [
+                  // App is 100% Free - Ad Supported
+                  const AdFreeMessage(),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ---- Account ----
+                  if (isGuest)
+                    _section(
+                      title: 'Account',
+                      icon: Icons.account_circle_outlined,
+                      tiles: [
+                        AppListTile(
+                          icon: Icons.person_add_rounded,
+                          iconColor: ext.mark(ext.brand),
+                          title: 'Sign in with Google',
+                          subtitle: 'Sync your data and access from anywhere',
+                          onTap: _isLoading ? null : _handleGoogleSignIn,
+                          trailing: _isLoading
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        ext.mark(ext.brand)),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        AppListTile(
+                          icon: Icons.logout_rounded,
+                          iconColor: ext.mark(ext.error),
+                          title: 'Sign Out',
+                          subtitle: 'Return to welcome screen',
+                          onTap: _handleSignOut,
+                        ),
+                      ],
+                    )
+                  else
+                    _section(
+                      title: 'Account',
+                      icon: Icons.account_circle_outlined,
+                      tiles: [
+                        AppListTile(
+                          icon: Icons.person_rounded,
+                          iconColor: ext.mark(ext.brand),
+                          title: currentUser?.name ?? 'User',
+                          subtitle: currentUser?.email ?? '',
+                          trailing: const SizedBox.shrink(),
+                        ),
+                        AppListTile(
+                          icon: Icons.logout_rounded,
+                          iconColor: ext.mark(ext.error),
+                          title: 'Sign Out',
+                          subtitle: "You'll continue as a guest",
+                          onTap: _handleSignOut,
+                        ),
+                        _buildRemoveAdsTile(),
+                      ],
+                    ),
+
+                  // ---- Appearance (ONB-5: System / Light / Dark) ----
+                  SectionHeader(
+                    title: 'Appearance',
+                    icon: Icons.palette_outlined,
+                    accent: ext.brand,
+                  ),
+                  _buildAppearanceCard(),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ---- General ----
+                  _section(
+                    title: 'General',
+                    icon: Icons.tune_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Icons.notifications_outlined,
+                        iconColor: ext.mark(ext.info),
+                        title: 'Notifications',
+                        subtitle: 'Reminder sounds and timing',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const NotificationSettingsScreen()),
+                          );
+                        },
                       ),
-                    );
-                  }
-                },
-                enabled: true,
-                trailing: _authService.isAuthenticated
-                    ? null
-                    : Icon(Icons.lock_outline_rounded,
-                        color: AppColors.getDivider(context)),
+                      _buildHapticSettingsTile(),
+                      _buildVitaVibeSettingsTile(),
+                    ],
+                  ),
+
+                  // ---- Data ----
+                  _section(
+                    title: 'Data',
+                    icon: Icons.storage_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Icons.save_alt_rounded,
+                        iconColor: ext.mark(ext.warning),
+                        title: 'Backup & Restore',
+                        subtitle: 'Export or import your data as a file',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const BackupSettingsScreen()),
+                          );
+                        },
+                      ),
+                      AppListTile(
+                        icon: Icons.cloud_upload_outlined,
+                        iconColor: ext.mark(ext.info),
+                        title: 'Cloud Backup',
+                        subtitle: _authService.isAuthenticated
+                            ? 'Manage your cloud backups'
+                            : 'Sign in to enable cloud backup',
+                        onTap: () {
+                          if (_authService.isAuthenticated) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const BackupScreen()),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    'Sign in with Google to enable cloud backup.'),
+                              ),
+                            );
+                          }
+                        },
+                        trailing: _authService.isAuthenticated
+                            ? null
+                            : Icon(Icons.lock_outline_rounded,
+                                color: ext.textTertiary),
+                      ),
+                    ],
+                  ),
+
+                  // ---- About ----
+                  _section(
+                    title: 'About',
+                    icon: Icons.info_outline_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Icons.info_outline_rounded,
+                        iconColor: ext.mark(ext.brand),
+                        title: 'About DailyMinder',
+                        subtitle: 'Version 1.0.0',
+                        onTap: () {
+                          showAboutDialog(
+                            context: context,
+                            applicationName: 'DailyMinder',
+                            applicationVersion: '1.0.0',
+                            applicationIcon: const AppLogo.mark(size: 44),
+                            applicationLegalese: '© 2026 DailyMinder',
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-          if (!isGuest) const SizedBox(height: 24),
-          _buildSection(
-            context,
-            title: "About",
-            children: [
-              _buildSettingsTile(
-                context,
-                icon: Icons.info_outline_rounded,
-                iconColor: AppColors.textSecondary,
-                title: "About DailyMinder",
-                subtitle: "Version 1.0.0",
-                onTap: () {
-                  showAboutDialog(
-                    context: context,
-                    applicationName: "DailyMinder",
-                    applicationVersion: "1.0.0",
-                    applicationIcon: const AppLogo.mark(size: 44),
-                    applicationLegalese: "© 2026 DailyMinder",
-                  );
-                },
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-
-  List<Widget> _buildChildrenWithDividers(List<Widget> children) {
-    final result = <Widget>[];
-    for (int i = 0; i < children.length; i++) {
-      result.add(children[i]);
-      if (i < children.length - 1) {
-        result.add(Divider(
-          height: 1,
-          indent: 68,
-          color: AppColors.getDivider(context).withOpacity(0.4),
-        ));
-      }
-    }
-    return result;
-  }
-
-  Widget _buildSection(BuildContext context, {required String title, required List<Widget> children}) {
+  /// A titled group: [SectionHeader] + an [AppCard] of divider-separated tiles.
+  Widget _section({
+    required String title,
+    IconData? icon,
+    required List<Widget> tiles,
+  }) {
+    final ext = AppColorsExt.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 12),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.getTextSecondary(context),
-            ),
-          ),
+        SectionHeader(title: title, icon: icon, accent: ext.brand),
+        AppCard(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Column(children: _withDividers(tiles)),
         ),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: _buildChildrenWithDividers(children),
-          ),
-        ),
+        const SizedBox(height: AppSpacing.lg),
       ],
     );
   }
 
-  Widget _buildSettingsTile(
-    BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    Widget? trailing,
-    bool enabled = true,
-  }) {
-    final isDark = AppColors.isDark(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
+  List<Widget> _withDividers(List<Widget> tiles) {
+    final ext = AppColorsExt.of(context);
+    final out = <Widget>[];
+    for (var i = 0; i < tiles.length; i++) {
+      out.add(tiles[i]);
+      if (i < tiles.length - 1) {
+        out.add(Divider(
+          height: 1,
+          indent: 52,
+          endIndent: 8,
+          color: ext.outline,
+        ));
+      }
+    }
+    return out;
+  }
+
+  Widget _buildAppearanceCard() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final settings = CleanStorageService.getUserSettings();
+    final pref = settings.themeModePreference;
+    final index = pref == 'light' ? 1 : (pref == 'dark' ? 2 : 0);
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(isDark ? 0.2 : 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  color: ext.brand.base.withOpacity(0.12),
+                  borderRadius: AppRadius.brSm,
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
+                child: Icon(Icons.palette_rounded,
+                    size: 20, color: ext.mark(ext.brand)),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: enabled ? AppColors.getTextPrimary(context) : AppColors.getTextSecondary(context),
-                      ),
-                    ),
+                    Text('Theme', style: tt.titleLarge),
                     const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.getTextSecondary(context),
-                      ),
-                    ),
+                    Text('Choose how DailyMinder looks',
+                        style: tt.bodyMedium
+                            ?.copyWith(color: ext.textSecondary)),
                   ],
                 ),
               ),
-              trailing ?? Icon(Icons.chevron_right_rounded, color: AppColors.getDivider(context)),
             ],
           ),
-        ),
+          const SizedBox(height: AppSpacing.md),
+          SegmentedToggle(
+            index: index,
+            accent: ext.brand,
+            items: const [
+              SegmentItem(icon: Icons.brightness_auto_rounded, label: 'System'),
+              SegmentItem(icon: Icons.light_mode_rounded, label: 'Light'),
+              SegmentItem(icon: Icons.dark_mode_rounded, label: 'Dark'),
+            ],
+            onChanged: (i) async {
+              _hapticService.tap();
+              final newPref = i == 1 ? 'light' : (i == 2 ? 'dark' : 'system');
+              final updated = settings.copyWith(
+                themeModePreference: newPref,
+                darkModeEnabled: newPref == 'dark',
+              );
+              await CleanStorageService.saveUserSettings(updated);
+              // Instantly rebuild MaterialApp with the new mode.
+              themeModeNotifier.value = themeModeFromPreference(newPref);
+              if (mounted) setState(() {});
+            },
+          ),
+        ],
       ),
     );
   }
@@ -369,66 +376,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListenableBuilder(
       listenable: _hapticService,
       builder: (context, _) {
-        final isDark = AppColors.isDark(context);
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              _hapticService.tap();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const HapticSettingsScreen()),
-              );
+        final ext = AppColorsExt.of(context);
+        return AppListTile(
+          icon: Icons.vibration_rounded,
+          iconColor: ext.mark(ext.brand),
+          title: 'Haptic Feedback',
+          subtitle: _hapticService.isEnabled
+              ? 'Enabled • ${_getIntensityLabel(_hapticService.globalIntensity)}'
+              : 'Disabled',
+          onTap: () {
+            _hapticService.tap();
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HapticSettingsScreen()),
+            );
+          },
+          trailing: Switch(
+            value: _hapticService.isEnabled,
+            onChanged: (value) async {
+              await _hapticService.setEnabled(value);
+              setState(() {});
             },
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(isDark ? 0.2 : 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.vibration_rounded, color: AppColors.primary, size: 20),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Haptic Feedback",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                            color: AppColors.getTextPrimary(context),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _hapticService.isEnabled 
-                              ? "Enabled • ${_getIntensityLabel(_hapticService.globalIntensity)}"
-                              : "Disabled",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.getTextSecondary(context),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: _hapticService.isEnabled,
-                    onChanged: (value) async {
-                      await _hapticService.setEnabled(value);
-                      setState(() {});
-                    },
-                  ),
-                ],
-              ),
-            ),
           ),
         );
       },
@@ -452,201 +420,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListenableBuilder(
       listenable: _vitaVibeService,
       builder: (context, _) {
-        final isDark = AppColors.isDark(context);
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              _vitaVibeService.tap();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const VitaVibeSettingsScreen()),
-              );
-            },
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.getCardBg(context),
-                borderRadius: BorderRadius.circular(14),
+        final ext = AppColorsExt.of(context);
+        final tt = Theme.of(context).textTheme;
+        return AppListTile(
+          icon: Icons.vibration_rounded,
+          iconColor: ext.mark(ext.success),
+          title: 'Haptix',
+          subtitle: _vitaVibeService.isEnabled
+              ? 'Advanced haptic patterns enabled'
+              : 'Advanced vibration patterns',
+          onTap: () {
+            _vitaVibeService.tap();
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const VitaVibeSettingsScreen()),
+            );
+          },
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: ext.success.container,
+                  borderRadius: AppRadius.brFull,
+                ),
+                child: Text(
+                  'FREE',
+                  style: tt.labelSmall?.copyWith(
+                    color: ext.success.onContainer,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 9,
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.vibration_rounded, color: AppColors.primary, size: 20),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              "Haptix",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: AppColors.getTextPrimary(context),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [AppColors.success, AppColors.success.withOpacity(0.8)],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                "FREE",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _vitaVibeService.isEnabled 
-                              ? "Advanced haptic patterns enabled"
-                              : "Advanced vibration patterns",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.getTextSecondary(context),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: _vitaVibeService.isEnabled,
-                    onChanged: (value) async {
-                      await _vitaVibeService.setEnabled(value);
-                      setState(() {});
-                    },
-                  ),
-                ],
+              const SizedBox(width: 8),
+              Switch(
+                value: _vitaVibeService.isEnabled,
+                onChanged: (value) async {
+                  await _vitaVibeService.setEnabled(value);
+                  setState(() {});
+                },
               ),
-            ),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildThemeToggleTile() {
-    final settings = CleanStorageService.getUserSettings();
-    final isDarkMode = settings.darkModeEnabled;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () async {
-          _hapticService.tap();
-          final newDarkMode = !isDarkMode;
-          final updated = settings.copyWith(darkModeEnabled: newDarkMode);
-          await CleanStorageService.saveUserSettings(updated);
-          
-          // Update app theme
-          MyApp.of(context)?.setThemeMode(
-            newDarkMode ? ThemeMode.dark : ThemeMode.light,
-          );
-          
-          setState(() {});
-        },
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: (isDarkMode ? Colors.indigo : AppColors.warning).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                  color: isDarkMode ? Colors.indigo : AppColors.warning,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Appearance",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isDarkMode ? "Dark mode enabled" : "Light mode enabled",
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Theme.of(context).textTheme.bodyMedium?.color,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: isDarkMode,
-                onChanged: (value) async {
-                  _hapticService.tap();
-                  final updated = settings.copyWith(darkModeEnabled: value);
-                  await CleanStorageService.saveUserSettings(updated);
-                  
-                  MyApp.of(context)?.setThemeMode(
-                    value ? ThemeMode.dark : ThemeMode.light,
-                  );
-                  
-                  setState(() {});
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildRemoveAdsTile() {
+    final ext = AppColorsExt.of(context);
     final settings = CleanStorageService.getUserSettings();
     final isAdsDisabled = settings.isAdsDisabled;
 
-    return _buildSettingsTile(
-      context,
+    return AppListTile(
       icon: isAdsDisabled ? Icons.verified_rounded : Icons.ad_units_rounded,
-      iconColor: isAdsDisabled ? AppColors.success : AppColors.primary,
-      title: isAdsDisabled ? "Ads Disabled" : "Ad Settings",
-      subtitle: isAdsDisabled ? "Ads are currently disabled" : "Manage ad preferences",
+      iconColor: ext.mark(isAdsDisabled ? ext.success : ext.brand),
+      title: isAdsDisabled ? 'Ads Disabled' : 'Ad Settings',
+      subtitle: isAdsDisabled
+          ? 'Ads are currently disabled'
+          : 'Manage ad preferences',
       onTap: () async {
         if (isAdsDisabled) return;
 
         // Simulate purchase
         setState(() => _isLoading = true);
         await Future.delayed(const Duration(seconds: 1)); // Simulate network
-        
+
         final updated = settings.copyWith(isAdsDisabled: true);
         await CleanStorageService.saveUserSettings(updated);
-        
+
         setState(() => _isLoading = false);
-        
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ads removed successfully!')),
@@ -654,8 +501,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // Force rebuild to update UI
         setState(() {});
       },
-      trailing: isAdsDisabled 
-          ? const Icon(Icons.check_circle_outline, color: AppColors.success)
+      trailing: isAdsDisabled
+          ? Icon(Icons.check_circle_outline, color: ext.mark(ext.success))
           : null,
     );
   }

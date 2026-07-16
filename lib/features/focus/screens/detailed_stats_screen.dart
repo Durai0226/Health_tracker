@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/design/app_colors_ext.dart';
 import '../models/focus_session.dart';
 import '../models/detailed_stats.dart';
 import '../services/stats_service.dart';
@@ -32,8 +32,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ext.background,
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge([_statsService, _tagService]),
@@ -69,28 +70,30 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   }
 
   Widget _buildAppBar() {
+    final ext = AppColorsExt.of(context);
     return SliverAppBar(
       pinned: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: ext.background,
       leading: IconButton(
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: ext.surface,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.arrow_back_rounded, size: 20),
+          child: Icon(Icons.arrow_back_rounded, size: 20, color: ext.textPrimary),
         ),
       ),
-      title: const Text(
+      title: Text(
         'Detailed Statistics',
-        style: TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(fontWeight: FontWeight.bold, color: ext.textPrimary),
       ),
     );
   }
 
   Widget _buildPeriodSelector() {
+    final ext = AppColorsExt.of(context);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Row(
@@ -104,10 +107,10 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.white,
+                    color: isSelected ? ext.fillBg(ext.focus) : ext.surface,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isSelected ? AppColors.primary : Colors.grey.shade200,
+                      color: isSelected ? ext.fillBg(ext.focus) : ext.outline,
                     ),
                   ),
                   child: Center(
@@ -116,7 +119,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        color: isSelected ? ext.fillFg(ext.focus) : ext.textPrimary,
                       ),
                     ),
                   ),
@@ -160,18 +163,20 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
         break;
     }
 
+    final ext = AppColorsExt.of(context);
+    final focusHero = ext.isDark ? ext.focus.container : ext.focus.base;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+          colors: [focusHero, focusHero.withOpacity(0.8)],
         ),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.4),
+            color: ext.focus.base.withOpacity(0.4),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -276,20 +281,22 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
         break;
     }
 
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Focus Time Trend',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           const SizedBox(height: 24),
@@ -305,6 +312,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   }
 
   Widget _buildChartEmptyState() {
+    final ext = AppColorsExt.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -312,15 +320,15 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
           Icon(
             Icons.bar_chart_rounded,
             size: 36,
-            color: AppColors.textSecondary.withOpacity(0.4),
+            color: ext.textSecondary.withOpacity(0.4),
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'No focus sessions yet',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: ext.textSecondary,
             ),
           ),
           const SizedBox(height: 4),
@@ -328,7 +336,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
             'Complete a session to see your trend',
             style: TextStyle(
               fontSize: 12,
-              color: AppColors.textSecondary.withOpacity(0.7),
+              color: ext.textSecondary.withOpacity(0.7),
             ),
           ),
         ],
@@ -344,23 +352,25 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
     }
 
     final maxMins = stats.first.totalMinutes;
+    final ext = AppColorsExt.of(context);
 
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: ext.surface,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Tag Breakdown',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: ext.textPrimary,
                 ),
               ),
               const SizedBox(height: 20),
@@ -390,9 +400,10 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                           Expanded(
                             child: Text(
                               stat.tagName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
+                                color: ext.textPrimary,
                               ),
                             ),
                           ),
@@ -411,7 +422,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: percentage,
-                          backgroundColor: Colors.grey.shade100,
+                          backgroundColor: ext.surfaceVariant,
                           valueColor: AlwaysStoppedAnimation(stat.tagColor),
                           minHeight: 6,
                         ),
@@ -429,8 +440,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   }
 
   Widget _buildBarChart(List<_ChartData> data) {
+    final ext = AppColorsExt.of(context);
     final maxValue = data.map((d) => d.value).reduce((a, b) => a > b ? a : b);
-    
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: data.map((d) {
@@ -443,16 +455,16 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                 height: height.clamp(4.0, 120.0),
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.7),
+                  color: ext.focus.base.withOpacity(0.7),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 d.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
-                  color: AppColors.textSecondary,
+                  color: ext.textSecondary,
                 ),
               ),
             ],
@@ -473,32 +485,34 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       ..sort((a, b) => b.value.compareTo(a.value));
     
     final total = breakdown.values.fold(0, (a, b) => a + b);
+    final ext = AppColorsExt.of(context);
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Activity Breakdown',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           const SizedBox(height: 20),
           ...sortedEntries.map((entry) {
             final percentage = total > 0 ? entry.value / total : 0.0;
             final colors = [
-              AppColors.primary,
-              AppColors.info,
-              AppColors.success,
-              AppColors.warning,
-              AppColors.periodPrimary,
+              ext.focus.base,
+              ext.info.base,
+              ext.success.base,
+              ext.warning.base,
+              ext.error.base,
             ];
             final color = colors[entry.key.index % colors.length];
 
@@ -513,9 +527,10 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                       Expanded(
                         child: Text(
                           entry.key.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
+                            color: ext.textPrimary,
                           ),
                         ),
                       ),
@@ -534,7 +549,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: percentage,
-                      backgroundColor: Colors.grey.shade100,
+                      backgroundColor: ext.surfaceVariant,
                       valueColor: AlwaysStoppedAnimation(color),
                       minHeight: 8,
                     ),
@@ -555,20 +570,22 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       return const SizedBox();
     }
 
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Productivity Patterns',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           const SizedBox(height: 20),
@@ -579,7 +596,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                   '⏰',
                   'Peak Hour',
                   pattern.mostProductiveHourLabel,
-                  const Color(0xFF4CAF50),
+                  ext.success.base,
                 ),
               ),
               const SizedBox(width: 12),
@@ -588,17 +605,18 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                   '📅',
                   'Best Day',
                   pattern.mostProductiveDayLabel,
-                  const Color(0xFF2196F3),
+                  ext.info.base,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Hourly Distribution',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
+              color: ext.textPrimary,
             ),
           ),
           const SizedBox(height: 12),
@@ -612,6 +630,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   }
 
   Widget _buildPatternCard(String emoji, String label, String value, Color color) {
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -625,9 +644,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: ext.textSecondary,
             ),
           ),
           Text(
@@ -644,6 +663,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   }
 
   Widget _buildHourlyHeatmap(ProductivityPattern pattern) {
+    final ext = AppColorsExt.of(context);
     final maxValue = pattern.minutesByHour.values.isEmpty
         ? 1
         : pattern.minutesByHour.values.reduce((a, b) => a > b ? a : b);
@@ -652,13 +672,13 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       children: List.generate(24, (hour) {
         final value = pattern.minutesByHour[hour] ?? 0;
         final intensity = maxValue > 0 ? value / maxValue : 0;
-        
+
         return Expanded(
           child: Container(
             height: 40,
             margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(intensity.clamp(0.1, 1.0).toDouble()),
+              color: ext.focus.base.withOpacity(intensity.clamp(0.1, 1.0).toDouble()),
               borderRadius: BorderRadius.circular(4),
             ),
             child: hour % 6 == 0
@@ -667,7 +687,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                       '$hour',
                       style: TextStyle(
                         fontSize: 8,
-                        color: intensity > 0.5 ? Colors.white : AppColors.textSecondary,
+                        color: intensity > 0.5 ? ext.focus.on : ext.textSecondary,
                       ),
                     ),
                   )
@@ -685,20 +705,22 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       return const SizedBox();
     }
 
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Insights',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           const SizedBox(height: 16),
@@ -728,9 +750,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                       ),
                       Text(
                         insight.description,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: ext.textSecondary,
                         ),
                       ),
                     ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/design/app_colors_ext.dart';
 import '../../../core/widgets/common_tab_widgets.dart';
 import '../models/water_achievement.dart';
 import '../services/water_service.dart';
@@ -33,8 +33,9 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ext.background,
       body: CustomScrollView(
         slivers: [
           _buildAppBar(),
@@ -64,11 +65,14 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
   }
 
   Widget _buildAppBar() {
+    final ext = AppColorsExt.of(context);
+    // Saturated teal that keeps white text readable in both themes.
+    final headerTeal = ext.isDark ? ext.water.container : ext.water.strong;
     return SliverAppBar(
       expandedHeight: 120,
       floating: false,
       pinned: true,
-      backgroundColor: AppColors.info,
+      backgroundColor: headerTeal,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
         onPressed: () => Navigator.pop(context),
@@ -76,7 +80,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
       flexibleSpace: FlexibleSpaceBar(
         title: const Text(
           'Achievements',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         background: Container(
           decoration: BoxDecoration(
@@ -84,8 +88,8 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                AppColors.info,
-                AppColors.info.withOpacity(0.7),
+                headerTeal,
+                headerTeal.withOpacity(0.75),
               ],
             ),
           ),
@@ -214,6 +218,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
   }
 
   Widget _buildAchievementList(List<WaterAchievement> achievements) {
+    final ext = AppColorsExt.of(context);
     if (achievements.isEmpty) {
       return Center(
         child: Column(
@@ -222,13 +227,13 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
             Icon(
               Icons.emoji_events_outlined,
               size: 64,
-              color: AppColors.textSecondary.withOpacity(0.5),
+              color: ext.textSecondary.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No achievements yet',
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: ext.textSecondary,
                 fontSize: 16,
               ),
             ),
@@ -253,9 +258,10 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
               child: Text(
                 _getTypeLabel(entry.key),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: ext.textPrimary,
                 ),
               ),
             ),
@@ -293,8 +299,9 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
   }
 
   Widget _buildAchievementCard(WaterAchievement achievement) {
+    final ext = AppColorsExt.of(context);
     final isUnlocked = achievement.isUnlocked;
-    
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -304,7 +311,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isUnlocked ? Colors.white : Colors.grey.shade100,
+          color: isUnlocked ? ext.surface : ext.surfaceVariant,
           borderRadius: BorderRadius.circular(16),
           border: isUnlocked
               ? Border.all(color: Colors.amber.shade300, width: 2)
@@ -328,7 +335,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               decoration: BoxDecoration(
                 color: isUnlocked
                     ? Colors.amber.shade100
-                    : Colors.grey.shade200,
+                    : ext.surfaceVariant,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Center(
@@ -356,8 +363,8 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
                             color: isUnlocked
-                                ? AppColors.textPrimary
-                                : AppColors.textSecondary,
+                                ? ext.textPrimary
+                                : ext.textSecondary,
                           ),
                         ),
                       ),
@@ -370,9 +377,9 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                   const SizedBox(height: 4),
                   Text(
                     achievement.description,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: ext.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -383,9 +390,9 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: achievement.progress,
-                            backgroundColor: Colors.grey.shade200,
+                            backgroundColor: ext.surfaceVariant,
                             valueColor: AlwaysStoppedAnimation(
-                              isUnlocked ? Colors.amber : AppColors.info,
+                              isUnlocked ? Colors.amber : ext.water.base,
                             ),
                             minHeight: 6,
                           ),
@@ -397,7 +404,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: isUnlocked ? Colors.amber.shade700 : AppColors.textSecondary,
+                          color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
                         ),
                       ),
                     ],
@@ -412,14 +419,14 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               decoration: BoxDecoration(
                 color: isUnlocked
                     ? Colors.amber.shade100
-                    : Colors.grey.shade200,
+                    : ext.surfaceVariant,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 '+${achievement.points}',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: isUnlocked ? Colors.amber.shade700 : AppColors.textSecondary,
+                  color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -431,14 +438,15 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
   }
 
   void _showAchievementDetails(WaterAchievement achievement) {
+    final ext = AppColorsExt.of(context);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: ext.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -447,7 +455,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: ext.outline,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -458,7 +466,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               decoration: BoxDecoration(
                 color: achievement.isUnlocked
                     ? Colors.amber.shade100
-                    : Colors.grey.shade200,
+                    : ext.surfaceVariant,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Center(
@@ -479,9 +487,9 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                 const SizedBox(width: 8),
                 Text(
                   achievement.tierName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textSecondary,
+                    color: ext.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -490,16 +498,17 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
             const SizedBox(height: 8),
             Text(
               achievement.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
+                color: ext.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               achievement.description,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: ext.textSecondary,
                 fontSize: 14,
               ),
               textAlign: TextAlign.center,
@@ -508,7 +517,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.1),
+                color: ext.water.base.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -518,16 +527,16 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                     children: [
                       Text(
                         '${achievement.currentValue}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.info,
+                          color: ext.mark(ext.water),
                         ),
                       ),
-                      const Text(
+                      Text(
                         'Current',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: ext.textSecondary,
                           fontSize: 12,
                         ),
                       ),
@@ -536,22 +545,22 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                   Container(
                     width: 1,
                     height: 40,
-                    color: AppColors.info.withOpacity(0.3),
+                    color: ext.mark(ext.water).withOpacity(0.3),
                   ),
                   Column(
                     children: [
                       Text(
                         '${achievement.targetValue}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.info,
+                          color: ext.mark(ext.water),
                         ),
                       ),
-                      const Text(
+                      Text(
                         'Target',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: ext.textSecondary,
                           fontSize: 12,
                         ),
                       ),
@@ -560,7 +569,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                   Container(
                     width: 1,
                     height: 40,
-                    color: AppColors.info.withOpacity(0.3),
+                    color: ext.mark(ext.water).withOpacity(0.3),
                   ),
                   Column(
                     children: [
@@ -572,10 +581,10 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                           color: Colors.amber,
                         ),
                       ),
-                      const Text(
+                      Text(
                         'Points',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: ext.textSecondary,
                           fontSize: 12,
                         ),
                       ),

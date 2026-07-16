@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../../../core/constants/app_colors.dart';
+import '../../../core/design/app_colors_ext.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
 
@@ -45,8 +45,9 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ext.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -89,6 +90,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
   }
 
   Widget _buildMonthSelector() {
+    final ext = AppColorsExt.of(context);
     final monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
@@ -97,11 +99,11 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -116,9 +118,10 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
           ),
           Text(
             '${monthNames[_selectedMonth - 1]} $_selectedYear',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           IconButton(
@@ -134,12 +137,13 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
   }
 
   Widget _buildOverviewCards() {
+    final ext = AppColorsExt.of(context);
     return Row(
       children: [
         Expanded(
           child: _buildOverviewCard(
             icon: Icons.water_drop,
-            iconColor: AppColors.info,
+            iconColor: ext.mark(ext.water),
             value: '${(_monthlyStats.totalIntakeMl / 1000).toStringAsFixed(1)}L',
             label: 'Total Intake',
             trend: _monthlyStats.averageDailyMl > WaterService.getDailyGoal() ? '+' : '',
@@ -149,7 +153,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
         Expanded(
           child: _buildOverviewCard(
             icon: Icons.analytics,
-            iconColor: AppColors.success,
+            iconColor: ext.mark(ext.success),
             value: '${_monthlyStats.averageDailyMl}ml',
             label: 'Daily Average',
           ),
@@ -165,14 +169,15 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
     required String label,
     String? trend,
   }) {
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -186,7 +191,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
+                  color: iconColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: iconColor, size: 20),
@@ -196,13 +201,13 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.1),
+                    color: ext.mark(ext.success).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     trend,
-                    style: const TextStyle(
-                      color: AppColors.success,
+                    style: TextStyle(
+                      color: ext.mark(ext.success),
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -214,15 +219,16 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
           const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           Text(
             label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: ext.textSecondary,
               fontSize: 12,
             ),
           ),
@@ -232,17 +238,18 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
   }
 
   Widget _buildWeeklyChart() {
+    final ext = AppColorsExt.of(context);
     final dailyData = _weeklyStats['dailyData'] as List<DailyWaterData>? ?? [];
     final goal = WaterService.getDailyGoal();
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -254,23 +261,24 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'This Week',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: ext.textPrimary,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.info.withOpacity(0.1),
+                  color: ext.mark(ext.water).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${((_weeklyStats['completionRate'] as double) * 100).toInt()}% complete',
-                  style: const TextStyle(
-                    color: AppColors.info,
+                  style: TextStyle(
+                    color: ext.mark(ext.water),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -289,7 +297,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                 final dayData = dailyData.where((d) =>
                     d.date.day == day.day &&
                     d.date.month == day.month).toList();
-                
+
                 final amount = dayData.isNotEmpty ? dayData.first.effectiveHydrationMl : 0;
                 final progress = goal > 0 ? (amount / goal).clamp(0.0, 1.5) : 0.0;
                 final isToday = index == 6;
@@ -302,7 +310,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                       amount > 0 ? '${(amount / 1000).toStringAsFixed(1)}L' : '-',
                       style: TextStyle(
                         fontSize: 10,
-                        color: AppColors.textSecondary,
+                        color: ext.textSecondary,
                         fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
@@ -312,10 +320,10 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                       height: 100 * progress,
                       decoration: BoxDecoration(
                         color: progress >= 1
-                            ? AppColors.success
+                            ? ext.success.base
                             : isToday
-                                ? AppColors.info
-                                : AppColors.info.withOpacity(0.5),
+                                ? ext.water.base
+                                : ext.water.base.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
@@ -324,7 +332,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                       dayNames[day.weekday - 1],
                       style: TextStyle(
                         fontSize: 12,
-                        color: isToday ? AppColors.info : AppColors.textSecondary,
+                        color: isToday ? ext.mark(ext.water) : ext.textSecondary,
                         fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
@@ -341,28 +349,28 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: AppColors.success,
+                  color: ext.success.base,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'Goal met',
-                style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 10, color: ext.textSecondary),
               ),
               const SizedBox(width: 16),
               Container(
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: AppColors.info,
+                  color: ext.water.base,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'In progress',
-                style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 10, color: ext.textSecondary),
               ),
             ],
           ),
@@ -372,6 +380,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
   }
 
   Widget _buildHourlyDistribution() {
+    final ext = AppColorsExt.of(context);
     final todayData = WaterService.getTodayData();
     final hourlyData = todayData.hourlyDistribution;
     final maxValue = hourlyData.values.isEmpty
@@ -381,11 +390,11 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -394,11 +403,12 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Today\'s Hourly Distribution',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           const SizedBox(height: 20),
@@ -419,10 +429,10 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                         margin: const EdgeInsets.symmetric(horizontal: 1),
                         decoration: BoxDecoration(
                           color: amount > 0
-                              ? AppColors.info
+                              ? ext.water.base
                               : isActive
-                                  ? Colors.grey.shade200
-                                  : Colors.grey.shade100,
+                                  ? ext.surfaceVariant
+                                  : ext.surfaceVariant.withOpacity(0.5),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -430,9 +440,9 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                       if (hour % 4 == 0)
                         Text(
                           '$hour',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 8,
-                            color: AppColors.textSecondary,
+                            color: ext.textSecondary,
                           ),
                         )
                       else
@@ -449,6 +459,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
   }
 
   Widget _buildBeverageBreakdown() {
+    final ext = AppColorsExt.of(context);
     final breakdown = _monthlyStats.beverageBreakdown;
     if (breakdown.isEmpty) {
       return const SizedBox.shrink();
@@ -461,11 +472,11 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -474,11 +485,12 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Beverage Breakdown',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
+              color: ext.textPrimary,
             ),
           ),
           const SizedBox(height: 16),
@@ -501,15 +513,18 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                       children: [
                         Text(
                           beverage?.name ?? entry.key,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: ext.textPrimary,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: percent / 100,
-                            backgroundColor: Colors.grey.shade200,
-                            valueColor: const AlwaysStoppedAnimation(AppColors.info),
+                            backgroundColor: ext.surfaceVariant,
+                            valueColor: AlwaysStoppedAnimation(ext.water.base),
                             minHeight: 6,
                           ),
                         ),
@@ -519,9 +534,9 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                   const SizedBox(width: 12),
                   Text(
                     '${percent.toStringAsFixed(1)}%',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                      color: ext.textSecondary,
                     ),
                   ),
                 ],
@@ -595,17 +610,18 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
   }
 
   Widget _buildInsights() {
+    final ext = AppColorsExt.of(context);
     final insights = WaterService.getInsights();
     if (insights.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -614,15 +630,16 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.lightbulb_outline, color: Colors.amber),
-              SizedBox(width: 8),
+              Icon(Icons.lightbulb_outline, color: ext.mark(ext.warning)),
+              const SizedBox(width: 8),
               Text(
                 'Insights',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: ext.textPrimary,
                 ),
               ),
             ],
@@ -641,12 +658,15 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                     children: [
                       Text(
                         insight.title,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: ext.textPrimary,
+                        ),
                       ),
                       Text(
                         insight.description,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: ext.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -662,23 +682,25 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
   }
 
   void _exportData() {
+    final ext = AppColorsExt.of(context);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: ext.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            Text(
               'Export Data',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: ext.textPrimary,
               ),
             ),
             const SizedBox(height: 24),
@@ -686,10 +708,10 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.info.withOpacity(0.1),
+                  color: ext.mark(ext.water).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.summarize, color: AppColors.info),
+                child: Icon(Icons.summarize, color: ext.mark(ext.water)),
               ),
               title: const Text('Summary CSV'),
               subtitle: const Text('Daily totals'),
@@ -706,10 +728,10 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.1),
+                  color: ext.mark(ext.success).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.list_alt, color: AppColors.success),
+                child: Icon(Icons.list_alt, color: ext.mark(ext.success)),
               ),
               title: const Text('Detailed CSV'),
               subtitle: const Text('All drink logs'),

@@ -22,6 +22,10 @@ class UserSettings {
   final bool fullScreenNotification;
   final bool isAdsDisabled;
 
+  /// App theme mode preference: 'system' (follow OS), 'light', or 'dark'.
+  /// Drives [ThemeMode] in main.dart. Defaults to following the system.
+  final String themeModePreference;
+
   UserSettings({
     this.waterDailyGoalMl = 2500,
     this.darkModeEnabled = false,
@@ -44,6 +48,7 @@ class UserSettings {
     this.showOnLockScreen = true,
     this.fullScreenNotification = true,
     this.isAdsDisabled = false,
+    this.themeModePreference = 'system',
   });
 
   UserSettings copyWith({
@@ -68,6 +73,7 @@ class UserSettings {
     bool? showOnLockScreen,
     bool? fullScreenNotification,
     bool? isAdsDisabled,
+    String? themeModePreference,
   }) {
     return UserSettings(
       waterDailyGoalMl: waterDailyGoalMl ?? this.waterDailyGoalMl,
@@ -91,6 +97,7 @@ class UserSettings {
       showOnLockScreen: showOnLockScreen ?? this.showOnLockScreen,
       fullScreenNotification: fullScreenNotification ?? this.fullScreenNotification,
       isAdsDisabled: isAdsDisabled ?? this.isAdsDisabled,
+      themeModePreference: themeModePreference ?? this.themeModePreference,
     );
   }
 
@@ -116,6 +123,7 @@ class UserSettings {
     'showOnLockScreen': showOnLockScreen,
     'fullScreenNotification': fullScreenNotification,
     'isAdsDisabled': isAdsDisabled,
+    'themeModePreference': themeModePreference,
   };
 
   factory UserSettings.fromJson(Map<String, dynamic> json) => UserSettings(
@@ -142,5 +150,6 @@ class UserSettings {
     showOnLockScreen: json['showOnLockScreen'] ?? true,
     fullScreenNotification: json['fullScreenNotification'] ?? true,
     isAdsDisabled: json['isAdsDisabled'] ?? false,
+    themeModePreference: json['themeModePreference'] ?? 'system',
   );
 }

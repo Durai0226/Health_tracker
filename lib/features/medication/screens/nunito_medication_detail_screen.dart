@@ -1,8 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../theme/nunito_theme.dart';
-import '../widgets/nunito_glass_card.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
@@ -41,10 +39,10 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     super.initState();
     _medicine = widget.medicine;
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: AppMotion.slow,
       vsync: this,
     );
-    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _fadeAnimation = CurvedAnimation(parent: _controller, curve: AppMotion.standard);
     _loadData();
   }
 
@@ -85,7 +83,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     } catch (e) {
       debugPrint('Error loading data: $e');
     }
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _editMedicine() {
@@ -104,15 +102,15 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     _hapticService.warning();
     final updated = _medicine.copyWith(isArchived: !_medicine.isArchived);
     await MedicineCleanStorageService.saveMedicine(updated);
-    
+
     if (_medicine.isArchived) {
       await _reminderService.scheduleReminders(updated);
     } else {
       await _reminderService.cancelReminders(_medicine);
     }
-    
+
     setState(() => _medicine = updated);
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -123,29 +121,13 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   }
 
   Future<void> _deleteMedicine() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(NunitoTheme.radiusMedium),
-        ),
-        title: Text('Delete ${_medicine.name}?', style: NunitoTheme.heading3),
-        content: Text(
-          'This will permanently delete this medication and all its history.',
-          style: NunitoTheme.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: NunitoTheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirm = await AppBottomSheet.confirm(
+      context,
+      title: 'Delete ${_medicine.name}?',
+      message: 'This will permanently delete this medication and all its history.',
+      confirmLabel: 'Delete',
+      danger: true,
+      icon: Icons.delete_rounded,
     );
 
     if (confirm == true) {
@@ -158,46 +140,53 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : FadeTransition(
-              opacity: _fadeAnimation,
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  _buildHeader(isDark),
-                  SliverToBoxAdapter(child: _buildStatsSection(isDark)),
-                  SliverToBoxAdapter(child: _buildScheduleSection(isDark)),
-                  SliverToBoxAdapter(child: _buildDetailsSection(isDark)),
-                  SliverToBoxAdapter(child: _buildHistorySection(isDark)),
-                  SliverToBoxAdapter(child: _buildActionsSection(isDark)),
-                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                ],
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : FadeTransition(
+                opacity: _fadeAnimation,
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    _buildHeader(),
+                    SliverToBoxAdapter(child: _buildStatsSection()),
+                    SliverToBoxAdapter(child: _buildScheduleSection()),
+                    SliverToBoxAdapter(child: _buildDetailsSection()),
+                    SliverToBoxAdapter(child: _buildHistorySection()),
+                    SliverToBoxAdapter(child: _buildActionsSection()),
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
-  Widget _buildHeader(bool isDark) {
+  Widget _buildHeader() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final headerBg = ext.fillBg(ext.medicine);
+    final onHeader = ext.fillFg(ext.medicine);
+
     return SliverAppBar(
       expandedHeight: 200,
       pinned: true,
-      backgroundColor: NunitoTheme.primary,
+      backgroundColor: headerBg,
+      foregroundColor: onHeader,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+        icon: Icon(Icons.arrow_back_rounded, color: onHeader),
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.edit_rounded, color: Colors.white),
+          icon: Icon(Icons.edit_rounded, color: onHeader),
           onPressed: _editMedicine,
         ),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+          icon: Icon(Icons.more_vert_rounded, color: onHeader),
+          color: ext.surfaceElevated,
           onSelected: (value) {
             if (value == 'archive') _toggleArchive();
             if (value == 'delete') _deleteMedicine();
@@ -207,19 +196,23 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               value: 'archive',
               child: Row(
                 children: [
-                  Icon(_medicine.isArchived ? Icons.unarchive_rounded : Icons.archive_rounded),
+                  Icon(
+                    _medicine.isArchived ? Icons.unarchive_rounded : Icons.archive_rounded,
+                    color: ext.textPrimary,
+                  ),
                   const SizedBox(width: 8),
-                  Text(_medicine.isArchived ? 'Restore' : 'Archive'),
+                  Text(_medicine.isArchived ? 'Restore' : 'Archive',
+                      style: TextStyle(color: ext.textPrimary)),
                 ],
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'delete',
               child: Row(
                 children: [
-                  Icon(Icons.delete_rounded, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: Colors.red)),
+                  Icon(Icons.delete_rounded, color: ext.mark(ext.error)),
+                  const SizedBox(width: 8),
+                  Text('Delete', style: TextStyle(color: ext.mark(ext.error))),
                 ],
               ),
             ),
@@ -228,12 +221,10 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
-          decoration: BoxDecoration(
-            gradient: NunitoTheme.primaryGradient,
-          ),
+          color: headerBg,
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(NunitoTheme.spacingL),
+              padding: const EdgeInsets.all(AppSpacing.gutter),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -242,8 +233,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(16),
+                          color: onHeader.withOpacity(0.15),
+                          borderRadius: AppRadius.brLg,
                         ),
                         child: NunitoPillVisual(
                           color: _medicine.color,
@@ -252,31 +243,34 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                           showShadow: false,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: AppSpacing.lg),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               _medicine.name,
-                              style: NunitoTheme.heading1.copyWith(color: Colors.white),
+                              style: tt.headlineMedium?.copyWith(
+                                  color: onHeader, fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               _medicine.displayDosage,
-                              style: NunitoTheme.bodyLarge.copyWith(color: Colors.white70),
+                              style: tt.bodyLarge
+                                  ?.copyWith(color: onHeader.withOpacity(0.8)),
                             ),
                             if (_medicine.isArchived)
                               Container(
                                 margin: const EdgeInsets.only(top: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
+                                  color: onHeader.withOpacity(0.15),
+                                  borderRadius: AppRadius.brMd,
                                 ),
                                 child: Text(
                                   'Archived',
-                                  style: NunitoTheme.caption.copyWith(color: Colors.white),
+                                  style: tt.labelSmall?.copyWith(color: onHeader),
                                 ),
                               ),
                           ],
@@ -293,119 +287,91 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     );
   }
 
-  Widget _buildStatsSection(bool isDark) {
+  Widget _buildStatsSection() {
+    final ext = AppColorsExt.of(context);
     return Padding(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildStatCard(
-              'Adherence',
-              '${_stats['adherence'] ?? 0}%',
-              Icons.trending_up_rounded,
-              NunitoTheme.success,
-              isDark,
-            ),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      child: StatTileRow(
+        tiles: [
+          StatTile(
+            label: 'Adherence',
+            value: '${_stats['adherence'] ?? 0}%',
+            icon: Icons.trending_up_rounded,
+            accent: ext.success,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildStatCard(
-              'Taken',
-              '${_stats['taken'] ?? 0}',
-              Icons.check_circle_rounded,
-              NunitoTheme.accentBlue,
-              isDark,
-            ),
+          StatTile(
+            label: 'Taken',
+            value: '${_stats['taken'] ?? 0}',
+            icon: Icons.check_circle_rounded,
+            accent: ext.info,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildStatCard(
-              'Total',
-              '${_stats['total'] ?? 0}',
-              Icons.history_rounded,
-              NunitoTheme.secondary,
-              isDark,
-            ),
+          StatTile(
+            label: 'Total',
+            value: '${_stats['total'] ?? 0}',
+            icon: Icons.history_rounded,
+            accent: ext.medicine,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color, bool isDark) {
-    return NunitoCard(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: NunitoTheme.heading2.copyWith(
-              color: isDark ? Colors.white : NunitoTheme.textPrimary,
-            ),
-          ),
-          Text(label, style: NunitoTheme.caption),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScheduleSection(bool isDark) {
+  Widget _buildScheduleSection() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final schedule = _medicine.schedule;
     final nextTime = _reminderService.getNextReminderTime(_medicine);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: NunitoTheme.spacingM),
-      child: NunitoCard(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, 0, AppSpacing.gutter, 0),
+      child: AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.schedule_rounded, color: NunitoTheme.primary, size: 20),
-                const SizedBox(width: 8),
-                Text('Schedule', style: NunitoTheme.heading3.copyWith(
-                  color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                )),
+                Icon(Icons.schedule_rounded,
+                    color: ext.mark(ext.medicine), size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Schedule', style: tt.titleLarge),
               ],
             ),
-            const SizedBox(height: 12),
-            _buildDetailRow('Frequency', schedule.frequencyType.displayName, isDark),
+            const SizedBox(height: AppSpacing.md),
+            _buildDetailRow('Frequency', schedule.frequencyType.displayName),
             if (schedule.times.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               _buildDetailRow(
                 'Times',
                 schedule.times.map((t) => t.formattedTime).join(', '),
-                isDark,
               ),
             ],
             if (nextTime != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               _buildDetailRow(
                 'Next Dose',
                 DateFormat('EEE, MMM d at h:mm a').format(nextTime),
-                isDark,
                 highlight: true,
               ),
             ],
             if (_medicine.reminderEnabled) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: NunitoTheme.success.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: ext.success.container,
+                  borderRadius: AppRadius.brSm,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.notifications_active_rounded, 
-                         color: NunitoTheme.success, size: 16),
+                    Icon(Icons.notifications_active_rounded,
+                        color: ext.success.onContainer, size: 16),
                     const SizedBox(width: 6),
                     Text(
                       'Reminders enabled',
-                      style: NunitoTheme.caption.copyWith(color: NunitoTheme.success),
+                      style: tt.labelMedium
+                          ?.copyWith(color: ext.success.onContainer),
                     ),
                   ],
                 ),
@@ -417,42 +383,42 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     );
   }
 
-  Widget _buildDetailsSection(bool isDark) {
+  Widget _buildDetailsSection() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
-      child: NunitoCard(
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      child: AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline_rounded, color: NunitoTheme.primary, size: 20),
-                const SizedBox(width: 8),
-                Text('Details', style: NunitoTheme.heading3.copyWith(
-                  color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                )),
+                Icon(Icons.info_outline_rounded,
+                    color: ext.mark(ext.medicine), size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Details', style: tt.titleLarge),
               ],
             ),
-            const SizedBox(height: 12),
-            _buildDetailRow('Form', _medicine.dosageForm.displayName, isDark),
+            const SizedBox(height: AppSpacing.md),
+            _buildDetailRow('Form', _medicine.dosageForm.displayName),
             if (_medicine.strength != null) ...[
-              const SizedBox(height: 8),
-              _buildDetailRow('Strength', _medicine.strength!, isDark),
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow('Strength', _medicine.strength!),
             ],
             if (_medicine.instructions != null) ...[
-              const SizedBox(height: 8),
-              _buildDetailRow('Instructions', _medicine.instructions!, isDark),
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow('Instructions', _medicine.instructions!),
             ],
             if (_medicine.purpose != null) ...[
-              const SizedBox(height: 8),
-              _buildDetailRow('Purpose', _medicine.purpose!, isDark),
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow('Purpose', _medicine.purpose!),
             ],
             if (_medicine.currentStock != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               _buildDetailRow(
                 'Stock',
                 '${_medicine.currentStock} remaining',
-                isDark,
                 highlight: (_medicine.currentStock ?? 0) <= (_medicine.lowStockThreshold ?? 5),
               ),
             ],
@@ -462,7 +428,9 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     );
   }
 
-  Widget _buildDetailRow(String label, String value, bool isDark, {bool highlight = false}) {
+  Widget _buildDetailRow(String label, String value, {bool highlight = false}) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -470,16 +438,14 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           width: 100,
           child: Text(
             label,
-            style: NunitoTheme.bodySmall.copyWith(color: NunitoTheme.textTertiary),
+            style: tt.bodySmall?.copyWith(color: ext.textTertiary),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: NunitoTheme.bodyMedium.copyWith(
-              color: highlight
-                  ? NunitoTheme.warning
-                  : (isDark ? Colors.white : NunitoTheme.textPrimary),
+            style: tt.bodyMedium?.copyWith(
+              color: highlight ? ext.mark(ext.warning) : ext.textPrimary,
               fontWeight: highlight ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
@@ -488,37 +454,43 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     );
   }
 
-  Widget _buildHistorySection(bool isDark) {
+  Widget _buildHistorySection() {
     if (_recentLogs.isEmpty) return const SizedBox.shrink();
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: NunitoTheme.spacingM),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, 0, AppSpacing.gutter, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.history_rounded, color: NunitoTheme.primary, size: 20),
-              const SizedBox(width: 8),
-              Text('Recent History', style: NunitoTheme.heading3.copyWith(
-                color: isDark ? Colors.white : NunitoTheme.textPrimary,
-              )),
+              Icon(Icons.history_rounded,
+                  color: ext.mark(ext.medicine), size: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Recent History', style: tt.titleLarge),
             ],
           ),
-          const SizedBox(height: 12),
-          ...(_recentLogs.take(5).map((log) => _buildLogItem(log, isDark))),
+          const SizedBox(height: AppSpacing.md),
+          ...(_recentLogs.take(5).map((log) => _buildLogItem(log))),
         ],
       ),
     );
   }
 
-  Widget _buildLogItem(MedicineLog log, bool isDark) {
+  Widget _buildLogItem(MedicineLog log) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final status = log.isTaken ? 'Taken' : (log.isSkipped ? 'Skipped' : 'Missed');
-    final color = log.isTaken ? NunitoTheme.success : (log.isSkipped ? NunitoTheme.warning : NunitoTheme.error);
+    final swatch = log.isTaken
+        ? ext.success
+        : (log.isSkipped ? ext.warning : ext.error);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: NunitoCard(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppCard(
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
@@ -526,24 +498,22 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: color,
+                color: swatch.base,
                 shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     DateFormat('EEE, MMM d').format(log.scheduledTime),
-                    style: NunitoTheme.labelMedium.copyWith(
-                      color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                    ),
+                    style: tt.labelLarge?.copyWith(color: ext.textPrimary),
                   ),
                   Text(
                     DateFormat('h:mm a').format(log.scheduledTime),
-                    style: NunitoTheme.caption,
+                    style: tt.bodySmall?.copyWith(color: ext.textTertiary),
                   ),
                 ],
               ),
@@ -551,12 +521,13 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: swatch.container,
+                borderRadius: AppRadius.brMd,
               ),
               child: Text(
                 status,
-                style: NunitoTheme.caption.copyWith(color: color, fontWeight: FontWeight.w600),
+                style: tt.labelMedium?.copyWith(
+                    color: swatch.onContainer, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -565,46 +536,48 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     );
   }
 
-  Widget _buildActionsSection(bool isDark) {
+  Widget _buildActionsSection() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.all(NunitoTheme.spacingM),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         children: [
-          NunitoAnimatedCard(
+          AppCard(
             onTap: _toggleArchive,
             child: Row(
               children: [
                 Icon(
                   _medicine.isArchived ? Icons.unarchive_rounded : Icons.archive_rounded,
-                  color: NunitoTheme.warning,
+                  color: ext.mark(ext.warning),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
                     _medicine.isArchived ? 'Restore Medication' : 'Archive Medication',
-                    style: NunitoTheme.labelLarge.copyWith(
-                      color: isDark ? Colors.white : NunitoTheme.textPrimary,
-                    ),
+                    style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600, color: ext.textPrimary),
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: NunitoTheme.textTertiary),
+                Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          NunitoAnimatedCard(
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
             onTap: _deleteMedicine,
             child: Row(
               children: [
-                const Icon(Icons.delete_rounded, color: Colors.red),
-                const SizedBox(width: 12),
+                Icon(Icons.delete_rounded, color: ext.mark(ext.error)),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
                     'Delete Medication',
-                    style: NunitoTheme.labelLarge.copyWith(color: Colors.red),
+                    style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600, color: ext.mark(ext.error)),
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: NunitoTheme.textTertiary),
+                Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
               ],
             ),
           ),
