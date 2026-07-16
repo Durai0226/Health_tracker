@@ -907,4 +907,62 @@ class MedicineCleanStorageService {
       'days': days,
     };
   }
+
+  /// Per-medicine adherence over the trailing [days] window, using the same
+  /// scheduled-slot denominator logic as [getAdherenceStats] but scoped to a
+  /// single medicine. Returns taken/skipped/missed/total/scheduled/adherenceRate
+  /// (adherenceRate as a 0-100 int). PRN or archived/inactive medicines yield an
+  /// adherenceRate of 100 (nothing was due to miss).
+  static Future<Map<String, dynamic>> getAdherenceStatsForMedicine(
+    String medicineId, {
+    int days = 30,
+  }) async {
+    final now = DateTime.now();
+    final startDate = now.subtract(Duration(days: days));
+    final medicine = await getMedicine(medicineId);
+
+    final logs = (await getLogsForMedicine(medicineId))
+        .where((l) =>
+            !l.scheduledTime.isBefore(startDate) &&
+            !l.scheduledTime.isAfter(now))
+        .toList();
+
+    final taken = logs.where((l) => l.isTaken).length;
+    final skipped = logs.where((l) => l.isSkipped).length;
+    final missed = logs.where((l) => l.isMissed).length;
+    final total = taken + skipped + missed;
+
+    int scheduled = 0;
+    if (medicine != null &&
+        medicine.isActive &&
+        !medicine.isArchived &&
+        !medicine.schedule.isPRN) {
+      final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+      final today = DateTime(now.year, now.month, now.day);
+      final createdDay = DateTime(medicine.createdAt.year,
+          medicine.createdAt.month, medicine.createdAt.day);
+      for (var day = startDay;
+          !day.isAfter(today);
+          day = day.add(const Duration(days: 1))) {
+        if (day.isBefore(createdDay)) continue;
+        final slots = medicine.schedule.getScheduledTimesForDate(day);
+        for (final slot in slots) {
+          if (slot.isBefore(startDate)) continue;
+          if (slot.isBefore(medicine.createdAt)) continue;
+          if (slot.isAfter(now)) continue;
+          scheduled++;
+        }
+      }
+    }
+
+    return {
+      'taken': taken,
+      'skipped': skipped,
+      'missed': missed,
+      'total': total,
+      'scheduled': scheduled,
+      'adherenceRate': scheduled > 0 ? (taken / scheduled * 100).round() : 100,
+      'days': days,
+    };
+  }
 }

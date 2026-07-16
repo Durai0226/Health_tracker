@@ -102,6 +102,74 @@ class StatsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Rebuilds the in-memory daily aggregates directly from the persisted
+  /// [FocusService.sessions] list. This makes the stored `focusDailyStats`
+  /// aggregate redundant so trend charts always reflect real session data
+  /// (recordSession is no longer required for charts to populate).
+  void buildFromSessions(List<FocusSession> sessions) {
+    final Map<String, DailyFocusStats> byDay = {};
+
+    for (final session in sessions) {
+      final date = DateTime(
+        session.startedAt.year,
+        session.startedAt.month,
+        session.startedAt.day,
+      );
+      final key = '${date.year}-${date.month}-${date.day}';
+
+      final existing = byDay[key];
+      if (existing == null) {
+        byDay[key] = DailyFocusStats(
+          date: date,
+          totalMinutes: session.actualMinutes,
+          sessionsCount: 1,
+          completedSessions: session.wasCompleted ? 1 : 0,
+          abandonedSessions: session.wasAbandoned ? 1 : 0,
+          minutesByActivity: {session.activityType: session.actualMinutes},
+          minutesByTag: _tagMinutes({}, session),
+          plantsGrown: session.wasCompleted ? 1 : 0,
+          plantsWithered: session.wasAbandoned ? 1 : 0,
+          coinsEarned: session.wasCompleted ? session.actualMinutes * 2 : 0,
+        );
+      } else {
+        final activities =
+            Map<FocusActivityType, int>.from(existing.minutesByActivity);
+        activities[session.activityType] =
+            (activities[session.activityType] ?? 0) + session.actualMinutes;
+
+        byDay[key] = DailyFocusStats(
+          date: date,
+          totalMinutes: existing.totalMinutes + session.actualMinutes,
+          sessionsCount: existing.sessionsCount + 1,
+          completedSessions:
+              existing.completedSessions + (session.wasCompleted ? 1 : 0),
+          abandonedSessions:
+              existing.abandonedSessions + (session.wasAbandoned ? 1 : 0),
+          minutesByActivity: activities,
+          minutesByTag: _tagMinutes(existing.minutesByTag, session),
+          plantsGrown: existing.plantsGrown + (session.wasCompleted ? 1 : 0),
+          plantsWithered:
+              existing.plantsWithered + (session.wasAbandoned ? 1 : 0),
+          coinsEarned: existing.coinsEarned +
+              (session.wasCompleted ? session.actualMinutes * 2 : 0),
+        );
+      }
+    }
+
+    _dailyStats = byDay.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    notifyListeners();
+  }
+
+  Map<String, int> _tagMinutes(Map<String, int> base, FocusSession session) {
+    if (session.tagIds.isEmpty) return base;
+    final result = Map<String, int>.from(base);
+    for (final tagId in session.tagIds) {
+      result[tagId] = (result[tagId] ?? 0) + session.actualMinutes;
+    }
+    return result;
+  }
+
   void updateProductivityPattern(List<FocusSession> sessions) {
     _productivityPattern = ProductivityPattern.analyze(sessions);
     notifyListeners();

@@ -5,6 +5,7 @@ import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
+import '../utils/reminder_helper.dart';
 import 'add_reminder_screen.dart';
 
 /// The Reminders destination — Calm Clarity, dark-aware, lists real reminders.
@@ -67,7 +68,37 @@ class _RemindersScreenState extends State<RemindersScreen> {
   }
 
   Future<void> _toggle(Reminder r) async {
-    await CleanStorageService.toggleReminderCompletion(r);
+    final markingComplete = !r.isCompleted;
+
+    // Roll a repeating reminder forward to its next occurrence instead of
+    // letting it die in the Completed section. Same row (same id) is reused via
+    // copyWith + saveReminder upsert, so no duplicates are created.
+    if (markingComplete && r.repeatType != RepeatType.none) {
+      final next = ReminderHelper.getNextOccurrence(r);
+      final rolled = r.copyWith(
+        scheduledTime: next,
+        isCompleted: false,
+      );
+      await CleanStorageService.saveReminder(rolled);
+
+      // Reschedule the notification for the new time (consistent with the
+      // add/edit path which keys notifications off id.hashCode).
+      await NotificationService().scheduleGenericReminder(
+        id: rolled.id.hashCode,
+        title: rolled.title,
+        body: rolled.body,
+        scheduledTime: next,
+        repeatType: rolled.repeatType,
+        customDays: rolled.customDays,
+        snoozeDuration: rolled.snoozeDuration,
+        sound: rolled.sound,
+        priority: rolled.priority,
+        payload: rolled.noteId != null ? 'note:${rolled.noteId}' : null,
+      );
+    } else {
+      // Non-repeating reminders keep the simple toggle behavior.
+      await CleanStorageService.toggleReminderCompletion(r);
+    }
     _load();
   }
 

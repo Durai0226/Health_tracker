@@ -10,6 +10,7 @@ import '../models/ambient_sound.dart';
 import '../models/focus_session.dart';
 import '../models/focus_achievement.dart';
 import 'coins_service.dart';
+import 'tag_service.dart';
 
 class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   static final FocusService _instance = FocusService._internal();
@@ -34,6 +35,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   FocusActivityType _selectedActivity = FocusActivityType.work;
   AmbientSoundType _selectedSound = AmbientSoundType.none;
   double _soundVolume = 0.5;
+  List<String> _selectedTagIds = [];
   
   // Stats & Data
   FocusStats _stats = const FocusStats();
@@ -52,6 +54,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   FocusActivityType get selectedActivity => _selectedActivity;
   AmbientSoundType get selectedSound => _selectedSound;
   double get soundVolume => _soundVolume;
+  List<String> get selectedTagIds => List.unmodifiable(_selectedTagIds);
   FocusStats get stats => _stats;
   List<FocusPlant> get garden => List.unmodifiable(_garden);
   List<FocusSession> get sessions => List.unmodifiable(_sessions);
@@ -96,6 +99,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     await _audioService.init();
     await CoinsService().init();
+    await TagService().init();
     await _loadData();
     _initAchievements();
     await _checkAndUpdateStreak();
@@ -145,6 +149,12 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       final statsJson = prefs['focusStats'];
       if (statsJson != null && statsJson is Map) {
         _stats = FocusStats.fromJson(Map<String, dynamic>.from(statsJson));
+      }
+
+      // Load previously selected tags for the next session
+      final selectedTagsJson = prefs['focusSelectedTagIds'];
+      if (selectedTagsJson != null && selectedTagsJson is List) {
+        _selectedTagIds = List<String>.from(selectedTagsJson);
       }
 
       // Load garden
@@ -209,6 +219,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       await CleanStorageService.setAppPreference('focusSelectedActivityType', _selectedActivity.index);
       await CleanStorageService.setAppPreference('focusSelectedSound', _selectedSound.index);
       await CleanStorageService.setAppPreference('focusSoundVolume', _soundVolume);
+      await CleanStorageService.setAppPreference('focusSelectedTagIds', _selectedTagIds);
       await CleanStorageService.setAppPreference('focusStats', _stats.toJson());
       await CleanStorageService.setAppPreference('focusGarden', _garden.map((p) => p.toJson()).toList());
       await CleanStorageService.setAppPreference('focusSessions', _sessions.take(100).map((s) => s.toJson()).toList());
@@ -243,6 +254,25 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       _saveData();
       notifyListeners();
     }
+  }
+
+  void setSelectedTags(List<String> tagIds) {
+    if (!_isRunning) {
+      _selectedTagIds = List<String>.from(tagIds);
+      _saveData();
+      notifyListeners();
+    }
+  }
+
+  void toggleTag(String tagId) {
+    if (_isRunning) return;
+    if (_selectedTagIds.contains(tagId)) {
+      _selectedTagIds.remove(tagId);
+    } else {
+      _selectedTagIds.add(tagId);
+    }
+    _saveData();
+    notifyListeners();
   }
 
   void setSound(AmbientSoundType sound) {
@@ -367,9 +397,15 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       activityType: _selectedActivity,
       plantType: _selectedPlant,
       soundUsed: _selectedSound,
+      tagIds: List<String>.from(_selectedTagIds),
     );
     _sessions.insert(0, session);
-    
+
+    // Persist the session → tag mapping (also bumps tag usage counts)
+    if (_selectedTagIds.isNotEmpty) {
+      await TagService().tagSession(session.id, List<String>.from(_selectedTagIds));
+    }
+
     // Update stats
     _stats = _stats.copyWith(
       totalSessions: _stats.totalSessions + 1,
@@ -417,9 +453,15 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       activityType: _selectedActivity,
       plantType: _selectedPlant,
       soundUsed: _selectedSound,
+      tagIds: List<String>.from(_selectedTagIds),
     );
     _sessions.insert(0, session);
-    
+
+    // Persist the session → tag mapping (also bumps tag usage counts)
+    if (_selectedTagIds.isNotEmpty) {
+      await TagService().tagSession(session.id, List<String>.from(_selectedTagIds));
+    }
+
     // Update activity minutes
     final activityMinutes = Map<FocusActivityType, int>.from(_stats.minutesByActivity);
     activityMinutes[_selectedActivity] = (activityMinutes[_selectedActivity] ?? 0) + _selectedMinutes;

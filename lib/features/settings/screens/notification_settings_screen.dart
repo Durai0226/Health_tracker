@@ -4,6 +4,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/models/user_settings.dart';
+import '../../../core/widgets/app/notification_permission_banner.dart';
 
 /// Clean, simple notification settings screen
 /// Inspired by Fitbit, Strava, Apple Health, Google Fit best practices
@@ -30,6 +31,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasChanges = false;
+  bool _notificationsEnabled = true;
 
   @override
   void initState() {
@@ -45,9 +47,15 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       await Future.delayed(const Duration(milliseconds: 100));
       
       final settings = CleanStorageService.getUserSettings();
-      
+
+      // Check whether OS notifications are enabled so we can surface a warning
+      // banner when medicine/reminder alerts would silently never fire.
+      final notificationsEnabled =
+          await NotificationService().areNotificationsEnabled();
+
       if (mounted) {
         setState(() {
+          _notificationsEnabled = notificationsEnabled;
           _soundEnabled = settings.soundEnabled;
           _vibrationEnabled = settings.vibrationEnabled;
           _showOnLockScreen = settings.showOnLockScreen;
@@ -200,6 +208,19 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                // Permission warning banner — shows only when OS notifications
+                // are disabled (self-hides otherwise).
+                if (!_notificationsEnabled) ...[
+                  NotificationPermissionBanner(
+                    onStatusChanged: (enabled) {
+                      if (mounted && enabled != _notificationsEnabled) {
+                        setState(() => _notificationsEnabled = enabled);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
                 // Header Card
                 _buildHeaderCard(),
                 const SizedBox(height: 20),

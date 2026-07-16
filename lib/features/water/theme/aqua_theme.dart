@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/design/app_palette.dart';
+import '../models/beverage_type.dart';
 
 /// Aqua Water Tracking Theme - Modern 2025/2026 Design System
 /// Dynamic beverage gradients with glassmorphism effects
@@ -156,9 +157,47 @@ class AquaTheme {
     ),
   };
 
-  /// Get beverage theme data by ID
+  /// Get beverage theme data (styling only) by ID.
+  ///
+  /// Prefers a curated gradient when one exists, otherwise derives styling from
+  /// the real beverage catalog ([BeverageType.defaultBeverages]) so drinks like
+  /// beer / energy drink / espresso keep their own accent instead of falling
+  /// back to Water. Water is only used as a last resort for truly unknown ids.
   static BeverageThemeData getBeverage(String id) {
-    return beverages[id] ?? beverages['water']!;
+    final curated = beverages[id];
+    if (curated != null) return curated;
+    for (final b in BeverageType.defaultBeverages) {
+      if (b.id == id) return themeFromBeverage(b);
+    }
+    return beverages['water']!;
+  }
+
+  /// Parse a `#RRGGBB` / `#AARRGGBB` hex string into a [Color].
+  static Color colorFromHex(String hex) {
+    var h = hex.replaceFirst('#', '').trim();
+    if (h.length == 6) h = 'FF$h';
+    final value = int.tryParse(h, radix: 16);
+    return value != null ? Color(value) : waterPrimary;
+  }
+
+  /// Build [BeverageThemeData] styling for any [BeverageType], including custom
+  /// beverages. Uses the curated gradient when available, otherwise derives a
+  /// gradient from the beverage's own [BeverageType.colorHex].
+  static BeverageThemeData themeFromBeverage(BeverageType b) {
+    final curated = beverages[b.id];
+    if (curated != null) return curated;
+    final primary = colorFromHex(b.colorHex);
+    final secondary = b.isAlcoholic
+        ? Color.lerp(primary, Colors.black, 0.2)!
+        : Color.lerp(primary, Colors.white, 0.28)!;
+    return BeverageThemeData(
+      id: b.id,
+      name: b.name,
+      emoji: b.emoji,
+      primary: primary,
+      secondary: secondary,
+      hydrationFactor: b.hydrationPercent / 100.0,
+    );
   }
 
   /// Get gradient for a beverage

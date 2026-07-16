@@ -12,3 +12,4 @@ export 'progress_ring.dart';
 export 'segmented_toggle.dart';
 export 'app_header.dart';
 export 'app_bottom_sheet.dart';
+export 'notification_permission_banner.dart';

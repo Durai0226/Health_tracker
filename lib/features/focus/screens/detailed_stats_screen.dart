@@ -4,6 +4,7 @@ import '../models/focus_session.dart';
 import '../models/detailed_stats.dart';
 import '../services/stats_service.dart';
 import '../services/focus_service.dart';
+import '../services/tag_service.dart';
 
 class DetailedStatsScreen extends StatefulWidget {
   const DetailedStatsScreen({super.key});
@@ -15,12 +16,17 @@ class DetailedStatsScreen extends StatefulWidget {
 class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   final StatsService _statsService = StatsService();
   final FocusService _focusService = FocusService();
+  final TagService _tagService = TagService();
   StatsPeriod _selectedPeriod = StatsPeriod.weekly;
 
   @override
   void initState() {
     super.initState();
     _statsService.init();
+    _tagService.init();
+    // Derive daily aggregates + patterns straight from the persisted sessions
+    // so the trend charts always reflect real data.
+    _statsService.buildFromSessions(_focusService.sessions);
     _statsService.updateProductivityPattern(_focusService.sessions);
   }
 
@@ -30,7 +36,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: _statsService,
+          listenable: Listenable.merge([_statsService, _tagService]),
           builder: (context, _) {
             return CustomScrollView(
               slivers: [
@@ -46,6 +52,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                       const SizedBox(height: 24),
                       _buildActivityBreakdown(),
                       const SizedBox(height: 24),
+                      _buildTagStatistics(),
                       _buildProductivityPatterns(),
                       const SizedBox(height: 24),
                       _buildInsights(),
@@ -288,12 +295,136 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
           const SizedBox(height: 24),
           SizedBox(
             height: 150,
-            child: data.isEmpty
-                ? const Center(child: Text('No data available'))
-                : _buildBarChart(data),
+            child: data.any((d) => d.value > 0)
+                ? _buildBarChart(data)
+                : _buildChartEmptyState(),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildChartEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.bar_chart_rounded,
+            size: 36,
+            color: AppColors.textSecondary.withOpacity(0.4),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'No focus sessions yet',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Complete a session to see your trend',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary.withOpacity(0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagStatistics() {
+    final stats = _tagService.calculateTagStatistics(_focusService.sessions);
+
+    if (stats.isEmpty) {
+      return const SizedBox();
+    }
+
+    final maxMins = stats.first.totalMinutes;
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Tag Breakdown',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ...stats.take(6).map((stat) {
+                final percentage = maxMins > 0 ? stat.totalMinutes / maxMins : 0.0;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: stat.tagColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text(
+                                _tagService.getTagById(stat.tagId)?.emoji ?? '🏷️',
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              stat.tagName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${stat.totalHours}h ${stat.totalMinutes % 60}m · ${stat.sessionCount}x',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: stat.tagColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: percentage,
+                          backgroundColor: Colors.grey.shade100,
+                          valueColor: AlwaysStoppedAnimation(stat.tagColor),
+                          minHeight: 6,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 

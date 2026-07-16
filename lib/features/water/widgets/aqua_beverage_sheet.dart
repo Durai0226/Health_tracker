@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/aqua_theme.dart';
+import '../models/beverage_type.dart';
+import '../services/water_service.dart';
 
 /// Modern beverage selection bottom sheet
 class AquaBeverageSheet extends StatefulWidget {
@@ -41,9 +43,12 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = AquaTheme.isDark(context);
-    final beverages = AquaTheme.beverages.values.toList();
+    final beverages = WaterService.getAllBeverages();
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+      ),
       decoration: BoxDecoration(
         color: AquaTheme.getCardBg(context),
         borderRadius: const BorderRadius.vertical(
@@ -93,11 +98,15 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
           ),
           
           // Beverage grid
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AquaTheme.spacingM),
+          Flexible(
             child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                AquaTheme.spacingM,
+                0,
+                AquaTheme.spacingM,
+                AquaTheme.spacingM,
+              ),
+              physics: const BouncingScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
                 childAspectRatio: 0.9,
@@ -108,7 +117,7 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
               itemBuilder: (context, index) {
                 final beverage = beverages[index];
                 final isSelected = beverage.id == _selectedId;
-                
+
                 return _BeverageCard(
                   beverage: beverage,
                   isSelected: isSelected,
@@ -121,7 +130,7 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
               },
             ),
           ),
-          
+
           SizedBox(height: MediaQuery.of(context).padding.bottom + AquaTheme.spacingL),
         ],
       ),
@@ -130,7 +139,7 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
 }
 
 class _BeverageCard extends StatelessWidget {
-  final BeverageThemeData beverage;
+  final BeverageType beverage;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -143,6 +152,7 @@ class _BeverageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = AquaTheme.isDark(context);
+    final style = AquaTheme.themeFromBeverage(beverage);
 
     return GestureDetector(
       onTap: onTap,
@@ -150,20 +160,20 @@ class _BeverageCard extends StatelessWidget {
         duration: AquaTheme.animationFast,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          gradient: isSelected ? beverage.gradient : null,
-          color: isSelected 
-              ? null 
+          gradient: isSelected ? style.gradient : null,
+          color: isSelected
+              ? null
               : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade50),
           borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
           border: Border.all(
-            color: isSelected 
-                ? Colors.transparent 
+            color: isSelected
+                ? Colors.transparent
                 : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200),
             width: 1.5,
           ),
           boxShadow: isSelected ? [
             BoxShadow(
-              color: beverage.primary.withOpacity(0.4),
+              color: style.primary.withOpacity(0.4),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -184,26 +194,26 @@ class _BeverageCard extends StatelessWidget {
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               ),
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            if (beverage.hydrationFactor != 1.0) ...[
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                      ? Colors.white.withOpacity(0.2) 
-                      : beverage.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
-                ),
-                child: Text(
-                  '${(beverage.hydrationFactor * 100).toInt()}%',
-                  style: AquaTheme.caption.copyWith(
-                    color: isSelected ? Colors.white70 : beverage.primary,
-                    fontSize: 10,
-                  ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white.withOpacity(0.2)
+                    : style.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+              ),
+              child: Text(
+                '${beverage.hydrationPercent}%',
+                style: AquaTheme.caption.copyWith(
+                  color: isSelected ? Colors.white70 : style.primary,
+                  fontSize: 10,
                 ),
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -228,7 +238,10 @@ class AquaBeverageChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final beverage = AquaTheme.getBeverage(beverageId);
+    final resolved = WaterService.getBeverage(beverageId);
+    final beverage = resolved != null
+        ? AquaTheme.themeFromBeverage(resolved)
+        : AquaTheme.getBeverage(beverageId);
     final isDark = AquaTheme.isDark(context);
 
     return GestureDetector(

@@ -9,6 +9,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../models/focus_session.dart';
 import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
+import '../services/tag_service.dart';
 import '../widgets/plant_animation_widget.dart';
 import '../widgets/breathing_widget.dart';
 import '../models/breathing_exercise.dart';
@@ -33,6 +34,7 @@ class FocusScreen extends StatefulWidget {
 class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin {
   final FocusService _focusService = FocusService();
   final CoinsService _coinsService = CoinsService();
+  final TagService _tagService = TagService();
   final HapticService _hapticService = HapticService();
   final VitaVibeService _vitaVibeService = VitaVibeService();
   
@@ -55,6 +57,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
   void initState() {
     super.initState();
     _focusService.init();
+    _tagService.init();
     _initAnimations();
   }
 
@@ -116,7 +119,7 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
     final isDark = AppColors.isDark(context);
     
     return ListenableBuilder(
-      listenable: Listenable.merge([_focusService, _coinsService]),
+      listenable: Listenable.merge([_focusService, _coinsService, _tagService]),
       builder: (context, _) {
         if (_showBreathing && _selectedBreathingPattern != null) {
           return Scaffold(
@@ -164,6 +167,8 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
                                 _buildPremiumDurationSelector(isDark),
                                 const SizedBox(height: 24),
                                 _buildPremiumActivitySelector(isDark),
+                                const SizedBox(height: 24),
+                                _buildPremiumTagSelector(isDark),
                                 const SizedBox(height: 24),
                                 _buildPremiumPlantSelector(isDark),
                                 const SizedBox(height: 24),
@@ -874,6 +879,115 @@ class _FocusScreenState extends State<FocusScreen> with TickerProviderStateMixin
               }).toList(),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumTagSelector(bool isDark) {
+    final plantColor = _focusService.selectedPlant.primaryColor;
+    final tags = _tagService.tags;
+    final selectedIds = _focusService.selectedTagIds;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildSectionTitle('Tags', Icons.label_outline_rounded, plantColor),
+              GestureDetector(
+                onTap: () {
+                  _hapticService.navigation();
+                  Navigator.push(context, _buildPageRoute(const CustomTagsScreen()));
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: plantColor.withOpacity(isDark ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Manage',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: plantColor,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (tags.isEmpty)
+            Text(
+              'Create tags to organize your sessions',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.getTextSecondary(context),
+              ),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: tags.map((tag) {
+                  final isSelected = selectedIds.contains(tag.id);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: GestureDetector(
+                      onTap: () {
+                        _hapticService.selection();
+                        _focusService.toggleTag(tag.id);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOutCubic,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? tag.color.withOpacity(isDark ? 0.28 : 0.16)
+                              : (isDark ? AppColors.darkCard : Colors.white),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? tag.color
+                                : (isDark ? AppColors.darkBorder : AppColors.divider),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isSelected) ...[
+                              Icon(Icons.check_rounded, size: 16, color: tag.color),
+                              const SizedBox(width: 6),
+                            ] else if (tag.emoji != null) ...[
+                              Text(tag.emoji!, style: const TextStyle(fontSize: 16)),
+                              const SizedBox(width: 6),
+                            ],
+                            Text(
+                              tag.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isSelected
+                                    ? tag.color
+                                    : AppColors.getTextPrimary(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
         ],
       ),
     );

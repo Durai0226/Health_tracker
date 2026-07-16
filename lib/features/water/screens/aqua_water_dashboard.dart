@@ -8,8 +8,9 @@ import '../widgets/aqua_timeline_list.dart';
 import '../widgets/aqua_weekly_progress.dart';
 import '../widgets/aqua_beverage_sheet.dart';
 import '../models/enhanced_water_log.dart';
-import '../models/beverage_type.dart';
+import '../models/water_container.dart';
 import '../services/water_service.dart';
+import 'custom_cup_creator_screen.dart';
 import 'water_statistics_screen.dart';
 import 'water_calendar_screen.dart';
 import 'water_reminder_settings_screen.dart';
@@ -130,30 +131,54 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     }
   }
 
-  Future<void> _addWater(int amountMl, String beverageId) async {
+  Future<void> _addWater(
+    int amountMl,
+    String beverageId, {
+    WaterContainer? container,
+  }) async {
     try {
-      final beverage = WaterService.getBeverage(beverageId) ??
-          BeverageType.defaultBeverages.first;
+      // Resolve the real beverage from the catalog — no silent fallback to
+      // Water. An unknown id must not be credited as 100% hydration water.
+      final beverage = WaterService.getBeverage(beverageId);
+      if (beverage == null) {
+        debugPrint('⚠️ Unknown beverage id "$beverageId" — skipping log');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Unknown beverage — not logged'),
+              backgroundColor: AquaTheme.warning,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
+              ),
+            ),
+          );
+        }
+        return;
+      }
 
+      // addWaterLog computes effective hydration / caffeine / alcohol from the
+      // BeverageType, so beer/energy drinks are recorded correctly.
       await WaterService.addWaterLog(
         amountMl: amountMl,
         beverage: beverage,
+        container: container,
       );
 
       await _loadData();
 
       if (mounted) {
         HapticFeedback.mediumImpact();
-        final beverageTheme = AquaTheme.getBeverage(beverageId);
-        
+        final beverageTheme = AquaTheme.themeFromBeverage(beverage);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                Text(beverageTheme.emoji, style: const TextStyle(fontSize: 20)),
+                Text(beverage.emoji, style: const TextStyle(fontSize: 20)),
                 const SizedBox(width: 12),
                 Text(
-                  '+${amountMl}ml ${beverageTheme.name}',
+                  '+${amountMl}ml ${beverage.name}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
@@ -178,6 +203,19 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
         );
       }
     }
+  }
+
+  /// One-tap logging of a saved cup/container with the selected beverage.
+  void _addWaterFromContainer(WaterContainer container) {
+    _addWater(container.capacityMl, _selectedBeverageId, container: container);
+  }
+
+  /// Open the custom cup creator, then refresh so new cups appear as chips.
+  void _openCupCreator() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CustomCupCreatorScreen()),
+    ).then((_) => _loadData());
   }
 
   void _showBeverageSelector() async {
@@ -457,6 +495,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           onQuickAdd: _addWater,
                           onCustomAmount: _showCustomAmountDialog,
                           onBeverageSelect: _showBeverageSelector,
+                          onContainerAdd: _addWaterFromContainer,
+                          onCreateCup: _openCupCreator,
                         ),
                         
                         const SizedBox(height: AquaTheme.spacingXL),

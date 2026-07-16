@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/aqua_theme.dart';
+import '../models/water_container.dart';
+import '../services/water_service.dart';
 
 /// Quick add buttons grid for beverages
 class AquaQuickAddGrid extends StatefulWidget {
@@ -9,12 +11,20 @@ class AquaQuickAddGrid extends StatefulWidget {
   final VoidCallback onCustomAmount;
   final VoidCallback onBeverageSelect;
 
+  /// Called when a saved container/cup chip is tapped for one-tap logging.
+  final void Function(WaterContainer container)? onContainerAdd;
+
+  /// Called to open the custom cup creator.
+  final VoidCallback? onCreateCup;
+
   const AquaQuickAddGrid({
     super.key,
     required this.selectedBeverageId,
     required this.onQuickAdd,
     required this.onCustomAmount,
     required this.onBeverageSelect,
+    this.onContainerAdd,
+    this.onCreateCup,
   });
 
   @override
@@ -33,7 +43,10 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
 
   @override
   Widget build(BuildContext context) {
-    final beverage = AquaTheme.getBeverage(widget.selectedBeverageId);
+    final selected = WaterService.getBeverage(widget.selectedBeverageId);
+    final beverage = selected != null
+        ? AquaTheme.themeFromBeverage(selected)
+        : AquaTheme.getBeverage(widget.selectedBeverageId);
     final isDark = AquaTheme.isDark(context);
 
     return Column(
@@ -42,7 +55,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         // Beverage selector row
         _buildBeverageSelector(beverage, isDark),
         const SizedBox(height: AquaTheme.spacingM),
-        
+
         // Quick add amount buttons
         Row(
           children: List.generate(_amounts.length, (index) {
@@ -67,25 +80,145 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         ),
         
         const SizedBox(height: AquaTheme.spacingS),
-        
+
         // Custom amount button
         _buildCustomAmountButton(beverage, isDark),
+
+        // Cups / saved containers (one-tap logging + create)
+        if (widget.onContainerAdd != null || widget.onCreateCup != null) ...[
+          const SizedBox(height: AquaTheme.spacingM),
+          _buildCupsSection(beverage, isDark),
+        ],
       ],
     );
   }
 
+  Widget _buildCupsSection(BeverageThemeData beverage, bool isDark) {
+    // Surface custom cups first, then defaults.
+    final containers = [...WaterService.getAllContainers()]
+      ..sort((a, b) {
+        if (a.isDefault == b.isDefault) return 0;
+        return a.isDefault ? 1 : -1;
+      });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.local_cafe_outlined, size: 16, color: beverage.primary),
+            const SizedBox(width: 6),
+            Text(
+              'Cups',
+              style: AquaTheme.labelMedium.copyWith(
+                color: AquaTheme.getTextSecondary(context),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AquaTheme.spacingS),
+        SizedBox(
+          height: 44,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: containers.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: AquaTheme.spacingS),
+            itemBuilder: (context, index) {
+              if (index == containers.length) {
+                return _buildNewCupChip(beverage, isDark);
+              }
+              return _buildContainerChip(containers[index], beverage, isDark);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContainerChip(
+    WaterContainer container,
+    BeverageThemeData beverage,
+    bool isDark,
+  ) {
+    return GestureDetector(
+      onTap: widget.onContainerAdd == null
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              widget.onContainerAdd!(container);
+            },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+          border: Border.all(
+            color: beverage.primary.withOpacity(isDark ? 0.3 : 0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(container.emoji, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 6),
+            Text(
+              '${container.capacityMl}ml',
+              style: AquaTheme.labelMedium.copyWith(
+                color: AquaTheme.getTextPrimary(context),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNewCupChip(BeverageThemeData beverage, bool isDark) {
+    return GestureDetector(
+      onTap: widget.onCreateCup == null
+          ? null
+          : () {
+              HapticFeedback.lightImpact();
+              widget.onCreateCup!();
+            },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: beverage.gradient,
+          borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add, size: 16, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              'New Cup',
+              style: AquaTheme.labelMedium.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBeverageSelector(BeverageThemeData beverage, bool isDark) {
-    final beverageList = AquaTheme.beverages.values.toList();
-    
+    final beverageList = WaterService.getAllBeverages();
+
     return SizedBox(
       height: 50,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: beverageList.length,
         itemBuilder: (context, index) {
-          final bev = beverageList[index];
+          final bev = AquaTheme.themeFromBeverage(beverageList[index]);
           final isSelected = bev.id == widget.selectedBeverageId;
-          
+
           return GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();

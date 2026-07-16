@@ -73,6 +73,7 @@ class FocusSession {
   final PlantType plantType;
   final AmbientSoundType? soundUsed;
   final String? note;
+  final List<String> tagIds;
 
   FocusSession({
     required this.id,
@@ -86,6 +87,7 @@ class FocusSession {
     required this.plantType,
     this.soundUsed,
     this.note,
+    this.tagIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -100,6 +102,7 @@ class FocusSession {
         'plantType': plantType.index,
         'soundUsed': soundUsed?.index,
         'note': note,
+        'tagIds': tagIds,
       };
 
   factory FocusSession.fromJson(Map<String, dynamic> json) => FocusSession(
@@ -114,6 +117,8 @@ class FocusSession {
         plantType: PlantType.values[json['plantType'] ?? 0],
         soundUsed: json['soundUsed'] != null ? AmbientSoundType.values[json['soundUsed']] : null,
         note: json['note'],
+        // Backward-compatible: older persisted sessions have no tagIds → [].
+        tagIds: json['tagIds'] != null ? List<String>.from(json['tagIds']) : const [],
       );
 
   FocusSession copyWith({
@@ -128,6 +133,7 @@ class FocusSession {
     PlantType? plantType,
     AmbientSoundType? soundUsed,
     String? note,
+    List<String>? tagIds,
   }) {
     return FocusSession(
       id: id ?? this.id,
@@ -141,6 +147,7 @@ class FocusSession {
       plantType: plantType ?? this.plantType,
       soundUsed: soundUsed ?? this.soundUsed,
       note: note ?? this.note,
+      tagIds: tagIds ?? this.tagIds,
     );
   }
 }
