@@ -59,7 +59,7 @@ class StorageService {
   }
   
   /// @deprecated Use CleanStorageService.exportAllData() instead
-  static Map<String, dynamic> exportAllData() {
+  static Future<Map<String, dynamic>> exportAllData() {
     return CleanStorageService.exportAllData();
   }
   

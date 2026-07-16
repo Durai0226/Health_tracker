@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/design/app_palette.dart';
 
 /// NUNITO Wellness App Theme Constants
 /// Based on the Behance design for Wellness Aging Care Mood & Meds Tracking app
@@ -11,13 +12,13 @@ class NunitoTheme {
   // ==========================================
   
   /// Deep purple - main brand color
-  static const Color primary = Color(0xFF3D3D6B);
+  static const Color primary = AppPalette.medicine;
   
   /// Slightly lighter purple
-  static const Color primaryLight = Color(0xFF4A4A7D);
+  static const Color primaryLight = AppPalette.medicineDark;
   
   /// Dark purple for emphasis
-  static const Color primaryDark = Color(0xFF2D2D5B);
+  static const Color primaryDark = AppPalette.medicineStrong;
   
   /// Soft purple for secondary elements
   static const Color secondary = Color(0xFF6B6B9D);
@@ -36,48 +37,48 @@ class NunitoTheme {
   static const Color accentBlue = Color(0xFF7BB3FF);
   
   /// Success green
-  static const Color success = Color(0xFF4CAF50);
+  static const Color success = AppPalette.success;
   
   /// Warning orange
-  static const Color warning = Color(0xFFFF9800);
+  static const Color warning = AppPalette.warning;
   
   /// Error red
-  static const Color error = Color(0xFFE53935);
+  static const Color error = AppPalette.error;
   
   // ==========================================
   // BACKGROUND COLORS
   // ==========================================
   
   /// Light mode background
-  static const Color backgroundLight = Color(0xFFF5F5FA);
+  static const Color backgroundLight = AppPalette.backgroundL;
   
   /// Dark mode background
-  static const Color backgroundDark = Color(0xFF1A1A2E);
+  static const Color backgroundDark = AppPalette.backgroundD;
   
   /// Card background light
-  static const Color cardLight = Colors.white;
+  static const Color cardLight = AppPalette.surfaceL;
   
   /// Card background dark
-  static const Color cardDark = Color(0xFF252540);
+  static const Color cardDark = AppPalette.surfaceD;
   
   /// Surface color for elevated elements
-  static const Color surface = Color(0xFFFFFFFF);
+  static const Color surface = AppPalette.surfaceL;
   
   /// Surface color dark mode
-  static const Color surfaceDark = Color(0xFF2D2D4A);
+  static const Color surfaceDark = AppPalette.surfaceElevatedD;
   
   // ==========================================
   // TEXT COLORS
   // ==========================================
   
   /// Primary text color
-  static const Color textPrimary = Color(0xFF2D2D4A);
+  static const Color textPrimary = AppPalette.textPrimaryL;
   
   /// Secondary text color
-  static const Color textSecondary = Color(0xFF6B6B9D);
+  static const Color textSecondary = AppPalette.textSecondaryL;
   
   /// Tertiary/hint text
-  static const Color textTertiary = Color(0xFF9E9EBF);
+  static const Color textTertiary = AppPalette.textTertiaryL;
   
   /// Text on dark backgrounds
   static const Color textOnDark = Colors.white;

@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'cloud_sync_service.dart';
-import 'category_manager.dart';
 import '../config/env_config.dart';
 import '../utils/validators.dart';
 
@@ -385,10 +384,7 @@ class AuthService extends ChangeNotifier {
     }
     
     await _clearSavedUser();
-    
-    // Clear category selection so user can choose a new one
-    await CategoryManager().clearCategory();
-    
+
     // Auto sign-in as guest after logout
     await signInAnonymously();
   }

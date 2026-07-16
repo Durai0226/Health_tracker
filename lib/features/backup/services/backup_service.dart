@@ -44,7 +44,7 @@ class BackupService {
   /// Share the backup file using system share sheet
   Future<void> shareBackup(File file) async {
     // ignore: deprecated_member_use
-    await Share.shareXFiles([XFile(file.path)], text: 'Dlyminder Backup');
+    await Share.shareXFiles([XFile(file.path)], text: 'DailyMinder Backup');
   }
 
   /// Allow user to pick a backup file and restore data

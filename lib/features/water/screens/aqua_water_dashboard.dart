@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/aqua_theme.dart';
-import '../widgets/aqua_droplet_widget.dart';
+import '../widgets/water_hero_gauge.dart';
 import '../widgets/aqua_glass_card.dart';
 import '../widgets/aqua_quick_add_grid.dart';
 import '../widgets/aqua_timeline_list.dart';
@@ -12,6 +12,8 @@ import '../models/beverage_type.dart';
 import '../services/water_service.dart';
 import 'water_statistics_screen.dart';
 import 'water_calendar_screen.dart';
+import 'water_reminder_settings_screen.dart';
+import 'water_history_edit_screen.dart';
 import 'water_achievements_screen.dart';
 import 'hydration_profile_screen.dart';
 import 'hydration_challenges_screen.dart';
@@ -20,7 +22,10 @@ import 'caffeine_insights_screen.dart';
 /// Modern Aqua Water Dashboard
 /// Features: Animated droplet, dynamic beverage gradients, glassmorphism
 class AquaWaterDashboard extends StatefulWidget {
-  const AquaWaterDashboard({super.key});
+  /// When embedded in the Health hub, drops its own SliverAppBar (the hub owns
+  /// the single header) and uses a transparent background.
+  final bool embedded;
+  const AquaWaterDashboard({super.key, this.embedded = false});
 
   @override
   State<AquaWaterDashboard> createState() => _AquaWaterDashboardState();
@@ -359,20 +364,20 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
+      final loading = Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('💧', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            CircularProgressIndicator(color: AquaTheme.waterPrimary),
+          ],
+        ),
+      );
+      if (widget.embedded) return loading;
       return Scaffold(
         backgroundColor: AquaTheme.getBackground(context),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('💧', style: TextStyle(fontSize: 48)),
-              const SizedBox(height: 16),
-              CircularProgressIndicator(
-                color: AquaTheme.waterPrimary,
-              ),
-            ],
-          ),
-        ),
+        body: loading,
       );
     }
 
@@ -405,21 +410,21 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     final progress = todayData.progress.clamp(0.0, 1.0);
     final currentStreak = WaterService.getCurrentStreak();
 
-    return Scaffold(
-      backgroundColor: AquaTheme.getBackground(context),
-      body: Stack(
+    final body = Stack(
         children: [
           // Background gradient
-          _buildBackground(beverage, isDark),
-          
+          if (!widget.embedded) _buildBackground(beverage, isDark),
+
           // Main content
           CustomScrollView(
             controller: _scrollController,
             physics: const BouncingScrollPhysics(),
             slivers: [
               // App bar
-              _buildSliverAppBar(beverage, currentStreak),
-              
+              if (!widget.embedded) _buildSliverAppBar(beverage, currentStreak),
+              if (widget.embedded)
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
               // Content
               SliverToBoxAdapter(
                 child: FadeTransition(
@@ -429,16 +434,15 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                     child: Column(
                       children: [
                         const SizedBox(height: AquaTheme.spacingM),
-                        
-                        // Droplet visualization
-                        AquaDropletWidget(
+
+                        // Hydration gauge (always water accent, never beverage-tinted)
+                        WaterHeroGauge(
                           progress: progress,
                           currentMl: todayData.effectiveHydrationMl,
                           goalMl: todayData.dailyGoalMl,
-                          beverageId: _selectedBeverageId,
                           onTap: _showBeverageSelector,
                         ),
-                        
+
                         const SizedBox(height: AquaTheme.spacingXL),
                         
                         // Quick add section
@@ -496,7 +500,12 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             ],
           ),
         ],
-      ),
+      );
+
+    if (widget.embedded) return body;
+    return Scaffold(
+      backgroundColor: AquaTheme.getBackground(context),
+      body: body,
     );
   }
 
@@ -799,14 +808,15 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   void _navigateToReminders() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const WaterCalendarScreen()),
+      MaterialPageRoute(builder: (_) => const WaterReminderSettingsScreen()),
     );
   }
 
   void _navigateToHistory() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const WaterCalendarScreen()),
-    );
+      MaterialPageRoute(
+          builder: (_) => WaterHistoryEditScreen(date: DateTime.now())),
+    ).then((_) => _loadData());
   }
 }

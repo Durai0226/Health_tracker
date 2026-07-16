@@ -128,16 +128,6 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/
-    - assets/sounds/
-    - assets/questions/
-    - assets/questions/banking/
-    - assets/questions/ssc/
-    - assets/questions/upsc/
-    - assets/questions/jee/
-    - assets/questions/neet/
-    - assets/questions/cat/
-    - assets/questions/gate/
-    - assets/questions/clat/
 
 
   # An image asset can refer to one or more resolution-specific "variants", see

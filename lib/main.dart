@@ -20,19 +20,12 @@ import 'core/services/background_alarm_service.dart';
 import 'core/services/focus_mode_service.dart';
 import 'core/services/feature_flag_service.dart';
 import 'core/services/feature_manager.dart';
-import 'core/services/category_manager.dart';
 import 'core/services/simple_ad_service.dart';
 import 'features/focus/services/focus_service.dart';
-import 'features/exam_prep/services/exam_prep_service.dart';
-import 'features/finance/services/finance_sync_manager.dart';
-import 'features/finance/services/bill_storage_service.dart';
-import 'features/period_tracking/services/period_storage_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/screens/welcome_screen.dart';
-import 'features/onboarding/screens/feature_selection_screen.dart';
+import 'features/home/screens/app_shell.dart';
 import 'features/reminders/screens/alarm_screen.dart';
-import 'features/habit/screens/habit_shop_screen.dart';
-import 'features/habit/screens/collections_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -74,7 +67,6 @@ void _initDeferredServices() {
         _initService('SyncService', () async => SyncService().init()),
         _initService('BackgroundAlarmService', () => BackgroundAlarmService().init()),
         _initService('FeatureFlagService', () => FeatureFlagService().init()),
-        _initService('Finance Sync Manager', () => FinanceSyncManager().init()),
         _initService('VitaVibeService', () => VitaVibeService().init()),
         // Other services can be initialized on-demand
       ]);
@@ -139,8 +131,6 @@ void main() async {
       _initService('MedicineCleanStorageService', () => MedicineCleanStorageService.init()),
       _initService('IntakeTrackingService', () => IntakeTrackingService.init()),
       _initService('WaterService', () => WaterService.init()),
-      _initService('BillStorageService', () => BillStorageService().init()),
-      _initService('PeriodCleanStorageService', () => PeriodCleanStorageService.init()),
     ]);
     
     // Sync snooze settings asynchronously (non-blocking)
@@ -152,7 +142,6 @@ void main() async {
       _initService('AuthService', () => AuthService().init()),
       _initService('HapticService', () => HapticService().init()),
       _initService('FeatureManager', () => FeatureManager().init()),
-      _initService('CategoryManager', () => CategoryManager().init()),
     ]);
     
     // Defer non-critical services to after app launch
@@ -230,7 +219,7 @@ class _MyAppState extends State<MyApp> {
     String determineInitialRoute() {
       if (widget.initialRoute != null) return widget.initialRoute!;
       if (isFirstLaunch) return '/welcome';
-      return '/feature-selection';
+      return '/home';
     }
     
     return MaterialApp(
@@ -243,13 +232,11 @@ class _MyAppState extends State<MyApp> {
       initialRoute: determineInitialRoute(),
       routes: {
         '/welcome': (context) => const WelcomeScreen(),
-        '/feature-selection': (context) => const FeatureSelectionScreen(),
+        '/home': (context) => const AppShell(),
         '/alarm': (context) => AlarmScreen(
-          payload: widget.alarmPayload ?? 
+          payload: widget.alarmPayload ??
             (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {}),
         ),
-        '/habit/shop': (context) => const HabitShopScreen(),
-        '/habit/collections': (context) => const CollectionsScreen(),
       },
     );
   }

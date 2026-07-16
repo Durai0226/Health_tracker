@@ -6,22 +6,12 @@ import 'connection/connection.dart';
 import 'tables/core_tables.dart';
 import 'tables/medication_tables.dart';
 import 'tables/water_tables.dart';
-import 'tables/finance_tables.dart';
-import 'tables/notes_tables.dart';
 import 'tables/reminders_tables.dart';
-import 'tables/fitness_tables.dart';
-import 'tables/period_tables.dart';
-import 'tables/js_learning_tables.dart';
 
 import 'daos/core_dao.dart';
 import 'daos/medication_dao.dart';
 import 'daos/water_dao.dart';
-import 'daos/finance_dao.dart';
-import 'daos/notes_dao.dart';
 import 'daos/reminders_dao.dart';
-import 'daos/fitness_dao.dart';
-import 'daos/period_dao.dart';
-import 'daos/js_learning_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -49,66 +39,42 @@ part 'app_database.g.dart';
     WaterContainers,
     HydrationProfiles,
     WaterAchievements,
-    
-    // Finance tables
-    Bills,
-    BillPayments,
-    BillCategories,
-    BillTemplates,
-    BillActivities,
-    CategoryKeywordMaps,
-    BillSettingsTable,
-    FinanceSettings,
-    
-    // Notes tables
-    Notes,
-    Folders,
-    Tags,
-    
+
     // Reminders tables
     Reminders,
     ReminderCategories,
-    
-    // Fitness tables
-    FitnessReminders,
-    FitnessActivities,
-    
-    // Period tracking tables
-    PeriodData,
-    PeriodRemindersTable,
-    SymptomLogs,
-    CycleLogs,
-    
-    // JS Learning tables
-    JsLevels,
-    JsTopics,
-    JsLessons,
-    JsQuizzes,
-    JsChallenges,
-    JsTopicProgress,
-    JsUserStats,
-    JsDailyActivity,
-    JsQuizAttempts,
-    JsBookmarks,
-    JsLessonNotes,
   ],
   daos: [
     CoreDao,
     MedicationDao,
     WaterDao,
-    FinanceDao,
-    NotesDao,
     RemindersDao,
-    FitnessDao,
-    PeriodDao,
-    JsLearningDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
+  /// period-tracking features were removed. Kept-feature data is untouched.
+  static const List<String> _droppedTables = [
+    // finance
+    'bills', 'bill_payments', 'bill_categories', 'bill_templates',
+    'bill_activities', 'category_keyword_maps', 'bill_settings_table',
+    'finance_settings',
+    // notes
+    'notes', 'folders', 'tags',
+    // fitness
+    'fitness_reminders', 'fitness_activities',
+    // period
+    'period_data', 'period_reminders_table', 'symptom_logs', 'cycle_logs',
+    // js learning
+    'js_levels', 'js_topics', 'js_lessons', 'js_quizzes', 'js_challenges',
+    'js_topic_progress', 'js_user_stats', 'js_daily_activity',
+    'js_quiz_attempts', 'js_bookmarks', 'js_lesson_notes',
+  ];
 
   @override
   MigrationStrategy get migration {
@@ -119,6 +85,12 @@ class AppDatabase extends _$AppDatabase {
       },
       onUpgrade: (Migrator m, int from, int to) async {
         debugPrint('Drift database upgrading from $from to $to');
+        if (from < 2) {
+          for (final table in _droppedTables) {
+            await customStatement('DROP TABLE IF EXISTS $table');
+          }
+          debugPrint('✓ Dropped removed-feature tables');
+        }
       },
     );
   }

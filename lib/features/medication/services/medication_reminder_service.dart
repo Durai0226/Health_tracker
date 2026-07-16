@@ -3,6 +3,7 @@ import '../../../core/services/notification_service.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
+import 'medicine_storage_service.dart';
 
 /// Service for managing medication reminder notifications
 /// Handles scheduling, updating, and canceling push notifications for medicines
@@ -15,6 +16,15 @@ class MedicationReminderService {
 
   /// Base ID offset for medication notifications to avoid conflicts
   static const int _medicineIdOffset = 100000;
+
+  /// SharedPreferences key for the master medication-reminders toggle.
+  static const String masterEnabledKey = 'medication_reminders_master_enabled';
+
+  /// Reschedule reminders for all stored medicines.
+  Future<void> rescheduleAll() async {
+    final medicines = await MedicineCleanStorageService.getAllMedicines();
+    await scheduleAllReminders(medicines);
+  }
 
   /// Generate unique notification ID for a medicine + time slot
   int _generateNotificationId(String medicineId, int timeIndex) {

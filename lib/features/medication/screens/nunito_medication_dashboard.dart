@@ -15,7 +15,10 @@ import 'clinics/nunito_clinic_list_screen.dart';
 import 'analytics/nunito_adherence_report_screen.dart';
 
 class NunitoMedicationDashboard extends StatefulWidget {
-  const NunitoMedicationDashboard({super.key});
+  /// When embedded in the Health hub, the dashboard drops its own header
+  /// (the hub owns the single header) and uses a transparent background.
+  final bool embedded;
+  const NunitoMedicationDashboard({super.key, this.embedded = false});
 
   @override
   State<NunitoMedicationDashboard> createState() => _NunitoMedicationDashboardState();
@@ -200,29 +203,44 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
+    final content = _isLoading
+        ? _buildLoadingState()
+        : FadeTransition(
+            opacity: _fadeAnimation,
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                if (!widget.embedded) _buildHeader(isDark),
+                if (widget.embedded)
+                  const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                SliverToBoxAdapter(child: _buildStatsRow(isDark)),
+                SliverToBoxAdapter(child: _buildDateSelector(isDark)),
+                SliverToBoxAdapter(child: _buildSectionTitle('Today\'s Schedule', Icons.schedule_rounded)),
+                _todaysDoses.isEmpty
+                    ? SliverToBoxAdapter(child: _buildEmptySchedule(isDark))
+                    : _buildTimelineList(isDark),
+                SliverToBoxAdapter(child: _buildQuickActions(isDark)),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            ),
+          );
+
+    // Embedded in the Health hub: no nested Scaffold — return the body with a
+    // floating add button so the hub owns the single Scaffold.
+    if (widget.embedded) {
+      return Stack(
+        children: [
+          Positioned.fill(child: content),
+          Positioned(right: 16, bottom: 16, child: _buildFAB()),
+        ],
+      );
+    }
+
     return Scaffold(
       backgroundColor: isDark ? NunitoTheme.backgroundDark : NunitoTheme.backgroundLight,
-      body: _isLoading
-          ? _buildLoadingState()
-          : FadeTransition(
-              opacity: _fadeAnimation,
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  _buildHeader(isDark),
-                  SliverToBoxAdapter(child: _buildStatsRow(isDark)),
-                  SliverToBoxAdapter(child: _buildDateSelector(isDark)),
-                  SliverToBoxAdapter(child: _buildSectionTitle('Today\'s Schedule', Icons.schedule_rounded)),
-                  _todaysDoses.isEmpty
-                      ? SliverToBoxAdapter(child: _buildEmptySchedule(isDark))
-                      : _buildTimelineList(isDark),
-                  SliverToBoxAdapter(child: _buildQuickActions(isDark)),
-                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                ],
-              ),
-            ),
+      body: content,
       floatingActionButton: _buildFAB(),
     );
   }

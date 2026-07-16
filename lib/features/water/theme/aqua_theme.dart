@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/design/app_palette.dart';
 
 /// Aqua Water Tracking Theme - Modern 2025/2026 Design System
 /// Dynamic beverage gradients with glassmorphism effects
@@ -11,8 +12,8 @@ class AquaTheme {
   // ==========================================
   
   /// Water - Fresh cyan blue
-  static const Color waterPrimary = Color(0xFF00D4FF);
-  static const Color waterSecondary = Color(0xFF0EA5E9);
+  static const Color waterPrimary = AppPalette.water;
+  static const Color waterSecondary = AppPalette.waterStrong;
   
   /// Coffee - Rich brown
   static const Color coffeePrimary = Color(0xFF8B4513);
@@ -50,20 +51,20 @@ class AquaTheme {
   // BACKGROUND COLORS
   // ==========================================
   
-  static const Color backgroundLight = Color(0xFFF0F9FF);
-  static const Color backgroundDark = Color(0xFF0F172A);
-  static const Color cardLight = Colors.white;
-  static const Color cardDark = Color(0xFF1E293B);
-  static const Color surfaceLight = Color(0xFFF8FAFC);
-  static const Color surfaceDark = Color(0xFF334155);
+  static const Color backgroundLight = AppPalette.backgroundL;
+  static const Color backgroundDark = AppPalette.backgroundD;
+  static const Color cardLight = AppPalette.surfaceL;
+  static const Color cardDark = AppPalette.surfaceD;
+  static const Color surfaceLight = AppPalette.surfaceVariantL;
+  static const Color surfaceDark = AppPalette.surfaceVariantD;
 
   // ==========================================
   // TEXT COLORS
   // ==========================================
   
-  static const Color textPrimary = Color(0xFF0F172A);
-  static const Color textSecondary = Color(0xFF64748B);
-  static const Color textTertiary = Color(0xFF94A3B8);
+  static const Color textPrimary = AppPalette.textPrimaryL;
+  static const Color textSecondary = AppPalette.textSecondaryL;
+  static const Color textTertiary = AppPalette.textTertiaryL;
   static const Color textOnDark = Colors.white;
   static const Color textOnPrimary = Colors.white;
 

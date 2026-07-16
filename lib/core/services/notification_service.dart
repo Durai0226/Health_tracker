@@ -12,8 +12,6 @@ import '../../features/reminders/models/reminder_model.dart';
 import '../models/user_settings.dart';
 import 'background_alarm_service.dart';
 import '../../main.dart';
-import '../../features/notes/data/services/notes_service.dart';
-import '../../features/notes/presentation/screens/premium_note_editor_screen.dart';
 import '../widgets/toast/toast.dart';
 
 // Top-level function for background notification handling
@@ -498,23 +496,7 @@ class NotificationService {
        _notifications.cancel(response.id ?? 0);
        debugPrint('✓ Notification dismissed via tap: ${response.id}');
     } else {
-      // Normal tap
-      final payload = response.payload;
-      if (payload != null && payload.startsWith('note:')) {
-        final noteId = payload.substring(5);
-        debugPrint('🔔 Navigating to note: $noteId');
-        
-        final note = NotesService().getNote(noteId);
-        if (note != null) {
-          navigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (context) => PremiumNoteEditorScreen(note: note),
-            ),
-          );
-        } else {
-          debugPrint('❌ Note not found: $noteId');
-        }
-      }
+      // Normal tap — note deep-linking removed with the Notes feature.
     }
   }
   

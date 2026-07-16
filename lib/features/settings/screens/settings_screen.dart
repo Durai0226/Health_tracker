@@ -1,10 +1,10 @@
 
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app/app_logo.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/services/category_manager.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import 'notification_settings_screen.dart';
 import 'haptic_settings_screen.dart';
@@ -26,7 +26,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _authService = AuthService();
   final _hapticService = HapticService();
   final _vitaVibeService = VitaVibeService();
-  final _categoryManager = CategoryManager();
   bool _isLoading = false;
 
   Future<void> _handleGoogleSignIn() async {
@@ -214,14 +213,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context,
                 icon: Icons.info_outline_rounded,
                 iconColor: AppColors.textSecondary,
-                title: "About Dlyminder",
+                title: "About DailyMinder",
                 subtitle: "Version 1.0.0",
                 onTap: () {
                   showAboutDialog(
                     context: context,
-                    applicationName: "Tablet Reminder",
+                    applicationName: "DailyMinder",
                     applicationVersion: "1.0.0",
-                    applicationLegalese: "© 2026 Your Health Companion",
+                    applicationIcon: const AppLogo.mark(size: 44),
+                    applicationLegalese: "© 2026 DailyMinder",
                   );
                 },
               ),
@@ -594,364 +594,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildCategorySection() {
-    final categoryConfig = _categoryManager.selectedCategoryConfig;
-    final isDark = AppColors.isDark(context);
-    
-    if (categoryConfig == null) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 12),
-          child: Text(
-            'Your Focus',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.getTextSecondary(context),
-            ),
-          ),
-        ),
-        // Compact luxurious category card
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: [
-              // Main category row - compact
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Elegant icon with gradient
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: categoryConfig.color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        categoryConfig.icon,
-                        color: categoryConfig.color,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    // Category info
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  categoryConfig.name,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.getTextPrimary(context),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: categoryConfig.color.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  'ACTIVE',
-                                  style: TextStyle(
-                                    color: categoryConfig.color,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            categoryConfig.tagline,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.getTextSecondary(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Arrow indicator
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.getDivider(context),
-                      size: 20,
-                    ),
-                  ],
-                ),
-              ),
-              // Divider
-              Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: isDark ? AppColors.darkBorder.withOpacity(0.3) : Colors.grey.withOpacity(0.1),
-              ),
-              // Features row - compact horizontal pills
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                child: Row(
-                  children: [
-                    // Fun & Relax pill
-                    Flexible(
-                      child: _buildFeaturePill(
-                        icon: Icons.spa_rounded,
-                        label: 'Fun & Relax',
-                        color: AppColors.focusPrimary,
-                        isDark: isDark,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Features count
-                    Text(
-                      '+${categoryConfig.features.length} features',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.getTextSecondary(context),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    // Info icon with tooltip
-                    GestureDetector(
-                      onTap: () => _showCategoryInfoSheet(categoryConfig),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: isDark 
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.grey.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.info_outline_rounded,
-                          size: 16,
-                          color: AppColors.getTextSecondary(context),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeaturePill({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-            decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: const Text(
-              '✓',
-              style: TextStyle(
-                color: AppColors.success,
-                fontSize: 8,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCategoryInfoSheet(CategoryConfig config) {
-    final isDark = AppColors.isDark(context);
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.getCardBg(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkBorder : Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Icon and title
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: config.color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(config.icon, color: config.color, size: 32),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              config.name,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.getTextPrimary(context),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              config.description,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.getTextSecondary(context),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Features list
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark 
-                    ? Colors.white.withOpacity(0.03)
-                    : Colors.grey.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'INCLUDED FEATURES',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.getTextSecondary(context),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildFeatureChip('Fun & Relax', AppColors.focusPrimary),
-                      ...config.features.map((f) => _buildFeatureChip(
-                        _formatFeatureName(f),
-                        config.color,
-                      )),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Change category info
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.info.withOpacity(0.15)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.swap_horiz_rounded, color: AppColors.info, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Sign out to switch your focus category',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.getTextSecondary(context),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: color,
-        ),
-      ),
-    );
-  }
-
-  String _formatFeatureName(String id) {
-    return id.split('_').map((w) => w[0].toUpperCase() + w.substring(1)).join(' ');
   }
 
   Widget _buildRemoveAdsTile() {

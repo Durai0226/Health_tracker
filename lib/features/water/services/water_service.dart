@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:drift/drift.dart' show Value;
+import '../../../core/database/app_database.dart' as db;
+import '../../../core/database/daos/water_dao.dart';
 import '../models/beverage_type.dart';
 import '../models/water_container.dart';
 import '../models/hydration_profile.dart';
@@ -26,11 +29,102 @@ class WaterService {
     return _dailyWaterNotifier;
   }
 
-  /// Initialize the water service
+  static WaterDao get _dao => db.AppDatabase.instance.waterDao;
+
+  /// Initialize the water service — loads persisted data from Drift.
   static Future<void> init() async {
     if (_isInitialized) return;
-    debugPrint('✓ WaterService initialized with in-memory storage');
+    try {
+      final now = DateTime.now();
+      final rows = await _dao.getDataForRange(
+        now.subtract(const Duration(days: 90)),
+        now.add(const Duration(days: 1)),
+      );
+      final map = <String, DailyWaterData>{};
+      for (final row in rows) {
+        final logRows = await _dao.getLogsForDay(row.id);
+        map[row.id] = _dailyFromRow(row, logRows.map(_logFromRow).toList());
+      }
+      _dailyWaterNotifier.value = map;
+      debugPrint('✓ WaterService loaded ${map.length} days from Drift');
+    } catch (e) {
+      debugPrint('⚠️ WaterService load failed (using empty): $e');
+    }
     _isInitialized = true;
+  }
+
+  // ---- Drift <-> model mapping / persistence -----------------------------
+  static EnhancedWaterLog _logFromRow(db.EnhancedWaterLog r) => EnhancedWaterLog(
+        id: r.id,
+        time: r.time,
+        amountMl: r.amountMl,
+        effectiveHydrationMl: r.effectiveHydrationMl,
+        beverageId: r.beverageId,
+        beverageName: r.beverageName,
+        beverageEmoji: r.beverageEmoji ?? '💧',
+        hydrationPercent: r.hydrationPercent,
+        containerId: r.containerId,
+        containerName: r.containerName,
+        caffeineAmount: r.caffeineAmount,
+        isAlcoholic: r.isAlcoholic,
+        note: r.note,
+      );
+
+  static DailyWaterData _dailyFromRow(
+      db.DailyWaterDataTableData r, List<EnhancedWaterLog> logs) {
+    return DailyWaterData(
+      id: r.id,
+      date: r.date,
+      dailyGoalMl: r.dailyGoalMl,
+      totalIntakeMl: r.totalIntakeMl,
+      effectiveHydrationMl: r.effectiveHydrationMl,
+      totalCaffeineMg: r.totalCaffeineMg,
+      alcoholicDrinksCount: r.alcoholicDrinksCount,
+      goalReached: r.goalReached,
+      goalReachedAt: r.goalReachedAt,
+      logs: logs,
+    );
+  }
+
+  static Future<void> _persistDay(DailyWaterData d) async {
+    try {
+      await _dao.saveDailyData(db.DailyWaterDataTableCompanion(
+        id: Value(d.id),
+        date: Value(d.date),
+        dailyGoalMl: Value(d.dailyGoalMl),
+        totalIntakeMl: Value(d.totalIntakeMl),
+        effectiveHydrationMl: Value(d.effectiveHydrationMl),
+        totalCaffeineMg: Value(d.totalCaffeineMg),
+        alcoholicDrinksCount: Value(d.alcoholicDrinksCount),
+        goalReached: Value(d.goalReached),
+        goalReachedAt: Value(d.goalReachedAt),
+      ));
+    } catch (e) {
+      debugPrint('⚠️ persist day failed: $e');
+    }
+  }
+
+  static Future<void> _persistLog(String dayId, EnhancedWaterLog l) async {
+    try {
+      await _dao.addWaterLog(db.EnhancedWaterLogsCompanion(
+        id: Value(l.id),
+        dailyDataId: Value(dayId),
+        time: Value(l.time),
+        amountMl: Value(l.amountMl),
+        effectiveHydrationMl: Value(l.effectiveHydrationMl),
+        beverageId: Value(l.beverageId),
+        beverageName: Value(l.beverageName),
+        beverageEmoji: Value(l.beverageEmoji),
+        hydrationPercent: Value(l.hydrationPercent),
+        containerId: Value(l.containerId),
+        containerName: Value(l.containerName),
+        caffeineAmount: Value(l.caffeineAmount),
+        isAlcoholic: Value(l.isAlcoholic),
+        note: Value(l.note),
+      ));
+    } catch (e) {
+      debugPrint('⚠️ persist log failed: $e');
+    }
   }
 
   // ============ BEVERAGES ============
@@ -174,6 +268,7 @@ class WaterService {
   static Future<void> saveDailyData(DailyWaterData data) async {
     _dailyWaterNotifier.value[data.id] = data;
     _notifyListeners();
+    await _persistDay(data);
   }
 
   /// Add water log
@@ -208,6 +303,8 @@ class WaterService {
       final updatedData = _recalculateDailyData(data, updatedLogs);
       _dailyWaterNotifier.value[key] = updatedData;
       _notifyListeners();
+      await _dao.deleteWaterLog(logId);
+      await _persistDay(updatedData);
     }
   }
 
@@ -256,7 +353,11 @@ class WaterService {
     
     _dailyWaterNotifier.value[key] = updatedData;
     _notifyListeners();
-    
+
+    // Persist to Drift (day totals + the new log).
+    await _persistDay(updatedData);
+    await _persistLog(key, log);
+
     // Track usage and update achievements
     await _trackBeverageUsage(beverage.id);
     await _updateAchievements(updatedData, beverage, effectiveTime);

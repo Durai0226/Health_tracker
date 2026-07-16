@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/reminder_model.dart';
-import '../models/reminder_category_model.dart';
 import 'add_reminder_screen.dart';
 
+/// The Reminders destination — Calm Clarity, dark-aware, lists real reminders.
 class RemindersScreen extends StatefulWidget {
   const RemindersScreen({super.key});
 
@@ -15,80 +15,70 @@ class RemindersScreen extends StatefulWidget {
 }
 
 class _RemindersScreenState extends State<RemindersScreen> {
-  String? _selectedCategoryId;
+  List<Reminder> _reminders = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    final all = CleanStorageService.getReminders().toList()
+      ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
+    setState(() => _reminders = all);
+  }
+
+  Future<void> _addReminder() async {
+    await Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const AddReminderScreen()));
+    _load();
+  }
+
+  Future<void> _edit(Reminder r) async {
+    await Navigator.push(
+        context, MaterialPageRoute(builder: (_) => AddReminderScreen(reminder: r)));
+    _load();
+  }
+
+  Future<void> _toggle(Reminder r) async {
+    await CleanStorageService.toggleReminderCompletion(r);
+    _load();
+  }
+
+  Future<void> _delete(Reminder r) async {
+    await CleanStorageService.deleteReminder(r.id);
+    await NotificationService().cancelNotification(r.id.hashCode);
+    _load();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
+    final ext = AppColorsExt.of(context);
+    return AccentScope(
+      feature: FeatureAccent.reminders,
+      child: AppScaffold(
+        floatingActionButton: AppFab(
+          icon: Icons.add_rounded,
+          accent: ext.reminders,
+          onPressed: _addReminder,
         ),
-        title: const Text('Reminders'),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddReminderScreen()),
-          );
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      body: Column(
-        children: [
-          _buildCategoryFilter(),
-          // TODO: Replace with Drift stream when migration is complete
-          Expanded(
-            child: _buildEmptyState(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryFilter() {
-    // TODO: Replace with Drift stream when migration is complete
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildFilterChip(String? id, String label, Color color, IconData icon) {
-    final isSelected = _selectedCategoryId == id;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedCategoryId = id;
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.2) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? color : AppColors.border,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
+        body: Column(
           children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isSelected ? color : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? color : AppColors.textSecondary,
-              ),
+            AppHeader(title: 'Reminders', accent: ext.reminders),
+            Expanded(
+              child: _reminders.isEmpty
+                  ? EmptyState(
+                      icon: Icons.notifications_none_rounded,
+                      title: 'No reminders yet',
+                      message: 'Tap + to create your first reminder.',
+                      accent: ext.reminders,
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.gutter, AppSpacing.xs, AppSpacing.gutter, 120),
+                      children: _buildGroups(ext),
+                    ),
             ),
           ],
         ),
@@ -96,303 +86,143 @@ class _RemindersScreenState extends State<RemindersScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.notifications_none_rounded,
-            size: 64,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _selectedCategoryId == null ? 'No reminders yet' : 'No reminders in this category',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          if (_selectedCategoryId == null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Tap the + button to add one',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary.withOpacity(0.7),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+  /// Groups reminders into an agenda: Overdue · Today · Tomorrow · Upcoming ·
+  /// Completed — each section shown only when it has items.
+  List<Widget> _buildGroups(AppColorsExt ext) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    final overdue = <Reminder>[];
+    final dueToday = <Reminder>[];
+    final dueTomorrow = <Reminder>[];
+    final upcoming = <Reminder>[];
+    final completed = <Reminder>[];
+
+    for (final r in _reminders) {
+      if (r.isCompleted) {
+        completed.add(r);
+      } else if (r.scheduledTime.isBefore(now)) {
+        overdue.add(r);
+      } else if (DateUtils.isSameDay(r.scheduledTime, today)) {
+        dueToday.add(r);
+      } else if (DateUtils.isSameDay(r.scheduledTime, tomorrow)) {
+        dueTomorrow.add(r);
+      } else {
+        upcoming.add(r);
+      }
+    }
+
+    final widgets = <Widget>[];
+    void section(String title, IconData icon, List<Reminder> items,
+        AccentSwatch accent) {
+      if (items.isEmpty) return;
+      widgets.add(Padding(
+        padding: const EdgeInsets.only(
+            top: AppSpacing.lg, bottom: AppSpacing.sm),
+        child: SectionHeader(
+          title: '$title (${items.length})',
+          icon: icon,
+          accent: accent,
+        ),
+      ));
+      for (final r in items) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: _reminderCard(ext, r),
+        ));
+      }
+    }
+
+    section('Overdue', Icons.error_outline_rounded, overdue, ext.error);
+    section('Today', Icons.today_rounded, dueToday, ext.reminders);
+    section('Tomorrow', Icons.wb_sunny_rounded, dueTomorrow, ext.reminders);
+    section('Upcoming', Icons.event_rounded, upcoming, ext.reminders);
+    section('Completed', Icons.check_circle_outline_rounded, completed,
+        ext.success);
+    return widgets;
   }
 
-  Widget _buildReminderCard(BuildContext context, Reminder reminder) {
-    final isOverdue = reminder.scheduledTime.isBefore(DateTime.now()) && !reminder.isCompleted;
-    final timeFormat = DateFormat('h:mm a');
-    final dateFormat = DateFormat('MMM d, y');
-    
-    // TODO: Replace with Drift storage
-    // final category = reminder.categoryId != null ? ... : null;
+  Widget _reminderCard(AppColorsExt ext, Reminder r) {
+    final tt = Theme.of(context).textTheme;
+    final overdue = r.scheduledTime.isBefore(DateTime.now()) && !r.isCompleted;
+    final isToday = DateUtils.isSameDay(r.scheduledTime, DateTime.now());
+    final when = isToday
+        ? DateFormat('h:mm a').format(r.scheduledTime)
+        : DateFormat('MMM d · h:mm a').format(r.scheduledTime);
 
     return Dismissible(
-      key: Key(reminder.id),
+      key: Key(r.id),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
-          color: AppColors.error,
-          borderRadius: BorderRadius.circular(16),
+          color: ext.error.container,
+          borderRadius: AppRadius.brCard,
         ),
-        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+        child: Icon(Icons.delete_outline_rounded, color: ext.error.onContainer),
       ),
-      onDismissed: (_) async {
-        // TODO: Replace with Drift storage
-        debugPrint('deleteReminder temporarily disabled - Drift migration needed');
-        await NotificationService().cancelNotification(reminder.id.hashCode);
-      },
-      child: GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AddReminderScreen(reminder: reminder),
-            ),
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isOverdue ? AppColors.error.withOpacity(0.5) : AppColors.border,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start, // Align to top
-            children: [
-              // Checkbox / Status
-              Padding(
-                padding: const EdgeInsets.only(top: 2), // Align with text
-                child: GestureDetector(
-                  key: Key('checkbox_${reminder.id}'),
-                  onTap: () async {
-                    // TODO: Replace with Drift storage
-                    debugPrint('toggleReminderCompletion temporarily disabled - Drift migration needed');
-                  },
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: reminder.isCompleted
-                            ? AppColors.success
-                            : (isOverdue ? AppColors.error : AppColors.primary),
-                        width: 2,
-                      ),
-                      color: reminder.isCompleted ? AppColors.success : Colors.transparent,
-                    ),
-                    child: reminder.isCompleted
-                        ? const Icon(Icons.check, size: 16, color: Colors.white)
-                        : null,
+      onDismissed: (_) => _delete(r),
+      child: AppCard(
+        onTap: () => _edit(r),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: () => _toggle(r),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: r.isCompleted ? ext.reminders.base : Colors.transparent,
+                  border: Border.all(
+                    color: r.isCompleted ? ext.reminders.base : ext.outlineStrong,
+                    width: 2,
                   ),
                 ),
+                child: r.isCompleted
+                    ? Icon(Icons.check_rounded, size: 16, color: ext.reminders.on)
+                    : null,
               ),
-              const SizedBox(width: 16),
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            reminder.title,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: reminder.isCompleted
-                                  ? AppColors.textSecondary
-                                  : AppColors.textPrimary,
-                              decoration: reminder.isCompleted ? TextDecoration.lineThrough : null,
-                            ),
-                          ),
-                        ),
-                        // TODO: Show category when Drift migration is complete
-                        // if (category != null) ...[
-                        //   const SizedBox(width: 8),
-                        //   Icon(category.iconObj, size: 14, color: category.colorObj),
-                        // ],
-                      ],
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    r.title,
+                    style: tt.titleLarge?.copyWith(
+                      decoration: r.isCompleted ? TextDecoration.lineThrough : null,
+                      color: r.isCompleted ? ext.textTertiary : ext.textPrimary,
                     ),
-                    if (reminder.body.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        overdue ? Icons.error_outline_rounded : Icons.schedule_rounded,
+                        size: 14,
+                        color: overdue ? ext.error.strong : ext.textSecondary,
+                      ),
+                      const SizedBox(width: 5),
                       Text(
-                        reminder.body,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                          decoration: reminder.isCompleted ? TextDecoration.lineThrough : null,
+                        overdue ? '$when · overdue' : when,
+                        style: tt.bodySmall?.copyWith(
+                          color: overdue ? ext.error.strong : ext.textSecondary,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4, // For wrapping items
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        // Time
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.access_time_rounded,
-                              size: 14,
-                              color: isOverdue ? AppColors.error : AppColors.textSecondary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${dateFormat.format(reminder.scheduledTime)} • ${timeFormat.format(reminder.scheduledTime)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: isOverdue ? AppColors.error : AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        // Priority
-                        if (reminder.priority != ReminderPriority.medium)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: _getPriorityColor(reminder.priority).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: _getPriorityColor(reminder.priority), width: 1),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _getPriorityIcon(reminder.priority),
-                                  size: 10,
-                                  color: _getPriorityColor(reminder.priority),
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  _getPriorityLabel(reminder.priority),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: _getPriorityColor(reminder.priority),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                         // Repeat
-                        if (reminder.repeatType != RepeatType.none)
-                          Text(
-                            _getRepeatText(reminder),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        // Note Indicator
-                        if (reminder.note != null && reminder.note!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Icon(
-                              Icons.description_rounded,
-                              size: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        // Image Indicator
-                        if (reminder.imagePath != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Icon(
-                              Icons.image_rounded,
-                              size: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
-  }
-
-  String _getRepeatText(Reminder reminder) {
-    switch (reminder.repeatType) {
-      case RepeatType.none:
-        return '';
-      case RepeatType.daily:
-        return ' • Daily';
-      case RepeatType.weekly:
-        return ' • Weekly';
-      case RepeatType.weekdays:
-        return ' • Weekdays';
-      case RepeatType.weekends:
-        return ' • Weekends';
-      case RepeatType.custom:
-        if (reminder.customDays == null || reminder.customDays!.isEmpty) return ' • Custom';
-        final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        final selected = reminder.customDays!.map((d) => days[d - 1]).join(', ');
-        return ' • $selected';
-    }
-    return '';
-  }
-
-  Color _getPriorityColor(ReminderPriority priority) {
-    switch (priority) {
-      case ReminderPriority.high: return AppColors.error;
-      case ReminderPriority.medium: return AppColors.warning;
-      case ReminderPriority.low: return AppColors.success;
-    }
-  }
-
-  IconData _getPriorityIcon(ReminderPriority priority) {
-    switch (priority) {
-      case ReminderPriority.high: return Icons.priority_high_rounded;
-      case ReminderPriority.medium: return Icons.remove_rounded; // Or generic
-      case ReminderPriority.low: return Icons.arrow_downward_rounded;
-    }
-  }
-
-  String _getPriorityLabel(ReminderPriority priority) {
-    switch (priority) {
-      case ReminderPriority.high: return 'HIGH';
-      case ReminderPriority.medium: return 'MED';
-      case ReminderPriority.low: return 'LOW';
-    }
   }
 }

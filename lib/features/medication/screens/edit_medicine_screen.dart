@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../onboarding/screens/feature_selection_screen.dart';
+import '../../home/screens/app_shell.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/medicine.dart';
 import '../models/enhanced_medicine.dart';
@@ -219,7 +219,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
       await NotificationService().cancelNotification(widget.medicine.id.hashCode);
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const FeatureSelectionScreen()),
+          MaterialPageRoute(builder: (_) => const AppShell(initialIndex: 1)),
           (route) => false,
         );
       }

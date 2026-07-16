@@ -61,20 +61,18 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet>
     _hapticService.medicineTaken();
 
     try {
-      final log = MedicineLog(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+      // Route through markMedicineTaken so the dose is logged AND stock is
+      // reduced (enabling low-stock / refill detection). addLog alone skips
+      // the stock decrement.
+      final log = await MedicineCleanStorageService.markMedicineTaken(
         medicineId: widget.medicine.id,
         scheduledTime: widget.scheduledTime,
-        actionTime: DateTime.now(),
-        status: MedicineStatus.taken,
         dosageTaken: widget.medicine.dosageAmount,
         moodRating: _selectedMood >= 0 ? _selectedMood + 1 : null,
         notes: _notesController.text.isNotEmpty ? _notesController.text : null,
         sideEffects: _sideEffects,
       );
 
-      await MedicineCleanStorageService.addLog(log);
-      
       if (mounted) {
         Navigator.pop(context, {'taken': true, 'log': log});
       }

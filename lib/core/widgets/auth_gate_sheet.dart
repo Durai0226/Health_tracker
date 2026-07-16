@@ -1,12 +1,10 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import '../constants/app_colors.dart';
+import 'app/app_widgets.dart';
 import '../services/auth_service.dart';
 import '../services/haptic_service.dart';
 
-/// Authentication gate bottom sheet shown when guest users access features
-/// Offers options to continue as guest or sign in with Google
+/// Modern, calm sign-in sheet. Centered brand hero, a benefits strip, a clean
+/// Google button (no network assets), and a clear primary/secondary hierarchy.
 class AuthGateSheet extends StatefulWidget {
   final String featureName;
   final Color featureColor;
@@ -23,7 +21,6 @@ class AuthGateSheet extends StatefulWidget {
     required this.onSignedIn,
   });
 
-  /// Show the auth gate sheet and return true if user authenticated/continued
   static Future<bool> show({
     required BuildContext context,
     required String featureName,
@@ -34,7 +31,7 @@ class AuthGateSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
+      barrierColor: Colors.black.withOpacity(0.45),
       builder: (context) => AuthGateSheet(
         featureName: featureName,
         featureColor: featureColor,
@@ -54,30 +51,24 @@ class _AuthGateSheetState extends State<AuthGateSheet>
     with SingleTickerProviderStateMixin {
   final AuthService _authService = AuthService();
   final HapticService _hapticService = HapticService();
-  
-  late AnimationController _animController;
-  late Animation<double> _scaleAnimation;
-  
+
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: AppMotion.slow,
+  )..forward();
+  late final Animation<double> _fade =
+      CurvedAnimation(parent: _anim, curve: Curves.easeOut);
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, 0.10),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _anim, curve: AppMotion.emphasized));
+
   bool _isLoading = false;
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _scaleAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutBack,
-    );
-    _animController.forward();
-  }
-
-  @override
   void dispose() {
-    _animController.dispose();
+    _anim.dispose();
     super.dispose();
   }
 
@@ -86,29 +77,21 @@ class _AuthGateSheetState extends State<AuthGateSheet>
       _isLoading = true;
       _error = null;
     });
-    
     _hapticService.selection();
-    
     try {
       final result = await _authService.signInWithGoogle();
-      
       if (result == null) {
-        // Success
         _hapticService.success();
-        if (mounted) {
-          widget.onSignedIn();
-        }
+        if (mounted) widget.onSignedIn();
       } else if (result != 'cancelled') {
-        // Error
         setState(() {
           _error = result;
           _isLoading = false;
         });
       } else {
-        // Cancelled
         setState(() => _isLoading = false);
       }
-    } catch (e) {
+    } catch (_) {
       setState(() {
         _error = 'Sign in failed. Please try again.';
         _isLoading = false;
@@ -116,82 +99,108 @@ class _AuthGateSheetState extends State<AuthGateSheet>
     }
   }
 
-  void _handleContinueAsGuest() {
-    _hapticService.selection();
-    widget.onContinueAsGuest();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isDark = AppColors.isDark(context);
-    
-    return ScaleTransition(
-      scale: _scaleAnimation,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.black.withOpacity(0.8)
-                    : Colors.white.withOpacity(0.95),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: widget.featureColor.withOpacity(0.3),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.featureColor.withOpacity(0.2),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          decoration: BoxDecoration(
+            color: ext.surfaceElevated,
+            borderRadius: AppRadius.brSheet,
+            boxShadow: AppShadows.elevated(context),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl, 12, AppSpacing.xl, AppSpacing.xl),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Header
-                  _buildHeader(isDark),
-                  
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                    child: Column(
-                      children: [
-                        // Feature info
-                        _buildFeatureInfo(isDark),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Sign in with Google button
-                        _buildGoogleSignInButton(isDark),
-                        
-                        const SizedBox(height: 12),
-                        
-                        // Divider with "or"
-                        _buildDivider(isDark),
-                        
-                        const SizedBox(height: 12),
-                        
-                        // Continue as guest button
-                        _buildGuestButton(isDark),
-                        
-                        // Error message
-                        if (_error != null) ...[
-                          const SizedBox(height: 16),
-                          _buildErrorMessage(),
-                        ],
-                        
-                        const SizedBox(height: 16),
-                        
-                        // Guest limitations note
-                        _buildGuestNote(isDark),
-                      ],
-                    ),
+                  // Grab handle + close
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: ext.outlineStrong,
+                          borderRadius: AppRadius.brFull,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => Navigator.pop(context, false),
+                          icon: Icon(Icons.close_rounded, color: ext.textTertiary),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Brand hero
+                  const AppLogo.raster(size: 68, radius: 8),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Welcome to ${widget.featureName}',
+                      textAlign: TextAlign.center, style: tt.headlineSmall),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Sync your day across devices — or keep everything private on this one.',
+                    textAlign: TextAlign.center,
+                    style: tt.bodyMedium?.copyWith(color: ext.textSecondary, height: 1.4),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // Benefits strip
+                  Row(
+                    children: [
+                      _benefit(ext, Icons.cloud_done_rounded, 'Auto\nsync'),
+                      _benefit(ext, Icons.devices_rounded, 'All\ndevices'),
+                      _benefit(ext, Icons.lock_rounded, 'Private &\nsecure'),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  if (_error != null) ...[
+                    _errorBox(ext, tt),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // Primary — Google
+                  _googleButton(ext, tt),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Secondary — guest
+                  AppButton(
+                    label: 'Continue as guest',
+                    variant: AppButtonVariant.ghost,
+                    fullWidth: true,
+                    accent: ext.brand,
+                    leadingIcon: Icons.person_outline_rounded,
+                    onPressed: () {
+                      _hapticService.selection();
+                      widget.onContinueAsGuest();
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shield_outlined, size: 14, color: ext.textTertiary),
+                      const SizedBox(width: 6),
+                      Text('Guest data stays on this device',
+                          style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
+                    ],
                   ),
                 ],
               ),
@@ -202,273 +211,109 @@ class _AuthGateSheetState extends State<AuthGateSheet>
     );
   }
 
-  Widget _buildHeader(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            widget.featureColor.withOpacity(0.15),
-            widget.featureColor.withOpacity(0.05),
-          ],
-        ),
-      ),
-      child: Row(
+  Widget _benefit(AppColorsExt ext, IconData icon, String label) {
+    return Expanded(
+      child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(14),
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [widget.featureColor, widget.featureColor.withOpacity(0.8)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.featureColor.withOpacity(0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: ext.brand.container,
+              borderRadius: AppRadius.brLg,
             ),
-            child: Icon(
-              widget.featureIcon,
-              color: Colors.white,
-              size: 26,
-            ),
+            child: Icon(icon, color: ext.brand.onContainer, size: 22),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome to',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.getTextSecondary(context),
-                  ),
-                ),
-                Text(
-                  widget.featureName,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.getTextPrimary(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: () => Navigator.pop(context, false),
-            icon: Icon(
-              Icons.close_rounded,
-              color: AppColors.getTextSecondary(context),
-            ),
-          ),
+          const SizedBox(height: 8),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(color: ext.textSecondary, height: 1.2)),
         ],
       ),
     );
   }
 
-  Widget _buildFeatureInfo(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.grey.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.info_outline_rounded,
-            color: widget.featureColor,
-            size: 22,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Sign in to sync your data across devices and unlock all features.',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.getTextSecondary(context),
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGoogleSignInButton(bool isDark) {
-    return GestureDetector(
-      onTap: _isLoading ? null : _handleGoogleSignIn,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+  Widget _googleButton(AppColorsExt ext, TextTheme tt) {
+    return SizedBox(
+      height: 54,
+      width: double.infinity,
+      child: Material(
+        color: ext.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.brMd,
+          side: BorderSide(color: ext.outlineStrong),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_isLoading)
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: widget.featureColor,
-                ),
-              )
-            else ...[
-              Image.network(
-                'https://www.google.com/favicon.ico',
-                width: 24,
-                height: 24,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.g_mobiledata_rounded,
-                  color: Colors.red[700],
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Sign in with Google',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ],
+        child: InkWell(
+          onTap: _isLoading ? null : _handleGoogleSignIn,
+          child: Center(
+            child: _isLoading
+                ? SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.4, color: ext.brand.base),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _GoogleGlyph(size: 22),
+                      const SizedBox(width: 12),
+                      Text('Continue with Google',
+                          style: tt.titleLarge?.copyWith(color: ext.textPrimary)),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildDivider(bool isDark) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 1,
-            color: AppColors.getBorder(context),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'or',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.getTextSecondary(context),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            height: 1,
-            color: AppColors.getBorder(context),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGuestButton(bool isDark) {
-    return GestureDetector(
-      onTap: _handleContinueAsGuest,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.getBorder(context),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.person_outline_rounded,
-              color: AppColors.getTextSecondary(context),
-              size: 24,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Continue as Guest',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.getTextPrimary(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorMessage() {
+  Widget _errorBox(AppColorsExt ext, TextTheme tt) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.error.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+        color: ext.error.container,
+        borderRadius: AppRadius.brMd,
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+          Icon(Icons.error_outline_rounded, color: ext.error.strong, size: 18),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              _error!,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.error,
-              ),
-            ),
+            child: Text(_error!,
+                style: tt.bodySmall?.copyWith(color: ext.error.strong)),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildGuestNote(bool isDark) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.cloud_off_rounded,
-          size: 16,
-          color: AppColors.getTextSecondary(context).withOpacity(0.6),
+/// A tasteful, self-contained Google "G" (Google-blue on white), no network.
+class _GoogleGlyph extends StatelessWidget {
+  final double size;
+  const _GoogleGlyph({this.size = 22});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+      child: Text(
+        'G',
+        style: TextStyle(
+          fontSize: size * 0.82,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF4285F4),
+          height: 1.0,
         ),
-        const SizedBox(width: 8),
-        Text(
-          'Guest data is stored locally only',
-          style: TextStyle(
-            fontSize: 12,
-            color: AppColors.getTextSecondary(context).withOpacity(0.6),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

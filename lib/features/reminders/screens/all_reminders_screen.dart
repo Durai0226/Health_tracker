@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
-import '../../fitness/screens/add_fitness_screen.dart';
 import '../../../features/settings/screens/notification_settings_screen.dart';
 import 'reminders_screen.dart';
 
@@ -17,12 +16,9 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
   int _totalReminders = 0;
   int _activeReminders = 0;
   int _medicineCount = 0;
-  int _fitnessCount = 0;
-  int _fitnessActive = 0;
   int _reminderCount = 0;
   int _reminderActive = 0;
   bool _hasWaterReminder = false;
-  bool _hasPeriodReminder = false;
 
   @override
   void initState() {
@@ -32,30 +28,19 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
 
   Future<void> _loadStats() async {
     final medicines = CleanStorageService.getAllMedicines();
-    final fitnessReminders = CleanStorageService.getAllFitnessReminders();
     final reminders = CleanStorageService.getReminders();
 
     final medicineCount = medicines.length;
-    final fitnessCount = fitnessReminders.length;
-    final fitnessActive = fitnessReminders.where((f) => f.isEnabled).length;
     final reminderCount = reminders.length;
     final reminderActive = reminders.where((r) => !r.isCompleted).length;
 
-    int total = medicineCount + fitnessCount + reminderCount;
-    int active = fitnessActive + reminderActive;
+    int total = medicineCount + reminderCount;
+    int active = reminderActive;
 
-    // Add water and period reminders (async)
+    // Add water reminder (async)
     final waterReminder = await CleanStorageService.getWaterReminder();
-    final periodReminder = await CleanStorageService.getPeriodReminder();
-    
     final hasWater = waterReminder != null;
-    final hasPeriod = periodReminder != null;
-    
     if (hasWater) {
-      total++;
-      active++;
-    }
-    if (hasPeriod) {
       total++;
       active++;
     }
@@ -65,12 +50,9 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
         _totalReminders = total;
         _activeReminders = active;
         _medicineCount = medicineCount;
-        _fitnessCount = fitnessCount;
-        _fitnessActive = fitnessActive;
         _reminderCount = reminderCount;
         _reminderActive = reminderActive;
         _hasWaterReminder = hasWater;
-        _hasPeriodReminder = hasPeriod;
       });
     }
   }
@@ -137,20 +119,6 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
             ),
             const SizedBox(height: 12),
             _buildReminderTypeCard(
-              icon: Icons.fitness_center_rounded,
-              title: 'Fitness Reminders',
-              color: AppColors.warning,
-              count: _fitnessCount,
-              activeCount: _fitnessActive,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddFitnessScreen()),
-                ).then((_) => _loadStats());
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildReminderTypeCard(
               icon: Icons.water_drop_rounded,
               title: 'Water Reminders',
               color: AppColors.info,
@@ -161,22 +129,6 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
                   const SnackBar(
                     content: Text('Go to Water Tracking to set up reminders'),
                     backgroundColor: AppColors.info,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildReminderTypeCard(
-              icon: Icons.calendar_today_rounded,
-              title: 'Period Reminders',
-              color: AppColors.periodPrimary,
-              count: _hasPeriodReminder ? 1 : 0,
-              activeCount: _hasPeriodReminder ? 1 : 0,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Go to Period Tracking to set up reminders'),
-                    backgroundColor: AppColors.periodPrimary,
                   ),
                 );
               },

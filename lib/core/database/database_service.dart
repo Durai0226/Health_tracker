@@ -3,11 +3,7 @@ import 'app_database.dart';
 import 'daos/core_dao.dart';
 import 'daos/medication_dao.dart';
 import 'daos/water_dao.dart';
-import 'daos/finance_dao.dart';
-import 'daos/notes_dao.dart';
 import 'daos/reminders_dao.dart';
-import 'daos/fitness_dao.dart';
-import 'daos/period_dao.dart';
 
 /// Central service for database access
 /// Provides singleton access to the Drift database and all DAOs
@@ -21,11 +17,7 @@ class DatabaseService {
   late final CoreDao coreDao;
   late final MedicationDao medicationDao;
   late final WaterDao waterDao;
-  late final FinanceDao financeDao;
-  late final NotesDao notesDao;
   late final RemindersDao remindersDao;
-  late final FitnessDao fitnessDao;
-  late final PeriodDao periodDao;
 
   DatabaseService._();
 
@@ -49,11 +41,7 @@ class DatabaseService {
       service.coreDao = CoreDao(service._database);
       service.medicationDao = MedicationDao(service._database);
       service.waterDao = WaterDao(service._database);
-      service.financeDao = FinanceDao(service._database);
-      service.notesDao = NotesDao(service._database);
       service.remindersDao = RemindersDao(service._database);
-      service.fitnessDao = FitnessDao(service._database);
-      service.periodDao = PeriodDao(service._database);
 
       _isInitialized = true;
       debugPrint('✓ DatabaseService initialized successfully');

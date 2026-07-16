@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/design/app_palette.dart';
 
 /// Manrope Design System Theme for Focus/Meditation Feature
 /// Based on modern wellness app design with warm, calming color palette
@@ -9,9 +10,9 @@ class ManropeTheme {
   // PRIMARY COLORS
   // ==========================================
   
-  static const Color primaryOrange = Color(0xFFF5A623);
-  static const Color primaryOrangeLight = Color(0xFFFFBE5C);
-  static const Color primaryOrangeDark = Color(0xFFE8940A);
+  static const Color primaryOrange = AppPalette.focus;
+  static const Color primaryOrangeLight = AppPalette.focusDark;
+  static const Color primaryOrangeDark = AppPalette.focusStrong;
   
   static const Color accentGreen = Color(0xFF4CAF50);
   static const Color accentGreenLight = Color(0xFF81C784);
@@ -40,7 +41,7 @@ class ManropeTheme {
   static const Color meditationColor = Color(0xFFF5A623);
   static const Color yogaColor = Color(0xFFFF6B9D);
   static const Color breathingColor = Color(0xFF00BCD4);
-  static const Color focusColor = Color(0xFF7C4DFF);
+  static const Color focusColor = AppPalette.focus;
   static const Color walkingColor = Color(0xFF4CAF50);
   static const Color journalingColor = Color(0xFFFFCC00);
 
@@ -48,26 +49,26 @@ class ManropeTheme {
   // BACKGROUND COLORS
   // ==========================================
   
-  static const Color background = Color(0xFFFAFAFA);
+  static const Color background = AppPalette.backgroundL;
   static const Color backgroundPure = Color(0xFFFFFFFF);
   static const Color backgroundWarm = Color(0xFFFFF8F0);
-  static const Color backgroundCard = Color(0xFFFFFFFF);
+  static const Color backgroundCard = AppPalette.surfaceL;
   
-  static const Color backgroundDark = Color(0xFF1A1A1A);
-  static const Color backgroundDarkCard = Color(0xFF2D2D2D);
-  static const Color backgroundDarkElevated = Color(0xFF3D3D3D);
+  static const Color backgroundDark = AppPalette.backgroundD;
+  static const Color backgroundDarkCard = AppPalette.surfaceD;
+  static const Color backgroundDarkElevated = AppPalette.surfaceElevatedD;
 
   // ==========================================
   // TEXT COLORS
   // ==========================================
   
-  static const Color textPrimary = Color(0xFF1A1A1A);
-  static const Color textSecondary = Color(0xFF6B6B6B);
-  static const Color textTertiary = Color(0xFF9E9E9E);
+  static const Color textPrimary = AppPalette.textPrimaryL;
+  static const Color textSecondary = AppPalette.textSecondaryL;
+  static const Color textTertiary = AppPalette.textTertiaryL;
   static const Color textHint = Color(0xFFBDBDBD);
   
-  static const Color textPrimaryDark = Color(0xFFFFFFFF);
-  static const Color textSecondaryDark = Color(0xFFB3B3B3);
+  static const Color textPrimaryDark = AppPalette.textPrimaryD;
+  static const Color textSecondaryDark = AppPalette.textSecondaryD;
   static const Color textTertiaryDark = Color(0xFF808080);
 
   // ==========================================

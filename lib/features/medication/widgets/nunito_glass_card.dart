@@ -41,31 +41,21 @@ class NunitoGlassCard extends StatelessWidget {
     final bgColor = backgroundColor ??
         (isDark ? NunitoTheme.cardDark : NunitoTheme.cardLight);
 
-    Widget card = ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blurAmount, sigmaY: blurAmount),
-        child: Container(
-          width: width,
-          height: height,
-          padding: padding ?? const EdgeInsets.all(NunitoTheme.spacingM),
-          decoration: BoxDecoration(
-            color: gradient == null ? bgColor.withOpacity(backgroundOpacity) : null,
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: showBorder
-                ? Border.all(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.white.withOpacity(0.5),
-                    width: 1,
-                  )
-                : null,
-            boxShadow: boxShadow ?? NunitoTheme.cardShadow,
-          ),
-          child: child,
-        ),
+    // Calm Clarity: flat opaque surface (no BackdropFilter/glass).
+    Widget card = Container(
+      width: width,
+      height: height,
+      padding: padding ?? const EdgeInsets.all(NunitoTheme.spacingM),
+      decoration: BoxDecoration(
+        color: gradient == null ? bgColor : null,
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: (showBorder && isDark)
+            ? Border.all(color: Colors.white.withOpacity(0.08), width: 1)
+            : null,
+        boxShadow: boxShadow ?? NunitoTheme.cardShadow,
       ),
+      child: child,
     );
 
     if (margin != null) {

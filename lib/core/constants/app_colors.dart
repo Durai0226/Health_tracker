@@ -1,33 +1,40 @@
 
 import 'package:flutter/material.dart';
+import '../design/app_palette.dart';
 
+/// Compatibility shim over the Calm Clarity palette ([AppPalette]).
+///
+/// The design system's single source of truth is `lib/core/design/` — new code
+/// should read `Theme.of(context).extension<AppColorsExt>()`. This class keeps
+/// its long-standing member names/signatures so the ~100 existing call sites
+/// keep compiling, while their VALUES now come from [AppPalette].
 class AppColors {
-  // Medical Theme
-  static const Color primary = Color(0xFF00897B); // Deep Teal
-  static const Color primaryDark = Color(0xFF00695C);
-  static const Color primaryLight = Color(0xFFB2DFDB);
-  static const Color accent = Color(0xFFFF8A80); // Soft Coral
+  // Brand (teal)
+  static const Color primary = AppPalette.brand;
+  static const Color primaryDark = AppPalette.brandPressed;
+  static const Color primaryLight = AppPalette.brandContainer;
+  static const Color accent = Color(0xFFFF8A80); // legacy soft coral
 
   // Backgrounds
-  static const Color background = Color(0xFFF8F9FA);
-  static const Color surface = Colors.white;
-  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color background = AppPalette.backgroundL;
+  static const Color surface = AppPalette.surfaceL;
+  static const Color cardBg = AppPalette.surfaceL;
 
   // Text
-  static const Color textPrimary = Color(0xFF1A1A2E);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textLight = Color(0xFF9CA3AF);
+  static const Color textPrimary = AppPalette.textPrimaryL;
+  static const Color textSecondary = AppPalette.textSecondaryL;
+  static const Color textLight = AppPalette.textTertiaryL;
 
   // Status
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
-  static const Color info = Color(0xFF3B82F6);
+  static const Color success = AppPalette.success;
+  static const Color warning = AppPalette.warning;
+  static const Color error = AppPalette.error;
+  static const Color info = AppPalette.info;
 
   // Dividers & Borders
-  static const Color divider = Color(0xFFE5E7EB);
-  static const Color border = Color(0xFFD1D5DB);
-  static const Color secondary = Color(0xFF6B7280);
+  static const Color divider = AppPalette.outlineL;
+  static const Color border = AppPalette.outlineStrongL;
+  static const Color secondary = AppPalette.textSecondaryL;
   static const Color shadow = Color(0x1A000000);
 
   // ============ THEME-AWARE COLOR GETTERS ============
@@ -92,9 +99,9 @@ class AppColors {
   }
 
   // Focus Theme
-  static const Color focusPrimary = Color(0xFF8B5CF6);
-  static const Color focusLight = Color(0xFFEDE9FE);
-  static const Color focusAccent = Color(0xFF7C3AED);
+  static const Color focusPrimary = AppPalette.focus;
+  static const Color focusLight = AppPalette.focusContainer;
+  static const Color focusAccent = AppPalette.focusStrong;
 
   // Period Theme (Elegant Rose)
   static const Color periodPrimary = Color(0xFFE91E63);
@@ -135,17 +142,17 @@ class AppColors {
 
   // ============ LUXURY DARK THEME COLORS ============
   // Deep, rich backgrounds with subtle blue undertones for luxury feel
-  static const Color darkBackground = Color(0xFF0A0E14);      // Deep space black
-  static const Color darkSurface = Color(0xFF12171E);         // Rich charcoal
-  static const Color darkCard = Color(0xFF1A2028);            // Elevated card
-  static const Color darkElevatedCard = Color(0xFF222A35);    // Higher elevation
-  static const Color darkBorder = Color(0xFF2D3748);          // Subtle border
-  static const Color darkTextPrimary = Color(0xFFF7FAFC);     // Crisp white
-  static const Color darkTextSecondary = Color(0xFFA0AEC0);   // Muted silver
-  static const Color darkTextLight = Color(0xFF718096);       // Soft gray
-  static const Color darkDivider = Color(0xFF2D3748);         // Subtle divider
-  static const Color darkShimmer = Color(0xFF2D3748);         // Shimmer effect
-  static const Color darkShadow = Color(0x40000000);          // Deep shadow
+  static const Color darkBackground = AppPalette.backgroundD;
+  static const Color darkSurface = AppPalette.surfaceD;
+  static const Color darkCard = AppPalette.surfaceD;
+  static const Color darkElevatedCard = AppPalette.surfaceElevatedD;
+  static const Color darkBorder = AppPalette.outlineD;
+  static const Color darkTextPrimary = AppPalette.textPrimaryD;
+  static const Color darkTextSecondary = AppPalette.textSecondaryD;
+  static const Color darkTextLight = AppPalette.textTertiaryD;
+  static const Color darkDivider = AppPalette.outlineD;
+  static const Color darkShimmer = AppPalette.surfaceVariantD;
+  static const Color darkShadow = Color(0x66000000);          // Deep shadow
   
   // Luxury accent colors for dark theme
   static const Color darkAccentGold = Color(0xFFD4AF37);      // Gold accent

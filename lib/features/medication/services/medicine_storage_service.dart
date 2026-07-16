@@ -11,6 +11,7 @@ import '../models/doctor_pharmacy.dart';
 import '../models/dependent_profile.dart';
 import '../models/medicine_enums.dart';
 import '../models/clinic.dart';
+import '../../../core/services/notification_service.dart';
 
 /// Enhanced Medicine Storage Service with all premium features
 /// Migrated to Drift (SQLite) storage
@@ -249,7 +250,18 @@ class MedicineCleanStorageService {
   static Future<void> reduceStock(String medicineId, double amount) async {
     final med = await getMedicine(medicineId);
     if (med != null) {
-      await updateMedicine(med.reduceStock(amount));
+      final wasLow = med.isLowStock;
+      final updated = med.reduceStock(amount);
+      await updateMedicine(updated);
+      // Fire a refill alert the moment stock crosses the low threshold
+      // (once, not on every subsequent dose). No-ops gracefully off-device.
+      if (updated.refillReminderEnabled && updated.isLowStock && !wasLow) {
+        await NotificationService().showImmediateNotification(
+          title: 'Refill ${med.name}',
+          body: 'Only ${updated.currentStock} left — time to restock.',
+          channelId: 'refill',
+        );
+      }
     }
   }
 

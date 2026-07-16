@@ -21,7 +21,7 @@ class BackupService {
 
     try {
       debugPrint('Creating backup...');
-      final data = CleanStorageService.exportAllData();
+      final data = await CleanStorageService.exportAllData();
       
       // Store backup metadata and data in Firestore
       // For large datasets, Firebase Storage is better, but for text JSON < 1MB, Firestore is fine.

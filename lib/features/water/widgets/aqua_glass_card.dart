@@ -34,44 +34,21 @@ class AquaGlassCard extends StatelessWidget {
         ? AquaTheme.getBeverage(beverageId!) 
         : AquaTheme.getBeverage('water');
 
+    // Calm Clarity: flat opaque surface (no BackdropFilter/glass).
     Widget card = Container(
       width: width,
       height: height,
       margin: margin,
+      padding: padding ?? const EdgeInsets.all(AquaTheme.spacingM),
       decoration: BoxDecoration(
-        color: isDark 
-            ? Colors.white.withOpacity(0.08)
-            : Colors.white.withOpacity(0.9),
+        color: isDark ? AquaTheme.cardDark : AquaTheme.cardLight,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: showGradientBorder
-            ? null
-            : Border.all(
-                color: isDark 
-                    ? Colors.white.withOpacity(0.1)
-                    : Colors.white.withOpacity(0.5),
-                width: 1,
-              ),
+        border: isDark
+            ? Border.all(color: Colors.white.withOpacity(0.08), width: 1)
+            : null,
         boxShadow: AquaTheme.cardShadow(beverage.primary),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: padding ?? const EdgeInsets.all(AquaTheme.spacingM),
-            decoration: showGradientBorder
-                ? BoxDecoration(
-                    borderRadius: BorderRadius.circular(borderRadius),
-                    border: GradientBoxBorder(
-                      gradient: beverage.gradient,
-                      width: 2,
-                    ),
-                  )
-                : null,
-            child: child,
-          ),
-        ),
-      ),
+      child: child,
     );
 
     if (onTap != null) {
