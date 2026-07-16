@@ -44,18 +44,18 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   bool _isPlayingPreview = false;
   List<ReminderCategory> _categories = [];
 
-  // Sound options with categories and preview URLs
+  // Built-in sounds — each maps to a bundled audio asset that plays instantly
+  // on selection (offline, no network).
   static const Map<String, Map<String, String>> _soundOptions = {
-    'default': {'label': 'Default', 'category': 'Classic', 'icon': 'notifications'},
-    'gentle_chime': {'label': 'Gentle Chime', 'category': 'Gentle', 'icon': 'music_note'},
-    'soft_bells': {'label': 'Soft Bells', 'category': 'Gentle', 'icon': 'notifications_active'},
-    'morning_bird': {'label': 'Morning Bird', 'category': 'Nature', 'icon': 'flutter_dash'},
-    'ocean_wave': {'label': 'Ocean Wave', 'category': 'Nature', 'icon': 'water'},
-    'sunrise': {'label': 'Sunrise', 'category': 'Classic', 'icon': 'wb_sunny'},
-    'galaxy': {'label': 'Galaxy', 'category': 'Classic', 'icon': 'star'},
-    'urgent_alert': {'label': 'Urgent Alert', 'category': 'Alert', 'icon': 'warning'},
-    'digital_alarm': {'label': 'Digital Alarm', 'category': 'Alert', 'icon': 'alarm'},
-    'meditation': {'label': 'Meditation', 'category': 'Gentle', 'icon': 'self_improvement'},
+    'default': {'label': 'Default', 'category': 'Classic', 'icon': 'notifications', 'asset': 'assets/sounds/chime.wav'},
+    'gentle_chime': {'label': 'Gentle Chime', 'category': 'Gentle', 'icon': 'music_note', 'asset': 'assets/sounds/gentle_chime.wav'},
+    'soft_bells': {'label': 'Soft Bells', 'category': 'Gentle', 'icon': 'notifications_active', 'asset': 'assets/sounds/soft_bells.wav'},
+    'marimba': {'label': 'Marimba', 'category': 'Melodic', 'icon': 'music_note', 'asset': 'assets/sounds/marimba.wav'},
+    'sunrise': {'label': 'Sunrise', 'category': 'Melodic', 'icon': 'wb_sunny', 'asset': 'assets/sounds/sunrise.wav'},
+    'pulse': {'label': 'Pulse', 'category': 'Classic', 'icon': 'graphic_eq', 'asset': 'assets/sounds/pulse.wav'},
+    'calm': {'label': 'Calm', 'category': 'Gentle', 'icon': 'self_improvement', 'asset': 'assets/sounds/calm.wav'},
+    'digital_alarm': {'label': 'Digital Alarm', 'category': 'Alert', 'icon': 'alarm', 'asset': 'assets/sounds/digital_alarm.wav'},
+    'urgent_alert': {'label': 'Urgent Alert', 'category': 'Alert', 'icon': 'warning', 'asset': 'assets/sounds/urgent_alert.wav'},
   };
 
   /// A custom sound is stored as an absolute file path (from the device audio
@@ -135,15 +135,21 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     }
   }
 
-  /// Preview only plays a picked device file locally (no network). Built-in
-  /// presets are the OS notification sound and play with the alarm itself.
+  /// Plays the currently-selected sound so the user hears it: a bundled asset
+  /// for presets, or the picked file for a custom device sound. All local — no
+  /// network.
   Future<void> _previewSound() async {
-    if (!_isCustomSound) return;
     try {
       setState(() => _isPlayingPreview = true);
       await _audioPlayer.stop();
-      await _audioPlayer.setFilePath(_sound);
-      await _audioPlayer.setVolume(0.8);
+      if (_isCustomSound) {
+        await _audioPlayer.setFilePath(_sound);
+      } else {
+        final asset =
+            _soundOptions[_sound]?['asset'] ?? 'assets/sounds/chime.wav';
+        await _audioPlayer.setAsset(asset);
+      }
+      await _audioPlayer.setVolume(0.85);
       await _audioPlayer.play();
       Future.delayed(const Duration(seconds: 4), () {
         if (mounted) {
@@ -182,6 +188,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       case 'warning': return Icons.warning_rounded;
       case 'alarm': return Icons.alarm_rounded;
       case 'self_improvement': return Icons.self_improvement_rounded;
+      case 'graphic_eq': return Icons.graphic_eq_rounded;
       default: return Icons.music_note_rounded;
     }
   }
@@ -544,26 +551,25 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                       ],
                                     ),
                                   ),
-                                  // Preview only applies to a picked device file
-                                  // (presets play with the notification itself).
-                                  if (_isCustomSound)
-                                    IconButton(
-                                      onPressed: _isPlayingPreview
-                                          ? _stopPreview
-                                          : _previewSound,
-                                      icon: Icon(
-                                        _isPlayingPreview
-                                            ? Icons.stop_circle_rounded
-                                            : Icons.play_circle_rounded,
-                                        color: _isPlayingPreview
-                                            ? ext.mark(ext.error)
-                                            : ext.mark(rem),
-                                        size: 32,
-                                      ),
-                                      tooltip: _isPlayingPreview
-                                          ? 'Stop preview'
-                                          : 'Preview sound',
+                                  // Every sound is playable (bundled asset or
+                                  // picked file) — tap to hear it.
+                                  IconButton(
+                                    onPressed: _isPlayingPreview
+                                        ? _stopPreview
+                                        : _previewSound,
+                                    icon: Icon(
+                                      _isPlayingPreview
+                                          ? Icons.stop_circle_rounded
+                                          : Icons.play_circle_rounded,
+                                      color: _isPlayingPreview
+                                          ? ext.mark(ext.error)
+                                          : ext.mark(rem),
+                                      size: 32,
                                     ),
+                                    tooltip: _isPlayingPreview
+                                        ? 'Stop preview'
+                                        : 'Preview sound',
+                                  ),
                                 ],
                               ),
                             ),
@@ -590,10 +596,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                           entry.value['icon'] ?? 'notifications'),
                                       selected: _sound == entry.key,
                                       accent: rem,
-                                      // Presets are OS notification sounds — just
-                                      // select (no network preview → no error).
-                                      onTap: () =>
-                                          setState(() => _sound = entry.key),
+                                      // Select AND play the bundled sound so the
+                                      // user hears what they picked.
+                                      onTap: () {
+                                        setState(() => _sound = entry.key);
+                                        _previewSound();
+                                      },
                                     );
                                   }),
                                 ],
