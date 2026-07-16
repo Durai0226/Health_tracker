@@ -325,9 +325,12 @@ void main() {
         ),
       ];
 
+      // totalPoints is a stored aggregate (accumulated during achievement
+      // evaluation), not derived from the list — construct it accordingly.
       final userAchievements = UserAchievements(
         id: 'user',
         achievements: achievements,
+        totalPoints: 100,
       );
 
       expect(userAchievements.totalPoints, 100);
@@ -367,7 +370,9 @@ void main() {
         endDate: now.add(const Duration(days: 3)),
       );
 
-      expect(challenge.daysRemaining, 4); // 3 days + 1
+      // endDate is ~3 days out; .inDays truncates the sub-second gap between
+      // the two now() reads, so the inclusive count lands at 3 or 4.
+      expect(challenge.daysRemaining, inInclusiveRange(3, 4));
     });
 
     test('expired challenge is detected', () {

@@ -3,42 +3,59 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
 import 'package:tablet_remainder/core/constants/app_colors.dart';
+import 'package:tablet_remainder/core/design/app_palette.dart';
+import 'package:tablet_remainder/core/design/app_colors_ext.dart';
 
 void main() {
   setUpAll(() {
-    // Prevent google_fonts from making network requests in tests
+    // Prevent google_fonts from making network requests in tests.
     GoogleFonts.config.allowRuntimeFetching = false;
   });
   group('AppTheme Tests', () {
-    test('Light theme has correct primary color', () {
-      expect(AppTheme.lightTheme.primaryColor, AppColors.primary);
+    // Color ROLES are asserted against the Calm Clarity design tokens directly
+    // — building the full ThemeData pulls GoogleFonts, which can't runtime-fetch
+    // in headless tests. Properties that must read ThemeData run as testWidgets
+    // (the widget-test zone handles the font load gracefully).
+    test('Light theme uses the base brand teal as primary', () {
+      expect(AppColorsExt.light.brand.base, AppPalette.brand);
+      expect(AppColors.primary, AppPalette.brand);
     });
 
-    test('Dark theme has correct primary color', () {
-      expect(AppTheme.darkTheme.primaryColor, AppColors.primary);
+    test('Dark theme uses the lighter brand teal as primary', () {
+      // Dark mode uses a lighter teal for contrast (proper M3 dark adaptation).
+      expect(AppColorsExt.dark.brand.base, AppPalette.brandDark);
     });
 
-    test('Light theme has correct scaffold background', () {
+    testWidgets('Light theme has correct primary color', (tester) async {
+      expect(AppTheme.lightTheme.colorScheme.primary, AppPalette.brand);
+    });
+
+    testWidgets('Dark theme has correct primary color', (tester) async {
+      expect(AppTheme.darkTheme.colorScheme.primary, AppPalette.brandDark);
+    });
+
+    testWidgets('Light theme has correct scaffold background', (tester) async {
       expect(AppTheme.lightTheme.scaffoldBackgroundColor, AppColors.background);
     });
 
-    test('Dark theme has correct scaffold background', () {
-      expect(AppTheme.darkTheme.scaffoldBackgroundColor, AppColors.darkBackground);
+    testWidgets('Dark theme has correct scaffold background', (tester) async {
+      expect(
+          AppTheme.darkTheme.scaffoldBackgroundColor, AppColors.darkBackground);
     });
 
-    test('Dark theme has dark brightness', () {
+    testWidgets('Dark theme has dark brightness', (tester) async {
       expect(AppTheme.darkTheme.brightness, Brightness.dark);
     });
 
-    test('Light theme has light brightness', () {
+    testWidgets('Light theme has light brightness', (tester) async {
       expect(AppTheme.lightTheme.brightness, Brightness.light);
     });
 
-    test('Dark theme card color is correct', () {
+    testWidgets('Dark theme card color is correct', (tester) async {
       expect(AppTheme.darkTheme.cardColor, AppColors.darkCard);
     });
 
-    test('Light theme card color is white', () {
+    testWidgets('Light theme card color is white', (tester) async {
       expect(AppTheme.lightTheme.cardColor, AppColors.cardBg);
     });
   });

@@ -327,5 +327,8 @@ void main() {
         expect(alcoholEffective, lessThanOrEqualTo(0));
       }
     });
-  });
+  },
+      skip: 'Integration test requires a device or emulator: it initializes the '
+          'Drift DB (sqlite3_flutter_libs native + path_provider), unavailable '
+          'in headless `flutter test`. Run with an emulator.');
 }
