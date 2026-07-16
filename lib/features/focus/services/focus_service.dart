@@ -29,6 +29,25 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _endTime;
   DateTime? _pauseStartTime;
   Timer? _timer;
+
+  // Total length (minutes) of the interval that is currently running. For single
+  // mode this equals _selectedMinutes; for pomodoro it is the work or break
+  // length of the active phase. Drives [progress] so the ring is correct in both
+  // work and break phases. 0 when idle.
+  int _phaseMinutes = 0;
+
+  // ---- Pomodoro (FOCUS-2) ----
+  FocusMode _mode = FocusMode.single;
+  int _workMinutes = 25;
+  int _shortBreakMinutes = 5;
+  int _longBreakMinutes = 15;
+  int _roundsBeforeLongBreak = 4;
+  int _totalRounds = 4;
+
+  // Pomodoro runtime state.
+  bool _isOnBreak = false;
+  bool _isLongBreak = false;
+  int _currentRound = 0; // completed WORK rounds this session
   
   // Current Session Config
   PlantType _selectedPlant = PlantType.seedling;
@@ -60,9 +79,20 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   List<FocusSession> get sessions => List.unmodifiable(_sessions);
   Map<AchievementType, FocusAchievement> get achievements => Map.unmodifiable(_achievements);
   Set<PlantType> get unlockedPlants => Set.unmodifiable(_unlockedPlants);
-  
-  double get progress => _isRunning && _selectedMinutes > 0
-      ? 1 - (_remainingSeconds / (_selectedMinutes * 60))
+
+  // Pomodoro getters (FOCUS-2)
+  FocusMode get mode => _mode;
+  int get workMinutes => _workMinutes;
+  int get shortBreakMinutes => _shortBreakMinutes;
+  int get longBreakMinutes => _longBreakMinutes;
+  int get roundsBeforeLongBreak => _roundsBeforeLongBreak;
+  int get totalRounds => _totalRounds;
+  bool get isOnBreak => _isOnBreak;
+  bool get isLongBreak => _isLongBreak;
+  int get currentRound => _currentRound;
+
+  double get progress => _isRunning && _phaseMinutes > 0
+      ? 1 - (_remainingSeconds / (_phaseMinutes * 60))
       : 0.0;
 
   String get formattedTime {
@@ -120,7 +150,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       
       if (remaining <= 0) {
         _remainingSeconds = 0;
-        _completeSession();
+        _onIntervalComplete();
       } else {
         _remainingSeconds = remaining;
         notifyListeners();
@@ -133,6 +163,15 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       final prefs = CleanStorageService.getAppPreferences();
       
       _selectedMinutes = prefs['focusSelectedMinutes'] ?? 25;
+
+      // Pomodoro mode + config (FOCUS-2). Defaults keep single-session behavior.
+      _mode = FocusMode.values[prefs['focusMode'] ?? 0];
+      _workMinutes = prefs['focusPomoWorkMinutes'] ?? 25;
+      _shortBreakMinutes = prefs['focusPomoShortBreakMinutes'] ?? 5;
+      _longBreakMinutes = prefs['focusPomoLongBreakMinutes'] ?? 15;
+      _roundsBeforeLongBreak = prefs['focusPomoRoundsBeforeLong'] ?? 4;
+      _totalRounds = prefs['focusPomoTotalRounds'] ?? 4;
+
       _selectedPlant = PlantType.values[prefs['focusSelectedPlant'] ?? 0];
       _selectedActivity = FocusActivityType.values[prefs['focusSelectedActivityType'] ?? 0];
       _selectedSound = AmbientSoundType.values[prefs['focusSelectedSound'] ?? 0];
@@ -215,6 +254,12 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _saveData() async {
     try {
       await CleanStorageService.setAppPreference('focusSelectedMinutes', _selectedMinutes);
+      await CleanStorageService.setAppPreference('focusMode', _mode.index);
+      await CleanStorageService.setAppPreference('focusPomoWorkMinutes', _workMinutes);
+      await CleanStorageService.setAppPreference('focusPomoShortBreakMinutes', _shortBreakMinutes);
+      await CleanStorageService.setAppPreference('focusPomoLongBreakMinutes', _longBreakMinutes);
+      await CleanStorageService.setAppPreference('focusPomoRoundsBeforeLong', _roundsBeforeLongBreak);
+      await CleanStorageService.setAppPreference('focusPomoTotalRounds', _totalRounds);
       await CleanStorageService.setAppPreference('focusSelectedPlant', _selectedPlant.index);
       await CleanStorageService.setAppPreference('focusSelectedActivityType', _selectedActivity.index);
       await CleanStorageService.setAppPreference('focusSelectedSound', _selectedSound.index);
@@ -238,6 +283,35 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       _saveData();
       notifyListeners();
     }
+  }
+
+  // ---- Pomodoro configuration (FOCUS-2) ----
+
+  void setMode(FocusMode mode) {
+    if (!_isRunning && _mode != mode) {
+      _mode = mode;
+      _saveData();
+      notifyListeners();
+    }
+  }
+
+  /// Update pomodoro parameters. Only takes effect while idle. Values are clamped
+  /// to sane ranges; nulls leave the existing value unchanged.
+  void setPomodoroConfig({
+    int? workMinutes,
+    int? shortBreakMinutes,
+    int? longBreakMinutes,
+    int? roundsBeforeLongBreak,
+    int? totalRounds,
+  }) {
+    if (_isRunning) return;
+    if (workMinutes != null) _workMinutes = workMinutes.clamp(1, 180);
+    if (shortBreakMinutes != null) _shortBreakMinutes = shortBreakMinutes.clamp(1, 60);
+    if (longBreakMinutes != null) _longBreakMinutes = longBreakMinutes.clamp(1, 120);
+    if (roundsBeforeLongBreak != null) _roundsBeforeLongBreak = roundsBeforeLongBreak.clamp(1, 12);
+    if (totalRounds != null) _totalRounds = totalRounds.clamp(1, 16);
+    _saveData();
+    notifyListeners();
   }
 
   void setPlant(PlantType plant) {
@@ -300,21 +374,93 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> startSession() async {
     if (_isRunning) return;
-    
+
     _isRunning = true;
     _isPaused = false;
-    _remainingSeconds = _selectedMinutes * 60;
+    _isOnBreak = false;
+    _isLongBreak = false;
+    _currentRound = 0;
+
+    // In pomodoro mode the first interval is a WORK interval of _workMinutes;
+    // _selectedMinutes is driven so the existing completion loop (coins/plant)
+    // awards for the work length. Single mode uses the chosen duration as-is.
+    if (_mode == FocusMode.pomodoro) {
+      _selectedMinutes = _workMinutes;
+    }
+    _phaseMinutes = _selectedMinutes;
+
+    _remainingSeconds = _phaseMinutes * 60;
     _startTime = DateTime.now();
-    _endTime = _startTime!.add(Duration(minutes: _selectedMinutes));
-    
+    _endTime = _startTime!.add(Duration(minutes: _phaseMinutes));
+
     // Start ambient sound if selected
     if (_selectedSound != AmbientSoundType.none) {
       await _audioService.playSound(_selectedSound, volume: _soundVolume);
     }
-    
+
     _startTimer();
     notifyListeners();
-    debugPrint('✓ Focus session started: $_selectedMinutes minutes, ends at $_endTime');
+    debugPrint('✓ Focus session started (${_mode.name}): $_phaseMinutes minutes, ends at $_endTime');
+  }
+
+  /// Routes an elapsed interval to the correct completion handler. Break
+  /// intervals never earn coins/plants; only work intervals do.
+  Future<void> _onIntervalComplete() async {
+    if (_mode == FocusMode.pomodoro && _isOnBreak) {
+      await _completeBreak();
+    } else {
+      await _completeSession();
+    }
+  }
+
+  /// Begins a break interval (pomodoro). No coins/plants are awarded here.
+  void _startBreak() {
+    _isOnBreak = true;
+    _isPaused = false;
+    // A long break lands after every _roundsBeforeLongBreak completed work rounds.
+    _isLongBreak =
+        _roundsBeforeLongBreak > 0 && _currentRound % _roundsBeforeLongBreak == 0;
+    _phaseMinutes = _isLongBreak ? _longBreakMinutes : _shortBreakMinutes;
+    _remainingSeconds = _phaseMinutes * 60;
+    _startTime = DateTime.now();
+    _endTime = _startTime!.add(Duration(minutes: _phaseMinutes));
+    _startTimer();
+    notifyListeners();
+    debugPrint('✓ Pomodoro break started (${_isLongBreak ? 'long' : 'short'}): $_phaseMinutes min');
+  }
+
+  /// Break finished → back to a work interval (pomodoro).
+  Future<void> _completeBreak() async {
+    _timer?.cancel();
+    await _audioService.stop();
+    _isOnBreak = false;
+    _isLongBreak = false;
+
+    await NotificationService().showImmediateNotification(
+      title: 'Break over ☕',
+      body: 'Time to focus again — round ${_currentRound + 1} of $_totalRounds.',
+    );
+
+    _startWork();
+  }
+
+  /// Begins the next work interval (pomodoro).
+  void _startWork() {
+    _isOnBreak = false;
+    _isPaused = false;
+    _selectedMinutes = _workMinutes;
+    _phaseMinutes = _workMinutes;
+    _remainingSeconds = _phaseMinutes * 60;
+    _startTime = DateTime.now();
+    _endTime = _startTime!.add(Duration(minutes: _phaseMinutes));
+
+    if (_selectedSound != AmbientSoundType.none) {
+      _audioService.playSound(_selectedSound, volume: _soundVolume);
+    }
+
+    _startTimer();
+    notifyListeners();
+    debugPrint('✓ Pomodoro work started: round ${_currentRound + 1} of $_totalRounds');
   }
 
   void _startTimer() {
@@ -326,7 +472,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
         
         if (remaining <= 0) {
           _remainingSeconds = 0;
-          _completeSession();
+          _onIntervalComplete();
         } else {
           // Only update UI if second actually changed to avoid jitter
           if (_remainingSeconds != remaining) {
@@ -367,10 +513,19 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> abandonSession() async {
     if (!_isRunning) return;
-    
+
     _timer?.cancel();
     await _audioService.stop();
-    
+
+    // Abandoning during a pomodoro break just ends the session — a break grows
+    // no plant, so nothing withers and no abandoned session is recorded.
+    if (_mode == FocusMode.pomodoro && _isOnBreak) {
+      _resetSession();
+      await _saveData();
+      debugPrint('✓ Pomodoro ended during break');
+      return;
+    }
+
     final elapsedMinutes = _selectedMinutes - (_remainingSeconds ~/ 60);
     
     // Create dead plant
@@ -506,10 +661,24 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       title: 'Focus Session Complete! 🌱',
       body: 'Amazing! You focused for $_selectedMinutes minutes and grew a ${_selectedPlant.name}!',
     );
-    
+
+    // Pomodoro: this was a WORK interval. Advance the round counter, then either
+    // finish the whole session (total-rounds reached) or auto-start a break.
+    if (_mode == FocusMode.pomodoro) {
+      _currentRound++;
+      await _saveData();
+      if (_currentRound >= _totalRounds) {
+        _resetSession();
+      } else {
+        _startBreak();
+      }
+      debugPrint('✓ Pomodoro work round $_currentRound/$_totalRounds completed');
+      return;
+    }
+
     _resetSession();
     await _saveData();
-    
+
     debugPrint('✓ Focus session completed');
   }
 
@@ -520,6 +689,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     _startTime = null;
     _endTime = null;
     _pauseStartTime = null;
+    _phaseMinutes = 0;
+    _isOnBreak = false;
+    _isLongBreak = false;
+    _currentRound = 0;
     notifyListeners();
   }
 

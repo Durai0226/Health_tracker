@@ -1356,6 +1356,40 @@ class NotificationService {
     debugPrint('✓ Cancelled ${ids.length} water reminders');
   }
 
+  /// Base notification id for interval water reminders. Each computed time uses
+  /// [waterReminderBaseId] + index, capped at [maxWaterReminders] slots.
+  static const int waterReminderBaseId = 900000;
+  static const int maxWaterReminders = 100;
+
+  /// Cancel every interval water reminder in the reserved id range.
+  Future<void> cancelAllWaterReminders() async {
+    await cancelWaterReminders(
+      List.generate(maxWaterReminders, (i) => waterReminderBaseId + i),
+    );
+  }
+
+  /// Schedule a set of daily-repeating water reminders at the given
+  /// [minutesSinceMidnight] times. Stale reminders in the reserved id range are
+  /// cancelled first so re-saving/rescheduling never leaves orphans. Returns the
+  /// number of reminders successfully scheduled.
+  Future<int> scheduleWaterReminderTimes(List<int> minutesSinceMidnight) async {
+    await cancelAllWaterReminders();
+    int count = 0;
+    for (int i = 0;
+        i < minutesSinceMidnight.length && i < maxWaterReminders;
+        i++) {
+      final m = minutesSinceMidnight[i];
+      final ok = await scheduleWaterReminder(
+        id: waterReminderBaseId + i,
+        hour: m ~/ 60,
+        minute: m % 60,
+      );
+      if (ok) count++;
+    }
+    debugPrint('✓ Scheduled $count interval water reminders');
+    return count;
+  }
+
   DateTimeComponents _getMatchComponents(String frequency) {
     if (frequency == 'Every week') {
       return DateTimeComponents.dayOfWeekAndTime;

@@ -20,6 +20,15 @@ class MedicineCleanStorageService {
 
   static MedicationDao get _dao => db.AppDatabase.instance.medicationDao;
 
+  /// A lightweight change signal, bumped whenever medicine data mutates (logs,
+  /// stock, or the medicine list itself). Screens kept alive in an IndexedStack
+  /// — notably the Home dashboard — can wrap their medicine views in a
+  /// [ValueListenableBuilder] on this notifier so they refresh live instead of
+  /// going stale after a dose is taken in another tab.
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  static void _bumpRevision() => revision.value++;
+
   static Future<void> init() async {
     if (_isInitialized) return;
     
@@ -230,14 +239,17 @@ class MedicineCleanStorageService {
 
   static Future<void> addMedicine(EnhancedMedicine medicine) async {
     await _dao.addMedicine(_mapToMedicineCompanion(medicine));
+    _bumpRevision();
   }
 
   static Future<void> updateMedicine(EnhancedMedicine medicine) async {
     await _dao.updateMedicine(_mapToMedicineCompanion(medicine));
+    _bumpRevision();
   }
 
   static Future<void> deleteMedicine(String id) async {
     await _dao.deleteMedicine(id);
+    _bumpRevision();
   }
 
   static Future<void> archiveMedicine(String id) async {
@@ -296,6 +308,7 @@ class MedicineCleanStorageService {
 
   static Future<void> addLog(MedicineLog log) async {
     await _dao.addLog(_mapToLogCompanion(log));
+    _bumpRevision();
   }
 
   static Future<void> updateLog(MedicineLog log) async {

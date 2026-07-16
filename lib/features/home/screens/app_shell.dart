@@ -21,11 +21,15 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late int _currentIndex = widget.initialIndex;
   int _healthTab = 0;
+  // Bumped each time Home is re-selected so the dashboard refreshes its
+  // sync-only surfaces (reminders) on return — see HomeDashboard.refreshTick.
+  int _homeTick = 0;
   final ValueNotifier<FeatureAccent> _healthAccent =
       ValueNotifier(FeatureAccent.medicine);
 
   void _goTo(int index, {int? healthTab}) {
     setState(() {
+      if (index == 0 && _currentIndex != 0) _homeTick++;
       _currentIndex = index;
       if (index == 1 && healthTab != null) {
         _healthTab = healthTab;
@@ -45,7 +49,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final screens = [
-      HomeDashboard(onNavigate: _goTo),
+      HomeDashboard(onNavigate: _goTo, refreshTick: _homeTick),
       HealthHubScreen(
         key: ValueKey('health_$_healthTab'),
         initialTab: _healthTab,

@@ -101,7 +101,12 @@ class _FocusScreenState extends State<FocusScreen> {
                             _buildTimerSection(ext),
                             const SizedBox(height: AppSpacing.xl),
                             if (!_focusService.isRunning) ...[
-                              _buildDurationSelector(ext),
+                              _buildModeToggle(ext),
+                              const SizedBox(height: AppSpacing.xl),
+                              if (_focusService.mode == FocusMode.single)
+                                _buildDurationSelector(ext)
+                              else
+                                _buildPomodoroConfig(ext),
                               const SizedBox(height: AppSpacing.xl),
                               _buildActivitySelector(ext),
                               const SizedBox(height: AppSpacing.xl),
@@ -223,8 +228,14 @@ class _FocusScreenState extends State<FocusScreen> {
   // ---------------------------------------------------------------------------
 
   Widget _buildTimerSection(AppColorsExt ext) {
-    final focus = ext.focus;
     final progress = _focusService.progress;
+    final bool isPomodoro = _focusService.mode == FocusMode.pomodoro;
+    final bool onBreak = _focusService.isRunning && _focusService.isOnBreak;
+    // Focus accent for work; a calmer info tone for breaks (FOCUS-2).
+    final AccentSwatch accentSwatch = onBreak ? ext.info : ext.focus;
+    // Idle preview shows the length of the first interval.
+    final int idleMinutes =
+        isPomodoro ? _focusService.workMinutes : _focusService.selectedMinutes;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
@@ -233,17 +244,21 @@ class _FocusScreenState extends State<FocusScreen> {
         pressEffect: false,
         child: Column(
           children: [
+            if (isPomodoro && _focusService.isRunning) ...[
+              _buildPhasePill(ext, accentSwatch, onBreak),
+              const SizedBox(height: AppSpacing.md),
+            ],
             ProgressRing(
               progress: progress,
               size: 210,
               stroke: 12,
-              accent: focus,
+              accent: accentSwatch,
               animate: true,
               center: PlantAnimationWidget(
                 plantType: _focusService.selectedPlant,
                 progress: progress,
                 isAlive: true,
-                isAnimating: _focusService.isRunning,
+                isAnimating: _focusService.isRunning && !onBreak,
                 size: 84,
               ),
             ),
@@ -251,37 +266,110 @@ class _FocusScreenState extends State<FocusScreen> {
             Text(
               _focusService.isRunning
                   ? _focusService.formattedTime
-                  : '${_focusService.selectedMinutes}:00',
+                  : '$idleMinutes:00',
               style: TextStyle(
                 fontSize: 52,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 3,
-                color: ext.mark(focus),
+                color: ext.mark(accentSwatch),
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
             if (_focusService.isRunning) ...[
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${(progress * 100).toInt()}% completed',
+                onBreak
+                    ? 'Break • ${(progress * 100).toInt()}%'
+                    : '${(progress * 100).toInt()}% completed',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: ext.textSecondary,
                       fontWeight: FontWeight.w600,
                     ),
               ),
             ],
+            if (isPomodoro) ...[
+              const SizedBox(height: AppSpacing.md),
+              _buildRoundIndicator(ext),
+            ],
             const SizedBox(height: AppSpacing.xl),
-            _buildControlButtons(ext),
+            _buildControlButtons(ext, accentSwatch),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildControlButtons(AppColorsExt ext) {
+  /// Small pill above the ring naming the active pomodoro phase (FOCUS-2).
+  Widget _buildPhasePill(AppColorsExt ext, AccentSwatch accent, bool onBreak) {
+    final String label = onBreak
+        ? (_focusService.isLongBreak ? 'Long Break' : 'Short Break')
+        : 'Focus';
+    final IconData icon =
+        onBreak ? Icons.self_improvement_rounded : Icons.center_focus_strong_rounded;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: accent.container,
+        borderRadius: AppRadius.brFull,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: accent.onContainer),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: accent.onContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Round progress dots, e.g. ●●○○ (FOCUS-2). Filled = completed work rounds,
+  /// the active round pulses with the focus accent while working.
+  Widget _buildRoundIndicator(AppColorsExt ext) {
+    final int total = _focusService.totalRounds;
+    final int done = _focusService.currentRound;
+    final bool working = _focusService.isRunning && !_focusService.isOnBreak;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (int i = 0; i < total; i++) ...[
+          () {
+            final bool filled = i < done;
+            final bool active = i == done && working;
+            return Container(
+              width: 11,
+              height: 11,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: filled
+                    ? ext.mark(ext.focus)
+                    : (active ? ext.focus.container : Colors.transparent),
+                border: Border.all(
+                  color: filled || active ? ext.mark(ext.focus) : ext.outlineStrong,
+                  width: active ? 2 : 1.4,
+                ),
+              ),
+            );
+          }(),
+          if (i != total - 1) const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildControlButtons(AppColorsExt ext, AccentSwatch accent) {
     if (!_focusService.isRunning) {
       return AppButton(
-        label: 'Start Focus',
+        label: _focusService.mode == FocusMode.pomodoro
+            ? 'Start Pomodoro'
+            : 'Start Focus',
         leadingIcon: Icons.play_arrow_rounded,
         accent: ext.focus,
         size: AppButtonSize.lg,
@@ -302,7 +390,7 @@ class _FocusScreenState extends State<FocusScreen> {
             leadingIcon: _focusService.isPaused
                 ? Icons.play_arrow_rounded
                 : Icons.pause_rounded,
-            accent: ext.focus,
+            accent: accent,
             size: AppButtonSize.lg,
             fullWidth: true,
             onPressed: () {
@@ -325,6 +413,137 @@ class _FocusScreenState extends State<FocusScreen> {
             size: AppButtonSize.lg,
             fullWidth: true,
             onPressed: _showAbandonDialog,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mode toggle (FOCUS-2)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildModeToggle(AppColorsExt ext) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: SegmentedToggle(
+        accent: ext.focus,
+        index: _focusService.mode.index,
+        onChanged: (i) {
+          _hapticService.selection();
+          _focusService.setMode(FocusMode.values[i]);
+        },
+        items: const [
+          SegmentItem(icon: Icons.timer_outlined, label: 'Single'),
+          SegmentItem(icon: Icons.repeat_rounded, label: 'Pomodoro'),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pomodoro config (FOCUS-2)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildPomodoroConfig(AppColorsExt ext) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: 'Pomodoro',
+            icon: Icons.repeat_rounded,
+            accent: ext.focus,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _buildConfigRow(
+            ext,
+            label: 'Focus',
+            options: const [15, 25, 30, 45, 50],
+            current: _focusService.workMinutes,
+            suffix: 'min',
+            onSelect: (v) => _focusService.setPomodoroConfig(workMinutes: v),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _buildConfigRow(
+            ext,
+            label: 'Short break',
+            options: const [3, 5, 10],
+            current: _focusService.shortBreakMinutes,
+            suffix: 'min',
+            onSelect: (v) => _focusService.setPomodoroConfig(shortBreakMinutes: v),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _buildConfigRow(
+            ext,
+            label: 'Long break',
+            options: const [15, 20, 30],
+            current: _focusService.longBreakMinutes,
+            suffix: 'min',
+            onSelect: (v) => _focusService.setPomodoroConfig(longBreakMinutes: v),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _buildConfigRow(
+            ext,
+            label: 'Long break every',
+            options: const [2, 3, 4, 5],
+            current: _focusService.roundsBeforeLongBreak,
+            suffix: 'rounds',
+            onSelect: (v) =>
+                _focusService.setPomodoroConfig(roundsBeforeLongBreak: v),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _buildConfigRow(
+            ext,
+            label: 'Total rounds',
+            options: const [2, 3, 4, 6, 8],
+            current: _focusService.totalRounds,
+            suffix: 'rounds',
+            onSelect: (v) => _focusService.setPomodoroConfig(totalRounds: v),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConfigRow(
+    AppColorsExt ext, {
+    required String label,
+    required List<int> options,
+    required int current,
+    required String suffix,
+    required ValueChanged<int> onSelect,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context)
+              .textTheme
+              .labelLarge
+              ?.copyWith(color: ext.textSecondary, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              for (final value in options) ...[
+                AppChip(
+                  label: '$value $suffix',
+                  selected: current == value,
+                  accent: ext.focus,
+                  onTap: () {
+                    _hapticService.selection();
+                    onSelect(value);
+                  },
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+            ],
           ),
         ),
       ],
@@ -1018,6 +1237,12 @@ class _FocusScreenState extends State<FocusScreen> {
   // ---------------------------------------------------------------------------
 
   Widget _buildActiveSessionCard(AppColorsExt ext) {
+    final bool onBreak = _focusService.isOnBreak;
+    final AccentSwatch accent = onBreak ? ext.info : ext.focus;
+    final String title = onBreak ? 'On a Break' : 'Session Active';
+    final String subtitle = onBreak
+        ? 'Relax and recharge — focus resumes soon.'
+        : 'Stay focused! Your plant is growing...';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       child: AppCard(
@@ -1028,21 +1253,25 @@ class _FocusScreenState extends State<FocusScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: ext.focus.container,
+                    color: accent.container,
                     borderRadius: AppRadius.brMd,
                   ),
-                  child: Icon(Icons.lock_rounded, color: ext.focus.onContainer, size: 22),
+                  child: Icon(
+                    onBreak ? Icons.self_improvement_rounded : Icons.lock_rounded,
+                    color: accent.onContainer,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Session Active',
+                      Text(title,
                           style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 2),
                       Text(
-                        'Stay focused! Your plant is growing...',
+                        subtitle,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: ext.textSecondary,
                             ),

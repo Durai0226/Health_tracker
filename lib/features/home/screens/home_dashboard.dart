@@ -19,7 +19,16 @@ class HomeDashboard extends StatefulWidget {
   /// Switches the shell destination; [healthTab] selects Medicine(0)/Water(1).
   final void Function(int index, {int? healthTab}) onNavigate;
 
-  const HomeDashboard({super.key, required this.onNavigate});
+  /// Bumped by the shell whenever Home is re-selected. Lets the sync-only
+  /// surfaces (reminders roll-up + card) refresh when the user returns to Home,
+  /// since — unlike medicine/water/focus — they have no change notifier.
+  final int refreshTick;
+
+  const HomeDashboard({
+    super.key,
+    required this.onNavigate,
+    this.refreshTick = 0,
+  });
 
   @override
   State<HomeDashboard> createState() => _HomeDashboardState();
@@ -28,23 +37,44 @@ class HomeDashboard extends StatefulWidget {
 class _HomeDashboardState extends State<HomeDashboard> {
   final AuthService _authService = AuthService();
   final FocusService _focus = FocusService();
-  Future<DailyMedicineSummary>? _medicineSummary;
 
-  @override
-  void initState() {
-    super.initState();
-    _refreshMedicine();
+  // Medicine data is async; memoize it against the service revision so it only
+  // re-queries when medicine data actually changed (a dose logged, a medicine
+  // added/removed, …) rather than on every unrelated rebuild.
+  int _medRev = -1;
+  Future<_MedicineHomeData>? _medFuture;
+
+  Future<_MedicineHomeData> _medicineData(int rev) {
+    if (_medFuture == null || _medRev != rev) {
+      _medRev = rev;
+      _medFuture = _loadMedicineData();
+    }
+    return _medFuture!;
   }
 
-  void _refreshMedicine() {
-    setState(() {
-      _medicineSummary =
-          MedicineCleanStorageService.getDailySummaryAsync(DateTime.now());
-    });
+  Future<_MedicineHomeData> _loadMedicineData() async {
+    final now = DateTime.now();
+    final summary = await MedicineCleanStorageService.getDailySummaryAsync(now);
+    final meds = await MedicineCleanStorageService.getAllMedicines();
+    final streak = await MedicineCleanStorageService.getCurrentStreak();
+    return _MedicineHomeData(
+      summary: summary,
+      hasMedicines: meds.isNotEmpty,
+      streak: streak,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Returning to Home recomputes the sync parts (reminders have no notifier).
+    if (oldWidget.refreshTick != widget.refreshTick && mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _refreshAll() async {
-    _refreshMedicine();
+    setState(() => _medFuture = null); // force a fresh medicine query
     await Future.delayed(const Duration(milliseconds: 300));
   }
 
@@ -96,11 +126,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 delegate: SliverChildListDelegate([
                   _buildQuickActions(ext),
                   const SizedBox(height: AppSpacing.xl),
+                  _buildRollup(ext),
+                  const SizedBox(height: AppSpacing.xl),
                   SectionHeader(title: 'Today', accent: ext.brand),
                   const SizedBox(height: AppSpacing.xs),
                   _buildMedicineCard(ext),
                   const SizedBox(height: AppSpacing.lg),
                   _buildWaterCard(ext),
+                  const SizedBox(height: AppSpacing.lg),
+                  _buildWeeklyStrip(ext),
                   const SizedBox(height: AppSpacing.lg),
                   SizedBox(
                     height: 132,
@@ -117,6 +151,108 @@ class _HomeDashboardState extends State<HomeDashboard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ---- daily roll-up hero --------------------------------------------------
+
+  /// A single "X of 4 done today" hero, combining the four daily wins:
+  /// medicine (all due doses taken), water (goal reached), focus (any minutes),
+  /// reminders (all of today's complete). Wrapped in every relevant notifier so
+  /// it stays live while Home is parked in the shell's IndexedStack.
+  Widget _buildRollup(AppColorsExt ext) {
+    final waterListenable = WaterService.listenToDailyData();
+    return ValueListenableBuilder<int>(
+      valueListenable: MedicineCleanStorageService.revision,
+      builder: (context, rev, _) {
+        return ListenableBuilder(
+          listenable: _focus,
+          builder: (context, __) {
+            Widget content() => FutureBuilder<_MedicineHomeData>(
+                  future: _medicineData(rev),
+                  builder: (context, snapshot) {
+                    final s = snapshot.data?.summary;
+                    final medTotal = s?.totalScheduled ?? 0;
+                    final medTaken = s?.taken ?? 0;
+                    // Nothing due today counts as done — you can't do more.
+                    final medDone = medTotal == 0 || medTaken >= medTotal;
+
+                    final water = WaterService.getTodayData();
+                    final goal = WaterService.getDailyGoal();
+                    final waterDone = goal > 0 && water.goalReached;
+
+                    final focusDone = _focus.todayMinutes > 0;
+
+                    final now = DateTime.now();
+                    final todaysReminders = CleanStorageService.getReminders()
+                        .where((r) => _isSameDay(r.scheduledTime, now))
+                        .toList();
+                    final remindersDone = todaysReminders.isEmpty ||
+                        todaysReminders.every((r) => r.isCompleted);
+
+                    final done = [medDone, waterDone, focusDone, remindersDone]
+                        .where((b) => b)
+                        .length;
+                    return _rollupCard(ext, done);
+                  },
+                );
+
+            if (waterListenable == null) return content();
+            return ValueListenableBuilder<Map<String, DailyWaterData>>(
+              valueListenable: waterListenable,
+              builder: (context, ___, ____) => content(),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _rollupCard(AppColorsExt ext, int done) {
+    final tt = Theme.of(context).textTheme;
+    final String line;
+    if (done >= 4) {
+      line = 'Every daily goal met — beautifully done.';
+    } else if (done == 0) {
+      line = 'A fresh start. Small steps count.';
+    } else {
+      line = "Keep going — you're building momentum.";
+    }
+    return AppCard(
+      child: Row(
+        children: [
+          ProgressRing(
+            progress: done / 4,
+            size: 76,
+            stroke: 7,
+            accent: ext.brand,
+            center: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('$done',
+                    style: tt.headlineSmall?.copyWith(
+                        color: ext.brand.strong, fontWeight: FontWeight.w800)),
+                Text('of 4',
+                    style: tt.labelSmall?.copyWith(color: ext.textTertiary)),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$done of 4 done today', style: tt.titleLarge),
+                const SizedBox(height: 4),
+                Text(line,
+                    style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -192,6 +328,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     required String subtitle,
     required VoidCallback onTap,
     Widget? trailing,
+    Widget? badge,
   }) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
@@ -209,7 +346,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: tt.titleLarge),
+                Row(
+                  children: [
+                    Flexible(child: Text(title, style: tt.titleLarge)),
+                    if (badge != null) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      badge,
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text(subtitle,
                     style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
@@ -225,46 +370,147 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
+  /// A "fire" streak badge, shown on a feature card when the streak is > 0.
+  Widget _streakChip(AccentSwatch accent, int streak) => AppChip(
+        label: '$streak',
+        icon: Icons.local_fire_department_rounded,
+        accent: accent,
+        selected: true,
+      );
+
+  /// A card-shaped empty state with a CTA into the relevant setup flow.
+  Widget _emptyCard({
+    required AccentSwatch accent,
+    required IconData icon,
+    required String title,
+    required String message,
+    required String ctaLabel,
+    required VoidCallback onCta,
+  }) {
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: EmptyState(
+        icon: icon,
+        title: title,
+        message: message,
+        accent: accent,
+        action: AppButton(
+          label: ctaLabel,
+          onPressed: onCta,
+          accent: accent,
+          variant: AppButtonVariant.tonal,
+          size: AppButtonSize.sm,
+          leadingIcon: Icons.add_rounded,
+        ),
+      ),
+    );
+  }
+
+  /// A compact empty-state CTA sized for the 2-up row (Focus / Reminders).
+  /// Tapping the whole card runs [onCta]; a subtle "add" affordance signals it.
+  Widget _compactEmptyCard({
+    required AccentSwatch accent,
+    required IconData icon,
+    required String title,
+    required String ctaLabel,
+    required VoidCallback onCta,
+  }) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
+      onTap: onCta,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration:
+                BoxDecoration(color: accent.container, borderRadius: AppRadius.brMd),
+            child: Icon(icon, color: accent.onContainer, size: 22),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(title, style: tt.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Icon(Icons.add_rounded, size: 16, color: ext.mark(accent)),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(ctaLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelMedium?.copyWith(color: ext.mark(accent))),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   // ---- medicine ------------------------------------------------------------
 
   Widget _buildMedicineCard(AppColorsExt ext) {
-    return FutureBuilder<DailyMedicineSummary>(
-      future: _medicineSummary,
-      builder: (context, snapshot) {
-        final s = snapshot.data;
-        final total = s?.totalScheduled ?? 0;
-        final taken = s?.taken ?? 0;
-        final missed = s?.missed ?? 0;
-        final adherence = s?.adherenceRate ?? 0;
+    return ValueListenableBuilder<int>(
+      valueListenable: MedicineCleanStorageService.revision,
+      builder: (context, rev, _) {
+        return FutureBuilder<_MedicineHomeData>(
+          future: _medicineData(rev),
+          builder: (context, snapshot) {
+            final data = snapshot.data;
 
-        final String status;
-        if (total == 0) {
-          status = 'No doses scheduled today';
-        } else if (taken >= total) {
-          status = 'All doses taken — nice work';
-        } else if (missed > 0) {
-          status = '$missed missed · ${total - taken - missed} left today';
-        } else {
-          status = '${total - taken} of $total doses left today';
-        }
+            // No medicines at all → CTA into the add-medicine flow.
+            if (data != null && !data.hasMedicines) {
+              return _emptyCard(
+                accent: ext.medicine,
+                icon: Icons.medication_rounded,
+                title: 'No medicines yet',
+                message: 'Add a medicine to start tracking your doses.',
+                ctaLabel: 'Add medicine',
+                onCta: () => widget.onNavigate(1, healthTab: 0),
+              );
+            }
 
-        return _featureCard(
-          accent: ext.medicine,
-          icon: Icons.medication_rounded,
-          title: 'Medicine',
-          subtitle: status,
-          onTap: () => widget.onNavigate(1, healthTab: 0),
-          trailing: total > 0
-              ? ProgressRing(
-                  progress: taken / total,
-                  size: 48,
-                  stroke: 5,
-                  accent: ext.medicine,
-                  center: Text('${adherence.round()}%',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: ext.medicine.strong, fontWeight: FontWeight.w800)),
-                )
-              : null,
+            final s = data?.summary;
+            final total = s?.totalScheduled ?? 0;
+            final taken = s?.taken ?? 0;
+            final missed = s?.missed ?? 0;
+            final adherence = s?.adherenceRate ?? 0;
+            final streak = data?.streak ?? 0;
+
+            final String status;
+            if (total == 0) {
+              status = 'No doses scheduled today';
+            } else if (taken >= total) {
+              status = 'All doses taken — nice work';
+            } else if (missed > 0) {
+              status = '$missed missed · ${total - taken - missed} left today';
+            } else {
+              status = '${total - taken} of $total doses left today';
+            }
+
+            return _featureCard(
+              accent: ext.medicine,
+              icon: Icons.medication_rounded,
+              title: 'Medicine',
+              subtitle: status,
+              onTap: () => widget.onNavigate(1, healthTab: 0),
+              badge: streak > 0 ? _streakChip(ext.medicine, streak) : null,
+              trailing: total > 0
+                  ? ProgressRing(
+                      progress: taken / total,
+                      size: 48,
+                      stroke: 5,
+                      accent: ext.medicine,
+                      center: Text('${(adherence * 100).round()}%',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: ext.medicine.strong,
+                              fontWeight: FontWeight.w800)),
+                    )
+                  : null,
+            );
+          },
         );
       },
     );
@@ -283,16 +529,31 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _waterCardBody(AppColorsExt ext, DailyWaterData data) {
     final goal = WaterService.getDailyGoal();
-    final progress = goal == 0 ? 0.0 : data.effectiveHydrationMl / goal;
+
+    // No goal configured → CTA into the hydration setup flow.
+    if (goal <= 0) {
+      return _emptyCard(
+        accent: ext.water,
+        icon: Icons.water_drop_rounded,
+        title: 'Set a hydration goal',
+        message: 'Tell us a bit about you to get a daily water target.',
+        ctaLabel: 'Set goal',
+        onCta: () => widget.onNavigate(1, healthTab: 1),
+      );
+    }
+
+    final progress = data.effectiveHydrationMl / goal;
     final remaining = (goal - data.effectiveHydrationMl).clamp(0, goal);
+    final streak = WaterService.getCurrentStreak();
     return _featureCard(
       accent: ext.water,
       icon: Icons.water_drop_rounded,
       title: 'Hydration',
-      subtitle: (data.effectiveHydrationMl >= goal && goal > 0)
+      subtitle: (data.effectiveHydrationMl >= goal)
           ? 'Goal reached · ${data.effectiveHydrationMl} ml'
           : '${data.effectiveHydrationMl} / $goal ml · $remaining ml to go',
       onTap: () => widget.onNavigate(1, healthTab: 1),
+      badge: streak > 0 ? _streakChip(ext.water, streak) : null,
       trailing: ProgressRing(
         progress: progress.clamp(0.0, 1.0),
         size: 48,
@@ -304,6 +565,122 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 .labelSmall
                 ?.copyWith(color: ext.water.strong, fontWeight: FontWeight.w800)),
       ),
+    );
+  }
+
+  // ---- weekly strip --------------------------------------------------------
+
+  /// A compact 7-day mini-bar strip for water and focus. Wrapped in both the
+  /// water and focus notifiers so it tracks live like the rest of the dashboard.
+  Widget _buildWeeklyStrip(AppColorsExt ext) {
+    final waterListenable = WaterService.listenToDailyData();
+    return ListenableBuilder(
+      listenable: _focus,
+      builder: (context, _) {
+        Widget content() => _weeklyStripBody(ext);
+        if (waterListenable == null) return content();
+        return ValueListenableBuilder<Map<String, DailyWaterData>>(
+          valueListenable: waterListenable,
+          builder: (context, __, ___) => content(),
+        );
+      },
+    );
+  }
+
+  Widget _weeklyStripBody(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
+    final now = DateTime.now();
+    final days = List<DateTime>.generate(
+        7, (i) => DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: 6 - i)));
+    final labels =
+        days.map((d) => DateFormat('E').format(d).substring(0, 1)).toList();
+
+    // Water: fraction of each day's goal reached (capped at 1.0).
+    final waterValues = days.map((d) {
+      final data = WaterService.getDataForDate(d);
+      if (data == null) return 0.0;
+      final goal = data.dailyGoalMl > 0 ? data.dailyGoalMl : WaterService.getDailyGoal();
+      if (goal <= 0) return 0.0;
+      return (data.effectiveHydrationMl / goal).clamp(0.0, 1.0);
+    }).toList();
+
+    // Focus: completed minutes per day, normalized to the busiest day.
+    final focusMinutes = days.map((d) {
+      return _focus.sessions
+          .where((s) => s.wasCompleted && _isSameDay(s.startedAt, d))
+          .fold<int>(0, (sum, s) => sum + s.actualMinutes);
+    }).toList();
+    final maxFocus = focusMinutes.fold<int>(0, (m, v) => v > m ? v : m);
+    final focusValues = focusMinutes
+        .map((m) => maxFocus > 0 ? m / maxFocus : 0.0)
+        .toList();
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('This week', style: tt.titleMedium),
+          const SizedBox(height: AppSpacing.md),
+          _miniBars(ext, ext.water, 'Water', waterValues, labels, 6),
+          const SizedBox(height: AppSpacing.md),
+          _miniBars(ext, ext.focus, 'Focus', focusValues, labels, 6),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniBars(AppColorsExt ext, AccentSwatch accent, String label,
+      List<double> values, List<String> labels, int todayIndex) {
+    final tt = Theme.of(context).textTheme;
+    const barsHeight = 34.0;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 46,
+          child: Text(label,
+              style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(7, (i) {
+              final v = values[i].clamp(0.0, 1.0);
+              final isToday = i == todayIndex;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: AppRadius.brSm,
+                        child: Container(
+                          height: barsHeight,
+                          color: accent.container,
+                          alignment: Alignment.bottomCenter,
+                          child: FractionallySizedBox(
+                            heightFactor: v == 0 ? 0.0 : v,
+                            child: Container(color: ext.mark(accent)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(labels[i],
+                          style: tt.labelSmall?.copyWith(
+                              color: isToday ? ext.mark(accent) : ext.textTertiary,
+                              fontWeight:
+                                  isToday ? FontWeight.w800 : FontWeight.w500)),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
     );
   }
 
@@ -386,14 +763,22 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final pending = reminders.where((r) => !r.isCompleted).toList()
       ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     final today = pending
-        .where((r) =>
-            r.scheduledTime.year == now.year &&
-            r.scheduledTime.month == now.month &&
-            r.scheduledTime.day == now.day)
+        .where((r) => _isSameDay(r.scheduledTime, now))
         .toList();
     final upcoming = pending.where((r) => r.scheduledTime.isAfter(now)).toList();
     final Reminder? next =
         today.isNotEmpty ? today.first : (upcoming.isNotEmpty ? upcoming.first : null);
+
+    // No reminders at all → compact CTA that fits the 2-up row footprint.
+    if (reminders.isEmpty) {
+      return _compactEmptyCard(
+        accent: ext.reminders,
+        icon: Icons.notifications_rounded,
+        title: 'No reminders',
+        ctaLabel: 'Add reminder',
+        onCta: _addReminder,
+      );
+    }
 
     return _compactCard(
       accent: ext.reminders,
@@ -410,9 +795,25 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   String _formatTime(DateTime t) {
     final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
     final m = t.minute.toString().padLeft(2, '0');
     return '$h:$m ${t.hour >= 12 ? 'PM' : 'AM'}';
   }
+}
+
+/// Bundled medicine data for the Home dashboard, loaded once per revision.
+class _MedicineHomeData {
+  final DailyMedicineSummary summary;
+  final bool hasMedicines;
+  final int streak;
+
+  const _MedicineHomeData({
+    required this.summary,
+    required this.hasMedicines,
+    required this.streak,
+  });
 }

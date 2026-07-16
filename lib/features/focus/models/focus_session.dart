@@ -1,6 +1,22 @@
 import 'focus_plant.dart';
 import 'ambient_sound.dart';
 
+/// How a focus session runs.
+/// - [single]: one continuous timer (default — preserves the plant/coin loop).
+/// - [pomodoro]: alternating work / break intervals for a number of rounds.
+enum FocusMode { single, pomodoro }
+
+extension FocusModeExtension on FocusMode {
+  String get label {
+    switch (this) {
+      case FocusMode.single:
+        return 'Single';
+      case FocusMode.pomodoro:
+        return 'Pomodoro';
+    }
+  }
+}
+
 enum FocusActivityType {
   work,
   study,

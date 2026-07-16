@@ -16,6 +16,7 @@ import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/focus/services/focus_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
+import '../../features/water/models/water_reminder_config.dart';
 
 /// Clean Drift-based storage service - unified storage using Drift DAOs
 class CleanStorageService {
@@ -445,6 +446,26 @@ class CleanStorageService {
     final today = DateTime.now();
     final dateKey = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
     return await _waterDao.getDailyData(dateKey);
+  }
+
+  /// Water reminder interval config — persisted as JSON in app preferences
+  /// (key `waterReminderConfig`). No Drift table / schema change.
+  static const String waterReminderConfigKey = 'waterReminderConfig';
+
+  static Future<void> saveWaterReminderConfig(WaterReminderConfig config) async {
+    await setAppPreference(waterReminderConfigKey, config.toJson());
+  }
+
+  static WaterReminderConfig? getWaterReminderConfig() {
+    final raw = getAppPreference(waterReminderConfigKey);
+    if (raw is Map) {
+      try {
+        return WaterReminderConfig.fromJson(Map<String, dynamic>.from(raw));
+      } catch (e) {
+        debugPrint('Error parsing water reminder config: $e');
+      }
+    }
+    return null;
   }
 
   // ============ UTILITY METHODS ============

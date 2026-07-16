@@ -1,24 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/services/notification_service.dart';
-import '../../../core/widgets/common_widgets.dart';
-import '../models/water_reminder.dart';
+import '../../../core/services/clean_storage_service.dart';
+import '../../../core/services/reminder_reschedule_service.dart';
+import '../../../core/widgets/app/app_widgets.dart';
+import '../models/water_reminder_config.dart';
+import '../services/water_service.dart';
 
 class WaterReminderSettingsScreen extends StatefulWidget {
   const WaterReminderSettingsScreen({super.key});
 
   @override
-  State<WaterReminderSettingsScreen> createState() => _WaterReminderSettingsScreenState();
+  State<WaterReminderSettingsScreen> createState() =>
+      _WaterReminderSettingsScreenState();
 }
 
-class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScreen> {
+class _WaterReminderSettingsScreenState
+    extends State<WaterReminderSettingsScreen> {
   bool _isEnabled = false;
   List<TimeOfDay> _reminderTimes = [];
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 22, minute: 0);
   int _intervalMinutes = 120;
+  String _sound = 'default';
+  bool _pauseWhenGoalReached = true;
+  bool _respectQuietHours = true;
   bool _isSaving = false;
 
   @override
@@ -28,17 +32,41 @@ class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScree
   }
 
   void _loadExisting() {
-    // TODO: Replace with Drift storage when migration is complete
-    final existing = null; // CleanStorageService.getWaterReminder();
-    if (existing != null) {
-      setState(() {
-        _isEnabled = existing.isEnabled;
-        _reminderTimes = existing.reminderTimes.map((dt) => TimeOfDay(hour: dt.hour, minute: dt.minute)).toList();
-        _startTime = existing.startTime != null ? TimeOfDay(hour: existing.startTime!.hour, minute: existing.startTime!.minute) : _startTime;
-        _endTime = existing.endTime != null ? TimeOfDay(hour: existing.endTime!.hour, minute: existing.endTime!.minute) : _endTime;
-        _intervalMinutes = existing.intervalMinutes;
-      });
-    }
+    final existing = CleanStorageService.getWaterReminderConfig();
+    if (existing == null) return;
+    setState(() {
+      _isEnabled = existing.enabled;
+      _startTime =
+          TimeOfDay(hour: existing.startHour, minute: existing.startMinute);
+      _endTime = TimeOfDay(hour: existing.endHour, minute: existing.endMinute);
+      _intervalMinutes = existing.intervalMinutes;
+      _sound = existing.sound;
+      _pauseWhenGoalReached = existing.pauseWhenGoalReached;
+      _respectQuietHours = existing.respectQuietHours;
+      _reminderTimes = existing.reminderMinutes
+          .map((m) => TimeOfDay(hour: m ~/ 60, minute: m % 60))
+          .toList()
+        ..sort(_compareTimes);
+    });
+  }
+
+  int _compareTimes(TimeOfDay a, TimeOfDay b) =>
+      (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute);
+
+  void _snack(String message, {bool error = false, bool success = false}) {
+    final ext = AppColorsExt.of(context);
+    final bg = error
+        ? ext.fillBg(ext.error)
+        : success
+            ? ext.fillBg(ext.success)
+            : ext.fillBg(ext.water);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: TextStyle(color: ext.fillFg(ext.water))),
+        backgroundColor: bg,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _generateIntervalReminders() {
@@ -46,13 +74,7 @@ class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScree
     final end = _endTime.hour * 60 + _endTime.minute;
 
     if (end <= start) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('End time must be after start time'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _snack('End time must be after start time', error: true);
       return;
     }
 
@@ -61,314 +83,299 @@ class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScree
       times.add(TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60));
     }
 
-    setState(() {
-      _reminderTimes = times;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Generated ${times.length} reminder times'),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    setState(() => _reminderTimes = times);
+    _snack('Generated ${times.length} reminder times', success: true);
   }
 
-  void _addCustomTime() async {
+  Future<void> _addCustomTime() async {
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );
-
     if (time != null) {
       setState(() {
         _reminderTimes.add(time);
-        _reminderTimes.sort((a, b) {
-          final aMinutes = a.hour * 60 + a.minute;
-          final bMinutes = b.hour * 60 + b.minute;
-          return aMinutes.compareTo(bMinutes);
-        });
+        _reminderTimes.sort(_compareTimes);
       });
     }
   }
 
   void _removeTime(int index) {
-    setState(() {
-      _reminderTimes.removeAt(index);
-    });
+    setState(() => _reminderTimes.removeAt(index));
   }
 
   Future<void> _save() async {
     if (_isSaving) return;
-    if (_reminderTimes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one reminder time'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+    if (_isEnabled && _reminderTimes.isEmpty) {
+      _snack('Please add at least one reminder time', error: true);
       return;
     }
 
     setState(() => _isSaving = true);
 
-    final now = DateTime.now();
-    final reminderDateTimes = _reminderTimes.map((time) {
-      return DateTime(now.year, now.month, now.day, time.hour, time.minute);
-    }).toList();
-
-    final reminder = WaterReminder(
-      id: const Uuid().v4(),
-      reminderTimes: reminderDateTimes,
+    final config = WaterReminderConfig(
+      enabled: _isEnabled,
+      startHour: _startTime.hour,
+      startMinute: _startTime.minute,
+      endHour: _endTime.hour,
+      endMinute: _endTime.minute,
       intervalMinutes: _intervalMinutes,
-      isEnabled: _isEnabled,
-      startTime: DateTime(now.year, now.month, now.day, _startTime.hour, _startTime.minute),
-      endTime: DateTime(now.year, now.month, now.day, _endTime.hour, _endTime.minute),
+      reminderMinutes: _reminderTimes
+          .map((t) => t.hour * 60 + t.minute)
+          .toList()
+        ..sort(),
+      sound: _sound,
+      pauseWhenGoalReached: _pauseWhenGoalReached,
+      respectQuietHours: _respectQuietHours,
     );
 
-    // TODO: Replace with Drift storage when migration is complete
-    debugPrint('saveWaterReminder temporarily disabled - Drift migration needed');
+    // Persist first so the reschedule pass reads the fresh config.
+    await CleanStorageService.saveWaterReminderConfig(config);
 
-    final notificationService = NotificationService();
-    if (_isEnabled) {
-      int successCount = 0;
-      for (int i = 0; i < _reminderTimes.length; i++) {
-        final time = _reminderTimes[i];
-        final scheduled = await notificationService.scheduleWaterReminder(
-          id: 900000 + i,
-          hour: time.hour,
-          minute: time.minute,
-        );
-        if (scheduled) successCount++;
-      }
+    // (Re)establish notifications with the adaptive quiet-hours / goal-reached
+    // rules applied centrally.
+    final scheduled = await ReminderRescheduleService.rescheduleWaterReminders();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$successCount water reminders scheduled'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } else {
-      final ids = List.generate(_reminderTimes.length, (i) => 900000 + i);
-      await notificationService.cancelWaterReminders(ids);
-    }
-
+    if (!mounted) return;
     setState(() => _isSaving = false);
 
-    if (mounted) {
-      Navigator.pop(context);
+    if (!_isEnabled) {
+      _snack('Water reminders turned off', success: true);
+    } else if (scheduled == 0 &&
+        _pauseWhenGoalReached &&
+        WaterService.getTodayData().goalReached) {
+      _snack('Saved — paused until tomorrow (goal reached)', success: true);
+    } else {
+      _snack('$scheduled water reminders scheduled', success: true);
     }
+
+    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Water Reminders'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildEnableToggle(),
-            const SizedBox(height: 24),
-            const Text(
-              'Reminder Schedule',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+    return AccentScope(
+      feature: FeatureAccent.water,
+      child: Builder(builder: _buildContent),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    return AppScaffold(
+      body: Column(
+        children: [
+          AppHeader(
+            title: 'Water Reminders',
+            icon: Icons.water_drop_rounded,
+            leading: AppIconButton(
+              icon: Icons.arrow_back_rounded,
+              filled: false,
+              onPressed: () => Navigator.pop(context),
             ),
-            const SizedBox(height: 12),
-            _buildIntervalControls(),
-            const SizedBox(height: 24),
-            _buildReminderTimesList(),
-            const SizedBox(height: 16),
-            _buildAddTimeButton(),
-            const SizedBox(height: 32),
-            _buildSaveButton(),
-          ],
-        ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0,
+                  AppSpacing.gutter, AppSpacing.xxl),
+              children: [
+                _buildEnableCard(ext),
+                const SizedBox(height: AppSpacing.lg),
+                SectionHeader(
+                  title: 'Reminder Schedule',
+                  icon: Icons.schedule_rounded,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildIntervalCard(ext),
+                const SizedBox(height: AppSpacing.lg),
+                _buildReminderTimesList(ext),
+                const SizedBox(height: AppSpacing.md),
+                AppButton(
+                  label: 'Add Custom Time',
+                  variant: AppButtonVariant.secondary,
+                  leadingIcon: Icons.add_rounded,
+                  fullWidth: true,
+                  onPressed: _addCustomTime,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SectionHeader(
+                  title: 'Adaptive Behavior',
+                  icon: Icons.auto_awesome_rounded,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildAdaptiveCard(ext),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  label: 'Save Water Reminders',
+                  variant: AppButtonVariant.primary,
+                  fullWidth: true,
+                  size: AppButtonSize.lg,
+                  loading: _isSaving,
+                  onPressed: _isSaving ? null : _save,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildEnableToggle() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+  Widget _buildEnableCard(AppColorsExt ext) {
+    final s = ext.water;
+    return AppCard(
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.info.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: s.container,
+              borderRadius: AppRadius.brMd,
             ),
-            child: const Icon(Icons.water_drop_rounded, color: AppColors.info),
+            child: Icon(Icons.water_drop_rounded, color: s.onContainer),
           ),
-          const SizedBox(width: 16),
-          const Expanded(
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Water Reminders', style: TextStyle(fontWeight: FontWeight.w600)),
-                Text('Get reminded to stay hydrated', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                Text('Water Reminders',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(color: ext.textPrimary)),
+                const SizedBox(height: 2),
+                Text('Get reminded to stay hydrated',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: ext.textSecondary)),
               ],
             ),
           ),
           Switch(
             value: _isEnabled,
             onChanged: (val) => setState(() => _isEnabled = val),
-            activeThumbColor: AppColors.info,
+            activeThumbColor: ext.mark(s),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildIntervalControls() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+  Widget _buildIntervalCard(AppColorsExt ext) {
+    final s = ext.water;
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Auto-generate by interval', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
+          Text('Auto-generate by interval',
+              style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final time = await showTimePicker(context: context, initialTime: _startTime);
-                    if (time != null) setState(() => _startTime = time);
-                  },
-                  child: _buildTimeField('Start', _startTime),
-                ),
+                child: _buildTimeField(ext, 'Start', _startTime, () async {
+                  final time = await showTimePicker(
+                      context: context, initialTime: _startTime);
+                  if (time != null) setState(() => _startTime = time);
+                }),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final time = await showTimePicker(context: context, initialTime: _endTime);
-                    if (time != null) setState(() => _endTime = time);
-                  },
-                  child: _buildTimeField('End', _endTime),
-                ),
+                child: _buildTimeField(ext, 'End', _endTime, () async {
+                  final time = await showTimePicker(
+                      context: context, initialTime: _endTime);
+                  if (time != null) setState(() => _endTime = time);
+                }),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text('Every $_intervalMinutes minutes', style: const TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: AppSpacing.lg),
+          Text('Every $_intervalMinutes minutes',
+              style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
           Slider(
             value: _intervalMinutes.toDouble(),
             min: 30,
             max: 240,
             divisions: 21,
-            activeColor: AppColors.info,
+            activeColor: ext.mark(s),
+            inactiveColor: ext.outline,
             onChanged: (val) => setState(() => _intervalMinutes = val.toInt()),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: CommonButton(
-              text: 'Generate Times',
-              icon: Icons.auto_fix_high_rounded,
-              variant: ButtonVariant.primary,
-              backgroundColor: AppColors.info,
-              onPressed: _generateIntervalReminders,
-            ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Generate Times',
+            variant: AppButtonVariant.tonal,
+            leadingIcon: Icons.auto_fix_high_rounded,
+            fullWidth: true,
+            onPressed: _generateIntervalReminders,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTimeField(String label, TimeOfDay time) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          const SizedBox(height: 4),
-          Text(
-            time.format(context),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReminderTimesList() {
-    if (_reminderTimes.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(32),
+  Widget _buildTimeField(
+      AppColorsExt ext, String label, TimeOfDay time, VoidCallback onTap) {
+    final tt = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          color: ext.surfaceVariant,
+          borderRadius: AppRadius.brMd,
         ),
-        child: const Center(
-          child: Column(
-            children: [
-              Icon(Icons.schedule_rounded, size: 48, color: AppColors.textSecondary),
-              SizedBox(height: 12),
-              Text(
-                'No reminder times set',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+            const SizedBox(height: AppSpacing.xs),
+            Text(time.format(context),
+                style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReminderTimesList(AppColorsExt ext) {
+    final s = ext.water;
+    final tt = Theme.of(context).textTheme;
+    if (_reminderTimes.isEmpty) {
+      return AppCard(
+        child: EmptyState(
+          icon: Icons.schedule_rounded,
+          title: 'No reminder times set',
+          message: 'Generate times by interval or add a custom time.',
         ),
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Column(
         children: _reminderTimes.asMap().entries.map((entry) {
           final index = entry.key;
           final time = entry.value;
           return ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: s.container,
+                borderRadius: AppRadius.brSm,
               ),
-              child: const Icon(Icons.alarm_rounded, color: AppColors.info, size: 20),
+              child: Icon(Icons.alarm_rounded, color: s.onContainer, size: 20),
             ),
-            title: Text(
-              time.format(context),
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            title: Text(time.format(context),
+                style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
             trailing: IconButton(
-              icon: const Icon(Icons.close_rounded, color: AppColors.error),
+              icon: Icon(Icons.close_rounded, color: ext.mark(ext.error)),
               onPressed: () => _removeTime(index),
             ),
           );
@@ -377,41 +384,83 @@ class _WaterReminderSettingsScreenState extends State<WaterReminderSettingsScree
     );
   }
 
-  Widget _buildAddTimeButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _addCustomTime,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Custom Time'),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          side: const BorderSide(color: AppColors.info),
-          foregroundColor: AppColors.info,
-        ),
+  Widget _buildAdaptiveCard(AppColorsExt ext) {
+    final profile = WaterService.getProfile();
+    final wake = profile.wakeUpHour ?? 7;
+    final bed = profile.bedtimeHour ?? 22;
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Column(
+        children: [
+          _buildToggleRow(
+            ext,
+            icon: Icons.emoji_events_rounded,
+            title: 'Pause when goal reached',
+            subtitle: "Stop today's reminders once you hit your goal",
+            value: _pauseWhenGoalReached,
+            onChanged: (v) => setState(() => _pauseWhenGoalReached = v),
+          ),
+          Divider(height: 1, color: ext.outline),
+          _buildToggleRow(
+            ext,
+            icon: Icons.bedtime_rounded,
+            title: 'Respect quiet hours',
+            subtitle:
+                'Skip reminders outside ${_formatHour(wake)}–${_formatHour(bed)}',
+            value: _respectQuietHours,
+            onChanged: (v) => setState(() => _respectQuietHours = v),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        onPressed: _isSaving ? null : _save,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.info,
-        ),
-        child: _isSaving
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Text('Save Water Reminders'),
+  String _formatHour(int hour24) {
+    return TimeOfDay(hour: hour24, minute: 0).format(context);
+  }
+
+  Widget _buildToggleRow(
+    AppColorsExt ext, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final s = ext.water;
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: s.container,
+              borderRadius: AppRadius.brSm,
+            ),
+            child: Icon(icon, color: s.onContainer, size: 20),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: ext.mark(s),
+          ),
+        ],
       ),
     );
   }
