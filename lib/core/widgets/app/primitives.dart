@@ -386,6 +386,11 @@ class AppTextField extends StatelessWidget {
           validator: validator,
           onChanged: onChanged,
           onFieldSubmitted: onSubmitted,
+          // Flutter's DEFAULT onTapOutside keeps the keyboard open on iOS/Android
+          // (it only dismisses on desktop). Override it so tapping outside any
+          // field closes the keyboard — the reported bug. Tapping another field
+          // still moves focus (that field claims it after this fires).
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           keyboardType: keyboardType ??
               (multiline ? TextInputType.multiline : TextInputType.text),
           maxLines: obscureText ? 1 : maxLines,
