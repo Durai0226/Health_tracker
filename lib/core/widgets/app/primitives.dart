@@ -10,6 +10,11 @@ class AppScaffold extends StatelessWidget {
   final bool extendBody;
   final bool safeTop;
 
+  /// Tapping empty space dismisses the keyboard (on by default). This is the
+  /// app-wide fix so every form built on AppScaffold closes the keyboard when
+  /// the user taps outside a field — a no-op when nothing is focused.
+  final bool dismissKeyboardOnTap;
+
   const AppScaffold({
     super.key,
     required this.body,
@@ -18,18 +23,29 @@ class AppScaffold extends StatelessWidget {
     this.bottomNavigationBar,
     this.extendBody = false,
     this.safeTop = false,
+    this.dismissKeyboardOnTap = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
+    Widget content = safeTop ? SafeArea(bottom: false, child: body) : body;
+    if (dismissKeyboardOnTap) {
+      // translucent → children (buttons, lists, fields) still receive taps;
+      // only taps that land on empty space trigger the unfocus.
+      content = GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: content,
+      );
+    }
     return Scaffold(
       backgroundColor: ext.background,
       extendBody: extendBody,
       floatingActionButton: floatingActionButton,
       floatingActionButtonLocation: floatingActionButtonLocation,
       bottomNavigationBar: bottomNavigationBar,
-      body: safeTop ? SafeArea(bottom: false, child: body) : body,
+      body: content,
     );
   }
 }

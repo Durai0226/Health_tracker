@@ -793,22 +793,26 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: accent.container,
               borderRadius: AppRadius.brMd,
             ),
-            child: Icon(icon, color: accent.onContainer, size: 24),
+            child: Icon(icon, color: accent.onContainer, size: 20),
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               label,
-              style: tt.titleMedium?.copyWith(
+              // Single line + ellipsis so a long label never breaks mid-word
+              // ("Doctor"/"s") in the narrow half-width card.
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: tt.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700, color: ext.textPrimary),
             ),
           ),
-          Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+          Icon(Icons.chevron_right_rounded, color: ext.textTertiary, size: 18),
         ],
       ),
     );
