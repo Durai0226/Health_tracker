@@ -7,11 +7,13 @@ import 'tables/core_tables.dart';
 import 'tables/medication_tables.dart';
 import 'tables/water_tables.dart';
 import 'tables/reminders_tables.dart';
+import 'tables/vitals_tables.dart';
 
 import 'daos/core_dao.dart';
 import 'daos/medication_dao.dart';
 import 'daos/water_dao.dart';
 import 'daos/reminders_dao.dart';
+import 'daos/vitals_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -43,19 +45,24 @@ part 'app_database.g.dart';
     // Reminders tables
     Reminders,
     ReminderCategories,
+
+    // Vitals tables (blood pressure + blood glucose)
+    BloodPressureReadings,
+    GlucoseReadings,
   ],
   daos: [
     CoreDao,
     MedicationDao,
     WaterDao,
     RemindersDao,
+    VitalsDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
   /// period-tracking features were removed. Kept-feature data is untouched.
@@ -96,6 +103,12 @@ class AppDatabase extends _$AppDatabase {
           // (was previously lost and reconstructed as a bogus "1.0pill(s)").
           await m.addColumn(enhancedMedicines, enhancedMedicines.strengthText);
           debugPrint('✓ Added enhancedMedicines.strengthText');
+        }
+        if (from < 4) {
+          // Blood-pressure + blood-glucose vitals trackers.
+          await m.createTable(bloodPressureReadings);
+          await m.createTable(glucoseReadings);
+          debugPrint('✓ Created vitals tables (BP + glucose)');
         }
       },
     );

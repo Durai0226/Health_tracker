@@ -14923,6 +14923,1538 @@ class ReminderCategoriesCompanion extends UpdateCompanion<ReminderCategory> {
   }
 }
 
+class $BloodPressureReadingsTable extends BloodPressureReadings
+    with TableInfo<$BloodPressureReadingsTable, BloodPressureReading> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BloodPressureReadingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dependentIdMeta = const VerificationMeta(
+    'dependentId',
+  );
+  @override
+  late final GeneratedColumn<String> dependentId = GeneratedColumn<String>(
+    'dependent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _systolicMeta = const VerificationMeta(
+    'systolic',
+  );
+  @override
+  late final GeneratedColumn<int> systolic = GeneratedColumn<int>(
+    'systolic',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _diastolicMeta = const VerificationMeta(
+    'diastolic',
+  );
+  @override
+  late final GeneratedColumn<int> diastolic = GeneratedColumn<int>(
+    'diastolic',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pulseMeta = const VerificationMeta('pulse');
+  @override
+  late final GeneratedColumn<int> pulse = GeneratedColumn<int>(
+    'pulse',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _armIndexMeta = const VerificationMeta(
+    'armIndex',
+  );
+  @override
+  late final GeneratedColumn<int> armIndex = GeneratedColumn<int>(
+    'arm_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _positionIndexMeta = const VerificationMeta(
+    'positionIndex',
+  );
+  @override
+  late final GeneratedColumn<int> positionIndex = GeneratedColumn<int>(
+    'position_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _takenAtMeta = const VerificationMeta(
+    'takenAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> takenAt = GeneratedColumn<DateTime>(
+    'taken_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
+    'tagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> tagsJson = GeneratedColumn<String>(
+    'tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _categoryIndexMeta = const VerificationMeta(
+    'categoryIndex',
+  );
+  @override
+  late final GeneratedColumn<int> categoryIndex = GeneratedColumn<int>(
+    'category_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dependentId,
+    systolic,
+    diastolic,
+    pulse,
+    armIndex,
+    positionIndex,
+    takenAt,
+    tagsJson,
+    note,
+    categoryIndex,
+    createdAt,
+    synced,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'blood_pressure_readings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BloodPressureReading> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('dependent_id')) {
+      context.handle(
+        _dependentIdMeta,
+        dependentId.isAcceptableOrUnknown(
+          data['dependent_id']!,
+          _dependentIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('systolic')) {
+      context.handle(
+        _systolicMeta,
+        systolic.isAcceptableOrUnknown(data['systolic']!, _systolicMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_systolicMeta);
+    }
+    if (data.containsKey('diastolic')) {
+      context.handle(
+        _diastolicMeta,
+        diastolic.isAcceptableOrUnknown(data['diastolic']!, _diastolicMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_diastolicMeta);
+    }
+    if (data.containsKey('pulse')) {
+      context.handle(
+        _pulseMeta,
+        pulse.isAcceptableOrUnknown(data['pulse']!, _pulseMeta),
+      );
+    }
+    if (data.containsKey('arm_index')) {
+      context.handle(
+        _armIndexMeta,
+        armIndex.isAcceptableOrUnknown(data['arm_index']!, _armIndexMeta),
+      );
+    }
+    if (data.containsKey('position_index')) {
+      context.handle(
+        _positionIndexMeta,
+        positionIndex.isAcceptableOrUnknown(
+          data['position_index']!,
+          _positionIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('taken_at')) {
+      context.handle(
+        _takenAtMeta,
+        takenAt.isAcceptableOrUnknown(data['taken_at']!, _takenAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_takenAtMeta);
+    }
+    if (data.containsKey('tags_json')) {
+      context.handle(
+        _tagsJsonMeta,
+        tagsJson.isAcceptableOrUnknown(data['tags_json']!, _tagsJsonMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('category_index')) {
+      context.handle(
+        _categoryIndexMeta,
+        categoryIndex.isAcceptableOrUnknown(
+          data['category_index']!,
+          _categoryIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BloodPressureReading map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BloodPressureReading(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dependentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dependent_id'],
+      ),
+      systolic: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}systolic'],
+      )!,
+      diastolic: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}diastolic'],
+      )!,
+      pulse: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}pulse'],
+      ),
+      armIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}arm_index'],
+      ),
+      positionIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position_index'],
+      ),
+      takenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}taken_at'],
+      )!,
+      tagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags_json'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      categoryIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}category_index'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+    );
+  }
+
+  @override
+  $BloodPressureReadingsTable createAlias(String alias) {
+    return $BloodPressureReadingsTable(attachedDatabase, alias);
+  }
+}
+
+class BloodPressureReading extends DataClass
+    implements Insertable<BloodPressureReading> {
+  final String id;
+  final String? dependentId;
+  final int systolic;
+  final int diastolic;
+  final int? pulse;
+  final int? armIndex;
+  final int? positionIndex;
+  final DateTime takenAt;
+  final String? tagsJson;
+  final String? note;
+  final int categoryIndex;
+  final DateTime createdAt;
+  final bool synced;
+  const BloodPressureReading({
+    required this.id,
+    this.dependentId,
+    required this.systolic,
+    required this.diastolic,
+    this.pulse,
+    this.armIndex,
+    this.positionIndex,
+    required this.takenAt,
+    this.tagsJson,
+    this.note,
+    required this.categoryIndex,
+    required this.createdAt,
+    required this.synced,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || dependentId != null) {
+      map['dependent_id'] = Variable<String>(dependentId);
+    }
+    map['systolic'] = Variable<int>(systolic);
+    map['diastolic'] = Variable<int>(diastolic);
+    if (!nullToAbsent || pulse != null) {
+      map['pulse'] = Variable<int>(pulse);
+    }
+    if (!nullToAbsent || armIndex != null) {
+      map['arm_index'] = Variable<int>(armIndex);
+    }
+    if (!nullToAbsent || positionIndex != null) {
+      map['position_index'] = Variable<int>(positionIndex);
+    }
+    map['taken_at'] = Variable<DateTime>(takenAt);
+    if (!nullToAbsent || tagsJson != null) {
+      map['tags_json'] = Variable<String>(tagsJson);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['category_index'] = Variable<int>(categoryIndex);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['synced'] = Variable<bool>(synced);
+    return map;
+  }
+
+  BloodPressureReadingsCompanion toCompanion(bool nullToAbsent) {
+    return BloodPressureReadingsCompanion(
+      id: Value(id),
+      dependentId: dependentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dependentId),
+      systolic: Value(systolic),
+      diastolic: Value(diastolic),
+      pulse: pulse == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pulse),
+      armIndex: armIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(armIndex),
+      positionIndex: positionIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(positionIndex),
+      takenAt: Value(takenAt),
+      tagsJson: tagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tagsJson),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      categoryIndex: Value(categoryIndex),
+      createdAt: Value(createdAt),
+      synced: Value(synced),
+    );
+  }
+
+  factory BloodPressureReading.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BloodPressureReading(
+      id: serializer.fromJson<String>(json['id']),
+      dependentId: serializer.fromJson<String?>(json['dependentId']),
+      systolic: serializer.fromJson<int>(json['systolic']),
+      diastolic: serializer.fromJson<int>(json['diastolic']),
+      pulse: serializer.fromJson<int?>(json['pulse']),
+      armIndex: serializer.fromJson<int?>(json['armIndex']),
+      positionIndex: serializer.fromJson<int?>(json['positionIndex']),
+      takenAt: serializer.fromJson<DateTime>(json['takenAt']),
+      tagsJson: serializer.fromJson<String?>(json['tagsJson']),
+      note: serializer.fromJson<String?>(json['note']),
+      categoryIndex: serializer.fromJson<int>(json['categoryIndex']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      synced: serializer.fromJson<bool>(json['synced']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dependentId': serializer.toJson<String?>(dependentId),
+      'systolic': serializer.toJson<int>(systolic),
+      'diastolic': serializer.toJson<int>(diastolic),
+      'pulse': serializer.toJson<int?>(pulse),
+      'armIndex': serializer.toJson<int?>(armIndex),
+      'positionIndex': serializer.toJson<int?>(positionIndex),
+      'takenAt': serializer.toJson<DateTime>(takenAt),
+      'tagsJson': serializer.toJson<String?>(tagsJson),
+      'note': serializer.toJson<String?>(note),
+      'categoryIndex': serializer.toJson<int>(categoryIndex),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'synced': serializer.toJson<bool>(synced),
+    };
+  }
+
+  BloodPressureReading copyWith({
+    String? id,
+    Value<String?> dependentId = const Value.absent(),
+    int? systolic,
+    int? diastolic,
+    Value<int?> pulse = const Value.absent(),
+    Value<int?> armIndex = const Value.absent(),
+    Value<int?> positionIndex = const Value.absent(),
+    DateTime? takenAt,
+    Value<String?> tagsJson = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    int? categoryIndex,
+    DateTime? createdAt,
+    bool? synced,
+  }) => BloodPressureReading(
+    id: id ?? this.id,
+    dependentId: dependentId.present ? dependentId.value : this.dependentId,
+    systolic: systolic ?? this.systolic,
+    diastolic: diastolic ?? this.diastolic,
+    pulse: pulse.present ? pulse.value : this.pulse,
+    armIndex: armIndex.present ? armIndex.value : this.armIndex,
+    positionIndex: positionIndex.present
+        ? positionIndex.value
+        : this.positionIndex,
+    takenAt: takenAt ?? this.takenAt,
+    tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
+    note: note.present ? note.value : this.note,
+    categoryIndex: categoryIndex ?? this.categoryIndex,
+    createdAt: createdAt ?? this.createdAt,
+    synced: synced ?? this.synced,
+  );
+  BloodPressureReading copyWithCompanion(BloodPressureReadingsCompanion data) {
+    return BloodPressureReading(
+      id: data.id.present ? data.id.value : this.id,
+      dependentId: data.dependentId.present
+          ? data.dependentId.value
+          : this.dependentId,
+      systolic: data.systolic.present ? data.systolic.value : this.systolic,
+      diastolic: data.diastolic.present ? data.diastolic.value : this.diastolic,
+      pulse: data.pulse.present ? data.pulse.value : this.pulse,
+      armIndex: data.armIndex.present ? data.armIndex.value : this.armIndex,
+      positionIndex: data.positionIndex.present
+          ? data.positionIndex.value
+          : this.positionIndex,
+      takenAt: data.takenAt.present ? data.takenAt.value : this.takenAt,
+      tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
+      note: data.note.present ? data.note.value : this.note,
+      categoryIndex: data.categoryIndex.present
+          ? data.categoryIndex.value
+          : this.categoryIndex,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      synced: data.synced.present ? data.synced.value : this.synced,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BloodPressureReading(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('systolic: $systolic, ')
+          ..write('diastolic: $diastolic, ')
+          ..write('pulse: $pulse, ')
+          ..write('armIndex: $armIndex, ')
+          ..write('positionIndex: $positionIndex, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('categoryIndex: $categoryIndex, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    dependentId,
+    systolic,
+    diastolic,
+    pulse,
+    armIndex,
+    positionIndex,
+    takenAt,
+    tagsJson,
+    note,
+    categoryIndex,
+    createdAt,
+    synced,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BloodPressureReading &&
+          other.id == this.id &&
+          other.dependentId == this.dependentId &&
+          other.systolic == this.systolic &&
+          other.diastolic == this.diastolic &&
+          other.pulse == this.pulse &&
+          other.armIndex == this.armIndex &&
+          other.positionIndex == this.positionIndex &&
+          other.takenAt == this.takenAt &&
+          other.tagsJson == this.tagsJson &&
+          other.note == this.note &&
+          other.categoryIndex == this.categoryIndex &&
+          other.createdAt == this.createdAt &&
+          other.synced == this.synced);
+}
+
+class BloodPressureReadingsCompanion
+    extends UpdateCompanion<BloodPressureReading> {
+  final Value<String> id;
+  final Value<String?> dependentId;
+  final Value<int> systolic;
+  final Value<int> diastolic;
+  final Value<int?> pulse;
+  final Value<int?> armIndex;
+  final Value<int?> positionIndex;
+  final Value<DateTime> takenAt;
+  final Value<String?> tagsJson;
+  final Value<String?> note;
+  final Value<int> categoryIndex;
+  final Value<DateTime> createdAt;
+  final Value<bool> synced;
+  final Value<int> rowid;
+  const BloodPressureReadingsCompanion({
+    this.id = const Value.absent(),
+    this.dependentId = const Value.absent(),
+    this.systolic = const Value.absent(),
+    this.diastolic = const Value.absent(),
+    this.pulse = const Value.absent(),
+    this.armIndex = const Value.absent(),
+    this.positionIndex = const Value.absent(),
+    this.takenAt = const Value.absent(),
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.categoryIndex = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BloodPressureReadingsCompanion.insert({
+    required String id,
+    this.dependentId = const Value.absent(),
+    required int systolic,
+    required int diastolic,
+    this.pulse = const Value.absent(),
+    this.armIndex = const Value.absent(),
+    this.positionIndex = const Value.absent(),
+    required DateTime takenAt,
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.categoryIndex = const Value.absent(),
+    required DateTime createdAt,
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       systolic = Value(systolic),
+       diastolic = Value(diastolic),
+       takenAt = Value(takenAt),
+       createdAt = Value(createdAt);
+  static Insertable<BloodPressureReading> custom({
+    Expression<String>? id,
+    Expression<String>? dependentId,
+    Expression<int>? systolic,
+    Expression<int>? diastolic,
+    Expression<int>? pulse,
+    Expression<int>? armIndex,
+    Expression<int>? positionIndex,
+    Expression<DateTime>? takenAt,
+    Expression<String>? tagsJson,
+    Expression<String>? note,
+    Expression<int>? categoryIndex,
+    Expression<DateTime>? createdAt,
+    Expression<bool>? synced,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dependentId != null) 'dependent_id': dependentId,
+      if (systolic != null) 'systolic': systolic,
+      if (diastolic != null) 'diastolic': diastolic,
+      if (pulse != null) 'pulse': pulse,
+      if (armIndex != null) 'arm_index': armIndex,
+      if (positionIndex != null) 'position_index': positionIndex,
+      if (takenAt != null) 'taken_at': takenAt,
+      if (tagsJson != null) 'tags_json': tagsJson,
+      if (note != null) 'note': note,
+      if (categoryIndex != null) 'category_index': categoryIndex,
+      if (createdAt != null) 'created_at': createdAt,
+      if (synced != null) 'synced': synced,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BloodPressureReadingsCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? dependentId,
+    Value<int>? systolic,
+    Value<int>? diastolic,
+    Value<int?>? pulse,
+    Value<int?>? armIndex,
+    Value<int?>? positionIndex,
+    Value<DateTime>? takenAt,
+    Value<String?>? tagsJson,
+    Value<String?>? note,
+    Value<int>? categoryIndex,
+    Value<DateTime>? createdAt,
+    Value<bool>? synced,
+    Value<int>? rowid,
+  }) {
+    return BloodPressureReadingsCompanion(
+      id: id ?? this.id,
+      dependentId: dependentId ?? this.dependentId,
+      systolic: systolic ?? this.systolic,
+      diastolic: diastolic ?? this.diastolic,
+      pulse: pulse ?? this.pulse,
+      armIndex: armIndex ?? this.armIndex,
+      positionIndex: positionIndex ?? this.positionIndex,
+      takenAt: takenAt ?? this.takenAt,
+      tagsJson: tagsJson ?? this.tagsJson,
+      note: note ?? this.note,
+      categoryIndex: categoryIndex ?? this.categoryIndex,
+      createdAt: createdAt ?? this.createdAt,
+      synced: synced ?? this.synced,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dependentId.present) {
+      map['dependent_id'] = Variable<String>(dependentId.value);
+    }
+    if (systolic.present) {
+      map['systolic'] = Variable<int>(systolic.value);
+    }
+    if (diastolic.present) {
+      map['diastolic'] = Variable<int>(diastolic.value);
+    }
+    if (pulse.present) {
+      map['pulse'] = Variable<int>(pulse.value);
+    }
+    if (armIndex.present) {
+      map['arm_index'] = Variable<int>(armIndex.value);
+    }
+    if (positionIndex.present) {
+      map['position_index'] = Variable<int>(positionIndex.value);
+    }
+    if (takenAt.present) {
+      map['taken_at'] = Variable<DateTime>(takenAt.value);
+    }
+    if (tagsJson.present) {
+      map['tags_json'] = Variable<String>(tagsJson.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (categoryIndex.present) {
+      map['category_index'] = Variable<int>(categoryIndex.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BloodPressureReadingsCompanion(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('systolic: $systolic, ')
+          ..write('diastolic: $diastolic, ')
+          ..write('pulse: $pulse, ')
+          ..write('armIndex: $armIndex, ')
+          ..write('positionIndex: $positionIndex, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('categoryIndex: $categoryIndex, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('synced: $synced, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $GlucoseReadingsTable extends GlucoseReadings
+    with TableInfo<$GlucoseReadingsTable, GlucoseReading> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GlucoseReadingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dependentIdMeta = const VerificationMeta(
+    'dependentId',
+  );
+  @override
+  late final GeneratedColumn<String> dependentId = GeneratedColumn<String>(
+    'dependent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _valueMgdlMeta = const VerificationMeta(
+    'valueMgdl',
+  );
+  @override
+  late final GeneratedColumn<int> valueMgdl = GeneratedColumn<int>(
+    'value_mgdl',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contextIndexMeta = const VerificationMeta(
+    'contextIndex',
+  );
+  @override
+  late final GeneratedColumn<int> contextIndex = GeneratedColumn<int>(
+    'context_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(4),
+  );
+  static const VerificationMeta _takenAtMeta = const VerificationMeta(
+    'takenAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> takenAt = GeneratedColumn<DateTime>(
+    'taken_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _carbsMeta = const VerificationMeta('carbs');
+  @override
+  late final GeneratedColumn<int> carbs = GeneratedColumn<int>(
+    'carbs',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _insulinUnitsMeta = const VerificationMeta(
+    'insulinUnits',
+  );
+  @override
+  late final GeneratedColumn<double> insulinUnits = GeneratedColumn<double>(
+    'insulin_units',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _medNoteMeta = const VerificationMeta(
+    'medNote',
+  );
+  @override
+  late final GeneratedColumn<String> medNote = GeneratedColumn<String>(
+    'med_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
+    'tagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> tagsJson = GeneratedColumn<String>(
+    'tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _classIndexMeta = const VerificationMeta(
+    'classIndex',
+  );
+  @override
+  late final GeneratedColumn<int> classIndex = GeneratedColumn<int>(
+    'class_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(2),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dependentId,
+    valueMgdl,
+    contextIndex,
+    takenAt,
+    carbs,
+    insulinUnits,
+    medNote,
+    tagsJson,
+    note,
+    classIndex,
+    createdAt,
+    synced,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'glucose_readings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<GlucoseReading> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('dependent_id')) {
+      context.handle(
+        _dependentIdMeta,
+        dependentId.isAcceptableOrUnknown(
+          data['dependent_id']!,
+          _dependentIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('value_mgdl')) {
+      context.handle(
+        _valueMgdlMeta,
+        valueMgdl.isAcceptableOrUnknown(data['value_mgdl']!, _valueMgdlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMgdlMeta);
+    }
+    if (data.containsKey('context_index')) {
+      context.handle(
+        _contextIndexMeta,
+        contextIndex.isAcceptableOrUnknown(
+          data['context_index']!,
+          _contextIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('taken_at')) {
+      context.handle(
+        _takenAtMeta,
+        takenAt.isAcceptableOrUnknown(data['taken_at']!, _takenAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_takenAtMeta);
+    }
+    if (data.containsKey('carbs')) {
+      context.handle(
+        _carbsMeta,
+        carbs.isAcceptableOrUnknown(data['carbs']!, _carbsMeta),
+      );
+    }
+    if (data.containsKey('insulin_units')) {
+      context.handle(
+        _insulinUnitsMeta,
+        insulinUnits.isAcceptableOrUnknown(
+          data['insulin_units']!,
+          _insulinUnitsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('med_note')) {
+      context.handle(
+        _medNoteMeta,
+        medNote.isAcceptableOrUnknown(data['med_note']!, _medNoteMeta),
+      );
+    }
+    if (data.containsKey('tags_json')) {
+      context.handle(
+        _tagsJsonMeta,
+        tagsJson.isAcceptableOrUnknown(data['tags_json']!, _tagsJsonMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('class_index')) {
+      context.handle(
+        _classIndexMeta,
+        classIndex.isAcceptableOrUnknown(data['class_index']!, _classIndexMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  GlucoseReading map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return GlucoseReading(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dependentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dependent_id'],
+      ),
+      valueMgdl: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}value_mgdl'],
+      )!,
+      contextIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}context_index'],
+      )!,
+      takenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}taken_at'],
+      )!,
+      carbs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}carbs'],
+      ),
+      insulinUnits: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}insulin_units'],
+      ),
+      medNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}med_note'],
+      ),
+      tagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags_json'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      classIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}class_index'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+    );
+  }
+
+  @override
+  $GlucoseReadingsTable createAlias(String alias) {
+    return $GlucoseReadingsTable(attachedDatabase, alias);
+  }
+}
+
+class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
+  final String id;
+  final String? dependentId;
+  final int valueMgdl;
+  final int contextIndex;
+  final DateTime takenAt;
+  final int? carbs;
+  final double? insulinUnits;
+  final String? medNote;
+  final String? tagsJson;
+  final String? note;
+  final int classIndex;
+  final DateTime createdAt;
+  final bool synced;
+  const GlucoseReading({
+    required this.id,
+    this.dependentId,
+    required this.valueMgdl,
+    required this.contextIndex,
+    required this.takenAt,
+    this.carbs,
+    this.insulinUnits,
+    this.medNote,
+    this.tagsJson,
+    this.note,
+    required this.classIndex,
+    required this.createdAt,
+    required this.synced,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || dependentId != null) {
+      map['dependent_id'] = Variable<String>(dependentId);
+    }
+    map['value_mgdl'] = Variable<int>(valueMgdl);
+    map['context_index'] = Variable<int>(contextIndex);
+    map['taken_at'] = Variable<DateTime>(takenAt);
+    if (!nullToAbsent || carbs != null) {
+      map['carbs'] = Variable<int>(carbs);
+    }
+    if (!nullToAbsent || insulinUnits != null) {
+      map['insulin_units'] = Variable<double>(insulinUnits);
+    }
+    if (!nullToAbsent || medNote != null) {
+      map['med_note'] = Variable<String>(medNote);
+    }
+    if (!nullToAbsent || tagsJson != null) {
+      map['tags_json'] = Variable<String>(tagsJson);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['class_index'] = Variable<int>(classIndex);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['synced'] = Variable<bool>(synced);
+    return map;
+  }
+
+  GlucoseReadingsCompanion toCompanion(bool nullToAbsent) {
+    return GlucoseReadingsCompanion(
+      id: Value(id),
+      dependentId: dependentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dependentId),
+      valueMgdl: Value(valueMgdl),
+      contextIndex: Value(contextIndex),
+      takenAt: Value(takenAt),
+      carbs: carbs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(carbs),
+      insulinUnits: insulinUnits == null && nullToAbsent
+          ? const Value.absent()
+          : Value(insulinUnits),
+      medNote: medNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(medNote),
+      tagsJson: tagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tagsJson),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      classIndex: Value(classIndex),
+      createdAt: Value(createdAt),
+      synced: Value(synced),
+    );
+  }
+
+  factory GlucoseReading.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return GlucoseReading(
+      id: serializer.fromJson<String>(json['id']),
+      dependentId: serializer.fromJson<String?>(json['dependentId']),
+      valueMgdl: serializer.fromJson<int>(json['valueMgdl']),
+      contextIndex: serializer.fromJson<int>(json['contextIndex']),
+      takenAt: serializer.fromJson<DateTime>(json['takenAt']),
+      carbs: serializer.fromJson<int?>(json['carbs']),
+      insulinUnits: serializer.fromJson<double?>(json['insulinUnits']),
+      medNote: serializer.fromJson<String?>(json['medNote']),
+      tagsJson: serializer.fromJson<String?>(json['tagsJson']),
+      note: serializer.fromJson<String?>(json['note']),
+      classIndex: serializer.fromJson<int>(json['classIndex']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      synced: serializer.fromJson<bool>(json['synced']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dependentId': serializer.toJson<String?>(dependentId),
+      'valueMgdl': serializer.toJson<int>(valueMgdl),
+      'contextIndex': serializer.toJson<int>(contextIndex),
+      'takenAt': serializer.toJson<DateTime>(takenAt),
+      'carbs': serializer.toJson<int?>(carbs),
+      'insulinUnits': serializer.toJson<double?>(insulinUnits),
+      'medNote': serializer.toJson<String?>(medNote),
+      'tagsJson': serializer.toJson<String?>(tagsJson),
+      'note': serializer.toJson<String?>(note),
+      'classIndex': serializer.toJson<int>(classIndex),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'synced': serializer.toJson<bool>(synced),
+    };
+  }
+
+  GlucoseReading copyWith({
+    String? id,
+    Value<String?> dependentId = const Value.absent(),
+    int? valueMgdl,
+    int? contextIndex,
+    DateTime? takenAt,
+    Value<int?> carbs = const Value.absent(),
+    Value<double?> insulinUnits = const Value.absent(),
+    Value<String?> medNote = const Value.absent(),
+    Value<String?> tagsJson = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    int? classIndex,
+    DateTime? createdAt,
+    bool? synced,
+  }) => GlucoseReading(
+    id: id ?? this.id,
+    dependentId: dependentId.present ? dependentId.value : this.dependentId,
+    valueMgdl: valueMgdl ?? this.valueMgdl,
+    contextIndex: contextIndex ?? this.contextIndex,
+    takenAt: takenAt ?? this.takenAt,
+    carbs: carbs.present ? carbs.value : this.carbs,
+    insulinUnits: insulinUnits.present ? insulinUnits.value : this.insulinUnits,
+    medNote: medNote.present ? medNote.value : this.medNote,
+    tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
+    note: note.present ? note.value : this.note,
+    classIndex: classIndex ?? this.classIndex,
+    createdAt: createdAt ?? this.createdAt,
+    synced: synced ?? this.synced,
+  );
+  GlucoseReading copyWithCompanion(GlucoseReadingsCompanion data) {
+    return GlucoseReading(
+      id: data.id.present ? data.id.value : this.id,
+      dependentId: data.dependentId.present
+          ? data.dependentId.value
+          : this.dependentId,
+      valueMgdl: data.valueMgdl.present ? data.valueMgdl.value : this.valueMgdl,
+      contextIndex: data.contextIndex.present
+          ? data.contextIndex.value
+          : this.contextIndex,
+      takenAt: data.takenAt.present ? data.takenAt.value : this.takenAt,
+      carbs: data.carbs.present ? data.carbs.value : this.carbs,
+      insulinUnits: data.insulinUnits.present
+          ? data.insulinUnits.value
+          : this.insulinUnits,
+      medNote: data.medNote.present ? data.medNote.value : this.medNote,
+      tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
+      note: data.note.present ? data.note.value : this.note,
+      classIndex: data.classIndex.present
+          ? data.classIndex.value
+          : this.classIndex,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      synced: data.synced.present ? data.synced.value : this.synced,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GlucoseReading(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('valueMgdl: $valueMgdl, ')
+          ..write('contextIndex: $contextIndex, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('carbs: $carbs, ')
+          ..write('insulinUnits: $insulinUnits, ')
+          ..write('medNote: $medNote, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('classIndex: $classIndex, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    dependentId,
+    valueMgdl,
+    contextIndex,
+    takenAt,
+    carbs,
+    insulinUnits,
+    medNote,
+    tagsJson,
+    note,
+    classIndex,
+    createdAt,
+    synced,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GlucoseReading &&
+          other.id == this.id &&
+          other.dependentId == this.dependentId &&
+          other.valueMgdl == this.valueMgdl &&
+          other.contextIndex == this.contextIndex &&
+          other.takenAt == this.takenAt &&
+          other.carbs == this.carbs &&
+          other.insulinUnits == this.insulinUnits &&
+          other.medNote == this.medNote &&
+          other.tagsJson == this.tagsJson &&
+          other.note == this.note &&
+          other.classIndex == this.classIndex &&
+          other.createdAt == this.createdAt &&
+          other.synced == this.synced);
+}
+
+class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
+  final Value<String> id;
+  final Value<String?> dependentId;
+  final Value<int> valueMgdl;
+  final Value<int> contextIndex;
+  final Value<DateTime> takenAt;
+  final Value<int?> carbs;
+  final Value<double?> insulinUnits;
+  final Value<String?> medNote;
+  final Value<String?> tagsJson;
+  final Value<String?> note;
+  final Value<int> classIndex;
+  final Value<DateTime> createdAt;
+  final Value<bool> synced;
+  final Value<int> rowid;
+  const GlucoseReadingsCompanion({
+    this.id = const Value.absent(),
+    this.dependentId = const Value.absent(),
+    this.valueMgdl = const Value.absent(),
+    this.contextIndex = const Value.absent(),
+    this.takenAt = const Value.absent(),
+    this.carbs = const Value.absent(),
+    this.insulinUnits = const Value.absent(),
+    this.medNote = const Value.absent(),
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.classIndex = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GlucoseReadingsCompanion.insert({
+    required String id,
+    this.dependentId = const Value.absent(),
+    required int valueMgdl,
+    this.contextIndex = const Value.absent(),
+    required DateTime takenAt,
+    this.carbs = const Value.absent(),
+    this.insulinUnits = const Value.absent(),
+    this.medNote = const Value.absent(),
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.classIndex = const Value.absent(),
+    required DateTime createdAt,
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       valueMgdl = Value(valueMgdl),
+       takenAt = Value(takenAt),
+       createdAt = Value(createdAt);
+  static Insertable<GlucoseReading> custom({
+    Expression<String>? id,
+    Expression<String>? dependentId,
+    Expression<int>? valueMgdl,
+    Expression<int>? contextIndex,
+    Expression<DateTime>? takenAt,
+    Expression<int>? carbs,
+    Expression<double>? insulinUnits,
+    Expression<String>? medNote,
+    Expression<String>? tagsJson,
+    Expression<String>? note,
+    Expression<int>? classIndex,
+    Expression<DateTime>? createdAt,
+    Expression<bool>? synced,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dependentId != null) 'dependent_id': dependentId,
+      if (valueMgdl != null) 'value_mgdl': valueMgdl,
+      if (contextIndex != null) 'context_index': contextIndex,
+      if (takenAt != null) 'taken_at': takenAt,
+      if (carbs != null) 'carbs': carbs,
+      if (insulinUnits != null) 'insulin_units': insulinUnits,
+      if (medNote != null) 'med_note': medNote,
+      if (tagsJson != null) 'tags_json': tagsJson,
+      if (note != null) 'note': note,
+      if (classIndex != null) 'class_index': classIndex,
+      if (createdAt != null) 'created_at': createdAt,
+      if (synced != null) 'synced': synced,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GlucoseReadingsCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? dependentId,
+    Value<int>? valueMgdl,
+    Value<int>? contextIndex,
+    Value<DateTime>? takenAt,
+    Value<int?>? carbs,
+    Value<double?>? insulinUnits,
+    Value<String?>? medNote,
+    Value<String?>? tagsJson,
+    Value<String?>? note,
+    Value<int>? classIndex,
+    Value<DateTime>? createdAt,
+    Value<bool>? synced,
+    Value<int>? rowid,
+  }) {
+    return GlucoseReadingsCompanion(
+      id: id ?? this.id,
+      dependentId: dependentId ?? this.dependentId,
+      valueMgdl: valueMgdl ?? this.valueMgdl,
+      contextIndex: contextIndex ?? this.contextIndex,
+      takenAt: takenAt ?? this.takenAt,
+      carbs: carbs ?? this.carbs,
+      insulinUnits: insulinUnits ?? this.insulinUnits,
+      medNote: medNote ?? this.medNote,
+      tagsJson: tagsJson ?? this.tagsJson,
+      note: note ?? this.note,
+      classIndex: classIndex ?? this.classIndex,
+      createdAt: createdAt ?? this.createdAt,
+      synced: synced ?? this.synced,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dependentId.present) {
+      map['dependent_id'] = Variable<String>(dependentId.value);
+    }
+    if (valueMgdl.present) {
+      map['value_mgdl'] = Variable<int>(valueMgdl.value);
+    }
+    if (contextIndex.present) {
+      map['context_index'] = Variable<int>(contextIndex.value);
+    }
+    if (takenAt.present) {
+      map['taken_at'] = Variable<DateTime>(takenAt.value);
+    }
+    if (carbs.present) {
+      map['carbs'] = Variable<int>(carbs.value);
+    }
+    if (insulinUnits.present) {
+      map['insulin_units'] = Variable<double>(insulinUnits.value);
+    }
+    if (medNote.present) {
+      map['med_note'] = Variable<String>(medNote.value);
+    }
+    if (tagsJson.present) {
+      map['tags_json'] = Variable<String>(tagsJson.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (classIndex.present) {
+      map['class_index'] = Variable<int>(classIndex.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GlucoseReadingsCompanion(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('valueMgdl: $valueMgdl, ')
+          ..write('contextIndex: $contextIndex, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('carbs: $carbs, ')
+          ..write('insulinUnits: $insulinUnits, ')
+          ..write('medNote: $medNote, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('classIndex: $classIndex, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('synced: $synced, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -14958,10 +16490,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RemindersTable reminders = $RemindersTable(this);
   late final $ReminderCategoriesTable reminderCategories =
       $ReminderCategoriesTable(this);
+  late final $BloodPressureReadingsTable bloodPressureReadings =
+      $BloodPressureReadingsTable(this);
+  late final $GlucoseReadingsTable glucoseReadings = $GlucoseReadingsTable(
+    this,
+  );
   late final CoreDao coreDao = CoreDao(this as AppDatabase);
   late final MedicationDao medicationDao = MedicationDao(this as AppDatabase);
   late final WaterDao waterDao = WaterDao(this as AppDatabase);
   late final RemindersDao remindersDao = RemindersDao(this as AppDatabase);
+  late final VitalsDao vitalsDao = VitalsDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -14986,6 +16524,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     waterAchievements,
     reminders,
     reminderCategories,
+    bloodPressureReadings,
+    glucoseReadings,
   ];
 }
 
@@ -22016,6 +23556,749 @@ typedef $$ReminderCategoriesTableProcessedTableManager =
       ReminderCategory,
       PrefetchHooks Function()
     >;
+typedef $$BloodPressureReadingsTableCreateCompanionBuilder =
+    BloodPressureReadingsCompanion Function({
+      required String id,
+      Value<String?> dependentId,
+      required int systolic,
+      required int diastolic,
+      Value<int?> pulse,
+      Value<int?> armIndex,
+      Value<int?> positionIndex,
+      required DateTime takenAt,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      Value<int> categoryIndex,
+      required DateTime createdAt,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+typedef $$BloodPressureReadingsTableUpdateCompanionBuilder =
+    BloodPressureReadingsCompanion Function({
+      Value<String> id,
+      Value<String?> dependentId,
+      Value<int> systolic,
+      Value<int> diastolic,
+      Value<int?> pulse,
+      Value<int?> armIndex,
+      Value<int?> positionIndex,
+      Value<DateTime> takenAt,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      Value<int> categoryIndex,
+      Value<DateTime> createdAt,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+
+class $$BloodPressureReadingsTableFilterComposer
+    extends Composer<_$AppDatabase, $BloodPressureReadingsTable> {
+  $$BloodPressureReadingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get systolic => $composableBuilder(
+    column: $table.systolic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get diastolic => $composableBuilder(
+    column: $table.diastolic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pulse => $composableBuilder(
+    column: $table.pulse,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get armIndex => $composableBuilder(
+    column: $table.armIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get positionIndex => $composableBuilder(
+    column: $table.positionIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get categoryIndex => $composableBuilder(
+    column: $table.categoryIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BloodPressureReadingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BloodPressureReadingsTable> {
+  $$BloodPressureReadingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get systolic => $composableBuilder(
+    column: $table.systolic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get diastolic => $composableBuilder(
+    column: $table.diastolic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pulse => $composableBuilder(
+    column: $table.pulse,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get armIndex => $composableBuilder(
+    column: $table.armIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get positionIndex => $composableBuilder(
+    column: $table.positionIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get categoryIndex => $composableBuilder(
+    column: $table.categoryIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BloodPressureReadingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BloodPressureReadingsTable> {
+  $$BloodPressureReadingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get systolic =>
+      $composableBuilder(column: $table.systolic, builder: (column) => column);
+
+  GeneratedColumn<int> get diastolic =>
+      $composableBuilder(column: $table.diastolic, builder: (column) => column);
+
+  GeneratedColumn<int> get pulse =>
+      $composableBuilder(column: $table.pulse, builder: (column) => column);
+
+  GeneratedColumn<int> get armIndex =>
+      $composableBuilder(column: $table.armIndex, builder: (column) => column);
+
+  GeneratedColumn<int> get positionIndex => $composableBuilder(
+    column: $table.positionIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get takenAt =>
+      $composableBuilder(column: $table.takenAt, builder: (column) => column);
+
+  GeneratedColumn<String> get tagsJson =>
+      $composableBuilder(column: $table.tagsJson, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<int> get categoryIndex => $composableBuilder(
+    column: $table.categoryIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+}
+
+class $$BloodPressureReadingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BloodPressureReadingsTable,
+          BloodPressureReading,
+          $$BloodPressureReadingsTableFilterComposer,
+          $$BloodPressureReadingsTableOrderingComposer,
+          $$BloodPressureReadingsTableAnnotationComposer,
+          $$BloodPressureReadingsTableCreateCompanionBuilder,
+          $$BloodPressureReadingsTableUpdateCompanionBuilder,
+          (
+            BloodPressureReading,
+            BaseReferences<
+              _$AppDatabase,
+              $BloodPressureReadingsTable,
+              BloodPressureReading
+            >,
+          ),
+          BloodPressureReading,
+          PrefetchHooks Function()
+        > {
+  $$BloodPressureReadingsTableTableManager(
+    _$AppDatabase db,
+    $BloodPressureReadingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BloodPressureReadingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$BloodPressureReadingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$BloodPressureReadingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> dependentId = const Value.absent(),
+                Value<int> systolic = const Value.absent(),
+                Value<int> diastolic = const Value.absent(),
+                Value<int?> pulse = const Value.absent(),
+                Value<int?> armIndex = const Value.absent(),
+                Value<int?> positionIndex = const Value.absent(),
+                Value<DateTime> takenAt = const Value.absent(),
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<int> categoryIndex = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BloodPressureReadingsCompanion(
+                id: id,
+                dependentId: dependentId,
+                systolic: systolic,
+                diastolic: diastolic,
+                pulse: pulse,
+                armIndex: armIndex,
+                positionIndex: positionIndex,
+                takenAt: takenAt,
+                tagsJson: tagsJson,
+                note: note,
+                categoryIndex: categoryIndex,
+                createdAt: createdAt,
+                synced: synced,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> dependentId = const Value.absent(),
+                required int systolic,
+                required int diastolic,
+                Value<int?> pulse = const Value.absent(),
+                Value<int?> armIndex = const Value.absent(),
+                Value<int?> positionIndex = const Value.absent(),
+                required DateTime takenAt,
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<int> categoryIndex = const Value.absent(),
+                required DateTime createdAt,
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BloodPressureReadingsCompanion.insert(
+                id: id,
+                dependentId: dependentId,
+                systolic: systolic,
+                diastolic: diastolic,
+                pulse: pulse,
+                armIndex: armIndex,
+                positionIndex: positionIndex,
+                takenAt: takenAt,
+                tagsJson: tagsJson,
+                note: note,
+                categoryIndex: categoryIndex,
+                createdAt: createdAt,
+                synced: synced,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BloodPressureReadingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BloodPressureReadingsTable,
+      BloodPressureReading,
+      $$BloodPressureReadingsTableFilterComposer,
+      $$BloodPressureReadingsTableOrderingComposer,
+      $$BloodPressureReadingsTableAnnotationComposer,
+      $$BloodPressureReadingsTableCreateCompanionBuilder,
+      $$BloodPressureReadingsTableUpdateCompanionBuilder,
+      (
+        BloodPressureReading,
+        BaseReferences<
+          _$AppDatabase,
+          $BloodPressureReadingsTable,
+          BloodPressureReading
+        >,
+      ),
+      BloodPressureReading,
+      PrefetchHooks Function()
+    >;
+typedef $$GlucoseReadingsTableCreateCompanionBuilder =
+    GlucoseReadingsCompanion Function({
+      required String id,
+      Value<String?> dependentId,
+      required int valueMgdl,
+      Value<int> contextIndex,
+      required DateTime takenAt,
+      Value<int?> carbs,
+      Value<double?> insulinUnits,
+      Value<String?> medNote,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      Value<int> classIndex,
+      required DateTime createdAt,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+typedef $$GlucoseReadingsTableUpdateCompanionBuilder =
+    GlucoseReadingsCompanion Function({
+      Value<String> id,
+      Value<String?> dependentId,
+      Value<int> valueMgdl,
+      Value<int> contextIndex,
+      Value<DateTime> takenAt,
+      Value<int?> carbs,
+      Value<double?> insulinUnits,
+      Value<String?> medNote,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      Value<int> classIndex,
+      Value<DateTime> createdAt,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+
+class $$GlucoseReadingsTableFilterComposer
+    extends Composer<_$AppDatabase, $GlucoseReadingsTable> {
+  $$GlucoseReadingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get valueMgdl => $composableBuilder(
+    column: $table.valueMgdl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get contextIndex => $composableBuilder(
+    column: $table.contextIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get carbs => $composableBuilder(
+    column: $table.carbs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get insulinUnits => $composableBuilder(
+    column: $table.insulinUnits,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get medNote => $composableBuilder(
+    column: $table.medNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get classIndex => $composableBuilder(
+    column: $table.classIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$GlucoseReadingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $GlucoseReadingsTable> {
+  $$GlucoseReadingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get valueMgdl => $composableBuilder(
+    column: $table.valueMgdl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get contextIndex => $composableBuilder(
+    column: $table.contextIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get carbs => $composableBuilder(
+    column: $table.carbs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get insulinUnits => $composableBuilder(
+    column: $table.insulinUnits,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get medNote => $composableBuilder(
+    column: $table.medNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get classIndex => $composableBuilder(
+    column: $table.classIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$GlucoseReadingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $GlucoseReadingsTable> {
+  $$GlucoseReadingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get valueMgdl =>
+      $composableBuilder(column: $table.valueMgdl, builder: (column) => column);
+
+  GeneratedColumn<int> get contextIndex => $composableBuilder(
+    column: $table.contextIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get takenAt =>
+      $composableBuilder(column: $table.takenAt, builder: (column) => column);
+
+  GeneratedColumn<int> get carbs =>
+      $composableBuilder(column: $table.carbs, builder: (column) => column);
+
+  GeneratedColumn<double> get insulinUnits => $composableBuilder(
+    column: $table.insulinUnits,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get medNote =>
+      $composableBuilder(column: $table.medNote, builder: (column) => column);
+
+  GeneratedColumn<String> get tagsJson =>
+      $composableBuilder(column: $table.tagsJson, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<int> get classIndex => $composableBuilder(
+    column: $table.classIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+}
+
+class $$GlucoseReadingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $GlucoseReadingsTable,
+          GlucoseReading,
+          $$GlucoseReadingsTableFilterComposer,
+          $$GlucoseReadingsTableOrderingComposer,
+          $$GlucoseReadingsTableAnnotationComposer,
+          $$GlucoseReadingsTableCreateCompanionBuilder,
+          $$GlucoseReadingsTableUpdateCompanionBuilder,
+          (
+            GlucoseReading,
+            BaseReferences<
+              _$AppDatabase,
+              $GlucoseReadingsTable,
+              GlucoseReading
+            >,
+          ),
+          GlucoseReading,
+          PrefetchHooks Function()
+        > {
+  $$GlucoseReadingsTableTableManager(
+    _$AppDatabase db,
+    $GlucoseReadingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$GlucoseReadingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$GlucoseReadingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$GlucoseReadingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> dependentId = const Value.absent(),
+                Value<int> valueMgdl = const Value.absent(),
+                Value<int> contextIndex = const Value.absent(),
+                Value<DateTime> takenAt = const Value.absent(),
+                Value<int?> carbs = const Value.absent(),
+                Value<double?> insulinUnits = const Value.absent(),
+                Value<String?> medNote = const Value.absent(),
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<int> classIndex = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GlucoseReadingsCompanion(
+                id: id,
+                dependentId: dependentId,
+                valueMgdl: valueMgdl,
+                contextIndex: contextIndex,
+                takenAt: takenAt,
+                carbs: carbs,
+                insulinUnits: insulinUnits,
+                medNote: medNote,
+                tagsJson: tagsJson,
+                note: note,
+                classIndex: classIndex,
+                createdAt: createdAt,
+                synced: synced,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> dependentId = const Value.absent(),
+                required int valueMgdl,
+                Value<int> contextIndex = const Value.absent(),
+                required DateTime takenAt,
+                Value<int?> carbs = const Value.absent(),
+                Value<double?> insulinUnits = const Value.absent(),
+                Value<String?> medNote = const Value.absent(),
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<int> classIndex = const Value.absent(),
+                required DateTime createdAt,
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => GlucoseReadingsCompanion.insert(
+                id: id,
+                dependentId: dependentId,
+                valueMgdl: valueMgdl,
+                contextIndex: contextIndex,
+                takenAt: takenAt,
+                carbs: carbs,
+                insulinUnits: insulinUnits,
+                medNote: medNote,
+                tagsJson: tagsJson,
+                note: note,
+                classIndex: classIndex,
+                createdAt: createdAt,
+                synced: synced,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$GlucoseReadingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $GlucoseReadingsTable,
+      GlucoseReading,
+      $$GlucoseReadingsTableFilterComposer,
+      $$GlucoseReadingsTableOrderingComposer,
+      $$GlucoseReadingsTableAnnotationComposer,
+      $$GlucoseReadingsTableCreateCompanionBuilder,
+      $$GlucoseReadingsTableUpdateCompanionBuilder,
+      (
+        GlucoseReading,
+        BaseReferences<_$AppDatabase, $GlucoseReadingsTable, GlucoseReading>,
+      ),
+      GlucoseReading,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -22058,4 +24341,8 @@ class $AppDatabaseManager {
       $$RemindersTableTableManager(_db, _db.reminders);
   $$ReminderCategoriesTableTableManager get reminderCategories =>
       $$ReminderCategoriesTableTableManager(_db, _db.reminderCategories);
+  $$BloodPressureReadingsTableTableManager get bloodPressureReadings =>
+      $$BloodPressureReadingsTableTableManager(_db, _db.bloodPressureReadings);
+  $$GlucoseReadingsTableTableManager get glucoseReadings =>
+      $$GlucoseReadingsTableTableManager(_db, _db.glucoseReadings);
 }
