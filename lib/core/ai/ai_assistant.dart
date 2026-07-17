@@ -4,6 +4,8 @@ import 'llm_engine.dart';
 import 'cloud_engine.dart';
 import 'rule_based_engine.dart';
 import 'safety_guard.dart';
+import 'ai_merge.dart';
+import 'on_device_llm_engine.dart';
 
 /// Single entry point for all AI in the app. Features call intent methods here
 /// and never touch a specific provider.
@@ -20,8 +22,10 @@ class AiAssistant {
   final RuleBasedEngine _rule = const RuleBasedEngine();
   final CloudEngine _cloud = CloudEngine();
 
-  /// Slot for the optional on-device LLM engine (wired in Phase B).
-  LlmEngine? onDeviceEngine;
+  /// The on-device LLM tier. Defaults to a build-safe, inert engine
+  /// (isAvailable == false) so the app stays on the rule engine until a model
+  /// runtime is attached (see [OnDeviceLlmEngine]); replaceable for tests.
+  LlmEngine? onDeviceEngine = OnDeviceLlmEngine();
 
   // ---- Policy (persisted via app preferences) --------------------------------
   static const _kConsent = 'aiCloudConsent';
@@ -76,6 +80,9 @@ class AiAssistant {
 
   Future<ParsedReminder?> parseReminder(String text) async {
     if (text.trim().isEmpty) return null;
+    // Deterministic baseline first — always valid, and the safety net the LLM
+    // output is merged onto (never replaced wholesale).
+    final base = _rule.parseReminder(text);
     final llm = _activeLlm();
     if (llm != null) {
       final json = await llm.completeJson(
@@ -87,24 +94,16 @@ class AiAssistant {
         user: _redact(text, llm),
       );
       if (json != null) {
-        final title = (json['title'] ?? '').toString().trim();
-        if (title.isNotEmpty) {
-          final cat = (json['category'] ?? '').toString().trim();
-          return ParsedReminder(
-            title: title,
-            time: DateTime.tryParse((json['datetimeIso'] ?? '').toString()),
-            repeat: (json['repeat'] ?? 'none').toString(),
-            priority: (json['priority'] ?? 'medium').toString(),
-            categoryHint: cat.isEmpty ? null : cat,
-          );
-        }
+        // Validate + overlay onto the rule baseline (schema-enforced).
+        return AiMerge.mergeReminder(base: base, llm: json);
       }
     }
-    return _rule.parseReminder(text); // guaranteed
+    return base; // guaranteed
   }
 
   Future<Map<String, dynamic>?> parseMedicine(String text) async {
     if (text.trim().isEmpty) return null;
+    final base = _rule.parseMedicine(text);
     final llm = _activeLlm();
     if (llm != null) {
       final json = await llm.completeJson(
@@ -116,11 +115,12 @@ class AiAssistant {
             'times (array of HH:mm strings if implied).',
         user: _redact(text, llm),
       );
-      if (json != null && (json['name']?.toString().trim().isNotEmpty ?? false)) {
-        return json;
+      if (json != null) {
+        // Validate + merge onto the rule baseline (schema-enforced, safe).
+        return AiMerge.mergeMedicine(base: base, llm: json);
       }
     }
-    return _rule.parseMedicine(text);
+    return base;
   }
 
   Future<String?> hydrationTip({
