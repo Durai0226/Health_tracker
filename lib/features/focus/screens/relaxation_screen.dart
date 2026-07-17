@@ -653,22 +653,34 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
       child: Scaffold(
         backgroundColor: category.color.withOpacity(0.05),
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
-                _buildLockedHeader(category),
-                const Spacer(),
-                _buildTimerDisplay(category),
-                const Spacer(),
-                _buildMusicInfo(music, category),
-                const SizedBox(height: 40),
-                _buildControlButtons(category),
-                const SizedBox(height: 20),
-                _buildAbandonButton(),
-                const SizedBox(height: 40),
-              ],
+          // Scroll-safe: on tall screens the Spacers center the content as
+          // designed; on shorter screens the content scrolls instead of
+          // overflowing (fixes the "BOTTOM OVERFLOWED" render error).
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 40),
+                        _buildLockedHeader(category),
+                        const Spacer(),
+                        _buildTimerDisplay(category),
+                        const Spacer(),
+                        _buildMusicInfo(music, category),
+                        const SizedBox(height: 40),
+                        _buildControlButtons(category),
+                        const SizedBox(height: 20),
+                        _buildAbandonButton(),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),

@@ -38,6 +38,12 @@ class LlmService {
   /// production must go through the managed proxy.
   bool get isConfigured =>
       usesProxy || (_apiKey.trim().isNotEmpty && kDebugMode);
+
+  /// Whether a key is stored on device, regardless of build mode. Lets the
+  /// Settings UI always offer "Remove key" even in a release build (where the
+  /// key is inert), instead of gating removal on [isConfigured] (always false
+  /// without a proxy → the key could never be removed).
+  bool get hasApiKey => _apiKey.trim().isNotEmpty;
   String get model => _model;
   String get baseUrl => _baseUrl;
 
@@ -63,9 +69,14 @@ class LlmService {
 
   Future<void> clearApiKey() async {
     _apiKey = '';
+    // Rethrow on failure: if the delete silently fails, init() would resurrect
+    // the "removed" key on next launch — the caller must know it didn't stick.
     try {
       await SecureStorageHelper.clearLlmApiKey();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('LlmService.clearApiKey: $e');
+      rethrow;
+    }
   }
 
   /// Point at a different OpenAI-compatible provider (e.g. for production).
@@ -168,7 +179,10 @@ class LlmService {
               'stream': false,
             }),
           )
-          .timeout(const Duration(seconds: 30));
+          // Wait longer than the proxy's own upstream budget (45s) so a
+          // slow-but-successful proxied call isn't abandoned after it already
+          // consumed the user's quota. Direct dev calls keep the short timeout.
+          .timeout(Duration(seconds: usesProxy ? 65 : 30));
 
       if (resp.statusCode != 200) {
         debugPrint('LlmService HTTP ${resp.statusCode}: ${resp.body}');

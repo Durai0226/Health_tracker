@@ -17,6 +17,12 @@ class MedicationReminderService {
   /// Base ID offset for medication notifications to avoid conflicts
   static const int _medicineIdOffset = 100000;
 
+  /// Max dose slots scheduled/cancelled per medicine. "Every X hours" fans out
+  /// to up to ~16 slots/day (interval 1h from 08:00), so this bound must cover
+  /// the busiest schedule — and cancel/hasActive MUST iterate to the same bound
+  /// or updates leave orphaned notifications firing forever.
+  static const int _maxSlotsPerMedicine = 24;
+
   /// SharedPreferences key for the master medication-reminders toggle.
   static const String masterEnabledKey = 'medication_reminders_master_enabled';
 
@@ -55,11 +61,29 @@ class MedicationReminderService {
       return scheduledIds;
     }
 
-    debugPrint('📅 Scheduling ${medicine.schedule.times.length} reminders for ${medicine.name}');
+    // Build the concrete dose slots. "Every X hours" fans a single anchor time
+    // out across the whole day (e.g. 08:00 / 14:00 / 20:00); every other
+    // frequency uses the stored times verbatim. Each slot becomes its OWN
+    // daily-repeating notification, so ALL doses fire — not just the first.
+    final List<ScheduledTime> slots;
+    final String frequency;
+    if (medicine.schedule.frequencyType == FrequencyType.everyXHours) {
+      slots = medicine.schedule
+          .getScheduledTimesForDate(DateTime.now())
+          .map((d) => ScheduledTime(hour: d.hour, minute: d.minute))
+          .toList();
+      frequency = 'daily'; // each fanned-out slot simply repeats every day
+    } else {
+      slots = medicine.schedule.times;
+      frequency = _getFrequencyString(medicine.schedule);
+    }
 
-    // Schedule notification for each time slot
-    for (int i = 0; i < medicine.schedule.times.length; i++) {
-      final time = medicine.schedule.times[i];
+    debugPrint('📅 Scheduling ${slots.length} reminders for ${medicine.name}');
+
+    // Schedule notification for each dose slot (bounded so a tight interval
+    // can't blow past the cancel bound and orphan notifications).
+    for (int i = 0; i < slots.length && i < _maxSlotsPerMedicine; i++) {
+      final time = slots[i];
       final notificationId = _generateNotificationId(medicine.id, i);
 
       try {
@@ -68,7 +92,7 @@ class MedicationReminderService {
           medicineName: _buildReminderTitle(medicine, time),
           hour: time.hour,
           minute: time.minute,
-          frequency: _getFrequencyString(medicine.schedule),
+          frequency: frequency,
         );
 
         if (success) {
@@ -89,9 +113,9 @@ class MedicationReminderService {
   Future<void> cancelReminders(EnhancedMedicine medicine) async {
     debugPrint('🗑️ Canceling all reminders for ${medicine.name}');
 
-    // Cancel notification for each possible time slot
-    // We cancel up to 10 possible time slots per medicine
-    for (int i = 0; i < 10; i++) {
+    // Cancel notification for each possible time slot (must cover the same
+    // bound as scheduling, else fanned-out "every X hours" slots are orphaned).
+    for (int i = 0; i < _maxSlotsPerMedicine; i++) {
       final notificationId = _generateNotificationId(medicine.id, i);
       try {
         await _notificationService.cancelNotification(notificationId);
@@ -105,7 +129,7 @@ class MedicationReminderService {
   Future<void> cancelRemindersById(String medicineId) async {
     debugPrint('🗑️ Canceling reminders for medicine ID: $medicineId');
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < _maxSlotsPerMedicine; i++) {
       final notificationId = _generateNotificationId(medicineId, i);
       try {
         await _notificationService.cancelNotification(notificationId);
@@ -179,8 +203,8 @@ class MedicationReminderService {
   Future<bool> hasActiveReminders(String medicineId) async {
     // Check if any notification IDs exist for this medicine
     final pendingNotifications = await _notificationService.getPendingNotifications();
-    
-    for (int i = 0; i < 10; i++) {
+
+    for (int i = 0; i < _maxSlotsPerMedicine; i++) {
       final notificationId = _generateNotificationId(medicineId, i);
       if (pendingNotifications.any((n) => n.id == notificationId)) {
         return true;

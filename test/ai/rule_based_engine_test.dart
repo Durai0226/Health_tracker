@@ -40,6 +40,47 @@ void main() {
       final r = engine.parseReminder('urgent: pay rent');
       expect(r.priority, 'high');
     });
+
+    test('multiple weekdays -> custom repeat + all days, no title leak', () {
+      final r = engine.parseReminder('gym every monday and thursday');
+      expect(r.repeat, 'custom');
+      expect(r.customDays, [1, 4]);
+      // Neither weekday token nor the "and" connector should leak into the title.
+      expect(r.title.toLowerCase(), isNot(contains('monday')));
+      expect(r.title.toLowerCase(), isNot(contains('thursday')));
+      expect(r.title.toLowerCase(), contains('gym'));
+    });
+
+    test('Mon–Fri set -> weekdays (not a single weekly)', () {
+      final r = engine.parseReminder(
+          'standup every monday tuesday wednesday thursday friday');
+      expect(r.repeat, 'weekdays');
+    });
+
+    test('bare afternoon hour with no am/pm biases to PM ("call at 5" -> 17)',
+        () {
+      final r = engine.parseReminder('call at 5');
+      expect(r.time, isNotNull);
+      expect(r.time!.hour, 17);
+      expect(r.title.toLowerCase(), isNot(contains('5')));
+    });
+
+    test('out-of-range minutes are rejected, not shifted ("at 8:99")', () {
+      final r = engine.parseReminder('meeting at 8:99');
+      expect(r.time, isNotNull);
+      expect(r.time!.minute, 0);
+    });
+
+    test('a one-off "today at <time>" is never scheduled in the past', () {
+      final r = engine.parseReminder('take pill today at 8am');
+      expect(r.time, isNotNull);
+      // Whatever the wall-clock, the result must be now-or-future (rolls to
+      // tomorrow if 8am already passed) — never a dead past reminder.
+      expect(
+        r.time!.isBefore(DateTime.now().subtract(const Duration(minutes: 1))),
+        isFalse,
+      );
+    });
   });
 
   group('parseMedicine', () {

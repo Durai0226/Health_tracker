@@ -16,6 +16,7 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { sanitizeBody } = require('./sanitize');
 
 admin.initializeApp();
 
@@ -24,41 +25,9 @@ const AI_PROVIDER_KEY = defineSecret('AI_PROVIDER_KEY');
 // OpenAI-compatible chat-completions endpoint. Change for a different provider.
 const PROVIDER_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
-// Server pins the model + caps size so a client can't request an expensive
-// model / huge generation (count-only quotas don't bound per-request cost).
-const ALLOWED_MODELS = ['meta/llama-3.1-8b-instruct'];
-const DEFAULT_MODEL = ALLOWED_MODELS[0];
-const MAX_OUTPUT_TOKENS = 1024;
-const MAX_INPUT_CHARS = 8000; // total across messages
-
 // Cost guardrails (tune to your budget).
 const DAILY_LIMIT = 50; // requests / user / day
 const MONTHLY_LIMIT = 800; // requests / user / month
-
-// Build a safe upstream body from the (untrusted) client body.
-function sanitizeBody(raw) {
-  const b = raw && typeof raw === 'object' ? raw : {};
-  const model = ALLOWED_MODELS.includes(b.model) ? b.model : DEFAULT_MODEL;
-  let messages = Array.isArray(b.messages) ? b.messages : [];
-  // Cap total content size.
-  let total = 0;
-  messages = messages
-    .filter((m) => m && typeof m.content === 'string')
-    .map((m) => {
-      const room = Math.max(0, MAX_INPUT_CHARS - total);
-      const content = m.content.slice(0, room);
-      total += content.length;
-      return { role: m.role === 'system' ? 'system' : 'user', content };
-    })
-    .filter((m) => m.content.length > 0);
-  const maxTokens = Math.min(
-    Number.isFinite(b.max_tokens) ? b.max_tokens : MAX_OUTPUT_TOKENS,
-    MAX_OUTPUT_TOKENS,
-  );
-  const temperature =
-    typeof b.temperature === 'number' ? Math.max(0, Math.min(1, b.temperature)) : 0.3;
-  return { model, messages, max_tokens: maxTokens, temperature, stream: false };
-}
 
 // Give back a reserved quota slot when the upstream call didn't succeed.
 async function refundQuota(ref, day, month) {
@@ -107,6 +76,15 @@ exports.aiProxy = onRequest(
       const day = now.toISOString().slice(0, 10); // YYYY-MM-DD
       const month = day.slice(0, 7); // YYYY-MM
       const ref = admin.firestore().collection('ai_usage').doc(uid);
+
+      // Sanitize once and reject empty requests up front — a guaranteed-400 body
+      // must never reserve a quota slot or hit the upstream (that would be an
+      // infinitely-refundable loop; see the refund policy below).
+      const body = sanitizeBody(req.body);
+      if (body.messages.length === 0) {
+        return res.status(400).json({ error: 'no messages' });
+      }
+
       const allowed = await admin.firestore().runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         const d = snap.exists ? snap.data() : {};
@@ -129,6 +107,11 @@ exports.aiProxy = onRequest(
       if (!allowed) return res.status(429).json({ error: 'quota exceeded' });
 
       // --- Proxy to the provider (key stays server-side; body sanitized) ---
+      // Abort a slow upstream well before the 60s function timeout so the
+      // instance frees up and the reserved quota slot is refunded (a function
+      // timeout would leave it silently consumed).
+      const ctrl = new AbortController();
+      const abortTimer = setTimeout(() => ctrl.abort(), 45000);
       let upstream;
       try {
         upstream = await fetch(PROVIDER_URL, {
@@ -137,15 +120,31 @@ exports.aiProxy = onRequest(
             'Content-Type': 'application/json',
             Authorization: `Bearer ${AI_PROVIDER_KEY.value()}`,
           },
-          body: JSON.stringify(sanitizeBody(req.body)),
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
         });
       } catch (e) {
-        await refundQuota(ref, day, month); // don't burn the user's budget
-        throw e;
+        // Network error or abort → transient; refund and surface a gateway error.
+        await refundQuota(ref, day, month);
+        const timedOut = e && e.name === 'AbortError';
+        return res
+          .status(timedOut ? 504 : 502)
+          .json({ error: timedOut ? 'upstream timeout' : 'upstream unreachable' });
+      } finally {
+        clearTimeout(abortTimer);
       }
-      const text = await upstream.text();
-      if (!upstream.ok) {
-        await refundQuota(ref, day, month); // provider error → refund the slot
+      let text;
+      try {
+        text = await upstream.text();
+      } catch (e) {
+        await refundQuota(ref, day, month); // body read failed → transient
+        return res.status(502).json({ error: 'upstream read failed' });
+      }
+      // Refund ONLY transient/provider-side failures. A client-caused 4xx (bad
+      // request, content policy) MUST consume quota, else it's an infinitely
+      // refundable loop that defeats the cap.
+      if (upstream.status >= 500 || upstream.status === 429) {
+        await refundQuota(ref, day, month);
       }
       return res
         .status(upstream.status)

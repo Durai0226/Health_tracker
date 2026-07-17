@@ -44,6 +44,10 @@ class _AiInsightCardState extends State<AiInsightCard> {
   String? _text;
   bool _loading = false;
   bool _failed = false;
+  // Bumped on every (re)load; a resolving loader whose epoch is stale is
+  // discarded so a slow old load can't overwrite fresh data or cache-poison
+  // under a newer cacheKey.
+  int _epoch = 0;
 
   @override
   void initState() {
@@ -64,6 +68,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
   void _init() {
     final key = widget.cacheKey;
     if (key != null && _cache.containsKey(key)) {
+      _epoch++; // supersede any in-flight load
       setState(() {
         _text = _cache[key];
         _loading = false;
@@ -75,14 +80,17 @@ class _AiInsightCardState extends State<AiInsightCard> {
   }
 
   Future<void> _load() async {
+    final epoch = ++_epoch;
+    final key = widget.cacheKey; // capture: cache under the key we loaded for
     setState(() {
       _loading = true;
       _failed = false;
     });
     final t = await widget.loader();
-    if (!mounted) return;
+    // Discard if the widget is gone or a newer load/update superseded this one.
+    if (!mounted || epoch != _epoch) return;
     final ok = t != null && t.trim().isNotEmpty;
-    if (ok && widget.cacheKey != null) _cache[widget.cacheKey!] = t;
+    if (ok && key != null) _cache[key] = t;
     setState(() {
       _text = ok ? t : null;
       _failed = !ok;

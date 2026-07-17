@@ -574,17 +574,33 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       _dosageUnit = form.unit;
     }
 
-    final amount = data['dosageAmount'];
-    if (amount is num) {
-      _dosageController.text =
-          amount == amount.roundToDouble() ? '${amount.toInt()}' : '$amount';
-    } else if (amount is String && double.tryParse(amount.trim()) != null) {
-      _dosageController.text = amount.trim();
-    }
+    // The parser returns a concentration like "500 mg" as dosageAmount+dosageUnit.
+    // For a COUNT form (tablet/capsule/lozenge, taken as "1 pill"), that value is
+    // the STRENGTH, not the dose count — route it to the strength field and keep
+    // the dose count at its default. For liquid/injection/drops, ml/units really
+    // are the dose amount, so keep the existing behavior.
+    final rawAmt = data['dosageAmount'];
+    final num? amt = rawAmt is num
+        ? rawAmt
+        : (rawAmt is String ? double.tryParse(rawAmt.trim()) : null);
+    final unitRaw = data['dosageUnit'];
+    final unitStr =
+        unitRaw is String && unitRaw.trim().isNotEmpty ? unitRaw.trim() : null;
+    String fmt(num n) => n == n.roundToDouble() ? '${n.toInt()}' : '$n';
+    const strengthUnits = {'mg', 'mcg', 'g', 'iu', 'unit', 'units'};
+    final isCountForm = _selectedForm == DosageForm.tablet ||
+        _selectedForm == DosageForm.capsule ||
+        _selectedForm == DosageForm.lozenge;
 
-    final unit = data['dosageUnit'];
-    if (unit is String && unit.trim().isNotEmpty) {
-      _dosageUnit = unit.trim();
+    if (amt != null &&
+        isCountForm &&
+        unitStr != null &&
+        strengthUnits.contains(unitStr.toLowerCase())) {
+      _strengthController.text = '${fmt(amt)}$unitStr'; // e.g. "500mg"
+      // leave _dosageController ('1') and _dosageUnit (form.unit) as-is
+    } else {
+      if (amt != null) _dosageController.text = fmt(amt);
+      if (unitStr != null) _dosageUnit = unitStr;
     }
 
     final freq = _parseFrequency(data['frequency']);

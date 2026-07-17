@@ -16,9 +16,10 @@ class RuleBasedEngine {
     final lower = text.toLowerCase();
     final now = DateTime.now();
 
-    final repeat = _repeat(lower);
+    var repeat = _repeat(lower);
     final priority = _priority(lower);
     final category = _category(lower);
+    List<int>? customDays;
 
     // Relative "in N hours/minutes" takes precedence.
     final rel = RegExp(r'\bin\s+(\d+)\s*(hours?|hrs?|minutes?|mins?)\b')
@@ -47,9 +48,13 @@ class RuleBasedEngine {
     if (at != null) {
       hour = int.parse(at.group(1)!);
       minute = at.group(2) != null ? int.parse(at.group(2)!) : 0;
+      if (minute > 59) minute = 0; // reject typos like "8:99" instead of shifting
       final ap = at.group(3);
       if (ap == 'pm' && hour < 12) hour += 12;
       if (ap == 'am' && hour == 12) hour = 0;
+      // Bare hour with no am/pm: 1–6 almost always means the afternoon/evening
+      // (nobody sets a 3-o'clock reminder for 3 AM), so bias those to PM.
+      if (ap == null && hour >= 1 && hour <= 6) hour += 12;
       if (hour > 23) hour = null; // guard nonsense
     } else if (lower.contains('morning')) {
       hour = 8;
@@ -72,10 +77,26 @@ class RuleBasedEngine {
     if (lower.contains('tomorrow')) {
       date = date.add(const Duration(days: 1));
     } else if (!explicitToday) {
-      final wd = _weekday(lower);
-      if (wd != null) {
-        date = _nextWeekday(date, wd);
+      final wdays = _weekdaysAll(lower);
+      if (wdays.length == 1) {
+        date = _nextWeekday(date, wdays.first);
         weekdayNamed = true;
+      } else if (wdays.length > 1) {
+        // Multiple named days ("mon and thu") describe a multi-day schedule —
+        // never collapse them to a single weekly reminder (drops the others).
+        final set = wdays.toSet();
+        if (set.length == 5 && set.containsAll(const {1, 2, 3, 4, 5})) {
+          repeat = 'weekdays';
+        } else if (set.length == 2 && set.containsAll(const {6, 7})) {
+          repeat = 'weekends';
+        } else {
+          repeat = 'custom';
+          customDays = wdays;
+        }
+        // Anchor at the nearest upcoming named day.
+        date = wdays
+            .map((d) => _nextWeekday(date, d))
+            .reduce((a, b) => a.isBefore(b) ? a : b);
       }
     }
     final isToday = date.year == now.year &&
@@ -85,14 +106,13 @@ class RuleBasedEngine {
     DateTime when;
     if (hour != null) {
       when = DateTime(date.year, date.month, date.day, hour, minute);
-      // If the chosen instant is already past for a one-off, roll forward:
-      // a named weekday jumps a full week; otherwise (a today-ish time) +1 day.
+      // If the chosen instant is already past for a one-off, roll forward so we
+      // never schedule a dead (past) reminder: a named weekday jumps a full
+      // week; every other case (incl. an explicit "today"/"tonight" whose time
+      // already passed) rolls to the next day at the same time. weekdayNamed is
+      // only ever true when !explicitToday, so this covers all cases correctly.
       if (when.isBefore(now) && repeat == 'none') {
-        if (weekdayNamed) {
-          when = when.add(const Duration(days: 7));
-        } else if (!explicitToday) {
-          when = when.add(const Duration(days: 1));
-        }
+        when = when.add(Duration(days: weekdayNamed ? 7 : 1));
       }
     } else if (isToday) {
       // No time given, and the date is today → next hour (guard 23→next day).
@@ -110,6 +130,7 @@ class RuleBasedEngine {
       repeat: repeat,
       priority: priority,
       categoryHint: category,
+      customDays: customDays,
     );
   }
 
@@ -150,7 +171,8 @@ class RuleBasedEngine {
     return null;
   }
 
-  int? _weekday(String lower) {
+  /// All distinct named weekdays in [lower], sorted (1=Mon … 7=Sun).
+  List<int> _weekdaysAll(String lower) {
     const days = {
       'monday': 1,
       'tuesday': 2,
@@ -160,10 +182,11 @@ class RuleBasedEngine {
       'saturday': 6,
       'sunday': 7,
     };
+    final found = <int>{};
     for (final e in days.entries) {
-      if (lower.contains(e.key)) return e.value;
+      if (lower.contains(e.key)) found.add(e.value);
     }
-    return null;
+    return found.toList()..sort();
   }
 
   DateTime _nextWeekday(DateTime from, int weekday) {
@@ -189,6 +212,12 @@ class RuleBasedEngine {
           caseSensitive: false),
       RegExp(r'\bon\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b',
           caseSensitive: false),
+      // Any remaining bare weekday, swallowing a leading "and"/"&" connector so
+      // "monday and thursday" doesn't leave "and thursday" in the title.
+      RegExp(
+          r'\b(and\s+|&\s*)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b',
+          caseSensitive: false),
+      RegExp(r'\b(weekdays?|weekends?)\b', caseSensitive: false),
       RegExp(r'\b(daily|everyday|every day|each day|weekly)\b',
           caseSensitive: false),
       RegExp(r'\b(today|tomorrow|tonight)\b', caseSensitive: false),

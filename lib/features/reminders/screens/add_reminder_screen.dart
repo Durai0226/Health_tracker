@@ -25,6 +25,7 @@ class AddReminderScreen extends StatefulWidget {
   final RepeatType? initialRepeat;
   final String? initialCategoryId;
   final ReminderPriority? initialPriority;
+  final List<int>? initialCustomDays;
 
   const AddReminderScreen({
     super.key,
@@ -35,6 +36,7 @@ class AddReminderScreen extends StatefulWidget {
     this.initialRepeat,
     this.initialCategoryId,
     this.initialPriority,
+    this.initialCustomDays,
   });
 
   @override
@@ -105,8 +107,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     // If creating new reminder, default time to next hour
     if (widget.reminder == null) {
       final now = DateTime.now();
-      _selectedDate = now;
-      _selectedTime = TimeOfDay(hour: now.hour + 1, minute: 0);
+      // Roll into the next day when created after 23:00 (hour 24 is invalid and
+      // asserts in TimeOfDay).
+      final next = now.add(const Duration(hours: 1));
+      _selectedDate = DateTime(next.year, next.month, next.day, next.hour);
+      _selectedTime = TimeOfDay(hour: next.hour, minute: 0);
 
       // Apply AI "Smart Add" pre-fill values (new reminders only).
       if (widget.initialTitle != null) {
@@ -124,6 +129,10 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       }
       if (widget.initialPriority != null) {
         _priority = widget.initialPriority!;
+      }
+      if (widget.initialCustomDays != null &&
+          widget.initialCustomDays!.isNotEmpty) {
+        _customDays = List<int>.from(widget.initialCustomDays!);
       }
     }
 

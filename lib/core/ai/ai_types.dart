@@ -6,7 +6,7 @@ class ParsedReminder {
   final String title;
   final DateTime? time;
 
-  /// One of: none | daily | weekly | weekdays | weekends
+  /// One of: none | daily | weekly | weekdays | weekends | custom
   final String repeat;
 
   /// One of: low | medium | high
@@ -15,12 +15,17 @@ class ParsedReminder {
   /// A best-effort category name hint (e.g. 'Health', 'Work') or null.
   final String? categoryHint;
 
+  /// When [repeat] == 'custom', the specific weekdays (1=Mon … 7=Sun) the user
+  /// named (e.g. "every monday and thursday" → [1, 4]). Null otherwise.
+  final List<int>? customDays;
+
   const ParsedReminder({
     required this.title,
     this.time,
     this.repeat = 'none',
     this.priority = 'medium',
     this.categoryHint,
+    this.customDays,
   });
 }
 

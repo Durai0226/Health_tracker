@@ -467,7 +467,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (mounted) setState(() {});
             },
           ),
-          if (LlmService().isConfigured) ...[
+          // Gate on hasApiKey (a key is stored) rather than isConfigured, which
+          // is always false in release without a proxy — so the key would be
+          // un-removable there.
+          if (LlmService().hasApiKey) ...[
             const SizedBox(height: AppSpacing.sm),
             AppButton(
               label: 'Remove key',
@@ -475,7 +478,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               accent: ext.error,
               fullWidth: true,
               onPressed: () async {
-                await LlmService().clearApiKey();
+                try {
+                  await LlmService().clearApiKey();
+                } catch (_) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(
+                          content: Text("Couldn't remove the key. Try again.")),
+                    );
+                  }
+                  return;
+                }
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (mounted) setState(() {});
               },

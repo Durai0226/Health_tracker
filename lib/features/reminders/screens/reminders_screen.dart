@@ -175,6 +175,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       initialRepeat: result.repeat,
                       initialCategoryId: result.categoryId,
                       initialPriority: result.priority,
+                      initialCustomDays: result.customDays,
                     ),
                   ),
                 );
@@ -231,6 +232,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
       repeat: repeat,
       priority: priority,
       categoryId: categoryId,
+      customDays: parsed.customDays,
     );
   }
 
@@ -244,6 +246,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
         return RepeatType.weekdays;
       case 'weekends':
         return RepeatType.weekends;
+      case 'custom':
+        return RepeatType.custom;
       case 'none':
         return RepeatType.none;
       default:
@@ -774,6 +778,7 @@ class _SmartReminder {
   final RepeatType? repeat;
   final ReminderPriority? priority;
   final String? categoryId;
+  final List<int>? customDays;
 
   _SmartReminder({
     required this.title,
@@ -781,5 +786,6 @@ class _SmartReminder {
     this.repeat,
     this.priority,
     this.categoryId,
+    this.customDays,
   });
 }
