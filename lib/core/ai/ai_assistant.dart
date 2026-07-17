@@ -6,6 +6,7 @@ import 'rule_based_engine.dart';
 import 'safety_guard.dart';
 import 'ai_merge.dart';
 import 'on_device_llm_engine.dart';
+import 'openfda_grounding.dart';
 
 /// Single entry point for all AI in the app. Features call intent methods here
 /// and never touch a specific provider.
@@ -227,6 +228,18 @@ class AiAssistant {
     // prompt-injected: a red-flag question short-circuits to an emergency card.
     final emergency = SafetyGuard.emergencyResponse(question, locale: locale);
     if (emergency != null) return emergency;
+
+    // Tier 3: if the user opted into network use, prefer the AUTHORITATIVE FDA
+    // label over any generative answer for medical facts (only the drug name
+    // leaves the device). Falls through to on-device engines on any failure.
+    if (cloudConsent) {
+      final grounded = await OpenFdaGrounding.fetch(name, question);
+      if (grounded != null) {
+        final body =
+            '**${grounded.section}** (${grounded.source}):\n\n${grounded.text}';
+        return SafetyGuard.ensureDisclaimer(body);
+      }
+    }
 
     final llm = _activeLlm();
     if (llm != null) {
