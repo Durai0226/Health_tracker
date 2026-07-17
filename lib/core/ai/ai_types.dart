@@ -41,6 +41,18 @@ enum AiEngineKind { ruleBased, onDevice, cloud }
 /// User preference for which engine to prefer.
 enum AiEnginePreference { auto, localOnly, onDevice, cloud }
 
+/// A natural-language logging command parsed from free text ("log 150/95",
+/// "drank 500ml", "took my pill"). [data] holds the extracted fields.
+enum CommandKind { logBloodPressure, logGlucose, logWater, takeMedicine, none }
+
+class ParsedCommand {
+  final CommandKind kind;
+  final Map<String, dynamic> data;
+  const ParsedCommand(this.kind, [this.data = const {}]);
+
+  bool get isNone => kind == CommandKind.none;
+}
+
 AiEnginePreference aiEnginePreferenceFromString(String? s) {
   switch (s) {
     case 'localOnly':

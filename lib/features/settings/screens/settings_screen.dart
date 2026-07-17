@@ -280,6 +280,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onTap: _manageAiKey,
                       ),
                       AppListTile(
+                        icon: Icons.tune_rounded,
+                        iconColor: ext.mark(ext.focus),
+                        title: 'AI engine',
+                        subtitle:
+                            'Which engine to prefer · ${_enginePrefLabel()}',
+                        onTap: _pickEnginePreference,
+                      ),
+                      AppListTile(
                         icon: Icons.cloud_outlined,
                         iconColor: ext.mark(ext.info),
                         title: 'Use cloud AI (optional)',
@@ -423,6 +431,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case AiEngineKind.ruleBased:
         return 'On-device';
     }
+  }
+
+  String _enginePrefLabel() {
+    switch (AiAssistant().preference) {
+      case AiEnginePreference.auto:
+        return 'Automatic';
+      case AiEnginePreference.localOnly:
+        return 'On-device only';
+      case AiEnginePreference.onDevice:
+        return 'On-device AI';
+      case AiEnginePreference.cloud:
+        return 'Prefer cloud';
+    }
+  }
+
+  /// Let the user choose which AI engine to prefer (wires the previously-unused
+  /// AiAssistant.setPreference). "On-device only" guarantees nothing leaves the
+  /// phone even if cloud consent is on.
+  Future<void> _pickEnginePreference() async {
+    final ext = AppColorsExt.of(context);
+    const options = [
+      (AiEnginePreference.auto, 'Automatic', 'Best available: on-device first, cloud only with consent'),
+      (AiEnginePreference.localOnly, 'On-device only', 'Never use the cloud — fully private, works offline'),
+      (AiEnginePreference.cloud, 'Prefer cloud', 'Use the cloud model for richer answers (needs consent)'),
+    ];
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: ext.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        final current = AiAssistant().preference;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: AppSpacing.md),
+              Text('AI engine', style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: AppSpacing.sm),
+              for (final (pref, title, sub) in options)
+                AppListTile(
+                  icon: current == pref
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  iconColor: ext.mark(ext.focus),
+                  title: title,
+                  subtitle: sub,
+                  onTap: () async {
+                    await AiAssistant().setPreference(pref);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) setState(() {});
+                  },
+                ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   /// Manage the AI (LLM) API key — paste/remove, stored on-device only.

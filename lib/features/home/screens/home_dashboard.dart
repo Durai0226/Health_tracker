@@ -14,6 +14,7 @@ import '../../reminders/models/reminder_model.dart';
 import '../../reminders/screens/add_reminder_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../insights/screens/insights_hub_screen.dart';
+import '../../insights/screens/proactive_nudge.dart';
 
 /// The unified landing screen — one calm "today" snapshot across every feature.
 /// The only greeting in the app.
@@ -126,6 +127,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   AppSpacing.gutter, AppSpacing.xs, AppSpacing.gutter, 120),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  const ProactiveNudge(),
                   _buildContextLine(ext),
                   _buildQuickActions(ext),
                   const SizedBox(height: AppSpacing.xl),

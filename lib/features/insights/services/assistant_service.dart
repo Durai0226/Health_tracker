@@ -1,3 +1,5 @@
+import '../../../core/ai/ai_types.dart';
+import '../../../core/ai/rule_based_engine.dart';
 import '../../../core/ai/safety_guard.dart';
 import '../../../core/ai/vitals_analyzer.dart';
 import '../../../core/ai/vitals_pattern_detector.dart';
@@ -40,6 +42,10 @@ class AssistantService {
     final emergency = SafetyGuard.emergencyResponse(question);
     if (emergency != null) return AssistantReply(emergency, isEmergency: true);
 
+    // Natural-language logging command? Recognize + guide to save (no silent write).
+    final cmd = const RuleBasedEngine().parseCommand(question);
+    if (!cmd.isNone) return _commandReply(cmd);
+
     final q = question.toLowerCase();
     if (_has(q, ['adherence', 'dose', 'missed', 'medication', 'my meds', 'pills'])) {
       return _medicine();
@@ -54,6 +60,32 @@ class AssistantService {
   }
 
   static bool _has(String q, List<String> keys) => keys.any(q.contains);
+
+  static AssistantReply _commandReply(ParsedCommand cmd) {
+    switch (cmd.kind) {
+      case CommandKind.logBloodPressure:
+        final s = cmd.data['systolic'] as int;
+        final d = cmd.data['diastolic'] as int;
+        final cat = VitalsAnalyzer.bpLabel(VitalsAnalyzer.classifyBp(s, d));
+        return AssistantReply(
+            'That reads as $s/$d mmHg ($cat). Open Blood Pressure to save it.',
+            followups: ['Is my blood pressure trending up?']);
+      case CommandKind.logGlucose:
+        final v = cmd.data['mgdl'] as int;
+        return AssistantReply('Noted $v mg/dL. Open Blood Sugar to save it.',
+            followups: ['Is my blood sugar okay?']);
+      case CommandKind.logWater:
+        final ml = cmd.data['ml'] as int;
+        return AssistantReply('Noted ${ml}ml of water. Open Water to log it.',
+            followups: ['Am I on track with water today?']);
+      case CommandKind.takeMedicine:
+        return const AssistantReply(
+            'Nice — open Medicine to mark your dose as taken.',
+            followups: ["What's my medication adherence?"]);
+      case CommandKind.none:
+        return _help();
+    }
+  }
 
   static Future<AssistantReply> _medicine() async {
     try {

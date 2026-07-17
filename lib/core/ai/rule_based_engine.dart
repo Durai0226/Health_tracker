@@ -10,6 +10,59 @@ class RuleBasedEngine {
   const RuleBasedEngine();
 
   // ---------------------------------------------------------------------------
+  // Natural-language logging commands ("log 150/95", "drank 500ml", "took pill")
+  // ---------------------------------------------------------------------------
+  ParsedCommand parseCommand(String input) {
+    final q = input.toLowerCase().trim();
+
+    // Blood pressure: "150/95", "150 over 95", optionally with bp/pressure words.
+    final bp = RegExp(r'\b(\d{2,3})\s*(?:/|over)\s*(\d{2,3})\b').firstMatch(q);
+    if (bp != null) {
+      final sys = int.parse(bp.group(1)!);
+      final dia = int.parse(bp.group(2)!);
+      if (sys > dia && sys <= 300 && dia >= 20) {
+        return ParsedCommand(
+            CommandKind.logBloodPressure, {'systolic': sys, 'diastolic': dia});
+      }
+    }
+
+    // Water: "drank 500ml", "log 500 ml water", "water 500".
+    if (RegExp(r'\b(water|drank|drink|hydrate)\b').hasMatch(q)) {
+      final byUnit = RegExp(r'\b(\d{2,4})\s*ml\b').firstMatch(q);
+      final byWord =
+          RegExp(r'\b(?:water|drank|drink|hydrate)\D{0,6}(\d{2,4})\b').firstMatch(q);
+      final v = byUnit != null
+          ? int.tryParse(byUnit.group(1)!)
+          : (byWord != null ? int.tryParse(byWord.group(1)!) : null);
+      if (v != null && v >= 10 && v <= 5000) {
+        return ParsedCommand(CommandKind.logWater, {'ml': v});
+      }
+    }
+
+    // Glucose: "sugar 120", "glucose 6.5", "blood sugar 140".
+    final glMatch =
+        RegExp(r'\b(?:glucose|sugar|bg)\D{0,6}(\d{1,3}(?:\.\d)?)\b').firstMatch(q);
+    if (glMatch != null) {
+      final raw = double.tryParse(glMatch.group(1)!);
+      if (raw != null) {
+        // Small values are almost certainly mmol/L → convert to canonical mg/dL.
+        final mgdl = raw < 30 ? (raw * 18.0182).round() : raw.round();
+        if (mgdl >= 10 && mgdl <= 900) {
+          return ParsedCommand(CommandKind.logGlucose, {'mgdl': mgdl});
+        }
+      }
+    }
+
+    // Medicine: "took my pill", "took my meds", "log medicine".
+    if (RegExp(r'\b(took|take|taken|log)\b.*\b(pill|meds?|medicine|dose|tablet)\b')
+        .hasMatch(q)) {
+      return const ParsedCommand(CommandKind.takeMedicine);
+    }
+
+    return const ParsedCommand(CommandKind.none);
+  }
+
+  // ---------------------------------------------------------------------------
   // Reminders — natural-language parsing
   // ---------------------------------------------------------------------------
   ParsedReminder parseReminder(String input) {

@@ -219,6 +219,68 @@ class SafetyDisclaimerBar extends StatelessWidget {
   }
 }
 
+/// A dismissible proactive nudge banner (frequency-capped by the caller). Shows
+/// the single most important insight with a "Why this?" and a dismiss.
+class ProactiveNudgeBanner extends StatelessWidget {
+  final Insight insight;
+  final VoidCallback onDismiss;
+  final VoidCallback? onTap;
+  const ProactiveNudgeBanner(
+      {super.key, required this.insight, required this.onDismiss, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final accent = InsightVisuals.accent(context, insight.feature);
+    final sev = InsightVisuals.severityColor(ext, insight.severity);
+    return AppCard(
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: accent.container, borderRadius: AppRadius.brSm),
+            child: Icon(InsightVisuals.icon(insight.feature), size: 18, color: accent.onContainer),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(
+                    child: Text(insight.title,
+                        style: tt.titleSmall?.copyWith(
+                            color: ext.textPrimary, fontWeight: FontWeight.w700)),
+                  ),
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: sev, shape: BoxShape.circle)),
+                ]),
+                const SizedBox(height: 2),
+                Text(insight.detail,
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary, height: 1.35)),
+                const SizedBox(height: 4),
+                Row(children: [
+                  WhyThisChip(why: insight.why),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: onDismiss,
+                    style: TextButton.styleFrom(
+                        foregroundColor: ext.textTertiary,
+                        visualDensity: VisualDensity.compact),
+                    child: const Text('Dismiss'),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The structured deterministic insight card: feature icon + severity color +
 /// engine badge, headline + metric + detail, and a "Why this?" affordance with
 /// an optional action. The glanceable "one big thing" surface.
