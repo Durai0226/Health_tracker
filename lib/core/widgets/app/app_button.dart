@@ -221,6 +221,10 @@ class AppFab extends StatelessWidget {
         backgroundColor: bg,
         foregroundColor: fg,
         elevation: 2,
+        // Disable the default shared hero tag: multiple AppFab screens are kept
+        // alive in the shell's IndexedStack, so a shared tag throws "multiple
+        // heroes share the same tag" on route pushes. We don't need FAB flights.
+        heroTag: null,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
         child: Icon(icon),
       );
@@ -230,6 +234,7 @@ class AppFab extends StatelessWidget {
       backgroundColor: bg,
       foregroundColor: fg,
       elevation: 2,
+      heroTag: null,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
       icon: Icon(icon),
       label: Text(label!,

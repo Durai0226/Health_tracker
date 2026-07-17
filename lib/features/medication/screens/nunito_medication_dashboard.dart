@@ -841,14 +841,19 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: Text(
-              label,
-              // Single line + ellipsis so a long label never breaks mid-word
-              // ("Doctor"/"s") in the narrow half-width card.
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: tt.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700, color: ext.textPrimary),
+            // scaleDown keeps the FULL label on one line in the narrow half-width
+            // card — short labels stay full size, long ones ("Blood Pressure")
+            // shrink just enough to fit rather than truncating to "Blood Pre…".
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: tt.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700, color: ext.textPrimary),
+              ),
             ),
           ),
           Icon(Icons.chevron_right_rounded, color: ext.textTertiary, size: 18),
