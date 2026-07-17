@@ -19,6 +19,11 @@ class ParsedReminder {
   /// named (e.g. "every monday and thursday" → [1, 4]). Null otherwise.
   final List<int>? customDays;
 
+  /// Parsed session/event length in minutes ("for 30 minutes", "25 min focus"),
+  /// or null when no duration was stated. Feeds the Focus feature's session
+  /// length; harmless for plain reminders.
+  final int? durationMinutes;
+
   const ParsedReminder({
     required this.title,
     this.time,
@@ -26,6 +31,7 @@ class ParsedReminder {
     this.priority = 'medium',
     this.categoryHint,
     this.customDays,
+    this.durationMinutes,
   });
 }
 

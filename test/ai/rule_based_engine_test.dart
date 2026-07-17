@@ -81,6 +81,57 @@ void main() {
         isFalse,
       );
     });
+
+    test('relative offset "in 3 days" schedules ~3 days out', () {
+      final r = engine.parseReminder('call the clinic in 3 days');
+      expect(r.time, isNotNull);
+      final hrs = r.time!.difference(DateTime.now()).inHours;
+      expect(hrs, inInclusiveRange(71, 73));
+      expect(r.title.toLowerCase(), isNot(contains('in 3 days')));
+    });
+
+    test('relative offset "in 2 weeks" schedules ~14 days out', () {
+      final r = engine.parseReminder('pay rent in 2 weeks');
+      expect(r.time, isNotNull);
+      final days = r.time!.difference(DateTime.now()).inDays;
+      expect(days, inInclusiveRange(13, 14));
+    });
+
+    test('relative offset "in 1 month" schedules ~a month out', () {
+      final r = engine.parseReminder('renew prescription in 1 month');
+      expect(r.time, isNotNull);
+      expect(r.time!.isAfter(DateTime.now().add(const Duration(days: 26))), isTrue);
+    });
+
+    test('"next week" schedules ~7 days out at a sane hour', () {
+      final r = engine.parseReminder('dentist next week');
+      expect(r.time, isNotNull);
+      final days = r.time!.difference(DateTime.now()).inDays;
+      expect(days, inInclusiveRange(6, 7));
+      expect(r.title.toLowerCase(), isNot(contains('next week')));
+    });
+
+    test('duration "for 30 minutes" → durationMinutes', () {
+      final r = engine.parseReminder('meditate for 30 minutes at 7pm');
+      expect(r.durationMinutes, 30);
+      expect(r.title.toLowerCase(), isNot(contains('for 30')));
+    });
+
+    test('duration "for 1 hour 30 minutes" → 90', () {
+      final r = engine.parseReminder('study for 1 hour 30 minutes');
+      expect(r.durationMinutes, 90);
+    });
+
+    test('"25 min focus session" → durationMinutes 25', () {
+      final r = engine.parseReminder('start a 25 min focus session');
+      expect(r.durationMinutes, 25);
+    });
+
+    test('a plain "for <word>" is NOT misread as a duration', () {
+      final r = engine.parseReminder('buy a gift for mom');
+      expect(r.durationMinutes, isNull);
+      expect(r.title.toLowerCase(), contains('mom'));
+    });
   });
 
   group('parseMedicine', () {
@@ -104,15 +155,16 @@ void main() {
       expect(tip.toLowerCase(), contains('goal reached'));
     });
 
-    test('well behind -> mentions remaining ml', () {
+    test('well behind -> pace-aware "behind" nudge with numbers', () {
       final tip = engine.hydrationTip(
         intakeMl: 400,
         goalMl: 2000,
         streakDays: 0,
         hour: 14,
       );
-      // remaining = 1600ml
-      expect(tip, contains('1600ml'));
+      // Now pace-aware: at 14:00 with 400/2000 the user is behind pace.
+      expect(tip.toLowerCase(), contains('behind'));
+      expect(tip, contains('2000ml'));
     });
   });
 

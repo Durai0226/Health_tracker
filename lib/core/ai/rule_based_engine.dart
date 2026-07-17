@@ -1,4 +1,5 @@
 import 'ai_types.dart';
+import 'hydration_pacer.dart';
 
 /// Pure-Dart, deterministic AI engine. Zero cost, zero infra, offline, private —
 /// runs on every device and scales to unlimited users for free. It is the
@@ -20,22 +21,63 @@ class RuleBasedEngine {
     final priority = _priority(lower);
     final category = _category(lower);
     List<int>? customDays;
+    final durationMinutes = _parseDuration(lower);
 
-    // Relative "in N hours/minutes" takes precedence.
-    final rel = RegExp(r'\bin\s+(\d+)\s*(hours?|hrs?|minutes?|mins?)\b')
+    // Relative "in N minutes/hours/days/weeks/months/years" takes precedence.
+    final rel = RegExp(
+            r'\bin\s+(\d+)\s*(hours?|hrs?|minutes?|mins?|days?|weeks?|wks?|months?|years?)\b')
         .firstMatch(lower);
     if (rel != null) {
       final n = int.parse(rel.group(1)!);
       final unit = rel.group(2)!;
-      final when = unit.startsWith('h')
-          ? now.add(Duration(hours: n))
-          : now.add(Duration(minutes: n));
+      DateTime when;
+      if (unit.startsWith('h')) {
+        when = now.add(Duration(hours: n));
+      } else if (unit.startsWith('mi')) {
+        when = now.add(Duration(minutes: n));
+      } else if (unit.startsWith('d')) {
+        when = now.add(Duration(days: n));
+      } else if (unit.startsWith('w')) {
+        when = now.add(Duration(days: 7 * n));
+      } else if (unit.startsWith('mo')) {
+        // Calendar month math (not a fixed 30 days).
+        when = DateTime(now.year, now.month + n, now.day, now.hour, now.minute);
+      } else {
+        // years
+        when = DateTime(now.year + n, now.month, now.day, now.hour, now.minute);
+      }
       return ParsedReminder(
         title: _cleanTitle(text),
         time: when,
         repeat: repeat,
         priority: priority,
         categoryHint: category,
+        durationMinutes: durationMinutes,
+      );
+    }
+
+    // "next week" / "next month" (no explicit "in N").
+    if (RegExp(r'\bnext week\b').hasMatch(lower)) {
+      final when = DateTime(now.year, now.month, now.day, 9, 0)
+          .add(const Duration(days: 7));
+      return ParsedReminder(
+        title: _cleanTitle(text),
+        time: when,
+        repeat: repeat,
+        priority: priority,
+        categoryHint: category,
+        durationMinutes: durationMinutes,
+      );
+    }
+    if (RegExp(r'\bnext month\b').hasMatch(lower)) {
+      final when = DateTime(now.year, now.month + 1, now.day, 9, 0);
+      return ParsedReminder(
+        title: _cleanTitle(text),
+        time: when,
+        repeat: repeat,
+        priority: priority,
+        categoryHint: category,
+        durationMinutes: durationMinutes,
       );
     }
 
@@ -131,7 +173,38 @@ class RuleBasedEngine {
       priority: priority,
       categoryHint: category,
       customDays: customDays,
+      durationMinutes: durationMinutes,
     );
+  }
+
+  /// Parse an explicit session/event length ("for 30 minutes", "25 min",
+  /// "for 1 hour", "1h30m") → minutes, or null. Hours/minutes only (a duration,
+  /// not a multi-day bound).
+  int? _parseDuration(String lower) {
+    // "for 1 hour 30 minutes" / "for 2 hours". Word units only (no bare h/m) so
+    // "for 5 meetings" can't be misread as a duration.
+    final forHM = RegExp(
+            r'\bfor\s+(\d+)\s*(?:hours?|hrs?)(?:\s+(\d+)\s*(?:minutes?|mins?))?\b')
+        .firstMatch(lower);
+    if (forHM != null) {
+      final h = int.parse(forHM.group(1)!);
+      final m = int.tryParse(forHM.group(2) ?? '') ?? 0;
+      final total = h * 60 + m;
+      if (total > 0) return total;
+    }
+    // "for 30 minutes" / "for 90 min"
+    final forMin =
+        RegExp(r'\bfor\s+(\d+)\s*(?:minutes?|mins?)\b').firstMatch(lower);
+    if (forMin != null) return int.parse(forMin.group(1)!);
+    // "25 min session" / "45-minute focus" / "1 hour timer"
+    final sess = RegExp(
+            r'\b(\d+)\s*(hours?|hrs?|minutes?|mins?)[\s-]*(session|focus|timer|block)\b')
+        .firstMatch(lower);
+    if (sess != null) {
+      final n = int.parse(sess.group(1)!);
+      return sess.group(2)!.startsWith('h') ? n * 60 : n;
+    }
+    return null;
   }
 
   String _repeat(String lower) {
@@ -221,9 +294,18 @@ class RuleBasedEngine {
       RegExp(r'\b(daily|everyday|every day|each day|weekly)\b',
           caseSensitive: false),
       RegExp(r'\b(today|tomorrow|tonight)\b', caseSensitive: false),
-      RegExp(r'\bin\s+\d+\s*(hours?|hrs?|minutes?|mins?)\b',
+      RegExp(
+          r'\bin\s+\d+\s*(hours?|hrs?|minutes?|mins?|days?|weeks?|wks?|months?|years?)\b',
           caseSensitive: false),
-      RegExp(r'\b(this|next)\s+(morning|afternoon|evening|week)\b',
+      // Duration phrase ("for 1 hour 30 min", "for 30 minutes"). Word units +
+      // required digit so a plain "for <word>" title isn't stripped.
+      RegExp(r'\bfor\s+\d+\s*(hours?|hrs?)(\s+\d+\s*(minutes?|mins?))?\b',
+          caseSensitive: false),
+      RegExp(r'\bfor\s+\d+\s*(minutes?|mins?)\b', caseSensitive: false),
+      // "N min session/focus/timer" duration.
+      RegExp(r'\b\d+\s*(hours?|hrs?|minutes?|mins?)[\s-]*(session|focus|timer|block)\b',
+          caseSensitive: false),
+      RegExp(r'\b(this|next)\s+(morning|afternoon|evening|week|month)\b',
           caseSensitive: false),
       RegExp(r'\b(urgent|important|asap|critical|high priority|low priority|no rush)\b',
           caseSensitive: false),
@@ -319,16 +401,29 @@ class RuleBasedEngine {
     if (intakeMl >= goalMl && goalMl > 0) {
       return '🎉 Goal reached — ${intakeMl}ml today! Keep sipping to stay ahead.$streak';
     }
+
+    // Pace-aware nudge: compare intake to where you'd be if on track for THIS
+    // point in the day, not just the daily total. (mid-hour estimate for time.)
+    final pace = HydrationPacer.compute(
+      intakeMl: intakeMl,
+      goalMl: goalMl,
+      nowMinutes: hour * 60 + 30,
+    );
+
     if (hour < 10) {
       return 'Good morning! A glass now is a strong start toward your ${goalMl}ml goal.$streak';
+    }
+    if (pace.behind) {
+      final sip = pace.suggestedSipMl > 0 ? pace.suggestedSipMl : 250;
+      return 'You\'re about ${pace.deficitMl}ml behind pace — a ${sip}ml drink now gets you back on track ($intakeMl of ${goalMl}ml).$streak';
     }
     if (hour >= 20) {
       return 'You\'re at $pct% ($intakeMl of ${goalMl}ml). A last glass before bed tops you off.$streak';
     }
-    if (pct < 50) {
-      return 'You\'re ${remaining}ml short of today\'s goal — a glass right now keeps you on track.$streak';
+    if (pace.ahead) {
+      return 'Ahead of pace — $pct% of your goal already. Nice work, keep it steady.$streak';
     }
-    return 'Nice pace — $pct% of your goal. Just ${remaining}ml to go.$streak';
+    return 'On pace — $pct% of your goal. Just ${remaining}ml to go.$streak';
   }
 
   String focusCoach({

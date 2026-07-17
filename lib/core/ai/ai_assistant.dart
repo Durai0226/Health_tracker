@@ -3,6 +3,7 @@ import 'ai_types.dart';
 import 'llm_engine.dart';
 import 'cloud_engine.dart';
 import 'rule_based_engine.dart';
+import 'safety_guard.dart';
 
 /// Single entry point for all AI in the app. Features call intent methods here
 /// and never touch a specific provider.
@@ -220,7 +221,13 @@ class AiAssistant {
     String? dose,
     required String question,
     String? instructions,
+    String? locale,
   }) async {
+    // Safety first — runs offline BEFORE any engine so it can't be bypassed or
+    // prompt-injected: a red-flag question short-circuits to an emergency card.
+    final emergency = SafetyGuard.emergencyResponse(question, locale: locale);
+    if (emergency != null) return emergency;
+
     final llm = _activeLlm();
     if (llm != null) {
       final t = await llm.completeText(
@@ -230,10 +237,12 @@ class AiAssistant {
             'one-line safety note, and never give a diagnosis.',
         user: _redact(question, llm),
       );
-      if (t != null) return t;
+      if (t != null) return SafetyGuard.ensureDisclaimer(t);
     }
-    return _rule.medicineAnswer(
+    final answer = _rule.medicineAnswer(
         name: name, dose: dose, question: question, instructions: instructions);
+    // Guarantee the not-a-diagnosis note on every medical answer.
+    return SafetyGuard.ensureDisclaimer(answer);
   }
 
   Future<String?> explainInteractions(List<String> descriptions) async {
@@ -245,9 +254,9 @@ class AiAssistant {
             'short bullets, then add "talk to your pharmacist".',
         user: _redact(descriptions.join('\n'), llm),
       );
-      if (t != null) return t;
+      if (t != null) return SafetyGuard.ensureDisclaimer(t);
     }
-    return _rule.explainInteractions(descriptions);
+    return SafetyGuard.ensureDisclaimer(_rule.explainInteractions(descriptions));
   }
 
   /// Light-touch PII scrub before an off-device (cloud) call (defense-in-depth;
