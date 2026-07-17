@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/ai/ai_assistant.dart';
+import '../../../core/ai/insight_engine.dart';
+import '../../../core/ai/hydration_pacer.dart';
+import '../../../core/widgets/app/ai_insight_kit.dart';
 import '../../../core/widgets/app/ai_widgets.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/water_hero_gauge.dart';
@@ -548,6 +551,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                             hour: DateTime.now().hour,
                           ),
                         ),
+                        _buildWaterInsight(
+                            todayData.effectiveHydrationMl, todayData.dailyGoalMl),
 
                         const SizedBox(height: AquaTheme.spacingXL),
 
@@ -918,6 +923,26 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       MaterialPageRoute(
           builder: (_) => WaterHistoryEditScreen(date: DateTime.now())),
     ).then((_) => _loadData());
+  }
+
+  /// Deterministic hydration insight (streak / behind-pace), surfaced as an
+  /// InsightCard beneath the tips.
+  Widget _buildWaterInsight(int intakeMl, int goalMl) {
+    final now = DateTime.now();
+    final pace = HydrationPacer.compute(
+        intakeMl: intakeMl, goalMl: goalMl, nowMinutes: now.hour * 60 + now.minute);
+    final insight = InsightEngine.water(
+      intakeMl: intakeMl,
+      goalMl: goalMl,
+      streakDays: WaterService.getCurrentStreak(),
+      behind: pace.behind,
+      deficitMl: pace.deficitMl,
+    );
+    if (insight == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AquaTheme.spacingL),
+      child: InsightCard(insight: insight),
+    );
   }
 }
 

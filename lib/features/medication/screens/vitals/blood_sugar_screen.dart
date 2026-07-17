@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/ai/vitals_analyzer.dart';
+import '../../../../core/ai/insight_engine.dart';
+import '../../../../core/ai/vitals_pattern_detector.dart';
 import '../../../../core/services/clean_storage_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
@@ -160,6 +162,11 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     final minY = series.isEmpty ? 40.0 : (series.reduce((a, b) => a < b ? a : b) - 20).clamp(20, 400).toDouble();
     final maxY = series.isEmpty ? 250.0 : (series.reduce((a, b) => a > b ? a : b) + 20).clamp(120, 500).toDouble();
 
+    // Deterministic pattern insight over the user's own readings.
+    final insight = InsightEngine.bloodSugar(_readings
+        .map((r) => GlucosePoint(at: r.takenAt, mgdl: r.valueMgdl, context: r.context))
+        .toList());
+
     return RefreshIndicator(
       onRefresh: _load,
       color: ext.mark(accent),
@@ -220,6 +227,10 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
                     .textTheme
                     .bodySmall
                     ?.copyWith(color: ext.textTertiary)),
+          ],
+          if (insight != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            InsightCard(insight: insight),
           ],
           const SizedBox(height: AppSpacing.lg),
           SectionHeader(title: 'Trend', icon: Icons.show_chart_rounded, accent: accent),

@@ -2,6 +2,8 @@ import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/ai/ai_assistant.dart';
+import '../../../core/ai/insight_engine.dart';
+import '../../../core/ai/focus_insights.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../models/focus_session.dart';
@@ -451,22 +453,43 @@ class _FocusScreenState extends State<FocusScreen> {
   /// Self-loading AI card offering one short, actionable focus suggestion based
   /// on real stats. Always available via the free on-device rule engine.
   Widget _buildFocusCoachCard(AppColorsExt ext) {
+    // Deterministic "best focus hour / completion" insight from real sessions.
+    final refs = _focusService.sessions
+        .map((s) => FocusSessionRef(
+            startHour: s.startedAt.hour,
+            minutes: s.actualMinutes,
+            completed: s.wasCompleted))
+        .toList();
+    final insight = InsightEngine.focus(
+      bestFocusHour: FocusInsights.bestFocusHour(refs),
+      completionRate: FocusInsights.completionRate(refs),
+      sessionCount: refs.length,
+      streakDays: _focusService.stats.currentStreak,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-      child: AiInsightCard(
-        title: 'Focus coach',
-        icon: Icons.psychology_rounded,
-        accent: ext.focus,
-        cacheKey:
-            'focus:${_focusService.todayMinutes ~/ 15}:${_focusService.stats.currentStreak}:${_focusService.stats.totalSessions}',
-        loader: () {
-          final stats = _focusService.stats;
-          return AiAssistant().focusCoach(
-            todayMinutes: _focusService.todayMinutes,
-            streakDays: stats.currentStreak,
-            totalSessions: stats.totalSessions,
-          );
-        },
+      child: Column(
+        children: [
+          AiInsightCard(
+            title: 'Focus coach',
+            icon: Icons.psychology_rounded,
+            accent: ext.focus,
+            cacheKey:
+                'focus:${_focusService.todayMinutes ~/ 15}:${_focusService.stats.currentStreak}:${_focusService.stats.totalSessions}',
+            loader: () {
+              final stats = _focusService.stats;
+              return AiAssistant().focusCoach(
+                todayMinutes: _focusService.todayMinutes,
+                streakDays: stats.currentStreak,
+                totalSessions: stats.totalSessions,
+              );
+            },
+          ),
+          if (insight != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            InsightCard(insight: insight),
+          ],
+        ],
       ),
     );
   }

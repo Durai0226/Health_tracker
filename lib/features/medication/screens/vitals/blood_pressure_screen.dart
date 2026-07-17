@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/ai/vitals_analyzer.dart';
+import '../../../../core/ai/insight_engine.dart';
+import '../../../../core/ai/vitals_pattern_detector.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
 import '../../../../core/widgets/app/vitals_widgets.dart';
@@ -139,6 +141,11 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     final minY = allVals.isEmpty ? 40.0 : (allVals.reduce((a, b) => a < b ? a : b) - 10).clamp(30, 300).toDouble();
     final maxY = allVals.isEmpty ? 200.0 : (allVals.reduce((a, b) => a > b ? a : b) + 10).clamp(60, 320).toDouble();
 
+    // Deterministic pattern insight over the user's own readings.
+    final insight = InsightEngine.bloodPressure(_readings
+        .map((r) => BpPoint(at: r.takenAt, systolic: r.systolic, diastolic: r.diastolic))
+        .toList());
+
     return RefreshIndicator(
       onRefresh: _load,
       color: ext.mark(accent),
@@ -192,6 +199,10 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
               accent: accent,
             ),
           ]),
+          if (insight != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            InsightCard(insight: insight),
+          ],
           const SizedBox(height: AppSpacing.lg),
           SectionHeader(title: 'Trend', icon: Icons.show_chart_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),

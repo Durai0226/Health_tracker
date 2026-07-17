@@ -13,6 +13,11 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/ai/ai_assistant.dart';
 import '../../../core/ai/refill_predictor.dart';
 import '../../../core/ai/med_safety_checker.dart';
+import '../../../core/ai/insight.dart';
+import '../../../core/ai/insight_engine.dart';
+import '../../../core/ai/adherence_analyzer.dart';
+import '../../../core/ai/streak_engine.dart';
+import '../../../core/ai/adaptive_timing.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
 
@@ -43,6 +48,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   // duplicate-therapy safety warnings.
   RefillPrediction? _refill;
   List<MedSafetyWarning> _safetyWarnings = [];
+  List<Insight> _medInsights = [];
 
   // AI plain-language rephrasing of the rules-based interactions. The rules
   // remain the source of truth; this only restates them for the patient.
@@ -105,6 +111,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
 
       _computeRefill(allLogs);
       await _computeSafety(medicines);
+      _computeMedInsights(allLogs);
 
       _controller.forward();
     } catch (e) {
@@ -187,6 +194,68 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           .where((w) => w.message.contains(_medicine.name)),
     ];
     _safetyWarnings = warnings;
+  }
+
+  /// Deterministic medicine insights — surfaces the AdherenceAnalyzer,
+  /// StreakEngine and AdaptiveTiming engines (adherence %, dose streak, supply,
+  /// and a "you usually take this later" reminder-time suggestion).
+  void _computeMedInsights(List<MedicineLog> allLogs) {
+    final out = <Insight>[];
+
+    // Adherence % + dose streak from the log history.
+    final history = allLogs
+        .where((l) => l.isTaken || l.isMissed || l.isSkipped)
+        .map((l) => DoseEvent(
+              l.scheduledTime,
+              l.isTaken
+                  ? DoseOutcome.taken
+                  : (l.isMissed ? DoseOutcome.missed : DoseOutcome.skipped),
+            ))
+        .toList();
+    final adherence = history.isEmpty ? null : AdherenceAnalyzer.adherence(history);
+    final takenDays = allLogs
+        .where((l) => l.isTaken)
+        .map((l) => DateTime(l.scheduledTime.year, l.scheduledTime.month, l.scheduledTime.day))
+        .toSet();
+    final streak = StreakEngine.compute(completedDays: takenDays, today: DateTime.now());
+
+    final primary = InsightEngine.medicine(
+      adherence: adherence,
+      streakDays: streak.current,
+      daysOfSupply: _refill?.daysRemaining,
+    );
+    if (primary != null) out.add(primary);
+
+    // AdaptiveTiming: compare real take-times to the first scheduled slot.
+    final times = _medicine.schedule.times;
+    if (times.isNotEmpty) {
+      final scheduledMin = times.first.hour * 60 + times.first.minute;
+      final actualMins = allLogs
+          .where((l) => l.isTaken && l.actionTime != null)
+          .map((l) => l.actionTime!.hour * 60 + l.actionTime!.minute)
+          .toList();
+      final s = AdaptiveTiming.suggest(
+          scheduledMinutes: scheduledMin, actualMinutes: actualMins);
+      if (s.confident) {
+        final h = (s.suggestedMinutes ~/ 60).toString().padLeft(2, '0');
+        final m = (s.suggestedMinutes % 60).toString().padLeft(2, '0');
+        final laterEarlier = s.deltaMinutes > 0 ? 'later' : 'earlier';
+        out.add(Insight(
+          id: 'med_adaptive',
+          feature: InsightFeature.medicine,
+          severity: InsightSeverity.info,
+          title: 'You usually take this $laterEarlier',
+          detail:
+              'On average you take this about ${s.deltaMinutes.abs()} min $laterEarlier than scheduled. Shifting the reminder to $h:$m could fit your routine better.',
+          metric: '$h:$m',
+          why:
+              'Median of your ${s.sampleCount} recorded take-times vs the scheduled time.',
+          rank: 48,
+        ));
+      }
+    }
+
+    _medInsights = InsightEngine.rankAll(out);
   }
 
   /// Rephrase the rules-based interaction findings in plain language for the
@@ -318,6 +387,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                   slivers: [
                     _buildHeader(),
                     SliverToBoxAdapter(child: _buildStatsSection()),
+                    SliverToBoxAdapter(child: _buildInsightsSection()),
                     SliverToBoxAdapter(child: _buildScheduleSection()),
                     SliverToBoxAdapter(child: _buildDetailsSection()),
                     SliverToBoxAdapter(child: _buildStockSection()),
@@ -485,6 +555,23 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             icon: Icons.history_rounded,
             accent: ext.medicine,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsightsSection() {
+    if (_medInsights.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.gutter),
+      child: Column(
+        children: [
+          for (final i in _medInsights)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: InsightCard(insight: i),
+            ),
         ],
       ),
     );
