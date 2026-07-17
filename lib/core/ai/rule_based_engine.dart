@@ -515,7 +515,48 @@ class RuleBasedEngine {
     if (remindersLeft > 0) {
       parts.add('$remindersLeft reminder${remindersLeft == 1 ? '' : 's'} left');
     }
-    return '$greeting! Today so far: ${parts.join(' · ')}. You\'ve got this.';
+    final nudge = _crossSignal(
+      medsLeft: medsTotal - medsTaken,
+      medsTotal: medsTotal,
+      waterPct: waterPct,
+      focusMinutes: focusMinutes,
+      remindersLeft: remindersLeft,
+      hour: hour,
+    );
+    return '$greeting! Today so far: ${parts.join(' · ')}. $nudge';
+  }
+
+  /// The single most useful CROSS-FEATURE suggestion — reasoning across meds,
+  /// water, focus and reminders together (our differentiator; a per-feature tip
+  /// can't see the whole day). Priority-ordered, deterministic.
+  String _crossSignal({
+    required int medsLeft,
+    required int medsTotal,
+    required int waterPct,
+    required int focusMinutes,
+    required int remindersLeft,
+    required int hour,
+  }) {
+    final waterBehind = waterPct < 60;
+    // Unfinished doses late in the day is the highest-priority health signal.
+    if (medsTotal > 0 && medsLeft > 0 && hour >= 18) {
+      return 'You still have $medsLeft dose${medsLeft == 1 ? '' : 's'} left — '
+          'a good moment to take ${medsLeft == 1 ? 'it' : 'them'} before the evening winds down.';
+    }
+    // Cross-signal: water behind AND a dose due → one glass covers both.
+    if (waterBehind && medsTotal > 0 && medsLeft > 0) {
+      return 'A glass of water now closes your hydration gap and pairs perfectly with your next dose.';
+    }
+    if (waterBehind) {
+      return 'Your water is a little behind — a glass now keeps you on track.';
+    }
+    if (focusMinutes == 0 && hour >= 9 && hour < 20) {
+      return 'No focus time yet — a single 25-minute session builds momentum.';
+    }
+    if (remindersLeft > 0) {
+      return 'You\'ve got this.';
+    }
+    return 'Everything\'s on track — nicely done.';
   }
 
   String explainInteractions(List<String> descriptions) {
