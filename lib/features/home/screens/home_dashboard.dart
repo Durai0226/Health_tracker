@@ -13,6 +13,7 @@ import '../../focus/services/focus_service.dart';
 import '../../reminders/models/reminder_model.dart';
 import '../../reminders/screens/add_reminder_screen.dart';
 import '../../settings/screens/settings_screen.dart';
+import '../../insights/screens/insights_hub_screen.dart';
 
 /// The unified landing screen — one calm "today" snapshot across every feature.
 /// The only greeting in the app.
@@ -274,23 +275,56 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// features. Always available; the [AiInsightCard] self-loads, shows a
   /// thinking/retry state, and offers a manual refresh.
   Widget _buildAiBriefing(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: AiInsightCard(
-        title: 'Daily briefing',
-        icon: Icons.auto_awesome_rounded,
-        accent: ext.brand,
-        loader: () async {
-          final d = await _briefingData();
-          return AiAssistant().dailyBriefing(
-            medsTaken: d.medsTaken,
-            medsTotal: d.medsTotal,
-            waterPct: d.waterPct,
-            focusMinutes: d.focusMinutes,
-            remindersLeft: d.remindersLeft,
-            hour: DateTime.now().hour,
-          );
-        },
+      child: Column(
+        children: [
+          AiInsightCard(
+            title: 'Daily briefing',
+            icon: Icons.auto_awesome_rounded,
+            accent: ext.brand,
+            loader: () async {
+              final d = await _briefingData();
+              return AiAssistant().dailyBriefing(
+                medsTaken: d.medsTaken,
+                medsTotal: d.medsTotal,
+                waterPct: d.waterPct,
+                focusMinutes: d.focusMinutes,
+                remindersLeft: d.remindersLeft,
+                hour: DateTime.now().hour,
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const InsightsHubScreen())),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                    color: ext.brand.container, borderRadius: AppRadius.brSm),
+                child: Icon(kAiSparkle, size: 18, color: ext.brand.onContainer),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Insights & Assistant',
+                        style: tt.titleSmall?.copyWith(
+                            color: ext.textPrimary, fontWeight: FontWeight.w700)),
+                    Text('Your patterns, weekly recap & Ask AI',
+                        style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+            ]),
+          ),
+        ],
       ),
     );
   }
