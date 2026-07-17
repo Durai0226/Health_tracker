@@ -12,6 +12,7 @@ import '../services/drug_interaction_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/ai/ai_assistant.dart';
 import 'nunito_add_medication_flow.dart';
+import 'nunito_take_medication_sheet.dart';
 
 class NunitoMedicationDetailScreen extends StatefulWidget {
   final EnhancedMedicine medicine;
@@ -1014,6 +1015,23 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     );
   }
 
+  /// Log a dose now. The primary path for PRN/as-needed medicines, which have
+  /// no scheduled reminder to tap "taken" on — without this they could be added
+  /// but never recorded as taken.
+  Future<void> _logDose() async {
+    _hapticService.medium();
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => NunitoTakeMedicationSheet(
+        medicine: _medicine,
+        scheduledTime: DateTime.now(),
+      ),
+    );
+    if (result != null) await _loadData();
+  }
+
   Widget _buildActionsSection() {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
@@ -1021,6 +1039,18 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         children: [
+          if (_medicine.schedule.isPRN ||
+              _medicine.schedule.frequencyType == FrequencyType.asNeeded) ...[
+            AppButton(
+              label: 'Log a dose',
+              accent: ext.medicine,
+              size: AppButtonSize.lg,
+              fullWidth: true,
+              leadingIcon: Icons.check_circle_rounded,
+              onPressed: _logDose,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           AppCard(
             onTap: _toggleArchive,
             child: Row(

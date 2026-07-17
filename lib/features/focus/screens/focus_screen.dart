@@ -1526,9 +1526,11 @@ class _FocusScreenState extends State<FocusScreen> {
             variant: AppButtonVariant.danger,
             onPressed: () {
               Navigator.pop(dialogCtx);
+              // abandonSession() flips isRunning → the ListenableBuilder rebuilds
+              // this screen into its idle state. Do NOT pop the screen itself —
+              // it's a tab root, so popping leaves a black screen.
               _focusService.abandonSession();
               _showCompletionSnackbar('Session abandoned. Your plant has withered 🥀');
-              Navigator.pop(context);
             },
           ),
         ],

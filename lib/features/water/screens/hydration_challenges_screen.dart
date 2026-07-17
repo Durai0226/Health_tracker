@@ -37,30 +37,20 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
 
   void _startChallenge(HydrationChallenge challenge) {
     HapticFeedback.mediumImpact();
-    
-    final now = DateTime.now();
-    final activeChallenge = challenge.copyWith(
-      isActive: true,
-      startDate: now,
-      endDate: now.add(Duration(days: challenge.durationDays)),
-      currentProgress: 0,
-    );
-
-    setState(() {
-      _activeChallenges.add(activeChallenge);
-      _availableChallenges.removeWhere((c) => c.id == challenge.id);
-    });
-
+    // Honest state: challenge progress isn't wired to real hydration data yet,
+    // so "starting" one would only fake an active state that silently loses
+    // progress (and resets on navigation). Tell the truth instead of showing a
+    // false success. When the tracking engine lands, restore the start flow.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Text(challenge.emoji, style: const TextStyle(fontSize: 20)),
             const SizedBox(width: 12),
-            Text('Challenge started: ${challenge.title}'),
+            const Expanded(
+                child: Text('Challenges are coming soon — hang tight!')),
           ],
         ),
-        backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
       ),
     );

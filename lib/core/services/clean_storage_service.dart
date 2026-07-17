@@ -487,6 +487,18 @@ class CleanStorageService {
               getAppPreference('darkMode', false) == true ? 'dark' : 'system')
           as String? ??
           'system',
+      // Notification 'Display' + alarm settings (were saved but never read back,
+      // so the toggles always reset to their defaults on reopen).
+      showOnLockScreen: getAppPreference('showOnLockScreen', true) == true,
+      persistentNotification:
+          getAppPreference('persistentNotification', true) == true,
+      fullScreenNotification:
+          getAppPreference('fullScreenNotification', true) == true,
+      alarmRingDurationSeconds:
+          getAppPreference('alarmRingDuration', 30) as int? ?? 30,
+      notificationSound:
+          getAppPreference('notificationSound', 'default') as String? ??
+              'default',
     );
   }
 
@@ -497,6 +509,12 @@ class CleanStorageService {
     await setAppPreference('snoozeInterval', settings.snoozeIntervalMinutes);
     await setAppPreference('snoozeEnabled', settings.snoozeEnabled);
     await setAppPreference('themeMode', settings.themeModePreference);
+    // Persist the notification 'Display' + alarm settings so they survive reopen.
+    await setAppPreference('showOnLockScreen', settings.showOnLockScreen);
+    await setAppPreference('persistentNotification', settings.persistentNotification);
+    await setAppPreference('fullScreenNotification', settings.fullScreenNotification);
+    await setAppPreference('alarmRingDuration', settings.alarmRingDurationSeconds);
+    await setAppPreference('notificationSound', settings.notificationSound);
   }
   
   /// Full backup snapshot: medicines, focus sessions, reminders, water,

@@ -276,6 +276,6 @@ class CategoryManagementScreen extends StatelessWidget {
           },
         );
       },
-    );
+    ).whenComplete(nameController.dispose); // dispose the sheet controller
   }
 }

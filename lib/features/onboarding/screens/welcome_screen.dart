@@ -106,6 +106,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     setState(() => _requesting = true);
     try {
       await NotificationService().requestPermissionsIfNeeded();
+      // Actually schedule the promised daily nudge at the chosen time —
+      // previously the preferred time was persisted but never consumed.
+      await NotificationService().scheduleDailyNotification(
+        id: 900001,
+        title: 'Daily check-in',
+        body: 'A gentle nudge for your medicine, water and to-dos.',
+        hour: _reminderTime.hour,
+        minute: _reminderTime.minute,
+      );
     } catch (_) {
       // Non-fatal: user can still grant via system settings later.
     }
@@ -131,6 +140,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         return;
       }
     }
+    // Persist the quick-setup choices on completion too — the swipe-past and
+    // "Skip for now" paths never hit _next()'s save, silently losing the water
+    // goal + reminder time. Idempotent when Continue already saved.
+    await _saveSetup();
     // Mark onboarding complete so returning users land straight on Home.
     await CleanStorageService.setFirstLaunchComplete();
     if (!mounted) return;
@@ -214,11 +227,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   // ----------------------------------------------------------------- pane one
   Widget _brandPane(AppColorsExt ext, TextTheme tt) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-      child: Column(
-        children: [
-          const Spacer(flex: 3),
+    // Scroll-safe with Spacers: IntrinsicHeight bounds the Spacer column so it
+    // distributes on tall screens and scrolls (no overflow) on short ones.
+    return LayoutBuilder(
+      builder: (context, c) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: c.maxHeight),
+          child: IntrinsicHeight(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
+              child: Column(
+                children: [
+                  const Spacer(flex: 3),
           Column(
             children: [
               const AppLogo.raster(size: 132, radius: 8),
@@ -235,7 +255,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           const Spacer(flex: 2),
           _featureRow(ext, tt),
           const Spacer(flex: 3),
-        ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -396,14 +420,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   // --------------------------------------------------------------- pane three
   Widget _remindersPane(AppColorsExt ext, TextTheme tt) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
+    // Scroll-safe + still centered: the minHeight lets the centered Column
+    // distribute space on tall screens and scroll on short ones instead of
+    // bottom-overflowing.
+    return LayoutBuilder(
+      builder: (context, c) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: c.maxHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 96,
+                  height: 96,
             decoration: BoxDecoration(
               color: ext.reminders.container,
               borderRadius: AppRadius.brLg,
@@ -419,7 +450,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             textAlign: TextAlign.center,
             style: tt.bodyMedium?.copyWith(color: ext.textSecondary, height: 1.5),
           ),
-        ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

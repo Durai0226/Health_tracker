@@ -496,7 +496,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
           ),
         ),
       ),
-    );
+    ).whenComplete(nameController.dispose); // dispose the sheet controller
   }
 
   void _showTagDetails(FocusTag tag) {

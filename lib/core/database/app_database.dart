@@ -55,7 +55,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
   /// period-tracking features were removed. Kept-feature data is untouched.
@@ -90,6 +90,12 @@ class AppDatabase extends _$AppDatabase {
             await customStatement('DROP TABLE IF EXISTS $table');
           }
           debugPrint('✓ Dropped removed-feature tables');
+        }
+        if (from < 3) {
+          // Persist the user-entered medicine strength string in its own column
+          // (was previously lost and reconstructed as a bogus "1.0pill(s)").
+          await m.addColumn(enhancedMedicines, enhancedMedicines.strengthText);
+          debugPrint('✓ Added enhancedMedicines.strengthText');
         }
       },
     );

@@ -627,9 +627,10 @@ class WaterService {
     }
 
     final effectiveTime = time ?? date;
+    EnhancedWaterLog? editedLog;
     final updatedLogs = data.logs.map((log) {
       if (log.id == logId) {
-        return EnhancedWaterLog(
+        editedLog = EnhancedWaterLog(
           id: logId,
           time: effectiveTime,
           amountMl: amountMl,
@@ -644,6 +645,7 @@ class WaterService {
           isAlcoholic: beverage.isAlcoholic,
           note: note,
         );
+        return editedLog!;
       }
       return log;
     }).toList();
@@ -651,7 +653,35 @@ class WaterService {
     final updatedData = _recalculateDailyData(data, updatedLogs);
     _dailyWaterNotifier.value[key] = updatedData;
     _notifyListeners();
-    
+
+    // Persist the edit — previously only the in-memory notifier was updated, so
+    // edits silently reverted on the next launch (init() reloads from Drift).
+    if (editedLog != null) {
+      final l = editedLog!;
+      try {
+        await _dao.updateWaterLog(db.EnhancedWaterLogsCompanion(
+          id: Value(l.id),
+          dailyDataId: Value(key),
+          time: Value(l.time),
+          amountMl: Value(l.amountMl),
+          effectiveHydrationMl: Value(l.effectiveHydrationMl),
+          beverageId: Value(l.beverageId),
+          beverageName: Value(l.beverageName),
+          beverageEmoji: Value(l.beverageEmoji),
+          hydrationPercent: Value(l.hydrationPercent),
+          containerId: Value(l.containerId),
+          containerName: Value(l.containerName),
+          caffeineAmount: Value(l.caffeineAmount),
+          isAlcoholic: Value(l.isAlcoholic),
+          note: Value(l.note),
+        ));
+      } catch (e) {
+        debugPrint('⚠️ update log failed: $e');
+      }
+    }
+    await _persistDay(updatedData);
+    await _evaluateAchievements();
+
     return updatedData;
   }
 

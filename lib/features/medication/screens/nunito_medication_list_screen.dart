@@ -3,6 +3,7 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
+import '../services/medication_reminder_service.dart';
 import '../../../core/services/haptic_service.dart';
 import 'nunito_medication_detail_screen.dart';
 import 'nunito_add_medication_flow.dart';
@@ -106,6 +107,9 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     _hapticService.warning();
     final updated = medicine.copyWith(isArchived: !medicine.isArchived);
     await MedicineCleanStorageService.saveMedicine(updated);
+    // Reconcile notifications: an archived medicine must stop firing reminders;
+    // a restored one gets them back. (Scheduling itself no-ops for archived.)
+    await _syncReminders(updated);
     _loadMedicines();
 
     if (mounted) {
@@ -116,11 +120,22 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
             label: 'Undo',
             onPressed: () async {
               await MedicineCleanStorageService.saveMedicine(medicine);
+              await _syncReminders(medicine);
               _loadMedicines();
             },
           ),
         ),
       );
+    }
+  }
+
+  /// Cancel or (re)schedule a medicine's reminders to match its archived state.
+  Future<void> _syncReminders(EnhancedMedicine medicine) async {
+    final service = MedicationReminderService();
+    if (medicine.isArchived) {
+      await service.cancelReminders(medicine);
+    } else {
+      await service.scheduleReminders(medicine);
     }
   }
 
@@ -156,6 +171,9 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
 
     if (confirm == true) {
       _hapticService.error();
+      // Cancel notifications before deleting so a removed medicine can't keep
+      // firing orphaned reminders.
+      await MedicationReminderService().cancelRemindersById(medicine.id);
       await MedicineCleanStorageService.deleteMedicine(medicine.id);
       _loadMedicines();
     }

@@ -184,10 +184,19 @@ class _AlarmScreenState extends State<AlarmScreen> with TickerProviderStateMixin
             
             // Main content
             SafeArea(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox(height: 60),
+              // Scroll-safe: keeps spaceBetween when there's room; on a short
+              // screen or with a long title/body it scrolls instead of throwing
+              // a BOTTOM OVERFLOWED render error.
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const SizedBox(height: 60),
                   
                   // Time Display with glassmorphism
                   ClipRRect(
@@ -418,7 +427,11 @@ class _AlarmScreenState extends State<AlarmScreen> with TickerProviderStateMixin
                       ),
                     ),
                   ),
-                ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

@@ -298,10 +298,13 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
   }
 
   String _getInitials(String name) {
-    final parts = name.trim().split(' ');
+    // Split on whitespace runs and drop empties so a double space
+    // ("John  Smith") doesn't yield an empty token → RangeError on [0].
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return parts.isNotEmpty ? parts[0][0].toUpperCase() : '?';
   }
 }

@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/clean_storage_service.dart';
-import '../../../core/models/user_settings.dart';
 
 /// Clean, simple notification settings screen — Calm Clarity, dark-aware.
 class NotificationSettingsScreen extends StatefulWidget {
@@ -82,7 +81,10 @@ class _NotificationSettingsScreenState
     setState(() => _isSaving = true);
 
     try {
-      final settings = UserSettings(
+      // copyWith on the persisted settings — building a fresh UserSettings here
+      // reset every unlisted field (notably the user's theme preference) to its
+      // default, silently wiping their dark/light choice on every save.
+      final settings = CleanStorageService.getUserSettings().copyWith(
         soundEnabled: _soundEnabled,
         vibrationEnabled: _vibrationEnabled,
         showOnLockScreen: _showOnLockScreen,

@@ -607,6 +607,6 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           ),
         ),
       ),
-    );
+    ).whenComplete(nameController.dispose); // dispose the sheet controller
   }
 }

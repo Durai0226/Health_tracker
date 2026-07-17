@@ -357,10 +357,12 @@ class EnhancedMedicine {
     );
   }
 
-  /// Reduce stock by the given amount
+  /// Reduce stock by the given amount. Uses ceil() so a fractional dose (e.g.
+  /// half a tablet) still decrements the integer stock instead of truncating to
+  /// 0 and never depleting.
   EnhancedMedicine reduceStock(double amount) {
     if (currentStock == null) return this;
-    return copyWith(currentStock: (currentStock! - amount.toInt()).clamp(0, 999999));
+    return copyWith(currentStock: (currentStock! - amount.ceil()).clamp(0, 999999));
   }
 
   /// Add stock (refill)

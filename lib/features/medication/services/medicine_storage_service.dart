@@ -53,7 +53,7 @@ class MedicineCleanStorageService {
       dosageForm: DosageForm.values[data.dosageForm],
       dosageAmount: data.strength, // Using strength column as dosage amount storage if needed
       dosageUnit: data.strengthUnit,
-      strength: '${data.strength}${data.strengthUnit}', // Composite strength
+      strength: data.strengthText, // The real user-entered strength (nullable)
       schedule: MedicineSchedule.fromJson(jsonDecode(data.scheduleJson)),
       color: MedicineColor.values[data.colorIndex],
       shape: MedicineShape.values[data.shapeIndex],
@@ -95,6 +95,8 @@ class MedicineCleanStorageService {
       dosageForm: drift.Value(medicine.dosageForm.index),
       strength: drift.Value(medicine.dosageAmount), // Map dosageAmount to strength column
       strengthUnit: drift.Value(medicine.dosageUnit ?? 'mg'),
+      strengthText: drift.Value(medicine.strength), // The real strength string
+
       scheduleJson: drift.Value(jsonEncode(medicine.schedule.toJson())),
       startDate: drift.Value(medicine.schedule.startDate ?? DateTime.now()), // Required field
       endDate: drift.Value(medicine.schedule.endDate),

@@ -317,7 +317,10 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                     const SizedBox(height: 4),
                     Container(
                       width: 30,
-                      height: 100 * progress,
+                      // Clamp so an over-goal day (>120%) can't grow the bar past
+                      // its box and overflow the column; color still flips to
+                      // success at/above the goal.
+                      height: 100 * progress.clamp(0.0, 1.0),
                       decoration: BoxDecoration(
                         color: progress >= 1
                             ? ext.success.base

@@ -2209,6 +2209,17 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     requiredDuringInsert: false,
     defaultValue: const Constant('mg'),
   );
+  static const VerificationMeta _strengthTextMeta = const VerificationMeta(
+    'strengthText',
+  );
+  @override
+  late final GeneratedColumn<String> strengthText = GeneratedColumn<String>(
+    'strength_text',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _instructionsMeta = const VerificationMeta(
     'instructions',
   );
@@ -2565,6 +2576,7 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     dosageForm,
     strength,
     strengthUnit,
+    strengthText,
     instructions,
     purpose,
     sideEffectsJson,
@@ -2656,6 +2668,15 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
         strengthUnit.isAcceptableOrUnknown(
           data['strength_unit']!,
           _strengthUnitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('strength_text')) {
+      context.handle(
+        _strengthTextMeta,
+        strengthText.isAcceptableOrUnknown(
+          data['strength_text']!,
+          _strengthTextMeta,
         ),
       );
     }
@@ -2932,6 +2953,10 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
         DriftSqlType.string,
         data['${effectivePrefix}strength_unit'],
       )!,
+      strengthText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}strength_text'],
+      ),
       instructions: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}instructions'],
@@ -3070,6 +3095,7 @@ class EnhancedMedicine extends DataClass
   final int dosageForm;
   final double strength;
   final String strengthUnit;
+  final String? strengthText;
   final String? instructions;
   final String? purpose;
   final String? sideEffectsJson;
@@ -3108,6 +3134,7 @@ class EnhancedMedicine extends DataClass
     required this.dosageForm,
     required this.strength,
     required this.strengthUnit,
+    this.strengthText,
     this.instructions,
     this.purpose,
     this.sideEffectsJson,
@@ -3153,6 +3180,9 @@ class EnhancedMedicine extends DataClass
     map['dosage_form'] = Variable<int>(dosageForm);
     map['strength'] = Variable<double>(strength);
     map['strength_unit'] = Variable<String>(strengthUnit);
+    if (!nullToAbsent || strengthText != null) {
+      map['strength_text'] = Variable<String>(strengthText);
+    }
     if (!nullToAbsent || instructions != null) {
       map['instructions'] = Variable<String>(instructions);
     }
@@ -3237,6 +3267,9 @@ class EnhancedMedicine extends DataClass
       dosageForm: Value(dosageForm),
       strength: Value(strength),
       strengthUnit: Value(strengthUnit),
+      strengthText: strengthText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(strengthText),
       instructions: instructions == null && nullToAbsent
           ? const Value.absent()
           : Value(instructions),
@@ -3319,6 +3352,7 @@ class EnhancedMedicine extends DataClass
       dosageForm: serializer.fromJson<int>(json['dosageForm']),
       strength: serializer.fromJson<double>(json['strength']),
       strengthUnit: serializer.fromJson<String>(json['strengthUnit']),
+      strengthText: serializer.fromJson<String?>(json['strengthText']),
       instructions: serializer.fromJson<String?>(json['instructions']),
       purpose: serializer.fromJson<String?>(json['purpose']),
       sideEffectsJson: serializer.fromJson<String?>(json['sideEffectsJson']),
@@ -3372,6 +3406,7 @@ class EnhancedMedicine extends DataClass
       'dosageForm': serializer.toJson<int>(dosageForm),
       'strength': serializer.toJson<double>(strength),
       'strengthUnit': serializer.toJson<String>(strengthUnit),
+      'strengthText': serializer.toJson<String?>(strengthText),
       'instructions': serializer.toJson<String?>(instructions),
       'purpose': serializer.toJson<String?>(purpose),
       'sideEffectsJson': serializer.toJson<String?>(sideEffectsJson),
@@ -3415,6 +3450,7 @@ class EnhancedMedicine extends DataClass
     int? dosageForm,
     double? strength,
     String? strengthUnit,
+    Value<String?> strengthText = const Value.absent(),
     Value<String?> instructions = const Value.absent(),
     Value<String?> purpose = const Value.absent(),
     Value<String?> sideEffectsJson = const Value.absent(),
@@ -3453,6 +3489,7 @@ class EnhancedMedicine extends DataClass
     dosageForm: dosageForm ?? this.dosageForm,
     strength: strength ?? this.strength,
     strengthUnit: strengthUnit ?? this.strengthUnit,
+    strengthText: strengthText.present ? strengthText.value : this.strengthText,
     instructions: instructions.present ? instructions.value : this.instructions,
     purpose: purpose.present ? purpose.value : this.purpose,
     sideEffectsJson: sideEffectsJson.present
@@ -3514,6 +3551,9 @@ class EnhancedMedicine extends DataClass
       strengthUnit: data.strengthUnit.present
           ? data.strengthUnit.value
           : this.strengthUnit,
+      strengthText: data.strengthText.present
+          ? data.strengthText.value
+          : this.strengthText,
       instructions: data.instructions.present
           ? data.instructions.value
           : this.instructions,
@@ -3599,6 +3639,7 @@ class EnhancedMedicine extends DataClass
           ..write('dosageForm: $dosageForm, ')
           ..write('strength: $strength, ')
           ..write('strengthUnit: $strengthUnit, ')
+          ..write('strengthText: $strengthText, ')
           ..write('instructions: $instructions, ')
           ..write('purpose: $purpose, ')
           ..write('sideEffectsJson: $sideEffectsJson, ')
@@ -3642,6 +3683,7 @@ class EnhancedMedicine extends DataClass
     dosageForm,
     strength,
     strengthUnit,
+    strengthText,
     instructions,
     purpose,
     sideEffectsJson,
@@ -3684,6 +3726,7 @@ class EnhancedMedicine extends DataClass
           other.dosageForm == this.dosageForm &&
           other.strength == this.strength &&
           other.strengthUnit == this.strengthUnit &&
+          other.strengthText == this.strengthText &&
           other.instructions == this.instructions &&
           other.purpose == this.purpose &&
           other.sideEffectsJson == this.sideEffectsJson &&
@@ -3724,6 +3767,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
   final Value<int> dosageForm;
   final Value<double> strength;
   final Value<String> strengthUnit;
+  final Value<String?> strengthText;
   final Value<String?> instructions;
   final Value<String?> purpose;
   final Value<String?> sideEffectsJson;
@@ -3763,6 +3807,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     this.dosageForm = const Value.absent(),
     this.strength = const Value.absent(),
     this.strengthUnit = const Value.absent(),
+    this.strengthText = const Value.absent(),
     this.instructions = const Value.absent(),
     this.purpose = const Value.absent(),
     this.sideEffectsJson = const Value.absent(),
@@ -3803,6 +3848,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     required int dosageForm,
     this.strength = const Value.absent(),
     this.strengthUnit = const Value.absent(),
+    this.strengthText = const Value.absent(),
     this.instructions = const Value.absent(),
     this.purpose = const Value.absent(),
     this.sideEffectsJson = const Value.absent(),
@@ -3849,6 +3895,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Expression<int>? dosageForm,
     Expression<double>? strength,
     Expression<String>? strengthUnit,
+    Expression<String>? strengthText,
     Expression<String>? instructions,
     Expression<String>? purpose,
     Expression<String>? sideEffectsJson,
@@ -3889,6 +3936,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
       if (dosageForm != null) 'dosage_form': dosageForm,
       if (strength != null) 'strength': strength,
       if (strengthUnit != null) 'strength_unit': strengthUnit,
+      if (strengthText != null) 'strength_text': strengthText,
       if (instructions != null) 'instructions': instructions,
       if (purpose != null) 'purpose': purpose,
       if (sideEffectsJson != null) 'side_effects_json': sideEffectsJson,
@@ -3935,6 +3983,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Value<int>? dosageForm,
     Value<double>? strength,
     Value<String>? strengthUnit,
+    Value<String?>? strengthText,
     Value<String?>? instructions,
     Value<String?>? purpose,
     Value<String?>? sideEffectsJson,
@@ -3975,6 +4024,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
       dosageForm: dosageForm ?? this.dosageForm,
       strength: strength ?? this.strength,
       strengthUnit: strengthUnit ?? this.strengthUnit,
+      strengthText: strengthText ?? this.strengthText,
       instructions: instructions ?? this.instructions,
       purpose: purpose ?? this.purpose,
       sideEffectsJson: sideEffectsJson ?? this.sideEffectsJson,
@@ -4034,6 +4084,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     }
     if (strengthUnit.present) {
       map['strength_unit'] = Variable<String>(strengthUnit.value);
+    }
+    if (strengthText.present) {
+      map['strength_text'] = Variable<String>(strengthText.value);
     }
     if (instructions.present) {
       map['instructions'] = Variable<String>(instructions.value);
@@ -4149,6 +4202,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
           ..write('dosageForm: $dosageForm, ')
           ..write('strength: $strength, ')
           ..write('strengthUnit: $strengthUnit, ')
+          ..write('strengthText: $strengthText, ')
           ..write('instructions: $instructions, ')
           ..write('purpose: $purpose, ')
           ..write('sideEffectsJson: $sideEffectsJson, ')
@@ -15942,6 +15996,7 @@ typedef $$EnhancedMedicinesTableCreateCompanionBuilder =
       required int dosageForm,
       Value<double> strength,
       Value<String> strengthUnit,
+      Value<String?> strengthText,
       Value<String?> instructions,
       Value<String?> purpose,
       Value<String?> sideEffectsJson,
@@ -15983,6 +16038,7 @@ typedef $$EnhancedMedicinesTableUpdateCompanionBuilder =
       Value<int> dosageForm,
       Value<double> strength,
       Value<String> strengthUnit,
+      Value<String?> strengthText,
       Value<String?> instructions,
       Value<String?> purpose,
       Value<String?> sideEffectsJson,
@@ -16057,6 +16113,11 @@ class $$EnhancedMedicinesTableFilterComposer
 
   ColumnFilters<String> get strengthUnit => $composableBuilder(
     column: $table.strengthUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get strengthText => $composableBuilder(
+    column: $table.strengthText,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16255,6 +16316,11 @@ class $$EnhancedMedicinesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get strengthText => $composableBuilder(
+    column: $table.strengthText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get instructions => $composableBuilder(
     column: $table.instructions,
     builder: (column) => ColumnOrderings(column),
@@ -16442,6 +16508,11 @@ class $$EnhancedMedicinesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get strengthText => $composableBuilder(
+    column: $table.strengthText,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get instructions => $composableBuilder(
     column: $table.instructions,
     builder: (column) => column,
@@ -16622,6 +16693,7 @@ class $$EnhancedMedicinesTableTableManager
                 Value<int> dosageForm = const Value.absent(),
                 Value<double> strength = const Value.absent(),
                 Value<String> strengthUnit = const Value.absent(),
+                Value<String?> strengthText = const Value.absent(),
                 Value<String?> instructions = const Value.absent(),
                 Value<String?> purpose = const Value.absent(),
                 Value<String?> sideEffectsJson = const Value.absent(),
@@ -16661,6 +16733,7 @@ class $$EnhancedMedicinesTableTableManager
                 dosageForm: dosageForm,
                 strength: strength,
                 strengthUnit: strengthUnit,
+                strengthText: strengthText,
                 instructions: instructions,
                 purpose: purpose,
                 sideEffectsJson: sideEffectsJson,
@@ -16702,6 +16775,7 @@ class $$EnhancedMedicinesTableTableManager
                 required int dosageForm,
                 Value<double> strength = const Value.absent(),
                 Value<String> strengthUnit = const Value.absent(),
+                Value<String?> strengthText = const Value.absent(),
                 Value<String?> instructions = const Value.absent(),
                 Value<String?> purpose = const Value.absent(),
                 Value<String?> sideEffectsJson = const Value.absent(),
@@ -16741,6 +16815,7 @@ class $$EnhancedMedicinesTableTableManager
                 dosageForm: dosageForm,
                 strength: strength,
                 strengthUnit: strengthUnit,
+                strengthText: strengthText,
                 instructions: instructions,
                 purpose: purpose,
                 sideEffectsJson: sideEffectsJson,

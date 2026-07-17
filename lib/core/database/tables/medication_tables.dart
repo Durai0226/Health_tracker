@@ -9,6 +9,9 @@ class EnhancedMedicines extends Table {
   IntColumn get dosageForm => integer()(); // DosageForm enum
   RealColumn get strength => real().withDefault(const Constant(1.0))();
   TextColumn get strengthUnit => text().withDefault(const Constant('mg'))();
+  // The user-entered clinical strength string (e.g. "500mg"). Kept separate from
+  // the strength/strengthUnit columns above, which store the dose amount+unit.
+  TextColumn get strengthText => text().nullable()();
   TextColumn get instructions => text().nullable()();
   TextColumn get purpose => text().nullable()();
   TextColumn get sideEffectsJson => text().nullable()(); // JSON array

@@ -238,11 +238,20 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Future<void> _selectDate() async {
+    final lastDate = DateTime.now().add(const Duration(days: 365));
+    final defaultFirst = DateTime.now().subtract(const Duration(days: 1));
+    // An overdue reminder's date can be before defaultFirst; showDatePicker
+    // asserts if initialDate < firstDate, so widen firstDate to include it and
+    // clamp initialDate into [firstDate, lastDate] as a safety net.
+    final firstDate =
+        _selectedDate.isBefore(defaultFirst) ? _selectedDate : defaultFirst;
+    final initialDate =
+        _selectedDate.isAfter(lastDate) ? lastDate : _selectedDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
     );
     if (picked != null) {
       setState(() {

@@ -13,7 +13,10 @@ class HydrationProfileScreen extends StatefulWidget {
 }
 
 class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
-  late HydrationProfile _profile;
+  // Eagerly initialized so build() never reads an unassigned `late` before the
+  // async _initializeProfile() completes (was a LateInitializationError on first
+  // frame). WaterService overwrites it once loaded.
+  HydrationProfile _profile = HydrationProfile(id: 'profile', createdAt: DateTime.now());
   final _weightController = TextEditingController();
   final _ageController = TextEditingController();
   bool _isSaving = false;
