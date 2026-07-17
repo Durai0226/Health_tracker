@@ -14,6 +14,9 @@ import 'nunito_take_medication_sheet.dart';
 import 'doctors/nunito_doctor_list_screen.dart';
 import 'clinics/nunito_clinic_list_screen.dart';
 import 'analytics/nunito_adherence_report_screen.dart';
+import '../../../core/widgets/app/vitals_theme.dart';
+import 'vitals/blood_pressure_screen.dart';
+import 'vitals/blood_sugar_screen.dart';
 
 class NunitoMedicationDashboard extends StatefulWidget {
   /// When embedded in the Health hub, the dashboard drops its own header
@@ -204,6 +207,22 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const NunitoAdherenceReportScreen()),
+    );
+  }
+
+  void _navigateToBloodPressure() {
+    _hapticService.light();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BloodPressureScreen()),
+    );
+  }
+
+  void _navigateToBloodSugar() {
+    _hapticService.light();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BloodSugarScreen()),
     );
   }
 
@@ -776,6 +795,26 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
               Expanded(
                 child: _buildQuickActionCard('Clinics',
                     Icons.local_hospital_rounded, ext.medicine, _navigateToClinics),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickActionCard(
+                    'Blood Pressure',
+                    Icons.favorite_rounded,
+                    VitalsColors.bpAccent(ext.isDark),
+                    _navigateToBloodPressure),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _buildQuickActionCard(
+                    'Blood Sugar',
+                    Icons.water_drop_rounded,
+                    VitalsColors.glucoseAccent(ext.isDark),
+                    _navigateToBloodSugar),
               ),
             ],
           ),
