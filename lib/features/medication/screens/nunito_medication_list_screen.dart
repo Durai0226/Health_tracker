@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
+import '../services/adherence_report_service.dart';
 import '../../../core/services/haptic_service.dart';
 import 'nunito_medication_detail_screen.dart';
 import 'nunito_add_medication_flow.dart';
@@ -139,6 +141,41 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     }
   }
 
+  /// Build a clinician-shareable adherence PDF over the last 30 days and hand it
+  /// to the OS share sheet.
+  Future<void> _exportAdherenceReport() async {
+    final active = _medicines.where((m) => m.isActive && !m.isArchived).toList();
+    if (active.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No active medications to report yet.')),
+        );
+      }
+      return;
+    }
+    _hapticService.medium();
+    try {
+      final entries = <MedicineReportEntry>[];
+      for (final m in active) {
+        final logs = await MedicineCleanStorageService.getLogsForMedicine(m.id);
+        entries.add(MedicineReportEntry(medicine: m, logs: logs));
+      }
+      final now = DateTime.now();
+      final bytes = await AdherenceReportService.buildPdf(
+        entries: entries,
+        from: now.subtract(const Duration(days: 30)),
+        to: now,
+      );
+      await Printing.sharePdf(bytes: bytes, filename: 'adherence-report.pdf');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not create the report. Please try again.')),
+        );
+      }
+    }
+  }
+
   Future<void> _deleteMedicine(EnhancedMedicine medicine) async {
     final ext = AppColorsExt.of(context);
     final confirm = await showDialog<bool>(
@@ -198,6 +235,14 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
                 accent: ext.medicine,
                 onPressed: () => Navigator.pop(context),
               ),
+              actions: [
+                AppIconButton(
+                  icon: Icons.ios_share_rounded,
+                  filled: false,
+                  accent: ext.medicine,
+                  onPressed: _exportAdherenceReport,
+                ),
+              ],
               bottom: Column(
                 children: [
                   AppTextField(

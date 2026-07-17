@@ -11,6 +11,8 @@ import '../services/medication_reminder_service.dart';
 import '../services/drug_interaction_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/ai/ai_assistant.dart';
+import '../../../core/ai/refill_predictor.dart';
+import '../../../core/ai/med_safety_checker.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
 
@@ -36,6 +38,11 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   final DrugInteractionService _interactionService = DrugInteractionService();
   List<DrugInteraction> _interactions = [];
   List<String> _foodWarnings = [];
+
+  // AI (pure-Dart, offline): refill forecast from real consumption + allergy /
+  // duplicate-therapy safety warnings.
+  RefillPrediction? _refill;
+  List<MedSafetyWarning> _safetyWarnings = [];
 
   // AI plain-language rephrasing of the rules-based interactions. The rules
   // remain the source of truth; this only restates them for the patient.
@@ -96,6 +103,9 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         'adherence': total > 0 ? (taken / total * 100).toInt() : 0,
       };
 
+      _computeRefill(allLogs);
+      await _computeSafety(medicines);
+
       _controller.forward();
     } catch (e) {
       debugPrint('Error loading data: $e');
@@ -129,6 +139,54 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       ..sort((a, b) => b.severity.index.compareTo(a.severity.index));
 
     _foodWarnings = _interactionService.checkFoodInteractions(_lookupName);
+  }
+
+  /// Project run-out from the user's OWN taken-dose history (last 21 days) —
+  /// more accurate than dividing stock by the scheduled rate.
+  void _computeRefill(List<MedicineLog> allLogs) {
+    if (_medicine.currentStock == null) {
+      _refill = null;
+      return;
+    }
+    final taken = allLogs.where((l) => l.isTaken).toList();
+    _refill = RefillPredictor.predict(
+      currentStock: _medicine.currentStock!,
+      doseTimes: taken.map((l) => l.actionTime ?? l.scheduledTime).toList(),
+      doseAmounts: taken.map((l) => l.dosageTaken).toList(),
+      lowStockThreshold: _medicine.lowStockThreshold,
+      windowDays: 21,
+    );
+  }
+
+  /// Duplicate-therapy (across active meds) + drug–allergy (against the taker's
+  /// stored allergies) checks — pure Dart, offline.
+  Future<void> _computeSafety(List<EnhancedMedicine> allMedicines) async {
+    final active = allMedicines
+        .where((m) => m.isActive && !m.isArchived)
+        .map((m) => MedRef(id: m.id, name: m.name, genericName: m.genericName))
+        .toList();
+
+    List<String> allergies = const [];
+    if (_medicine.dependentId != null) {
+      try {
+        final deps = await MedicineCleanStorageService.getAllDependents();
+        final profile =
+            deps.where((d) => d.id == _medicine.dependentId).firstOrNull;
+        allergies = profile?.allergies ?? const [];
+      } catch (_) {/* best-effort */}
+    }
+
+    final warnings = <MedSafetyWarning>[
+      ...MedSafetyChecker.checkAllergies(
+        name: _medicine.name,
+        genericName: _medicine.genericName,
+        allergies: allergies,
+      ),
+      // Only duplicates that actually involve THIS medicine.
+      ...MedSafetyChecker.checkDuplicates(active)
+          .where((w) => w.message.contains(_medicine.name)),
+    ];
+    _safetyWarnings = warnings;
   }
 
   /// Rephrase the rules-based interaction findings in plain language for the
@@ -625,6 +683,23 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 ),
               ],
             ),
+            // AI refill forecast from real consumption (when there's history).
+            if (_refill != null && _refill!.daysRemaining != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Icon(Icons.insights_rounded,
+                      size: 15, color: ext.mark(ext.medicine)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _refill!.summary,
+                      style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (low) ...[
               const SizedBox(height: AppSpacing.md),
               Container(
@@ -864,7 +939,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   Widget _buildSafetySection() {
     final warnings = _medicine.warnings ?? const [];
     final sideEffects = _medicine.sideEffects ?? const [];
-    if (warnings.isEmpty && sideEffects.isEmpty) {
+    if (warnings.isEmpty && sideEffects.isEmpty && _safetyWarnings.isEmpty) {
       return const SizedBox.shrink();
     }
     final ext = AppColorsExt.of(context);
@@ -885,6 +960,18 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 Text('Warnings & Side Effects', style: tt.titleLarge),
               ],
             ),
+            // AI safety checks (allergy conflict / duplicate therapy) first —
+            // highest-signal, from the user's own data.
+            if (_safetyWarnings.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              ..._safetyWarnings.map((w) => _buildBulletRow(
+                    w.message,
+                    w.kind == 'allergy'
+                        ? Icons.dangerous_rounded
+                        : Icons.copy_all_rounded,
+                    w.severity == 'high' ? ext.error : ext.warning,
+                  )),
+            ],
             if (warnings.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               Text('Warnings',

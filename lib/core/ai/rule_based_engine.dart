@@ -352,24 +352,66 @@ class RuleBasedEngine {
     }
 
     String? freq;
-    if (RegExp(r'\b(once|1x|once a day|once daily)\b').hasMatch(lower)) {
+    if (RegExp(r'\b(once|1x|once a day|once daily|qd|od|qhs)\b').hasMatch(lower)) {
       freq = 'once daily';
-    } else if (RegExp(r'\b(twice|2x|two times)\b').hasMatch(lower)) {
+    } else if (RegExp(r'\b(twice|2x|two times|bid|b\.i\.d)\b').hasMatch(lower)) {
       freq = 'twice daily';
-    } else if (RegExp(r'\b(thrice|3x|three times)\b').hasMatch(lower)) {
+    } else if (RegExp(r'\b(thrice|3x|three times|tid|t\.i\.d)\b').hasMatch(lower)) {
       freq = 'thrice daily';
-    } else if (RegExp(r'\b(four times|4x)\b').hasMatch(lower)) {
+    } else if (RegExp(r'\b(four times|4x|qid|q\.i\.d)\b').hasMatch(lower)) {
       freq = 'four times daily';
     } else if (RegExp(r'\b(as needed|prn|when needed)\b').hasMatch(lower)) {
       freq = 'asNeeded';
-    } else if (RegExp(r'every\s+(\d+)\s*hours?').hasMatch(lower)) {
+    } else if (RegExp(r'every\s+(\d+)\s*(hours?|h)\b').hasMatch(lower) ||
+        RegExp(r'\bq(\d+)h\b').hasMatch(lower)) {
       freq = 'everyXHours';
-      res['intervalHours'] =
-          int.tryParse(RegExp(r'every\s+(\d+)\s*hours?').firstMatch(lower)!.group(1)!);
+      final m = RegExp(r'every\s+(\d+)\s*(?:hours?|h)\b').firstMatch(lower) ??
+          RegExp(r'\bq(\d+)h\b').firstMatch(lower);
+      res['intervalHours'] = int.tryParse(m!.group(1)!);
     } else if (lower.contains('daily') || lower.contains('every day')) {
       freq = 'once daily';
     }
     if (freq != null) res['frequency'] = freq;
+
+    // Meal / food timing anchors.
+    if (RegExp(r'\b(with food|with meals?|after (a )?meals?|with breakfast|with lunch|with dinner|after eating)\b')
+        .hasMatch(lower)) {
+      res['withFood'] = true;
+    } else if (RegExp(r'\b(empty stomach|before (a )?meals?|before food|before eating|without food)\b')
+        .hasMatch(lower)) {
+      res['withFood'] = false;
+    }
+    for (final anchor in const {
+      'breakfast': 'breakfast',
+      'lunch': 'lunch',
+      'dinner': 'dinner',
+      'bedtime': 'bedtime',
+      'before bed': 'bedtime',
+      'at night': 'bedtime',
+      'in the morning': 'morning',
+      'morning': 'morning',
+      'evening': 'evening',
+    }.entries) {
+      if (lower.contains(anchor.key)) {
+        res['mealTiming'] = anchor.value;
+        break;
+      }
+    }
+
+    // Explicit clock times ("8am and 8pm", "at 9:00 and 21:00") → HH:mm list.
+    final times = <String>[];
+    for (final m
+        in RegExp(r'\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b').allMatches(lower)) {
+      var h = int.parse(m.group(1)!);
+      final min = m.group(2) != null ? int.parse(m.group(2)!) : 0;
+      final ap = m.group(3);
+      if (ap == 'pm' && h < 12) h += 12;
+      if (ap == 'am' && h == 12) h = 0;
+      if (h <= 23 && min <= 59) {
+        times.add('${h.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}');
+      }
+    }
+    if (times.isNotEmpty) res['times'] = times.toSet().toList()..sort();
 
     var name = input;
     name = name.replaceAll(
@@ -377,10 +419,23 @@ class RuleBasedEngine {
         ' ');
     name = name.replaceAll(
         RegExp(
-            r'\b(once|twice|thrice|four times|two times|three times|a day|per day|daily|every day|as needed|prn|when needed|tablet|capsule|liquid|syrup|injection|drops|cream|inhaler|patch|take|of)\b',
+            r'\b(once|twice|thrice|four times|two times|three times|a day|per day|daily|every day|as needed|prn|when needed|tablet|capsule|liquid|syrup|injection|drops|cream|inhaler|patch|take|of|qd|od|bid|tid|qid|qhs)\b',
             caseSensitive: false),
         ' ');
-    name = name.replaceAll(RegExp(r'every\s+\d+\s*hours?', caseSensitive: false), ' ');
+    name = name.replaceAll(RegExp(r'every\s+\d+\s*(hours?|h)\b', caseSensitive: false), ' ');
+    name = name.replaceAll(RegExp(r'\bq\d+h\b', caseSensitive: false), ' ');
+    // Meal / food / clock-time phrases.
+    name = name.replaceAll(
+        RegExp(
+            r'\b(with|before|after|without)\s+(food|meals?|breakfast|lunch|dinner|eating)\b',
+            caseSensitive: false),
+        ' ');
+    name = name.replaceAll(
+        RegExp(r'\b(empty stomach|before bed|bedtime|at night|in the morning|morning|evening)\b',
+            caseSensitive: false),
+        ' ');
+    name = name.replaceAll(RegExp(r'\b\d{1,2}(?::\d{2})?\s*(am|pm)\b', caseSensitive: false), ' ');
+    name = name.replaceAll(RegExp(r'\band\b|\bat\b', caseSensitive: false), ' ');
     name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (name.isNotEmpty) res['name'] = _capitalize(name);
     return res;

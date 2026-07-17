@@ -142,6 +142,42 @@ void main() {
       expect(m['dosageUnit'], 'mg');
       expect(m['frequency'], 'twice daily');
     });
+
+    test('pharmacy abbreviation "tid" + "with food"', () {
+      final m = engine.parseMedicine('Amoxicillin 500mg tid with food');
+      expect((m['name'] as String).toLowerCase(), contains('amoxicillin'));
+      expect(m['frequency'], 'thrice daily');
+      expect(m['withFood'], true);
+    });
+
+    test('"bid with dinner" → twice daily, dinner, with food', () {
+      final m = engine.parseMedicine('Metformin bid with dinner');
+      expect(m['frequency'], 'twice daily');
+      expect(m['mealTiming'], 'dinner');
+      expect(m['withFood'], true);
+    });
+
+    test('"once daily in the morning" → morning anchor', () {
+      final m = engine.parseMedicine('Lisinopril 10mg once daily in the morning');
+      expect(m['frequency'], 'once daily');
+      expect(m['mealTiming'], 'morning');
+    });
+
+    test('explicit times "8am and 8pm" → HH:mm list', () {
+      final m = engine.parseMedicine('Vitamin D at 8am and 8pm');
+      expect(m['times'], ['08:00', '20:00']);
+    });
+
+    test('"q8h" → every 8 hours', () {
+      final m = engine.parseMedicine('Ibuprofen q8h');
+      expect(m['frequency'], 'everyXHours');
+      expect(m['intervalHours'], 8);
+    });
+
+    test('"before bed" → bedtime anchor + empty stomach not set', () {
+      final m = engine.parseMedicine('Aspirin before bed');
+      expect(m['mealTiming'], 'bedtime');
+    });
   });
 
   group('hydrationTip', () {
