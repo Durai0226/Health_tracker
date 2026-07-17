@@ -10,6 +10,7 @@ import '../../../../core/widgets/app/vitals_widgets.dart';
 import '../../models/blood_pressure_reading.dart';
 import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
+import 'vitals_reminder_button.dart';
 import 'blood_pressure_report_screen.dart';
 
 /// Blood Pressure tracker — log, classify (AHA/ACC), trend, and act on readings.
@@ -82,6 +83,14 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
+              VitalsReminderButton(
+                id: 900020,
+                prefKey: 'vitals_bp_reminder',
+                title: 'Blood pressure check',
+                body: 'Time to measure and log your blood pressure.',
+                accent: accent,
+                defaultHour: 9,
+              ),
               if (_readings.isNotEmpty)
                 AppIconButton(
                   icon: Icons.assessment_rounded,

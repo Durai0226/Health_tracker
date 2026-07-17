@@ -68,6 +68,32 @@ class VitalsStorageService {
     _bump();
   }
 
+  // ============ BACKUP ============
+
+  /// Snapshot of all vitals for the backup file.
+  static Future<Map<String, dynamic>> exportJson() async {
+    final bp = await getAllBp();
+    final gl = await getAllGlucose();
+    return {
+      'bloodPressure': bp.map((r) => r.toJson()).toList(),
+      'glucose': gl.map((r) => r.toJson()).toList(),
+    };
+  }
+
+  /// Restore vitals from a backup snapshot (non-destructive upsert).
+  static Future<void> importJson(Map<String, dynamic> data) async {
+    for (final r in (data['bloodPressure'] as List? ?? const [])) {
+      try {
+        await saveBp(BloodPressureReading.fromJson(Map<String, dynamic>.from(r)));
+      } catch (_) {/* skip malformed */}
+    }
+    for (final r in (data['glucose'] as List? ?? const [])) {
+      try {
+        await saveGlucose(GlucoseReading.fromJson(Map<String, dynamic>.from(r)));
+      } catch (_) {/* skip malformed */}
+    }
+  }
+
   // ============ MAPPERS ============
 
   static BloodPressureReading _bpToDomain(db.BloodPressureReading d) {

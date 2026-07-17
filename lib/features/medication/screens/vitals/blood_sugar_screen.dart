@@ -11,6 +11,7 @@ import '../../../../core/widgets/app/vitals_widgets.dart';
 import '../../models/glucose_reading.dart';
 import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
+import 'vitals_reminder_button.dart';
 import 'blood_sugar_report_screen.dart';
 
 /// Blood Sugar tracker — log, classify per-context (ADA), estimated A1C, trend.
@@ -107,6 +108,14 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
                 onTap: _toggleUnit,
               ),
               const SizedBox(width: AppSpacing.sm),
+              VitalsReminderButton(
+                id: 900021,
+                prefKey: 'vitals_glucose_reminder',
+                title: 'Blood sugar check',
+                body: 'Time to measure and log your blood sugar.',
+                accent: accent,
+                defaultHour: 8,
+              ),
               if (_readings.isNotEmpty)
                 AppIconButton(
                   icon: Icons.assessment_rounded,

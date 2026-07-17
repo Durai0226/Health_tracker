@@ -13,6 +13,7 @@ import '../../features/reminders/models/reminder_category_model.dart' as Reminde
 import 'package:uuid/uuid.dart';
 import '../../features/medication/models/medicine.dart';
 import '../../features/medication/services/medicine_storage_service.dart';
+import '../../features/medication/services/vitals_storage_service.dart';
 import '../../features/focus/services/focus_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
@@ -525,9 +526,9 @@ class CleanStorageService {
     final water = WaterService.listenToDailyData()?.value.values.toList() ??
         const <DailyWaterData>[];
     return {
-      // v3: adds 'medicines' and 'focus' sections; older backups (v2/no version)
-      // simply omit them and are restored non-destructively by importData.
-      'version': 3,
+      // v4: adds a 'vitals' section (BP + glucose). Older backups simply omit
+      // sections and are restored non-destructively by importData.
+      'version': 4,
       'timestamp': DateTime.now().toIso8601String(),
       'settings': getUserSettings().toJson(),
       'medicines': await MedicineCleanStorageService.exportMedicinesJson(),
@@ -536,6 +537,7 @@ class CleanStorageService {
       },
       'reminders': getReminders().map((r) => r.toJson()).toList(),
       'water': water.map((d) => d.toJson()).toList(),
+      'vitals': await VitalsStorageService.exportJson(),
       'preferences': Map<String, dynamic>.from(_appPreferencesCache),
     };
   }
@@ -678,6 +680,15 @@ class CleanStorageService {
               DailyWaterData.fromJson(Map<String, dynamic>.from(w)));
         } catch (e) {
           debugPrint('Import water failed: $e');
+        }
+      }
+      // Vitals (v4+). Missing key → leave existing readings intact.
+      if (data['vitals'] is Map) {
+        try {
+          await VitalsStorageService.importJson(
+              Map<String, dynamic>.from(data['vitals'] as Map));
+        } catch (e) {
+          debugPrint('Import vitals failed: $e');
         }
       }
       if (data['preferences'] is Map) {
