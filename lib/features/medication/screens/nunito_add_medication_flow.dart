@@ -130,14 +130,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   void _onNameChanged() {
     if (_suppressNameSuggest) return;
     final next = DrugNameCatalog.suggest(_nameController.text);
-    if (next.length != _nameSuggestions.length ||
-        (next.isNotEmpty &&
-            _nameSuggestions.isNotEmpty &&
-            next.first.name != _nameSuggestions.first.name)) {
-      setState(() => _nameSuggestions = next);
-    } else if (next.isEmpty && _nameSuggestions.isNotEmpty) {
-      setState(() => _nameSuggestions = const []);
-    }
+    // Full element-wise comparison. The old length+first-item shortcut left
+    // stale suggestions on screen when the list changed but kept the same
+    // length and first entry (e.g. "Cro" -> "Cra").
+    final same = next.length == _nameSuggestions.length &&
+        List.generate(next.length, (i) => next[i].name == _nameSuggestions[i].name)
+            .every((e) => e);
+    if (!same) setState(() => _nameSuggestions = next);
   }
 
   void _loadExistingMedicine() {
@@ -146,7 +145,9 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _genericNameController.text = m.genericName ?? '';
     _expiryDate = m.expiryDate;
     _selectedForm = m.dosageForm;
-    _dosageController.text = m.dosageAmount.toString();
+    _dosageController.text = m.dosageAmount % 1 == 0
+        ? m.dosageAmount.toInt().toString()
+        : m.dosageAmount.toString();
     _strengthController.text = m.strength ?? '';
     _dosageUnit = m.dosageUnit ?? m.dosageForm.unit;
     // Stock: treat a stored 0 as "untracked" so the field starts blank rather
@@ -249,8 +250,23 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           _showError('Please enter a valid dosage');
           return false;
         }
+        // Stock is optional, but if entered it must be a non-negative whole
+        // number — otherwise it was silently dropped (saved as untracked).
+        final stockText = _stockController.text.trim();
+        if (stockText.isNotEmpty) {
+          final stock = int.tryParse(stockText);
+          if (stock == null || stock < 0) {
+            _showError('Enter a whole number for quantity, or leave it blank');
+            return false;
+          }
+        }
         return true;
       case 2:
+        // "End date" mode must have an end date chosen (applies to PRN too).
+        if (_durationMode == _DurationMode.endDate && _endDate == null) {
+          _showError('Please pick an end date');
+          return false;
+        }
         if (_frequencyType == FrequencyType.asNeeded) {
           return true; // PRN needs no fixed times
         }
@@ -805,14 +821,30 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   /// Map the parser's meal-timing / with-food output to a [MealTiming].
   MealTiming? _parseMealTiming(Map<String, dynamic> data) {
-    final raw = (data['mealTiming'] ?? data['withFood'])?.toString().toLowerCase();
-    if (raw == null || raw.isEmpty) return null;
-    if (raw == 'true' || raw.contains('with')) return MealTiming.withMeal;
-    if (raw.contains('before') && raw.contains('bed')) return MealTiming.beforeBed;
-    if (raw.contains('before')) return MealTiming.beforeMeal;
-    if (raw.contains('after')) return MealTiming.afterMeal;
-    if (raw.contains('empty')) return MealTiming.emptyStomach;
-    if (raw.contains('wake') || raw.contains('morning')) return MealTiming.wakeUp;
+    final raw = data['mealTiming']?.toString().toLowerCase();
+    if (raw != null && raw.isNotEmpty) {
+      // Specific instructions first, so "before meals" doesn't fall into the
+      // meal-name catch-all below.
+      if (raw.contains('empty')) return MealTiming.emptyStomach;
+      if (raw.contains('bed')) return MealTiming.beforeBed;
+      if (raw.contains('wake') || raw.contains('morning')) {
+        return MealTiming.wakeUp;
+      }
+      if (raw.contains('after')) return MealTiming.afterMeal;
+      if (raw.contains('before')) return MealTiming.beforeMeal;
+      // Meal-name anchors emitted by the rule engine (breakfast/lunch/dinner)
+      // and generic "with food" — these were previously dropped, losing the
+      // habit anchor for common phrases.
+      if (raw.contains('with') ||
+          raw.contains('meal') ||
+          raw.contains('breakfast') ||
+          raw.contains('lunch') ||
+          raw.contains('dinner')) {
+        return MealTiming.withMeal;
+      }
+    }
+    final wf = data['withFood']?.toString().toLowerCase();
+    if (wf == 'true' || wf == 'with') return MealTiming.withMeal;
     return null;
   }
 
@@ -1128,6 +1160,9 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final tt = Theme.of(context).textTheme;
     return GestureDetector(
       onTap: () {
+        // Re-tapping the already-selected count must NOT regenerate the default
+        // times — that would silently discard the user's edited/added times.
+        if (_frequencyType == freq) return;
         _hapticService.selection();
         setState(() {
           _frequencyType = freq;
@@ -1586,7 +1621,14 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               accent: med,
               onTap: () {
                 _hapticService.selection();
-                setState(() => _mealTiming = timing);
+                setState(() {
+                  // If the times are still the auto-generated defaults, re-anchor
+                  // them to the newly-picked meal timing; never overwrite times
+                  // the user hand-edited.
+                  final wasAuto = _timesMatchAuto();
+                  _mealTiming = timing;
+                  if (wasAuto && !_isPRN) _updateTimesForFrequency();
+                });
               },
             );
           }).toList(),
@@ -1747,6 +1789,20 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     }
   }
 
+  /// True when the current times still equal the auto-generated defaults for the
+  /// current frequency + meal timing (i.e. the user hasn't hand-edited them).
+  bool _timesMatchAuto() {
+    final auto = _defaultTimesFor(_frequencyType, _mealTiming);
+    if (auto.length != _scheduleTimes.length) return false;
+    for (var i = 0; i < auto.length; i++) {
+      if (auto[i].hour != _scheduleTimes[i].hour ||
+          auto[i].minute != _scheduleTimes[i].minute) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _updateTimesForFrequency() {
     switch (_frequencyType) {
       case FrequencyType.onceDaily:
@@ -1837,9 +1893,16 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   Future<void> _addTime() async {
     final time = await AppTimePicker.show(context, initial: TimeOfDay.now());
-    if (time != null) {
-      setState(() => _scheduleTimes.add(time));
-    }
+    if (time == null) return;
+    final key = time.hour * 60 + time.minute;
+    // Ignore duplicates, and keep times chronological so the "Dose N" labels
+    // (which follow list order) read in the order they'll actually fire.
+    if (_scheduleTimes.any((t) => t.hour * 60 + t.minute == key)) return;
+    setState(() {
+      _scheduleTimes.add(time);
+      _scheduleTimes
+          .sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
+    });
   }
 
   Future<void> _editTime(int index) async {

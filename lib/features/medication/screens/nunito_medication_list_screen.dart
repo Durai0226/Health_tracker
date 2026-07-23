@@ -246,6 +246,14 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     _hapticService.medium();
     final entries = await _buildReportEntries();
     if (entries == null) return;
+    if (entries.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No doses logged in the last 30 days')),
+        );
+      }
+      return;
+    }
     try {
       final now = DateTime.now();
       final csv = AdherenceReportService.buildCsv(
@@ -492,17 +500,19 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  if (medicine.isLowStock || medicine.isArchived) ...[
+                  // Only warn on low stock when stock is actually being tracked.
+                  // Untracked meds persist as currentStock 0 (NOT NULL column),
+                  // which previously showed a false "Low stock · 0" on every one.
+                  if ((medicine.isLowStock && (medicine.currentStock ?? 0) > 0) ||
+                      medicine.isArchived) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.xs,
                       children: [
-                        if (medicine.isLowStock)
+                        if (medicine.isLowStock && (medicine.currentStock ?? 0) > 0)
                           _statusPill(
-                            label: medicine.currentStock != null
-                                ? 'Low stock · ${medicine.currentStock}'
-                                : 'Low stock',
+                            label: 'Low stock · ${medicine.currentStock}',
                             icon: Symbols.warning_amber_rounded,
                             swatch: ext.warning,
                           ),

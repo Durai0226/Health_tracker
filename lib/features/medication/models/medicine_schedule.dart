@@ -91,32 +91,44 @@ class MedicineSchedule {
   bool get isOngoing => endDate == null && durationDays == null;
 
   bool isActiveOnDate(DateTime date) {
-    if (startDate != null && date.isBefore(startDate!)) return false;
-    if (endDate != null && date.isAfter(endDate!)) return false;
-    if (durationDays != null && startDate != null) {
-      final daysSinceStart = date.difference(startDate!).inDays;
+    // Normalize to date-only. The alarm isolate and the timeline pass a
+    // DateTime carrying a time-of-day; using it raw makes `difference().inDays`
+    // truncate to the wrong day count (off-by-one for every-X-days / cyclical /
+    // duration) and makes the end-date exclusive. Compare whole calendar days.
+    final d = DateTime(date.year, date.month, date.day);
+    final start = startDate == null
+        ? null
+        : DateTime(startDate!.year, startDate!.month, startDate!.day);
+
+    if (start != null && d.isBefore(start)) return false;
+    if (endDate != null) {
+      final end = DateTime(endDate!.year, endDate!.month, endDate!.day);
+      if (d.isAfter(end)) return false; // end date is inclusive
+    }
+    if (durationDays != null && start != null) {
+      final daysSinceStart = d.difference(start).inDays;
       if (daysSinceStart >= durationDays!) return false;
     }
 
     // Check specific days
     if (frequencyType == FrequencyType.specificDays && specificDays != null) {
-      final weekday = date.weekday;
+      final weekday = d.weekday;
       return specificDays!.contains(weekday);
     }
 
     // Check cyclical
-    if (frequencyType == FrequencyType.cyclical && 
-        cycleDaysOn != null && cycleDaysOff != null && startDate != null) {
-      final daysSinceStart = date.difference(startDate!).inDays;
+    if (frequencyType == FrequencyType.cyclical &&
+        cycleDaysOn != null && cycleDaysOff != null && start != null) {
+      final daysSinceStart = d.difference(start).inDays;
       final cycleLength = cycleDaysOn! + cycleDaysOff!;
       final dayInCycle = daysSinceStart % cycleLength;
       return dayInCycle < cycleDaysOn!;
     }
 
     // Check interval days
-    if (frequencyType == FrequencyType.everyXDays && 
-        intervalDays != null && startDate != null) {
-      final daysSinceStart = date.difference(startDate!).inDays;
+    if (frequencyType == FrequencyType.everyXDays &&
+        intervalDays != null && start != null) {
+      final daysSinceStart = d.difference(start).inDays;
       return daysSinceStart % intervalDays! == 0;
     }
 

@@ -120,6 +120,13 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
             label: 'Undo',
             onPressed: () async {
               for (final id in ids) {
+                // Reverse the stock decrement for taken doses before deleting,
+                // otherwise Undo silently loses inventory.
+                final log = await MedicineCleanStorageService.getLog(id);
+                if (log != null && log.isTaken) {
+                  await MedicineCleanStorageService.restoreStock(
+                      log.medicineId, log.dosageTaken);
+                }
                 await MedicineCleanStorageService.deleteLog(id);
               }
               await _loadData();
@@ -161,11 +168,14 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   }
 
   Future<void> _buildTodaySchedule() async {
+    // Single source of truth (shared with the Today hub's next-dose hero).
+    final requestDate = _selectedDate;
+    final doses = await TodayScheduleService.getTodaysDoses(requestDate);
+    // Discard stale results if the user changed the date during the await —
+    // otherwise two rapid taps could interleave and merge both days' doses.
+    if (requestDate != _selectedDate) return;
     _todaysDoses.clear();
     _takenStatus.clear();
-
-    // Single source of truth (shared with the Today hub's next-dose hero).
-    final doses = await TodayScheduleService.getTodaysDoses(_selectedDate);
     for (final d in doses) {
       _todaysDoses.add(_ScheduledDose(
         medicine: d.medicine,
@@ -262,8 +272,10 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                   SliverToBoxAdapter(child: _buildInteractionBanner()),
                 SliverToBoxAdapter(child: _buildRefillBanner()),
                 SliverToBoxAdapter(child: _buildSummaryCard()),
-                SliverToBoxAdapter(child: _buildStatsRow()),
+                // Date selector before the stats so the numbers sit next to the
+                // picker that scopes them (the stats follow the selected date).
                 SliverToBoxAdapter(child: _buildDateSelector()),
+                SliverToBoxAdapter(child: _buildStatsRow()),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(
@@ -371,8 +383,12 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     final anyExpired = flagged.any((m) => m.isExpired);
     final swatch = anyExpired ? ext.error : ext.warning;
     final n = flagged.length;
-    final lowCount = flagged.where((m) => m.isLowStock).length;
+    // Bucket each flagged med once (expiry takes priority) so the subtitle
+    // parts sum to the count — a med both low AND expiring was double-counted.
     final expCount = flagged.where((m) => m.isExpiringSoon || m.isExpired).length;
+    final lowCount = flagged
+        .where((m) => m.isLowStock && !(m.isExpiringSoon || m.isExpired))
+        .length;
     final parts = <String>[
       if (lowCount > 0) '$lowCount running low',
       if (expCount > 0) '$expCount expiring',
@@ -582,7 +598,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${(_adherenceRate * 100).toInt()}%',
+              Text('${(_adherenceRate * 100).round()}%',
                   style: tt.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: ext.mark(ext.medicine))),
@@ -599,10 +615,21 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     final ext = AppColorsExt.of(context);
     final takenToday = _todaysDoses.where((d) => _takenStatus['${d.medicine.id}_${d.timeIndex}'] == true).length;
     final totalToday = _todaysDoses.length;
-    final upcoming = _todaysDoses.where((d) =>
-      d.scheduledTime.isAfter(DateTime.now()) &&
-      _takenStatus['${d.medicine.id}_${d.timeIndex}'] != true
-    ).length;
+    // "Upcoming" is scoped to the SELECTED date, not always "now": a past day
+    // has nothing upcoming; today counts doses still after now; a future day
+    // counts every not-yet-taken dose.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selDay =
+        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final isToday = selDay == today;
+    final isPastDay = selDay.isBefore(today);
+    final upcoming = _todaysDoses.where((d) {
+      final taken = _takenStatus['${d.medicine.id}_${d.timeIndex}'] == true;
+      if (taken || isPastDay) return false;
+      if (isToday) return d.scheduledTime.isAfter(now);
+      return true; // future day → all untaken doses are upcoming
+    }).length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -710,30 +737,49 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
 
   Widget _buildEmptySchedule() {
     final ext = AppColorsExt.of(context);
+    // Distinguish true onboarding (no meds yet) from an off-day (meds exist but
+    // none are scheduled on the selected date). The old copy told an existing
+    // user to "add your first medication".
+    final hasMeds = _medicines.any((m) => m.isActive && !m.isArchived);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
       child: EmptyState(
         icon: Symbols.event_available_rounded,
-        title: 'No medications scheduled',
-        message: 'Tap + to add your first medication',
+        title: hasMeds ? 'Nothing scheduled for this day' : 'No medications scheduled',
+        message: hasMeds
+            ? 'None of your medicines are due on this date.'
+            : 'Tap + to add your first medication',
         accent: ext.medicine,
       ),
     );
   }
 
   Widget _buildTimelineList() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    bool isFutureDay(DateTime t) =>
+        DateTime(t.year, t.month, t.day).isAfter(today);
+    bool isHandled(_ScheduledDose d) =>
+        (_takenStatus['${d.medicine.id}_${d.timeIndex}'] ?? false) ||
+        d.log?.isSkipped == true ||
+        d.log?.isMissed == true;
+    // "Next" = the earliest still-open dose that is due today (overdue OR
+    // upcoming) — never a future-day dose, never one already taken/skipped/
+    // missed. This keeps the emphasis on the overdue dose, not a later one.
+    final nextIndex = _todaysDoses
+        .indexWhere((d) => !isHandled(d) && !isFutureDay(d.scheduledTime));
+
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           final dose = _todaysDoses[index];
-          final isTaken = _takenStatus['${dose.medicine.id}_${dose.timeIndex}'] ?? false;
-          final isPast = dose.scheduledTime.isBefore(DateTime.now());
-          final isNext = !isTaken && index == _todaysDoses.indexWhere((d) =>
-            !(_takenStatus['${d.medicine.id}_${d.timeIndex}'] ?? false) &&
-            d.scheduledTime.isAfter(DateTime.now())
-          );
+          final isTaken =
+              _takenStatus['${dose.medicine.id}_${dose.timeIndex}'] ?? false;
+          final isPast = dose.scheduledTime.isBefore(now);
+          final isNext = index == nextIndex;
 
-          return _buildTimelineItem(dose, isTaken, isPast, isNext, index == 0, index == _todaysDoses.length - 1);
+          return _buildTimelineItem(dose, isTaken, isPast, isNext, index == 0,
+              index == _todaysDoses.length - 1);
         },
         childCount: _todaysDoses.length,
       ),
@@ -745,9 +791,29 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     final tt = Theme.of(context).textTheme;
     final timeStr = DateFormat('h:mm a').format(dose.scheduledTime);
 
+    // A dose can be taken / skipped / missed (terminal) — or, on a future day,
+    // view-only. Previously only "taken" was tracked, so a skipped or missed
+    // dose rendered as a fresh pending one and could be re-taken (duplicate log
+    // + double stock decrement); a future dose could be "taken" early.
+    final isSkipped = dose.log?.isSkipped == true;
+    final isMissed = dose.log?.isMissed == true;
+    final isTerminal = isTaken || isSkipped || isMissed;
+    final now = DateTime.now();
+    final isFuture = DateTime(dose.scheduledTime.year, dose.scheduledTime.month,
+            dose.scheduledTime.day)
+        .isAfter(DateTime(now.year, now.month, now.day));
+    final actionable = !isTerminal && !isFuture;
+    final closed = isTerminal; // taken/skipped/missed all read as "done"
+
     final dotColor = isTaken
         ? ext.success.base
         : (isNext ? ext.mark(ext.medicine) : ext.textTertiary.withOpacity(0.5));
+    final cardColor = isTaken
+        ? ext.success.container
+        : (isSkipped || isMissed ? ext.surfaceVariant : ext.surface);
+    final nameColor = isTaken
+        ? ext.success.onContainer
+        : (isSkipped || isMissed ? ext.textTertiary : ext.textPrimary);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
@@ -797,10 +863,10 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: MergeSemantics(
                   child: Semantics(
-                  button: !isTaken,
+                  button: actionable,
                   child: AppCard(
-                  color: isTaken ? ext.success.container : ext.surface,
-                  onTap: isTaken ? null : () => _onTakeMedication(dose),
+                  color: cardColor,
+                  onTap: actionable ? () => _onTakeMedication(dose) : null,
                   child: Row(
                     children: [
                       NunitoPillIndicator(
@@ -817,10 +883,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                               dose.medicine.name,
                               style: tt.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: isTaken
-                                    ? ext.success.onContainer
-                                    : ext.textPrimary,
-                                decoration: isTaken
+                                color: nameColor,
+                                decoration: closed
                                     ? TextDecoration.lineThrough
                                     : null,
                               ),
@@ -831,25 +895,16 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                               style: tt.bodySmall?.copyWith(
                                 color: isTaken
                                     ? ext.success.onContainer
-                                    : ext.textSecondary,
+                                    : (isSkipped || isMissed
+                                        ? ext.textTertiary
+                                        : ext.textSecondary),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      if (!isTaken)
-                        AppButton(
-                          label: isNext ? 'Take Now' : 'Take',
-                          size: AppButtonSize.sm,
-                          variant: isNext
-                              ? AppButtonVariant.primary
-                              : AppButtonVariant.tonal,
-                          accent: ext.medicine,
-                          onPressed: () => _onTakeMedication(dose),
-                        )
-                      else
-                        Icon(Symbols.check_circle_rounded,
-                            color: ext.success.base, size: 28),
+                      _buildDoseTrailing(
+                          isTaken, isSkipped, isMissed, isNext, actionable, dose),
                     ],
                   ),
                 ),
@@ -860,6 +915,46 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           ],
         ),
       ),
+    );
+  }
+
+  /// Trailing control for a timeline dose: a completed check, a Skipped/Missed
+  /// badge (non-actionable), a Take button (only for a due, unhandled dose), or
+  /// a view-only clock for a future-day dose.
+  Widget _buildDoseTrailing(bool isTaken, bool isSkipped, bool isMissed,
+      bool isNext, bool actionable, _ScheduledDose dose) {
+    final ext = AppColorsExt.of(context);
+    if (isTaken) {
+      return Icon(Symbols.check_circle_rounded,
+          color: ext.success.base, size: 28);
+    }
+    if (isSkipped) return _doseBadge('Skipped', ext.textTertiary);
+    if (isMissed) return _doseBadge('Missed', ext.warning.base);
+    if (actionable) {
+      return AppButton(
+        label: isNext ? 'Take Now' : 'Take',
+        size: AppButtonSize.sm,
+        variant: isNext ? AppButtonVariant.primary : AppButtonVariant.tonal,
+        accent: ext.medicine,
+        onPressed: () => _onTakeMedication(dose),
+      );
+    }
+    // Future-day dose — view only, not takeable yet.
+    return Icon(Symbols.schedule_rounded, color: ext.textTertiary, size: 22);
+  }
+
+  Widget _doseBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: AppRadius.brFull,
+      ),
+      child: Text(label,
+          style: Theme.of(context)
+              .textTheme
+              .labelMedium
+              ?.copyWith(color: color, fontWeight: FontWeight.w600)),
     );
   }
 

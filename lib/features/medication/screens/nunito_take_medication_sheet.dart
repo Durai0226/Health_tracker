@@ -114,6 +114,11 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
       }
     } catch (e) {
       debugPrint('Error skipping medication: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     }
 
     if (mounted) setState(() => _isLoading = false);
@@ -164,22 +169,16 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
         minutes,
       );
 
-      // Record a snooze log so history reflects the deferred dose.
-      final log = MedicineLog(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        medicineId: widget.medicine.id,
-        scheduledTime: widget.scheduledTime,
-        actionTime: DateTime.now(),
-        status: MedicineStatus.snoozed,
-        notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-      );
-      await MedicineCleanStorageService.addLog(log);
-
+      // Snooze only reschedules the reminder — it is NOT an adherence outcome.
+      // Do NOT persist a log: the store has no 'snoozed' status, so a snoozed
+      // log round-trips to 'pending', shows wrongly in history, and (worse)
+      // suppresses missed-dose reconciliation for that slot. The dose stays
+      // open and will reconcile to 'missed' if never taken.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Snoozed for $minutes min')),
         );
-        Navigator.pop(context, {'snoozed': true, 'minutes': minutes, 'log': log});
+        Navigator.pop(context, {'snoozed': true, 'minutes': minutes});
       }
     } catch (e) {
       debugPrint('Error snoozing medication: $e');

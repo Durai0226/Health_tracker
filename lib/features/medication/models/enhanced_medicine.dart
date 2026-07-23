@@ -137,9 +137,21 @@ class EnhancedMedicine {
 
   int get estimatedDaysRemaining {
     if (currentStock == null) return -1;
-    final dailyDoses = schedule.times.length;
-    if (dailyDoses == 0) return -1;
-    return (currentStock! / (dailyDoses * dosageAmount)).floor();
+    // Average units consumed per day over a representative window, using the
+    // schedule's real per-day slots. `schedule.times.length` alone was wrong for
+    // everyXHours (interval fan-out) and for specificDays / everyXDays / cyclical
+    // (off-days), over- or under-estimating the runway.
+    const window = 28;
+    final now = DateTime.now();
+    final base = DateTime(now.year, now.month, now.day);
+    var slotCount = 0;
+    for (var i = 0; i < window; i++) {
+      slotCount += schedule.getScheduledTimesForDate(base.add(Duration(days: i))).length;
+    }
+    if (slotCount == 0) return -1;
+    final unitsPerDay = (slotCount * dosageAmount) / window;
+    if (unitsPerDay <= 0) return -1;
+    return (currentStock! / unitsPerDay).floor();
   }
 
   String get displayDosage {
@@ -372,6 +384,14 @@ class EnhancedMedicine {
       currentStock: newStock,
       lastRefillDate: DateTime.now(),
     );
+  }
+
+  /// Puts back the units a dose removed (for Undo). Mirrors [reduceStock]'s
+  /// `ceil()` so a taken-then-undone dose leaves stock unchanged. Not a refill,
+  /// so it does not touch lastRefillDate.
+  EnhancedMedicine restoreStock(double amount) {
+    if (currentStock == null) return this;
+    return copyWith(currentStock: (currentStock! + amount.ceil()).clamp(0, 999999));
   }
 
   /// Archive the medicine

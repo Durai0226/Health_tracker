@@ -288,11 +288,27 @@ class MedicineCleanStorageService {
     }
   }
 
+  /// Put back the units a dose removed — used by Undo so undoing a "taken" dose
+  /// also reverses its stock decrement (previously only the log was deleted).
+  static Future<void> restoreStock(String medicineId, double amount) async {
+    final med = await getMedicine(medicineId);
+    if (med != null && med.currentStock != null) {
+      await updateMedicine(med.restoreStock(amount));
+    }
+  }
+
   // ============ MEDICINE LOG METHODS ============
 
   static Future<List<MedicineLog>> getAllLogs() async {
     final logs = await _dao.getAllLogs();
     return logs.map(_mapToDomainLog).toList();
+  }
+
+  /// Single log by id (for Undo, which must know the medicine + dose amount to
+  /// reverse a stock decrement before deleting the log).
+  static Future<MedicineLog?> getLog(String id) async {
+    final row = await _dao.getLogById(id);
+    return row == null ? null : _mapToDomainLog(row);
   }
 
   static Future<List<MedicineLog>> getLogsForMedicine(String medicineId) async {
@@ -402,8 +418,12 @@ class MedicineCleanStorageService {
           if (!slot.isBefore(graceCutoff)) continue;
           // Ignore slots that predate the medicine's creation.
           if (slot.isBefore(med.createdAt)) continue;
-          // Idempotency: skip if a log already exists for this exact slot.
+          // Idempotency: skip only if a TERMINAL log (taken/skipped/missed)
+          // already exists for this exact slot. A non-terminal (pending) log
+          // must not suppress the missed insert, or a deferred-then-forgotten
+          // dose would never be counted as missed.
           final exists = medLogs.any((l) =>
+              (l.isTaken || l.isSkipped || l.isMissed) &&
               l.scheduledTime.year == slot.year &&
               l.scheduledTime.month == slot.month &&
               l.scheduledTime.day == slot.day &&
@@ -869,9 +889,16 @@ class MedicineCleanStorageService {
       }
     }
 
-    final taken = logs.where((l) => l.isTaken).length;
-    final skipped = logs.where((l) => l.isSkipped).length;
-    final missed = logs.where((l) => l.isMissed).length;
+    // Scope counts to the same population as the scheduled denominator so the
+    // rate can't exceed 100% from archived/PRN/orphaned taken logs.
+    final eligibleIds = medicines
+        .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
+        .map((m) => m.id)
+        .toSet();
+    final scopedLogs = logs.where((l) => eligibleIds.contains(l.medicineId));
+    final taken = scopedLogs.where((l) => l.isTaken).length;
+    final skipped = scopedLogs.where((l) => l.isSkipped).length;
+    final missed = scopedLogs.where((l) => l.isMissed).length;
 
     return DailyMedicineSummary(
       date: date,
@@ -879,9 +906,11 @@ class MedicineCleanStorageService {
       taken: taken,
       skipped: skipped,
       missed: missed,
-      adherenceRate: scheduled > 0 ? taken / scheduled : 1.0,
-      medicinesTaken: logs.where((l) => l.isTaken).map((l) => l.medicineId).toList(),
-      medicinesMissed: logs.where((l) => l.isMissed).map((l) => l.medicineId).toList(),
+      adherenceRate: scheduled > 0 ? (taken / scheduled).clamp(0.0, 1.0) : 1.0,
+      medicinesTaken:
+          scopedLogs.where((l) => l.isTaken).map((l) => l.medicineId).toList(),
+      medicinesMissed:
+          scopedLogs.where((l) => l.isMissed).map((l) => l.medicineId).toList(),
     );
   }
 
@@ -965,9 +994,18 @@ class MedicineCleanStorageService {
     final logs = await getLogsForDateRange(startDate, now);
     final medicines = await getAllMedicines();
 
-    final taken = logs.where((l) => l.isTaken).length;
-    final skipped = logs.where((l) => l.isSkipped).length;
-    final missed = logs.where((l) => l.isMissed).length;
+    // Scope the numerator to the same population as the scheduled denominator
+    // (active, non-archived, non-PRN). Counting taken logs from archived / PRN /
+    // orphaned medicines against a denominator that excludes them let adherence
+    // exceed 100% ("12 of 7 doses").
+    final eligibleIds = medicines
+        .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
+        .map((m) => m.id)
+        .toSet();
+    final scoped = logs.where((l) => eligibleIds.contains(l.medicineId));
+    final taken = scoped.where((l) => l.isTaken).length;
+    final skipped = scoped.where((l) => l.isSkipped).length;
+    final missed = scoped.where((l) => l.isMissed).length;
     final total = taken + skipped + missed;
 
     // The denominator that makes adherence meaningful: the number of scheduled
@@ -1002,7 +1040,8 @@ class MedicineCleanStorageService {
       'missed': missed,
       'total': total,
       'scheduled': scheduled,
-      'adherenceRate': scheduled > 0 ? (taken / scheduled * 100).round() : 100,
+      'adherenceRate':
+          scheduled > 0 ? (taken / scheduled * 100).round().clamp(0, 100) : 100,
       'days': days,
     };
   }
@@ -1060,7 +1099,8 @@ class MedicineCleanStorageService {
       'missed': missed,
       'total': total,
       'scheduled': scheduled,
-      'adherenceRate': scheduled > 0 ? (taken / scheduled * 100).round() : 100,
+      'adherenceRate':
+          scheduled > 0 ? (taken / scheduled * 100).round().clamp(0, 100) : 100,
       'days': days,
     };
   }

@@ -1423,7 +1423,11 @@ class NotificationService {
   }
 
   Future<void> snoozeReminder(int notificationId, int minutes,
-      {String? title, String? body}) async {
+      {String? title,
+      String? body,
+      String? medicineId,
+      int? hour,
+      int? minute}) async {
     try {
       final reminders = CleanStorageService.getReminders();
       // Match the fired notification (or its snoozed `+100000` variant) to a
@@ -1471,7 +1475,8 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        payload: _buildAlarmPayload(snoozeId, cleanTitle, cleanBody, minutes),
+        payload: _buildAlarmPayload(snoozeId, cleanTitle, cleanBody, minutes,
+            medicineId: medicineId, hour: hour, minute: minute),
       );
       debugPrint('✓ Reminder snoozed for $minutes minutes');
     } catch (e) {

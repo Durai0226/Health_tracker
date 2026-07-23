@@ -38,18 +38,13 @@ class DrugInteractionService {
   /// Check interactions between two drugs
   List<DrugInteraction> checkInteraction(String drug1, String drug2) {
     final interactions = <DrugInteraction>[];
-    final d1 = _normalizeDrugName(drug1);
-    final d2 = _normalizeDrugName(drug2);
 
     for (final interaction in _interactionDatabase) {
-      final name1 = _normalizeDrugName(interaction.drug1Name);
-      final name2 = _normalizeDrugName(interaction.drug2Name);
-
-      if ((d1.contains(name1) || name1.contains(d1)) && 
-          (d2.contains(name2) || name2.contains(d2))) {
+      if (_namesMatch(drug1, interaction.drug1Name) &&
+          _namesMatch(drug2, interaction.drug2Name)) {
         interactions.add(interaction);
-      } else if ((d1.contains(name2) || name2.contains(d1)) && 
-                 (d2.contains(name1) || name1.contains(d2))) {
+      } else if (_namesMatch(drug1, interaction.drug2Name) &&
+          _namesMatch(drug2, interaction.drug1Name)) {
         interactions.add(interaction);
       }
     }
@@ -83,17 +78,10 @@ class DrugInteractionService {
 
   /// Get drug information
   DrugInfo? getDrugInfo(String drugName) {
-    final normalized = _normalizeDrugName(drugName);
     for (final info in _drugDatabase) {
-      if (_normalizeDrugName(info.genericName).contains(normalized) ||
-          normalized.contains(_normalizeDrugName(info.genericName))) {
-        return info;
-      }
+      if (_namesMatch(drugName, info.genericName)) return info;
       for (final brand in info.brandNames) {
-        if (_normalizeDrugName(brand).contains(normalized) ||
-            normalized.contains(_normalizeDrugName(brand))) {
-          return info;
-        }
+        if (_namesMatch(drugName, brand)) return info;
       }
     }
     return null;
@@ -161,6 +149,30 @@ class DrugInteractionService {
 
   String _normalizeDrugName(String name) {
     return name.toLowerCase().trim().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  /// Tokens of a name — split on non-alphanumerics, lowercased, non-empty.
+  Set<String> _drugTokens(String s) => s
+      .toLowerCase()
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((t) => t.isNotEmpty)
+      .toSet();
+
+  /// Whether two drug names refer to the same drug: exact normalized equality,
+  /// or a shared WHOLE token of >= 4 chars (e.g. "Dolo 650" ~ brand "Dolo").
+  /// Replaces loose bidirectional substring containment, which produced wrong
+  /// monographs and false interaction warnings when one short name happened to
+  /// be a substring of another.
+  bool _namesMatch(String a, String b) {
+    final na = _normalizeDrugName(a);
+    final nb = _normalizeDrugName(b);
+    if (na.isEmpty || nb.isEmpty) return false;
+    if (na == nb) return true;
+    final tb = _drugTokens(b);
+    for (final t in _drugTokens(a)) {
+      if (t.length >= 4 && tb.contains(t)) return true;
+    }
+    return false;
   }
 
   // ============ DRUG INTERACTION DATABASE ============
@@ -667,14 +679,11 @@ class DrugInteractionService {
 
   /// Check if a drug has any known severe interactions
   bool hasSevereInteractions(String drugName) {
-    final normalized = _normalizeDrugName(drugName);
     for (final interaction in _interactionDatabase) {
       if (interaction.severity == InteractionSeverity.severe ||
           interaction.severity == InteractionSeverity.contraindicated) {
-        final n1 = _normalizeDrugName(interaction.drug1Name);
-        final n2 = _normalizeDrugName(interaction.drug2Name);
-        if (normalized.contains(n1) || n1.contains(normalized) ||
-            normalized.contains(n2) || n2.contains(normalized)) {
+        if (_namesMatch(drugName, interaction.drug1Name) ||
+            _namesMatch(drugName, interaction.drug2Name)) {
           return true;
         }
       }

@@ -351,11 +351,15 @@ class MedicationReminderService {
 
   /// Find the index of the schedule time slot matching [scheduledTime].
   /// Falls back to 0 if no exact hour/minute match is found.
+  ///
+  /// Resolves against the EXPANDED per-day slots (not the raw anchor list), so
+  /// 'every X hours' meds — whose single anchor fans out to many daily slots —
+  /// map a fired dose to the correct slot index instead of always 0.
   int _resolveTimeIndex(EnhancedMedicine medicine, DateTime scheduledTime) {
-    final times = medicine.schedule.times;
-    for (int i = 0; i < times.length; i++) {
-      if (times[i].hour == scheduledTime.hour &&
-          times[i].minute == scheduledTime.minute) {
+    final slots = medicine.schedule.getScheduledTimesForDate(scheduledTime);
+    for (int i = 0; i < slots.length; i++) {
+      if (slots[i].hour == scheduledTime.hour &&
+          slots[i].minute == scheduledTime.minute) {
         return i;
       }
     }

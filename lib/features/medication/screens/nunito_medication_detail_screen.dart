@@ -348,15 +348,14 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       await _reminderService.cancelReminders(_medicine);
     }
 
+    if (!mounted) return; // awaits above may outlive the screen
     setState(() => _medicine = updated);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_medicine.isArchived ? 'Medicine archived' : 'Medicine restored'),
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_medicine.isArchived ? 'Medicine archived' : 'Medicine restored'),
+      ),
+    );
   }
 
   Future<void> _deleteMedicine() async {
@@ -499,12 +498,16 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                           children: [
                             Text(
                               _medicine.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: tt.headlineMedium?.copyWith(
                                   color: onHeader, fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               _medicine.displayDosage,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: tt.bodyLarge
                                   ?.copyWith(color: onHeader.withOpacity(0.8)),
                             ),
@@ -586,7 +589,10 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     final schedule = _medicine.schedule;
-    final nextTime = _reminderService.getNextReminderTime(_medicine);
+    // Archived meds have their reminders cancelled, so don't imply an upcoming
+    // dose or an active reminder state on the Schedule card.
+    final nextTime =
+        _medicine.isArchived ? null : _reminderService.getNextReminderTime(_medicine);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -620,7 +626,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 highlight: true,
               ),
             ],
-            if (_medicine.reminderEnabled) ...[
+            if (_medicine.reminderEnabled && !_medicine.isArchived) ...[
               const SizedBox(height: AppSpacing.md),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

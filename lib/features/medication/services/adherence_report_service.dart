@@ -111,10 +111,18 @@ class AdherenceReportService {
     return buf.toString();
   }
 
-  static String _csvField(String s) =>
-      (s.contains(',') || s.contains('"') || s.contains('\n'))
-          ? '"${s.replaceAll('"', '""')}"'
-          : s;
+  static String _csvField(String s) {
+    var v = s;
+    // Neutralize spreadsheet formula injection: a cell beginning with = + - @
+    // (or a leading tab/CR) is executed as a formula by Excel/Sheets. Prefix a
+    // single quote so the value is treated as literal text.
+    if (v.isNotEmpty && '=+-@\t\r'.contains(v[0])) {
+      v = "'$v";
+    }
+    return (v.contains(',') || v.contains('"') || v.contains('\n'))
+        ? '"${v.replaceAll('"', '""')}"'
+        : v;
+  }
 
   static List<MedicineLog> _inWindow(
       List<MedicineLog> logs, DateTime? from, DateTime? to) {

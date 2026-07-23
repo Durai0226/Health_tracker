@@ -44,7 +44,10 @@ class _AlarmScreenState extends State<AlarmScreen>
   // Cross-isolate "stop ringing" channel: the notification-action handlers run
   // in the alarm/background isolate and can't touch this screen's audio player
   // directly, so they send to this named port to silence + close the screen.
-  static const String _kAlarmStopPort = 'db_alarm_stop';
+  // Scope the stop-port to THIS alarm's notification id. A single shared name
+  // let a second concurrent alarm's registration overwrite the first's, so the
+  // earlier AlarmScreen could never be signalled and kept ringing.
+  String get _kAlarmStopPort => 'db_alarm_stop_${_payloadId() ?? 'default'}';
   ReceivePort? _stopPort;
 
   @override
@@ -206,6 +209,11 @@ class _AlarmScreenState extends State<AlarmScreen>
         mins,
         title: widget.payload['title']?.toString(),
         body: widget.payload['body']?.toString(),
+        // Carry the dose identity so a snoozed medicine re-fire still shows Take
+        // and logs correctly, instead of losing its medicine link.
+        medicineId: widget.payload['medicineId']?.toString(),
+        hour: (widget.payload['hour'] as num?)?.toInt(),
+        minute: (widget.payload['minute'] as num?)?.toInt(),
       );
     }
     _exit();
@@ -475,6 +483,10 @@ class _AlarmScreenState extends State<AlarmScreen>
   Widget _actions(AppColorsExt ext, bool dark) {
     final isMedicine =
         (widget.payload['medicineId']?.toString().isNotEmpty ?? false);
+    // Same resolution _handleSnooze uses, so the chip's a11y label matches the
+    // real duration instead of a hardcoded "10 minutes".
+    final sd = widget.payload['snoozeDuration'];
+    final snoozeMins = sd is int ? sd : (sd is String ? int.tryParse(sd) ?? 5 : 5);
     return Column(
       children: [
         if (isMedicine) ...[
@@ -486,6 +498,7 @@ class _AlarmScreenState extends State<AlarmScreen>
             Expanded(
               child: _SnoozeChip(
                 ext: ext,
+                minutes: snoozeMins,
                 onTap: _handleSnooze,
               ),
             ),
@@ -667,8 +680,10 @@ class _DismissChipState extends State<_DismissChip> {
 
 class _SnoozeChip extends StatefulWidget {
   final AppColorsExt ext;
+  final int minutes;
   final VoidCallback onTap;
-  const _SnoozeChip({required this.ext, required this.onTap});
+  const _SnoozeChip(
+      {required this.ext, required this.minutes, required this.onTap});
   @override
   State<_SnoozeChip> createState() => _SnoozeChipState();
 }
@@ -681,7 +696,7 @@ class _SnoozeChipState extends State<_SnoozeChip> {
     final accent = ext.mark(ext.brand);
     return Semantics(
       button: true,
-      label: 'Snooze 10 minutes',
+      label: 'Snooze ${widget.minutes} minutes',
       child: GestureDetector(
         onTapDown: (_) => setState(() => _down = true),
         onTapCancel: () => setState(() => _down = false),

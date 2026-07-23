@@ -28,12 +28,15 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
   Future<void> _load() async {
     await MedicineCleanStorageService.init();
     final all = await MedicineCleanStorageService.getAllMedicines();
-    // Only meds where supply/expiry is meaningful (stock or expiry tracked).
+    // Only meds where supply/expiry is meaningful. currentStock is persisted
+    // NOT-NULL (untracked coerces to 0), so `!= null` matched everything and the
+    // "No supply tracked" empty state was unreachable — gate on a positive stock
+    // count (or an expiry) instead so untracked meds drop out.
     final tracked = all
         .where((m) =>
             m.isActive &&
             !m.isArchived &&
-            (m.currentStock != null || m.expiryDate != null))
+            ((m.currentStock ?? 0) > 0 || m.expiryDate != null))
         .toList();
     // Flagged (low / expiring / expired) first, then by days remaining.
     int rank(EnhancedMedicine m) {

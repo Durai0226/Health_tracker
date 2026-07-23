@@ -20,9 +20,10 @@ import 'dose_action_queue.dart';
 /// canceling the notification alone would leave it ringing. No-op when no alarm
 /// screen is showing (the named port is unregistered).
 @pragma('vm:entry-point')
-void _stopRingingAlarmScreen() {
+void _stopRingingAlarmScreen(int? id) {
   try {
-    ui.IsolateNameServer.lookupPortByName('db_alarm_stop')?.send('stop');
+    ui.IsolateNameServer.lookupPortByName('db_alarm_stop_${id ?? 'default'}')
+        ?.send('stop');
   } catch (_) {}
 }
 
@@ -31,7 +32,7 @@ void _stopRingingAlarmScreen() {
 void _backgroundNotificationCallback(NotificationResponse response) {
   debugPrint('🔔 Background notification response: ${response.actionId}');
   // Any reminder action means the user engaged — silence a ringing alarm screen.
-  _stopRingingAlarmScreen();
+  _stopRingingAlarmScreen(response.id);
   // Background actions handled here
   if (response.actionId == 'snooze') {
     _scheduleSnoozeNotification(response.id ?? 0);
@@ -202,7 +203,7 @@ Future<void> alarmCallback(int alarmId) async {
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
         debugPrint('🔔 Background notification action: ${response.actionId}');
-        _stopRingingAlarmScreen();
+        _stopRingingAlarmScreen(response.id);
         if (response.actionId == 'snooze') {
           await _handleBackgroundSnooze(response.id ?? 0, prefs);
         } else if (response.actionId == 'dismiss') {

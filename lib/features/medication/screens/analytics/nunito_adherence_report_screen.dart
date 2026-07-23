@@ -213,6 +213,9 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     final adherenceRate = _summary.adherenceRate;
+    // With nothing due yet the rate defaults to 100% — showing a full ring +
+    // "Excellent" would be misleading. Render a neutral no-data state instead.
+    final noData = _summary.scheduled == 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,7 +229,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
           child: Column(
             children: [
               ProgressRing(
-                progress: adherenceRate / 100,
+                progress: noData ? 0 : adherenceRate / 100,
                 size: 148,
                 stroke: 13,
                 accent: ext.medicine,
@@ -234,7 +237,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '$adherenceRate%',
+                      noData ? '—' : '$adherenceRate%',
                       style: tt.displaySmall?.copyWith(
                         color: ext.textPrimary,
                         fontWeight: FontWeight.w800,
@@ -249,7 +252,9 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                '${_summary.taken} of ${_summary.scheduled} scheduled doses taken',
+                noData
+                    ? 'No doses due yet in this period'
+                    : '${_summary.taken} of ${_summary.scheduled} scheduled doses taken',
                 style: tt.bodySmall?.copyWith(color: ext.textTertiary),
                 textAlign: TextAlign.center,
               ),
@@ -452,9 +457,11 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       byMonth.putIfAbsent(key, () => []).add(d);
     }
     final keys = byMonth.keys.toList()..sort();
+    // Include the year so the two boundary months of a 12-month window (same
+    // month name, different year) don't render as two identical labels.
     return keys
         .map((k) => _aggregate(
-            byMonth[k]!, DateFormat('MMM').format(byMonth[k]!.first.date)))
+            byMonth[k]!, DateFormat("MMM ''yy").format(byMonth[k]!.first.date)))
         .toList();
   }
 
@@ -560,7 +567,17 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
 
     final List<_Insight> insights = [];
 
-    if (adherenceRate >= 90) {
+    // Only judge adherence once doses have actually been due — otherwise the
+    // 100% default would falsely award "Excellent Adherence!".
+    if (_summary.scheduled == 0) {
+      insights.add(_Insight(
+        icon: Symbols.tips_and_updates_rounded,
+        swatch: ext.info,
+        title: 'Start tracking',
+        description:
+            'No doses due yet in this period. Your adherence will appear here.',
+      ));
+    } else if (adherenceRate >= 90) {
       insights.add(_Insight(
         icon: Symbols.emoji_events_rounded,
         swatch: ext.success,

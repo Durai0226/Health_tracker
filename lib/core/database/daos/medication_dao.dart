@@ -45,6 +45,10 @@ class MedicationDao extends DatabaseAccessor<AppDatabase> with _$MedicationDaoMi
   }
 
   Future<void> deleteMedicine(String id) async {
+    // Cascade-delete the medicine's logs. Orphaned taken logs would otherwise
+    // survive and inflate adherence (numerator) against a denominator that no
+    // longer includes the deleted medicine.
+    await (delete(medicineLogs)..where((t) => t.medicineId.equals(id))).go();
     await (delete(enhancedMedicines)..where((t) => t.id.equals(id))).go();
   }
 
@@ -60,6 +64,11 @@ class MedicationDao extends DatabaseAccessor<AppDatabase> with _$MedicationDaoMi
     return await (select(medicineLogs)
       ..orderBy([(t) => OrderingTerm.desc(t.scheduledTime)]))
       .get();
+  }
+
+  Future<MedicineLog?> getLogById(String id) async {
+    return await (select(medicineLogs)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
   }
 
   Future<List<MedicineLog>> getLogsForMedicine(String medicineId) async {
