@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../constants/app_colors.dart';
 import '../services/notification_service.dart';
 
@@ -94,8 +95,8 @@ class _ReminderStatusWidgetState extends State<ReminderStatusWidget> {
             ),
             child: Icon(
               _permissionsGranted
-                  ? Icons.notifications_active_rounded
-                  : Icons.notifications_off_rounded,
+                  ? Symbols.notifications_active_rounded
+                  : Symbols.notifications_off_rounded,
               color: Colors.white,
               size: 24,
             ),
@@ -130,7 +131,7 @@ class _ReminderStatusWidgetState extends State<ReminderStatusWidget> {
           ),
           if (!_permissionsGranted)
             const Icon(
-              Icons.arrow_forward_ios_rounded,
+              Symbols.arrow_forward_ios_rounded,
               color: Colors.white,
               size: 18,
             ),

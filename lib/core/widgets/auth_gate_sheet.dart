@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'app/app_widgets.dart';
 import '../services/auth_service.dart';
 import '../services/haptic_service.dart';
@@ -140,7 +141,7 @@ class _AuthGateSheetState extends State<AuthGateSheet>
                         child: IconButton(
                           visualDensity: VisualDensity.compact,
                           onPressed: () => Navigator.pop(context, false),
-                          icon: Icon(Icons.close_rounded, color: ext.textTertiary),
+                          icon: Icon(Symbols.close_rounded, color: ext.textTertiary),
                         ),
                       ),
                     ],
@@ -163,9 +164,9 @@ class _AuthGateSheetState extends State<AuthGateSheet>
                   // Benefits strip
                   Row(
                     children: [
-                      _benefit(ext, Icons.cloud_done_rounded, 'Auto\nsync'),
-                      _benefit(ext, Icons.devices_rounded, 'All\ndevices'),
-                      _benefit(ext, Icons.lock_rounded, 'Private &\nsecure'),
+                      _benefit(ext, Symbols.cloud_done_rounded, 'Auto\nsync'),
+                      _benefit(ext, Symbols.devices_rounded, 'All\ndevices'),
+                      _benefit(ext, Symbols.lock_rounded, 'Private &\nsecure'),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xl),
@@ -185,7 +186,7 @@ class _AuthGateSheetState extends State<AuthGateSheet>
                     variant: AppButtonVariant.ghost,
                     fullWidth: true,
                     accent: ext.brand,
-                    leadingIcon: Icons.person_outline_rounded,
+                    leadingIcon: Symbols.person_rounded,
                     onPressed: () {
                       _hapticService.selection();
                       widget.onContinueAsGuest();
@@ -196,7 +197,7 @@ class _AuthGateSheetState extends State<AuthGateSheet>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.shield_outlined, size: 14, color: ext.textTertiary),
+                      Icon(Symbols.shield_rounded, size: 14, color: ext.textTertiary),
                       const SizedBox(width: 6),
                       Text('Guest data stays on this device',
                           style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
@@ -281,7 +282,7 @@ class _AuthGateSheetState extends State<AuthGateSheet>
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline_rounded, color: ext.error.strong, size: 18),
+          Icon(Symbols.error_rounded, color: ext.error.strong, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(_error!,

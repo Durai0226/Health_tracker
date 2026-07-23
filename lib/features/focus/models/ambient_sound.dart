@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 enum AmbientSoundType {
   none,
@@ -97,37 +98,37 @@ extension AmbientSoundExtension on AmbientSoundType {
   IconData get icon {
     switch (this) {
       case AmbientSoundType.none:
-        return Icons.volume_off_rounded;
+        return Symbols.volume_off_rounded;
       case AmbientSoundType.rain:
-        return Icons.water_drop_rounded;
+        return Symbols.water_drop_rounded;
       case AmbientSoundType.thunderstorm:
-        return Icons.thunderstorm_rounded;
+        return Symbols.thunderstorm_rounded;
       case AmbientSoundType.ocean:
-        return Icons.waves_rounded;
+        return Symbols.waves_rounded;
       case AmbientSoundType.forest:
-        return Icons.forest_rounded;
+        return Symbols.forest_rounded;
       case AmbientSoundType.fireplace:
-        return Icons.local_fire_department_rounded;
+        return Symbols.local_fire_department_rounded;
       case AmbientSoundType.wind:
-        return Icons.air_rounded;
+        return Symbols.air_rounded;
       case AmbientSoundType.birds:
-        return Icons.flutter_dash_rounded;
+        return Symbols.flutter_dash_rounded;
       case AmbientSoundType.river:
-        return Icons.water_rounded;
+        return Symbols.water_rounded;
       case AmbientSoundType.whiteNoise:
-        return Icons.graphic_eq_rounded;
+        return Symbols.graphic_eq_rounded;
       case AmbientSoundType.brownNoise:
-        return Icons.graphic_eq_rounded;
+        return Symbols.graphic_eq_rounded;
       case AmbientSoundType.pinkNoise:
-        return Icons.graphic_eq_rounded;
+        return Symbols.graphic_eq_rounded;
       case AmbientSoundType.cafe:
-        return Icons.coffee_rounded;
+        return Symbols.coffee_rounded;
       case AmbientSoundType.library:
-        return Icons.menu_book_rounded;
+        return Symbols.menu_book_rounded;
       case AmbientSoundType.nightSounds:
-        return Icons.nightlight_rounded;
+        return Symbols.nightlight_rounded;
       case AmbientSoundType.meditation:
-        return Icons.self_improvement_rounded;
+        return Symbols.self_improvement_rounded;
     }
   }
 

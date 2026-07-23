@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 
 /// Calm Clarity hydration hero — a bold progress ring around a gentle wave-fill
@@ -85,7 +86,7 @@ class WaterHeroGauge extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            reached ? Icons.check_rounded : Icons.local_drink_rounded,
+                            reached ? Symbols.check_rounded : Symbols.local_drink_rounded,
                             size: 13,
                             color: Colors.white,
                           ),

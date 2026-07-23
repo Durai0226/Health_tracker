@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 
 /// Focus Ambient Sounds Settings Screen
 class FocusSoundsSettingsScreen extends StatefulWidget {
@@ -19,14 +21,14 @@ class _FocusSoundsSettingsScreenState extends State<FocusSoundsSettingsScreen> {
   static const _primaryColor = Color(0xFF4CAF50);
 
   final List<Map<String, dynamic>> _sounds = [
-    {'id': 'rain', 'name': 'Rain', 'icon': Icons.water_drop},
-    {'id': 'forest', 'name': 'Forest', 'icon': Icons.forest},
-    {'id': 'ocean', 'name': 'Ocean Waves', 'icon': Icons.waves},
-    {'id': 'fire', 'name': 'Fireplace', 'icon': Icons.local_fire_department},
-    {'id': 'cafe', 'name': 'Coffee Shop', 'icon': Icons.coffee},
-    {'id': 'white', 'name': 'White Noise', 'icon': Icons.graphic_eq},
-    {'id': 'birds', 'name': 'Birds', 'icon': Icons.flutter_dash},
-    {'id': 'wind', 'name': 'Wind', 'icon': Icons.air},
+    {'id': 'rain', 'name': 'Rain', 'icon': Symbols.water_drop_rounded},
+    {'id': 'forest', 'name': 'Forest', 'icon': Symbols.forest_rounded},
+    {'id': 'ocean', 'name': 'Ocean Waves', 'icon': Symbols.waves_rounded},
+    {'id': 'fire', 'name': 'Fireplace', 'icon': Symbols.local_fire_department_rounded},
+    {'id': 'cafe', 'name': 'Coffee Shop', 'icon': Symbols.coffee_rounded},
+    {'id': 'white', 'name': 'White Noise', 'icon': Symbols.graphic_eq_rounded},
+    {'id': 'birds', 'name': 'Birds', 'icon': Symbols.flutter_dash_rounded},
+    {'id': 'wind', 'name': 'Wind', 'icon': Symbols.air_rounded},
   ];
 
   @override
@@ -69,7 +71,7 @@ class _FocusSoundsSettingsScreenState extends State<FocusSoundsSettingsScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFF5F5F5),
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: const Text('Ambient Sounds', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
       ),
@@ -136,7 +138,7 @@ class _FocusSoundsSettingsScreenState extends State<FocusSoundsSettingsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.volume_up, color: _primaryColor),
+              Icon(Symbols.volume_up_rounded, color: _primaryColor),
               const SizedBox(width: 12),
               const Text('Volume', style: TextStyle(fontWeight: FontWeight.w600)),
               const Spacer(),
@@ -156,10 +158,10 @@ class _FocusSoundsSettingsScreenState extends State<FocusSoundsSettingsScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
       child: Row(
         children: [
-          Container(width: 44, height: 44, decoration: BoxDecoration(color: _autoPlay ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(Icons.play_circle_outline, color: _autoPlay ? _primaryColor : Colors.grey)),
+          Container(width: 44, height: 44, decoration: BoxDecoration(color: _autoPlay ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(Symbols.play_circle_rounded, color: _autoPlay ? _primaryColor : Colors.grey)),
           const SizedBox(width: 16),
           const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Auto-Play', style: TextStyle(fontWeight: FontWeight.w600)), Text('Play sound when session starts', style: TextStyle(color: Colors.grey, fontSize: 13))])),
-          Switch.adaptive(value: _autoPlay, onChanged: (v) { HapticFeedback.lightImpact(); setState(() => _autoPlay = v); }, activeColor: _primaryColor),
+          AppSwitch(value: _autoPlay, onChanged: (v) { HapticFeedback.lightImpact(); setState(() => _autoPlay = v); }),
         ],
       ),
     );

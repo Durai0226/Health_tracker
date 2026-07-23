@@ -8,12 +8,21 @@ import 'tables/medication_tables.dart';
 import 'tables/water_tables.dart';
 import 'tables/reminders_tables.dart';
 import 'tables/vitals_tables.dart';
+import 'tables/period_tables.dart';
+import 'tables/steps_tables.dart';
+import 'tables/sleep_tables.dart';
+import 'tables/knowledge_tables.dart';
+import 'tables/memory_tables.dart';
 
 import 'daos/core_dao.dart';
 import 'daos/medication_dao.dart';
 import 'daos/water_dao.dart';
 import 'daos/reminders_dao.dart';
 import 'daos/vitals_dao.dart';
+import 'daos/period_dao.dart';
+import 'daos/steps_dao.dart';
+import 'daos/sleep_dao.dart';
+import 'daos/ai_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -49,6 +58,23 @@ part 'app_database.g.dart';
     // Vitals tables (blood pressure + blood glucose)
     BloodPressureReadings,
     GlucoseReadings,
+
+    // Period / menstrual cycle tables
+    MenstrualCycles,
+    PeriodDays,
+    PeriodSettingsTable,
+
+    // Steps tables (+ shared health profile)
+    StepDailyData,
+    StepManualEntries,
+    HealthProfiles,
+
+    // Sleep tables
+    SleepSessions,
+
+    // AI: RAG knowledge base + user-curated memory
+    KnowledgeChunks,
+    AssistantMemories,
   ],
   daos: [
     CoreDao,
@@ -56,13 +82,45 @@ part 'app_database.g.dart';
     WaterDao,
     RemindersDao,
     VitalsDao,
+    PeriodDao,
+    StepsDao,
+    SleepDao,
+    AiDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
+  /// Test-only constructor: runs the full schema (incl. the FTS5 migration) on
+  /// a caller-supplied executor (e.g. an in-memory database).
+  @visibleForTesting
+  AppDatabase.forTesting(QueryExecutor executor) : super(executor);
+
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 7;
+
+  /// Creates the FTS5 virtual table backing the RAG knowledge base. Called from
+  /// both onCreate (fresh installs) and onUpgrade — Drift's DSL can't declare
+  /// FTS5, so it's raw SQL. sqlite3 ships FTS5 + bm25(). The `porter` tokenizer
+  /// stems words so "sleeping"/"slept"/"hydrate"/"hydration" all retrieve their
+  /// base-form chunks (v7).
+  Future<void> _createKnowledgeFts() async {
+    await customStatement(
+      'CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5('
+      "chunk_id UNINDEXED, title, body, topic, tokenize = 'porter unicode61')",
+    );
+  }
+
+  /// Rebuilds the FTS index with the current tokenizer from the persisted
+  /// `knowledge_chunks` rows (used when the tokenizer changes across versions).
+  Future<void> _rebuildKnowledgeFts() async {
+    await customStatement('DROP TABLE IF EXISTS knowledge_fts');
+    await _createKnowledgeFts();
+    await customStatement(
+      'INSERT INTO knowledge_fts(chunk_id, title, body, topic) '
+      'SELECT id, title, body, topic FROM knowledge_chunks',
+    );
+  }
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
   /// period-tracking features were removed. Kept-feature data is untouched.
@@ -88,6 +146,7 @@ class AppDatabase extends _$AppDatabase {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
+        await _createKnowledgeFts();
         debugPrint('✓ Drift database created');
       },
       onUpgrade: (Migrator m, int from, int to) async {
@@ -110,15 +169,46 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(glucoseReadings);
           debugPrint('✓ Created vitals tables (BP + glucose)');
         }
+        if (from < 5) {
+          // Period / steps / sleep trackers.
+          await m.createTable(menstrualCycles);
+          await m.createTable(periodDays);
+          await m.createTable(periodSettingsTable);
+          await m.createTable(stepDailyData);
+          await m.createTable(stepManualEntries);
+          await m.createTable(healthProfiles);
+          await m.createTable(sleepSessions);
+          debugPrint('✓ Created period + steps + sleep tables');
+        }
+        if (from < 6) {
+          // AI: RAG knowledge base (+ FTS5) + user-curated memory.
+          await m.createTable(knowledgeChunks);
+          await m.createTable(assistantMemories);
+          await _createKnowledgeFts();
+          debugPrint('✓ Created AI knowledge + memory tables');
+        }
+        if (from < 7) {
+          // Upgrade the KB search index to the stemming (porter) tokenizer,
+          // rebuilding it from the persisted chunks (no re-seed needed).
+          await _rebuildKnowledgeFts();
+          debugPrint('✓ Rebuilt knowledge FTS with porter stemming');
+        }
       },
     );
   }
 
   static AppDatabase? _instance;
-  
+
   static AppDatabase get instance {
     _instance ??= AppDatabase();
     return _instance!;
+  }
+
+  /// Test-only: point the singleton at an in-memory database so services that
+  /// read `AppDatabase.instance` operate on a hermetic DB.
+  @visibleForTesting
+  static void setInstanceForTesting(AppDatabase db) {
+    _instance = db;
   }
 
   Future<void> closeDatabase() async {

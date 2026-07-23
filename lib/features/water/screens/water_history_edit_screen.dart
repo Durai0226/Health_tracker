@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../models/beverage_type.dart';
 import '../models/enhanced_water_log.dart';
@@ -50,7 +51,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
     AppBottomSheet.show(
       context,
       title: 'Add Entry',
-      icon: Icons.local_drink_rounded,
+      icon: Symbols.local_drink_rounded,
       accent: ext.water,
       builder: (sheetCtx) => _AddEditEntrySheet(
         date: widget.date,
@@ -69,7 +70,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
     AppBottomSheet.show(
       context,
       title: 'Edit Entry',
-      icon: Icons.edit_rounded,
+      icon: Symbols.edit_rounded,
       accent: ext.water,
       builder: (sheetCtx) => _AddEditEntrySheet(
         date: widget.date,
@@ -94,7 +95,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
 
     return AppScaffold(
       floatingActionButton: AppFab(
-        icon: Icons.add_rounded,
+        icon: Symbols.add_rounded,
         label: 'Add Entry',
         accent: ext.water,
         onPressed: _showAddEntryDialog,
@@ -105,7 +106,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
             title: 'Edit History',
             accent: ext.water,
             leading: AppIconButton(
-              icon: Icons.arrow_back_rounded,
+              icon: Symbols.arrow_back_rounded,
               filled: false,
               accent: ext.water,
               onPressed: () => Navigator.pop(context, true),
@@ -116,7 +117,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                 variant: AppButtonVariant.tonal,
                 size: AppButtonSize.sm,
                 accent: ext.water,
-                leadingIcon: Icons.add_rounded,
+                leadingIcon: Symbols.add_rounded,
                 onPressed: _showAddEntryDialog,
               ),
             ],
@@ -160,7 +161,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
               color: ext.water.container,
               borderRadius: AppRadius.brMd,
             ),
-            child: Icon(Icons.calendar_today_rounded, color: ext.water.onContainer),
+            child: Icon(Symbols.calendar_today_rounded, color: ext.water.onContainer),
           ),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
@@ -265,7 +266,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
     if (logs.isEmpty) {
       return AppCard(
         child: EmptyState(
-          icon: Icons.water_drop_outlined,
+          icon: Symbols.water_drop_rounded,
           title: 'No entries for this day',
           message: 'Tap the button below to add an entry',
           accent: ext.water,
@@ -286,7 +287,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                 Expanded(
                   child: SectionHeader(
                     title: 'Drink Entries',
-                    icon: Icons.local_drink_rounded,
+                    icon: Symbols.local_drink_rounded,
                     accent: ext.water,
                   ),
                 ),
@@ -313,7 +314,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: AppSpacing.gutter),
         color: ext.error.base,
-        child: Icon(Icons.delete_rounded, color: ext.error.on),
+        child: Icon(Symbols.delete_rounded, color: ext.error.on),
       ),
       confirmDismiss: (direction) async {
         return await AppBottomSheet.confirm(
@@ -322,7 +323,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
           message: 'Delete ${log.amountMl}ml of ${log.beverageName}?',
           confirmLabel: 'Delete',
           danger: true,
-          icon: Icons.delete_outline_rounded,
+          icon: Symbols.delete_rounded,
         );
       },
       onDismissed: (direction) async {
@@ -428,7 +429,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
               ),
               const SizedBox(width: AppSpacing.sm),
               Icon(
-                Icons.edit_outlined,
+                Symbols.edit_rounded,
                 size: 18,
                 color: ext.textTertiary,
               ),
@@ -720,10 +721,7 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
                   const SizedBox(height: AppSpacing.sm),
                   GestureDetector(
                     onTap: () async {
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: _selectedTime,
-                      );
+                      final time = await AppTimePicker.show(context, initial: _selectedTime);
                       if (time != null) {
                         setState(() => _selectedTime = time);
                       }
@@ -737,7 +735,7 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.access_time_rounded,
+                          Icon(Symbols.access_time_rounded,
                               size: 20, color: ext.textTertiary),
                           const SizedBox(width: AppSpacing.sm),
                           Text(_selectedTime.format(context),

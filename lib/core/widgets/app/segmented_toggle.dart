@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import '../../design/app_design.dart';
 
 class SegmentItem {
-  final IconData icon;
+  /// Optional leading glyph. Omit for short label-only segments (e.g. numeric
+  /// duration/ring choices) so they render with no phantom leading gap.
+  final IconData? icon;
   final String label;
-  const SegmentItem({required this.icon, required this.label});
+  const SegmentItem({this.icon, required this.label});
 }
 
 /// Accent-aware segmented control (e.g. Medicine | Water in the Health hub).
@@ -58,10 +60,13 @@ class SegmentedToggle extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(items[i].icon,
-                          size: 18,
-                          color: i == index ? ext.mark(s) : ext.textSecondary),
-                      const SizedBox(width: 8),
+                      if (items[i].icon != null) ...[
+                        Icon(items[i].icon,
+                            size: 18,
+                            color:
+                                i == index ? ext.mark(s) : ext.textSecondary),
+                        const SizedBox(width: 8),
+                      ],
                       Text(
                         items[i].label,
                         style: tt.labelLarge?.copyWith(

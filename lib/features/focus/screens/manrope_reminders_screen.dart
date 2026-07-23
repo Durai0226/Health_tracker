@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:tablet_remainder/core/widgets/app/app_pickers.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/haptic_service.dart';
 import '../theme/manrope_theme.dart';
 import '../models/meditation_activity.dart';
@@ -58,7 +61,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
           floatingActionButton: FloatingActionButton(
             onPressed: () => _showAddReminderSheet(context, isDark),
             backgroundColor: ManropeTheme.primaryOrange,
-            child: const Icon(Icons.add_rounded, color: Colors.white),
+            child: const Icon(Symbols.add_rounded, color: Colors.white),
           ),
           body: FadeTransition(
             opacity: _fadeAnimation,
@@ -88,7 +91,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: Icon(
-              Icons.arrow_back_rounded,
+              Symbols.arrow_back_rounded,
               color: isDark
                   ? ManropeTheme.textPrimaryDark
                   : ManropeTheme.textPrimary,
@@ -125,7 +128,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
               borderRadius: ManropeTheme.borderRadiusMedium,
             ),
             child: const Icon(
-              Icons.notifications_outlined,
+              Symbols.notifications_rounded,
               color: Colors.white,
               size: 24,
             ),
@@ -149,7 +152,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.notifications_off_outlined,
+                Symbols.notifications_off_rounded,
                 size: 48,
                 color: ManropeTheme.primaryOrange,
               ),
@@ -176,7 +179,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () => _showAddReminderSheet(context, isDark),
-              icon: const Icon(Icons.add_rounded),
+              icon: const Icon(Symbols.add_rounded),
               label: const Text('Add Reminder'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: ManropeTheme.primaryOrange,
@@ -225,7 +228,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         child: const Icon(
-          Icons.delete_outline_rounded,
+          Symbols.delete_rounded,
           color: Colors.white,
         ),
       ),
@@ -234,6 +237,9 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Reminder deleted'),
+            // Without persist:false the Undo action pins the toast open forever
+            // (SnackBar.persist defaults to `action != null`).
+            persist: false,
             action: SnackBarAction(
               label: 'Undo',
               onPressed: () => _wellnessService.addReminder(reminder),
@@ -268,7 +274,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
                       borderRadius: ManropeTheme.borderRadiusMedium,
                     ),
                     child: Icon(
-                      activity?.icon ?? Icons.notifications_rounded,
+                      activity?.icon ?? Symbols.notifications_rounded,
                       color: Colors.white,
                       size: 24,
                     ),
@@ -290,7 +296,7 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
                         Row(
                           children: [
                             Icon(
-                              Icons.schedule_outlined,
+                              Symbols.schedule_rounded,
                               size: 14,
                               color: isDark
                                   ? ManropeTheme.textTertiaryDark
@@ -327,13 +333,12 @@ class _ManropeRemindersScreenState extends State<ManropeRemindersScreen>
                       ],
                     ),
                   ),
-                  Switch(
+                  AppSwitch(
                     value: reminder.isEnabled,
                     onChanged: (value) {
                       _hapticService.selection();
                       _wellnessService.toggleReminder(reminder.id, value);
                     },
-                    activeColor: color,
                   ),
                 ],
               ),
@@ -541,10 +546,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
             const SizedBox(height: 12),
             GestureDetector(
               onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: _time,
-                );
+                final picked = await AppTimePicker.show(context, initial: _time);
                 if (picked != null) {
                   setState(() => _time = picked);
                 }
@@ -560,7 +562,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
                 child: Row(
                   children: [
                     const Icon(
-                      Icons.schedule_outlined,
+                      Symbols.schedule_rounded,
                       color: ManropeTheme.primaryOrange,
                     ),
                     const SizedBox(width: 12),
@@ -574,7 +576,7 @@ class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
                     ),
                     const Spacer(),
                     Icon(
-                      Icons.arrow_forward_ios_rounded,
+                      Symbols.arrow_forward_ios_rounded,
                       size: 16,
                       color: widget.isDark
                           ? ManropeTheme.textTertiaryDark

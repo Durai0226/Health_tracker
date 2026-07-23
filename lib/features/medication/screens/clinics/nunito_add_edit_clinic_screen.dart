@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/clinic.dart';
@@ -124,10 +125,10 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
           children: [
             AppHeader(
               title: _isEditing ? 'Edit Clinic' : 'Add Clinic',
-              icon: Icons.local_hospital_rounded,
+              icon: Symbols.local_hospital_rounded,
               accent: med,
               leading: IconButton(
-                icon: Icon(Icons.close_rounded, color: ext.textPrimary),
+                icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
@@ -152,7 +153,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                       // ---- Basic Information ----
                       SectionHeader(
                         title: 'Basic Information',
-                        icon: Icons.info_outline_rounded,
+                        icon: Symbols.info_rounded,
                         accent: med,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -160,7 +161,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         controller: _nameController,
                         label: 'Name',
                         hint: 'Clinic or hospital name',
-                        prefixIcon: Icons.local_hospital_rounded,
+                        prefixIcon: Symbols.local_hospital_rounded,
                         accent: med,
                         textCapitalization: TextCapitalization.words,
                         validator: (v) =>
@@ -195,7 +196,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                       // ---- Location & Contact ----
                       SectionHeader(
                         title: 'Location & Contact',
-                        icon: Icons.place_rounded,
+                        icon: Symbols.place_rounded,
                         accent: med,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -203,7 +204,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         controller: _addressController,
                         label: 'Address',
                         hint: 'Full address',
-                        prefixIcon: Icons.location_on_rounded,
+                        prefixIcon: Symbols.location_on_rounded,
                         accent: med,
                         maxLines: 2,
                         textCapitalization: TextCapitalization.sentences,
@@ -213,7 +214,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         controller: _phoneController,
                         label: 'Phone',
                         hint: 'Phone number',
-                        prefixIcon: Icons.phone_rounded,
+                        prefixIcon: Symbols.phone_rounded,
                         accent: med,
                         keyboardType: TextInputType.phone,
                       ),
@@ -222,7 +223,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         controller: _emailController,
                         label: 'Email',
                         hint: 'Email address',
-                        prefixIcon: Icons.email_rounded,
+                        prefixIcon: Symbols.email_rounded,
                         accent: med,
                         keyboardType: TextInputType.emailAddress,
                       ),
@@ -231,7 +232,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         controller: _websiteController,
                         label: 'Website',
                         hint: 'Website URL',
-                        prefixIcon: Icons.language_rounded,
+                        prefixIcon: Symbols.language_rounded,
                         accent: med,
                         keyboardType: TextInputType.url,
                       ),
@@ -240,7 +241,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                       // ---- Operating Hours ----
                       SectionHeader(
                         title: 'Operating Hours',
-                        icon: Icons.schedule_rounded,
+                        icon: Symbols.schedule_rounded,
                         accent: med,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -250,7 +251,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                       // ---- Additional ----
                       SectionHeader(
                         title: 'Additional',
-                        icon: Icons.sticky_note_2_rounded,
+                        icon: Symbols.sticky_note_2_rounded,
                         accent: med,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -271,7 +272,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         fullWidth: true,
                         size: AppButtonSize.lg,
                         loading: _isLoading,
-                        leadingIcon: Icons.check_rounded,
+                        leadingIcon: Symbols.check_rounded,
                         onPressed: _save,
                       ),
                     ],
@@ -315,14 +316,13 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                     style: tt.titleLarge?.copyWith(color: ext.textPrimary),
                   ),
                 ),
-                Switch(
+                AppSwitch(
                   value: hours.isOpen,
                   onChanged: (v) {
                     _hapticService.toggle();
                     _updateDayHours(index, hours.copyWith(isOpen: v));
                   },
-                  activeColor: ext.mark(med),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  accent: med,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 if (hours.isOpen) ...[
@@ -431,10 +431,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
       minute: int.parse(parts[1]),
     );
 
-    final selectedTime = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-    );
+    final selectedTime = await AppTimePicker.show(context, initial: initialTime);
 
     if (selectedTime != null) {
       final timeStr = '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}';

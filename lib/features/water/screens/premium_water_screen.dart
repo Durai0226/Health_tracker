@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 
 import '../services/water_service.dart';
@@ -324,11 +325,11 @@ class _PremiumWaterScreenState extends State<PremiumWaterScreen>
       ),
       actions: [
         _buildHeaderAction(
-          Icons.bar_chart_rounded,
+          Symbols.bar_chart_rounded,
           () => _navigateToStats(),
         ),
         _buildHeaderAction(
-          Icons.settings_outlined,
+          Symbols.settings_rounded,
           () => _navigateToProfile(),
         ),
         const SizedBox(width: 8),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../theme/aqua_theme.dart';
 import '../models/water_container.dart';
@@ -44,13 +45,14 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   @override
   Widget build(BuildContext context) {
     final selected = WaterService.getBeverage(widget.selectedBeverageId);
-    // The beverage theme only tints the selected chip in the selector row.
+    // The selected beverage now themes the whole quick-add block — the selector
+    // chip, the amount cards, the custom CTA and the cups — so picking Tea turns
+    // the amounts green/amber, Coffee brown, etc. (Screen chrome — gauge, app
+    // bar, background, add-confirmation snackbar — stays on the water accent,
+    // owned by the parent dashboard.)
     final beverage = selected != null
         ? AquaTheme.themeFromBeverage(selected)
         : AquaTheme.getBeverage(widget.selectedBeverageId);
-    // Everything else (amount buttons, custom CTA, cups) stays on the single
-    // water accent so the card doesn't turn brown/orange with coffee/juice.
-    final water = AquaTheme.getBeverage('water');
     final isDark = AquaTheme.isDark(context);
 
     return Column(
@@ -60,7 +62,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         _buildBeverageSelector(beverage, isDark),
         const SizedBox(height: AquaTheme.spacingM),
 
-        // Quick add amount buttons — water accent, selected beverage emoji.
+        // Quick add amount buttons — tinted by the selected beverage.
         Row(
           children: List.generate(_amounts.length, (index) {
             final option = _amounts[index];
@@ -73,7 +75,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                 ),
                 child: _buildAmountButton(
                   option,
-                  water,
+                  beverage,
                   beverage.emoji,
                   isDark,
                   isPressed,
@@ -87,12 +89,12 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         const SizedBox(height: AquaTheme.spacingS),
 
         // Custom amount button
-        _buildCustomAmountButton(water, isDark),
+        _buildCustomAmountButton(beverage, isDark),
 
         // Cups / saved containers (one-tap logging + create)
         if (widget.onContainerAdd != null || widget.onCreateCup != null) ...[
           const SizedBox(height: AquaTheme.spacingM),
-          _buildCupsSection(water, isDark),
+          _buildCupsSection(beverage, isDark),
         ],
       ],
     );
@@ -111,7 +113,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
       children: [
         Row(
           children: [
-            Icon(Icons.local_cafe_outlined, size: 16, color: beverage.primary),
+            Icon(Symbols.local_cafe_rounded, size: 16, color: beverage.primary),
             const SizedBox(width: 6),
             Text(
               'Cups',
@@ -206,7 +208,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.add, size: 16, color: Colors.white),
+            const Icon(Symbols.add_rounded, size: 16, color: Colors.white),
             const SizedBox(width: 6),
             Text(
               'New Cup',
@@ -404,7 +406,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.add_circle_outline, color: Colors.white, size: 20),
+            const Icon(Symbols.add_circle_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 8),
             Text(
               'Custom Amount',
@@ -523,7 +525,7 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                         color: beverage.primary.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.remove, color: beverage.primary),
+                      child: Icon(Symbols.remove_rounded, color: beverage.primary),
                     ),
                   ),
                   const SizedBox(width: 20),
@@ -561,7 +563,7 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                         color: beverage.primary.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.add, color: beverage.primary),
+                      child: Icon(Symbols.add_rounded, color: beverage.primary),
                     ),
                   ),
                 ],
@@ -633,7 +635,7 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.add, color: Colors.white),
+                    const Icon(Symbols.add_rounded, color: Colors.white),
                     const SizedBox(width: 8),
                     Text(
                       'Add $_amount ml',

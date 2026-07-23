@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
@@ -137,7 +138,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
     AppBottomSheet.show<void>(
       context,
       title: 'Smart Add',
-      icon: Icons.auto_awesome_rounded,
+      icon: Symbols.auto_awesome_rounded,
       accent: rem,
       builder: (sheetCtx) {
         return StatefulBuilder(
@@ -204,7 +205,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   accent: rem,
                   fullWidth: true,
                   loading: submitting,
-                  leadingIcon: Icons.auto_awesome_rounded,
+                  leadingIcon: Symbols.auto_awesome_rounded,
                   onPressed: submit,
                 ),
               ],
@@ -349,7 +350,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
         floatingActionButton: Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: AppFab(
-            icon: Icons.add_rounded,
+            icon: Symbols.add_rounded,
             accent: ext.reminders,
             onPressed: _addReminder,
           ),
@@ -361,7 +362,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
               accent: ext.reminders,
               actions: [
                 IconButton(
-                  icon: Icon(Icons.auto_awesome_rounded,
+                  icon: Icon(Symbols.auto_awesome_rounded,
                       color: ext.mark(ext.reminders)),
                   tooltip: 'Smart Add',
                   onPressed: _openSmartAdd,
@@ -373,7 +374,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
             Expanded(
               child: _visibleReminders.isEmpty
                   ? EmptyState(
-                      icon: Icons.notifications_none_rounded,
+                      icon: Symbols.notifications_none_rounded,
                       title: _hasActiveFilter
                           ? 'No matching reminders'
                           : 'No reminders yet',
@@ -406,14 +407,14 @@ class _RemindersScreenState extends State<RemindersScreen> {
             child: AppTextField(
               controller: _searchController,
               hint: 'Search reminders',
-              prefixIcon: Icons.search_rounded,
+              prefixIcon: Symbols.search_rounded,
               accent: ext.reminders,
               textInputAction: TextInputAction.search,
               onChanged: (v) => setState(() => _searchQuery = v),
               suffix: _searchQuery.isEmpty
                   ? null
                   : IconButton(
-                      icon: Icon(Icons.close_rounded,
+                      icon: Icon(Symbols.close_rounded,
                           size: 18, color: ext.textTertiary),
                       tooltip: 'Clear search',
                       onPressed: () {
@@ -444,7 +445,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md + 2),
             child: Icon(
-              active ? Icons.flag_rounded : Icons.sort_rounded,
+              active ? Symbols.flag_rounded : Symbols.sort_rounded,
               size: 22,
               color: active ? ext.reminders.onContainer : ext.textSecondary,
             ),
@@ -477,13 +478,13 @@ class _RemindersScreenState extends State<RemindersScreen> {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
         children: [
           chip('all', 'All'),
-          chip('active', 'Active', icon: Icons.radio_button_unchecked_rounded),
-          chip('today', 'Today', icon: Icons.today_rounded),
+          chip('active', 'Active', icon: Symbols.radio_button_unchecked_rounded),
+          chip('today', 'Today', icon: Symbols.today_rounded),
           chip('prio:high', 'High',
-              icon: Icons.flag_rounded, accent: ext.error),
+              icon: Symbols.flag_rounded, accent: ext.error),
           chip('prio:medium', 'Medium',
-              icon: Icons.flag_rounded, accent: ext.warning),
-          chip('prio:low', 'Low', icon: Icons.flag_rounded, accent: ext.success),
+              icon: Symbols.flag_rounded, accent: ext.warning),
+          chip('prio:low', 'Low', icon: Symbols.flag_rounded, accent: ext.success),
           ..._categories.map(
             (c) => chip('cat:${c.id}', c.name, icon: c.iconObj),
           ),
@@ -540,11 +541,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
       }
     }
 
-    section('Overdue', Icons.error_outline_rounded, overdue, ext.error);
-    section('Today', Icons.today_rounded, dueToday, ext.reminders);
-    section('Tomorrow', Icons.wb_sunny_rounded, dueTomorrow, ext.reminders);
-    section('Upcoming', Icons.event_rounded, upcoming, ext.reminders);
-    section('Completed', Icons.check_circle_outline_rounded, completed,
+    section('Overdue', Symbols.error_rounded, overdue, ext.error);
+    section('Today', Symbols.today_rounded, dueToday, ext.reminders);
+    section('Tomorrow', Symbols.wb_sunny_rounded, dueTomorrow, ext.reminders);
+    section('Upcoming', Symbols.event_rounded, upcoming, ext.reminders);
+    section('Completed', Symbols.check_circle_rounded, completed,
         ext.success);
     return widgets;
   }
@@ -633,13 +634,13 @@ class _RemindersScreenState extends State<RemindersScreen> {
     if (cat != null) items.add(_categoryChip(cat, tt));
     if (r.repeatType != RepeatType.none) {
       items.add(_metaItem(
-          Icons.repeat_rounded, _repeatLabel(r.repeatType), ext, tt));
+          Symbols.repeat_rounded, _repeatLabel(r.repeatType), ext, tt));
     }
     if (r.note != null && r.note!.trim().isNotEmpty) {
-      items.add(_metaItem(Icons.sticky_note_2_outlined, null, ext, tt));
+      items.add(_metaItem(Symbols.sticky_note_2_rounded, null, ext, tt));
     }
     if (r.imagePath != null && r.imagePath!.trim().isNotEmpty) {
-      items.add(_metaItem(Icons.image_outlined, null, ext, tt));
+      items.add(_metaItem(Symbols.image_rounded, null, ext, tt));
     }
     if (items.isEmpty) return const [];
     return [
@@ -671,7 +672,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
           color: ext.error.container,
           borderRadius: AppRadius.brCard,
         ),
-        child: Icon(Icons.delete_outline_rounded, color: ext.error.onContainer),
+        child: Icon(Symbols.delete_rounded, color: ext.error.onContainer),
       ),
       onDismissed: (_) => _delete(r),
       child: AppCard(
@@ -703,24 +704,32 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   child: GestureDetector(
                   onTap: () => _toggle(r),
                   behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color:
-                          r.isCompleted ? ext.reminders.base : Colors.transparent,
-                      border: Border.all(
-                        color: r.isCompleted
-                            ? ext.reminders.base
-                            : ext.outlineStrong,
-                        width: 2,
+                  // 44px hit target around the 26px visual checkbox.
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Center(
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: r.isCompleted
+                              ? ext.reminders.base
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: r.isCompleted
+                                ? ext.reminders.base
+                                : ext.outlineStrong,
+                            width: 2,
+                          ),
+                        ),
+                        child: r.isCompleted
+                            ? Icon(Symbols.check_rounded,
+                                size: 16, color: ext.reminders.on)
+                            : null,
                       ),
                     ),
-                    child: r.isCompleted
-                        ? Icon(Icons.check_rounded,
-                            size: 16, color: ext.reminders.on)
-                        : null,
                   ),
                 ),
                 ),
@@ -744,8 +753,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       children: [
                         Icon(
                           overdue
-                              ? Icons.error_outline_rounded
-                              : Icons.schedule_rounded,
+                              ? Symbols.error_rounded
+                              : Symbols.schedule_rounded,
                           size: 14,
                           color: overdue ? ext.error.strong : ext.textSecondary,
                         ),

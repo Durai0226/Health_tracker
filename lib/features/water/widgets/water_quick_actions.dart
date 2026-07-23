@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../models/water_container.dart';
 import '../models/beverage_type.dart';
@@ -43,7 +44,7 @@ class WaterQuickActions extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
-                  Icons.add_circle_outline,
+                  Symbols.add_circle_rounded,
                   color: Colors.white,
                   size: 18,
                 ),
@@ -95,7 +96,7 @@ class WaterQuickActions extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Icon(
-                        Icons.keyboard_arrow_down,
+                        Symbols.keyboard_arrow_down_rounded,
                         size: 16,
                         color: Color(int.parse(
                             selectedBeverage.colorHex.replaceFirst('#', '0xFF'))),
@@ -381,7 +382,7 @@ class _CustomAmountCardState extends State<_CustomAmountCard>
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      Icons.edit_outlined,
+                      Symbols.edit_rounded,
                       size: 20,
                       color: Colors.purple.shade400,
                     ),
@@ -452,7 +453,7 @@ class BeverageSelectionSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
-                    Icons.local_drink,
+                    Symbols.local_drink_rounded,
                     color: Colors.white,
                     size: 20,
                   ),
@@ -661,7 +662,7 @@ class _CustomAmountDialogState extends State<CustomAmountDialog> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _AdjustButton(
-                  icon: Icons.remove,
+                  icon: Symbols.remove_rounded,
                   onTap: () => _adjustAmount(-50),
                   color: color,
                 ),
@@ -708,7 +709,7 @@ class _CustomAmountDialogState extends State<CustomAmountDialog> {
                 ),
                 const SizedBox(width: 16),
                 _AdjustButton(
-                  icon: Icons.add,
+                  icon: Symbols.add_rounded,
                   onTap: () => _adjustAmount(50),
                   color: color,
                 ),

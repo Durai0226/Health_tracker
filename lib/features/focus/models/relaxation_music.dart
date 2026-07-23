@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 enum RelaxationCategory {
   deepFocus,
@@ -54,11 +55,11 @@ extension RelaxationCategoryExtension on RelaxationCategory {
   IconData get icon {
     switch (this) {
       case RelaxationCategory.deepFocus:
-        return Icons.psychology_rounded;
+        return Symbols.psychology_rounded;
       case RelaxationCategory.stressRelief:
-        return Icons.spa_rounded;
+        return Symbols.spa_rounded;
       case RelaxationCategory.nervousSystemReset:
-        return Icons.bedtime_rounded;
+        return Symbols.bedtime_rounded;
     }
   }
 
@@ -282,33 +283,33 @@ extension RelaxationMusicTypeExtension on RelaxationMusicType {
   IconData get icon {
     switch (this) {
       case RelaxationMusicType.binauralBeatsAlpha:
-        return Icons.headphones_rounded;
+        return Symbols.headphones_rounded;
       case RelaxationMusicType.lofiHipHop:
-        return Icons.music_note_rounded;
+        return Symbols.music_note_rounded;
       case RelaxationMusicType.ambientInstrumental:
-        return Icons.piano_rounded;
+        return Symbols.piano_rounded;
       case RelaxationMusicType.gammaFocus40Hz:
-        return Icons.bolt_rounded;
+        return Symbols.bolt_rounded;
       case RelaxationMusicType.healing432Hz:
-        return Icons.auto_awesome_rounded;
+        return Symbols.auto_awesome_rounded;
       case RelaxationMusicType.miracleTone528Hz:
-        return Icons.stars_rounded;
+        return Symbols.stars_rounded;
       case RelaxationMusicType.tibetanBowls:
-        return Icons.self_improvement_rounded;
+        return Symbols.self_improvement_rounded;
       case RelaxationMusicType.rainOnWindow:
-        return Icons.water_drop_rounded;
+        return Symbols.water_drop_rounded;
       case RelaxationMusicType.oceanWaves:
-        return Icons.waves_rounded;
+        return Symbols.waves_rounded;
       case RelaxationMusicType.forestBirds:
-        return Icons.forest_rounded;
+        return Symbols.forest_rounded;
       case RelaxationMusicType.rainPiano432Hz:
-        return Icons.nightlight_rounded;
+        return Symbols.nightlight_rounded;
       case RelaxationMusicType.deepSleepDelta:
-        return Icons.bedtime_rounded;
+        return Symbols.bedtime_rounded;
       case RelaxationMusicType.softPianoRain:
-        return Icons.music_note_rounded;
+        return Symbols.music_note_rounded;
       case RelaxationMusicType.healingNightSounds:
-        return Icons.dark_mode_rounded;
+        return Symbols.dark_mode_rounded;
     }
   }
 

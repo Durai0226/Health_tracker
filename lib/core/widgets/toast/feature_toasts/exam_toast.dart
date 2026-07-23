@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -127,7 +128,7 @@ class ExamToast {
       feature: ToastFeature.exam,
       title: 'Study Plan Created',
       message: 'Your personalized study plan is ready',
-      customIcon: Icons.auto_awesome_rounded,
+      customIcon: Symbols.auto_awesome_rounded,
     );
   }
 

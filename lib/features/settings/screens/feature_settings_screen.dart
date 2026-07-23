@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/feature_manager.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 
 class FeatureSettingsScreen extends StatefulWidget {
   const FeatureSettingsScreen({super.key});
@@ -53,7 +55,7 @@ class _FeatureSettingsScreenState extends State<FeatureSettingsScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
-                          Icons.info_outline_rounded,
+                          Symbols.info_rounded,
                           color: AppColors.primary,
                           size: 22,
                         ),
@@ -92,7 +94,7 @@ class _FeatureSettingsScreenState extends State<FeatureSettingsScreen> {
                 _buildSectionHeader(
                   'Core Features',
                   subtitle: 'Always enabled',
-                  icon: Icons.lock_rounded,
+                  icon: Symbols.lock_rounded,
                 ),
                 const SizedBox(height: 12),
                 ...FeatureManager.coreFeatures.map(
@@ -105,7 +107,7 @@ class _FeatureSettingsScreenState extends State<FeatureSettingsScreen> {
                 _buildSectionHeader(
                   'Optional Features',
                   subtitle: '${_featureManager.enabledFeatures.length - FeatureManager.coreFeatures.length} enabled',
-                  icon: Icons.tune_rounded,
+                  icon: Symbols.tune_rounded,
                 ),
                 const SizedBox(height: 12),
                 ...FeatureManager.optionalFeatures.map(
@@ -118,7 +120,7 @@ class _FeatureSettingsScreenState extends State<FeatureSettingsScreen> {
                 Center(
                   child: TextButton.icon(
                     onPressed: () => _showResetDialog(),
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    icon: const Icon(Symbols.refresh_rounded, size: 18),
                     label: const Text('Reset to Defaults'),
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.textSecondary,
@@ -267,7 +269,7 @@ class _FeatureSettingsScreenState extends State<FeatureSettingsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.check_rounded,
+                          Symbols.check_rounded,
                           size: 14,
                           color: AppColors.success,
                         ),
@@ -284,12 +286,11 @@ class _FeatureSettingsScreenState extends State<FeatureSettingsScreen> {
                     ),
                   )
                 else
-                  Switch.adaptive(
+                  AppSwitch(
                     value: isEnabled,
                     onChanged: (value) async {
                       await _featureManager.toggleFeature(feature.id, value);
                     },
-                    activeColor: feature.color,
                   ),
               ],
             ),

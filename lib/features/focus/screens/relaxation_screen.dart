@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/haptic_service.dart';
@@ -118,7 +119,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                   ),
                 ],
               ),
-              child: const Icon(Icons.arrow_back_rounded, size: 22),
+              child: const Icon(Symbols.arrow_back_rounded, size: 22),
             ),
           ),
           const SizedBox(width: 16),
@@ -376,7 +377,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
-                              Icons.check_rounded,
+                              Symbols.check_rounded,
                               color: Colors.white,
                               size: 16,
                             ),
@@ -509,7 +510,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(
-                          Icons.play_arrow_rounded,
+                          Symbols.play_arrow_rounded,
                           color: Colors.white,
                           size: 32,
                         ),
@@ -574,21 +575,21 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
           Row(
             children: [
               _buildStatItem(
-                icon: Icons.timer_rounded,
+                icon: Symbols.timer_rounded,
                 value: '${stats.totalMinutes}',
                 label: 'Minutes',
                 color: color,
               ),
               const SizedBox(width: 12),
               _buildStatItem(
-                icon: Icons.spa_rounded,
+                icon: Symbols.spa_rounded,
                 value: '${stats.completedSessions}',
                 label: 'Sessions',
                 color: AppColors.success,
               ),
               const SizedBox(width: 12),
               _buildStatItem(
-                icon: Icons.trending_up_rounded,
+                icon: Symbols.trending_up_rounded,
                 value: '${(stats.completionRate * 100).toInt()}%',
                 label: 'Completion',
                 color: AppColors.warning,
@@ -702,7 +703,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.lock_rounded,
+            Symbols.lock_rounded,
             color: category.color,
             size: 20,
           ),
@@ -881,7 +882,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                 child: Row(
                   children: [
                     Icon(
-                      Icons.volume_up_rounded,
+                      Symbols.volume_up_rounded,
                       color: category.color,
                       size: 18,
                     ),
@@ -951,8 +952,8 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
             ),
             child: Icon(
               _relaxationService.isPaused
-                  ? Icons.play_arrow_rounded
-                  : Icons.pause_rounded,
+                  ? Symbols.play_arrow_rounded
+                  : Symbols.pause_rounded,
               color: category.color,
               size: 40,
             ),
@@ -975,7 +976,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.close_rounded,
+              Symbols.close_rounded,
               color: AppColors.error,
               size: 20,
             ),
@@ -1024,7 +1025,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
               ),
               child: Row(
                 children: [
-                  Icon(Icons.timer_rounded, color: category.color, size: 20),
+                  Icon(Symbols.timer_rounded, color: category.color, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     'Time remaining: ${_relaxationService.formattedTime}',

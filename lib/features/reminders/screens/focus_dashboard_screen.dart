@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/focus_mode_service.dart';
 import '../../../core/services/clean_storage_service.dart';
@@ -25,12 +26,12 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
   List<Map<String, dynamic>> _recentSessions = [];
   
   final List<Map<String, dynamic>> _activities = [
-    {'id': 'reading', 'name': 'Reading', 'icon': Icons.menu_book_rounded, 'color': AppColors.primary},
-    {'id': 'studying', 'name': 'Studying', 'icon': Icons.school_rounded, 'color': AppColors.info},
-    {'id': 'working', 'name': 'Working', 'icon': Icons.work_rounded, 'color': AppColors.warning},
-    {'id': 'meditating', 'name': 'Meditating', 'icon': Icons.self_improvement_rounded, 'color': AppColors.success},
-    {'id': 'writing', 'name': 'Writing', 'icon': Icons.edit_rounded, 'color': AppColors.error},
-    {'id': 'coding', 'name': 'Coding', 'icon': Icons.code_rounded, 'color': const Color(0xFF9C27B0)},
+    {'id': 'reading', 'name': 'Reading', 'icon': Symbols.menu_book_rounded, 'color': AppColors.primary},
+    {'id': 'studying', 'name': 'Studying', 'icon': Symbols.school_rounded, 'color': AppColors.info},
+    {'id': 'working', 'name': 'Working', 'icon': Symbols.work_rounded, 'color': AppColors.warning},
+    {'id': 'meditating', 'name': 'Meditating', 'icon': Symbols.self_improvement_rounded, 'color': AppColors.success},
+    {'id': 'writing', 'name': 'Writing', 'icon': Symbols.edit_rounded, 'color': AppColors.error},
+    {'id': 'coding', 'name': 'Coding', 'icon': Symbols.code_rounded, 'color': const Color(0xFF9C27B0)},
   ];
 
   @override
@@ -106,7 +107,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _startFocusSession,
         backgroundColor: AppColors.success,
-        icon: const Icon(Icons.play_arrow_rounded, color: Colors.white),
+        icon: const Icon(Symbols.play_arrow_rounded, color: Colors.white),
         label: const Text('Start Focus', style: TextStyle(color: Colors.white)),
       ),
     );
@@ -119,12 +120,12 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
       pinned: true,
       backgroundColor: AppColors.success,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+        icon: const Icon(Symbols.arrow_back_rounded, color: Colors.white),
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.settings_outlined, color: Colors.white),
+          icon: const Icon(Symbols.settings_rounded, color: Colors.white),
           onPressed: _showGoalDialog,
         ),
       ],
@@ -159,7 +160,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
                 right: 30,
                 bottom: 50,
                 child: Icon(
-                  Icons.self_improvement_rounded,
+                  Symbols.self_improvement_rounded,
                   size: 50,
                   color: Colors.white.withOpacity(0.15),
                 ),
@@ -200,7 +201,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.timer_rounded, color: Colors.white, size: 32),
+                child: const Icon(Symbols.timer_rounded, color: Colors.white, size: 32),
               ),
               const SizedBox(width: 20),
               Expanded(
@@ -234,7 +235,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  _todayMinutes >= 60 ? Icons.park : Icons.eco,
+                  _todayMinutes >= 60 ? Symbols.park_rounded : Symbols.eco_rounded,
                   color: Colors.white,
                   size: 40,
                 ),
@@ -244,9 +245,9 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
           const SizedBox(height: 20),
           Row(
             children: [
-              _buildMiniStat('Sessions', '$_totalSessions', Icons.repeat),
+              _buildMiniStat('Sessions', '$_totalSessions', Symbols.repeat_rounded),
               const SizedBox(width: 16),
-              _buildMiniStat('This Week', _formatMinutes(_weekMinutes), Icons.calendar_today),
+              _buildMiniStat('This Week', _formatMinutes(_weekMinutes), Symbols.calendar_today_rounded),
             ],
           ),
         ],
@@ -551,7 +552,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
           ...breakdown.entries.map((entry) {
             final activity = _activities.firstWhere(
               (a) => a['id'] == entry.key,
-              orElse: () => {'name': entry.key, 'color': AppColors.textSecondary, 'icon': Icons.circle},
+              orElse: () => {'name': entry.key, 'color': AppColors.textSecondary, 'icon': Symbols.circle_rounded},
             );
             final total = breakdown.values.fold(0, (a, b) => a + b);
             final percentage = total > 0 ? entry.value / total : 0.0;
@@ -619,7 +620,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
         ),
         child: Column(
           children: [
-            Icon(Icons.history, size: 48, color: AppColors.textSecondary.withOpacity(0.5)),
+            Icon(Symbols.history_rounded, size: 48, color: AppColors.textSecondary.withOpacity(0.5)),
             const SizedBox(height: 12),
             const Text(
               'No focus sessions yet',
@@ -663,7 +664,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
           ..._recentSessions.take(5).map((session) {
             final activity = _activities.firstWhere(
               (a) => a['id'] == session['activity'],
-              orElse: () => {'name': 'Focus', 'color': AppColors.success, 'icon': Icons.timer},
+              orElse: () => {'name': 'Focus', 'color': AppColors.success, 'icon': Symbols.timer_rounded},
             );
             final date = DateTime.tryParse(session['date'] ?? '');
             
@@ -782,7 +783,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
                     onPressed: () => setModalState(() {
                       newGoal = (newGoal - 60).clamp(60, 1200);
                     }),
-                    icon: const Icon(Icons.remove_circle_outline),
+                    icon: const Icon(Symbols.remove_circle_rounded),
                     iconSize: 36,
                     color: AppColors.success,
                   ),
@@ -799,7 +800,7 @@ class _FocusDashboardScreenState extends State<FocusDashboardScreen> {
                     onPressed: () => setModalState(() {
                       newGoal = (newGoal + 60).clamp(60, 1200);
                     }),
-                    icon: const Icon(Icons.add_circle_outline),
+                    icon: const Icon(Symbols.add_circle_rounded),
                     iconSize: 36,
                     color: AppColors.success,
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../models/enhanced_medicine.dart';
 import '../../services/medicine_storage_service.dart';
@@ -152,10 +153,10 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
           children: [
             AppHeader(
               title: 'Adherence',
-              icon: Icons.insights_rounded,
+              icon: Symbols.insights_rounded,
               accent: ext.medicine,
               leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: Symbols.arrow_back_rounded,
                 filled: false,
                 accent: ext.medicine,
                 onPressed: () => Navigator.pop(context),
@@ -165,9 +166,9 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
                 onChanged: _onPeriodChanged,
                 accent: ext.medicine,
                 items: const [
-                  SegmentItem(icon: Icons.view_week_rounded, label: 'Week'),
-                  SegmentItem(icon: Icons.calendar_month_rounded, label: 'Month'),
-                  SegmentItem(icon: Icons.calendar_today_rounded, label: 'Year'),
+                  SegmentItem(icon: Symbols.view_week_rounded, label: 'Week'),
+                  SegmentItem(icon: Symbols.calendar_month_rounded, label: 'Month'),
+                  SegmentItem(icon: Symbols.calendar_today_rounded, label: 'Year'),
                 ],
               ),
             ),
@@ -218,7 +219,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       children: [
         SectionHeader(
           title: 'Overview',
-          icon: Icons.donut_large_rounded,
+          icon: Symbols.donut_large_rounded,
           accent: ext.medicine,
         ),
         AppCard(
@@ -259,19 +260,19 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
         StatTileRow(
           tiles: [
             StatTile(
-              icon: Icons.local_fire_department_rounded,
+              icon: Symbols.local_fire_department_rounded,
               value: '$_streak',
               label: 'Day Streak',
               accent: ext.warning,
             ),
             StatTile(
-              icon: Icons.check_circle_rounded,
+              icon: Symbols.check_circle_rounded,
               value: '${_summary.taken}',
               label: 'Taken',
               accent: ext.success,
             ),
             StatTile(
-              icon: Icons.cancel_rounded,
+              icon: Symbols.cancel_rounded,
               value: '${_summary.missed}',
               label: 'Missed',
               accent: ext.error,
@@ -292,7 +293,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       children: [
         SectionHeader(
           title: 'Daily Adherence',
-          icon: Icons.bar_chart_rounded,
+          icon: Symbols.bar_chart_rounded,
           accent: c.medicine,
         ),
         AppCard(
@@ -312,7 +313,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.bar_chart_rounded, size: 36, color: c.textTertiary),
+            Icon(Symbols.bar_chart_rounded, size: 36, color: c.textTertiary),
             const SizedBox(height: 8),
             Text(
               'No doses scheduled in this period',
@@ -401,14 +402,8 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          _adherenceColor(c, bar.adherence),
-                          _adherenceColor(c, bar.adherence).withOpacity(0.65),
-                        ],
-                      ),
+                      // Flat solid fill — Calm Clarity has no gradients.
+                      color: _adherenceColor(c, bar.adherence),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -497,7 +492,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       children: [
         SectionHeader(
           title: 'By Medication',
-          icon: Icons.medication_rounded,
+          icon: Symbols.medication_rounded,
           accent: ext.medicine,
         ),
         ...activeMedicines.map((medicine) => _buildMedicineStatCard(medicine)),
@@ -567,21 +562,21 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
 
     if (adherenceRate >= 90) {
       insights.add(_Insight(
-        icon: Icons.emoji_events_rounded,
+        icon: Symbols.emoji_events_rounded,
         swatch: ext.success,
         title: 'Excellent Adherence!',
         description: 'You\'re doing great! Keep up the good work.',
       ));
     } else if (adherenceRate >= 70) {
       insights.add(_Insight(
-        icon: Icons.trending_up_rounded,
+        icon: Symbols.trending_up_rounded,
         swatch: ext.info,
         title: 'Good Progress',
         description: 'You\'re on the right track. Try to improve a bit more.',
       ));
     } else {
       insights.add(_Insight(
-        icon: Icons.tips_and_updates_rounded,
+        icon: Symbols.tips_and_updates_rounded,
         swatch: ext.warning,
         title: 'Room for Improvement',
         description: 'Set reminders to help you remember your medications.',
@@ -589,7 +584,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     }
 
     insights.add(_Insight(
-      icon: Icons.lightbulb_rounded,
+      icon: Symbols.lightbulb_rounded,
       swatch: ext.medicine,
       title: 'Tip',
       description: 'Taking medications at the same time daily can improve adherence.',
@@ -600,7 +595,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       children: [
         SectionHeader(
           title: 'Insights',
-          icon: Icons.auto_awesome_rounded,
+          icon: Symbols.auto_awesome_rounded,
           accent: ext.medicine,
         ),
         ...insights.map((insight) => AppCard(

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../design/app_design.dart';
@@ -19,6 +21,12 @@ class AppButton extends StatelessWidget {
   final bool fullWidth;
   final AccentSwatch? accent;
 
+  /// Hero treatment for a top-level CTA (onboarding / primary flow). Keeps the
+  /// fill a pure, FRESH accent (brightens to `base` where AA allows) and floats
+  /// it with a same-hue glow + hairline top gloss. Default off → every other
+  /// button in the app is unchanged.
+  final bool emphasized;
+
   const AppButton({
     super.key,
     required this.label,
@@ -30,10 +38,11 @@ class AppButton extends StatelessWidget {
     this.loading = false,
     this.fullWidth = false,
     this.accent,
+    this.emphasized = false,
   });
 
   double get _height => switch (size) {
-        AppButtonSize.sm => 40,
+        AppButtonSize.sm => 44, // Apple/Material minimum tap target
         AppButtonSize.md => 48,
         AppButtonSize.lg => 56,
       };
@@ -79,6 +88,16 @@ class AppButton extends StatelessWidget {
       fg = ext.textDisabled;
     }
 
+    // ── Emphasized CTA (design-panel winner: "fresh solid teal, floated") ──
+    final emph = emphasized && variant == AppButtonVariant.primary && !disabled;
+    // In light mode the primary fill is the darkened `strong` (AA-safe but muddy).
+    // Brighten to the vivid `base` — but ONLY where white still clears the
+    // large/bold AA floor (3:1), so cyan/amber/green accents fall back safely.
+    if (emph && !ext.isDark && _wcagContrast(s.base, fg) >= 3.0) {
+      bg = s.base;
+    }
+    final radius = emph ? AppRadius.brLg : AppRadius.brMd;
+
     final child = loading
         ? SizedBox(
             height: 18,
@@ -96,7 +115,9 @@ class AppButton extends StatelessWidget {
               Flexible(
                 child: Text(label,
                     overflow: TextOverflow.ellipsis,
-                    style: tt.labelLarge?.copyWith(color: fg)),
+                    style: tt.labelLarge?.copyWith(
+                        color: fg,
+                        fontWeight: emph ? FontWeight.w700 : null)),
               ),
               if (trailingIcon != null) ...[
                 const SizedBox(width: 8),
@@ -104,6 +125,72 @@ class AppButton extends StatelessWidget {
               ],
             ],
           );
+
+    if (emph) {
+      final tap = loading
+          ? null
+          : () {
+              HapticFeedback.lightImpact();
+              onPressed?.call();
+            };
+      return SizedBox(
+        height: _height,
+        width: fullWidth ? double.infinity : null,
+        child: DecoratedBox(
+          // Same-hue teal "float" — depth without a muddy dark gradient. On dark
+          // surfaces a colored glow reads as mud, so lift with a soft ambient.
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            boxShadow: ext.isDark
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: bg.withOpacity(0.34),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(borderRadius: radius),
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                // Hairline "lit-from-above" gloss confined to the top — only
+                // LIGHTENS the top edge (above the centered label), never
+                // darkens below the fill, so contrast never regresses.
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [_lighten(bg, 0.09), bg, bg],
+                  stops: const [0.0, 0.42, 1.0],
+                ),
+              ),
+              child: InkWell(
+                onTap: tap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Center(child: child),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
       height: _height,
@@ -131,6 +218,29 @@ class AppButton extends StatelessWidget {
     );
   }
 }
+
+// WCAG relative luminance + contrast — used to decide when a primary CTA may
+// safely brighten to its vivid `base` fill under white text.
+double _relLum(Color c) {
+  double lin(double v) {
+    v /= 255.0;
+    return v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  }
+
+  return 0.2126 * lin(c.red.toDouble()) +
+      0.7152 * lin(c.green.toDouble()) +
+      0.0722 * lin(c.blue.toDouble());
+}
+
+double _wcagContrast(Color a, Color b) {
+  final la = _relLum(a);
+  final lb = _relLum(b);
+  final hi = math.max(la, lb);
+  final lo = math.min(la, lb);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+Color _lighten(Color c, double amount) => Color.lerp(c, Colors.white, amount)!;
 
 /// Circular/rounded icon button — header actions, gear, +/- steppers.
 class AppIconButton extends StatelessWidget {

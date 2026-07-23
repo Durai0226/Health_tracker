@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/haptic_service.dart';
@@ -156,13 +157,13 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
           Row(
             children: [
               _buildHeaderIconButton(
-                icon: Icons.notifications_outlined,
+                icon: Symbols.notifications_rounded,
                 onTap: () => _navigateToReminders(),
                 isDark: isDark,
               ),
               const SizedBox(width: 12),
               _buildHeaderIconButton(
-                icon: Icons.bar_chart_rounded,
+                icon: Symbols.bar_chart_rounded,
                 onTap: () => _navigateToStats(),
                 isDark: isDark,
               ),
@@ -301,7 +302,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
         children: [
           Expanded(
             child: _buildStatCard(
-              icon: Icons.local_fire_department_rounded,
+              icon: Symbols.local_fire_department_rounded,
               value: '${stats.currentStreak}',
               label: 'Day Streak',
               color: ManropeTheme.primaryOrange,
@@ -311,7 +312,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
           const SizedBox(width: 12),
           Expanded(
             child: _buildStatCard(
-              icon: Icons.timer_outlined,
+              icon: Symbols.timer_rounded,
               value: '${_wellnessService.todayMinutes}',
               label: 'Min Today',
               color: ManropeTheme.accentGreen,
@@ -321,7 +322,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
           const SizedBox(width: 12),
           Expanded(
             child: _buildStatCard(
-              icon: Icons.check_circle_outline_rounded,
+              icon: Symbols.check_circle_rounded,
               value: '${_wellnessService.todaySessions}',
               label: 'Sessions',
               color: ManropeTheme.deepPurple,
@@ -502,7 +503,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
                           Row(
                             children: [
                               Icon(
-                                Icons.timer_outlined,
+                                Symbols.timer_rounded,
                                 color: Colors.white.withOpacity(0.8),
                                 size: 14,
                               ),
@@ -648,7 +649,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.check_rounded,
+                Symbols.check_rounded,
                 color: ManropeTheme.accentGreen,
                 size: 20,
               ),
@@ -661,7 +662,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.schedule,
+                Symbols.schedule_rounded,
                 color: ManropeTheme.error,
                 size: 20,
               ),
@@ -711,7 +712,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.calendar_today_rounded,
+                Symbols.calendar_today_rounded,
                 color: ManropeTheme.primaryOrange,
                 size: 32,
               ),
@@ -788,7 +789,7 @@ class _ManropeFocusDashboardState extends State<ManropeFocusDashboard>
                     borderRadius: ManropeTheme.borderRadiusMedium,
                   ),
                   child: const Icon(
-                    Icons.format_quote_rounded,
+                    Symbols.format_quote_rounded,
                     color: ManropeTheme.primaryOrangeDark,
                     size: 24,
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -179,7 +180,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     AppBottomSheet.show(
       context,
       title: 'Add Ingredient',
-      icon: Icons.local_drink_rounded,
+      icon: Symbols.local_drink_rounded,
       accent: AppColorsExt.of(context).water,
       builder: (context) => _IngredientSelector(
         beverages: beverages,
@@ -219,10 +220,10 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           children: [
             AppHeader(
               title: isEditing ? 'Edit Cup' : 'New Cup',
-              icon: Icons.local_drink_rounded,
+              icon: Symbols.local_drink_rounded,
               accent: water,
               leading: AppIconButton(
-                icon: Icons.close_rounded,
+                icon: Symbols.close_rounded,
                 accent: water,
                 filled: false,
                 onPressed: () => Navigator.pop(context),
@@ -266,7 +267,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                       size: AppButtonSize.lg,
                       fullWidth: true,
                       loading: _isSaving,
-                      leadingIcon: Icons.check_rounded,
+                      leadingIcon: Symbols.check_rounded,
                       onPressed: _isSaving ? null : _save,
                     ),
                   ],
@@ -333,7 +334,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
         children: [
           SectionHeader(
             title: 'Details',
-            icon: Icons.edit_note_rounded,
+            icon: Symbols.edit_note_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -341,7 +342,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
             controller: _nameController,
             label: 'Cup name',
             hint: 'e.g. My Favorite Mug',
-            prefixIcon: Icons.local_cafe_rounded,
+            prefixIcon: Symbols.local_cafe_rounded,
             accent: water,
             textCapitalization: TextCapitalization.words,
             onChanged: (_) => setState(() {}),
@@ -359,7 +360,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
         children: [
           SectionHeader(
             title: 'Icon',
-            icon: Icons.emoji_emotions_outlined,
+            icon: Symbols.emoji_emotions_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -403,7 +404,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
         children: [
           SectionHeader(
             title: 'Color',
-            icon: Icons.palette_outlined,
+            icon: Symbols.palette_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -429,7 +430,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                     ),
                   ),
                   child: isSelected
-                      ? Icon(Icons.check_rounded, color: _onColor(color), size: 22)
+                      ? Icon(Symbols.check_rounded, color: _onColor(color), size: 22)
                       : null,
                 ),
               );
@@ -453,7 +454,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           children: [
             SectionHeader(
               title: 'Total Capacity',
-              icon: Icons.straighten_rounded,
+              icon: Symbols.straighten_rounded,
               accent: water,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -491,7 +492,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
         children: [
           SectionHeader(
             title: 'Capacity',
-            icon: Icons.straighten_rounded,
+            icon: Symbols.straighten_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -499,7 +500,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
             controller: _capacityController,
             label: 'Capacity (ml)',
             hint: 'Enter capacity',
-            prefixIcon: Icons.water_drop_outlined,
+            prefixIcon: Symbols.water_drop_rounded,
             accent: water,
             keyboardType: TextInputType.number,
             onChanged: (_) => setState(() {}),
@@ -545,7 +546,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
               color: water.container,
               borderRadius: AppRadius.brSm,
             ),
-            child: Icon(Icons.blender_outlined, size: 20, color: water.onContainer),
+            child: Icon(Symbols.blender_rounded, size: 20, color: water.onContainer),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -560,10 +561,8 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
               ],
             ),
           ),
-          Switch(
+          AppSwitch(
             value: _isMultiIngredient,
-            activeThumbColor: water.base,
-            activeTrackColor: water.container,
             onChanged: (v) {
               HapticFeedback.selectionClick();
               setState(() {
@@ -571,6 +570,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                 if (!v) _ingredients.clear();
               });
             },
+            accent: water,
           ),
         ],
       ),
@@ -585,7 +585,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
         children: [
           SectionHeader(
             title: 'Ingredients',
-            icon: Icons.science_outlined,
+            icon: Symbols.science_rounded,
             accent: water,
             actionLabel: 'Add',
             onAction: _addIngredient,
@@ -636,7 +636,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.remove_circle_outline, color: ext.error.base),
+                      icon: Icon(Symbols.remove_circle_rounded, color: ext.error.base),
                       onPressed: () => _removeIngredient(index),
                     ),
                   ],
@@ -787,7 +787,7 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
           accent: water,
           size: AppButtonSize.lg,
           fullWidth: true,
-          leadingIcon: Icons.add_rounded,
+          leadingIcon: Symbols.add_rounded,
           onPressed: _selectedBeverage == null
               ? null
               : () {

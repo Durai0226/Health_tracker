@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../../settings/screens/early_access_screen.dart';
 
 class VitaVibeSettingsScreen extends StatefulWidget {
@@ -22,7 +24,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Icon(Icons.vibration_rounded, size: 24),
+            const Icon(Symbols.vibration_rounded, size: 24),
             const SizedBox(width: 8),
             const Text(
               'Haptic Feel',
@@ -64,7 +66,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.touch_app_rounded, color: Colors.teal, size: 28),
+                        const Icon(Symbols.touch_app_rounded, color: Colors.teal, size: 28),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
@@ -89,10 +91,9 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                             ],
                           ),
                         ),
-                        Switch(
+                        AppSwitch(
                           value: _service.isEnabled,
                           onChanged: (value) => _service.toggleEnabled(value),
-                          activeColor: Colors.teal,
                         ),
                       ],
                     ),
@@ -103,7 +104,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       ),
                       const Row(
                         children: [
-                          Icon(Icons.speed_rounded, color: Colors.orange, size: 24),
+                          Icon(Symbols.speed_rounded, color: Colors.orange, size: 24),
                           SizedBox(width: 16),
                           Text(
                             'Intensity',
@@ -177,7 +178,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       _buildFeatureItem(
                         key: 'medicine',
                         title: 'Medicine Taken',
-                        icon: Icons.medication_rounded,
+                        icon: Symbols.medication_rounded,
                         iconColor: Colors.teal,
                         bgColor: Colors.teal.withOpacity(0.1),
                       ),
@@ -185,7 +186,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       _buildFeatureItem(
                         key: 'reminder', // Assuming mapped to specific key usage or general notification
                         title: 'Medicine Reminder',
-                        icon: Icons.alarm_rounded,
+                        icon: Symbols.alarm_rounded,
                         iconColor: Colors.orange,
                         bgColor: Colors.orange.withOpacity(0.1),
                         overridePattern: VibePattern.medicineTime, 
@@ -195,7 +196,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       _buildFeatureItem(
                         key: 'water',
                         title: 'Water Added',
-                        icon: Icons.water_drop_rounded,
+                        icon: Symbols.water_drop_rounded,
                         iconColor: Colors.blue,
                         bgColor: Colors.blue.withOpacity(0.1),
                       ),
@@ -203,7 +204,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       _buildFeatureItem(
                         key: 'celebrate',
                         title: 'Water Goal',
-                        icon: Icons.emoji_events_rounded,
+                        icon: Symbols.emoji_events_rounded,
                         iconColor: Colors.green,
                         bgColor: Colors.green.withOpacity(0.1),
                         overrideKey: 'celebrate', // Use celebrate key for goal
@@ -212,7 +213,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       _buildFeatureItem(
                         key: 'focus',
                         title: 'Focus Start',
-                        icon: Icons.self_improvement_rounded,
+                        icon: Symbols.self_improvement_rounded,
                         iconColor: Colors.teal,
                         bgColor: Colors.teal.withOpacity(0.1),
                       ),
@@ -220,7 +221,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       _buildFeatureItem(
                         key: 'focus_complete',
                         title: 'Focus Complete',
-                        icon: Icons.check_circle_rounded,
+                        icon: Symbols.check_circle_rounded,
                         iconColor: Colors.green,
                         bgColor: Colors.green.withOpacity(0.1),
                         overrideKey: 'celebrate', // Use celebrate for focus complete too or new key
@@ -229,7 +230,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                       _buildFeatureItem(
                         key: 'navigation',
                         title: 'Navigation',
-                        icon: Icons.touch_app_rounded,
+                        icon: Symbols.touch_app_rounded,
                         iconColor: Colors.indigo,
                         bgColor: Colors.indigo.withOpacity(0.1),
                       ),
@@ -251,14 +252,14 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                         color: Colors.purple.withOpacity(isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.explore_rounded, color: Colors.purple),
+                      child: const Icon(Symbols.explore_rounded, color: Colors.purple),
                     ),
                     title: Text(
                       'Pattern Explorer',
                       style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(context)),
                     ),
                     subtitle: Text('Test all vibration patterns', style: TextStyle(color: AppColors.getTextSecondary(context))),
-                    trailing: Icon(Icons.chevron_right_rounded, color: AppColors.getTextSecondary(context)),
+                    trailing: Icon(Symbols.chevron_right_rounded, color: AppColors.getTextSecondary(context)),
                     onTap: _showPatternExplorer,
                   ),
                 ),
@@ -277,14 +278,14 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                         color: Colors.orange.withOpacity(isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.science_rounded, color: Colors.orange),
+                      child: const Icon(Symbols.science_rounded, color: Colors.orange),
                     ),
                     title: Text(
                       'Early Access',
                       style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.getTextPrimary(context)),
                     ),
                     subtitle: Text('Try experimental features', style: TextStyle(color: AppColors.getTextSecondary(context))),
-                    trailing: Icon(Icons.chevron_right_rounded, color: AppColors.getTextSecondary(context)),
+                    trailing: Icon(Symbols.chevron_right_rounded, color: AppColors.getTextSecondary(context)),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -388,7 +389,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: Color(0xFFCFD3D8)),
+              const Icon(Symbols.chevron_right_rounded, color: Color(0xFFCFD3D8)),
             ],
           ),
         ),
@@ -434,7 +435,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                             color: Colors.teal.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.vibration_rounded, color: Colors.teal, size: 20),
+                          child: const Icon(Symbols.vibration_rounded, color: Colors.teal, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Flexible(
@@ -515,7 +516,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                                     ),
                                     IconButton(
                                       icon: Icon(
-                                        Icons.play_circle_outline_rounded,
+                                        Symbols.play_circle_rounded,
                                         color: isSelected ? Colors.teal : Colors.teal,
                                       ),
                                       onPressed: () => _service.playPattern(pattern),
@@ -606,7 +607,7 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
                                   ),
                                   subtitle: Text(metadata['desc']!),
                                   trailing: IconButton(
-                                    icon: const Icon(Icons.play_circle_fill, color: Colors.teal),
+                                    icon: const Icon(Symbols.play_circle_rounded, color: Colors.teal),
                                     onPressed: () => _service.playPattern(pattern),
                                   ),
                                 ),

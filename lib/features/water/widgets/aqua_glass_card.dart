@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../theme/aqua_theme.dart';
 
 /// Glassmorphism card with dynamic beverage-based styling
@@ -174,7 +175,7 @@ class AquaSectionHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Icon(
-                    Icons.arrow_forward_ios_rounded,
+                    Symbols.arrow_forward_ios_rounded,
                     size: 12,
                     color: beverage.primary,
                   ),

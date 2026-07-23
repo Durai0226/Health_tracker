@@ -203,7 +203,17 @@ class AppTheme {
         ),
         textStyle: textTheme.bodySmall?.copyWith(color: ext.surface),
       ),
-      iconTheme: IconThemeData(color: ext.textPrimary, size: 24),
+      // Material Symbols (variable font): render filled at a medium weight by
+      // default so the app keeps its solid, confident icon identity. Surfaces
+      // that want an outline-at-rest affordance set `fill: 0` explicitly (e.g.
+      // the nav bar's inactive tabs). MaterialIcons glyphs ignore these axes.
+      iconTheme: IconThemeData(
+        color: ext.textPrimary,
+        size: 24,
+        fill: 1,
+        weight: 500,
+        opticalSize: 24,
+      ),
     );
   }
 }

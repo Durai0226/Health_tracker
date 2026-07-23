@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_colors_ext.dart';
 import '../../ai/vitals_analyzer.dart';
 
@@ -83,30 +84,30 @@ class VitalsColors {
   static IconData bpIcon(BpCategory c) {
     switch (c) {
       case BpCategory.normal:
-        return Icons.check_circle_rounded;
+        return Symbols.check_circle_rounded;
       case BpCategory.elevated:
-        return Icons.trending_up_rounded;
+        return Symbols.trending_up_rounded;
       case BpCategory.stage1:
-        return Icons.warning_amber_rounded;
+        return Symbols.warning_amber_rounded;
       case BpCategory.stage2:
-        return Icons.error_rounded;
+        return Symbols.error_rounded;
       case BpCategory.crisis:
-        return Icons.emergency_rounded;
+        return Symbols.emergency_rounded;
     }
   }
 
   static IconData glucoseIcon(GlucoseClass c) {
     switch (c) {
       case GlucoseClass.severeLow:
-        return Icons.emergency_rounded;
+        return Symbols.emergency_rounded;
       case GlucoseClass.low:
-        return Icons.arrow_downward_rounded;
+        return Symbols.arrow_downward_rounded;
       case GlucoseClass.inRange:
-        return Icons.check_circle_rounded;
+        return Symbols.check_circle_rounded;
       case GlucoseClass.high:
-        return Icons.arrow_upward_rounded;
+        return Symbols.arrow_upward_rounded;
       case GlucoseClass.veryHigh:
-        return Icons.error_rounded;
+        return Symbols.error_rounded;
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../services/relaxation_game_service.dart';
 import '../widgets/relaxation_game_widgets.dart';
@@ -417,7 +418,7 @@ class _StarryNightGameState extends State<StarryNightGame>
                 borderRadius: BorderRadius.circular(16),
                 padding: const EdgeInsets.all(12),
                 child: const Icon(
-                  Icons.arrow_back_rounded,
+                  Symbols.arrow_back_rounded,
                   color: Colors.white70,
                   size: 24,
                 ),
@@ -472,7 +473,7 @@ class _StarryNightGameState extends State<StarryNightGame>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _isDrawingMode ? Icons.check : Icons.gesture,
+                    _isDrawingMode ? Symbols.check_rounded : Symbols.gesture_rounded,
                     color: _isDrawingMode ? const Color(0xFF74B9FF) : Colors.white70,
                     size: 20,
                   ),
@@ -500,7 +501,7 @@ class _StarryNightGameState extends State<StarryNightGame>
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh, color: Colors.white70, size: 20),
+                  Icon(Symbols.refresh_rounded, color: Colors.white70, size: 20),
                   SizedBox(width: 8),
                   Text(
                     'Clear',

@@ -8,11 +8,17 @@ class AppNavItem {
   final String label;
   final AccentSwatch accent;
 
+  /// An action slot (e.g. a center "+ Log") — rendered as a permanently-raised
+  /// orb that never enters the selection, and whose tap always fires (even when
+  /// another destination is selected).
+  final bool isAction;
+
   const AppNavItem({
     required this.icon,
     required this.activeIcon,
     required this.label,
     required this.accent,
+    this.isAction = false,
   });
 }
 
@@ -42,6 +48,7 @@ class AppNavBar extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final active = items[currentIndex];
     final n = items.length;
+    final actionIndex = items.indexWhere((e) => e.isAction);
 
     // Docked to the bottom edge (not floating): full-width, rounded top,
     // upward shadow to separate from content, safe-area padding.
@@ -81,7 +88,9 @@ class AppNavBar extends StatelessWidget {
                           child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
-                            if (i != currentIndex) {
+                            // Action slots always fire (they don't get selected);
+                            // destinations only fire when not already selected.
+                            if (items[i].isAction || i != currentIndex) {
                               HapticFeedback.selectionClick();
                               onTap(i);
                             }
@@ -89,13 +98,20 @@ class AppNavBar extends StatelessWidget {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              // Active icon is hidden — the raised orb shows it.
+                              // The raised orb (sliding for the selection, fixed
+                              // for the action slot) shows the icon, so the flat
+                              // icon is hidden for both.
                               SizedBox(
                                 height: 26,
-                                child: i == currentIndex
+                                child: (i == currentIndex || items[i].isAction)
                                     ? null
+                                    // Outline-at-rest: inactive tabs render the
+                                    // Symbols glyph unfilled; the selected tab
+                                    // sits filled inside the orb.
                                     : Icon(items[i].icon,
-                                        size: 24, color: ext.textSecondary),
+                                        size: 24,
+                                        fill: 0,
+                                        color: ext.textSecondary),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -103,12 +119,13 @@ class AppNavBar extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: tt.labelSmall?.copyWith(
-                                  color: i == currentIndex
+                                  color: (i == currentIndex || items[i].isAction)
                                       ? items[i].accent.strong
                                       : ext.textSecondary,
-                                  fontWeight: i == currentIndex
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
+                                  fontWeight:
+                                      (i == currentIndex || items[i].isAction)
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
                                 ),
                               ),
                             ],
@@ -120,7 +137,43 @@ class AppNavBar extends StatelessWidget {
                 ),
               ),
 
-              // The raised, sliding, color-morphing orb.
+              // Fixed center ACTION orb (e.g. "+ Log"). Drawn BEFORE the sliding
+              // orb so the selection orb glides cleanly OVER it during a
+              // cross-centre tab switch instead of vanishing behind it (the old
+              // ordering caused a flicker as the orb slid past the centre).
+              if (actionIndex != -1)
+                IgnorePointer(
+                  child: Align(
+                    alignment: Alignment(_alignX(actionIndex, n), -1),
+                    child: Transform.translate(
+                      offset: const Offset(0, -22),
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: items[actionIndex].accent.base,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: ext.surface, width: 4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: items[actionIndex]
+                                  .accent
+                                  .base
+                                  .withOpacity(0.5),
+                              blurRadius: 18,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Icon(items[actionIndex].activeIcon,
+                            color: items[actionIndex].accent.on, size: 30),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // The raised, sliding, color-morphing selection orb — on top, so
+              // it reads continuously as it slides across the bar.
               IgnorePointer(
                 child: AnimatedAlign(
                   duration: AppMotion.base,

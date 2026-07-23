@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -162,7 +163,7 @@ class _BeverageSelectionScreenState extends State<BeverageSelectionScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
+          icon: const Icon(Symbols.close_rounded),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Add Drink'),
@@ -350,7 +351,7 @@ class _BeverageSelectionScreenState extends State<BeverageSelectionScreen>
                     color: AppColors.info.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.remove, color: AppColors.info),
+                  child: const Icon(Symbols.remove_rounded, color: AppColors.info),
                 ),
               ),
               Expanded(
@@ -378,7 +379,7 @@ class _BeverageSelectionScreenState extends State<BeverageSelectionScreen>
                     color: AppColors.info.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.add, color: AppColors.info),
+                  child: const Icon(Symbols.add_rounded, color: AppColors.info),
                 ),
               ),
             ],
@@ -490,7 +491,7 @@ class _BeverageSelectionScreenState extends State<BeverageSelectionScreen>
       ),
       child: CommonButton(
         text: 'Log ${_customAmount}ml${_selectedBeverage != null ? ' ${_selectedBeverage!.name}' : ''}',
-        icon: Icons.local_drink,
+        icon: Symbols.local_drink_rounded,
         variant: ButtonVariant.primary,
         backgroundColor: canLog ? AppColors.info : Colors.grey.shade300,
         isLoading: _isLogging,

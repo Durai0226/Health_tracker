@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
 import '../../water/screens/aqua_water_dashboard.dart';
+import '../../period/screens/period_dashboard.dart';
 
 /// Groups Medicine + Water behind ONE header + a segmented toggle, so the
 /// bottom nav stays at four clean destinations. The two dashboards render as
@@ -23,10 +25,13 @@ class HealthHubScreen extends StatefulWidget {
 }
 
 class _HealthHubScreenState extends State<HealthHubScreen> {
-  late int _tab = widget.initialTab.clamp(0, 1);
+  late int _tab = widget.initialTab.clamp(0, 2);
 
-  FeatureAccent get _feature =>
-      _tab == 1 ? FeatureAccent.water : FeatureAccent.medicine;
+  FeatureAccent get _feature => _tab == 2
+      ? FeatureAccent.period
+      : _tab == 1
+          ? FeatureAccent.water
+          : FeatureAccent.medicine;
 
   @override
   void initState() {
@@ -63,8 +68,9 @@ class _HealthHubScreenState extends State<HealthHubScreen> {
                 index: _tab,
                 onChanged: _select,
                 items: const [
-                  SegmentItem(icon: Icons.medication_rounded, label: 'Medicine'),
-                  SegmentItem(icon: Icons.water_drop_rounded, label: 'Water'),
+                  SegmentItem(icon: Symbols.medication_rounded, label: 'Medicine'),
+                  SegmentItem(icon: Symbols.water_drop_rounded, label: 'Water'),
+                  SegmentItem(icon: Symbols.calendar_month_rounded, label: 'Period'),
                 ],
               ),
             ),
@@ -74,6 +80,7 @@ class _HealthHubScreenState extends State<HealthHubScreen> {
                 children: const [
                   NunitoMedicationDashboard(embedded: true),
                   AquaWaterDashboard(embedded: true),
+                  PeriodDashboard(embedded: true),
                 ],
               ),
             ),

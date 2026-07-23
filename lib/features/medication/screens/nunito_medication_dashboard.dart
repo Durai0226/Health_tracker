@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -7,16 +8,16 @@ import '../models/enhanced_medicine.dart';
 import '../models/drug_interaction.dart';
 import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
+import '../services/today_schedule_service.dart';
 import '../services/drug_interaction_service.dart';
+import '../../../core/services/rating_prompt_service.dart';
 import 'nunito_medication_list_screen.dart';
+import 'refill_overview_screen.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
 import 'doctors/nunito_doctor_list_screen.dart';
 import 'clinics/nunito_clinic_list_screen.dart';
 import 'analytics/nunito_adherence_report_screen.dart';
-import '../../../core/widgets/app/vitals_theme.dart';
-import 'vitals/blood_pressure_screen.dart';
-import 'vitals/blood_sugar_screen.dart';
 
 class NunitoMedicationDashboard extends StatefulWidget {
   /// When embedded in the Health hub, the dashboard drops its own header
@@ -34,8 +35,11 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   List<_ScheduledDose> _todaysDoses = [];
   final Map<String, bool> _takenStatus = {};
   bool _isLoading = true;
+  bool _ratingChecked = false; // one-shot rating prompt per screen lifetime
   int _streak = 0;
   double _adherenceRate = 0.0;
+  // Log ids applied this load from queued notification actions (for Undo).
+  List<String> _drainedLogIds = const [];
   DateTime _selectedDate = DateTime.now();
 
   final DrugInteractionService _interactionService = DrugInteractionService();
@@ -60,19 +64,32 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       curve: AppMotion.standard,
     );
     _loadData();
+    // Live refresh: any dose taken/edited/deleted — here, from a notification,
+    // the medicine detail screen, or another tab — bumps this revision. Kept
+    // alive in the Health hub's IndexedStack, this screen would otherwise go
+    // stale until a tab remount, so subscribe and refresh in place.
+    MedicineCleanStorageService.revision.addListener(_onMedicineRevision);
+  }
+
+  void _onMedicineRevision() {
+    if (mounted) _loadData(showLoader: false);
   }
 
   @override
   void dispose() {
+    MedicineCleanStorageService.revision.removeListener(_onMedicineRevision);
     _fadeController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadData({bool showLoader = true}) async {
+    if (showLoader) setState(() => _isLoading = true);
     try {
       await MedicineCleanStorageService.init();
+      // Apply any Take/Skip the user tapped on a notification while the app was
+      // closed (queued by the background isolate); reflected below in the stats.
+      _drainedLogIds = await MedicineCleanStorageService.drainPendingDoseActions();
       // Backfill `missed` logs for past-due slots so adherence reflects reality.
       await MedicineCleanStorageService.reconcileMissedDoses();
       _medicines = await MedicineCleanStorageService.getAllMedicines();
@@ -87,6 +104,35 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       debugPrint('Error loading data: $e');
     }
     if (mounted) setState(() => _isLoading = false);
+
+    // Confirm + offer Undo for doses logged from a notification while away.
+    if (_drainedLogIds.isNotEmpty && mounted) {
+      final ids = _drainedLogIds;
+      _drainedLogIds = const [];
+      final n = ids.length;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text('Logged $n dose${n == 1 ? '' : 's'} from your reminder'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () async {
+              for (final id in ids) {
+                await MedicineCleanStorageService.deleteLog(id);
+              }
+              await _loadData();
+            },
+          ),
+        ));
+    }
+
+    // One-shot: after a real adherence "win", ask for a store rating (never nags).
+    if (!_ratingChecked && mounted) {
+      _ratingChecked = true;
+      RatingPromptService.maybePrompt(context, streak: _streak);
+    }
   }
 
   /// Scan the user's active medicines for drug-drug interactions using the
@@ -118,30 +164,17 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     _todaysDoses.clear();
     _takenStatus.clear();
 
-    final activeMedicines = _medicines.where((m) => m.isActive && !m.isArchived);
-    final logs = await MedicineCleanStorageService.getLogsForDate(_selectedDate);
-
-    for (final medicine in activeMedicines) {
-      final times = medicine.schedule.getScheduledTimesForDate(_selectedDate);
-      for (int i = 0; i < times.length; i++) {
-        final doseKey = '${medicine.id}_$i';
-        final log = logs.where((l) =>
-          l.medicineId == medicine.id &&
-          l.scheduledTime.hour == times[i].hour &&
-          l.scheduledTime.minute == times[i].minute
-        ).firstOrNull;
-
-        _todaysDoses.add(_ScheduledDose(
-          medicine: medicine,
-          scheduledTime: times[i],
-          timeIndex: i,
-          log: log,
-        ));
-        _takenStatus[doseKey] = log?.isTaken ?? false;
-      }
+    // Single source of truth (shared with the Today hub's next-dose hero).
+    final doses = await TodayScheduleService.getTodaysDoses(_selectedDate);
+    for (final d in doses) {
+      _todaysDoses.add(_ScheduledDose(
+        medicine: d.medicine,
+        scheduledTime: d.scheduledTime,
+        timeIndex: d.timeIndex,
+        log: d.log,
+      ));
+      _takenStatus[d.key] = d.isTaken;
     }
-
-    _todaysDoses.sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
   }
 
   void _onDateChanged(DateTime date) {
@@ -210,21 +243,6 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     );
   }
 
-  void _navigateToBloodPressure() {
-    _hapticService.light();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const BloodPressureScreen()),
-    );
-  }
-
-  void _navigateToBloodSugar() {
-    _hapticService.light();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const BloodSugarScreen()),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +260,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                   const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
                 if (_interactions.isNotEmpty)
                   SliverToBoxAdapter(child: _buildInteractionBanner()),
+                SliverToBoxAdapter(child: _buildRefillBanner()),
                 SliverToBoxAdapter(child: _buildSummaryCard()),
                 SliverToBoxAdapter(child: _buildStatsRow()),
                 SliverToBoxAdapter(child: _buildDateSelector()),
@@ -251,7 +270,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                         AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 0),
                     child: const SectionHeader(
                       title: "Today's Schedule",
-                      icon: Icons.schedule_rounded,
+                      icon: Symbols.schedule_rounded,
                     ),
                   ),
                 ),
@@ -294,7 +313,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.medication_rounded,
+            Symbols.medication_rounded,
             size: 64,
             color: ext.mark(ext.medicine),
           ),
@@ -314,24 +333,83 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   Widget _buildHeader() {
     final ext = AppColorsExt.of(context);
     return AppHeader(
-      title: 'Medication Tracker',
+      // Short title so it never truncates beside the greeting + two actions.
+      title: 'Medicine',
       greeting: _getGreeting(),
-      icon: Icons.medication_rounded,
+      icon: Symbols.medication_rounded,
       accent: ext.medicine,
       actions: [
         AppIconButton(
-          icon: Icons.bar_chart_rounded,
+          icon: Symbols.bar_chart_rounded,
           accent: ext.medicine,
           tooltip: 'Adherence report',
           onPressed: _navigateToAnalytics,
         ),
         AppIconButton(
-          icon: Icons.list_rounded,
+          icon: Symbols.list_rounded,
           accent: ext.medicine,
           tooltip: 'All medications',
           onPressed: _navigateToMedicationList,
         ),
       ],
+    );
+  }
+
+  /// Calm banner aggregating meds that are running low or expiring. Collapses to
+  /// nothing when all is well. Data is already computed on each medicine model.
+  Widget _buildRefillBanner() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final flagged = _medicines
+        .where((m) =>
+            m.isActive &&
+            !m.isArchived &&
+            (m.isLowStock || m.isExpiringSoon || m.isExpired))
+        .toList();
+    if (flagged.isEmpty) return const SizedBox.shrink();
+
+    final anyExpired = flagged.any((m) => m.isExpired);
+    final swatch = anyExpired ? ext.error : ext.warning;
+    final n = flagged.length;
+    final lowCount = flagged.where((m) => m.isLowStock).length;
+    final expCount = flagged.where((m) => m.isExpiringSoon || m.isExpired).length;
+    final parts = <String>[
+      if (lowCount > 0) '$lowCount running low',
+      if (expCount > 0) '$expCount expiring',
+    ];
+
+    return AppCard(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 0),
+      color: swatch.container,
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const RefillOverviewScreen()))
+          .then((_) => _loadData(showLoader: false)),
+      child: Row(
+        children: [
+          Icon(Symbols.inventory_2_rounded, color: swatch.onContainer, size: 24),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$n medicine${n == 1 ? '' : 's'} need attention',
+                  style: tt.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700, color: swatch.onContainer),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  parts.join(' · '),
+                  style: tt.bodySmall
+                      ?.copyWith(color: swatch.onContainer.withValues(alpha: 0.85)),
+                ),
+              ],
+            ),
+          ),
+          Icon(Symbols.chevron_right_rounded, color: swatch.onContainer),
+        ],
+      ),
     );
   }
 
@@ -353,7 +431,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         children: [
           Row(
             children: [
-              Icon(Icons.warning_amber_rounded,
+              Icon(Symbols.warning_amber_rounded,
                   color: swatch.onContainer, size: 24),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -379,8 +457,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
               ),
               Icon(
                 _interactionsExpanded
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
+                    ? Symbols.expand_less_rounded
+                    : Symbols.expand_more_rounded,
                 color: swatch.onContainer,
               ),
             ],
@@ -388,6 +466,16 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           if (_interactionsExpanded) ...[
             const SizedBox(height: AppSpacing.md),
             ..._interactions.map(_buildInteractionRow),
+            const SizedBox(height: AppSpacing.sm),
+            // Cited, abstaining framing + pharmacist escalation — never present
+            // this as an authoritative or complete clinical verdict.
+            Text(
+              'General reference from a built-in list — not a complete or '
+              'clinical interaction check. Always confirm with your pharmacist '
+              'or doctor before changing anything.',
+              style: tt.bodySmall
+                  ?.copyWith(color: swatch.onContainer.withOpacity(0.85)),
+            ),
           ],
         ],
       ),
@@ -445,7 +533,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.lightbulb_outline_rounded,
+                Icon(Symbols.lightbulb_rounded,
                     size: 15, color: ext.mark(ext.info)),
                 const SizedBox(width: 6),
                 Expanded(
@@ -476,7 +564,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
               color: ext.warning.container,
               borderRadius: AppRadius.brMd,
             ),
-            child: Icon(Icons.local_fire_department_rounded,
+            child: Icon(Symbols.local_fire_department_rounded,
                 color: ext.warning.onContainer, size: 22),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -524,19 +612,19 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           StatTile(
             label: 'Taken',
             value: '$takenToday/$totalToday',
-            icon: Icons.check_circle_rounded,
+            icon: Symbols.check_circle_rounded,
             accent: ext.success,
           ),
           StatTile(
             label: 'Upcoming',
             value: '$upcoming',
-            icon: Icons.access_time_rounded,
+            icon: Symbols.access_time_rounded,
             accent: ext.info,
           ),
           StatTile(
             label: 'Medicines',
             value: '${_medicines.where((m) => m.isActive).length}',
-            icon: Icons.medication_rounded,
+            icon: Symbols.medication_rounded,
             accent: ext.medicine,
           ),
         ],
@@ -625,7 +713,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
       child: EmptyState(
-        icon: Icons.event_available_rounded,
+        icon: Symbols.event_available_rounded,
         title: 'No medications scheduled',
         message: 'Tap + to add your first medication',
         accent: ext.medicine,
@@ -693,7 +781,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                           : null,
                     ),
                     child: isTaken
-                        ? Icon(Icons.check, color: ext.success.on, size: 8)
+                        ? Icon(Symbols.check_rounded, color: ext.success.on, size: 8)
                         : null,
                   ),
                   if (!isLast)
@@ -760,7 +848,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                           onPressed: () => _onTakeMedication(dose),
                         )
                       else
-                        Icon(Icons.check_circle_rounded,
+                        Icon(Symbols.check_circle_rounded,
                             color: ext.success.base, size: 28),
                     ],
                   ),
@@ -777,86 +865,64 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
 
   Widget _buildQuickActions() {
     final ext = AppColorsExt.of(context);
+    // Health trackers (Steps/Sleep/BP/Glucose) now live in the Health tab, so
+    // this grid is just the medicine-adjacent care directory.
+    final tiles = <_QuickTile>[
+      _QuickTile('Doctors', Symbols.person_rounded, ext.info, _navigateToDoctors),
+      _QuickTile('Clinics', Symbols.local_hospital_rounded, ext.medicine,
+          _navigateToClinics),
+    ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(title: 'Quick Access', icon: Icons.apps_rounded),
+          const SectionHeader(title: 'Care team', icon: Symbols.groups_rounded),
           const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickActionCard(
-                    'Doctors', Icons.person_rounded, ext.info, _navigateToDoctors),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _buildQuickActionCard('Clinics',
-                    Icons.local_hospital_rounded, ext.medicine, _navigateToClinics),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickActionCard(
-                    'Blood Pressure',
-                    Icons.favorite_rounded,
-                    VitalsColors.bpAccent(ext.isDark),
-                    _navigateToBloodPressure),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _buildQuickActionCard(
-                    'Blood Sugar',
-                    Icons.water_drop_rounded,
-                    VitalsColors.glucoseAccent(ext.isDark),
-                    _navigateToBloodSugar),
-              ),
-            ],
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: AppSpacing.md,
+            crossAxisSpacing: AppSpacing.md,
+            childAspectRatio: 0.92,
+            children: [for (final t in tiles) _buildQuickTile(t)],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard(
-      String label, IconData icon, AccentSwatch accent, VoidCallback onTap) {
+  Widget _buildQuickTile(_QuickTile t) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     return AppCard(
-      onTap: onTap,
-      child: Row(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      onTap: t.onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
-              color: accent.container,
+              color: t.accent.container,
               borderRadius: AppRadius.brMd,
             ),
-            child: Icon(icon, color: accent.onContainer, size: 20),
+            child: Icon(t.icon, color: t.accent.onContainer, size: 22),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            // scaleDown keeps the FULL label on one line in the narrow half-width
-            // card — short labels stay full size, long ones ("Blood Pressure")
-            // shrink just enough to fit rather than truncating to "Blood Pre…".
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                label,
-                maxLines: 1,
-                softWrap: false,
-                style: tt.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700, color: ext.textPrimary),
-              ),
+          const SizedBox(height: AppSpacing.sm),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              t.label,
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.center,
+              style: tt.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700, color: ext.textPrimary),
             ),
           ),
-          Icon(Icons.chevron_right_rounded, color: ext.textTertiary, size: 18),
         ],
       ),
     );
@@ -866,7 +932,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     final ext = AppColorsExt.of(context);
     // Circular + (matches Reminders, doesn't overlap the empty-state text).
     return AppFab(
-      icon: Icons.add_rounded,
+      icon: Symbols.add_rounded,
       accent: ext.medicine,
       onPressed: _navigateToAddMedication,
     );
@@ -882,6 +948,15 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
+}
+
+/// A single Quick-Access tile (label + icon + accent + destination).
+class _QuickTile {
+  final String label;
+  final IconData icon;
+  final AccentSwatch accent;
+  final VoidCallback onTap;
+  const _QuickTile(this.label, this.icon, this.accent, this.onTap);
 }
 
 class _ScheduledDose {

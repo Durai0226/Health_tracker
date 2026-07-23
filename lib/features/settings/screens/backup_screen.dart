@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/backup_service.dart';
@@ -149,7 +150,7 @@ class _BackupScreenState extends State<BackupScreen> {
               title: 'Backup & Restore',
               accent: ext.brand,
               leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: Symbols.arrow_back_rounded,
                 filled: false,
                 accent: ext.brand,
                 onPressed: () => Navigator.pop(context),
@@ -195,7 +196,7 @@ class _BackupScreenState extends State<BackupScreen> {
               const SizedBox(height: AppSpacing.lg),
               AppButton(
                 label: 'Create New Backup',
-                leadingIcon: Icons.cloud_upload_outlined,
+                leadingIcon: Symbols.cloud_upload_rounded,
                 accent: ext.brand,
                 fullWidth: true,
                 onPressed: _createBackup,
@@ -208,7 +209,7 @@ class _BackupScreenState extends State<BackupScreen> {
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xxl),
             child: EmptyState(
-              icon: Icons.cloud_off_rounded,
+              icon: Symbols.cloud_off_rounded,
               title: 'No backups found',
               message: 'Create your first cloud backup to keep your data safe.',
               accent: ext.brand,
@@ -221,7 +222,7 @@ class _BackupScreenState extends State<BackupScreen> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                   child: AppListTile(
-                    icon: Icons.history_rounded,
+                    icon: Symbols.history_rounded,
                     iconColor: ext.mark(ext.brand),
                     title: DateFormat('MMM d, y • h:mm a')
                         .format(backup.createdAt),
@@ -231,13 +232,13 @@ class _BackupScreenState extends State<BackupScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: Icon(Icons.restore_rounded,
+                          icon: Icon(Symbols.restore_rounded,
                               color: ext.textPrimary),
                           onPressed: () => _restoreBackup(backup),
                           tooltip: 'Restore',
                         ),
                         IconButton(
-                          icon: Icon(Icons.delete_outline_rounded,
+                          icon: Icon(Symbols.delete_rounded,
                               color: ext.mark(ext.error)),
                           onPressed: () => _deleteBackup(backup),
                           tooltip: 'Delete',

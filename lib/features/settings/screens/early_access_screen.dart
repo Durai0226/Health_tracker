@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/feature_flag_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 
 class EarlyAccessScreen extends StatefulWidget {
   const EarlyAccessScreen({super.key});
@@ -21,7 +23,7 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+          icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -47,7 +49,7 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
                 key: FeatureFlagService.keyAdvancedRepeat,
                 title: 'Advanced Repeat Options',
                 description: 'Enable complex recurrence rules (e.g., "Every 2nd Tuesday").',
-                icon: Icons.update_rounded,
+                icon: Symbols.update_rounded,
                 color: Colors.blue,
               ),
               const SizedBox(height: 12),
@@ -55,7 +57,7 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
                 key: FeatureFlagService.keyPremiumThemes,
                 title: 'Premium Themes',
                 description: 'Unlock additional color themes and layouts.',
-                icon: Icons.palette_rounded,
+                icon: Symbols.palette_rounded,
                 color: Colors.purple,
               ),
               const SizedBox(height: 12),
@@ -63,7 +65,7 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
                 key: FeatureFlagService.keyBetaFeatures,
                 title: 'Beta Features',
                 description: 'Opt-in to the latest beta features (May be unstable).',
-                icon: Icons.science_rounded,
+                icon: Symbols.science_rounded,
                 color: Colors.orange,
               ),
             ],
@@ -84,7 +86,7 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+          const Icon(Symbols.warning_amber_rounded, color: Colors.orange),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -167,13 +169,12 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
                 ],
               ),
             ),
-            Switch(
+            AppSwitch(
               value: isEnabled,
               onChanged: (value) async {
                 await _featureService.setEnabled(key, value);
                 setState(() {}); // Rebuild to update UI (notifier handles it too but safe to setState)
               },
-              activeColor: color,
             ),
           ],
         ),

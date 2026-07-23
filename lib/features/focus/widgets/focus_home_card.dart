@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
@@ -48,7 +49,7 @@ class FocusHomeCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
-                        Icons.self_improvement_rounded,
+                        Symbols.self_improvement_rounded,
                         color: Colors.white,
                         size: 24,
                       ),
@@ -98,19 +99,19 @@ class FocusHomeCard extends StatelessWidget {
                 Row(
                   children: [
                     _buildMiniStat(
-                      icon: Icons.timer_rounded,
+                      icon: Symbols.timer_rounded,
                       value: '${focusService.todayMinutes}',
                       label: 'min today',
                     ),
                     const SizedBox(width: 20),
                     _buildMiniStat(
-                      icon: Icons.local_florist_rounded,
+                      icon: Symbols.local_florist_rounded,
                       value: '${todayPlants.length}',
                       label: 'plants',
                     ),
                     const SizedBox(width: 20),
                     _buildMiniStat(
-                      icon: Icons.park_rounded,
+                      icon: Symbols.park_rounded,
                       value: '${stats.alivePlants}',
                       label: 'garden',
                     ),
@@ -130,7 +131,7 @@ class FocusHomeCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons.play_arrow_rounded,
+                        Symbols.play_arrow_rounded,
                         color: AppColors.focusPrimary,
                         size: 20,
                       ),
@@ -257,7 +258,7 @@ class FocusMiniBanner extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
-                    Icons.arrow_forward_rounded,
+                    Symbols.arrow_forward_rounded,
                     color: Colors.white,
                     size: 18,
                   ),

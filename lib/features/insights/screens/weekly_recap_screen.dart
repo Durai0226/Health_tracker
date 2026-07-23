@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_colors_ext.dart';
 import '../../../core/ai/insight.dart';
@@ -8,6 +9,9 @@ import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/vitals_storage_service.dart';
 import '../../water/services/water_service.dart';
 import '../../focus/services/focus_service.dart';
+import '../../steps/services/step_service.dart';
+import '../../sleep/services/sleep_service.dart';
+import '../../sleep/models/sleep_consistency.dart';
 import '../services/insight_service.dart';
 
 class _WeekStats {
@@ -17,6 +21,10 @@ class _WeekStats {
   final int readingsLogged;
   final String? bpAvg;
   final int? glucoseAvg;
+  final int stepsDaysGoalMet;
+  final int sleepNightsLogged;
+  final double sleepRegularity;
+  final SleepConsistency sleepConsistency;
   final List<Insight> highlights;
   const _WeekStats({
     this.adherencePct,
@@ -25,6 +33,10 @@ class _WeekStats {
     required this.readingsLogged,
     this.bpAvg,
     this.glucoseAvg,
+    required this.stepsDaysGoalMet,
+    required this.sleepNightsLogged,
+    required this.sleepRegularity,
+    required this.sleepConsistency,
     required this.highlights,
   });
 }
@@ -101,6 +113,26 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
       if (m != null) glucoseAvg = m.round();
     } catch (_) {}
 
+    int stepsDaysMet = 0;
+    try {
+      await StepService.init();
+      stepsDaysMet = (StepService.getWeeklyStats()['daysGoalMet'] as int?) ?? 0;
+    } catch (_) {}
+
+    int sleepNights = 0;
+    var regularity = 0.75;
+    var consistency = SleepConsistency.building;
+    try {
+      await SleepService.init();
+      sleepNights =
+          SleepService.getWeeklyTrend().where((d) => d.hasData).length;
+      regularity = SleepService.regularityIndex();
+      consistency = SleepConsistency.fromIndex(
+        regularity,
+        sampleSize: SleepService.regularitySampleSize(),
+      );
+    } catch (_) {}
+
     final highlights = await InsightService.gatherAll();
 
     return _WeekStats(
@@ -110,28 +142,51 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
       readingsLogged: readings,
       bpAvg: bpAvg,
       glucoseAvg: glucoseAvg,
+      stepsDaysGoalMet: stepsDaysMet,
+      sleepNightsLogged: sleepNights,
+      sleepRegularity: regularity,
+      sleepConsistency: consistency,
       highlights: highlights,
     );
+  }
+
+  static String _rhythmShort(SleepConsistency c) {
+    switch (c) {
+      case SleepConsistency.veryRegular:
+        return 'Steady';
+      case SleepConsistency.fairlyRegular:
+        return 'Fair';
+      case SleepConsistency.variable:
+        return 'Varies';
+      case SleepConsistency.building:
+        return '—';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final accent = ext.brand;
+    final now = DateTime.now();
+    final from = now.subtract(const Duration(days: 6));
     return AppScaffold(
       safeTop: true,
       body: Column(
         children: [
           AppHeader(
             title: 'Weekly recap',
-            icon: Icons.calendar_view_week_rounded,
+            greeting: '${_mon(from).toUpperCase()} ${from.day} – ${_mon(now).toUpperCase()} ${now.day}',
             accent: accent,
             leading: AppIconButton(
-              icon: Icons.arrow_back_rounded,
+              icon: Symbols.arrow_back_rounded,
               filled: false,
               accent: accent,
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (Navigator.canPop(context)) Navigator.pop(context);
+              },
             ),
+            actions: const [AiSeal(size: 24)],
+            bottom: Container(height: 1, color: ext.outline),
           ),
           Expanded(
             child: FutureBuilder<_WeekStats>(
@@ -140,29 +195,138 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
                 if (snap.connectionState != ConnectionState.done) {
                   return Center(child: CircularProgressIndicator(color: ext.mark(accent)));
                 }
+                // Don't force-unwrap: an error must surface a retry, not blank
+                // the screen (or crash on `snap.data!`).
+                if (snap.hasError || !snap.hasData) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Symbols.error_rounded,
+                              size: 40, color: ext.textTertiary),
+                          const SizedBox(height: AppSpacing.md),
+                          Text("Couldn't load your recap",
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(color: ext.textPrimary)),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'Something went wrong gathering this week. Please try again.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: ext.textSecondary),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppButton(
+                            label: 'Try again',
+                            leadingIcon: Symbols.refresh_rounded,
+                            accent: accent,
+                            onPressed: () =>
+                                setState(() => _future = _gather()),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
                 final s = snap.data!;
+                final primaryEmpty = s.adherencePct == null &&
+                    s.waterDaysHit == 0 &&
+                    s.focusMinutes == 0;
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, AppSpacing.huge),
+                      AppSpacing.gutter, AppSpacing.lg, AppSpacing.gutter, AppSpacing.huge),
                   children: [
-                    _headline(ext, s),
+                    _headline(ext, s, from, now),
                     const SizedBox(height: AppSpacing.md),
-                    StatTileRow(tiles: [
-                      StatTile(value: s.adherencePct != null ? '${s.adherencePct}%' : '—', label: 'Doses', icon: Icons.medication_rounded, accent: accent),
-                      StatTile(value: '${s.waterDaysHit}/7', label: 'Water days', icon: Icons.water_drop_rounded, accent: accent),
-                      StatTile(value: '${s.focusMinutes}m', label: 'Focus', icon: Icons.self_improvement_rounded, accent: accent),
-                    ]),
+                    if (primaryEmpty)
+                      _emptyLedger(ext)
+                    else
+                      _kpiCard(ext, [
+                        KpiCell(
+                          progress: (s.adherencePct ?? 0) / 100,
+                          muted: s.adherencePct == null,
+                          value: s.adherencePct != null ? '${s.adherencePct}%' : '—',
+                          label: 'Doses',
+                          accent: ext.medicine,
+                        ),
+                        KpiCell(
+                          progress: s.waterDaysHit / 7,
+                          muted: s.waterDaysHit == 0,
+                          value: '${s.waterDaysHit}/7',
+                          label: 'Water days',
+                          accent: ext.water,
+                        ),
+                        KpiCell(
+                          progress: (s.focusMinutes / 150).clamp(0, 1).toDouble(),
+                          muted: s.focusMinutes == 0,
+                          value: '${s.focusMinutes}m',
+                          label: 'Focus',
+                          accent: ext.focus,
+                        ),
+                      ]),
+                    if (s.stepsDaysGoalMet > 0 || s.sleepNightsLogged > 0) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _kpiCard(ext, [
+                        KpiCell(
+                          progress: s.stepsDaysGoalMet / 7,
+                          muted: s.stepsDaysGoalMet == 0,
+                          value: '${s.stepsDaysGoalMet}/7',
+                          label: 'Step goals',
+                          accent: ext.steps,
+                        ),
+                        KpiCell(
+                          progress: s.sleepNightsLogged / 7,
+                          muted: s.sleepNightsLogged == 0,
+                          value: '${s.sleepNightsLogged}/7',
+                          label: 'Sleep logs',
+                          accent: ext.sleep,
+                        ),
+                        KpiCell(
+                          progress: s.sleepConsistency.hasEnoughData
+                              ? s.sleepRegularity.clamp(0.0, 1.0)
+                              : 0,
+                          muted: !s.sleepConsistency.hasEnoughData,
+                          value: _rhythmShort(s.sleepConsistency),
+                          label: 'Rhythm',
+                          accent: ext.sleep,
+                        ),
+                      ]),
+                    ],
                     if (s.bpAvg != null || s.glucoseAvg != null) ...[
                       const SizedBox(height: AppSpacing.sm),
-                      StatTileRow(tiles: [
-                        StatTile(value: s.bpAvg ?? '—', label: 'Avg BP', icon: Icons.favorite_rounded, accent: accent),
-                        StatTile(value: s.glucoseAvg != null ? '${s.glucoseAvg}' : '—', label: 'Avg sugar', icon: Icons.bloodtype_rounded, accent: accent),
-                        StatTile(value: '${s.readingsLogged}', label: 'Readings', icon: Icons.timeline_rounded, accent: accent),
+                      _kpiCard(ext, [
+                        KpiCell(
+                          progress: s.bpAvg != null ? 1 : 0,
+                          muted: s.bpAvg == null,
+                          value: s.bpAvg ?? '—',
+                          label: 'Avg BP',
+                          accent: InsightVisuals.accent(context, InsightFeature.bloodPressure),
+                        ),
+                        KpiCell(
+                          progress: s.glucoseAvg != null ? 1 : 0,
+                          muted: s.glucoseAvg == null,
+                          value: s.glucoseAvg != null ? '${s.glucoseAvg}' : '—',
+                          label: 'Avg sugar',
+                          accent: InsightVisuals.accent(context, InsightFeature.bloodSugar),
+                        ),
+                        KpiCell(
+                          progress: (s.readingsLogged / 14).clamp(0, 1).toDouble(),
+                          muted: s.readingsLogged == 0,
+                          value: '${s.readingsLogged}',
+                          label: 'Readings',
+                          accent: ext.brand,
+                        ),
                       ]),
                     ],
                     if (s.highlights.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.lg),
-                      SectionHeader(title: 'Highlights', icon: Icons.star_rounded, accent: accent),
+                      const SizedBox(height: AppSpacing.xl),
+                      SectionHeader(title: 'Highlights', icon: Symbols.star_rounded, accent: accent),
                       const SizedBox(height: AppSpacing.sm),
                       for (final i in s.highlights.take(4))
                         Padding(
@@ -182,25 +346,97 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
     );
   }
 
-  Widget _headline(AppColorsExt ext, _WeekStats s) {
+  static String _mon(DateTime d) => const [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ][d.month - 1];
+
+  /// A KPI ledger row: equal ring cells separated by hairline dividers, all
+  /// numerals locked to one baseline (the one deliberate use of centering).
+  Widget _kpiCard(AppColorsExt ext, List<Widget> cells) {
+    final children = <Widget>[];
+    for (var i = 0; i < cells.length; i++) {
+      if (i != 0) children.add(Container(width: 1, color: ext.outline));
+      children.add(Expanded(child: cells[i]));
+    }
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      child: IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: children),
+      ),
+    );
+  }
+
+  Widget _emptyLedger(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
-    final bits = <String>[];
-    if (s.adherencePct != null) bits.add('${s.adherencePct}% of doses');
-    if (s.waterDaysHit > 0) bits.add('${s.waterDaysHit} hydrated days');
-    if (s.focusMinutes > 0) bits.add('${s.focusMinutes} focus minutes');
-    final summary = bits.isEmpty
-        ? 'Log a few things this week and your recap will fill in.'
-        : 'This week: ${bits.join(' · ')}. Keep the momentum going.';
+    return AppCard(
+      child: Text('Start logging and your recap fills in here.',
+          style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+    );
+  }
+
+  /// The editorial teal cover: overline · a big tabular cover number (adherence)
+  /// with a caption, then the narrative sentence, and a quiet seal watermark.
+  Widget _headline(AppColorsExt ext, _WeekStats s, DateTime from, DateTime now) {
+    final tt = Theme.of(context).textTheme;
+    final on = ext.brand.onContainer;
+    final hasAny =
+        s.adherencePct != null || s.waterDaysHit > 0 || s.focusMinutes > 0;
+
+    // Narrative — the cover number carries adherence, so this leads with the rest.
+    final parts = <String>[];
+    if (s.waterDaysHit > 0) {
+      parts.add('${s.waterDaysHit} hydrated ${s.waterDaysHit == 1 ? 'day' : 'days'}');
+    }
+    if (s.focusMinutes > 0) parts.add('${s.focusMinutes} focus minutes');
+    final String narrative;
+    if (!hasAny) {
+      narrative = 'Log a few things this week and your recap will fill in.';
+    } else if (s.adherencePct != null) {
+      narrative = parts.isEmpty
+          ? 'Steady dosing this week — keep the momentum going.'
+          : 'Plus ${parts.join(' and ')}. Keep the momentum going.';
+    } else {
+      narrative = 'This week: ${parts.join(' and ')}. Keep the momentum going.';
+    }
+
     return AppCard(
       color: ext.brand.container,
-      child: Row(children: [
-        Icon(kAiSparkle, color: ext.brand.onContainer, size: 28),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Text(summary,
-              style: tt.titleMedium?.copyWith(color: ext.brand.onContainer, height: 1.3)),
-        ),
-      ]),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'THIS WEEK · ${_mon(from).toUpperCase()} ${from.day}–${now.day}',
+                style: tt.labelSmall
+                    ?.copyWith(color: on.withOpacity(0.7), letterSpacing: 0.6),
+              ),
+              if (s.adherencePct != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text('${s.adherencePct}%',
+                    style: tt.displayLarge?.copyWith(
+                        color: on,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: kTabular,
+                        height: 1.0)),
+                const SizedBox(height: AppSpacing.xs),
+                Text('of doses taken',
+                    style: tt.bodyMedium?.copyWith(color: on.withOpacity(0.8))),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Text(narrative,
+                  style: tt.headlineSmall?.copyWith(color: on, height: 1.3)),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: AiSeal(size: 20, color: on),
+          ),
+        ],
+      ),
     );
   }
 }

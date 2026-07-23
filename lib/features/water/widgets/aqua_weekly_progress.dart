@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../theme/aqua_theme.dart';
 
@@ -39,7 +40,7 @@ class AquaWeeklyProgress extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AquaTheme.radiusSmall),
                 ),
                 child: const Icon(
-                  Icons.calendar_today_rounded,
+                  Symbols.calendar_today_rounded,
                   color: Colors.white,
                   size: 16,
                 ),
@@ -66,7 +67,7 @@ class AquaWeeklyProgress extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Icon(
-                        Icons.arrow_forward_ios_rounded,
+                        Symbols.arrow_forward_ios_rounded,
                         size: 12,
                         color: beverage.primary,
                       ),
@@ -269,7 +270,7 @@ class _DayIndicator extends StatelessWidget {
                     ),
                   ),
                   child: const Icon(
-                    Icons.check,
+                    Symbols.check_rounded,
                     color: Colors.white,
                     size: 14,
                   ),

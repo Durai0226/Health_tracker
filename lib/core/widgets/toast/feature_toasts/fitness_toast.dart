@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -32,7 +33,7 @@ class FitnessToast {
       feature: ToastFeature.fitness,
       title: '🏃 Let\'s Go!',
       message: 'Starting $workoutName',
-      customIcon: Icons.play_circle_rounded,
+      customIcon: Symbols.play_circle_rounded,
       duration: const Duration(seconds: 2),
     );
   }
@@ -122,7 +123,7 @@ class FitnessToast {
       feature: ToastFeature.fitness,
       title: '😴 Rest Day',
       message: 'Recovery is important - take it easy today',
-      customIcon: Icons.self_improvement_rounded,
+      customIcon: Symbols.self_improvement_rounded,
     );
   }
 

@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/background_alarm_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
@@ -26,16 +29,75 @@ class MedicationReminderService {
   /// SharedPreferences key for the master medication-reminders toggle.
   static const String masterEnabledKey = 'medication_reminders_master_enabled';
 
+  /// Prefs key for the medicine → dense-index map (collision-free IDs).
+  static const String _indexMapKey = 'medicine_notif_index_map';
+
+  /// Prefs flag: the one-time migration to the dense ID scheme has run.
+  static const String _idSchemeV2Key = 'medicine_notif_id_scheme_v2';
+
+  Map<String, int>? _indexCache;
+
   /// Reschedule reminders for all stored medicines.
   Future<void> rescheduleAll() async {
     final medicines = await MedicineCleanStorageService.getAllMedicines();
     await scheduleAllReminders(medicines);
   }
 
-  /// Generate unique notification ID for a medicine + time slot
-  int _generateNotificationId(String medicineId, int timeIndex) {
-    // Use hashCode of medicineId + timeIndex to generate unique ID
-    return _medicineIdOffset + (medicineId.hashCode.abs() % 90000) + timeIndex;
+  Future<Map<String, int>> _loadIndexMap() async {
+    if (_indexCache != null) return _indexCache!;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_indexMapKey);
+    final map = <String, int>{};
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        (jsonDecode(raw) as Map).forEach(
+            (k, v) => map[k.toString()] = (v as num).toInt());
+      } catch (_) {}
+    }
+    _indexCache = map;
+    return map;
+  }
+
+  /// A stable, densely-allocated index per medicine (never reused), so
+  /// notification IDs never overlap across medicines. Persisted in prefs.
+  Future<int> _medicineIndex(String medicineId) async {
+    final map = await _loadIndexMap();
+    final existing = map[medicineId];
+    if (existing != null) return existing;
+    final next = map.isEmpty ? 0 : (map.values.reduce((a, b) => a > b ? a : b) + 1);
+    map[medicineId] = next;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_indexMapKey, jsonEncode(map));
+    return next;
+  }
+
+  /// Collision-free notification ID for a medicine + time slot:
+  /// `offset + medIndex*maxSlots + timeIndex` — non-overlapping across meds.
+  Future<int> _notificationIdFor(String medicineId, int timeIndex) async {
+    final idx = await _medicineIndex(medicineId);
+    return _medicineIdOffset + idx * _maxSlotsPerMedicine + timeIndex;
+  }
+
+  /// One-time migration to the dense ID scheme: cancels any medicine alarms
+  /// left under the OLD hash-based IDs (matched by `medicine_channel`) so they
+  /// don't orphan. Water/other alarms are untouched. Caller reschedules after.
+  Future<void> migrateNotificationIdsIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_idSchemeV2Key) == true) return;
+    try {
+      final bg = BackgroundAlarmService();
+      final alarms = await bg.getScheduledAlarms();
+      for (final a in alarms) {
+        if (a['channelId'] == 'medicine_channel') {
+          final id = a['id'];
+          if (id is int) await bg.cancelAlarm(id);
+        }
+      }
+      await prefs.setBool(_idSchemeV2Key, true);
+      debugPrint('✓ Migrated medicine notification IDs to dense scheme');
+    } catch (e) {
+      debugPrint('⚠️ Notification-ID migration failed: $e');
+    }
   }
 
   /// Schedule all reminders for a medicine
@@ -80,11 +142,16 @@ class MedicationReminderService {
 
     debugPrint('📅 Scheduling ${slots.length} reminders for ${medicine.name}');
 
+    // Serialized schedule — the Android alarm callback reconstructs it and gates
+    // firing to active days (so specific-days / every-X-days / cyclical / ended
+    // meds no longer alarm every day). Same descriptor for every slot.
+    final scheduleJson = jsonEncode(medicine.schedule.toJson());
+
     // Schedule notification for each dose slot (bounded so a tight interval
     // can't blow past the cancel bound and orphan notifications).
     for (int i = 0; i < slots.length && i < _maxSlotsPerMedicine; i++) {
       final time = slots[i];
-      final notificationId = _generateNotificationId(medicine.id, i);
+      final notificationId = await _notificationIdFor(medicine.id, i);
 
       try {
         final success = await _notificationService.scheduleMedicineReminder(
@@ -93,6 +160,8 @@ class MedicationReminderService {
           hour: time.hour,
           minute: time.minute,
           frequency: frequency,
+          scheduleJson: scheduleJson,
+          medicineId: medicine.id,
         );
 
         if (success) {
@@ -116,7 +185,7 @@ class MedicationReminderService {
     // Cancel notification for each possible time slot (must cover the same
     // bound as scheduling, else fanned-out "every X hours" slots are orphaned).
     for (int i = 0; i < _maxSlotsPerMedicine; i++) {
-      final notificationId = _generateNotificationId(medicine.id, i);
+      final notificationId = await _notificationIdFor(medicine.id, i);
       try {
         await _notificationService.cancelNotification(notificationId);
       } catch (e) {
@@ -130,7 +199,7 @@ class MedicationReminderService {
     debugPrint('🗑️ Canceling reminders for medicine ID: $medicineId');
 
     for (int i = 0; i < _maxSlotsPerMedicine; i++) {
-      final notificationId = _generateNotificationId(medicineId, i);
+      final notificationId = await _notificationIdFor(medicineId, i);
       try {
         await _notificationService.cancelNotification(notificationId);
       } catch (e) {
@@ -175,6 +244,13 @@ class MedicationReminderService {
       buffer.write(' (${time.label})');
     }
 
+    // Habit-anchor: tie the dose to a mealtime cue (implementation intention —
+    // the highest-leverage, evidence-based adherence nudge).
+    final meal = medicine.schedule.mealTiming;
+    if (meal != MealTiming.anytime) {
+      buffer.write(' · ${meal.displayName.toLowerCase()}');
+    }
+
     return buffer.toString();
   }
 
@@ -199,14 +275,19 @@ class MedicationReminderService {
     }
   }
 
-  /// Check if a medicine has any scheduled reminders
+  /// Check if a medicine has any scheduled reminders.
+  ///
+  /// On Android the real schedule lives in AndroidAlarmManager (not
+  /// flutter_local_notifications), so we consult the actual scheduled-alarm
+  /// records via [BackgroundAlarmService.getScheduledAlarms].
   Future<bool> hasActiveReminders(String medicineId) async {
-    // Check if any notification IDs exist for this medicine
-    final pendingNotifications = await _notificationService.getPendingNotifications();
-
+    final alarms = await BackgroundAlarmService().getScheduledAlarms();
+    final activeIds = alarms
+        .map((a) => a['id'])
+        .whereType<int>()
+        .toSet();
     for (int i = 0; i < _maxSlotsPerMedicine; i++) {
-      final notificationId = _generateNotificationId(medicineId, i);
-      if (pendingNotifications.any((n) => n.id == notificationId)) {
+      if (activeIds.contains(await _notificationIdFor(medicineId, i))) {
         return true;
       }
     }
@@ -264,7 +345,7 @@ class MedicationReminderService {
     int minutes,
   ) async {
     final timeIndex = _resolveTimeIndex(medicine, scheduledTime);
-    final notificationId = _generateNotificationId(medicine.id, timeIndex);
+    final notificationId = await _notificationIdFor(medicine.id, timeIndex);
     return snoozeReminder(notificationId, minutes);
   }
 
@@ -280,28 +361,4 @@ class MedicationReminderService {
     }
     return 0;
   }
-}
-
-/// Extension to add pending notifications getter
-extension NotificationServiceExtension on NotificationService {
-  Future<List<PendingNotificationInfo>> getPendingNotifications() async {
-    // This would need to be implemented in NotificationService
-    // For now, return empty list
-    return [];
-  }
-}
-
-/// Info about a pending notification
-class PendingNotificationInfo {
-  final int id;
-  final String? title;
-  final String? body;
-  final DateTime? scheduledTime;
-
-  PendingNotificationInfo({
-    required this.id,
-    this.title,
-    this.body,
-    this.scheduledTime,
-  });
 }

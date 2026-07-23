@@ -11,6 +11,8 @@ import '../models/doctor_pharmacy.dart';
 import '../models/dependent_profile.dart';
 import '../models/medicine_enums.dart';
 import '../models/clinic.dart';
+import '../../../core/ai/streak_engine.dart';
+import '../../../core/services/dose_action_queue.dart';
 import '../../../core/services/notification_service.dart';
 
 /// Enhanced Medicine Storage Service with all premium features
@@ -315,10 +317,12 @@ class MedicineCleanStorageService {
 
   static Future<void> updateLog(MedicineLog log) async {
     await _dao.updateLog(_mapToLogCompanion(log));
+    _bumpRevision();
   }
 
   static Future<void> deleteLog(String id) async {
     await _dao.deleteLog(id);
+    _bumpRevision();
   }
 
   static Future<MedicineLog> markMedicineTaken({
@@ -437,6 +441,31 @@ class MedicineCleanStorageService {
     );
     await addLog(log);
     return log;
+  }
+
+  /// Apply any Take/Skip actions the user tapped on a notification while the app
+  /// was closed (queued by the background isolate — Drift is unavailable there).
+  /// Returns the ids of the logs created, so the caller can offer a single Undo.
+  static Future<List<String>> drainPendingDoseActions() async {
+    final actions = await DoseActionQueue.drain();
+    final created = <String>[];
+    for (final a in actions) {
+      final med = await getMedicine(a.medicineId);
+      if (med == null) continue;
+      try {
+        final log = a.isTake
+            ? await markMedicineTaken(
+                medicineId: a.medicineId, scheduledTime: a.scheduledTime)
+            : await markMedicineSkipped(
+                medicineId: a.medicineId,
+                scheduledTime: a.scheduledTime,
+                reason: SkipReason.other);
+        created.add(log.id);
+      } catch (e) {
+        debugPrint('⚠️ Applying queued dose action failed: $e');
+      }
+    }
+    return created;
   }
 
   // ============ DOCTOR METHODS ============
@@ -858,48 +887,77 @@ class MedicineCleanStorageService {
 
   // ============ ANALYTICS METHODS ============
 
-  static Future<int> getCurrentStreak() async {
-    final logs = await getAllLogs();
-    if (logs.isEmpty) return 0;
-
-    // Filter for taken logs and sort by date descending
-    final takenLogs = logs.where((l) => l.isTaken).toList();
-    takenLogs.sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
-
-    if (takenLogs.isEmpty) return 0;
-
-    int streak = 0;
-    final today = DateTime.now();
-    final todayDate = DateTime(today.year, today.month, today.day);
-    
-    // Check if taken today
-    var lastDate = DateTime(takenLogs.first.scheduledTime.year, takenLogs.first.scheduledTime.month, takenLogs.first.scheduledTime.day);
-    
-    // If last taken was before yesterday, streak is broken (unless today hasn't happened yet, but we check logs)
-    // If last taken is today, streak starts at 1. If yesterday, it also continues.
-    final diff = todayDate.difference(lastDate).inDays;
-    if (diff > 1) return 0; 
-
-    streak = 1;
-    for (int i = 0; i < takenLogs.length - 1; i++) {
-      final current = takenLogs[i].scheduledTime;
-      final next = takenLogs[i + 1].scheduledTime;
-      
-      final currentDate = DateTime(current.year, current.month, current.day);
-      final nextDate = DateTime(next.year, next.month, next.day);
-      
-      final dayDiff = currentDate.difference(nextDate).inDays;
-      
-      if (dayDiff == 1) {
-        streak++;
-      } else if (dayDiff > 1) {
-        break;
-      }
-      // If dayDiff == 0, it's the same day, continue
+  /// Forgiving adherence streak via the shared [StreakEngine].
+  ///
+  /// A day counts as "completed" when **every due (non-PRN) dose that day was
+  /// taken** — days with no scheduled doses (off-days / before any medicine
+  /// existed) are vacuously complete so they never break the streak, and the
+  /// engine forgives one missed day per rolling week. This replaces the old
+  /// naive "any dose taken that day" counter (which overstated adherence and
+  /// hard-reset on a single gap). Single source of truth for the whole app.
+  static Future<StreakResult> getStreakResult() async {
+    final medicines = await getAllMedicines();
+    final active = medicines
+        .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
+        .toList();
+    if (active.isEmpty) {
+      return const StreakResult(
+          current: 0, longest: 0, usedGrace: false, atRisk: false);
     }
-    
-    return streak;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Window: from the earliest medicine's creation day, bounded to ~180 days.
+    var earliest = today;
+    for (final m in active) {
+      final c = DateTime(m.createdAt.year, m.createdAt.month, m.createdAt.day);
+      if (c.isBefore(earliest)) earliest = c;
+    }
+    final floor = today.subtract(const Duration(days: 180));
+    if (earliest.isBefore(floor)) earliest = floor;
+
+    // Keys of slots that were actually taken.
+    final logs = await getLogsForDateRange(earliest, now);
+    final takenKeys = <String>{};
+    for (final l in logs.where((l) => l.isTaken)) {
+      final t = l.scheduledTime;
+      takenKeys.add('${t.year}-${t.month}-${t.day}-${t.hour}-${t.minute}');
+    }
+
+    final completed = <DateTime>{};
+    for (var day = earliest;
+        !day.isAfter(today);
+        day = day.add(const Duration(days: 1))) {
+      var due = 0;
+      var taken = 0;
+      for (final m in active) {
+        final createdDay =
+            DateTime(m.createdAt.year, m.createdAt.month, m.createdAt.day);
+        if (day.isBefore(createdDay)) continue;
+        for (final slot in m.schedule.getScheduledTimesForDate(day)) {
+          if (slot.isBefore(m.createdAt)) continue;
+          if (slot.isAfter(now)) continue; // today's upcoming doses aren't due yet
+          due++;
+          final k =
+              '${slot.year}-${slot.month}-${slot.day}-${slot.hour}-${slot.minute}';
+          if (takenKeys.contains(k)) taken++;
+        }
+      }
+      if (due == 0 || taken == due) completed.add(day);
+    }
+
+    return StreakEngine.compute(
+      completedDays: completed,
+      today: today,
+      graceDaysPerWeek: 1,
+    );
   }
+
+  /// Consecutive (forgiving, all-due) adherence streak. Sourced from
+  /// [getStreakResult] so every caller shares one definition.
+  static Future<int> getCurrentStreak() async =>
+      (await getStreakResult()).current;
 
   static Future<Map<String, dynamic>> getAdherenceStats({int days = 30}) async {
     final now = DateTime.now();

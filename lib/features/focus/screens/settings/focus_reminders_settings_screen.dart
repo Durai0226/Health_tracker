@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:tablet_remainder/core/widgets/app/app_pickers.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -57,10 +60,9 @@ class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScr
   }
 
   Future<void> _selectTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _reminderTime,
-      builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(primary: _primaryColor)), child: child!),
+    final picked = await AppTimePicker.show(
+      context,
+      initial: _reminderTime,
     );
     if (picked != null) {
       HapticFeedback.lightImpact();
@@ -75,7 +77,7 @@ class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScr
       appBar: AppBar(
         backgroundColor: const Color(0xFFF5F5F5),
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: const Text('Focus Reminders', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
       ),
@@ -87,9 +89,9 @@ class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScr
                 children: [
                   _buildDailyReminderCard(),
                   const SizedBox(height: 12),
-                  _buildToggleCard(Icons.local_fire_department, 'Streak Reminder', 'Alert when streak is at risk', _streakReminder, (v) => setState(() => _streakReminder = v)),
+                  _buildToggleCard(Symbols.local_fire_department_rounded, 'Streak Reminder', 'Alert when streak is at risk', _streakReminder, (v) => setState(() => _streakReminder = v)),
                   const SizedBox(height: 12),
-                  _buildToggleCard(Icons.coffee, 'Break Reminder', 'Remind to take breaks', _breakReminder, (v) => setState(() => _breakReminder = v)),
+                  _buildToggleCard(Symbols.coffee_rounded, 'Break Reminder', 'Remind to take breaks', _breakReminder, (v) => setState(() => _breakReminder = v)),
                   const SizedBox(height: 32),
                   _buildSaveButton(),
                 ],
@@ -106,10 +108,10 @@ class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScr
         children: [
           Row(
             children: [
-              Container(width: 44, height: 44, decoration: BoxDecoration(color: _dailyReminder ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(Icons.notifications, color: _dailyReminder ? _primaryColor : Colors.grey)),
+              Container(width: 44, height: 44, decoration: BoxDecoration(color: _dailyReminder ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(Symbols.notifications_rounded, color: _dailyReminder ? _primaryColor : Colors.grey)),
               const SizedBox(width: 16),
               const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Daily Focus Reminder', style: TextStyle(fontWeight: FontWeight.w600)), Text('Get reminded to focus each day', style: TextStyle(color: Colors.grey, fontSize: 13))])),
-              Switch.adaptive(value: _dailyReminder, onChanged: (v) { HapticFeedback.lightImpact(); setState(() => _dailyReminder = v); }, activeColor: _primaryColor),
+              AppSwitch(value: _dailyReminder, onChanged: (v) { HapticFeedback.lightImpact(); setState(() => _dailyReminder = v); }),
             ],
           ),
           if (_dailyReminder) ...[
@@ -118,7 +120,7 @@ class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScr
               onTap: _selectTime,
               child: Row(
                 children: [
-                  Icon(Icons.access_time, color: _primaryColor, size: 20),
+                  Icon(Symbols.access_time_rounded, color: _primaryColor, size: 20),
                   const SizedBox(width: 12),
                   const Text('Reminder Time', style: TextStyle(color: Colors.grey)),
                   const Spacer(),
@@ -145,7 +147,7 @@ class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScr
           Container(width: 44, height: 44, decoration: BoxDecoration(color: value ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: value ? _primaryColor : Colors.grey)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600)), Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 13))])),
-          Switch.adaptive(value: value, onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); }, activeColor: _primaryColor),
+          AppSwitch(value: value, onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); }),
         ],
       ),
     );

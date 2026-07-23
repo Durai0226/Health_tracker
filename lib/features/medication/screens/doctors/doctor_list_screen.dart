@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
@@ -92,7 +93,7 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
         actions: [
           if (!widget.isSelectionMode)
             IconButton(
-              icon: const Icon(Icons.add_rounded),
+              icon: const Icon(Symbols.add_rounded),
               onPressed: () => _navigateToAddEdit(),
             ),
         ],
@@ -113,7 +114,7 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
           ? FloatingActionButton(
               onPressed: () => _navigateToAddEdit(),
               backgroundColor: AppColors.primary,
-              child: const Icon(Icons.add, color: Colors.white),
+              child: const Icon(Symbols.add_rounded, color: Colors.white),
             )
           : null,
     );
@@ -125,7 +126,7 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.medical_services_outlined,
+            Symbols.medical_services_rounded,
             size: 64,
             color: isDark ? Colors.white24 : AppColors.textLight,
           ),
@@ -153,7 +154,7 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            icon: const Icon(Icons.add, color: Colors.white),
+            icon: const Icon(Symbols.add_rounded, color: Colors.white),
             label: const Text('Add Doctor', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -267,7 +268,7 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
                 if (!widget.isSelectionMode)
                   PopupMenuButton<String>(
                     icon: Icon(
-                      Icons.more_vert_rounded,
+                      Symbols.more_vert_rounded,
                       color: isDark ? Colors.white38 : AppColors.textLight,
                     ),
                     onSelected: (value) {
@@ -282,7 +283,7 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
                         value: 'edit',
                         child: Row(
                           children: [
-                            Icon(Icons.edit_rounded, size: 20),
+                            Icon(Symbols.edit_rounded, size: 20),
                             SizedBox(width: 8),
                             Text('Edit'),
                           ],
@@ -292,7 +293,7 @@ class _DoctorListScreenState extends State<DoctorListScreen> {
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete_rounded, color: AppColors.error, size: 20),
+                            Icon(Symbols.delete_rounded, color: AppColors.error, size: 20),
                             SizedBox(width: 8),
                             Text('Delete', style: TextStyle(color: AppColors.error)),
                           ],

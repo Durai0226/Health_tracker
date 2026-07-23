@@ -1,17 +1,37 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui; // IsolateNameServer — signal the foreground AlarmScreen
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:flutter_timezone/flutter_timezone.dart';
+// Pure-Dart schedule model (no Flutter/DB deps) — safe to use inside the alarm
+// isolate to decide whether a medicine alarm should fire on a given day.
+import '../../features/medication/models/medicine_schedule.dart';
+import 'dose_action_queue.dart';
+
+/// When the user acts on the reminder from the NOTIFICATION (not the on-screen
+/// buttons), tell a live full-screen [AlarmScreen] in the main isolate to stop
+/// ringing and close. The looping ring lives in that screen's in-app player, so
+/// canceling the notification alone would leave it ringing. No-op when no alarm
+/// screen is showing (the named port is unregistered).
+@pragma('vm:entry-point')
+void _stopRingingAlarmScreen() {
+  try {
+    ui.IsolateNameServer.lookupPortByName('db_alarm_stop')?.send('stop');
+  } catch (_) {}
+}
 
 /// Top-level callback for background notification actions
 @pragma('vm:entry-point')
 void _backgroundNotificationCallback(NotificationResponse response) {
   debugPrint('🔔 Background notification response: ${response.actionId}');
+  // Any reminder action means the user engaged — silence a ringing alarm screen.
+  _stopRingingAlarmScreen();
   // Background actions handled here
   if (response.actionId == 'snooze') {
     _scheduleSnoozeNotification(response.id ?? 0);
@@ -20,6 +40,32 @@ void _backgroundNotificationCallback(NotificationResponse response) {
     final notifications = FlutterLocalNotificationsPlugin();
     notifications.cancel(response.id ?? 0);
     debugPrint('✓ Background notification dismissed: ${response.id}');
+  } else if (response.actionId == 'take') {
+    _handleDoseAction(response.payload, DoseActionQueue.actionTake);
+  } else if (response.actionId == 'skip') {
+    _handleDoseAction(response.payload, DoseActionQueue.actionSkip);
+  }
+}
+
+/// Parse a medicine alarm payload and queue a Take/Skip for the main isolate to
+/// apply on next resume (Drift is unavailable in this background isolate, so we
+/// only touch SharedPreferences here — the queue-and-drain pattern).
+@pragma('vm:entry-point')
+Future<void> _handleDoseAction(String? payload, String action) async {
+  try {
+    if (payload == null || !payload.startsWith('alarm:')) return;
+    final data = jsonDecode(payload.substring(6)) as Map<String, dynamic>;
+    final medId = data['medicineId']?.toString();
+    if (medId == null || medId.isEmpty) return;
+    final hour = (data['hour'] as num?)?.toInt() ?? 8;
+    final minute = (data['minute'] as num?)?.toInt() ?? 0;
+    final now = DateTime.now();
+    // The dose belongs to today at its scheduled hour:minute.
+    final scheduled = DateTime(now.year, now.month, now.day, hour, minute);
+    await DoseActionQueue.enqueue(
+        medicineId: medId, scheduledTime: scheduled, action: action);
+  } catch (e) {
+    debugPrint('⚠️ Dose action handling failed: $e');
   }
 }
 
@@ -63,6 +109,10 @@ Future<void> _scheduleSnoozeNotification(int originalId) async {
       'isRepeating': false,
       'snoozeDuration': snoozeMinutes,
       'sound': alarmData['sound'],
+      // Carry the payload so the snoozed re-fire again opens the full-screen
+      // AlarmScreen (whose on-screen Dismiss always works) instead of a
+      // button-limited notification. Null when the source had no payload.
+      'payload': alarmData['payload'],
     };
     await prefs.setString('alarm_$snoozeId', jsonEncode(snoozeData));
     
@@ -103,9 +153,36 @@ Future<void> alarmCallback(int alarmId) async {
     final title = alarmData['title'] as String? ?? 'Reminder';
     final body = alarmData['body'] as String? ?? 'Time for your reminder!';
     final payload = alarmData['payload'] as String?;
-    
+
     debugPrint('📋 Alarm data: $title - $body (Payload: $payload)');
-    
+
+    // ── Active-day gate (medicine alarms only) ──────────────────────────────
+    // Medicine alarms carry a serialized MedicineSchedule. Day-based regimens
+    // (specific days / every-X-days / cyclical, and past end/duration) must NOT
+    // fire on off-days. We keep the proven daily-repeating loop but SKIP showing
+    // the notification on inactive days (then still reschedule for tomorrow).
+    // Pure-Dart + SharedPreferences only — safe inside the alarm isolate.
+    final scheduleJson = alarmData['scheduleJson'] as String?;
+    if (scheduleJson != null && scheduleJson.isNotEmpty) {
+      try {
+        final schedule = MedicineSchedule.fromJson(
+            jsonDecode(scheduleJson) as Map<String, dynamic>);
+        if (!schedule.isActiveOnDate(DateTime.now())) {
+          debugPrint('⏭️ Alarm $alarmId inactive today — skipping, rescheduling');
+          final isRepeating = alarmData['isRepeating'] as bool? ?? false;
+          if (isRepeating) {
+            await _rescheduleRepeatingAlarm(alarmId, alarmData, prefs);
+          } else {
+            await prefs.remove('alarm_$alarmId');
+          }
+          return;
+        }
+      } catch (e) {
+        // On any parse error, fail OPEN (fire) — never silently drop a dose.
+        debugPrint('⚠️ Schedule gate parse failed (firing anyway): $e');
+      }
+    }
+
     // Initialize notifications plugin
     final notifications = FlutterLocalNotificationsPlugin();
     
@@ -125,11 +202,16 @@ Future<void> alarmCallback(int alarmId) async {
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
         debugPrint('🔔 Background notification action: ${response.actionId}');
+        _stopRingingAlarmScreen();
         if (response.actionId == 'snooze') {
           await _handleBackgroundSnooze(response.id ?? 0, prefs);
         } else if (response.actionId == 'dismiss') {
           await notifications.cancel(response.id ?? 0);
           debugPrint('✓ Notification dismissed via tap (callback): ${response.id}');
+        } else if (response.actionId == 'take') {
+          await _handleDoseAction(response.payload, DoseActionQueue.actionTake);
+        } else if (response.actionId == 'skip') {
+          await _handleDoseAction(response.payload, DoseActionQueue.actionSkip);
         }
       },
       onDidReceiveBackgroundNotificationResponse: _backgroundNotificationCallback,
@@ -170,14 +252,26 @@ Future<void> alarmCallback(int alarmId) async {
       // Audio attributes for alarm - ensures it plays on alarm stream
       audioAttributesUsage: AudioAttributesUsage.alarm,
       actions: <AndroidNotificationAction>[
+        // 1-tap Take straight from the notification (Pogue's #1 differentiator).
+        // Queued for the main isolate to log (Drift is unavailable here).
+        const AndroidNotificationAction(
+          'take',
+          '✓ Take',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
         AndroidNotificationAction(
           'snooze',
           '⏰ Snooze ${snoozeMinutes}min',
           showsUserInterface: false,
         ),
+        // Dismiss must always be present. Android caps a notification at 3 action
+        // buttons, so this is the third and final slot (Take/Snooze/Dismiss) —
+        // do NOT add a 4th here or Dismiss silently disappears. Clears the alert
+        // without logging the dose; "Skip" (a logged non-dose) lives in-app.
         const AndroidNotificationAction(
           'dismiss',
-          '❌ Dismiss',
+          '✕ Dismiss',
           showsUserInterface: false,
           cancelNotification: true,
         ),
@@ -311,9 +405,14 @@ class BackgroundAlarmService {
     if (_isInitialized) return;
     
     try {
-      // Initialize timezone
+      // Initialize timezone from the REAL device zone (never hardcode).
       tz_data.initializeTimeZones();
-      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      try {
+        tz.setLocalLocation(
+            tz.getLocation(await FlutterTimezone.getLocalTimezone()));
+      } catch (_) {
+        tz.setLocalLocation(tz.getLocation('UTC'));
+      }
       
       // Initialize Android Alarm Manager
       if (Platform.isAndroid) {
@@ -390,6 +489,7 @@ class BackgroundAlarmService {
     int? snoozeDuration,
     String? sound,
     String? payload,
+    String? scheduleJson,
   }) async {
     try {
       await init();
@@ -415,6 +515,8 @@ class BackgroundAlarmService {
         'snoozeDuration': snoozeDuration,
         'sound': sound,
         'payload': payload,
+        // Medicine alarms: serialized MedicineSchedule for the active-day gate.
+        'scheduleJson': scheduleJson,
       };
       await prefs.setString('alarm_$id', jsonEncode(alarmData));
       

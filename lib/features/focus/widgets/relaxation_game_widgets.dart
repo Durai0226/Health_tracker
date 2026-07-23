@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../models/relaxation_game_models.dart';
 
 /// Glassmorphism container widget
@@ -1084,7 +1085,7 @@ class ModeSelectionCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.lock, color: Colors.white70, size: 12),
+                      const Icon(Symbols.lock_rounded, color: Colors.white70, size: 12),
                       if (minutesToUnlock != null) ...[
                         const SizedBox(width: 4),
                         Text(

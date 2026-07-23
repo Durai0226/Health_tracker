@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../services/relaxation_game_service.dart';
 import '../widgets/relaxation_game_widgets.dart';
@@ -342,7 +343,7 @@ class _FloatingLanternGameState extends State<FloatingLanternGame>
                 borderRadius: BorderRadius.circular(16),
                 padding: const EdgeInsets.all(12),
                 child: const Icon(
-                  Icons.arrow_back_rounded,
+                  Symbols.arrow_back_rounded,
                   color: Colors.white70,
                   size: 24,
                 ),

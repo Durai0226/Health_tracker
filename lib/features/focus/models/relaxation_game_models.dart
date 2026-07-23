@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// Premium Theme Palettes for Relaxation Game
 enum RelaxationTheme {
@@ -321,21 +322,21 @@ extension ExperienceModeExtension on ExperienceMode {
   IconData get icon {
     switch (this) {
       case ExperienceMode.zenFlow:
-        return Icons.blur_on_rounded;
+        return Symbols.blur_on_rounded;
       case ExperienceMode.liquidRipple:
-        return Icons.water_drop_rounded;
+        return Symbols.water_drop_rounded;
       case ExperienceMode.auraSculpt:
-        return Icons.auto_awesome_rounded;
+        return Symbols.auto_awesome_rounded;
       case ExperienceMode.breathingRitual:
-        return Icons.air_rounded;
+        return Symbols.air_rounded;
       case ExperienceMode.cosmicDrift:
-        return Icons.stars_rounded;
+        return Symbols.stars_rounded;
       case ExperienceMode.emberMeditation:
-        return Icons.local_fire_department_rounded;
+        return Symbols.local_fire_department_rounded;
       case ExperienceMode.chromaticHarmony:
-        return Icons.palette_rounded;
+        return Symbols.palette_rounded;
       case ExperienceMode.hypnoticLoop:
-        return Icons.motion_photos_on_rounded;
+        return Symbols.motion_photos_on_rounded;
     }
   }
 
@@ -441,15 +442,15 @@ extension HapticTherapyModeExtension on HapticTherapyMode {
   IconData get icon {
     switch (this) {
       case HapticTherapyMode.stressRelease:
-        return Icons.spa_rounded;
+        return Symbols.spa_rounded;
       case HapticTherapyMode.anxietyCalm:
-        return Icons.self_improvement_rounded;
+        return Symbols.self_improvement_rounded;
       case HapticTherapyMode.sleepInduction:
-        return Icons.bedtime_rounded;
+        return Symbols.bedtime_rounded;
       case HapticTherapyMode.deepFocus:
-        return Icons.center_focus_strong_rounded;
+        return Symbols.center_focus_strong_rounded;
       case HapticTherapyMode.energyBoost:
-        return Icons.bolt_rounded;
+        return Symbols.bolt_rounded;
     }
   }
 }
@@ -563,23 +564,23 @@ extension PlayModeExtension on PlayMode {
   IconData get icon {
     switch (this) {
       case PlayMode.liquidTouch:
-        return Icons.water_rounded;
+        return Symbols.water_rounded;
       case PlayMode.energyOrb:
-        return Icons.blur_circular_rounded;
+        return Symbols.blur_circular_rounded;
       case PlayMode.zenGarden:
-        return Icons.grass_rounded;
+        return Symbols.grass_rounded;
       case PlayMode.bubblePop:
-        return Icons.bubble_chart_rounded;
+        return Symbols.bubble_chart_rounded;
       case PlayMode.sandFlow:
-        return Icons.hourglass_bottom_rounded;
+        return Symbols.hourglass_bottom_rounded;
       case PlayMode.oceanAquarium:
-        return Icons.pool_rounded;
+        return Symbols.pool_rounded;
       case PlayMode.starryNight:
-        return Icons.star_rounded;
+        return Symbols.star_rounded;
       case PlayMode.colorBloom:
-        return Icons.palette_rounded;
+        return Symbols.palette_rounded;
       case PlayMode.floatingLantern:
-        return Icons.light_mode_rounded;
+        return Symbols.light_mode_rounded;
     }
   }
 }

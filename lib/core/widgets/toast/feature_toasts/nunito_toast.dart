@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -15,7 +16,7 @@ class NunitoToast {
       feature: ToastFeature.medication,
       title: '💊 Medication Taken',
       message: '$medicineName marked as taken',
-      customIcon: Icons.check_circle_rounded,
+      customIcon: Symbols.check_circle_rounded,
     );
   }
 
@@ -27,7 +28,7 @@ class NunitoToast {
       feature: ToastFeature.medication,
       title: 'Dose Skipped',
       message: reason ?? '$medicineName skipped',
-      customIcon: Icons.skip_next_rounded,
+      customIcon: Symbols.skip_next_rounded,
     );
   }
 

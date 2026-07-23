@@ -77,6 +77,45 @@ class AdherenceReportService {
     return doc.save();
   }
 
+  /// A per-dose CSV (Date,Time,Medicine,Status) — a spreadsheet-friendly export
+  /// for the user or their doctor/caregiver. Pure Dart, on-device.
+  static String buildCsv({
+    required List<MedicineReportEntry> entries,
+    DateTime? from,
+    DateTime? to,
+  }) {
+    final rows = <List<String>>[];
+    for (final e in entries) {
+      for (final l in _inWindow(e.logs, from, to)) {
+        final t = l.scheduledTime;
+        final date = '${t.year}-${_2(t.month)}-${_2(t.day)}';
+        final time = '${_2(t.hour)}:${_2(t.minute)}';
+        final status = l.isTaken
+            ? 'Taken'
+            : l.isMissed
+                ? 'Missed'
+                : l.isSkipped
+                    ? 'Skipped'
+                    : 'Pending';
+        rows.add([date, time, _medLabel(e.medicine), status]);
+      }
+    }
+    rows.sort((a, b) {
+      final d = a[0].compareTo(b[0]);
+      return d != 0 ? d : a[1].compareTo(b[1]);
+    });
+    final buf = StringBuffer('Date,Time,Medicine,Status\n');
+    for (final r in rows) {
+      buf.writeln(r.map(_csvField).join(','));
+    }
+    return buf.toString();
+  }
+
+  static String _csvField(String s) =>
+      (s.contains(',') || s.contains('"') || s.contains('\n'))
+          ? '"${s.replaceAll('"', '""')}"'
+          : s;
+
   static List<MedicineLog> _inWindow(
       List<MedicineLog> logs, DateTime? from, DateTime? to) {
     return logs.where((l) {

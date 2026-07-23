@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/relaxation_game_models.dart';
 import '../services/relaxation_game_service.dart';
 import '../widgets/relaxation_game_widgets.dart';
@@ -94,7 +96,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               borderRadius: BorderRadius.circular(14),
               padding: const EdgeInsets.all(10),
               child: Icon(
-                Icons.arrow_back_rounded,
+                Symbols.arrow_back_rounded,
                 color: theme.textColor,
                 size: 22,
               ),
@@ -133,7 +135,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               borderRadius: BorderRadius.circular(14),
               padding: const EdgeInsets.all(10),
               child: Icon(
-                Icons.tune_rounded,
+                Symbols.tune_rounded,
                 color: theme.primaryColor,
                 size: 22,
               ),
@@ -148,7 +150,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               borderRadius: BorderRadius.circular(14),
               padding: const EdgeInsets.all(10),
               child: Icon(
-                Icons.palette_rounded,
+                Symbols.palette_rounded,
                 color: theme.secondaryColor,
                 size: 22,
               ),
@@ -345,7 +347,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
-                  isUnlocked ? Icons.workspace_premium : Icons.lock_rounded,
+                  isUnlocked ? Symbols.workspace_premium_rounded : Symbols.lock_rounded,
                   color: Colors.white,
                   size: 24,
                 ),
@@ -385,7 +387,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               'Total Usage',
               totalMinutes / 300,
               '$totalMinutes / 300 min',
-              Icons.timer_rounded,
+              Symbols.timer_rounded,
               theme,
             ),
             const SizedBox(height: 12),
@@ -393,7 +395,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               '7-Day Streak',
               streak / 7,
               '$streak / 7 days',
-              Icons.local_fire_department_rounded,
+              Symbols.local_fire_department_rounded,
               theme,
             ),
             const SizedBox(height: 12),
@@ -401,7 +403,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               'Modes Mastered',
               mastered / 3,
               '$mastered / 3 modes',
-              Icons.star_rounded,
+              Symbols.star_rounded,
               theme,
             ),
           ],
@@ -483,7 +485,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
           Row(
             children: [
               _buildStatCard(
-                Icons.timer_rounded,
+                Symbols.timer_rounded,
                 '${_service.settings.totalMinutesUsed}',
                 'Minutes',
                 theme.primaryColor,
@@ -491,7 +493,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               ),
               const SizedBox(width: 12),
               _buildStatCard(
-                Icons.local_fire_department_rounded,
+                Symbols.local_fire_department_rounded,
                 '${_service.settings.currentStreak}',
                 'Streak',
                 const Color(0xFFF59E0B),
@@ -499,7 +501,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
               ),
               const SizedBox(width: 12),
               _buildStatCard(
-                Icons.stars_rounded,
+                Symbols.stars_rounded,
                 '${_service.settings.masteredModes.length}',
                 'Mastered',
                 const Color(0xFF8B5CF6),
@@ -660,7 +662,7 @@ class _RelaxationGameScreenState extends State<RelaxationGameScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
-                    Icons.play_arrow_rounded,
+                    Symbols.play_arrow_rounded,
                     color: Colors.white,
                     size: 22,
                   ),
@@ -980,17 +982,16 @@ class SettingsSheet extends StatelessWidget {
                                 ),
                               ),
                               const Spacer(),
-                              Switch(
+                              AppSwitch(
                                 value: service.settings.hapticEnabled,
                                 onChanged: service.setHapticEnabled,
-                                activeThumbColor: theme.primaryColor,
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Haptic Intensity',
-                            icon: Icons.vibration_rounded,
+                            icon: Symbols.vibration_rounded,
                             value: service.settings.hapticIntensity,
                             color: theme.primaryColor,
                             onChanged: service.setHapticIntensity,
@@ -998,7 +999,7 @@ class SettingsSheet extends StatelessWidget {
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Pattern Speed',
-                            icon: Icons.speed_rounded,
+                            icon: Symbols.speed_rounded,
                             value: service.settings.hapticSpeed,
                             color: theme.primaryColor,
                             onChanged: service.setHapticSpeed,
@@ -1008,7 +1009,7 @@ class SettingsSheet extends StatelessWidget {
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Particle Density',
-                            icon: Icons.blur_on_rounded,
+                            icon: Symbols.blur_on_rounded,
                             value: service.settings.particleDensity,
                             color: theme.secondaryColor,
                             onChanged: service.setParticleDensity,
@@ -1016,7 +1017,7 @@ class SettingsSheet extends StatelessWidget {
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Animation Speed',
-                            icon: Icons.animation_rounded,
+                            icon: Symbols.animation_rounded,
                             value: service.settings.animationSpeed,
                             color: theme.secondaryColor,
                             onChanged: service.setAnimationSpeed,
@@ -1024,7 +1025,7 @@ class SettingsSheet extends StatelessWidget {
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Glow Intensity',
-                            icon: Icons.light_mode_rounded,
+                            icon: Symbols.light_mode_rounded,
                             value: service.settings.glowIntensity,
                             color: theme.secondaryColor,
                             onChanged: service.setGlowIntensity,
@@ -1032,7 +1033,7 @@ class SettingsSheet extends StatelessWidget {
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Blur Intensity',
-                            icon: Icons.blur_circular_rounded,
+                            icon: Symbols.blur_circular_rounded,
                             value: service.settings.blurIntensity,
                             color: theme.secondaryColor,
                             onChanged: service.setBlurIntensity,
@@ -1040,7 +1041,7 @@ class SettingsSheet extends StatelessWidget {
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Motion Sensitivity',
-                            icon: Icons.motion_photos_auto_rounded,
+                            icon: Symbols.motion_photos_auto_rounded,
                             value: service.settings.motionSensitivity,
                             color: theme.secondaryColor,
                             onChanged: service.setMotionSensitivity,
@@ -1050,7 +1051,7 @@ class SettingsSheet extends StatelessWidget {
                           const SizedBox(height: 16),
                           SettingsSlider(
                             label: 'Volume',
-                            icon: Icons.volume_up_rounded,
+                            icon: Symbols.volume_up_rounded,
                             value: service.settings.soundVolume,
                             color: const Color(0xFF10B981),
                             onChanged: service.setSoundVolume,
@@ -1059,7 +1060,7 @@ class SettingsSheet extends StatelessWidget {
                           Row(
                             children: [
                               const Icon(
-                                Icons.sync_rounded,
+                                Symbols.sync_rounded,
                                 color: Color(0xFF10B981),
                                 size: 20,
                               ),
@@ -1072,10 +1073,9 @@ class SettingsSheet extends StatelessWidget {
                                 ),
                               ),
                               const Spacer(),
-                              Switch(
+                              AppSwitch(
                                 value: service.settings.soundHapticSync,
                                 onChanged: service.setSoundHapticSync,
-                                activeThumbColor: const Color(0xFF10B981),
                               ),
                             ],
                           ),
@@ -1316,7 +1316,7 @@ class _TherapySessionSheetState extends State<TherapySessionSheet> {
                     : null,
               ),
               child: Icon(
-                _isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                _isRunning ? Symbols.stop_rounded : Symbols.play_arrow_rounded,
                 color: Colors.white,
                 size: 50,
               ),

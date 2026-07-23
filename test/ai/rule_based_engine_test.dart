@@ -178,6 +178,27 @@ void main() {
       final m = engine.parseMedicine('Aspirin before bed');
       expect(m['mealTiming'], 'bedtime');
     });
+
+    test('"Dolo 650 once a day" → bare number becomes strength, not name', () {
+      final m = engine.parseMedicine('Dolo 650 once a day');
+      expect(m['name'], 'Dolo'); // 650 pulled out of the name
+      expect(m['strength'], '650'); // captured as the strength
+      expect(m['frequency'], 'once daily');
+      expect(m['dosageAmount'], isNull); // no unit → not a dose count
+    });
+
+    test('vitamin names with fused digits (B12) are preserved', () {
+      final m = engine.parseMedicine('Vitamin B12 once a day');
+      expect((m['name'] as String).toLowerCase(), contains('b12'));
+      expect(m['strength'], isNull); // B12 is the name, not a strength
+    });
+
+    test('unit-tagged dose still wins over bare-number strength', () {
+      final m = engine.parseMedicine('Metformin 500mg once daily');
+      expect(m['dosageAmount'], 500);
+      expect(m['dosageUnit'], 'mg');
+      expect(m['strength'], isNull);
+    });
   });
 
   group('dailyBriefing cross-signal', () {

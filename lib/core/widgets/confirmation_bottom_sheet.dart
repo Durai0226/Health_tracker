@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 
 /// Standard confirmation bottom sheet for critical actions
@@ -150,7 +151,7 @@ class ConfirmationBottomSheet {
       title: 'Delete $itemName?',
       message: customMessage ?? 'This action cannot be undone. Are you sure you want to delete this $itemName?',
       confirmText: 'Delete',
-      icon: Icons.delete_outline_rounded,
+      icon: Symbols.delete_rounded,
       isDangerous: true,
     );
   }
@@ -164,7 +165,7 @@ class ConfirmationBottomSheet {
       title: 'Sign Out',
       message: 'Are you sure you want to sign out? Your local data will be preserved.',
       confirmText: 'Sign Out',
-      icon: Icons.logout_rounded,
+      icon: Symbols.logout_rounded,
       isDangerous: false,
     );
   }
@@ -178,7 +179,7 @@ class ConfirmationBottomSheet {
       title: 'Discard Changes?',
       message: 'You have unsaved changes. Are you sure you want to discard them?',
       confirmText: 'Discard',
-      icon: Icons.warning_amber_rounded,
+      icon: Symbols.warning_amber_rounded,
       isDangerous: true,
     );
   }
@@ -193,7 +194,7 @@ class ConfirmationBottomSheet {
       title: 'Reset $featureName?',
       message: 'This will reset all $featureName data to default. This action cannot be undone.',
       confirmText: 'Reset',
-      icon: Icons.refresh_rounded,
+      icon: Symbols.refresh_rounded,
       isDangerous: true,
     );
   }

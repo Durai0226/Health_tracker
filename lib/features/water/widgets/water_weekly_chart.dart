@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 
 /// Premium weekly progress chart with modern visualization
@@ -66,7 +67,7 @@ class _WaterWeeklyChartState extends State<WaterWeeklyChart>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
-                  Icons.bar_chart_rounded,
+                  Symbols.bar_chart_rounded,
                   color: Colors.white,
                   size: 18,
                 ),
@@ -96,7 +97,7 @@ class _WaterWeeklyChartState extends State<WaterWeeklyChart>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.calendar_month,
+                          Symbols.calendar_month_rounded,
                           size: 14,
                           color: Colors.green.shade400,
                         ),
@@ -327,7 +328,7 @@ class _WaterWeeklyChartState extends State<WaterWeeklyChart>
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.check,
+                          Symbols.check_rounded,
                           size: 10,
                           color: Colors.white,
                         ),
@@ -448,7 +449,7 @@ class WaterHistoryTimeline extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
-                  Icons.history,
+                  Symbols.history_rounded,
                   color: Colors.white,
                   size: 18,
                 ),

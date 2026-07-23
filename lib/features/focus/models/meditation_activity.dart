@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../theme/manrope_theme.dart';
 
 /// Enum representing all available wellness activity types
@@ -83,17 +84,17 @@ extension WellnessActivityTypeExtension on WellnessActivityType {
   IconData get icon {
     switch (this) {
       case WellnessActivityType.meditation:
-        return Icons.self_improvement_rounded;
+        return Symbols.self_improvement_rounded;
       case WellnessActivityType.yoga:
-        return Icons.accessibility_new_rounded;
+        return Symbols.accessibility_new_rounded;
       case WellnessActivityType.breathing:
-        return Icons.air_rounded;
+        return Symbols.air_rounded;
       case WellnessActivityType.focus:
-        return Icons.center_focus_strong_rounded;
+        return Symbols.center_focus_strong_rounded;
       case WellnessActivityType.walking:
-        return Icons.directions_walk_rounded;
+        return Symbols.directions_walk_rounded;
       case WellnessActivityType.journaling:
-        return Icons.edit_note_rounded;
+        return Symbols.edit_note_rounded;
     }
   }
 

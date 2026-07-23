@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 enum BreathingPattern {
   relaxing,        // 4-7-8 pattern
@@ -47,17 +48,17 @@ extension BreathingPatternExtension on BreathingPattern {
   IconData get icon {
     switch (this) {
       case BreathingPattern.relaxing:
-        return Icons.spa_rounded;
+        return Symbols.spa_rounded;
       case BreathingPattern.balancing:
-        return Icons.crop_square_rounded;
+        return Symbols.crop_square_rounded;
       case BreathingPattern.energizing:
-        return Icons.bolt_rounded;
+        return Symbols.bolt_rounded;
       case BreathingPattern.calming:
-        return Icons.nights_stay_rounded;
+        return Symbols.nights_stay_rounded;
       case BreathingPattern.deepBreathing:
-        return Icons.air_rounded;
+        return Symbols.air_rounded;
       case BreathingPattern.sleepBreathing:
-        return Icons.bedtime_rounded;
+        return Symbols.bedtime_rounded;
     }
   }
 

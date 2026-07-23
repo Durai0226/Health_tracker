@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
@@ -63,13 +64,13 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: const Icon(Symbols.arrow_back_rounded, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('All Reminders'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_rounded, color: AppColors.primary),
+            icon: const Icon(Symbols.settings_rounded, color: AppColors.primary),
             onPressed: () {
               Navigator.push(
                 context,
@@ -91,7 +92,7 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
             _buildStatsCard(),
             const SizedBox(height: 24),
             _buildReminderTypeCard(
-              icon: Icons.notifications_rounded,
+              icon: Symbols.notifications_rounded,
               title: 'General Reminders',
               color: AppColors.secondary,
               count: _reminderCount,
@@ -105,7 +106,7 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
             ),
             const SizedBox(height: 12),
             _buildReminderTypeCard(
-              icon: Icons.medication_rounded,
+              icon: Symbols.medication_rounded,
               title: 'Medicine Reminders',
               color: AppColors.primary,
               count: _medicineCount,
@@ -119,7 +120,7 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
             ),
             const SizedBox(height: 12),
             _buildReminderTypeCard(
-              icon: Icons.water_drop_rounded,
+              icon: Symbols.water_drop_rounded,
               title: 'Water Reminders',
               color: AppColors.info,
               count: _hasWaterReminder ? 1 : 0,
@@ -156,7 +157,7 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
       child: Column(
         children: [
           const Icon(
-            Icons.notifications_active_rounded,
+            Symbols.notifications_active_rounded,
             size: 48,
             color: Colors.white,
           ),
@@ -180,9 +181,9 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildQuickStat(Icons.check_circle_rounded, '$_activeReminders', 'Active'),
+              _buildQuickStat(Symbols.check_circle_rounded, '$_activeReminders', 'Active'),
               const SizedBox(width: 32),
-              _buildQuickStat(Icons.cancel_rounded, '${_totalReminders - _activeReminders}', 'Disabled'),
+              _buildQuickStat(Symbols.cancel_rounded, '${_totalReminders - _activeReminders}', 'Disabled'),
             ],
           ),
         ],
@@ -266,7 +267,7 @@ class _AllRemindersScreenState extends State<AllRemindersScreen> {
               ),
             ),
             const Icon(
-              Icons.chevron_right_rounded,
+              Symbols.chevron_right_rounded,
               color: AppColors.textSecondary,
             ),
           ],

@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'package:tablet_remainder/core/widgets/app/app_pickers.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/focus_mode_service.dart';
@@ -21,12 +24,12 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
   
   
   final List<Map<String, dynamic>> _activities = [
-    {'id': 'reading', 'name': 'Reading', 'icon': Icons.menu_book_rounded, 'color': AppColors.primary},
-    {'id': 'studying', 'name': 'Studying', 'icon': Icons.school_rounded, 'color': AppColors.info},
-    {'id': 'working', 'name': 'Working', 'icon': Icons.work_rounded, 'color': AppColors.warning},
-    {'id': 'meditating', 'name': 'Meditating', 'icon': Icons.self_improvement_rounded, 'color': AppColors.success},
-    {'id': 'writing', 'name': 'Writing', 'icon': Icons.edit_rounded, 'color': AppColors.error},
-    {'id': 'coding', 'name': 'Coding', 'icon': Icons.code_rounded, 'color': const Color(0xFF9C27B0)},
+    {'id': 'reading', 'name': 'Reading', 'icon': Symbols.menu_book_rounded, 'color': AppColors.primary},
+    {'id': 'studying', 'name': 'Studying', 'icon': Symbols.school_rounded, 'color': AppColors.info},
+    {'id': 'working', 'name': 'Working', 'icon': Symbols.work_rounded, 'color': AppColors.warning},
+    {'id': 'meditating', 'name': 'Meditating', 'icon': Symbols.self_improvement_rounded, 'color': AppColors.success},
+    {'id': 'writing', 'name': 'Writing', 'icon': Symbols.edit_rounded, 'color': AppColors.error},
+    {'id': 'coding', 'name': 'Coding', 'icon': Symbols.code_rounded, 'color': const Color(0xFF9C27B0)},
   ];
 
   final List<int> _durationOptions = [15, 25, 30, 45, 60, 90];
@@ -113,7 +116,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                child: const Icon(Symbols.arrow_back_rounded, color: Colors.white, size: 20),
               ),
               onPressed: () => Navigator.pop(context),
             ),
@@ -204,11 +207,11 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
   Widget _buildStatsRow() {
     return Row(
       children: [
-        Expanded(child: _buildStatCard('Today', '${_focusService.todayMinutes}m', Icons.today_rounded, AppColors.primary)),
+        Expanded(child: _buildStatCard('Today', '${_focusService.todayMinutes}m', Symbols.today_rounded, AppColors.primary)),
         const SizedBox(width: 12),
-        Expanded(child: _buildStatCard('This Week', '${_focusService.weekMinutes}m', Icons.date_range_rounded, AppColors.info)),
+        Expanded(child: _buildStatCard('This Week', '${_focusService.weekMinutes}m', Symbols.date_range_rounded, AppColors.info)),
         const SizedBox(width: 12),
-        Expanded(child: _buildStatCard('Sessions', '${_focusService.totalSessions}', Icons.flag_rounded, AppColors.success)),
+        Expanded(child: _buildStatCard('Sessions', '${_focusService.totalSessions}', Symbols.flag_rounded, AppColors.success)),
       ],
     );
   }
@@ -351,7 +354,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    _focusService.isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                    _focusService.isRunning ? Symbols.stop_rounded : Symbols.play_arrow_rounded,
                     color: Colors.white,
                     size: 28,
                   ),
@@ -543,7 +546,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
                   color: AppColors.info.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.schedule_rounded, color: AppColors.info, size: 22),
+                child: const Icon(Symbols.schedule_rounded, color: AppColors.info, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -569,10 +572,9 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
                   ],
                 ),
               ),
-              Switch(
+              AppSwitch(
                 value: _focusService.isScheduled,
                 onChanged: (value) => _focusService.setScheduled(value),
-                activeThumbColor: AppColors.primary,
               ),
             ],
           ),
@@ -591,7 +593,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Icon(Icons.arrow_forward_rounded, color: AppColors.textSecondary, size: 20),
+                  child: Icon(Symbols.arrow_forward_rounded, color: AppColors.textSecondary, size: 20),
                 ),
                 Expanded(
                   child: _buildTimeSelector(
@@ -669,7 +671,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.notifications_off_rounded, color: AppColors.warning, size: 20),
+                  const Icon(Symbols.notifications_off_rounded, color: AppColors.warning, size: 20),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
@@ -680,11 +682,9 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
                       ),
                     ),
                   ),
-                  Switch(
+                  AppSwitch(
                     value: _focusService.autoStartReminders,
                     onChanged: (value) => _focusService.setAutoStartReminders(value),
-                    activeThumbColor: AppColors.primary,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ],
               ),
@@ -735,13 +735,13 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
   }
 
   Future<void> _pickTime({required bool isStart}) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(
-        hour: isStart 
+    final picked = await AppTimePicker.show(
+      context,
+      initial: TimeOfDay(
+        hour: isStart
             ? (_focusService.scheduledStartTime?.hour ?? 9)
             : (_focusService.scheduledEndTime?.hour ?? 17),
-        minute: isStart 
+        minute: isStart
             ? (_focusService.scheduledStartTime?.minute ?? 0)
             : (_focusService.scheduledEndTime?.minute ?? 0),
       ),
@@ -776,7 +776,7 @@ class _FocusModeScreenState extends State<FocusModeScreen> with TickerProviderSt
         children: [
           const Row(
             children: [
-              Icon(Icons.history_rounded, color: AppColors.textSecondary, size: 20),
+              Icon(Symbols.history_rounded, color: AppColors.textSecondary, size: 20),
               SizedBox(width: 8),
               Text(
                 'Recent Sessions',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -84,10 +85,10 @@ class _WaterBeveragesSettingsScreenState
         children: [
           AppHeader(
             title: 'Beverages',
-            icon: Icons.local_bar_rounded,
+            icon: Symbols.local_bar_rounded,
             accent: water,
             leading: AppIconButton(
-              icon: Icons.arrow_back_ios_new_rounded,
+              icon: Symbols.arrow_back_rounded,
               accent: water,
               filled: false,
               onPressed: () => Navigator.pop(context),
@@ -121,7 +122,7 @@ class _WaterBeveragesSettingsScreenState
               accent: water,
               size: AppButtonSize.lg,
               fullWidth: true,
-              leadingIcon: Icons.check_rounded,
+              leadingIcon: Symbols.check_rounded,
               onPressed: _saveSettings,
             ),
           ),
@@ -170,7 +171,7 @@ class _WaterBeveragesSettingsScreenState
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      Icon(Icons.water_drop_rounded,
+                      Icon(Symbols.water_drop_rounded,
                           size: 14, color: ext.mark(water)),
                       const SizedBox(width: 4),
                       Text(
@@ -188,14 +189,13 @@ class _WaterBeveragesSettingsScreenState
                 ],
               ),
             ),
-            Switch(
+            AppSwitch(
               value: isEnabled,
-              activeThumbColor: water.base,
-              activeTrackColor: water.base.withOpacity(0.35),
               onChanged: (v) {
                 HapticFeedback.lightImpact();
                 setState(() => _enabledBeverages[beverage['id']] = v);
               },
+              accent: water,
             ),
           ],
         ),

@@ -1,0 +1,25 @@
+# Release signing for DailyMinder (Android).
+#
+# 1. Generate your release keystore ONCE (see android/make_release_keystore.sh),
+#    keeping it OUTSIDE the repo and backed up somewhere safe. Losing this file
+#    means you can never publish an update to the same app listing.
+# 2. Copy this file to  android/key.properties  and fill in the real values.
+#    android/key.properties is gitignored — NEVER commit it or the .jks.
+# 3. Register the keystore's SHA-1 in Firebase (see below) so Google Sign-In works.
+#
+# storeFile: an ABSOLUTE path is safest (keystore lives outside the repo), e.g.
+#   /Users/you/keystores/dlyminder-upload.jks
+# A path relative to android/app/ also works (e.g. upload-keystore.jks) since the
+# app module resolves file() from there — but keeping it outside the repo is safer.
+
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=upload
+storeFile=/absolute/path/to/dlyminder-upload.jks
+
+# After first build, get the SHA-1 and add it in Firebase console
+# (project remedly-86882 -> Project settings -> Android app com.dlyminder.app ->
+#  Add fingerprint), then re-download google-services.json:
+#   keytool -list -v -keystore <storeFile> -alias upload
+# For Play Store: ALSO register the Play App Signing SHA-1
+# (Play Console -> Setup -> App signing) or Google Sign-In breaks in production.

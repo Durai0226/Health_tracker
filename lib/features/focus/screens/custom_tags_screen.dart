@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/custom_tag.dart';
 import '../services/tag_service.dart';
@@ -55,7 +56,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateTagDialog,
         backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        icon: const Icon(Symbols.add_rounded, color: Colors.white),
         label: const Text('Create Tag', style: TextStyle(color: Colors.white)),
       ),
     );
@@ -73,7 +74,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.arrow_back_rounded, size: 20),
+          child: const Icon(Symbols.arrow_back_rounded, size: 20),
         ),
       ),
       title: const Text(
@@ -424,7 +425,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                             : null,
                       ),
                       child: isSelected
-                          ? const Icon(Icons.check, color: Colors.white, size: 20)
+                          ? const Icon(Symbols.check_rounded, color: Colors.white, size: 20)
                           : null,
                     ),
                   );

@@ -1,10 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 
-/// Clean, simple notification settings screen — Calm Clarity, dark-aware.
+/// Notifications settings — an Apple-tier, instant-apply grouped-settings list.
+/// Calm Clarity: one interactive color (brand teal), a neutral chrome bed, and
+/// amber reserved for the single semantic permission warning. Every toggle /
+/// duration persists immediately (no Save button); a quiet "Saved" affordance
+/// fades in the header.
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -28,14 +35,26 @@ class _NotificationSettingsScreenState
 
   // UI state
   bool _isLoading = true;
-  bool _isSaving = false;
-  bool _hasChanges = false;
   bool _notificationsEnabled = true;
+  bool _showSaved = false;
+
+  Timer? _debounce;
+  Timer? _savedTimer;
+
+  static const List<int> _snoozeOptions = [1, 5, 10, 15, 30];
+  static const List<int> _alarmOptions = [15, 30, 45, 60];
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _savedTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -75,11 +94,9 @@ class _NotificationSettingsScreenState
     }
   }
 
-  Future<void> _saveSettings() async {
-    if (_isSaving) return;
-
-    setState(() => _isSaving = true);
-
+  /// Instant-apply write. Runs behind [_persistDebounced] on every toggle /
+  /// duration change — no Save button, no success SnackBar.
+  Future<void> _persist() async {
     try {
       // copyWith on the persisted settings — building a fresh UserSettings here
       // reset every unlisted field (notably the user's theme preference) to its
@@ -104,48 +121,22 @@ class _NotificationSettingsScreenState
       await prefs.setBool('snooze_enabled', _snoozeEnabled);
 
       if (mounted) {
-        final ext = AppColorsExt.of(context);
-        setState(() {
-          _isSaving = false;
-          _hasChanges = false;
+        // Quiet, non-blocking "Saved" affordance in the header — fades away.
+        setState(() => _showSaved = true);
+        _savedTimer?.cancel();
+        _savedTimer = Timer(const Duration(milliseconds: 1200), () {
+          if (mounted) setState(() => _showSaved = false);
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    color: ext.fillFg(ext.success), size: 20),
-                const SizedBox(width: 12),
-                Text('Settings saved successfully',
-                    style: TextStyle(color: ext.fillFg(ext.success))),
-              ],
-            ),
-            backgroundColor: ext.fillBg(ext.success),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-          ),
-        );
       }
     } catch (e) {
       debugPrint('Error saving settings: $e');
-      if (mounted) {
-        final ext = AppColorsExt.of(context);
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to save settings'),
-            backgroundColor: ext.fillBg(ext.error),
-          ),
-        );
-      }
     }
   }
 
-  void _markChanged() {
-    if (!_hasChanges) {
-      setState(() => _hasChanges = true);
-    }
+  /// Debounces rapid toggles/selections into a single write.
+  void _persistDebounced() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), _persist);
   }
 
   Future<void> _testNotification() async {
@@ -157,6 +148,7 @@ class _NotificationSettingsScreenState
       );
 
       if (mounted) {
+        // No action -> auto-dismisses (SnackBar-persist gotcha).
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Test notification sent'),
@@ -172,30 +164,37 @@ class _NotificationSettingsScreenState
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return AccentScope(
-      feature: FeatureAccent.reminders,
+      feature: FeatureAccent.brand,
       child: AppScaffold(
         body: Column(
           children: [
             AppHeader(
               title: 'Notifications',
-              accent: ext.reminders,
               leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: Symbols.arrow_back_rounded,
                 filled: false,
-                accent: ext.reminders,
+                accent: ext.brand,
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
-                if (_hasChanges)
-                  AppButton(
-                    label: 'Save',
-                    size: AppButtonSize.sm,
-                    variant: AppButtonVariant.tonal,
-                    accent: ext.reminders,
-                    loading: _isSaving,
-                    onPressed: _isSaving ? null : _saveSettings,
+                // Quiet fading "Saved" check — replaces the Save button/pill.
+                AnimatedOpacity(
+                  opacity: _showSaved ? 1 : 0,
+                  duration: AppMotion.base,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Symbols.check_circle_rounded,
+                          size: 18, color: ext.mark(ext.success)),
+                      const SizedBox(width: 4),
+                      Text('Saved',
+                          style: tt.labelMedium
+                              ?.copyWith(color: ext.textSecondary)),
+                    ],
                   ),
+                ),
               ],
             ),
             Expanded(
@@ -203,10 +202,11 @@ class _NotificationSettingsScreenState
                   ? const Center(child: CircularProgressIndicator())
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
-                          AppSpacing.sm, AppSpacing.gutter, 40),
+                          AppSpacing.sm, AppSpacing.gutter, AppSpacing.xxl),
                       children: [
-                        // Permission warning banner — shows only when OS
-                        // notifications are disabled (self-hides otherwise).
+                        // Permission warning banner — the one amber moment.
+                        // Shows only when OS notifications are disabled and
+                        // self-hides once the user enables them.
                         if (!_notificationsEnabled) ...[
                           NotificationPermissionBanner(
                             onStatusChanged: (enabled) {
@@ -217,183 +217,137 @@ class _NotificationSettingsScreenState
                               }
                             },
                           ),
-                          const SizedBox(height: AppSpacing.lg),
+                          const SizedBox(height: AppSpacing.xl),
                         ],
 
-                        // Header Card
-                        _buildHeaderCard(ext),
-                        const SizedBox(height: AppSpacing.lg),
-
-                        // Sound & Vibration Section
-                        SectionHeader(
-                            title: 'Sound & Haptics', accent: ext.reminders),
-                        AppCard(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.xs),
-                          child: Column(
-                            children: [
-                              _buildSwitchTile(
-                                ext,
-                                icon: Icons.volume_up_rounded,
-                                accent: ext.brand,
-                                title: 'Sound',
-                                subtitle: 'Play sound for notifications',
-                                value: _soundEnabled,
-                                onChanged: (v) {
-                                  setState(() => _soundEnabled = v);
-                                  _markChanged();
-                                },
-                              ),
-                              _divider(ext),
-                              _buildSwitchTile(
-                                ext,
-                                icon: Icons.vibration_rounded,
-                                accent: ext.warning,
-                                title: 'Vibration',
-                                subtitle: 'Vibrate for notifications',
-                                value: _vibrationEnabled,
-                                onChanged: (v) {
-                                  setState(() => _vibrationEnabled = v);
-                                  _markChanged();
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-
-                        // Display Section
-                        SectionHeader(
-                            title: 'Display', accent: ext.reminders),
-                        AppCard(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.xs),
-                          child: Column(
-                            children: [
-                              _buildSwitchTile(
-                                ext,
-                                icon: Icons.lock_outline_rounded,
-                                accent: ext.info,
-                                title: 'Show on Lock Screen',
-                                subtitle: 'Display notifications when locked',
-                                value: _showOnLockScreen,
-                                onChanged: (v) {
-                                  setState(() => _showOnLockScreen = v);
-                                  _markChanged();
-                                },
-                              ),
-                              _divider(ext),
-                              _buildSwitchTile(
-                                ext,
-                                icon: Icons.push_pin_rounded,
-                                accent: ext.success,
-                                title: 'Persistent Notifications',
-                                subtitle: 'Keep until manually dismissed',
-                                value: _persistentNotification,
-                                onChanged: (v) {
-                                  setState(() => _persistentNotification = v);
-                                  _markChanged();
-                                },
-                              ),
-                              _divider(ext),
-                              _buildSwitchTile(
-                                ext,
-                                icon: Icons.fullscreen_rounded,
-                                accent: ext.error,
-                                title: 'Full Screen Alerts',
-                                subtitle:
-                                    'Show full screen for important reminders',
-                                value: _fullScreenNotification,
-                                onChanged: (v) {
-                                  setState(() => _fullScreenNotification = v);
-                                  _markChanged();
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-
-                        // Snooze Section
-                        SectionHeader(
-                            title: 'Snooze', accent: ext.reminders),
-                        AppCard(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.xs),
-                          child: Column(
-                            children: [
-                              _buildSwitchTile(
-                                ext,
-                                icon: Icons.snooze_rounded,
-                                accent: ext.focus,
-                                title: 'Enable Snooze',
-                                subtitle: 'Allow snoozing reminders',
-                                value: _snoozeEnabled,
-                                onChanged: (v) {
-                                  setState(() => _snoozeEnabled = v);
-                                  _markChanged();
-                                },
-                              ),
-                              if (_snoozeEnabled) ...[
-                                _divider(ext),
-                                _buildOptionSelector(
-                                  ext,
-                                  title: 'Snooze Duration',
-                                  options: const [1, 5, 10, 15, 30],
-                                  selectedValue: _snoozeMinutes,
-                                  suffix: 'min',
-                                  onSelected: (v) {
-                                    setState(() => _snoozeMinutes = v);
-                                    _markChanged();
-                                  },
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-
-                        // Alarm Duration Section
-                        SectionHeader(title: 'Alarm', accent: ext.reminders),
-                        AppCard(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.xs),
-                          child: _buildOptionSelector(
-                            ext,
-                            title: 'Alarm Ring Duration',
-                            options: const [15, 30, 45, 60],
-                            selectedValue: _alarmDurationSeconds,
-                            suffix: 'sec',
-                            onSelected: (v) {
-                              setState(() => _alarmDurationSeconds = v);
-                              _markChanged();
-                            },
-                          ),
+                        // Alerts
+                        SettingsSection(
+                          title: 'Alerts',
+                          footer:
+                              'Play a sound and vibrate your device when a reminder fires.',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.volume_up_rounded,
+                              title: 'Sound',
+                              switchValue: _soundEnabled,
+                              onSwitchChanged: (v) {
+                                setState(() => _soundEnabled = v);
+                                _persistDebounced();
+                              },
+                            ),
+                            SettingsTile(
+                              icon: Symbols.vibration_rounded,
+                              title: 'Vibration',
+                              switchValue: _vibrationEnabled,
+                              onSwitchChanged: (v) {
+                                setState(() => _vibrationEnabled = v);
+                                _persistDebounced();
+                              },
+                            ),
+                          ],
                         ),
                         const SizedBox(height: AppSpacing.xl),
 
-                        // Test Notification
-                        AppButton(
-                          label: 'Send Test Notification',
-                          leadingIcon: Icons.notifications_active_rounded,
-                          variant: AppButtonVariant.secondary,
-                          accent: ext.reminders,
-                          fullWidth: true,
-                          onPressed: _testNotification,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-
-                        // Save Button
-                        AppButton(
-                          label: 'Save Settings',
-                          leadingIcon: Icons.save_rounded,
-                          accent: ext.reminders,
-                          fullWidth: true,
-                          size: AppButtonSize.lg,
-                          loading: _isSaving,
-                          onPressed: _isSaving ? null : _saveSettings,
+                        // Display
+                        SettingsSection(
+                          title: 'Display',
+                          footer:
+                              'Full-screen alerts take over the screen for time-critical reminders.',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.lock_rounded,
+                              title: 'Show on Lock Screen',
+                              switchValue: _showOnLockScreen,
+                              onSwitchChanged: (v) {
+                                setState(() => _showOnLockScreen = v);
+                                _persistDebounced();
+                              },
+                            ),
+                            SettingsTile(
+                              icon: Symbols.push_pin_rounded,
+                              title: 'Persistent Notifications',
+                              switchValue: _persistentNotification,
+                              onSwitchChanged: (v) {
+                                setState(() => _persistentNotification = v);
+                                _persistDebounced();
+                              },
+                            ),
+                            SettingsTile(
+                              icon: Symbols.fullscreen_rounded,
+                              title: 'Full-Screen Alerts',
+                              switchValue: _fullScreenNotification,
+                              onSwitchChanged: (v) {
+                                setState(() => _fullScreenNotification = v);
+                                _persistDebounced();
+                              },
+                            ),
+                          ],
                         ),
                         const SizedBox(height: AppSpacing.xl),
+
+                        // Snooze
+                        SettingsSection(
+                          title: 'Snooze',
+                          footer:
+                              'How long a reminder waits before alerting you again.',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.snooze_rounded,
+                              title: 'Enable Snooze',
+                              switchValue: _snoozeEnabled,
+                              onSwitchChanged: (v) {
+                                setState(() => _snoozeEnabled = v);
+                                _persistDebounced();
+                              },
+                            ),
+                            if (_snoozeEnabled)
+                              _durationRow(
+                                ext,
+                                tt,
+                                label: 'Snooze duration (minutes)',
+                                options: _snoozeOptions,
+                                value: _snoozeMinutes,
+                                onSelected: (v) {
+                                  setState(() => _snoozeMinutes = v);
+                                  _persistDebounced();
+                                },
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+
+                        // Alarm
+                        SettingsSection(
+                          title: 'Alarm',
+                          footer:
+                              'How long an alarm rings before it dismisses itself.',
+                          children: [
+                            _durationRow(
+                              ext,
+                              tt,
+                              label: 'Ring duration (seconds)',
+                              options: _alarmOptions,
+                              value: _alarmDurationSeconds,
+                              onSelected: (v) {
+                                setState(() => _alarmDurationSeconds = v);
+                                _persistDebounced();
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+
+                        // Testing
+                        SettingsSection(
+                          title: 'Testing',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.notifications_active_rounded,
+                              title: 'Send a test notification',
+                              onTap: _testNotification,
+                            ),
+                          ],
+                        ),
                       ],
                     ),
             ),
@@ -403,106 +357,29 @@ class _NotificationSettingsScreenState
     );
   }
 
-  Widget _divider(AppColorsExt ext) => Divider(
-        height: 1,
-        indent: 52,
-        endIndent: 8,
-        color: ext.outline,
-      );
-
-  Widget _buildHeaderCard(AppColorsExt ext) {
-    final tt = Theme.of(context).textTheme;
-    return AppCard(
-      color: ext.reminders.container,
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: ext.reminders.base.withOpacity(0.18),
-              borderRadius: AppRadius.brMd,
-            ),
-            child: Icon(
-              Icons.notifications_active_rounded,
-              color: ext.reminders.onContainer,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Notification Preferences',
-                  style: tt.titleLarge
-                      ?.copyWith(color: ext.reminders.onContainer),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Customize how you receive reminders',
-                  style: tt.bodyMedium?.copyWith(
-                    color: ext.reminders.onContainer.withOpacity(0.8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile(
-    AppColorsExt ext, {
-    required IconData icon,
-    required AccentSwatch accent,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return AppListTile(
-      icon: icon,
-      iconColor: ext.mark(accent),
-      title: title,
-      subtitle: subtitle,
-      onTap: () => onChanged(!value),
-      trailing: Switch.adaptive(
-        value: value,
-        onChanged: onChanged,
-      ),
-    );
-  }
-
-  Widget _buildOptionSelector(
-    AppColorsExt ext, {
-    required String title,
+  /// Full-width label-only duration picker inside a group card.
+  Widget _durationRow(
+    AppColorsExt ext,
+    TextTheme tt, {
+    required String label,
     required List<int> options,
-    required int selectedValue,
-    required String suffix,
+    required int value,
     required ValueChanged<int> onSelected,
   }) {
-    final tt = Theme.of(context).textTheme;
+    final index = options.indexOf(value).clamp(0, options.length - 1);
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: tt.titleLarge?.copyWith(color: ext.textPrimary)),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: options.map((value) {
-              return AppChip(
-                label: '$value$suffix',
-                selected: selectedValue == value,
-                accent: ext.reminders,
-                onTap: () => onSelected(value),
-              );
-            }).toList(),
+          Text(label,
+              style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedToggle(
+            accent: ext.brand,
+            index: index,
+            items: [for (final o in options) SegmentItem(label: '$o')],
+            onChanged: (i) => onSelected(options[i]),
           ),
         ],
       ),

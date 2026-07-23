@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 
 /// Reminders Categories Settings Screen
@@ -13,11 +14,11 @@ class _RemindersCategoriesSettingsScreenState extends State<RemindersCategoriesS
   static const _primaryColor = Color(0xFFEC4899);
 
   final List<Map<String, dynamic>> _categories = [
-    {'name': 'Personal', 'icon': Icons.person, 'color': Colors.blue, 'count': 12},
-    {'name': 'Work', 'icon': Icons.work, 'color': Colors.orange, 'count': 8},
-    {'name': 'Health', 'icon': Icons.favorite, 'color': Colors.red, 'count': 5},
-    {'name': 'Shopping', 'icon': Icons.shopping_cart, 'color': Colors.green, 'count': 3},
-    {'name': 'Finance', 'icon': Icons.attach_money, 'color': Colors.purple, 'count': 4},
+    {'name': 'Personal', 'icon': Symbols.person_rounded, 'color': Colors.blue, 'count': 12},
+    {'name': 'Work', 'icon': Symbols.work_rounded, 'color': Colors.orange, 'count': 8},
+    {'name': 'Health', 'icon': Symbols.favorite_rounded, 'color': Colors.red, 'count': 5},
+    {'name': 'Shopping', 'icon': Symbols.shopping_cart_rounded, 'color': Colors.green, 'count': 3},
+    {'name': 'Finance', 'icon': Symbols.attach_money_rounded, 'color': Colors.purple, 'count': 4},
   ];
 
   @override
@@ -27,10 +28,10 @@ class _RemindersCategoriesSettingsScreenState extends State<RemindersCategoriesS
       appBar: AppBar(
         backgroundColor: const Color(0xFFFDF2F8),
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: const Text('Categories', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
-        actions: [IconButton(icon: Icon(Icons.add_circle_outline, color: _primaryColor), onPressed: _addCategory)],
+        actions: [IconButton(icon: Icon(Symbols.add_circle_rounded, color: _primaryColor), onPressed: _addCategory)],
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -62,8 +63,8 @@ class _RemindersCategoriesSettingsScreenState extends State<RemindersCategoriesS
               ],
             ),
           ),
-          IconButton(icon: Icon(Icons.edit_outlined, color: _primaryColor), onPressed: () => _editCategory(index)),
-          IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _deleteCategory(index)),
+          IconButton(icon: Icon(Symbols.edit_rounded, color: _primaryColor), onPressed: () => _editCategory(index)),
+          IconButton(icon: const Icon(Symbols.delete_rounded, color: Colors.red), onPressed: () => _deleteCategory(index)),
         ],
       ),
     );

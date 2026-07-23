@@ -369,6 +369,21 @@ class AuthService extends ChangeNotifier {
       debugPrint('Google Sign In Error (non-Firebase): $e');
       _isLoading = false;
       notifyListeners();
+      // ApiException 10 / DEVELOPER_ERROR / sign_in_failed means the build's
+      // signing SHA-1 (or OAuth config) isn't registered in the Firebase
+      // project — the #1 cause of Android Google Sign-In failing.
+      final s = e.toString();
+      if (s.contains('ApiException: 10') ||
+          s.contains('DEVELOPER_ERROR') ||
+          s.contains('sign_in_failed') ||
+          s.contains('12500')) {
+        debugPrint(
+            '⚠️ Google Sign-In config error: register this build\'s SHA-1 '
+            'fingerprint on the Firebase Android app, then re-download '
+            'google-services.json.');
+        return "Google Sign-In isn't set up for this app build yet. "
+            'Please try again later or continue as guest.';
+      }
       return 'Google Sign In failed.';
     }
   }

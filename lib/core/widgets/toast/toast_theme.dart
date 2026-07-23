@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// Toast notification types
 enum ToastType {
@@ -127,7 +128,7 @@ class ToastTheme {
           primaryColor: successPrimary,
           secondaryColor: successSecondary,
           gradient: _buildGradient(successPrimary, successSecondary),
-          icon: Icons.check_circle_rounded,
+          icon: Symbols.check_circle_rounded,
           iconColor: successPrimary,
           glowShadow: _buildGlow(successPrimary),
         );
@@ -136,7 +137,7 @@ class ToastTheme {
           primaryColor: errorPrimary,
           secondaryColor: errorSecondary,
           gradient: _buildGradient(errorPrimary, errorSecondary),
-          icon: Icons.error_rounded,
+          icon: Symbols.error_rounded,
           iconColor: errorPrimary,
           glowShadow: _buildGlow(errorPrimary),
         );
@@ -145,7 +146,7 @@ class ToastTheme {
           primaryColor: warningPrimary,
           secondaryColor: warningSecondary,
           gradient: _buildGradient(warningPrimary, warningSecondary),
-          icon: Icons.warning_rounded,
+          icon: Symbols.warning_rounded,
           iconColor: warningPrimary,
           glowShadow: _buildGlow(warningPrimary),
         );
@@ -154,7 +155,7 @@ class ToastTheme {
           primaryColor: infoPrimary,
           secondaryColor: infoSecondary,
           gradient: _buildGradient(infoPrimary, infoSecondary),
-          icon: Icons.info_rounded,
+          icon: Symbols.info_rounded,
           iconColor: infoPrimary,
           glowShadow: _buildGlow(infoPrimary),
         );
@@ -163,7 +164,7 @@ class ToastTheme {
           primaryColor: achievementPrimary,
           secondaryColor: achievementSecondary,
           gradient: _buildGradient(achievementPrimary, achievementSecondary),
-          icon: Icons.star_rounded,
+          icon: Symbols.star_rounded,
           iconColor: achievementPrimary,
           glowShadow: _buildGlow(achievementPrimary),
         );
@@ -172,7 +173,7 @@ class ToastTheme {
           primaryColor: infoPrimary,
           secondaryColor: infoSecondary,
           gradient: _buildGradient(infoPrimary, infoSecondary),
-          icon: Icons.notifications_active_rounded,
+          icon: Symbols.notifications_active_rounded,
           iconColor: infoPrimary,
           glowShadow: _buildGlow(infoPrimary),
         );
@@ -189,52 +190,52 @@ class ToastTheme {
       case ToastFeature.water:
         primary = waterPrimary;
         secondary = waterSecondary;
-        icon = Icons.water_drop_rounded;
+        icon = Symbols.water_drop_rounded;
         break;
       case ToastFeature.medication:
         primary = medicationPrimary;
         secondary = medicationSecondary;
-        icon = Icons.medication_rounded;
+        icon = Symbols.medication_rounded;
         break;
       case ToastFeature.focus:
         primary = focusPrimary;
         secondary = focusSecondary;
-        icon = Icons.track_changes_rounded;
+        icon = Symbols.track_changes_rounded;
         break;
       case ToastFeature.finance:
         primary = financePrimary;
         secondary = financeSecondary;
-        icon = Icons.account_balance_wallet_rounded;
+        icon = Symbols.account_balance_wallet_rounded;
         break;
       case ToastFeature.habit:
         primary = habitPrimary;
         secondary = habitSecondary;
-        icon = Icons.repeat_rounded;
+        icon = Symbols.repeat_rounded;
         break;
       case ToastFeature.mood:
         primary = moodPrimary;
         secondary = moodSecondary;
-        icon = Icons.mood_rounded;
+        icon = Symbols.mood_rounded;
         break;
       case ToastFeature.exam:
         primary = examPrimary;
         secondary = examSecondary;
-        icon = Icons.school_rounded;
+        icon = Symbols.school_rounded;
         break;
       case ToastFeature.fitness:
         primary = fitnessPrimary;
         secondary = fitnessSecondary;
-        icon = Icons.fitness_center_rounded;
+        icon = Symbols.fitness_center_rounded;
         break;
       case ToastFeature.period:
         primary = periodPrimary;
         secondary = periodSecondary;
-        icon = Icons.favorite_rounded;
+        icon = Symbols.favorite_rounded;
         break;
       case ToastFeature.notes:
         primary = notesPrimary;
         secondary = notesSecondary;
-        icon = Icons.note_alt_rounded;
+        icon = Symbols.note_alt_rounded;
         break;
       case ToastFeature.general:
         return getThemeForType(type);
@@ -242,11 +243,11 @@ class ToastTheme {
 
     // Override icon based on type if needed
     if (type == ToastType.error) {
-      icon = Icons.error_rounded;
+      icon = Symbols.error_rounded;
     } else if (type == ToastType.warning) {
-      icon = Icons.warning_rounded;
+      icon = Symbols.warning_rounded;
     } else if (type == ToastType.achievement) {
-      icon = Icons.star_rounded;
+      icon = Symbols.star_rounded;
     }
 
     return ToastThemeData(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -22,8 +23,8 @@ class FinanceToast {
       title: '💰 $type Added',
       message: '$symbol$formattedAmount recorded successfully',
       customIcon: type.toLowerCase() == 'income' 
-          ? Icons.arrow_downward_rounded 
-          : Icons.arrow_upward_rounded,
+          ? Symbols.arrow_downward_rounded 
+          : Symbols.arrow_upward_rounded,
     );
   }
 
@@ -64,7 +65,7 @@ class FinanceToast {
       feature: ToastFeature.finance,
       title: '⚠️ Budget Alert',
       message: '$category is at $percentUsed% of budget',
-      customIcon: Icons.warning_amber_rounded,
+      customIcon: Symbols.warning_amber_rounded,
     );
   }
 

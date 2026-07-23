@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/reminder_reschedule_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -88,10 +89,7 @@ class _WaterReminderSettingsScreenState
   }
 
   Future<void> _addCustomTime() async {
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
+    final time = await AppTimePicker.show(context, initial: TimeOfDay.now());
     if (time != null) {
       setState(() {
         _reminderTimes.add(time);
@@ -167,9 +165,9 @@ class _WaterReminderSettingsScreenState
         children: [
           AppHeader(
             title: 'Water Reminders',
-            icon: Icons.water_drop_rounded,
+            icon: Symbols.water_drop_rounded,
             leading: AppIconButton(
-              icon: Icons.arrow_back_rounded,
+              icon: Symbols.arrow_back_rounded,
               filled: false,
               onPressed: () => Navigator.pop(context),
             ),
@@ -183,7 +181,7 @@ class _WaterReminderSettingsScreenState
                 const SizedBox(height: AppSpacing.lg),
                 SectionHeader(
                   title: 'Reminder Schedule',
-                  icon: Icons.schedule_rounded,
+                  icon: Symbols.schedule_rounded,
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 _buildIntervalCard(ext),
@@ -193,14 +191,14 @@ class _WaterReminderSettingsScreenState
                 AppButton(
                   label: 'Add Custom Time',
                   variant: AppButtonVariant.secondary,
-                  leadingIcon: Icons.add_rounded,
+                  leadingIcon: Symbols.add_rounded,
                   fullWidth: true,
                   onPressed: _addCustomTime,
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 SectionHeader(
                   title: 'Adaptive Behavior',
-                  icon: Icons.auto_awesome_rounded,
+                  icon: Symbols.auto_awesome_rounded,
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 _buildAdaptiveCard(ext),
@@ -232,7 +230,7 @@ class _WaterReminderSettingsScreenState
               color: s.container,
               borderRadius: AppRadius.brMd,
             ),
-            child: Icon(Icons.water_drop_rounded, color: s.onContainer),
+            child: Icon(Symbols.water_drop_rounded, color: s.onContainer),
           ),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
@@ -253,10 +251,10 @@ class _WaterReminderSettingsScreenState
               ],
             ),
           ),
-          Switch(
+          AppSwitch(
             value: _isEnabled,
             onChanged: (val) => setState(() => _isEnabled = val),
-            activeThumbColor: ext.mark(s),
+            accent: s,
           ),
         ],
       ),
@@ -277,16 +275,14 @@ class _WaterReminderSettingsScreenState
             children: [
               Expanded(
                 child: _buildTimeField(ext, 'Start', _startTime, () async {
-                  final time = await showTimePicker(
-                      context: context, initialTime: _startTime);
+                  final time = await AppTimePicker.show(context, initial: _startTime);
                   if (time != null) setState(() => _startTime = time);
                 }),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: _buildTimeField(ext, 'End', _endTime, () async {
-                  final time = await showTimePicker(
-                      context: context, initialTime: _endTime);
+                  final time = await AppTimePicker.show(context, initial: _endTime);
                   if (time != null) setState(() => _endTime = time);
                 }),
               ),
@@ -308,7 +304,7 @@ class _WaterReminderSettingsScreenState
           AppButton(
             label: 'Generate Times',
             variant: AppButtonVariant.tonal,
-            leadingIcon: Icons.auto_fix_high_rounded,
+            leadingIcon: Symbols.auto_fix_high_rounded,
             fullWidth: true,
             onPressed: _generateIntervalReminders,
           ),
@@ -348,7 +344,7 @@ class _WaterReminderSettingsScreenState
     if (_reminderTimes.isEmpty) {
       return AppCard(
         child: EmptyState(
-          icon: Icons.schedule_rounded,
+          icon: Symbols.schedule_rounded,
           title: 'No reminder times set',
           message: 'Generate times by interval or add a custom time.',
         ),
@@ -370,12 +366,12 @@ class _WaterReminderSettingsScreenState
                 color: s.container,
                 borderRadius: AppRadius.brSm,
               ),
-              child: Icon(Icons.alarm_rounded, color: s.onContainer, size: 20),
+              child: Icon(Symbols.alarm_rounded, color: s.onContainer, size: 20),
             ),
             title: Text(time.format(context),
                 style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
             trailing: IconButton(
-              icon: Icon(Icons.close_rounded, color: ext.mark(ext.error)),
+              icon: Icon(Symbols.close_rounded, color: ext.mark(ext.error)),
               onPressed: () => _removeTime(index),
             ),
           );
@@ -394,7 +390,7 @@ class _WaterReminderSettingsScreenState
         children: [
           _buildToggleRow(
             ext,
-            icon: Icons.emoji_events_rounded,
+            icon: Symbols.emoji_events_rounded,
             title: 'Pause when goal reached',
             subtitle: "Stop today's reminders once you hit your goal",
             value: _pauseWhenGoalReached,
@@ -403,7 +399,7 @@ class _WaterReminderSettingsScreenState
           Divider(height: 1, color: ext.outline),
           _buildToggleRow(
             ext,
-            icon: Icons.bedtime_rounded,
+            icon: Symbols.bedtime_rounded,
             title: 'Respect quiet hours',
             subtitle:
                 'Skip reminders outside ${_formatHour(wake)}–${_formatHour(bed)}',
@@ -455,10 +451,10 @@ class _WaterReminderSettingsScreenState
               ],
             ),
           ),
-          Switch(
+          AppSwitch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: ext.mark(s),
+            accent: s,
           ),
         ],
       ),

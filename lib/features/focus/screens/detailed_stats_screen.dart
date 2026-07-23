@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/haptic_service.dart';
 import '../models/detailed_stats.dart';
@@ -73,14 +74,14 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                               () => _selectedPeriod = StatsPeriod.values[i]),
                           items: const [
                             SegmentItem(
-                                icon: Icons.today_rounded, label: 'Day'),
+                                icon: Symbols.today_rounded, label: 'Day'),
                             SegmentItem(
-                                icon: Icons.view_week_rounded, label: 'Week'),
+                                icon: Symbols.view_week_rounded, label: 'Week'),
                             SegmentItem(
-                                icon: Icons.calendar_month_rounded,
+                                icon: Symbols.calendar_month_rounded,
                                 label: 'Month'),
                             SegmentItem(
-                                icon: Icons.calendar_today_rounded,
+                                icon: Symbols.calendar_today_rounded,
                                 label: 'Year'),
                           ],
                         ),
@@ -112,16 +113,16 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
     return AppHeader(
       title: 'Statistics',
       greeting: 'Your focus insights',
-      icon: Icons.insights_rounded,
+      icon: Symbols.insights_rounded,
       accent: ext.focus,
       leading: AppIconButton(
-        icon: Icons.arrow_back_rounded,
+        icon: Symbols.arrow_back_rounded,
         accent: ext.focus,
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
         AppIconButton(
-          icon: Icons.park_rounded,
+          icon: Symbols.park_rounded,
           accent: ext.focus,
           onPressed: () {
             _hapticService.navigation();
@@ -187,13 +188,13 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildOverviewStat(
-              '${hours}h ${mins}m', 'Focus Time', Icons.timer_rounded, heroFg),
+              '${hours}h ${mins}m', 'Focus Time', Symbols.timer_rounded, heroFg),
           Container(width: 1, height: 50, color: heroFg.withOpacity(0.24)),
           _buildOverviewStat(
-              '$sessions', 'Sessions', Icons.flag_rounded, heroFg),
+              '$sessions', 'Sessions', Symbols.flag_rounded, heroFg),
           Container(width: 1, height: 50, color: heroFg.withOpacity(0.24)),
           _buildOverviewStat('${(completionRate * 100).toInt()}%', 'Completed',
-              Icons.check_circle_rounded, heroFg),
+              Symbols.check_circle_rounded, heroFg),
         ],
       ),
     );
@@ -331,7 +332,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
 
   Widget _buildChartEmptyState(AppColorsExt ext) {
     return EmptyState(
-      icon: Icons.bar_chart_rounded,
+      icon: Symbols.bar_chart_rounded,
       title: 'No focus sessions yet',
       message: 'Complete a session to see your trend',
       accent: ext.focus,
@@ -749,7 +750,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
               ],
             ),
           ),
-          Icon(Icons.arrow_forward_rounded, color: ext.mark(ext.focus), size: 22),
+          Icon(Symbols.arrow_forward_rounded, color: ext.mark(ext.focus), size: 22),
         ],
       ),
     );

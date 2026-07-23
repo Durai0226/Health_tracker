@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_tab_widgets.dart';
@@ -100,7 +101,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.arrow_back_rounded, size: 20),
+              child: const Icon(Symbols.arrow_back_rounded, size: 20),
             ),
           ),
           const SizedBox(width: 16),
@@ -120,7 +121,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                 color: AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.person_add_rounded, color: AppColors.primary, size: 20),
+              child: const Icon(Symbols.person_add_rounded, color: AppColors.primary, size: 20),
             ),
           ),
         ],
@@ -410,10 +411,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                     children: [
                       Icon(
                         entry.rankImproved
-                            ? Icons.arrow_upward_rounded
+                            ? Symbols.arrow_upward_rounded
                             : entry.rankDeclined
-                                ? Icons.arrow_downward_rounded
-                                : Icons.remove_rounded,
+                                ? Symbols.arrow_downward_rounded
+                                : Symbols.remove_rounded,
                         size: 12,
                         color: entry.rankImproved
                             ? Colors.green
@@ -497,7 +498,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _showFriendCodeDialog,
-              icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+              icon: const Icon(Symbols.person_add_rounded, color: Colors.white),
               label: const Text('Add Friend', style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -579,7 +580,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                             const SnackBar(content: Text('Code copied!')),
                           );
                         },
-                        icon: const Icon(Icons.copy_rounded, color: AppColors.primary),
+                        icon: const Icon(Symbols.content_copy_rounded, color: AppColors.primary),
                       ),
                     ],
                   ),

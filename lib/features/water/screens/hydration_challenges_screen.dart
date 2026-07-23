@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_tab_widgets.dart';
@@ -119,7 +120,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
       pinned: true,
       backgroundColor: Colors.purple.shade600,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+        icon: const Icon(Symbols.arrow_back_rounded, color: Colors.white),
         onPressed: () => Navigator.pop(context),
       ),
       flexibleSpace: FlexibleSpaceBar(
@@ -161,19 +162,19 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildStatItem(
-            icon: Icons.flash_on,
+            icon: Symbols.flash_on_rounded,
             value: '${_activeChallenges.length}',
             label: 'Active',
           ),
           Container(width: 1, height: 50, color: Colors.white24),
           _buildStatItem(
-            icon: Icons.check_circle,
+            icon: Symbols.check_circle_rounded,
             value: '${_completedChallenges.length}',
             label: 'Completed',
           ),
           Container(width: 1, height: 50, color: Colors.white24),
           _buildStatItem(
-            icon: Icons.stars,
+            icon: Symbols.stars_rounded,
             value: '$_totalPoints',
             label: 'Points',
           ),
@@ -228,7 +229,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
   Widget _buildActiveTab() {
     if (_activeChallenges.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.flash_on_outlined,
+        icon: Symbols.flash_on_rounded,
         title: 'No Active Challenges',
         subtitle: 'Start a challenge from the Available tab',
       );
@@ -246,7 +247,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
   Widget _buildAvailableTab() {
     if (_availableChallenges.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.emoji_events_outlined,
+        icon: Symbols.emoji_events_rounded,
         title: 'All Challenges Started',
         subtitle: 'Complete your active challenges to unlock more',
       );
@@ -291,7 +292,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
   Widget _buildCompletedTab() {
     if (_completedChallenges.isEmpty) {
       return _buildEmptyState(
-        icon: Icons.check_circle_outline,
+        icon: Symbols.check_circle_rounded,
         title: 'No Completed Challenges',
         subtitle: 'Complete challenges to earn points and badges',
       );
@@ -448,7 +449,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.timer_outlined, size: 16, color: AppColors.textSecondary),
+                  const Icon(Symbols.timer_rounded, size: 16, color: AppColors.textSecondary),
                   const SizedBox(width: 4),
                   Text(
                     '${challenge.daysRemaining} days left',
@@ -474,7 +475,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.star, size: 14, color: Colors.amber),
+                        const Icon(Symbols.star_rounded, size: 14, color: Colors.amber),
                         const SizedBox(width: 4),
                         Text(
                           '+${challenge.rewardPoints}',
@@ -546,14 +547,14 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today, size: 12, color: AppColors.textSecondary),
+                    const Icon(Symbols.calendar_today_rounded, size: 12, color: AppColors.textSecondary),
                     const SizedBox(width: 4),
                     Text(
                       challenge.durationLabel,
                       style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                     ),
                     const SizedBox(width: 12),
-                    const Icon(Icons.star, size: 12, color: Colors.amber),
+                    const Icon(Symbols.star_rounded, size: 12, color: Colors.amber),
                     const SizedBox(width: 4),
                     Text(
                       '+${challenge.rewardPoints}',
@@ -611,7 +612,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    const Icon(Symbols.check_circle_rounded, color: Colors.green, size: 20),
                   ],
                 ),
                 if (challenge.completedAt != null)
@@ -633,7 +634,7 @@ class _HydrationChallengesScreenState extends State<HydrationChallengesScreen>
             ),
             child: Row(
               children: [
-                const Icon(Icons.star, size: 14, color: Colors.amber),
+                const Icon(Symbols.star_rounded, size: 14, color: Colors.amber),
                 const SizedBox(width: 4),
                 Text(
                   '+${challenge.rewardPoints}',

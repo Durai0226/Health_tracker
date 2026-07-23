@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,12 +18,12 @@ class _RemindersSoundsSettingsScreenState extends State<RemindersSoundsSettingsS
   static const _primaryColor = Color(0xFFEC4899);
 
   final List<Map<String, dynamic>> _sounds = [
-    {'id': 'chime', 'name': 'Gentle Chime', 'icon': Icons.music_note},
-    {'id': 'bell', 'name': 'Classic Bell', 'icon': Icons.notifications},
-    {'id': 'ping', 'name': 'Quick Ping', 'icon': Icons.circle_notifications},
-    {'id': 'melody', 'name': 'Soft Melody', 'icon': Icons.audiotrack},
-    {'id': 'alert', 'name': 'Alert Tone', 'icon': Icons.warning},
-    {'id': 'none', 'name': 'Silent', 'icon': Icons.volume_off},
+    {'id': 'chime', 'name': 'Gentle Chime', 'icon': Symbols.music_note_rounded},
+    {'id': 'bell', 'name': 'Classic Bell', 'icon': Symbols.notifications_rounded},
+    {'id': 'ping', 'name': 'Quick Ping', 'icon': Symbols.circle_notifications_rounded},
+    {'id': 'melody', 'name': 'Soft Melody', 'icon': Symbols.audiotrack_rounded},
+    {'id': 'alert', 'name': 'Alert Tone', 'icon': Symbols.warning_rounded},
+    {'id': 'none', 'name': 'Silent', 'icon': Symbols.volume_off_rounded},
   ];
 
   @override
@@ -64,7 +65,7 @@ class _RemindersSoundsSettingsScreenState extends State<RemindersSoundsSettingsS
       appBar: AppBar(
         backgroundColor: const Color(0xFFFDF2F8),
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: const Text('Notification Sounds', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
       ),
@@ -104,8 +105,8 @@ class _RemindersSoundsSettingsScreenState extends State<RemindersSoundsSettingsS
             ),
             const SizedBox(width: 16),
             Expanded(child: Text(sound['name'], style: TextStyle(fontWeight: FontWeight.w600, color: isSelected ? _primaryColor : Colors.black87))),
-            IconButton(icon: Icon(Icons.play_circle_outline, color: _primaryColor), onPressed: () => _playPreview(sound['id'])),
-            if (isSelected) Icon(Icons.check_circle, color: _primaryColor),
+            IconButton(icon: Icon(Symbols.play_circle_rounded, color: _primaryColor), onPressed: () => _playPreview(sound['id'])),
+            if (isSelected) Icon(Symbols.check_circle_rounded, color: _primaryColor),
           ],
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
@@ -83,17 +84,17 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
         children: [
           AppHeader(
             title: 'BP Report',
-            icon: Icons.assessment_rounded,
+            icon: Symbols.assessment_rounded,
             accent: accent,
             leading: AppIconButton(
-              icon: Icons.arrow_back_rounded,
+              icon: Symbols.arrow_back_rounded,
               filled: false,
               accent: accent,
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
               AppIconButton(
-                icon: Icons.ios_share_rounded,
+                icon: Symbols.ios_share_rounded,
                 filled: false,
                 accent: accent,
                 onPressed: _export,
@@ -111,20 +112,20 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
                         index: _windowIndex,
                         accent: accent,
                         items: const [
-                          SegmentItem(icon: Icons.calendar_view_week_rounded, label: '7d'),
-                          SegmentItem(icon: Icons.calendar_view_month_rounded, label: '30d'),
-                          SegmentItem(icon: Icons.calendar_today_rounded, label: '90d'),
+                          SegmentItem(icon: Symbols.calendar_view_week_rounded, label: '7d'),
+                          SegmentItem(icon: Symbols.calendar_view_month_rounded, label: '30d'),
+                          SegmentItem(icon: Symbols.calendar_today_rounded, label: '90d'),
                         ],
                         onChanged: (i) => setState(() => _windowIndex = i),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       _overview(ext, accent, data),
                       const SizedBox(height: AppSpacing.lg),
-                      SectionHeader(title: 'Trend', icon: Icons.show_chart_rounded, accent: accent),
+                      SectionHeader(title: 'Trend', icon: Symbols.show_chart_rounded, accent: accent),
                       const SizedBox(height: AppSpacing.sm),
                       AppCard(child: _trend(ext, accent, data)),
                       const SizedBox(height: AppSpacing.lg),
-                      SectionHeader(title: 'Category breakdown', icon: Icons.donut_small_rounded, accent: accent),
+                      SectionHeader(title: 'Category breakdown', icon: Symbols.donut_small_rounded, accent: accent),
                       const SizedBox(height: AppSpacing.sm),
                       _breakdown(ext, data),
                     ],
@@ -144,19 +145,19 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
       StatTile(
         value: avgSys != null ? '${avgSys.round()}/${avgDia!.round()}' : '—',
         label: 'Average',
-        icon: Icons.favorite_rounded,
+        icon: Symbols.favorite_rounded,
         accent: accent,
       ),
       StatTile(
         value: '${data.length}',
         label: 'Readings',
-        icon: Icons.numbers_rounded,
+        icon: Symbols.numbers_rounded,
         accent: accent,
       ),
       StatTile(
         value: avgPulse != null ? '${avgPulse.round()}' : '—',
         label: 'Avg pulse',
-        icon: Icons.monitor_heart_rounded,
+        icon: Symbols.monitor_heart_rounded,
         accent: accent,
       ),
     ]);

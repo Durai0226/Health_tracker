@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
@@ -6,6 +7,7 @@ import '../models/medicine_log.dart';
 import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
+import '../services/drug_interaction_service.dart';
 import '../../../core/services/haptic_service.dart';
 
 class NunitoTakeMedicationSheet extends StatefulWidget {
@@ -125,7 +127,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     return AppBottomSheet.show<SkipReason>(
       context,
       title: 'Why are you skipping?',
-      icon: Icons.help_outline_rounded,
+      icon: Symbols.help_rounded,
       accent: ext.medicine,
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
@@ -133,7 +135,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
         children: [
           for (final reason in SkipReason.values)
             AppListTile(
-              icon: Icons.radio_button_unchecked_rounded,
+              icon: Symbols.radio_button_unchecked_rounded,
               title: reason.displayName,
               accent: ext.medicine,
               trailing: const SizedBox.shrink(),
@@ -241,6 +243,14 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
 
   Widget _buildMedicineInfo(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
+    // One calm line of context: the user's own "why" if set, else a general
+    // reference use from the on-device monograph. Null → shown nothing.
+    final purpose = widget.medicine.purpose?.trim();
+    final forContext = (purpose != null && purpose.isNotEmpty)
+        ? purpose
+        : DrugInteractionService().primaryUses(
+            name: widget.medicine.name,
+            genericName: widget.medicine.genericName);
     return Row(
       children: [
         NunitoPillVisual(
@@ -269,6 +279,13 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
                   style: tt.bodySmall?.copyWith(color: ext.mark(ext.medicine)),
                 ),
               ],
+              if (forContext != null && forContext.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'For $forContext',
+                  style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                ),
+              ],
             ],
           ),
         ),
@@ -286,7 +303,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppListTile(
-          icon: Icons.tune_rounded,
+          icon: Symbols.tune_rounded,
           title: 'Add details',
           subtitle: _showDetails
               ? 'Mood, side effects and notes'
@@ -296,8 +313,8 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
           accent: ext.medicine,
           trailing: Icon(
             _showDetails
-                ? Icons.expand_less_rounded
-                : Icons.expand_more_rounded,
+                ? Symbols.expand_less_rounded
+                : Symbols.expand_more_rounded,
             color: ext.textSecondary,
           ),
           onTap: () {
@@ -392,7 +409,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
         // Primary action - Take
         AppButton(
           label: 'Take Medication',
-          leadingIcon: Icons.check_rounded,
+          leadingIcon: Symbols.check_rounded,
           variant: AppButtonVariant.primary,
           size: AppButtonSize.lg,
           accent: ext.success,
@@ -407,7 +424,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
             Expanded(
               child: AppButton(
                 label: 'Snooze',
-                leadingIcon: Icons.snooze_rounded,
+                leadingIcon: Symbols.snooze_rounded,
                 variant: AppButtonVariant.secondary,
                 accent: ext.medicine,
                 onPressed: _isLoading ? null : _snoozeMedication,
@@ -417,7 +434,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
             Expanded(
               child: AppButton(
                 label: 'Skip',
-                leadingIcon: Icons.close_rounded,
+                leadingIcon: Symbols.close_rounded,
                 variant: AppButtonVariant.tonal,
                 accent: ext.warning,
                 onPressed: _isLoading ? null : _skipMedication,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../theme/aqua_theme.dart';
 import '../widgets/aqua_glass_card.dart';
@@ -146,7 +147,7 @@ class _AquaStatisticsScreenState extends State<AquaStatisticsScreen>
             boxShadow: AquaTheme.subtleShadow,
           ),
           child: Icon(
-            Icons.arrow_back_ios_rounded,
+            Symbols.arrow_back_rounded,
             color: AquaTheme.getTextPrimary(context),
             size: 18,
           ),
@@ -168,7 +169,7 @@ class _AquaStatisticsScreenState extends State<AquaStatisticsScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
-                        Icons.analytics_rounded,
+                        Symbols.analytics_rounded,
                         color: Colors.white,
                         size: 20,
                       ),
@@ -246,25 +247,25 @@ class _AquaStatisticsScreenState extends State<AquaStatisticsScreen>
       childAspectRatio: 1.4,
       children: [
         _buildStatCard(
-          icon: Icons.water_drop_rounded,
+          icon: Symbols.water_drop_rounded,
           value: '${(totalMl / 1000).toStringAsFixed(1)}L',
           label: 'Total Intake',
           color: AquaTheme.waterPrimary,
         ),
         _buildStatCard(
-          icon: Icons.show_chart_rounded,
+          icon: Symbols.show_chart_rounded,
           value: '${avgMl}ml',
           label: 'Daily Average',
           color: const Color(0xFF8B5CF6),
         ),
         _buildStatCard(
-          icon: Icons.local_fire_department_rounded,
+          icon: Symbols.local_fire_department_rounded,
           value: '$streak',
           label: 'Day Streak',
           color: const Color(0xFFFF9500),
         ),
         _buildStatCard(
-          icon: Icons.check_circle_rounded,
+          icon: Symbols.check_circle_rounded,
           value: '${(goalRate * 100).toInt()}%',
           label: 'Goal Rate',
           color: AquaTheme.success,
@@ -341,7 +342,7 @@ class _AquaStatisticsScreenState extends State<AquaStatisticsScreen>
                   gradient: AquaTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 16),
+                child: const Icon(Symbols.bar_chart_rounded, color: Colors.white, size: 16),
               ),
               const SizedBox(width: 10),
               Text(
@@ -505,7 +506,7 @@ class _AquaStatisticsScreenState extends State<AquaStatisticsScreen>
                   gradient: AquaTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.pie_chart_rounded, color: Colors.white, size: 16),
+                child: const Icon(Symbols.pie_chart_rounded, color: Colors.white, size: 16),
               ),
               const SizedBox(width: 10),
               Text(
@@ -582,13 +583,13 @@ class _AquaStatisticsScreenState extends State<AquaStatisticsScreen>
   Widget _buildInsights() {
     final insights = [
       {
-        'icon': Icons.trending_up_rounded,
+        'icon': Symbols.trending_up_rounded,
         'title': 'Great Progress!',
         'message': 'You\'ve been consistent this week. Keep it up!',
         'color': AquaTheme.success,
       },
       {
-        'icon': Icons.lightbulb_outline_rounded,
+        'icon': Symbols.lightbulb_rounded,
         'title': 'Tip',
         'message': 'Try drinking a glass of water first thing in the morning.',
         'color': AquaTheme.warning,
@@ -600,7 +601,7 @@ class _AquaStatisticsScreenState extends State<AquaStatisticsScreen>
       children: [
         AquaSectionHeader(
           title: 'Insights',
-          icon: Icons.psychology_rounded,
+          icon: Symbols.psychology_rounded,
           beverageId: 'water',
         ),
         const SizedBox(height: AquaTheme.spacingS),

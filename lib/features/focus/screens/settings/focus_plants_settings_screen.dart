@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 
 /// Focus Plants & Garden Settings Screen
@@ -32,7 +33,7 @@ class _FocusPlantsSettingsScreenState extends State<FocusPlantsSettingsScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFF5F5F5),
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: const Text('Plants & Garden', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
       ),

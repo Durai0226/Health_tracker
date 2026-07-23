@@ -5,6 +5,7 @@ import '../../features/medication/models/medicine.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import 'clean_storage_service.dart';
+import 'health_cloud_sync_service.dart';
 
 class CloudSyncService {
   static final CloudSyncService _instance = CloudSyncService._internal();
@@ -29,6 +30,8 @@ class CloudSyncService {
       await Future.wait([
         _syncMedicines(userId),
         _syncWaterIntake(userId),
+        // Period (opt-in) / Steps / Sleep — LWW + tombstones.
+        HealthCloudSyncService.instance.syncAll(userId),
       ]);
 
       debugPrint('Cloud sync completed successfully');

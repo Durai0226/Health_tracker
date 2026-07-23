@@ -1,14 +1,15 @@
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
-import '../../../core/services/llm_service.dart';
-import '../../../core/ai/ai_assistant.dart';
-import '../../../core/ai/ai_types.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import 'notification_settings_screen.dart';
+import 'premium_screen.dart';
+import '../../../core/services/premium_service.dart';
+import '../../insights/screens/ai_assistant_screen.dart';
 import 'haptic_settings_screen.dart';
 import 'vitavibe_settings_screen.dart';
 import '../../../core/services/vitavibe_service.dart';
@@ -114,7 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'and reminders from this device. This cannot be undone. Consider '
           'exporting a copy first.',
       confirmText: 'Delete everything',
-      icon: Icons.delete_forever_rounded,
+      icon: Symbols.delete_forever_rounded,
       isDangerous: true,
     );
     if (confirm != true || !mounted) return;
@@ -181,10 +182,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   if (isGuest)
                     _section(
                       title: 'Account',
-                      icon: Icons.account_circle_outlined,
+                      icon: Symbols.account_circle_rounded,
                       tiles: [
                         AppListTile(
-                          icon: Icons.person_add_rounded,
+                          icon: Symbols.person_add_rounded,
                           iconColor: ext.mark(ext.brand),
                           title: 'Sign in with Google',
                           subtitle: 'Sync your data and access from anywhere',
@@ -202,7 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               : null,
                         ),
                         AppListTile(
-                          icon: Icons.logout_rounded,
+                          icon: Symbols.logout_rounded,
                           iconColor: ext.mark(ext.error),
                           title: 'Sign Out',
                           subtitle: 'Return to welcome screen',
@@ -213,17 +214,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   else
                     _section(
                       title: 'Account',
-                      icon: Icons.account_circle_outlined,
+                      icon: Symbols.account_circle_rounded,
                       tiles: [
                         AppListTile(
-                          icon: Icons.person_rounded,
+                          icon: Symbols.person_rounded,
                           iconColor: ext.mark(ext.brand),
                           title: currentUser?.name ?? 'User',
                           subtitle: currentUser?.email ?? '',
                           trailing: const SizedBox.shrink(),
                         ),
                         AppListTile(
-                          icon: Icons.logout_rounded,
+                          icon: Symbols.logout_rounded,
                           iconColor: ext.mark(ext.error),
                           title: 'Sign Out',
                           subtitle: "You'll continue as a guest",
@@ -235,19 +236,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // ---- Appearance (ONB-5: System / Light / Dark) ----
                   SectionHeader(
                     title: 'Appearance',
-                    icon: Icons.palette_outlined,
+                    icon: Symbols.palette_rounded,
                     accent: ext.brand,
                   ),
                   _buildAppearanceCard(),
                   const SizedBox(height: AppSpacing.lg),
 
+                  // ---- DailyMinder Plus ----
+                  _section(
+                    title: 'Upgrade',
+                    icon: Symbols.workspace_premium_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Symbols.workspace_premium_rounded,
+                        iconColor: ext.mark(ext.brand),
+                        title: 'DailyMinder Plus',
+                        subtitle: PremiumService.isActive
+                            ? 'Active ✓ — thanks for your support'
+                            : 'Unlimited meds, reports, caregiver sharing, ad-free',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const PremiumScreen())),
+                      ),
+                    ],
+                  ),
+
                   // ---- General ----
                   _section(
                     title: 'General',
-                    icon: Icons.tune_rounded,
+                    icon: Symbols.tune_rounded,
                     tiles: [
                       AppListTile(
-                        icon: Icons.notifications_outlined,
+                        icon: Symbols.notifications_rounded,
                         iconColor: ext.mark(ext.info),
                         title: 'Notifications',
                         subtitle: 'Reminder sounds and timing',
@@ -266,41 +287,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   // ---- AI Assistant ----
+                  // One clear entry. Everything AI — the explainer, Memory, and
+                  // Privacy — lives inside AiAssistantScreen; engine/online-AI/key
+                  // are hidden developer controls unlocked there (tap version 7×).
                   _section(
-                    title: 'AI Assistant',
-                    icon: Icons.auto_awesome_rounded,
+                    title: 'Assistant',
+                    icon: Symbols.auto_awesome_rounded,
                     tiles: [
                       AppListTile(
-                        icon: Icons.auto_awesome_rounded,
+                        icon: Symbols.auto_awesome_rounded,
                         iconColor: ext.mark(ext.focus),
                         title: 'AI Assistant',
-                        subtitle:
-                            'On-device AI is on (free). Tap to manage cloud AI.\n'
-                            'Active: ${_activeEngineLabel()}',
-                        onTap: _manageAiKey,
-                      ),
-                      AppListTile(
-                        icon: Icons.tune_rounded,
-                        iconColor: ext.mark(ext.focus),
-                        title: 'AI engine',
-                        subtitle:
-                            'Which engine to prefer · ${_enginePrefLabel()}',
-                        onTap: _pickEnginePreference,
-                      ),
-                      AppListTile(
-                        icon: Icons.cloud_outlined,
-                        iconColor: ext.mark(ext.info),
-                        title: 'Use cloud AI (optional)',
-                        subtitle:
-                            'Off by default. Uses a cloud model for richer answers '
-                            '— sends data off-device; needs a key (dev/beta).',
-                        trailing: Switch(
-                          value: AiAssistant().cloudConsent,
-                          onChanged: (value) async {
-                            await AiAssistant().setCloudConsent(value);
-                            if (mounted) setState(() {});
-                          },
-                        ),
+                        subtitle: 'Private, on-device · memory & data',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AiAssistantScreen())),
                       ),
                     ],
                   ),
@@ -308,10 +310,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // ---- Data ----
                   _section(
                     title: 'Data',
-                    icon: Icons.storage_rounded,
+                    icon: Symbols.storage_rounded,
                     tiles: [
                       AppListTile(
-                        icon: Icons.ios_share_rounded,
+                        icon: Symbols.ios_share_rounded,
                         iconColor: ext.mark(ext.success),
                         title: 'Export a copy',
                         subtitle: 'Save a backup file and share it',
@@ -329,7 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             : null,
                       ),
                       AppListTile(
-                        icon: Icons.save_alt_rounded,
+                        icon: Symbols.save_alt_rounded,
                         iconColor: ext.mark(ext.warning),
                         title: 'Backup & Restore',
                         subtitle: 'Export or import your data as a file',
@@ -342,7 +344,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                       ),
                       AppListTile(
-                        icon: Icons.cloud_upload_outlined,
+                        icon: Symbols.cloud_upload_rounded,
                         iconColor: ext.mark(ext.info),
                         title: 'Cloud Backup',
                         subtitle: _authService.isAuthenticated
@@ -366,11 +368,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                         trailing: _authService.isAuthenticated
                             ? null
-                            : Icon(Icons.lock_outline_rounded,
+                            : Icon(Symbols.lock_rounded,
                                 color: ext.textTertiary),
                       ),
                       AppListTile(
-                        icon: Icons.delete_forever_rounded,
+                        icon: Symbols.delete_forever_rounded,
                         iconColor: ext.mark(ext.error),
                         title: 'Delete all data',
                         subtitle: 'Permanently erase everything on this device',
@@ -393,10 +395,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // ---- About ----
                   _section(
                     title: 'About',
-                    icon: Icons.info_outline_rounded,
+                    icon: Symbols.info_rounded,
                     tiles: [
                       AppListTile(
-                        icon: Icons.info_outline_rounded,
+                        icon: Symbols.info_rounded,
                         iconColor: ext.mark(ext.brand),
                         title: 'About DailyMinder',
                         subtitle: 'Version 1.0.0',
@@ -407,6 +409,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             applicationVersion: '1.0.0',
                             applicationIcon: const AppLogo.mark(size: 44),
                             applicationLegalese: '© 2026 DailyMinder',
+                            children: const [
+                              SizedBox(height: 12),
+                              Text(
+                                'DailyMinder is a general wellness and reminder '
+                                'tool — not a medical device, and not a source of '
+                                'diagnosis or treatment. Always confirm health '
+                                'decisions with a qualified clinician or '
+                                'pharmacist. In an emergency, contact your local '
+                                'emergency services.',
+                              ),
+                            ],
                           );
                         },
                       ),
@@ -419,162 +432,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  /// Human-readable label for the engine that will serve AI requests now.
-  String _activeEngineLabel() {
-    switch (AiAssistant().activeKind) {
-      case AiEngineKind.cloud:
-        return 'Cloud';
-      case AiEngineKind.onDevice:
-        return 'On-device';
-      case AiEngineKind.ruleBased:
-        return 'On-device';
-    }
-  }
-
-  String _enginePrefLabel() {
-    switch (AiAssistant().preference) {
-      case AiEnginePreference.auto:
-        return 'Automatic';
-      case AiEnginePreference.localOnly:
-        return 'On-device only';
-      case AiEnginePreference.onDevice:
-        return 'On-device AI';
-      case AiEnginePreference.cloud:
-        return 'Prefer cloud';
-    }
-  }
-
-  /// Let the user choose which AI engine to prefer (wires the previously-unused
-  /// AiAssistant.setPreference). "On-device only" guarantees nothing leaves the
-  /// phone even if cloud consent is on.
-  Future<void> _pickEnginePreference() async {
-    final ext = AppColorsExt.of(context);
-    const options = [
-      (AiEnginePreference.auto, 'Automatic', 'Best available: on-device first, cloud only with consent'),
-      (AiEnginePreference.localOnly, 'On-device only', 'Never use the cloud — fully private, works offline'),
-      (AiEnginePreference.cloud, 'Prefer cloud', 'Use the cloud model for richer answers (needs consent)'),
-    ];
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: ext.surface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        final current = AiAssistant().preference;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: AppSpacing.md),
-              Text('AI engine', style: Theme.of(ctx).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.sm),
-              for (final (pref, title, sub) in options)
-                AppListTile(
-                  icon: current == pref
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  iconColor: ext.mark(ext.focus),
-                  title: title,
-                  subtitle: sub,
-                  onTap: () async {
-                    await AiAssistant().setPreference(pref);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (mounted) setState(() {});
-                  },
-                ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// Manage the AI (LLM) API key — paste/remove, stored on-device only.
-  Future<void> _manageAiKey() async {
-    final ext = AppColorsExt.of(context);
-    final controller = TextEditingController();
-    await AppBottomSheet.show<void>(
-      context,
-      title: 'AI Assistant',
-      icon: Icons.auto_awesome_rounded,
-      accent: ext.focus,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Enable AI to smart-add reminders, explain medicines, and get '
-            'hydration & focus tips. Paste a free NVIDIA API key from '
-            'build.nvidia.com to turn it on.',
-            style: Theme.of(ctx)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: ext.textSecondary),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          AppTextField(
-            controller: controller,
-            label: 'API key',
-            hint: 'nvapi-…',
-            accent: ext.focus,
-            obscureText: true,
-            prefixIcon: Icons.key_rounded,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppButton(
-            label: 'Save key',
-            accent: ext.focus,
-            fullWidth: true,
-            onPressed: () async {
-              await LlmService().setApiKey(controller.text);
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) setState(() {});
-            },
-          ),
-          // Gate on hasApiKey (a key is stored) rather than isConfigured, which
-          // is always false in release without a proxy — so the key would be
-          // un-removable there.
-          if (LlmService().hasApiKey) ...[
-            const SizedBox(height: AppSpacing.sm),
-            AppButton(
-              label: 'Remove key',
-              variant: AppButtonVariant.ghost,
-              accent: ext.error,
-              fullWidth: true,
-              onPressed: () async {
-                try {
-                  await LlmService().clearApiKey();
-                } catch (_) {
-                  if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(
-                          content: Text("Couldn't remove the key. Try again.")),
-                    );
-                  }
-                  return;
-                }
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted) setState(() {});
-              },
-            ),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Beta: the key is stored on this device only, for development/testing. '
-            'The free NVIDIA tier is not licensed for production use.',
-            style: Theme.of(ctx)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: ext.textTertiary),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-      ),
-    );
-    controller.dispose();
   }
 
   /// A titled group: [SectionHeader] + an [AppCard] of divider-separated tiles.
@@ -633,7 +490,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: ext.brand.base.withOpacity(0.12),
                   borderRadius: AppRadius.brSm,
                 ),
-                child: Icon(Icons.palette_rounded,
+                child: Icon(Symbols.palette_rounded,
                     size: 20, color: ext.mark(ext.brand)),
               ),
               const SizedBox(width: 14),
@@ -656,9 +513,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             index: index,
             accent: ext.brand,
             items: const [
-              SegmentItem(icon: Icons.brightness_auto_rounded, label: 'System'),
-              SegmentItem(icon: Icons.light_mode_rounded, label: 'Light'),
-              SegmentItem(icon: Icons.dark_mode_rounded, label: 'Dark'),
+              SegmentItem(icon: Symbols.brightness_auto_rounded, label: 'System'),
+              SegmentItem(icon: Symbols.light_mode_rounded, label: 'Light'),
+              SegmentItem(icon: Symbols.dark_mode_rounded, label: 'Dark'),
             ],
             onChanged: (i) async {
               _hapticService.tap();
@@ -684,7 +541,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context, _) {
         final ext = AppColorsExt.of(context);
         return AppListTile(
-          icon: Icons.vibration_rounded,
+          icon: Symbols.vibration_rounded,
           iconColor: ext.mark(ext.brand),
           title: 'Haptic Feedback',
           subtitle: _hapticService.isEnabled
@@ -697,7 +554,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const HapticSettingsScreen()),
             );
           },
-          trailing: Switch(
+          trailing: AppSwitch(
             value: _hapticService.isEnabled,
             onChanged: (value) async {
               await _hapticService.setEnabled(value);
@@ -729,7 +586,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final ext = AppColorsExt.of(context);
         final tt = Theme.of(context).textTheme;
         return AppListTile(
-          icon: Icons.vibration_rounded,
+          icon: Symbols.vibration_rounded,
           iconColor: ext.mark(ext.success),
           title: 'Haptix',
           subtitle: _vitaVibeService.isEnabled
@@ -762,7 +619,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Switch(
+              AppSwitch(
                 value: _vitaVibeService.isEnabled,
                 onChanged: (value) async {
                   await _vitaVibeService.setEnabled(value);

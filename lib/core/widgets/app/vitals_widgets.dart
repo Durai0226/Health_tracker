@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
 import '../../design/app_colors_ext.dart';
 import 'app_card.dart';
@@ -163,7 +164,7 @@ class VitalsEmergencyCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.emergency_rounded, color: Colors.white, size: 24),
+              const Icon(Symbols.emergency_rounded, color: Colors.white, size: 24),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(title,
@@ -184,7 +185,7 @@ class VitalsEmergencyCard extends StatelessWidget {
                 // field, both themes).
                 child: FilledButton.icon(
                   onPressed: onPrimary,
-                  icon: const Icon(Icons.call_rounded, size: 18),
+                  icon: const Icon(Symbols.call_rounded, size: 18),
                   label: Text(primaryLabel),
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,

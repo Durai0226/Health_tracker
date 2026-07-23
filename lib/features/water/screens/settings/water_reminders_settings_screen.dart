@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
@@ -77,10 +78,7 @@ class _WaterRemindersSettingsScreenState
 
   Future<void> _selectTime(
       TimeOfDay current, ValueChanged<TimeOfDay> onChanged) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: current,
-    );
+    final picked = await AppTimePicker.show(context, initial: current);
     if (picked != null) {
       HapticFeedback.lightImpact();
       onChanged(picked);
@@ -98,10 +96,10 @@ class _WaterRemindersSettingsScreenState
         children: [
           AppHeader(
             title: 'Reminders',
-            icon: Icons.notifications_active_rounded,
+            icon: Symbols.notifications_active_rounded,
             accent: water,
             leading: AppIconButton(
-              icon: Icons.arrow_back_ios_new_rounded,
+              icon: Symbols.arrow_back_rounded,
               accent: water,
               filled: false,
               onPressed: () => Navigator.pop(context),
@@ -130,7 +128,7 @@ class _WaterRemindersSettingsScreenState
                           accent: water,
                           size: AppButtonSize.lg,
                           fullWidth: true,
-                          leadingIcon: Icons.check_rounded,
+                          leadingIcon: Symbols.check_rounded,
                           onPressed: _saveSettings,
                         ),
                       ],
@@ -178,14 +176,13 @@ class _WaterRemindersSettingsScreenState
               ],
             ),
           ),
-          Switch(
+          AppSwitch(
             value: value,
-            activeThumbColor: water.base,
-            activeTrackColor: water.base.withOpacity(0.35),
             onChanged: (v) {
               HapticFeedback.lightImpact();
               onChanged(v);
             },
+            accent: water,
           ),
         ],
       ),
@@ -196,7 +193,7 @@ class _WaterRemindersSettingsScreenState
     return _buildToggleRow(
       ext: ext,
       water: water,
-      icon: Icons.notifications_outlined,
+      icon: Symbols.notifications_rounded,
       title: 'Drink Reminders',
       subtitle: 'Get notified to stay hydrated',
       value: _remindersEnabled,
@@ -212,7 +209,7 @@ class _WaterRemindersSettingsScreenState
         children: [
           SectionHeader(
             title: 'Reminder Interval',
-            icon: Icons.timer_outlined,
+            icon: Symbols.timer_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -252,7 +249,7 @@ class _WaterRemindersSettingsScreenState
         children: [
           SectionHeader(
             title: 'Active Hours',
-            icon: Icons.schedule_rounded,
+            icon: Symbols.schedule_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -311,7 +308,7 @@ class _WaterRemindersSettingsScreenState
     return _buildToggleRow(
       ext: ext,
       water: water,
-      icon: Icons.auto_awesome_rounded,
+      icon: Symbols.auto_awesome_rounded,
       title: 'Smart Reminders',
       subtitle: 'Adjust based on your activity',
       value: _smartReminders,

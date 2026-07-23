@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/doctor_pharmacy.dart';
@@ -114,7 +115,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
               title: _isEditing ? 'Edit Doctor' : 'Add Doctor',
               accent: accent,
               leading: AppIconButton(
-                icon: Icons.close_rounded,
+                icon: Symbols.close_rounded,
                 filled: false,
                 accent: accent,
                 onPressed: () => Navigator.pop(context),
@@ -144,7 +145,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                         children: [
                           SectionHeader(
                             title: 'Basic Information',
-                            icon: Icons.badge_rounded,
+                            icon: Symbols.badge_rounded,
                             accent: accent,
                           ),
                           const SizedBox(height: AppSpacing.sm),
@@ -152,7 +153,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             controller: _nameController,
                             label: 'Name',
                             hint: "Doctor's name",
-                            prefixIcon: Icons.person_rounded,
+                            prefixIcon: Symbols.person_rounded,
                             accent: accent,
                             textCapitalization: TextCapitalization.words,
                             validator: (v) =>
@@ -163,7 +164,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             controller: _specialtyController,
                             label: 'Specialty',
                             hint: 'e.g., Cardiologist, General Physician',
-                            prefixIcon: Icons.medical_services_rounded,
+                            prefixIcon: Symbols.medical_services_rounded,
                             accent: accent,
                             textCapitalization: TextCapitalization.words,
                           ),
@@ -172,7 +173,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             controller: _hospitalController,
                             label: 'Hospital / Clinic',
                             hint: 'Where they practice',
-                            prefixIcon: Icons.local_hospital_rounded,
+                            prefixIcon: Symbols.local_hospital_rounded,
                             accent: accent,
                             textCapitalization: TextCapitalization.words,
                           ),
@@ -188,7 +189,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                         children: [
                           SectionHeader(
                             title: 'Contact Information',
-                            icon: Icons.contact_phone_rounded,
+                            icon: Symbols.contact_phone_rounded,
                             accent: accent,
                           ),
                           const SizedBox(height: AppSpacing.sm),
@@ -196,7 +197,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             controller: _phoneController,
                             label: 'Phone',
                             hint: 'Phone number',
-                            prefixIcon: Icons.phone_rounded,
+                            prefixIcon: Symbols.phone_rounded,
                             accent: accent,
                             keyboardType: TextInputType.phone,
                           ),
@@ -205,7 +206,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             controller: _emailController,
                             label: 'Email',
                             hint: 'Email address',
-                            prefixIcon: Icons.email_rounded,
+                            prefixIcon: Symbols.email_rounded,
                             accent: accent,
                             keyboardType: TextInputType.emailAddress,
                           ),
@@ -214,7 +215,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             controller: _addressController,
                             label: 'Address',
                             hint: 'Office address',
-                            prefixIcon: Icons.location_on_rounded,
+                            prefixIcon: Symbols.location_on_rounded,
                             accent: accent,
                             maxLines: 2,
                             textCapitalization: TextCapitalization.sentences,
@@ -231,7 +232,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                         children: [
                           SectionHeader(
                             title: 'Additional',
-                            icon: Icons.notes_rounded,
+                            icon: Symbols.notes_rounded,
                             accent: accent,
                           ),
                           const SizedBox(height: AppSpacing.sm),
@@ -239,7 +240,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             controller: _notesController,
                             label: 'Notes',
                             hint: 'Any additional notes',
-                            prefixIcon: Icons.sticky_note_2_rounded,
+                            prefixIcon: Symbols.sticky_note_2_rounded,
                             accent: accent,
                             maxLines: 3,
                             textCapitalization: TextCapitalization.sentences,
@@ -264,7 +265,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                               borderRadius: AppRadius.brSm,
                             ),
                             child: Icon(
-                              _isPrimary ? Icons.star_rounded : Icons.star_outline_rounded,
+                              _isPrimary ? Symbols.star_rounded : Symbols.star_rounded,
                               color: ext.warning.onContainer,
                               size: 20,
                             ),
@@ -290,13 +291,13 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                               ],
                             ),
                           ),
-                          Switch(
+                          AppSwitch(
                             value: _isPrimary,
                             onChanged: (v) {
                               _hapticService.toggle();
                               setState(() => _isPrimary = v);
                             },
-                            activeColor: ext.fillBg(accent),
+                            accent: accent,
                           ),
                         ],
                       ),
@@ -309,7 +310,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                       accent: accent,
                       fullWidth: true,
                       size: AppButtonSize.lg,
-                      leadingIcon: Icons.check_rounded,
+                      leadingIcon: Symbols.check_rounded,
                       loading: _isLoading,
                       onPressed: _isLoading ? null : _save,
                     ),

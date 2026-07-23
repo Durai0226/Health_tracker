@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../services/backup_service.dart';
@@ -69,7 +70,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
           'in the backup will be lost. Locked notes need the encryption key '
           'from the device that created them to be readable.',
       confirmText: 'Restore & overwrite',
-      icon: Icons.restore_page_rounded,
+      icon: Symbols.restore_page_rounded,
       isDangerous: true,
     );
     if (confirmed != true || !mounted) return;
@@ -103,7 +104,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
               title: 'Backup & Restore',
               accent: ext.brand,
               leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: Symbols.arrow_back_rounded,
                 filled: false,
                 accent: ext.brand,
                 onPressed: () => Navigator.pop(context),
@@ -116,7 +117,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 children: [
                   SectionHeader(
                     title: 'Backup',
-                    icon: Icons.cloud_upload_outlined,
+                    icon: Symbols.cloud_upload_rounded,
                     accent: ext.success,
                   ),
                   AppCard(
@@ -124,7 +125,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _rowHeader(
-                          icon: Icons.cloud_upload_outlined,
+                          icon: Symbols.cloud_upload_rounded,
                           title: 'Create backup',
                           subtitle:
                               'Export your data to a file and share it anywhere.',
@@ -133,7 +134,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                         const SizedBox(height: AppSpacing.md),
                         AppButton(
                           label: 'Create backup',
-                          leadingIcon: Icons.ios_share_rounded,
+                          leadingIcon: Symbols.ios_share_rounded,
                           accent: ext.success,
                           fullWidth: true,
                           loading: _isBackingUp,
@@ -145,7 +146,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                   const SizedBox(height: AppSpacing.lg),
                   SectionHeader(
                     title: 'Restore',
-                    icon: Icons.restore_page_outlined,
+                    icon: Symbols.restore_page_rounded,
                     accent: ext.warning,
                   ),
                   AppCard(
@@ -153,7 +154,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _rowHeader(
-                          icon: Icons.restore_page_outlined,
+                          icon: Symbols.restore_page_rounded,
                           title: 'Restore data',
                           subtitle:
                               'Import data from a backup file. This overwrites '
@@ -163,7 +164,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                         const SizedBox(height: AppSpacing.md),
                         AppButton(
                           label: 'Restore from file',
-                          leadingIcon: Icons.folder_open_rounded,
+                          leadingIcon: Symbols.folder_open_rounded,
                           accent: ext.warning,
                           variant: AppButtonVariant.tonal,
                           fullWidth: true,
@@ -227,7 +228,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded,
+          Icon(Symbols.warning_amber_rounded,
               size: 20, color: ext.warning.onContainer),
           const SizedBox(width: 12),
           Expanded(

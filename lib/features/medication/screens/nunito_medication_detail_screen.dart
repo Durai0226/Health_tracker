@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
@@ -9,6 +10,7 @@ import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../services/drug_interaction_service.dart';
+import '../services/drug_name_catalog.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/ai/ai_assistant.dart';
 import '../../../core/ai/refill_predictor.dart';
@@ -83,6 +85,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
+      // Ensure the brand→generic catalog is ready for the "What it's for" bridge.
+      await DrugNameCatalog.ensureLoaded();
       // Reload medicine data
       final medicines = await MedicineCleanStorageService.getAllMedicines();
       final updated = medicines.where((m) => m.id == _medicine.id).firstOrNull;
@@ -362,7 +366,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       message: 'This will permanently delete this medication and all its history.',
       confirmLabel: 'Delete',
       danger: true,
-      icon: Icons.delete_rounded,
+      icon: Symbols.delete_rounded,
     );
 
     if (confirm == true) {
@@ -390,6 +394,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                     SliverToBoxAdapter(child: _buildInsightsSection()),
                     SliverToBoxAdapter(child: _buildScheduleSection()),
                     SliverToBoxAdapter(child: _buildDetailsSection()),
+                    SliverToBoxAdapter(child: _buildWhatItsForSection()),
                     SliverToBoxAdapter(child: _buildStockSection()),
                     SliverToBoxAdapter(child: _buildInteractionsSection()),
                     SliverToBoxAdapter(child: _buildSafetySection()),
@@ -415,21 +420,21 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       backgroundColor: headerBg,
       foregroundColor: onHeader,
       leading: IconButton(
-        icon: Icon(Icons.arrow_back_rounded, color: onHeader),
+        icon: Icon(Symbols.arrow_back_rounded, color: onHeader),
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
         IconButton(
-          icon: Icon(Icons.auto_awesome_rounded, color: onHeader),
+          icon: Icon(Symbols.auto_awesome_rounded, color: onHeader),
           tooltip: 'Ask AI about this medicine',
           onPressed: _askAi,
         ),
         IconButton(
-          icon: Icon(Icons.edit_rounded, color: onHeader),
+          icon: Icon(Symbols.edit_rounded, color: onHeader),
           onPressed: _editMedicine,
         ),
         PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert_rounded, color: onHeader),
+          icon: Icon(Symbols.more_vert_rounded, color: onHeader),
           color: ext.surfaceElevated,
           onSelected: (value) {
             if (value == 'archive') _toggleArchive();
@@ -441,7 +446,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               child: Row(
                 children: [
                   Icon(
-                    _medicine.isArchived ? Icons.unarchive_rounded : Icons.archive_rounded,
+                    _medicine.isArchived ? Symbols.unarchive_rounded : Symbols.archive_rounded,
                     color: ext.textPrimary,
                   ),
                   const SizedBox(width: 8),
@@ -454,7 +459,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               value: 'delete',
               child: Row(
                 children: [
-                  Icon(Icons.delete_rounded, color: ext.mark(ext.error)),
+                  Icon(Symbols.delete_rounded, color: ext.mark(ext.error)),
                   const SizedBox(width: 8),
                   Text('Delete', style: TextStyle(color: ext.mark(ext.error))),
                 ],
@@ -540,19 +545,19 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           StatTile(
             label: 'Adherence',
             value: '${_stats['adherence'] ?? 0}%',
-            icon: Icons.trending_up_rounded,
+            icon: Symbols.trending_up_rounded,
             accent: ext.success,
           ),
           StatTile(
             label: 'Taken',
             value: '${_stats['taken'] ?? 0}',
-            icon: Icons.check_circle_rounded,
+            icon: Symbols.check_circle_rounded,
             accent: ext.info,
           ),
           StatTile(
             label: 'Total',
             value: '${_stats['total'] ?? 0}',
-            icon: Icons.history_rounded,
+            icon: Symbols.history_rounded,
             accent: ext.medicine,
           ),
         ],
@@ -592,7 +597,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           children: [
             Row(
               children: [
-                Icon(Icons.schedule_rounded,
+                Icon(Symbols.schedule_rounded,
                     color: ext.mark(ext.medicine), size: 20),
                 const SizedBox(width: AppSpacing.sm),
                 Text('Schedule', style: tt.titleLarge),
@@ -626,7 +631,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.notifications_active_rounded,
+                    Icon(Symbols.notifications_active_rounded,
                         color: ext.success.onContainer, size: 16),
                     const SizedBox(width: 6),
                     Text(
@@ -655,7 +660,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline_rounded,
+                Icon(Symbols.info_rounded,
                     color: ext.mark(ext.medicine), size: 20),
                 const SizedBox(width: AppSpacing.sm),
                 Text('Details', style: tt.titleLarge),
@@ -675,6 +680,63 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               const SizedBox(height: AppSpacing.sm),
               _buildDetailRow('Purpose', _medicine.purpose!),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Plain-language "what it's for" from the curated on-device monograph.
+  /// Collapses when there's no monograph AND the user already wrote a Purpose
+  /// (the Details card shows that), so we never duplicate or fabricate.
+  Widget _buildWhatItsForSection() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final summary = _interactionService.purposeSummary(
+        name: _medicine.name, genericName: _medicine.genericName);
+    final hasUserPurpose =
+        _medicine.purpose != null && _medicine.purpose!.trim().isNotEmpty;
+    if (summary == null && hasUserPurpose) return const SizedBox.shrink();
+
+    final onC = ext.medicine.onContainer;
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      child: AppCard(
+        color: ext.medicine.container,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Symbols.help_rounded, color: onC, size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text('What it\'s for',
+                    style: tt.titleLarge?.copyWith(color: onC)),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              summary ??
+                  'Not sure what this is for? Add a note under Edit, or ask '
+                      'your pharmacist.',
+              style: tt.bodyMedium?.copyWith(color: onC, height: 1.4),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Symbols.info_rounded,
+                    size: 13, color: onC.withValues(alpha: 0.75)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'General reference — confirm with your doctor or pharmacist.',
+                    style: tt.bodySmall
+                        ?.copyWith(color: onC.withValues(alpha: 0.75)),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -727,7 +789,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           children: [
             Row(
               children: [
-                Icon(Icons.inventory_2_rounded,
+                Icon(Symbols.inventory_2_rounded,
                     color: ext.mark(swatch), size: 20),
                 const SizedBox(width: AppSpacing.sm),
                 Text('Stock', style: tt.titleLarge),
@@ -775,7 +837,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
-                  Icon(Icons.insights_rounded,
+                  Icon(Symbols.insights_rounded,
                       size: 15, color: ext.mark(ext.medicine)),
                   const SizedBox(width: 6),
                   Expanded(
@@ -797,7 +859,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.warning_amber_rounded,
+                    Icon(Symbols.warning_amber_rounded,
                         color: ext.warning.onContainer, size: 18),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
@@ -815,7 +877,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             const SizedBox(height: AppSpacing.md),
             AppButton(
               label: 'Refill',
-              leadingIcon: Icons.add_rounded,
+              leadingIcon: Symbols.add_rounded,
               variant:
                   low ? AppButtonVariant.primary : AppButtonVariant.secondary,
               accent: ext.medicine,
@@ -840,7 +902,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     final amount = await AppBottomSheet.show<int>(
       context,
       title: 'Refill ${_medicine.name}',
-      icon: Icons.inventory_2_rounded,
+      icon: Symbols.inventory_2_rounded,
       accent: AppColorsExt.of(context).medicine,
       builder: (_) => _RefillSheet(medicine: _medicine),
     );
@@ -877,7 +939,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           children: [
             Row(
               children: [
-                Icon(Icons.warning_amber_rounded,
+                Icon(Symbols.warning_amber_rounded,
                     color: ext.mark(headerSwatch), size: 20),
                 const SizedBox(width: AppSpacing.sm),
                 Text('Interactions & Cautions', style: tt.titleLarge),
@@ -894,7 +956,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               const SizedBox(height: AppSpacing.sm),
               AppButton(
                 label: 'Explain in plain language',
-                leadingIcon: Icons.auto_awesome_rounded,
+                leadingIcon: Symbols.auto_awesome_rounded,
                 variant: AppButtonVariant.secondary,
                 size: AppButtonSize.sm,
                 accent: ext.medicine,
@@ -911,7 +973,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.auto_awesome_rounded,
+                          Icon(Symbols.auto_awesome_rounded,
                               color: ext.medicine.onContainer, size: 16),
                           const SizedBox(width: AppSpacing.sm),
                           Text(
@@ -950,7 +1012,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               const SizedBox(height: AppSpacing.sm),
               ..._foodWarnings.map(
                 (w) => _buildBulletRow(
-                    w, Icons.restaurant_rounded, ext.warning),
+                    w, Symbols.restaurant_rounded, ext.warning),
               ),
             ],
           ],
@@ -1041,7 +1103,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           children: [
             Row(
               children: [
-                Icon(Icons.health_and_safety_rounded,
+                Icon(Symbols.health_and_safety_rounded,
                     color: ext.mark(ext.warning), size: 20),
                 const SizedBox(width: AppSpacing.sm),
                 Text('Warnings & Side Effects', style: tt.titleLarge),
@@ -1054,8 +1116,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               ..._safetyWarnings.map((w) => _buildBulletRow(
                     w.message,
                     w.kind == 'allergy'
-                        ? Icons.dangerous_rounded
-                        : Icons.copy_all_rounded,
+                        ? Symbols.dangerous_rounded
+                        : Symbols.copy_all_rounded,
                     w.severity == 'high' ? ext.error : ext.warning,
                   )),
             ],
@@ -1065,7 +1127,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                   style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
               const SizedBox(height: AppSpacing.sm),
               ...warnings.map((w) =>
-                  _buildBulletRow(w, Icons.error_outline_rounded, ext.error)),
+                  _buildBulletRow(w, Symbols.error_rounded, ext.error)),
             ],
             if (sideEffects.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
@@ -1073,7 +1135,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                   style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
               const SizedBox(height: AppSpacing.sm),
               ...sideEffects.map((s) =>
-                  _buildBulletRow(s, Icons.circle, ext.warning, small: true)),
+                  _buildBulletRow(s, Symbols.circle_rounded, ext.warning, small: true)),
             ],
           ],
         ),
@@ -1120,7 +1182,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         children: [
           Row(
             children: [
-              Icon(Icons.history_rounded,
+              Icon(Symbols.history_rounded,
                   color: ext.mark(ext.medicine), size: 20),
               const SizedBox(width: AppSpacing.sm),
               Text('Recent History', style: tt.titleLarge),
@@ -1220,7 +1282,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               accent: ext.medicine,
               size: AppButtonSize.lg,
               fullWidth: true,
-              leadingIcon: Icons.check_circle_rounded,
+              leadingIcon: Symbols.check_circle_rounded,
               onPressed: _logDose,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -1230,7 +1292,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             child: Row(
               children: [
                 Icon(
-                  _medicine.isArchived ? Icons.unarchive_rounded : Icons.archive_rounded,
+                  _medicine.isArchived ? Symbols.unarchive_rounded : Symbols.archive_rounded,
                   color: ext.mark(ext.warning),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -1241,7 +1303,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                         fontWeight: FontWeight.w600, color: ext.textPrimary),
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+                Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
               ],
             ),
           ),
@@ -1250,7 +1312,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             onTap: _deleteMedicine,
             child: Row(
               children: [
-                Icon(Icons.delete_rounded, color: ext.mark(ext.error)),
+                Icon(Symbols.delete_rounded, color: ext.mark(ext.error)),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
@@ -1259,7 +1321,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                         fontWeight: FontWeight.w600, color: ext.mark(ext.error)),
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+                Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
               ],
             ),
           ),
@@ -1321,7 +1383,7 @@ class _RefillSheetState extends State<_RefillSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            stepButton(Icons.remove_rounded, _amount > 1,
+            stepButton(Symbols.remove_rounded, _amount > 1,
                 () => setState(() => _amount = (_amount - 1).clamp(1, 9999))),
             Container(
               constraints: const BoxConstraints(minWidth: 96),
@@ -1332,7 +1394,7 @@ class _RefillSheetState extends State<_RefillSheet> {
                     color: ext.textPrimary, fontWeight: FontWeight.w800),
               ),
             ),
-            stepButton(Icons.add_rounded, true,
+            stepButton(Symbols.add_rounded, true,
                 () => setState(() => _amount = (_amount + 1).clamp(1, 9999))),
           ],
         ),

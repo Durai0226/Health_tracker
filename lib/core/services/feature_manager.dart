@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Defines the tier/category of a feature
@@ -59,7 +60,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'medicine',
       name: 'Medicine Tracker',
-      icon: Icons.medication_rounded,
+      icon: Symbols.medication_rounded,
       color: Color(0xFF6366F1),
       description: 'Track medications, dosages, schedules, and get timely reminders',
       tier: FeatureTier.core,
@@ -68,7 +69,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'water',
       name: 'Water Tracker',
-      icon: Icons.water_drop_rounded,
+      icon: Symbols.water_drop_rounded,
       color: Color(0xFF06B6D4),
       description: 'Monitor daily hydration and reach your water intake goals',
       tier: FeatureTier.core,
@@ -77,7 +78,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'reminders',
       name: 'Reminders',
-      icon: Icons.notifications_rounded,
+      icon: Symbols.notifications_rounded,
       color: Color(0xFFF59E0B),
       description: 'Create custom reminders for any health or daily task',
       tier: FeatureTier.core,
@@ -88,7 +89,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'focus',
       name: 'Focus Mode',
-      icon: Icons.self_improvement_rounded,
+      icon: Symbols.self_improvement_rounded,
       color: Color(0xFF8B5CF6),
       description: 'Pomodoro-style focus sessions with plant growth gamification',
       tier: FeatureTier.optional,
@@ -96,7 +97,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'fitness',
       name: 'Fitness',
-      icon: Icons.fitness_center_rounded,
+      icon: Symbols.fitness_center_rounded,
       color: Color(0xFFEF4444),
       description: 'Track workouts, set fitness goals, and log activities',
       tier: FeatureTier.optional,
@@ -104,7 +105,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'notes',
       name: 'Notes',
-      icon: Icons.note_alt_rounded,
+      icon: Symbols.note_alt_rounded,
       color: Color(0xFF10B981),
       description: 'Quick notes, checklists, and thoughts for your health journey',
       tier: FeatureTier.optional,
@@ -112,15 +113,31 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'period',
       name: 'Period Tracking',
-      icon: Icons.calendar_month_rounded,
+      icon: Symbols.calendar_month_rounded,
       color: Color(0xFFEC4899),
       description: 'Track menstrual cycles, symptoms, and predictions',
       tier: FeatureTier.optional,
     ),
     FeatureConfig(
+      id: 'steps',
+      name: 'Step Counter',
+      icon: Symbols.directions_walk_rounded,
+      color: Color(0xFF22C55E),
+      description: 'Track daily steps, distance, and active calories',
+      tier: FeatureTier.optional,
+    ),
+    FeatureConfig(
+      id: 'sleep',
+      name: 'Sleep Tracker',
+      icon: Symbols.bedtime_rounded,
+      color: Color(0xFF7C6FF0),
+      description: 'Track sleep duration, quality, and bedtime consistency',
+      tier: FeatureTier.optional,
+    ),
+    FeatureConfig(
       id: 'finance',
       name: 'Expense Tracker',
-      icon: Icons.account_balance_wallet_rounded,
+      icon: Symbols.account_balance_wallet_rounded,
       color: Color(0xFF22C55E),
       description: 'Log daily expenses and track spending habits',
       tier: FeatureTier.optional,
@@ -128,7 +145,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'exam_prep',
       name: 'Exam Preparation',
-      icon: Icons.school_rounded,
+      icon: Symbols.school_rounded,
       color: Color(0xFF3B82F6),
       description: 'Plan exams, track study sessions, manage subjects & grades',
       tier: FeatureTier.optional,
@@ -136,7 +153,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'mood',
       name: 'Mood Tracker',
-      icon: Icons.mood_rounded,
+      icon: Symbols.mood_rounded,
       color: Color(0xFFFF6B9D),
       description: 'Track your daily mood, emotions, and mental wellness',
       tier: FeatureTier.optional,
@@ -144,7 +161,7 @@ class FeatureManager extends ChangeNotifier {
     FeatureConfig(
       id: 'habit',
       name: 'Habit Tracker',
-      icon: Icons.track_changes_rounded,
+      icon: Symbols.track_changes_rounded,
       color: Color(0xFF7C91F4),
       description: 'Build healthy habits with streaks, goals, and gamification',
       tier: FeatureTier.optional,

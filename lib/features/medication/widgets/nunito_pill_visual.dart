@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../theme/nunito_theme.dart';
 import '../models/medicine_enums.dart';
 
@@ -360,39 +361,39 @@ class NunitoDosageIcon extends StatelessWidget {
   IconData _getIcon() {
     switch (dosageForm) {
       case DosageForm.tablet:
-        return Icons.medication_rounded;
+        return Symbols.medication_rounded;
       case DosageForm.capsule:
-        return Icons.medication_liquid_rounded;
+        return Symbols.medication_liquid_rounded;
       case DosageForm.syrup:
-        return Icons.local_drink_rounded;
+        return Symbols.local_drink_rounded;
       case DosageForm.injection:
-        return Icons.vaccines_rounded;
+        return Symbols.vaccines_rounded;
       case DosageForm.drops:
-        return Icons.water_drop_rounded;
+        return Symbols.water_drop_rounded;
       case DosageForm.cream:
-        return Icons.sanitizer_rounded;
+        return Symbols.sanitizer_rounded;
       case DosageForm.inhaler:
-        return Icons.air_rounded;
+        return Symbols.air_rounded;
       case DosageForm.patch:
-        return Icons.healing_rounded;
+        return Symbols.healing_rounded;
       case DosageForm.suppository:
-        return Icons.medication_rounded;
+        return Symbols.medication_rounded;
       case DosageForm.powder:
-        return Icons.grain_rounded;
+        return Symbols.grain_rounded;
       case DosageForm.spray:
-        return Icons.wb_cloudy_rounded;
+        return Symbols.wb_cloudy_rounded;
       case DosageForm.gel:
-        return Icons.opacity_rounded;
+        return Symbols.opacity_rounded;
       case DosageForm.ointment:
-        return Icons.healing_rounded;
+        return Symbols.healing_rounded;
       case DosageForm.lozenge:
-        return Icons.circle_rounded;
+        return Symbols.circle_rounded;
       case DosageForm.solution:
-        return Icons.science_rounded;
+        return Symbols.science_rounded;
       case DosageForm.suspension:
-        return Icons.science_rounded;
+        return Symbols.science_rounded;
       case DosageForm.other:
-        return Icons.medical_services_rounded;
+        return Symbols.medical_services_rounded;
     }
   }
 }

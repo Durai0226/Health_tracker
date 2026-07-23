@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/app_database.dart' as db;
 import '../../../core/services/clean_storage_service.dart';
@@ -25,7 +26,7 @@ class CategoryManagementScreen extends StatelessWidget {
       feature: FeatureAccent.reminders,
       child: AppScaffold(
         floatingActionButton: AppFab(
-          icon: Icons.add_rounded,
+          icon: Symbols.add_rounded,
           accent: ext.reminders,
           onPressed: () => _showEditor(context),
         ),
@@ -35,7 +36,7 @@ class CategoryManagementScreen extends StatelessWidget {
               title: 'Categories',
               accent: ext.reminders,
               leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: Symbols.arrow_back_rounded,
                 filled: false,
                 accent: ext.reminders,
                 onPressed: () => Navigator.pop(context),
@@ -51,7 +52,7 @@ class CategoryManagementScreen extends StatelessWidget {
                   }
                   if (rows.isEmpty) {
                     return EmptyState(
-                      icon: Icons.label_outline_rounded,
+                      icon: Symbols.label_rounded,
                       title: 'No categories yet',
                       message: 'Tap + to create your first category.',
                       accent: ext.reminders,
@@ -91,7 +92,7 @@ class CategoryManagementScreen extends StatelessWidget {
                 'their data but lose the label.',
             confirmLabel: 'Delete',
             danger: true,
-            icon: Icons.delete_outline_rounded,
+            icon: Symbols.delete_rounded,
           );
           if (ok == true) {
             await CleanStorageService.deleteCategory(category.id);
@@ -106,7 +107,7 @@ class CategoryManagementScreen extends StatelessWidget {
             color: ext.error.container,
             borderRadius: AppRadius.brCard,
           ),
-          child: Icon(Icons.delete_outline_rounded, color: ext.error.onContainer),
+          child: Icon(Symbols.delete_rounded, color: ext.error.onContainer),
         ),
         child: AppCard(
           onTap: () => _showEditor(context, category: category),
@@ -129,7 +130,7 @@ class CategoryManagementScreen extends StatelessWidget {
               if (category.isDefault)
                 AppChip(label: 'Default', accent: ext.reminders),
               const SizedBox(width: AppSpacing.sm),
-              Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+              Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
             ],
           ),
         ),
@@ -146,7 +147,7 @@ class CategoryManagementScreen extends StatelessWidget {
     AppBottomSheet.show(
       context,
       title: category == null ? 'New Category' : 'Edit Category',
-      icon: Icons.label_rounded,
+      icon: Symbols.label_rounded,
       accent: AppColorsExt.of(context).reminders,
       builder: (ctx) {
         final ext = AppColorsExt.of(ctx);

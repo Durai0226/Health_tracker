@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -103,7 +104,7 @@ class PeriodToast {
       feature: ToastFeature.period,
       title: '🥚 Ovulation Day',
       message: 'Today is your predicted ovulation day',
-      customIcon: Icons.favorite_rounded,
+      customIcon: Symbols.favorite_rounded,
     );
   }
 
@@ -141,7 +142,7 @@ class PeriodToast {
       feature: ToastFeature.period,
       title: '📊 New Insights Available',
       message: 'Check your cycle patterns and trends',
-      customIcon: Icons.insights_rounded,
+      customIcon: Symbols.insights_rounded,
     );
   }
 

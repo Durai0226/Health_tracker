@@ -1,34 +1,35 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/// Simplified Ad Service - Strategic placement for maximum revenue
-/// 
-/// This service manages ad display across the app with smart frequency
-/// capping and strategic placement based on user behavior.
+import 'ad_config.dart';
+
+/// Ad service — banner + interstitial + rewarded only. Native-in-list ads are
+/// deliberately disabled so ads never interleave with health data.
+///
+/// Production-safety guarantees (see [AdConfig]):
+///  • Test ad IDs run in debug ONLY; release uses real IDs or shows nothing.
+///  • Ads never load unless GDPR/UMP consent + (iOS) ATT have been resolved.
+///  • Sensitive health screens (period/vitals/sleep) carry no ads.
 class SimpleAdService {
   static final SimpleAdService _instance = SimpleAdService._internal();
   factory SimpleAdService() => _instance;
   SimpleAdService._internal();
 
   bool _isInitialized = false;
-  
-  // Ad instances
+
   BannerAd? _bannerAd;
   InterstitialAd? _interstitialAd;
   RewardedAd? _rewardedAd;
-  final Map<String, NativeAd> _nativeAds = {};
-  
-  // Test Ad Unit IDs (replace with real IDs in production)
-  static const String _testBannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
-  static const String _testInterstitialAdUnitId = 'ca-app-pub-3940256099942544/1033173712';
-  static const String _testRewardedAdUnitId = 'ca-app-pub-3940256099942544/5224354917';
-  static const String _testNativeAdUnitId = 'ca-app-pub-3940256099942544/2247696110';
-  
+
   // Ad frequency tracking
   int _interstitialCount = 0;
   DateTime? _lastInterstitialTime;
   int _reminderDismissalCount = 0;
-  
+
   // Daily limits
   static const int _maxInterstitialsPerDay = 6;
   static const int _minInterstitialInterval = 4; // hours
@@ -36,23 +37,69 @@ class SimpleAdService {
 
   Future<void> init() async {
     if (_isInitialized) return;
-    
-    debugPrint('🎯 SimpleAdService: Initializing...');
-    
+    if (!AdConfig.available) {
+      debugPrint(
+          '🎯 SimpleAdService: ads unavailable (no real ad IDs in this build) — skipping.');
+      return;
+    }
+
+    debugPrint('🎯 SimpleAdService: Initializing…');
     try {
-      // Initialize AdMob SDK
+      // 1) GDPR/EEA consent (UMP) + (2) iOS App Tracking Transparency must be
+      //    resolved BEFORE requesting any ad.
+      await _gatherConsent();
+      await _requestAtt();
+
       await MobileAds.instance.initialize();
-      
-      // Load initial ads
       await _loadBannerAd();
       await _preloadInterstitial();
       await _preloadRewarded();
-      
+
       _isInitialized = true;
-      debugPrint('✓ SimpleAdService initialized with AdMob SDK');
+      debugPrint('✓ SimpleAdService initialized');
     } catch (e) {
       debugPrint('❌ SimpleAdService initialization failed: $e');
       _isInitialized = false;
+    }
+  }
+
+  /// Google User Messaging Platform consent gather (required for EEA/UK users).
+  /// Best-effort + non-blocking to app startup; ad loads proceed regardless but
+  /// personalization respects the collected consent.
+  Future<void> _gatherConsent() async {
+    try {
+      final params = ConsentRequestParameters();
+      final completer = _AsyncGate();
+      ConsentInformation.instance.requestConsentInfoUpdate(
+        params,
+        () async {
+          try {
+            await ConsentForm.loadAndShowConsentFormIfRequired((_) {});
+          } catch (_) {}
+          completer.done();
+        },
+        (error) {
+          debugPrint('🎯 UMP consent update failed: ${error.message}');
+          completer.done();
+        },
+      );
+      await completer.future;
+    } catch (e) {
+      debugPrint('🎯 UMP consent skipped: $e');
+    }
+  }
+
+  /// iOS App Tracking Transparency prompt (no-op on Android).
+  Future<void> _requestAtt() async {
+    if (kIsWeb || !Platform.isIOS) return;
+    try {
+      final status =
+          await AppTrackingTransparency.trackingAuthorizationStatus;
+      if (status == TrackingStatus.notDetermined) {
+        await AppTrackingTransparency.requestTrackingAuthorization();
+      }
+    } catch (e) {
+      debugPrint('🎯 ATT request skipped: $e');
     }
   }
 
@@ -60,68 +107,50 @@ class SimpleAdService {
   // AD PLACEMENT CHECKS
   // ============================================
 
-  /// Should show persistent banner ad on dashboard
-  bool get shouldShowDashboardBanner => true;
+  /// Persistent banner on the (neutral) home dashboard.
+  bool get shouldShowDashboardBanner => AdConfig.available;
 
-  /// Should show native ad in medication list (every 5th item)
-  bool shouldShowMedicationNativeAd(int index) {
-    return index > 0 && index % 5 == 0;
-  }
+  // Native-in-list ads are disabled so ads never sit beside health data. These
+  // remain (returning false) for call-site compatibility.
+  bool shouldShowMedicationNativeAd(int index) => false;
+  bool shouldShowFinanceNativeAd(int index) => false;
+  bool shouldShowNotesNativeAd(int index) => false;
+  bool get shouldShowPeriodNativeAd => false; // POLICY: never on menstrual data.
 
-  /// Should show native ad in finance list (between accounts)
-  bool shouldShowFinanceNativeAd(int index) {
-    return index > 0 && index % 3 == 0;
-  }
-
-  /// Should show native ad in notes list (every 10th note)
-  bool shouldShowNotesNativeAd(int index) {
-    return index > 0 && index % 10 == 0;
-  }
-
-  /// Should show native ad in period tracking insights
-  bool get shouldShowPeriodNativeAd => true;
+  /// Disabled — native ads are not used (see class doc). Always null.
+  Future<NativeAd?> loadNativeAd(String placement) async => null;
 
   // ============================================
   // INTERSTITIAL AD LOGIC
   // ============================================
 
-  /// Track reminder dismissal and show interstitial after threshold
   Future<bool> onReminderDismissed() async {
     _reminderDismissalCount++;
-    
     if (_reminderDismissalCount >= _reminderDismissalsBeforeAd) {
       _reminderDismissalCount = 0;
       return await showInterstitialAd('reminder_completion');
     }
-    
     return false;
   }
 
-  /// Show interstitial after focus session complete
-  Future<bool> onFocusSessionComplete() async {
-    return await showInterstitialAd('focus_complete');
-  }
+  Future<bool> onFocusSessionComplete() async =>
+      showInterstitialAd('focus_complete');
 
-  /// Show interstitial when water goal reached
-  Future<bool> onWaterGoalReached() async {
-    return await showInterstitialAd('water_goal');
-  }
+  Future<bool> onWaterGoalReached() async =>
+      showInterstitialAd('water_goal');
 
-  /// Generic interstitial display with frequency capping
   Future<bool> showInterstitialAd(String placement) async {
+    if (!AdConfig.available) return false;
     if (!_canShowInterstitial()) {
       debugPrint('🎯 Ad blocked by frequency cap: $placement');
       return false;
     }
-
     if (_interstitialAd == null) {
-      debugPrint('⚠️ No interstitial ad loaded for: $placement');
+      debugPrint('⚠️ No interstitial loaded for: $placement');
       await _preloadInterstitial();
       return false;
     }
-
-    debugPrint('🎯 Showing interstitial ad: $placement');
-    
+    debugPrint('🎯 Showing interstitial: $placement');
     try {
       await _interstitialAd?.show();
       _interstitialCount++;
@@ -133,24 +162,13 @@ class SimpleAdService {
     }
   }
 
-  /// Check if interstitial can be shown based on frequency rules
   bool _canShowInterstitial() {
-    // Check daily limit
-    if (_interstitialCount >= _maxInterstitialsPerDay) {
-      return false;
-    }
-
-    // Check time interval
+    if (_interstitialCount >= _maxInterstitialsPerDay) return false;
     if (_lastInterstitialTime != null) {
-      final hoursSinceLastAd = DateTime.now()
-          .difference(_lastInterstitialTime!)
-          .inHours;
-      
-      if (hoursSinceLastAd < _minInterstitialInterval) {
-        return false;
-      }
+      final hours =
+          DateTime.now().difference(_lastInterstitialTime!).inHours;
+      if (hours < _minInterstitialInterval) return false;
     }
-
     return true;
   }
 
@@ -158,25 +176,20 @@ class SimpleAdService {
   // REWARDED VIDEO ADS
   // ============================================
 
-  /// Show rewarded video ad (user-initiated)
   Future<bool> showRewardedAd({
     required String featureName,
-    required Function(String) onRewarded,
+    required void Function(String) onRewarded,
   }) async {
+    if (!AdConfig.available) return false;
     if (_rewardedAd == null) {
       debugPrint('⚠️ No rewarded ad loaded');
       await _preloadRewarded();
       return false;
     }
-    
-    debugPrint('🎯 Showing rewarded ad for: $featureName');
-    
+    debugPrint('🎯 Showing rewarded ad: $featureName');
     try {
       await _rewardedAd?.show(
-        onUserEarnedReward: (ad, reward) {
-          debugPrint('✓ User earned reward: ${reward.amount} ${reward.type}');
-          onRewarded(featureName);
-        },
+        onUserEarnedReward: (ad, reward) => onRewarded(featureName),
       );
       return true;
     } catch (e) {
@@ -185,104 +198,79 @@ class SimpleAdService {
     }
   }
 
-  /// Offer rewarded video for 2x focus coins
-  Future<bool> offerRewardedForCoins() async {
-    return await showRewardedAd(
-      featureName: 'focus_coins_2x',
-      onRewarded: (feature) {
-        debugPrint('✓ User earned 2x coins from rewarded ad');
-      },
-    );
-  }
+  Future<bool> offerRewardedForCoins() async => showRewardedAd(
+        featureName: 'focus_coins_2x',
+        onRewarded: (_) {},
+      );
 
   // ============================================
   // ANALYTICS & TRACKING
   // ============================================
 
-  /// Get ad statistics
-  Map<String, dynamic> getAdStats() {
-    return {
-      'interstitials_shown_today': _interstitialCount,
-      'last_interstitial': _lastInterstitialTime?.toIso8601String(),
-      'reminder_dismissals': _reminderDismissalCount,
-      'can_show_interstitial': _canShowInterstitial(),
-    };
-  }
+  Map<String, dynamic> getAdStats() => {
+        'interstitials_shown_today': _interstitialCount,
+        'last_interstitial': _lastInterstitialTime?.toIso8601String(),
+        'reminder_dismissals': _reminderDismissalCount,
+        'can_show_interstitial': _canShowInterstitial(),
+      };
 
-  /// Reset daily counters (call at midnight)
   void resetDailyCounters() {
     _interstitialCount = 0;
     debugPrint('🎯 Ad counters reset for new day');
   }
 
   // ============================================
-  // AD NETWORK INTEGRATION
+  // AD LOADING
   // ============================================
 
-  /// Load banner ad for dashboard
   Future<void> _loadBannerAd() async {
+    final unit = AdConfig.bannerUnitId;
+    if (unit == null) return;
     _bannerAd?.dispose();
-    
+    _bannerLoaded = false;
     _bannerAd = BannerAd(
-      adUnitId: _testBannerAdUnitId,
+      adUnitId: unit,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
-        onAdLoaded: (_) => debugPrint('✓ Banner ad loaded'),
+        onAdLoaded: (_) {
+          debugPrint('✓ Banner ad loaded');
+          _bannerLoaded = true;
+        },
         onAdFailedToLoad: (ad, error) {
           debugPrint('❌ Banner ad failed: $error');
+          _bannerLoaded = false;
           ad.dispose();
+          _bannerAd = null;
         },
       ),
     );
-    
     await _bannerAd?.load();
   }
-  
-  /// Get loaded banner ad
+
   BannerAd? get bannerAd => _bannerAd;
 
-  /// Load native ad for list placement
-  Future<NativeAd?> loadNativeAd(String placement) async {
-    if (_nativeAds.containsKey(placement)) {
-      return _nativeAds[placement];
-    }
-    
-    final nativeAd = NativeAd(
-      adUnitId: _testNativeAdUnitId,
-      factoryId: 'listTile',
-      request: const AdRequest(),
-      listener: NativeAdListener(
-        onAdLoaded: (_) => debugPrint('✓ Native ad loaded: $placement'),
-        onAdFailedToLoad: (ad, error) {
-          debugPrint('❌ Native ad failed: $error');
-          ad.dispose();
-        },
-      ),
-    );
-    
-    await nativeAd.load();
-    _nativeAds[placement] = nativeAd;
-    return nativeAd;
-  }
+  /// True only once the banner has actually loaded. Inserting an [AdWidget]
+  /// before load() completes throws "AdWidget requires Ad.load…" and paints a
+  /// red error box — the tab-switch glitch. UI must gate on this.
+  bool _bannerLoaded = false;
+  bool get bannerLoaded => _bannerLoaded;
 
-  /// Preload interstitial ads
   Future<void> _preloadInterstitial() async {
+    final unit = AdConfig.interstitialUnitId;
+    if (unit == null) return;
     await InterstitialAd.load(
-      adUnitId: _testInterstitialAdUnitId,
+      adUnitId: unit,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _interstitialAd = ad;
-          debugPrint('✓ Interstitial ad preloaded');
-          
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
-              _preloadInterstitial(); // Preload next
+              _preloadInterstitial();
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
-              debugPrint('❌ Interstitial failed to show: $error');
               ad.dispose();
               _preloadInterstitial();
             },
@@ -295,59 +283,56 @@ class SimpleAdService {
       ),
     );
   }
-  
-  /// Preload rewarded ads
+
   Future<void> _preloadRewarded() async {
+    final unit = AdConfig.rewardedUnitId;
+    if (unit == null) return;
     await RewardedAd.load(
-      adUnitId: _testRewardedAdUnitId,
+      adUnitId: unit,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
           _rewardedAd = ad;
-          debugPrint('✓ Rewarded ad preloaded');
-          
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
-              _preloadRewarded(); // Preload next
+              _preloadRewarded();
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
-              debugPrint('❌ Rewarded ad failed to show: $error');
               ad.dispose();
               _preloadRewarded();
             },
           );
         },
         onAdFailedToLoad: (error) {
-          debugPrint('❌ Rewarded ad failed to load: $error');
+          debugPrint('❌ Rewarded failed to load: $error');
           _rewardedAd = null;
         },
       ),
     );
   }
 
-  /// Dispose ad resources
   void dispose() {
     _bannerAd?.dispose();
     _interstitialAd?.dispose();
     _rewardedAd?.dispose();
-    
-    for (final ad in _nativeAds.values) {
-      ad.dispose();
-    }
-    _nativeAds.clear();
-    
     debugPrint('🎯 SimpleAdService disposed');
   }
 }
 
-/// Ad placement identifiers for analytics
+/// Tiny one-shot async gate bridging the callback-style UMP consent API to a
+/// single awaitable future.
+class _AsyncGate {
+  final _c = Completer<void>();
+  Future<void> get future => _c.future;
+  void done() {
+    if (!_c.isCompleted) _c.complete();
+  }
+}
+
+/// Ad placement identifiers for analytics.
 class AdPlacement {
   static const String dashboardBanner = 'dashboard_banner';
-  static const String medicationNative = 'medication_native';
-  static const String financeNative = 'finance_native';
-  static const String notesNative = 'notes_native';
-  static const String periodNative = 'period_native';
   static const String reminderInterstitial = 'reminder_interstitial';
   static const String focusInterstitial = 'focus_interstitial';
   static const String waterInterstitial = 'water_interstitial';

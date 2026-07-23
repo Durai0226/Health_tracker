@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/doctor_pharmacy.dart';
@@ -131,7 +132,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
       feature: FeatureAccent.medicine,
       child: AppScaffold(
         floatingActionButton: AppFab(
-          icon: Icons.add_rounded,
+          icon: Symbols.add_rounded,
           label: 'Add Doctor',
           accent: accent,
           onPressed: () => _navigateToAddEdit(),
@@ -142,7 +143,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
               title: widget.isSelectionMode ? 'Select Doctor' : 'Doctors',
               accent: accent,
               leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: Symbols.arrow_back_rounded,
                 filled: false,
                 accent: accent,
                 onPressed: () => Navigator.pop(context),
@@ -153,14 +154,14 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _doctors.isEmpty
                       ? EmptyState(
-                          icon: Icons.person_add_rounded,
+                          icon: Symbols.person_add_rounded,
                           title: 'No doctors added',
                           message: 'Add your doctors to keep their info handy.',
                           accent: accent,
                           action: AppButton(
                             label: 'Add Doctor',
                             accent: accent,
-                            leadingIcon: Icons.add_rounded,
+                            leadingIcon: Symbols.add_rounded,
                             onPressed: () => _navigateToAddEdit(),
                           ),
                         )
@@ -197,7 +198,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: Icon(Icons.delete_rounded, color: ext.error.on),
+        child: Icon(Symbols.delete_rounded, color: ext.error.on),
       ),
       confirmDismiss: (direction) async {
         _deleteDoctor(doctor);
@@ -280,14 +281,14 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
             if (doctor.phone != null && doctor.phone!.isNotEmpty)
               IconButton(
                 onPressed: () => _callDoctor(doctor),
-                icon: Icon(Icons.phone_rounded,
+                icon: Icon(Symbols.phone_rounded,
                     color: ext.success.strong, size: 22),
                 tooltip: 'Call',
               ),
             if (doctor.email != null && doctor.email!.isNotEmpty)
               IconButton(
                 onPressed: () => _emailDoctor(doctor),
-                icon: Icon(Icons.email_rounded,
+                icon: Icon(Symbols.email_rounded,
                     color: ext.mark(accent), size: 22),
                 tooltip: 'Email',
               ),

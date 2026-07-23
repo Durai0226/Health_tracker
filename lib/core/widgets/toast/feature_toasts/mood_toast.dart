@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -48,7 +49,7 @@ class MoodToast {
       title: '$emoji Mood Logged',
       message: 'Your mood has been recorded',
       customColor: _getMoodColor(moodLevel),
-      customIcon: Icons.mood_rounded,
+      customIcon: Symbols.mood_rounded,
     );
   }
 
@@ -113,7 +114,7 @@ class MoodToast {
       feature: ToastFeature.mood,
       title: '📊 Weekly Insights Ready',
       message: 'Check your mood patterns and trends',
-      customIcon: Icons.insights_rounded,
+      customIcon: Symbols.insights_rounded,
     );
   }
 
@@ -137,7 +138,7 @@ class MoodToast {
       feature: ToastFeature.mood,
       title: '✨ Daily Affirmation',
       message: message,
-      customIcon: Icons.auto_awesome_rounded,
+      customIcon: Symbols.auto_awesome_rounded,
       duration: const Duration(seconds: 5),
     );
   }

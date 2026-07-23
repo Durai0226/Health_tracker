@@ -1,6 +1,7 @@
 
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -80,7 +81,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.water_drop, color: Colors.white, size: 20),
+              const Icon(Symbols.water_drop_rounded, color: Colors.white, size: 20),
               const SizedBox(width: 12),
               Text('+${amount}ml added${progress >= 1 ? ' 🎉 Goal reached!' : ''}'),
             ],
@@ -152,7 +153,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                         color: waterAccent.withOpacity(isDark ? 0.2 : 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.remove, color: waterAccent),
+                      child: Icon(Symbols.remove_rounded, color: waterAccent),
                     ),
                     iconSize: 36,
                   ),
@@ -190,7 +191,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                         color: waterAccent.withOpacity(isDark ? 0.2 : 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.add, color: waterAccent),
+                      child: Icon(Symbols.add_rounded, color: waterAccent),
                     ),
                     iconSize: 36,
                   ),
@@ -199,7 +200,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
               const SizedBox(height: 32),
               CommonButton(
                 text: 'Save Goal',
-                icon: Icons.save,
+                icon: Symbols.save_rounded,
                 variant: ButtonVariant.primary,
                 backgroundColor: waterAccent,
                 onPressed: () async {
@@ -277,7 +278,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                     ),
                   ],
                 ),
-                child: Icon(Icons.arrow_back_ios_rounded, color: AppColors.getTextPrimary(context), size: 18),
+                child: Icon(Symbols.arrow_back_rounded, color: AppColors.getTextPrimary(context), size: 18),
               ),
               onPressed: () => Navigator.pop(context),
             ),
@@ -297,7 +298,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                       ),
                     ],
                   ),
-                  child: Icon(Icons.notifications_rounded, color: waterAccent, size: 20),
+                  child: Icon(Symbols.notifications_rounded, color: waterAccent, size: 20),
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -411,7 +412,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                               child: Column(
                                 children: [
                                   Icon(
-                                    Icons.water_drop_outlined,
+                                    Symbols.water_drop_rounded,
                                     size: 48,
                                     color: AppColors.getTextSecondary(context).withOpacity(0.5),
                                     ),
@@ -543,7 +544,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                           ),
                           const SizedBox(width: 4),
                           Icon(
-                            Icons.edit,
+                            Symbols.edit_rounded,
                             size: 14,
                             color: progress > 0.5 ? Colors.white70 : AppColors.getTextSecondary(context),
                           ),
@@ -578,7 +579,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  progress >= 1.0 ? Icons.check_circle : Icons.water_drop,
+                  progress >= 1.0 ? Symbols.check_circle_rounded : Symbols.water_drop_rounded,
                   color: progress >= 1.0 ? AppColors.success : waterAccent,
                   size: 20,
                 ),
@@ -711,7 +712,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
-                    Icons.water_drop,
+                    Symbols.water_drop_rounded,
                     color: waterAccent,
                     size: 20,
                   ),
@@ -749,7 +750,7 @@ class _WaterTrackingScreenState extends State<WaterTrackingScreen>
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check, color: AppColors.success, size: 14),
+                      Icon(Symbols.check_rounded, color: AppColors.success, size: 14),
                       SizedBox(width: 4),
                       Text(
                         'Logged',

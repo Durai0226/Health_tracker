@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../models/breathing_exercise.dart';
 import '../../../core/constants/app_colors.dart';
@@ -233,7 +234,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
               _stop();
               widget.onClose?.call();
             },
-            icon: const Icon(Icons.close_rounded),
+            icon: const Icon(Symbols.close_rounded),
             style: IconButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: AppColors.textSecondary,
@@ -355,21 +356,21 @@ class _BreathingWidgetState extends State<BreathingWidget>
         children: [
           if (!_isActive)
             _buildControlButton(
-              icon: Icons.play_arrow_rounded,
+              icon: Symbols.play_arrow_rounded,
               label: 'Start',
               onPressed: _start,
               isPrimary: true,
             )
           else if (_isPaused)
             _buildControlButton(
-              icon: Icons.play_arrow_rounded,
+              icon: Symbols.play_arrow_rounded,
               label: 'Resume',
               onPressed: _resume,
               isPrimary: true,
             )
           else
             _buildControlButton(
-              icon: Icons.pause_rounded,
+              icon: Symbols.pause_rounded,
               label: 'Pause',
               onPressed: _pause,
               isPrimary: true,
@@ -377,7 +378,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
           if (_isActive) ...[
             const SizedBox(width: 16),
             _buildControlButton(
-              icon: Icons.stop_rounded,
+              icon: Symbols.stop_rounded,
               label: 'Stop',
               onPressed: _stop,
               isPrimary: false,
@@ -525,7 +526,7 @@ class BreathingPatternCard extends StatelessWidget {
             ),
             if (isSelected)
               Icon(
-                Icons.check_circle_rounded,
+                Symbols.check_circle_rounded,
                 color: pattern.color,
               ),
           ],

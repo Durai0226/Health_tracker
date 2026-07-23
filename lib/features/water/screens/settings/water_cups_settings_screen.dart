@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -73,7 +74,7 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
     AppBottomSheet.show(
       context,
       title: 'Edit Cup Size',
-      icon: Icons.local_drink_rounded,
+      icon: Symbols.local_drink_rounded,
       accent: water,
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
@@ -98,7 +99,7 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
             accent: water,
             size: AppButtonSize.lg,
             fullWidth: true,
-            leadingIcon: Icons.check_rounded,
+            leadingIcon: Symbols.check_rounded,
             onPressed: () {
               setState(() {
                 _cups[index] = {
@@ -126,10 +127,10 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
         children: [
           AppHeader(
             title: 'Cup Sizes',
-            icon: Icons.local_drink_rounded,
+            icon: Symbols.local_drink_rounded,
             accent: water,
             leading: AppIconButton(
-              icon: Icons.arrow_back_ios_new_rounded,
+              icon: Symbols.arrow_back_rounded,
               accent: water,
               filled: false,
               onPressed: () => Navigator.pop(context),
@@ -156,7 +157,7 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
               accent: water,
               size: AppButtonSize.lg,
               fullWidth: true,
-              leadingIcon: Icons.check_rounded,
+              leadingIcon: Symbols.check_rounded,
               onPressed: _saveSettings,
             ),
           ),
@@ -203,7 +204,7 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
             ),
           ),
           IconButton(
-            icon: Icon(Icons.edit_outlined, color: ext.mark(water)),
+            icon: Icon(Symbols.edit_rounded, color: ext.mark(water)),
             onPressed: () => _editCup(index),
           ),
         ],

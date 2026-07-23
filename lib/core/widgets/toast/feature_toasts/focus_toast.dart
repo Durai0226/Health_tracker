@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -15,7 +16,7 @@ class FocusToast {
       feature: ToastFeature.focus,
       title: '🎯 Focus Session Started',
       message: '$minutes minute session - stay focused!',
-      customIcon: Icons.play_circle_rounded,
+      customIcon: Symbols.play_circle_rounded,
       duration: const Duration(seconds: 3),
     );
   }
@@ -41,7 +42,7 @@ class FocusToast {
       feature: ToastFeature.focus,
       title: 'Session Paused',
       message: 'Take a break, your progress is saved',
-      customIcon: Icons.pause_circle_rounded,
+      customIcon: Symbols.pause_circle_rounded,
       duration: const Duration(seconds: 2),
     );
   }
@@ -54,7 +55,7 @@ class FocusToast {
       feature: ToastFeature.focus,
       title: 'Session Resumed',
       message: 'Welcome back! Keep going',
-      customIcon: Icons.play_circle_rounded,
+      customIcon: Symbols.play_circle_rounded,
       duration: const Duration(seconds: 2),
     );
   }
@@ -67,7 +68,7 @@ class FocusToast {
       feature: ToastFeature.focus,
       title: 'Session Ended',
       message: 'That\'s okay, try again when you\'re ready',
-      customIcon: Icons.stop_circle_rounded,
+      customIcon: Symbols.stop_circle_rounded,
     );
   }
 

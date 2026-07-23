@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
@@ -38,10 +39,10 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
 
   // Quick add amounts
   final List<Map<String, dynamic>> _quickAddOptions = [
-    {'amount': 150, 'icon': Icons.local_cafe, 'label': 'Cup'},
-    {'amount': 250, 'icon': Icons.water_drop, 'label': 'Glass'},
-    {'amount': 500, 'icon': Icons.local_drink, 'label': 'Bottle'},
-    {'amount': 750, 'icon': Icons.sports_bar, 'label': 'Large'},
+    {'amount': 150, 'icon': Symbols.local_cafe_rounded, 'label': 'Cup'},
+    {'amount': 250, 'icon': Symbols.water_drop_rounded, 'label': 'Glass'},
+    {'amount': 500, 'icon': Symbols.local_drink_rounded, 'label': 'Bottle'},
+    {'amount': 750, 'icon': Symbols.sports_bar_rounded, 'label': 'Large'},
   ];
 
   @override
@@ -134,7 +135,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: AppColors.error),
+              const Icon(Symbols.error_rounded, size: 64, color: AppColors.error),
               const SizedBox(height: 16),
               const Text('Failed to initialize water tracking'),
               const SizedBox(height: 16),
@@ -191,14 +192,14 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                   MaterialPageRoute(builder: (_) => const BeverageSelectionScreen()),
                 ),
                 backgroundColor: Colors.white,
-                child: const Icon(Icons.local_cafe, color: AppColors.info),
+                child: const Icon(Symbols.local_cafe_rounded, color: AppColors.info),
               ),
               const SizedBox(height: 12),
               FloatingActionButton.extended(
                 heroTag: 'custom',
                 onPressed: () => _showCustomAmountDialog(),
                 backgroundColor: AppColors.info,
-                icon: const Icon(Icons.add, color: Colors.white),
+                icon: const Icon(Symbols.add_rounded, color: Colors.white),
                 label: const Text('Quick Add', style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -215,19 +216,19 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
       pinned: true,
       backgroundColor: AppColors.info,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+        icon: const Icon(Symbols.arrow_back_rounded, color: Colors.white),
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+          icon: const Icon(Symbols.notifications_rounded, color: Colors.white),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const WaterReminderSettingsScreen()),
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.settings_outlined, color: Colors.white),
+          icon: const Icon(Symbols.settings_rounded, color: Colors.white),
           onPressed: _showGoalDialog,
         ),
       ],
@@ -456,21 +457,21 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
           Row(
             children: [
               _buildStatCard(
-                icon: Icons.water_drop,
+                icon: Symbols.water_drop_rounded,
                 value: '${currentMl}ml',
                 label: 'Consumed',
                 color: AppColors.info,
               ),
               const SizedBox(width: 16),
               _buildStatCard(
-                icon: Icons.flag_outlined,
+                icon: Symbols.flag_rounded,
                 value: '${remaining}ml',
                 label: 'Remaining',
                 color: AppColors.warning,
               ),
               const SizedBox(width: 16),
               _buildStatCard(
-                icon: Icons.local_drink,
+                icon: Symbols.local_drink_rounded,
                 value: '${logs.length}',
                 label: 'Drinks',
                 color: AppColors.success,
@@ -578,7 +579,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                           ),
                         ),
                         if (progress >= 1)
-                          const Icon(Icons.check, color: AppColors.success, size: 16),
+                          const Icon(Symbols.check_rounded, color: AppColors.success, size: 16),
                       ],
                     ),
                   ),
@@ -633,7 +634,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    Icon(Icons.water_drop_outlined, 
+                    Icon(Symbols.water_drop_rounded, 
                         size: 48, color: AppColors.textSecondary.withOpacity(0.5)),
                     const SizedBox(height: 8),
                     const Text(
@@ -674,7 +675,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
             childAspectRatio: 0.85,
             children: [
               _buildFeatureCard(
-                icon: Icons.analytics_outlined,
+                icon: Symbols.analytics_rounded,
                 label: 'Statistics',
                 color: Colors.purple,
                 onTap: () => Navigator.push(
@@ -683,7 +684,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.calendar_today,
+                icon: Symbols.calendar_today_rounded,
                 label: 'Calendar',
                 color: Colors.orange,
                 onTap: () => Navigator.push(
@@ -692,7 +693,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.edit_calendar,
+                icon: Symbols.edit_calendar_rounded,
                 label: 'Edit History',
                 color: Colors.teal,
                 onTap: () => Navigator.push(
@@ -701,7 +702,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.person_outline,
+                icon: Symbols.person_rounded,
                 label: 'Profile',
                 color: Colors.indigo,
                 onTap: () => Navigator.push(
@@ -710,7 +711,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.emoji_events,
+                icon: Symbols.emoji_events_rounded,
                 label: 'Achievements',
                 color: Colors.amber,
                 onTap: () => Navigator.push(
@@ -719,7 +720,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.flag_outlined,
+                icon: Symbols.flag_rounded,
                 label: 'Challenges',
                 color: Colors.red,
                 onTap: () => Navigator.push(
@@ -728,7 +729,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.coffee,
+                icon: Symbols.coffee_rounded,
                 label: 'Caffeine',
                 color: Colors.brown,
                 onTap: () => Navigator.push(
@@ -737,7 +738,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.create_outlined,
+                icon: Symbols.create_rounded,
                 label: 'Custom Cup',
                 color: Colors.pink,
                 onTap: () => Navigator.push(
@@ -746,7 +747,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                 ),
               ),
               _buildFeatureCard(
-                icon: Icons.track_changes,
+                icon: Symbols.track_changes_rounded,
                 label: 'Tracking',
                 color: Colors.cyan,
                 onTap: () => Navigator.push(
@@ -822,7 +823,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
               color: AppColors.info.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.water_drop, color: AppColors.info, size: 20),
+            child: const Icon(Symbols.water_drop_rounded, color: AppColors.info, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -879,7 +880,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                     onPressed: () => setModalState(() {
                       customAmount = (customAmount - 50).clamp(50, 2000);
                     }),
-                    icon: const Icon(Icons.remove_circle_outline),
+                    icon: const Icon(Symbols.remove_circle_rounded),
                     key: const Key('remove_custom_amount'),
                     iconSize: 32,
                     color: AppColors.info,
@@ -897,7 +898,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                     onPressed: () => setModalState(() {
                       customAmount = (customAmount + 50).clamp(50, 2000);
                     }),
-                    icon: const Icon(Icons.add_circle_outline),
+                    icon: const Icon(Symbols.add_circle_rounded),
                     key: const Key('add_custom_amount'),
                     iconSize: 32,
                     color: AppColors.info,
@@ -969,7 +970,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                     onPressed: () => setModalState(() {
                       newGoal = (newGoal - 250).clamp(500, 5000);
                     }),
-                    icon: const Icon(Icons.remove_circle_outline),
+                    icon: const Icon(Symbols.remove_circle_rounded),
                     iconSize: 32,
                     color: AppColors.info,
                   ),
@@ -986,7 +987,7 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
                     onPressed: () => setModalState(() {
                       newGoal = (newGoal + 250).clamp(500, 5000);
                     }),
-                    icon: const Icon(Icons.add_circle_outline),
+                    icon: const Icon(Symbols.add_circle_rounded),
                     iconSize: 32,
                     color: AppColors.info,
                   ),

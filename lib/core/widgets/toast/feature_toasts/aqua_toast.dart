@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -16,7 +17,7 @@ class AquaToast {
       feature: ToastFeature.water,
       title: '💧 Hydration Logged!',
       message: '+${amount}ml of $beverageName added',
-      customIcon: Icons.water_drop_rounded,
+      customIcon: Symbols.water_drop_rounded,
     );
   }
 

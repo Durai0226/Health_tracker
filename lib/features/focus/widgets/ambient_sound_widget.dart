@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../models/ambient_sound.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -45,7 +46,7 @@ class AmbientSoundSelector extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.volume_down_rounded,
+            Symbols.volume_down_rounded,
             color: selectedSound.color,
           ),
           Expanded(
@@ -63,7 +64,7 @@ class AmbientSoundSelector extends StatelessWidget {
             ),
           ),
           Icon(
-            Icons.volume_up_rounded,
+            Symbols.volume_up_rounded,
             color: selectedSound.color,
           ),
         ],
@@ -182,7 +183,7 @@ class AmbientSoundMiniPlayer extends StatelessWidget {
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.music_note_rounded, color: Colors.grey, size: 20),
+              Icon(Symbols.music_note_rounded, color: Colors.grey, size: 20),
               SizedBox(width: 8),
               Text(
                 'Add Sound',
@@ -232,7 +233,7 @@ class AmbientSoundMiniPlayer extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
                   color: Colors.white,
                   size: 16,
                 ),

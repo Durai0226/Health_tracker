@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../toast_service.dart';
 import '../toast_theme.dart';
 import '../premium_toast.dart';
@@ -15,7 +16,7 @@ class HabitToast {
       feature: ToastFeature.habit,
       title: '✓ Habit Completed',
       message: '$habitName marked as done',
-      customIcon: Icons.check_circle_rounded,
+      customIcon: Symbols.check_circle_rounded,
     );
   }
 
@@ -54,7 +55,7 @@ class HabitToast {
       feature: ToastFeature.habit,
       title: 'Streak Reset',
       message: '$habitName streak has been reset - start fresh!',
-      customIcon: Icons.refresh_rounded,
+      customIcon: Symbols.refresh_rounded,
     );
   }
 

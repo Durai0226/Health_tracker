@@ -16455,6 +16455,7099 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
   }
 }
 
+class $MenstrualCyclesTable extends MenstrualCycles
+    with TableInfo<$MenstrualCyclesTable, MenstrualCycleRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MenstrualCyclesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startDateMeta = const VerificationMeta(
+    'startDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startDate = GeneratedColumn<DateTime>(
+    'start_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endDateMeta = const VerificationMeta(
+    'endDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> endDate = GeneratedColumn<DateTime>(
+    'end_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cycleLengthDaysMeta = const VerificationMeta(
+    'cycleLengthDays',
+  );
+  @override
+  late final GeneratedColumn<int> cycleLengthDays = GeneratedColumn<int>(
+    'cycle_length_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _periodLengthDaysMeta = const VerificationMeta(
+    'periodLengthDays',
+  );
+  @override
+  late final GeneratedColumn<int> periodLengthDays = GeneratedColumn<int>(
+    'period_length_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isPredictedMeta = const VerificationMeta(
+    'isPredicted',
+  );
+  @override
+  late final GeneratedColumn<bool> isPredicted = GeneratedColumn<bool>(
+    'is_predicted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_predicted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    startDate,
+    endDate,
+    cycleLengthDays,
+    periodLengthDays,
+    isPredicted,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'menstrual_cycles';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MenstrualCycleRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('start_date')) {
+      context.handle(
+        _startDateMeta,
+        startDate.isAcceptableOrUnknown(data['start_date']!, _startDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startDateMeta);
+    }
+    if (data.containsKey('end_date')) {
+      context.handle(
+        _endDateMeta,
+        endDate.isAcceptableOrUnknown(data['end_date']!, _endDateMeta),
+      );
+    }
+    if (data.containsKey('cycle_length_days')) {
+      context.handle(
+        _cycleLengthDaysMeta,
+        cycleLengthDays.isAcceptableOrUnknown(
+          data['cycle_length_days']!,
+          _cycleLengthDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('period_length_days')) {
+      context.handle(
+        _periodLengthDaysMeta,
+        periodLengthDays.isAcceptableOrUnknown(
+          data['period_length_days']!,
+          _periodLengthDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_predicted')) {
+      context.handle(
+        _isPredictedMeta,
+        isPredicted.isAcceptableOrUnknown(
+          data['is_predicted']!,
+          _isPredictedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MenstrualCycleRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MenstrualCycleRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      startDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}start_date'],
+      )!,
+      endDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}end_date'],
+      ),
+      cycleLengthDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cycle_length_days'],
+      ),
+      periodLengthDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}period_length_days'],
+      ),
+      isPredicted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_predicted'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $MenstrualCyclesTable createAlias(String alias) {
+    return $MenstrualCyclesTable(attachedDatabase, alias);
+  }
+}
+
+class MenstrualCycleRow extends DataClass
+    implements Insertable<MenstrualCycleRow> {
+  final String id;
+  final DateTime startDate;
+  final DateTime? endDate;
+  final int? cycleLengthDays;
+  final int? periodLengthDays;
+  final bool isPredicted;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const MenstrualCycleRow({
+    required this.id,
+    required this.startDate,
+    this.endDate,
+    this.cycleLengthDays,
+    this.periodLengthDays,
+    required this.isPredicted,
+    this.note,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['start_date'] = Variable<DateTime>(startDate);
+    if (!nullToAbsent || endDate != null) {
+      map['end_date'] = Variable<DateTime>(endDate);
+    }
+    if (!nullToAbsent || cycleLengthDays != null) {
+      map['cycle_length_days'] = Variable<int>(cycleLengthDays);
+    }
+    if (!nullToAbsent || periodLengthDays != null) {
+      map['period_length_days'] = Variable<int>(periodLengthDays);
+    }
+    map['is_predicted'] = Variable<bool>(isPredicted);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  MenstrualCyclesCompanion toCompanion(bool nullToAbsent) {
+    return MenstrualCyclesCompanion(
+      id: Value(id),
+      startDate: Value(startDate),
+      endDate: endDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endDate),
+      cycleLengthDays: cycleLengthDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cycleLengthDays),
+      periodLengthDays: periodLengthDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(periodLengthDays),
+      isPredicted: Value(isPredicted),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory MenstrualCycleRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MenstrualCycleRow(
+      id: serializer.fromJson<String>(json['id']),
+      startDate: serializer.fromJson<DateTime>(json['startDate']),
+      endDate: serializer.fromJson<DateTime?>(json['endDate']),
+      cycleLengthDays: serializer.fromJson<int?>(json['cycleLengthDays']),
+      periodLengthDays: serializer.fromJson<int?>(json['periodLengthDays']),
+      isPredicted: serializer.fromJson<bool>(json['isPredicted']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'startDate': serializer.toJson<DateTime>(startDate),
+      'endDate': serializer.toJson<DateTime?>(endDate),
+      'cycleLengthDays': serializer.toJson<int?>(cycleLengthDays),
+      'periodLengthDays': serializer.toJson<int?>(periodLengthDays),
+      'isPredicted': serializer.toJson<bool>(isPredicted),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  MenstrualCycleRow copyWith({
+    String? id,
+    DateTime? startDate,
+    Value<DateTime?> endDate = const Value.absent(),
+    Value<int?> cycleLengthDays = const Value.absent(),
+    Value<int?> periodLengthDays = const Value.absent(),
+    bool? isPredicted,
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => MenstrualCycleRow(
+    id: id ?? this.id,
+    startDate: startDate ?? this.startDate,
+    endDate: endDate.present ? endDate.value : this.endDate,
+    cycleLengthDays: cycleLengthDays.present
+        ? cycleLengthDays.value
+        : this.cycleLengthDays,
+    periodLengthDays: periodLengthDays.present
+        ? periodLengthDays.value
+        : this.periodLengthDays,
+    isPredicted: isPredicted ?? this.isPredicted,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  MenstrualCycleRow copyWithCompanion(MenstrualCyclesCompanion data) {
+    return MenstrualCycleRow(
+      id: data.id.present ? data.id.value : this.id,
+      startDate: data.startDate.present ? data.startDate.value : this.startDate,
+      endDate: data.endDate.present ? data.endDate.value : this.endDate,
+      cycleLengthDays: data.cycleLengthDays.present
+          ? data.cycleLengthDays.value
+          : this.cycleLengthDays,
+      periodLengthDays: data.periodLengthDays.present
+          ? data.periodLengthDays.value
+          : this.periodLengthDays,
+      isPredicted: data.isPredicted.present
+          ? data.isPredicted.value
+          : this.isPredicted,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MenstrualCycleRow(')
+          ..write('id: $id, ')
+          ..write('startDate: $startDate, ')
+          ..write('endDate: $endDate, ')
+          ..write('cycleLengthDays: $cycleLengthDays, ')
+          ..write('periodLengthDays: $periodLengthDays, ')
+          ..write('isPredicted: $isPredicted, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    startDate,
+    endDate,
+    cycleLengthDays,
+    periodLengthDays,
+    isPredicted,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MenstrualCycleRow &&
+          other.id == this.id &&
+          other.startDate == this.startDate &&
+          other.endDate == this.endDate &&
+          other.cycleLengthDays == this.cycleLengthDays &&
+          other.periodLengthDays == this.periodLengthDays &&
+          other.isPredicted == this.isPredicted &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class MenstrualCyclesCompanion extends UpdateCompanion<MenstrualCycleRow> {
+  final Value<String> id;
+  final Value<DateTime> startDate;
+  final Value<DateTime?> endDate;
+  final Value<int?> cycleLengthDays;
+  final Value<int?> periodLengthDays;
+  final Value<bool> isPredicted;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const MenstrualCyclesCompanion({
+    this.id = const Value.absent(),
+    this.startDate = const Value.absent(),
+    this.endDate = const Value.absent(),
+    this.cycleLengthDays = const Value.absent(),
+    this.periodLengthDays = const Value.absent(),
+    this.isPredicted = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MenstrualCyclesCompanion.insert({
+    required String id,
+    required DateTime startDate,
+    this.endDate = const Value.absent(),
+    this.cycleLengthDays = const Value.absent(),
+    this.periodLengthDays = const Value.absent(),
+    this.isPredicted = const Value.absent(),
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       startDate = Value(startDate),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<MenstrualCycleRow> custom({
+    Expression<String>? id,
+    Expression<DateTime>? startDate,
+    Expression<DateTime>? endDate,
+    Expression<int>? cycleLengthDays,
+    Expression<int>? periodLengthDays,
+    Expression<bool>? isPredicted,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (startDate != null) 'start_date': startDate,
+      if (endDate != null) 'end_date': endDate,
+      if (cycleLengthDays != null) 'cycle_length_days': cycleLengthDays,
+      if (periodLengthDays != null) 'period_length_days': periodLengthDays,
+      if (isPredicted != null) 'is_predicted': isPredicted,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MenstrualCyclesCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? startDate,
+    Value<DateTime?>? endDate,
+    Value<int?>? cycleLengthDays,
+    Value<int?>? periodLengthDays,
+    Value<bool>? isPredicted,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return MenstrualCyclesCompanion(
+      id: id ?? this.id,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      cycleLengthDays: cycleLengthDays ?? this.cycleLengthDays,
+      periodLengthDays: periodLengthDays ?? this.periodLengthDays,
+      isPredicted: isPredicted ?? this.isPredicted,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (startDate.present) {
+      map['start_date'] = Variable<DateTime>(startDate.value);
+    }
+    if (endDate.present) {
+      map['end_date'] = Variable<DateTime>(endDate.value);
+    }
+    if (cycleLengthDays.present) {
+      map['cycle_length_days'] = Variable<int>(cycleLengthDays.value);
+    }
+    if (periodLengthDays.present) {
+      map['period_length_days'] = Variable<int>(periodLengthDays.value);
+    }
+    if (isPredicted.present) {
+      map['is_predicted'] = Variable<bool>(isPredicted.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MenstrualCyclesCompanion(')
+          ..write('id: $id, ')
+          ..write('startDate: $startDate, ')
+          ..write('endDate: $endDate, ')
+          ..write('cycleLengthDays: $cycleLengthDays, ')
+          ..write('periodLengthDays: $periodLengthDays, ')
+          ..write('isPredicted: $isPredicted, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PeriodDaysTable extends PeriodDays
+    with TableInfo<$PeriodDaysTable, PeriodDayRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PeriodDaysTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cycleIdMeta = const VerificationMeta(
+    'cycleId',
+  );
+  @override
+  late final GeneratedColumn<String> cycleId = GeneratedColumn<String>(
+    'cycle_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _flowIndexMeta = const VerificationMeta(
+    'flowIndex',
+  );
+  @override
+  late final GeneratedColumn<int> flowIndex = GeneratedColumn<int>(
+    'flow_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _moodMeta = const VerificationMeta('mood');
+  @override
+  late final GeneratedColumn<int> mood = GeneratedColumn<int>(
+    'mood',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _energyMeta = const VerificationMeta('energy');
+  @override
+  late final GeneratedColumn<int> energy = GeneratedColumn<int>(
+    'energy',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bbtCelsiusMeta = const VerificationMeta(
+    'bbtCelsius',
+  );
+  @override
+  late final GeneratedColumn<double> bbtCelsius = GeneratedColumn<double>(
+    'bbt_celsius',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _intercourseMeta = const VerificationMeta(
+    'intercourse',
+  );
+  @override
+  late final GeneratedColumn<bool> intercourse = GeneratedColumn<bool>(
+    'intercourse',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("intercourse" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _symptomIdsJsonMeta = const VerificationMeta(
+    'symptomIdsJson',
+  );
+  @override
+  late final GeneratedColumn<String> symptomIdsJson = GeneratedColumn<String>(
+    'symptom_ids_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    date,
+    cycleId,
+    flowIndex,
+    mood,
+    energy,
+    bbtCelsius,
+    intercourse,
+    symptomIdsJson,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'period_days';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PeriodDayRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('cycle_id')) {
+      context.handle(
+        _cycleIdMeta,
+        cycleId.isAcceptableOrUnknown(data['cycle_id']!, _cycleIdMeta),
+      );
+    }
+    if (data.containsKey('flow_index')) {
+      context.handle(
+        _flowIndexMeta,
+        flowIndex.isAcceptableOrUnknown(data['flow_index']!, _flowIndexMeta),
+      );
+    }
+    if (data.containsKey('mood')) {
+      context.handle(
+        _moodMeta,
+        mood.isAcceptableOrUnknown(data['mood']!, _moodMeta),
+      );
+    }
+    if (data.containsKey('energy')) {
+      context.handle(
+        _energyMeta,
+        energy.isAcceptableOrUnknown(data['energy']!, _energyMeta),
+      );
+    }
+    if (data.containsKey('bbt_celsius')) {
+      context.handle(
+        _bbtCelsiusMeta,
+        bbtCelsius.isAcceptableOrUnknown(data['bbt_celsius']!, _bbtCelsiusMeta),
+      );
+    }
+    if (data.containsKey('intercourse')) {
+      context.handle(
+        _intercourseMeta,
+        intercourse.isAcceptableOrUnknown(
+          data['intercourse']!,
+          _intercourseMeta,
+        ),
+      );
+    }
+    if (data.containsKey('symptom_ids_json')) {
+      context.handle(
+        _symptomIdsJsonMeta,
+        symptomIdsJson.isAcceptableOrUnknown(
+          data['symptom_ids_json']!,
+          _symptomIdsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PeriodDayRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PeriodDayRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      cycleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cycle_id'],
+      ),
+      flowIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}flow_index'],
+      )!,
+      mood: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}mood'],
+      ),
+      energy: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}energy'],
+      ),
+      bbtCelsius: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}bbt_celsius'],
+      ),
+      intercourse: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}intercourse'],
+      ),
+      symptomIdsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}symptom_ids_json'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $PeriodDaysTable createAlias(String alias) {
+    return $PeriodDaysTable(attachedDatabase, alias);
+  }
+}
+
+class PeriodDayRow extends DataClass implements Insertable<PeriodDayRow> {
+  final String id;
+  final DateTime date;
+  final String? cycleId;
+  final int flowIndex;
+  final int? mood;
+  final int? energy;
+  final double? bbtCelsius;
+  final bool? intercourse;
+  final String? symptomIdsJson;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const PeriodDayRow({
+    required this.id,
+    required this.date,
+    this.cycleId,
+    required this.flowIndex,
+    this.mood,
+    this.energy,
+    this.bbtCelsius,
+    this.intercourse,
+    this.symptomIdsJson,
+    this.note,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['date'] = Variable<DateTime>(date);
+    if (!nullToAbsent || cycleId != null) {
+      map['cycle_id'] = Variable<String>(cycleId);
+    }
+    map['flow_index'] = Variable<int>(flowIndex);
+    if (!nullToAbsent || mood != null) {
+      map['mood'] = Variable<int>(mood);
+    }
+    if (!nullToAbsent || energy != null) {
+      map['energy'] = Variable<int>(energy);
+    }
+    if (!nullToAbsent || bbtCelsius != null) {
+      map['bbt_celsius'] = Variable<double>(bbtCelsius);
+    }
+    if (!nullToAbsent || intercourse != null) {
+      map['intercourse'] = Variable<bool>(intercourse);
+    }
+    if (!nullToAbsent || symptomIdsJson != null) {
+      map['symptom_ids_json'] = Variable<String>(symptomIdsJson);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  PeriodDaysCompanion toCompanion(bool nullToAbsent) {
+    return PeriodDaysCompanion(
+      id: Value(id),
+      date: Value(date),
+      cycleId: cycleId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cycleId),
+      flowIndex: Value(flowIndex),
+      mood: mood == null && nullToAbsent ? const Value.absent() : Value(mood),
+      energy: energy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(energy),
+      bbtCelsius: bbtCelsius == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bbtCelsius),
+      intercourse: intercourse == null && nullToAbsent
+          ? const Value.absent()
+          : Value(intercourse),
+      symptomIdsJson: symptomIdsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(symptomIdsJson),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory PeriodDayRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PeriodDayRow(
+      id: serializer.fromJson<String>(json['id']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      cycleId: serializer.fromJson<String?>(json['cycleId']),
+      flowIndex: serializer.fromJson<int>(json['flowIndex']),
+      mood: serializer.fromJson<int?>(json['mood']),
+      energy: serializer.fromJson<int?>(json['energy']),
+      bbtCelsius: serializer.fromJson<double?>(json['bbtCelsius']),
+      intercourse: serializer.fromJson<bool?>(json['intercourse']),
+      symptomIdsJson: serializer.fromJson<String?>(json['symptomIdsJson']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'date': serializer.toJson<DateTime>(date),
+      'cycleId': serializer.toJson<String?>(cycleId),
+      'flowIndex': serializer.toJson<int>(flowIndex),
+      'mood': serializer.toJson<int?>(mood),
+      'energy': serializer.toJson<int?>(energy),
+      'bbtCelsius': serializer.toJson<double?>(bbtCelsius),
+      'intercourse': serializer.toJson<bool?>(intercourse),
+      'symptomIdsJson': serializer.toJson<String?>(symptomIdsJson),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  PeriodDayRow copyWith({
+    String? id,
+    DateTime? date,
+    Value<String?> cycleId = const Value.absent(),
+    int? flowIndex,
+    Value<int?> mood = const Value.absent(),
+    Value<int?> energy = const Value.absent(),
+    Value<double?> bbtCelsius = const Value.absent(),
+    Value<bool?> intercourse = const Value.absent(),
+    Value<String?> symptomIdsJson = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => PeriodDayRow(
+    id: id ?? this.id,
+    date: date ?? this.date,
+    cycleId: cycleId.present ? cycleId.value : this.cycleId,
+    flowIndex: flowIndex ?? this.flowIndex,
+    mood: mood.present ? mood.value : this.mood,
+    energy: energy.present ? energy.value : this.energy,
+    bbtCelsius: bbtCelsius.present ? bbtCelsius.value : this.bbtCelsius,
+    intercourse: intercourse.present ? intercourse.value : this.intercourse,
+    symptomIdsJson: symptomIdsJson.present
+        ? symptomIdsJson.value
+        : this.symptomIdsJson,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  PeriodDayRow copyWithCompanion(PeriodDaysCompanion data) {
+    return PeriodDayRow(
+      id: data.id.present ? data.id.value : this.id,
+      date: data.date.present ? data.date.value : this.date,
+      cycleId: data.cycleId.present ? data.cycleId.value : this.cycleId,
+      flowIndex: data.flowIndex.present ? data.flowIndex.value : this.flowIndex,
+      mood: data.mood.present ? data.mood.value : this.mood,
+      energy: data.energy.present ? data.energy.value : this.energy,
+      bbtCelsius: data.bbtCelsius.present
+          ? data.bbtCelsius.value
+          : this.bbtCelsius,
+      intercourse: data.intercourse.present
+          ? data.intercourse.value
+          : this.intercourse,
+      symptomIdsJson: data.symptomIdsJson.present
+          ? data.symptomIdsJson.value
+          : this.symptomIdsJson,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeriodDayRow(')
+          ..write('id: $id, ')
+          ..write('date: $date, ')
+          ..write('cycleId: $cycleId, ')
+          ..write('flowIndex: $flowIndex, ')
+          ..write('mood: $mood, ')
+          ..write('energy: $energy, ')
+          ..write('bbtCelsius: $bbtCelsius, ')
+          ..write('intercourse: $intercourse, ')
+          ..write('symptomIdsJson: $symptomIdsJson, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    date,
+    cycleId,
+    flowIndex,
+    mood,
+    energy,
+    bbtCelsius,
+    intercourse,
+    symptomIdsJson,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PeriodDayRow &&
+          other.id == this.id &&
+          other.date == this.date &&
+          other.cycleId == this.cycleId &&
+          other.flowIndex == this.flowIndex &&
+          other.mood == this.mood &&
+          other.energy == this.energy &&
+          other.bbtCelsius == this.bbtCelsius &&
+          other.intercourse == this.intercourse &&
+          other.symptomIdsJson == this.symptomIdsJson &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class PeriodDaysCompanion extends UpdateCompanion<PeriodDayRow> {
+  final Value<String> id;
+  final Value<DateTime> date;
+  final Value<String?> cycleId;
+  final Value<int> flowIndex;
+  final Value<int?> mood;
+  final Value<int?> energy;
+  final Value<double?> bbtCelsius;
+  final Value<bool?> intercourse;
+  final Value<String?> symptomIdsJson;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const PeriodDaysCompanion({
+    this.id = const Value.absent(),
+    this.date = const Value.absent(),
+    this.cycleId = const Value.absent(),
+    this.flowIndex = const Value.absent(),
+    this.mood = const Value.absent(),
+    this.energy = const Value.absent(),
+    this.bbtCelsius = const Value.absent(),
+    this.intercourse = const Value.absent(),
+    this.symptomIdsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PeriodDaysCompanion.insert({
+    required String id,
+    required DateTime date,
+    this.cycleId = const Value.absent(),
+    this.flowIndex = const Value.absent(),
+    this.mood = const Value.absent(),
+    this.energy = const Value.absent(),
+    this.bbtCelsius = const Value.absent(),
+    this.intercourse = const Value.absent(),
+    this.symptomIdsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       date = Value(date),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<PeriodDayRow> custom({
+    Expression<String>? id,
+    Expression<DateTime>? date,
+    Expression<String>? cycleId,
+    Expression<int>? flowIndex,
+    Expression<int>? mood,
+    Expression<int>? energy,
+    Expression<double>? bbtCelsius,
+    Expression<bool>? intercourse,
+    Expression<String>? symptomIdsJson,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (date != null) 'date': date,
+      if (cycleId != null) 'cycle_id': cycleId,
+      if (flowIndex != null) 'flow_index': flowIndex,
+      if (mood != null) 'mood': mood,
+      if (energy != null) 'energy': energy,
+      if (bbtCelsius != null) 'bbt_celsius': bbtCelsius,
+      if (intercourse != null) 'intercourse': intercourse,
+      if (symptomIdsJson != null) 'symptom_ids_json': symptomIdsJson,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PeriodDaysCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? date,
+    Value<String?>? cycleId,
+    Value<int>? flowIndex,
+    Value<int?>? mood,
+    Value<int?>? energy,
+    Value<double?>? bbtCelsius,
+    Value<bool?>? intercourse,
+    Value<String?>? symptomIdsJson,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return PeriodDaysCompanion(
+      id: id ?? this.id,
+      date: date ?? this.date,
+      cycleId: cycleId ?? this.cycleId,
+      flowIndex: flowIndex ?? this.flowIndex,
+      mood: mood ?? this.mood,
+      energy: energy ?? this.energy,
+      bbtCelsius: bbtCelsius ?? this.bbtCelsius,
+      intercourse: intercourse ?? this.intercourse,
+      symptomIdsJson: symptomIdsJson ?? this.symptomIdsJson,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (cycleId.present) {
+      map['cycle_id'] = Variable<String>(cycleId.value);
+    }
+    if (flowIndex.present) {
+      map['flow_index'] = Variable<int>(flowIndex.value);
+    }
+    if (mood.present) {
+      map['mood'] = Variable<int>(mood.value);
+    }
+    if (energy.present) {
+      map['energy'] = Variable<int>(energy.value);
+    }
+    if (bbtCelsius.present) {
+      map['bbt_celsius'] = Variable<double>(bbtCelsius.value);
+    }
+    if (intercourse.present) {
+      map['intercourse'] = Variable<bool>(intercourse.value);
+    }
+    if (symptomIdsJson.present) {
+      map['symptom_ids_json'] = Variable<String>(symptomIdsJson.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeriodDaysCompanion(')
+          ..write('id: $id, ')
+          ..write('date: $date, ')
+          ..write('cycleId: $cycleId, ')
+          ..write('flowIndex: $flowIndex, ')
+          ..write('mood: $mood, ')
+          ..write('energy: $energy, ')
+          ..write('bbtCelsius: $bbtCelsius, ')
+          ..write('intercourse: $intercourse, ')
+          ..write('symptomIdsJson: $symptomIdsJson, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PeriodSettingsTableTable extends PeriodSettingsTable
+    with TableInfo<$PeriodSettingsTableTable, PeriodSettingsRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PeriodSettingsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _trackingModeIndexMeta = const VerificationMeta(
+    'trackingModeIndex',
+  );
+  @override
+  late final GeneratedColumn<int> trackingModeIndex = GeneratedColumn<int>(
+    'tracking_mode_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _typicalCycleLengthMeta =
+      const VerificationMeta('typicalCycleLength');
+  @override
+  late final GeneratedColumn<int> typicalCycleLength = GeneratedColumn<int>(
+    'typical_cycle_length',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(28),
+  );
+  static const VerificationMeta _typicalPeriodLengthMeta =
+      const VerificationMeta('typicalPeriodLength');
+  @override
+  late final GeneratedColumn<int> typicalPeriodLength = GeneratedColumn<int>(
+    'typical_period_length',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(5),
+  );
+  static const VerificationMeta _lutealPhaseLengthMeta = const VerificationMeta(
+    'lutealPhaseLength',
+  );
+  @override
+  late final GeneratedColumn<int> lutealPhaseLength = GeneratedColumn<int>(
+    'luteal_phase_length',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(14),
+  );
+  static const VerificationMeta _pregnancyStartDateMeta =
+      const VerificationMeta('pregnancyStartDate');
+  @override
+  late final GeneratedColumn<DateTime> pregnancyStartDate =
+      GeneratedColumn<DateTime>(
+        'pregnancy_start_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _birthControlEnabledMeta =
+      const VerificationMeta('birthControlEnabled');
+  @override
+  late final GeneratedColumn<bool> birthControlEnabled = GeneratedColumn<bool>(
+    'birth_control_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("birth_control_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _cloudSyncEnabledMeta = const VerificationMeta(
+    'cloudSyncEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> cloudSyncEnabled = GeneratedColumn<bool>(
+    'cloud_sync_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("cloud_sync_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _extraJsonMeta = const VerificationMeta(
+    'extraJson',
+  );
+  @override
+  late final GeneratedColumn<String> extraJson = GeneratedColumn<String>(
+    'extra_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    trackingModeIndex,
+    typicalCycleLength,
+    typicalPeriodLength,
+    lutealPhaseLength,
+    pregnancyStartDate,
+    birthControlEnabled,
+    cloudSyncEnabled,
+    updatedAt,
+    schemaVer,
+    extraJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'period_settings_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PeriodSettingsRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('tracking_mode_index')) {
+      context.handle(
+        _trackingModeIndexMeta,
+        trackingModeIndex.isAcceptableOrUnknown(
+          data['tracking_mode_index']!,
+          _trackingModeIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('typical_cycle_length')) {
+      context.handle(
+        _typicalCycleLengthMeta,
+        typicalCycleLength.isAcceptableOrUnknown(
+          data['typical_cycle_length']!,
+          _typicalCycleLengthMeta,
+        ),
+      );
+    }
+    if (data.containsKey('typical_period_length')) {
+      context.handle(
+        _typicalPeriodLengthMeta,
+        typicalPeriodLength.isAcceptableOrUnknown(
+          data['typical_period_length']!,
+          _typicalPeriodLengthMeta,
+        ),
+      );
+    }
+    if (data.containsKey('luteal_phase_length')) {
+      context.handle(
+        _lutealPhaseLengthMeta,
+        lutealPhaseLength.isAcceptableOrUnknown(
+          data['luteal_phase_length']!,
+          _lutealPhaseLengthMeta,
+        ),
+      );
+    }
+    if (data.containsKey('pregnancy_start_date')) {
+      context.handle(
+        _pregnancyStartDateMeta,
+        pregnancyStartDate.isAcceptableOrUnknown(
+          data['pregnancy_start_date']!,
+          _pregnancyStartDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('birth_control_enabled')) {
+      context.handle(
+        _birthControlEnabledMeta,
+        birthControlEnabled.isAcceptableOrUnknown(
+          data['birth_control_enabled']!,
+          _birthControlEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cloud_sync_enabled')) {
+      context.handle(
+        _cloudSyncEnabledMeta,
+        cloudSyncEnabled.isAcceptableOrUnknown(
+          data['cloud_sync_enabled']!,
+          _cloudSyncEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('extra_json')) {
+      context.handle(
+        _extraJsonMeta,
+        extraJson.isAcceptableOrUnknown(data['extra_json']!, _extraJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PeriodSettingsRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PeriodSettingsRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      trackingModeIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tracking_mode_index'],
+      )!,
+      typicalCycleLength: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}typical_cycle_length'],
+      )!,
+      typicalPeriodLength: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}typical_period_length'],
+      )!,
+      lutealPhaseLength: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}luteal_phase_length'],
+      )!,
+      pregnancyStartDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}pregnancy_start_date'],
+      ),
+      birthControlEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}birth_control_enabled'],
+      )!,
+      cloudSyncEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}cloud_sync_enabled'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      extraJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}extra_json'],
+      ),
+    );
+  }
+
+  @override
+  $PeriodSettingsTableTable createAlias(String alias) {
+    return $PeriodSettingsTableTable(attachedDatabase, alias);
+  }
+}
+
+class PeriodSettingsRow extends DataClass
+    implements Insertable<PeriodSettingsRow> {
+  final String id;
+  final int trackingModeIndex;
+  final int typicalCycleLength;
+  final int typicalPeriodLength;
+  final int lutealPhaseLength;
+  final DateTime? pregnancyStartDate;
+  final bool birthControlEnabled;
+  final bool cloudSyncEnabled;
+  final DateTime updatedAt;
+  final int schemaVer;
+  final String? extraJson;
+  const PeriodSettingsRow({
+    required this.id,
+    required this.trackingModeIndex,
+    required this.typicalCycleLength,
+    required this.typicalPeriodLength,
+    required this.lutealPhaseLength,
+    this.pregnancyStartDate,
+    required this.birthControlEnabled,
+    required this.cloudSyncEnabled,
+    required this.updatedAt,
+    required this.schemaVer,
+    this.extraJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['tracking_mode_index'] = Variable<int>(trackingModeIndex);
+    map['typical_cycle_length'] = Variable<int>(typicalCycleLength);
+    map['typical_period_length'] = Variable<int>(typicalPeriodLength);
+    map['luteal_phase_length'] = Variable<int>(lutealPhaseLength);
+    if (!nullToAbsent || pregnancyStartDate != null) {
+      map['pregnancy_start_date'] = Variable<DateTime>(pregnancyStartDate);
+    }
+    map['birth_control_enabled'] = Variable<bool>(birthControlEnabled);
+    map['cloud_sync_enabled'] = Variable<bool>(cloudSyncEnabled);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['schema_ver'] = Variable<int>(schemaVer);
+    if (!nullToAbsent || extraJson != null) {
+      map['extra_json'] = Variable<String>(extraJson);
+    }
+    return map;
+  }
+
+  PeriodSettingsTableCompanion toCompanion(bool nullToAbsent) {
+    return PeriodSettingsTableCompanion(
+      id: Value(id),
+      trackingModeIndex: Value(trackingModeIndex),
+      typicalCycleLength: Value(typicalCycleLength),
+      typicalPeriodLength: Value(typicalPeriodLength),
+      lutealPhaseLength: Value(lutealPhaseLength),
+      pregnancyStartDate: pregnancyStartDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pregnancyStartDate),
+      birthControlEnabled: Value(birthControlEnabled),
+      cloudSyncEnabled: Value(cloudSyncEnabled),
+      updatedAt: Value(updatedAt),
+      schemaVer: Value(schemaVer),
+      extraJson: extraJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(extraJson),
+    );
+  }
+
+  factory PeriodSettingsRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PeriodSettingsRow(
+      id: serializer.fromJson<String>(json['id']),
+      trackingModeIndex: serializer.fromJson<int>(json['trackingModeIndex']),
+      typicalCycleLength: serializer.fromJson<int>(json['typicalCycleLength']),
+      typicalPeriodLength: serializer.fromJson<int>(
+        json['typicalPeriodLength'],
+      ),
+      lutealPhaseLength: serializer.fromJson<int>(json['lutealPhaseLength']),
+      pregnancyStartDate: serializer.fromJson<DateTime?>(
+        json['pregnancyStartDate'],
+      ),
+      birthControlEnabled: serializer.fromJson<bool>(
+        json['birthControlEnabled'],
+      ),
+      cloudSyncEnabled: serializer.fromJson<bool>(json['cloudSyncEnabled']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      extraJson: serializer.fromJson<String?>(json['extraJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'trackingModeIndex': serializer.toJson<int>(trackingModeIndex),
+      'typicalCycleLength': serializer.toJson<int>(typicalCycleLength),
+      'typicalPeriodLength': serializer.toJson<int>(typicalPeriodLength),
+      'lutealPhaseLength': serializer.toJson<int>(lutealPhaseLength),
+      'pregnancyStartDate': serializer.toJson<DateTime?>(pregnancyStartDate),
+      'birthControlEnabled': serializer.toJson<bool>(birthControlEnabled),
+      'cloudSyncEnabled': serializer.toJson<bool>(cloudSyncEnabled),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'extraJson': serializer.toJson<String?>(extraJson),
+    };
+  }
+
+  PeriodSettingsRow copyWith({
+    String? id,
+    int? trackingModeIndex,
+    int? typicalCycleLength,
+    int? typicalPeriodLength,
+    int? lutealPhaseLength,
+    Value<DateTime?> pregnancyStartDate = const Value.absent(),
+    bool? birthControlEnabled,
+    bool? cloudSyncEnabled,
+    DateTime? updatedAt,
+    int? schemaVer,
+    Value<String?> extraJson = const Value.absent(),
+  }) => PeriodSettingsRow(
+    id: id ?? this.id,
+    trackingModeIndex: trackingModeIndex ?? this.trackingModeIndex,
+    typicalCycleLength: typicalCycleLength ?? this.typicalCycleLength,
+    typicalPeriodLength: typicalPeriodLength ?? this.typicalPeriodLength,
+    lutealPhaseLength: lutealPhaseLength ?? this.lutealPhaseLength,
+    pregnancyStartDate: pregnancyStartDate.present
+        ? pregnancyStartDate.value
+        : this.pregnancyStartDate,
+    birthControlEnabled: birthControlEnabled ?? this.birthControlEnabled,
+    cloudSyncEnabled: cloudSyncEnabled ?? this.cloudSyncEnabled,
+    updatedAt: updatedAt ?? this.updatedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    extraJson: extraJson.present ? extraJson.value : this.extraJson,
+  );
+  PeriodSettingsRow copyWithCompanion(PeriodSettingsTableCompanion data) {
+    return PeriodSettingsRow(
+      id: data.id.present ? data.id.value : this.id,
+      trackingModeIndex: data.trackingModeIndex.present
+          ? data.trackingModeIndex.value
+          : this.trackingModeIndex,
+      typicalCycleLength: data.typicalCycleLength.present
+          ? data.typicalCycleLength.value
+          : this.typicalCycleLength,
+      typicalPeriodLength: data.typicalPeriodLength.present
+          ? data.typicalPeriodLength.value
+          : this.typicalPeriodLength,
+      lutealPhaseLength: data.lutealPhaseLength.present
+          ? data.lutealPhaseLength.value
+          : this.lutealPhaseLength,
+      pregnancyStartDate: data.pregnancyStartDate.present
+          ? data.pregnancyStartDate.value
+          : this.pregnancyStartDate,
+      birthControlEnabled: data.birthControlEnabled.present
+          ? data.birthControlEnabled.value
+          : this.birthControlEnabled,
+      cloudSyncEnabled: data.cloudSyncEnabled.present
+          ? data.cloudSyncEnabled.value
+          : this.cloudSyncEnabled,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      extraJson: data.extraJson.present ? data.extraJson.value : this.extraJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeriodSettingsRow(')
+          ..write('id: $id, ')
+          ..write('trackingModeIndex: $trackingModeIndex, ')
+          ..write('typicalCycleLength: $typicalCycleLength, ')
+          ..write('typicalPeriodLength: $typicalPeriodLength, ')
+          ..write('lutealPhaseLength: $lutealPhaseLength, ')
+          ..write('pregnancyStartDate: $pregnancyStartDate, ')
+          ..write('birthControlEnabled: $birthControlEnabled, ')
+          ..write('cloudSyncEnabled: $cloudSyncEnabled, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('extraJson: $extraJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    trackingModeIndex,
+    typicalCycleLength,
+    typicalPeriodLength,
+    lutealPhaseLength,
+    pregnancyStartDate,
+    birthControlEnabled,
+    cloudSyncEnabled,
+    updatedAt,
+    schemaVer,
+    extraJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PeriodSettingsRow &&
+          other.id == this.id &&
+          other.trackingModeIndex == this.trackingModeIndex &&
+          other.typicalCycleLength == this.typicalCycleLength &&
+          other.typicalPeriodLength == this.typicalPeriodLength &&
+          other.lutealPhaseLength == this.lutealPhaseLength &&
+          other.pregnancyStartDate == this.pregnancyStartDate &&
+          other.birthControlEnabled == this.birthControlEnabled &&
+          other.cloudSyncEnabled == this.cloudSyncEnabled &&
+          other.updatedAt == this.updatedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.extraJson == this.extraJson);
+}
+
+class PeriodSettingsTableCompanion extends UpdateCompanion<PeriodSettingsRow> {
+  final Value<String> id;
+  final Value<int> trackingModeIndex;
+  final Value<int> typicalCycleLength;
+  final Value<int> typicalPeriodLength;
+  final Value<int> lutealPhaseLength;
+  final Value<DateTime?> pregnancyStartDate;
+  final Value<bool> birthControlEnabled;
+  final Value<bool> cloudSyncEnabled;
+  final Value<DateTime> updatedAt;
+  final Value<int> schemaVer;
+  final Value<String?> extraJson;
+  final Value<int> rowid;
+  const PeriodSettingsTableCompanion({
+    this.id = const Value.absent(),
+    this.trackingModeIndex = const Value.absent(),
+    this.typicalCycleLength = const Value.absent(),
+    this.typicalPeriodLength = const Value.absent(),
+    this.lutealPhaseLength = const Value.absent(),
+    this.pregnancyStartDate = const Value.absent(),
+    this.birthControlEnabled = const Value.absent(),
+    this.cloudSyncEnabled = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.extraJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PeriodSettingsTableCompanion.insert({
+    required String id,
+    this.trackingModeIndex = const Value.absent(),
+    this.typicalCycleLength = const Value.absent(),
+    this.typicalPeriodLength = const Value.absent(),
+    this.lutealPhaseLength = const Value.absent(),
+    this.pregnancyStartDate = const Value.absent(),
+    this.birthControlEnabled = const Value.absent(),
+    this.cloudSyncEnabled = const Value.absent(),
+    required DateTime updatedAt,
+    this.schemaVer = const Value.absent(),
+    this.extraJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       updatedAt = Value(updatedAt);
+  static Insertable<PeriodSettingsRow> custom({
+    Expression<String>? id,
+    Expression<int>? trackingModeIndex,
+    Expression<int>? typicalCycleLength,
+    Expression<int>? typicalPeriodLength,
+    Expression<int>? lutealPhaseLength,
+    Expression<DateTime>? pregnancyStartDate,
+    Expression<bool>? birthControlEnabled,
+    Expression<bool>? cloudSyncEnabled,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? schemaVer,
+    Expression<String>? extraJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (trackingModeIndex != null) 'tracking_mode_index': trackingModeIndex,
+      if (typicalCycleLength != null)
+        'typical_cycle_length': typicalCycleLength,
+      if (typicalPeriodLength != null)
+        'typical_period_length': typicalPeriodLength,
+      if (lutealPhaseLength != null) 'luteal_phase_length': lutealPhaseLength,
+      if (pregnancyStartDate != null)
+        'pregnancy_start_date': pregnancyStartDate,
+      if (birthControlEnabled != null)
+        'birth_control_enabled': birthControlEnabled,
+      if (cloudSyncEnabled != null) 'cloud_sync_enabled': cloudSyncEnabled,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (extraJson != null) 'extra_json': extraJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PeriodSettingsTableCompanion copyWith({
+    Value<String>? id,
+    Value<int>? trackingModeIndex,
+    Value<int>? typicalCycleLength,
+    Value<int>? typicalPeriodLength,
+    Value<int>? lutealPhaseLength,
+    Value<DateTime?>? pregnancyStartDate,
+    Value<bool>? birthControlEnabled,
+    Value<bool>? cloudSyncEnabled,
+    Value<DateTime>? updatedAt,
+    Value<int>? schemaVer,
+    Value<String?>? extraJson,
+    Value<int>? rowid,
+  }) {
+    return PeriodSettingsTableCompanion(
+      id: id ?? this.id,
+      trackingModeIndex: trackingModeIndex ?? this.trackingModeIndex,
+      typicalCycleLength: typicalCycleLength ?? this.typicalCycleLength,
+      typicalPeriodLength: typicalPeriodLength ?? this.typicalPeriodLength,
+      lutealPhaseLength: lutealPhaseLength ?? this.lutealPhaseLength,
+      pregnancyStartDate: pregnancyStartDate ?? this.pregnancyStartDate,
+      birthControlEnabled: birthControlEnabled ?? this.birthControlEnabled,
+      cloudSyncEnabled: cloudSyncEnabled ?? this.cloudSyncEnabled,
+      updatedAt: updatedAt ?? this.updatedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      extraJson: extraJson ?? this.extraJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (trackingModeIndex.present) {
+      map['tracking_mode_index'] = Variable<int>(trackingModeIndex.value);
+    }
+    if (typicalCycleLength.present) {
+      map['typical_cycle_length'] = Variable<int>(typicalCycleLength.value);
+    }
+    if (typicalPeriodLength.present) {
+      map['typical_period_length'] = Variable<int>(typicalPeriodLength.value);
+    }
+    if (lutealPhaseLength.present) {
+      map['luteal_phase_length'] = Variable<int>(lutealPhaseLength.value);
+    }
+    if (pregnancyStartDate.present) {
+      map['pregnancy_start_date'] = Variable<DateTime>(
+        pregnancyStartDate.value,
+      );
+    }
+    if (birthControlEnabled.present) {
+      map['birth_control_enabled'] = Variable<bool>(birthControlEnabled.value);
+    }
+    if (cloudSyncEnabled.present) {
+      map['cloud_sync_enabled'] = Variable<bool>(cloudSyncEnabled.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (extraJson.present) {
+      map['extra_json'] = Variable<String>(extraJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeriodSettingsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('trackingModeIndex: $trackingModeIndex, ')
+          ..write('typicalCycleLength: $typicalCycleLength, ')
+          ..write('typicalPeriodLength: $typicalPeriodLength, ')
+          ..write('lutealPhaseLength: $lutealPhaseLength, ')
+          ..write('pregnancyStartDate: $pregnancyStartDate, ')
+          ..write('birthControlEnabled: $birthControlEnabled, ')
+          ..write('cloudSyncEnabled: $cloudSyncEnabled, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('extraJson: $extraJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StepDailyDataTable extends StepDailyData
+    with TableInfo<$StepDailyDataTable, StepDayRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StepDailyDataTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _goalStepsMeta = const VerificationMeta(
+    'goalSteps',
+  );
+  @override
+  late final GeneratedColumn<int> goalSteps = GeneratedColumn<int>(
+    'goal_steps',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(8000),
+  );
+  static const VerificationMeta _sensorStepsMeta = const VerificationMeta(
+    'sensorSteps',
+  );
+  @override
+  late final GeneratedColumn<int> sensorSteps = GeneratedColumn<int>(
+    'sensor_steps',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _manualStepsMeta = const VerificationMeta(
+    'manualSteps',
+  );
+  @override
+  late final GeneratedColumn<int> manualSteps = GeneratedColumn<int>(
+    'manual_steps',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _distanceMetersMeta = const VerificationMeta(
+    'distanceMeters',
+  );
+  @override
+  late final GeneratedColumn<double> distanceMeters = GeneratedColumn<double>(
+    'distance_meters',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _activeCaloriesMeta = const VerificationMeta(
+    'activeCalories',
+  );
+  @override
+  late final GeneratedColumn<double> activeCalories = GeneratedColumn<double>(
+    'active_calories',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _sourceIndexMeta = const VerificationMeta(
+    'sourceIndex',
+  );
+  @override
+  late final GeneratedColumn<int> sourceIndex = GeneratedColumn<int>(
+    'source_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(3),
+  );
+  static const VerificationMeta _hourlyJsonMeta = const VerificationMeta(
+    'hourlyJson',
+  );
+  @override
+  late final GeneratedColumn<String> hourlyJson = GeneratedColumn<String>(
+    'hourly_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _goalReachedMeta = const VerificationMeta(
+    'goalReached',
+  );
+  @override
+  late final GeneratedColumn<bool> goalReached = GeneratedColumn<bool>(
+    'goal_reached',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("goal_reached" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _goalReachedAtMeta = const VerificationMeta(
+    'goalReachedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> goalReachedAt =
+      GeneratedColumn<DateTime>(
+        'goal_reached_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastSyncedAtMeta = const VerificationMeta(
+    'lastSyncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncedAt = GeneratedColumn<DateTime>(
+    'last_synced_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    date,
+    goalSteps,
+    sensorSteps,
+    manualSteps,
+    distanceMeters,
+    activeCalories,
+    sourceIndex,
+    hourlyJson,
+    goalReached,
+    goalReachedAt,
+    lastSyncedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'step_daily_data';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StepDayRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('goal_steps')) {
+      context.handle(
+        _goalStepsMeta,
+        goalSteps.isAcceptableOrUnknown(data['goal_steps']!, _goalStepsMeta),
+      );
+    }
+    if (data.containsKey('sensor_steps')) {
+      context.handle(
+        _sensorStepsMeta,
+        sensorSteps.isAcceptableOrUnknown(
+          data['sensor_steps']!,
+          _sensorStepsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('manual_steps')) {
+      context.handle(
+        _manualStepsMeta,
+        manualSteps.isAcceptableOrUnknown(
+          data['manual_steps']!,
+          _manualStepsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('distance_meters')) {
+      context.handle(
+        _distanceMetersMeta,
+        distanceMeters.isAcceptableOrUnknown(
+          data['distance_meters']!,
+          _distanceMetersMeta,
+        ),
+      );
+    }
+    if (data.containsKey('active_calories')) {
+      context.handle(
+        _activeCaloriesMeta,
+        activeCalories.isAcceptableOrUnknown(
+          data['active_calories']!,
+          _activeCaloriesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_index')) {
+      context.handle(
+        _sourceIndexMeta,
+        sourceIndex.isAcceptableOrUnknown(
+          data['source_index']!,
+          _sourceIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hourly_json')) {
+      context.handle(
+        _hourlyJsonMeta,
+        hourlyJson.isAcceptableOrUnknown(data['hourly_json']!, _hourlyJsonMeta),
+      );
+    }
+    if (data.containsKey('goal_reached')) {
+      context.handle(
+        _goalReachedMeta,
+        goalReached.isAcceptableOrUnknown(
+          data['goal_reached']!,
+          _goalReachedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('goal_reached_at')) {
+      context.handle(
+        _goalReachedAtMeta,
+        goalReachedAt.isAcceptableOrUnknown(
+          data['goal_reached_at']!,
+          _goalReachedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_synced_at')) {
+      context.handle(
+        _lastSyncedAtMeta,
+        lastSyncedAt.isAcceptableOrUnknown(
+          data['last_synced_at']!,
+          _lastSyncedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StepDayRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StepDayRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      goalSteps: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}goal_steps'],
+      )!,
+      sensorSteps: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sensor_steps'],
+      ),
+      manualSteps: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}manual_steps'],
+      )!,
+      distanceMeters: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}distance_meters'],
+      )!,
+      activeCalories: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}active_calories'],
+      )!,
+      sourceIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_index'],
+      )!,
+      hourlyJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hourly_json'],
+      ),
+      goalReached: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}goal_reached'],
+      )!,
+      goalReachedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}goal_reached_at'],
+      ),
+      lastSyncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_synced_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $StepDailyDataTable createAlias(String alias) {
+    return $StepDailyDataTable(attachedDatabase, alias);
+  }
+}
+
+class StepDayRow extends DataClass implements Insertable<StepDayRow> {
+  final String id;
+  final DateTime date;
+  final int goalSteps;
+  final int? sensorSteps;
+  final int manualSteps;
+  final double distanceMeters;
+  final double activeCalories;
+  final int sourceIndex;
+  final String? hourlyJson;
+  final bool goalReached;
+  final DateTime? goalReachedAt;
+  final DateTime? lastSyncedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const StepDayRow({
+    required this.id,
+    required this.date,
+    required this.goalSteps,
+    this.sensorSteps,
+    required this.manualSteps,
+    required this.distanceMeters,
+    required this.activeCalories,
+    required this.sourceIndex,
+    this.hourlyJson,
+    required this.goalReached,
+    this.goalReachedAt,
+    this.lastSyncedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['date'] = Variable<DateTime>(date);
+    map['goal_steps'] = Variable<int>(goalSteps);
+    if (!nullToAbsent || sensorSteps != null) {
+      map['sensor_steps'] = Variable<int>(sensorSteps);
+    }
+    map['manual_steps'] = Variable<int>(manualSteps);
+    map['distance_meters'] = Variable<double>(distanceMeters);
+    map['active_calories'] = Variable<double>(activeCalories);
+    map['source_index'] = Variable<int>(sourceIndex);
+    if (!nullToAbsent || hourlyJson != null) {
+      map['hourly_json'] = Variable<String>(hourlyJson);
+    }
+    map['goal_reached'] = Variable<bool>(goalReached);
+    if (!nullToAbsent || goalReachedAt != null) {
+      map['goal_reached_at'] = Variable<DateTime>(goalReachedAt);
+    }
+    if (!nullToAbsent || lastSyncedAt != null) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  StepDailyDataCompanion toCompanion(bool nullToAbsent) {
+    return StepDailyDataCompanion(
+      id: Value(id),
+      date: Value(date),
+      goalSteps: Value(goalSteps),
+      sensorSteps: sensorSteps == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sensorSteps),
+      manualSteps: Value(manualSteps),
+      distanceMeters: Value(distanceMeters),
+      activeCalories: Value(activeCalories),
+      sourceIndex: Value(sourceIndex),
+      hourlyJson: hourlyJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hourlyJson),
+      goalReached: Value(goalReached),
+      goalReachedAt: goalReachedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(goalReachedAt),
+      lastSyncedAt: lastSyncedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory StepDayRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StepDayRow(
+      id: serializer.fromJson<String>(json['id']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      goalSteps: serializer.fromJson<int>(json['goalSteps']),
+      sensorSteps: serializer.fromJson<int?>(json['sensorSteps']),
+      manualSteps: serializer.fromJson<int>(json['manualSteps']),
+      distanceMeters: serializer.fromJson<double>(json['distanceMeters']),
+      activeCalories: serializer.fromJson<double>(json['activeCalories']),
+      sourceIndex: serializer.fromJson<int>(json['sourceIndex']),
+      hourlyJson: serializer.fromJson<String?>(json['hourlyJson']),
+      goalReached: serializer.fromJson<bool>(json['goalReached']),
+      goalReachedAt: serializer.fromJson<DateTime?>(json['goalReachedAt']),
+      lastSyncedAt: serializer.fromJson<DateTime?>(json['lastSyncedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'date': serializer.toJson<DateTime>(date),
+      'goalSteps': serializer.toJson<int>(goalSteps),
+      'sensorSteps': serializer.toJson<int?>(sensorSteps),
+      'manualSteps': serializer.toJson<int>(manualSteps),
+      'distanceMeters': serializer.toJson<double>(distanceMeters),
+      'activeCalories': serializer.toJson<double>(activeCalories),
+      'sourceIndex': serializer.toJson<int>(sourceIndex),
+      'hourlyJson': serializer.toJson<String?>(hourlyJson),
+      'goalReached': serializer.toJson<bool>(goalReached),
+      'goalReachedAt': serializer.toJson<DateTime?>(goalReachedAt),
+      'lastSyncedAt': serializer.toJson<DateTime?>(lastSyncedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  StepDayRow copyWith({
+    String? id,
+    DateTime? date,
+    int? goalSteps,
+    Value<int?> sensorSteps = const Value.absent(),
+    int? manualSteps,
+    double? distanceMeters,
+    double? activeCalories,
+    int? sourceIndex,
+    Value<String?> hourlyJson = const Value.absent(),
+    bool? goalReached,
+    Value<DateTime?> goalReachedAt = const Value.absent(),
+    Value<DateTime?> lastSyncedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => StepDayRow(
+    id: id ?? this.id,
+    date: date ?? this.date,
+    goalSteps: goalSteps ?? this.goalSteps,
+    sensorSteps: sensorSteps.present ? sensorSteps.value : this.sensorSteps,
+    manualSteps: manualSteps ?? this.manualSteps,
+    distanceMeters: distanceMeters ?? this.distanceMeters,
+    activeCalories: activeCalories ?? this.activeCalories,
+    sourceIndex: sourceIndex ?? this.sourceIndex,
+    hourlyJson: hourlyJson.present ? hourlyJson.value : this.hourlyJson,
+    goalReached: goalReached ?? this.goalReached,
+    goalReachedAt: goalReachedAt.present
+        ? goalReachedAt.value
+        : this.goalReachedAt,
+    lastSyncedAt: lastSyncedAt.present ? lastSyncedAt.value : this.lastSyncedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  StepDayRow copyWithCompanion(StepDailyDataCompanion data) {
+    return StepDayRow(
+      id: data.id.present ? data.id.value : this.id,
+      date: data.date.present ? data.date.value : this.date,
+      goalSteps: data.goalSteps.present ? data.goalSteps.value : this.goalSteps,
+      sensorSteps: data.sensorSteps.present
+          ? data.sensorSteps.value
+          : this.sensorSteps,
+      manualSteps: data.manualSteps.present
+          ? data.manualSteps.value
+          : this.manualSteps,
+      distanceMeters: data.distanceMeters.present
+          ? data.distanceMeters.value
+          : this.distanceMeters,
+      activeCalories: data.activeCalories.present
+          ? data.activeCalories.value
+          : this.activeCalories,
+      sourceIndex: data.sourceIndex.present
+          ? data.sourceIndex.value
+          : this.sourceIndex,
+      hourlyJson: data.hourlyJson.present
+          ? data.hourlyJson.value
+          : this.hourlyJson,
+      goalReached: data.goalReached.present
+          ? data.goalReached.value
+          : this.goalReached,
+      goalReachedAt: data.goalReachedAt.present
+          ? data.goalReachedAt.value
+          : this.goalReachedAt,
+      lastSyncedAt: data.lastSyncedAt.present
+          ? data.lastSyncedAt.value
+          : this.lastSyncedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StepDayRow(')
+          ..write('id: $id, ')
+          ..write('date: $date, ')
+          ..write('goalSteps: $goalSteps, ')
+          ..write('sensorSteps: $sensorSteps, ')
+          ..write('manualSteps: $manualSteps, ')
+          ..write('distanceMeters: $distanceMeters, ')
+          ..write('activeCalories: $activeCalories, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('hourlyJson: $hourlyJson, ')
+          ..write('goalReached: $goalReached, ')
+          ..write('goalReachedAt: $goalReachedAt, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    date,
+    goalSteps,
+    sensorSteps,
+    manualSteps,
+    distanceMeters,
+    activeCalories,
+    sourceIndex,
+    hourlyJson,
+    goalReached,
+    goalReachedAt,
+    lastSyncedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StepDayRow &&
+          other.id == this.id &&
+          other.date == this.date &&
+          other.goalSteps == this.goalSteps &&
+          other.sensorSteps == this.sensorSteps &&
+          other.manualSteps == this.manualSteps &&
+          other.distanceMeters == this.distanceMeters &&
+          other.activeCalories == this.activeCalories &&
+          other.sourceIndex == this.sourceIndex &&
+          other.hourlyJson == this.hourlyJson &&
+          other.goalReached == this.goalReached &&
+          other.goalReachedAt == this.goalReachedAt &&
+          other.lastSyncedAt == this.lastSyncedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class StepDailyDataCompanion extends UpdateCompanion<StepDayRow> {
+  final Value<String> id;
+  final Value<DateTime> date;
+  final Value<int> goalSteps;
+  final Value<int?> sensorSteps;
+  final Value<int> manualSteps;
+  final Value<double> distanceMeters;
+  final Value<double> activeCalories;
+  final Value<int> sourceIndex;
+  final Value<String?> hourlyJson;
+  final Value<bool> goalReached;
+  final Value<DateTime?> goalReachedAt;
+  final Value<DateTime?> lastSyncedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const StepDailyDataCompanion({
+    this.id = const Value.absent(),
+    this.date = const Value.absent(),
+    this.goalSteps = const Value.absent(),
+    this.sensorSteps = const Value.absent(),
+    this.manualSteps = const Value.absent(),
+    this.distanceMeters = const Value.absent(),
+    this.activeCalories = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.hourlyJson = const Value.absent(),
+    this.goalReached = const Value.absent(),
+    this.goalReachedAt = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StepDailyDataCompanion.insert({
+    required String id,
+    required DateTime date,
+    this.goalSteps = const Value.absent(),
+    this.sensorSteps = const Value.absent(),
+    this.manualSteps = const Value.absent(),
+    this.distanceMeters = const Value.absent(),
+    this.activeCalories = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.hourlyJson = const Value.absent(),
+    this.goalReached = const Value.absent(),
+    this.goalReachedAt = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       date = Value(date),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<StepDayRow> custom({
+    Expression<String>? id,
+    Expression<DateTime>? date,
+    Expression<int>? goalSteps,
+    Expression<int>? sensorSteps,
+    Expression<int>? manualSteps,
+    Expression<double>? distanceMeters,
+    Expression<double>? activeCalories,
+    Expression<int>? sourceIndex,
+    Expression<String>? hourlyJson,
+    Expression<bool>? goalReached,
+    Expression<DateTime>? goalReachedAt,
+    Expression<DateTime>? lastSyncedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (date != null) 'date': date,
+      if (goalSteps != null) 'goal_steps': goalSteps,
+      if (sensorSteps != null) 'sensor_steps': sensorSteps,
+      if (manualSteps != null) 'manual_steps': manualSteps,
+      if (distanceMeters != null) 'distance_meters': distanceMeters,
+      if (activeCalories != null) 'active_calories': activeCalories,
+      if (sourceIndex != null) 'source_index': sourceIndex,
+      if (hourlyJson != null) 'hourly_json': hourlyJson,
+      if (goalReached != null) 'goal_reached': goalReached,
+      if (goalReachedAt != null) 'goal_reached_at': goalReachedAt,
+      if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StepDailyDataCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? date,
+    Value<int>? goalSteps,
+    Value<int?>? sensorSteps,
+    Value<int>? manualSteps,
+    Value<double>? distanceMeters,
+    Value<double>? activeCalories,
+    Value<int>? sourceIndex,
+    Value<String?>? hourlyJson,
+    Value<bool>? goalReached,
+    Value<DateTime?>? goalReachedAt,
+    Value<DateTime?>? lastSyncedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return StepDailyDataCompanion(
+      id: id ?? this.id,
+      date: date ?? this.date,
+      goalSteps: goalSteps ?? this.goalSteps,
+      sensorSteps: sensorSteps ?? this.sensorSteps,
+      manualSteps: manualSteps ?? this.manualSteps,
+      distanceMeters: distanceMeters ?? this.distanceMeters,
+      activeCalories: activeCalories ?? this.activeCalories,
+      sourceIndex: sourceIndex ?? this.sourceIndex,
+      hourlyJson: hourlyJson ?? this.hourlyJson,
+      goalReached: goalReached ?? this.goalReached,
+      goalReachedAt: goalReachedAt ?? this.goalReachedAt,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (goalSteps.present) {
+      map['goal_steps'] = Variable<int>(goalSteps.value);
+    }
+    if (sensorSteps.present) {
+      map['sensor_steps'] = Variable<int>(sensorSteps.value);
+    }
+    if (manualSteps.present) {
+      map['manual_steps'] = Variable<int>(manualSteps.value);
+    }
+    if (distanceMeters.present) {
+      map['distance_meters'] = Variable<double>(distanceMeters.value);
+    }
+    if (activeCalories.present) {
+      map['active_calories'] = Variable<double>(activeCalories.value);
+    }
+    if (sourceIndex.present) {
+      map['source_index'] = Variable<int>(sourceIndex.value);
+    }
+    if (hourlyJson.present) {
+      map['hourly_json'] = Variable<String>(hourlyJson.value);
+    }
+    if (goalReached.present) {
+      map['goal_reached'] = Variable<bool>(goalReached.value);
+    }
+    if (goalReachedAt.present) {
+      map['goal_reached_at'] = Variable<DateTime>(goalReachedAt.value);
+    }
+    if (lastSyncedAt.present) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StepDailyDataCompanion(')
+          ..write('id: $id, ')
+          ..write('date: $date, ')
+          ..write('goalSteps: $goalSteps, ')
+          ..write('sensorSteps: $sensorSteps, ')
+          ..write('manualSteps: $manualSteps, ')
+          ..write('distanceMeters: $distanceMeters, ')
+          ..write('activeCalories: $activeCalories, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('hourlyJson: $hourlyJson, ')
+          ..write('goalReached: $goalReached, ')
+          ..write('goalReachedAt: $goalReachedAt, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StepManualEntriesTable extends StepManualEntries
+    with TableInfo<$StepManualEntriesTable, StepManualEntryRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StepManualEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dailyDataIdMeta = const VerificationMeta(
+    'dailyDataId',
+  );
+  @override
+  late final GeneratedColumn<String> dailyDataId = GeneratedColumn<String>(
+    'daily_data_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _timeMeta = const VerificationMeta('time');
+  @override
+  late final GeneratedColumn<DateTime> time = GeneratedColumn<DateTime>(
+    'time',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stepsMeta = const VerificationMeta('steps');
+  @override
+  late final GeneratedColumn<int> steps = GeneratedColumn<int>(
+    'steps',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dailyDataId,
+    time,
+    steps,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'step_manual_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StepManualEntryRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('daily_data_id')) {
+      context.handle(
+        _dailyDataIdMeta,
+        dailyDataId.isAcceptableOrUnknown(
+          data['daily_data_id']!,
+          _dailyDataIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_dailyDataIdMeta);
+    }
+    if (data.containsKey('time')) {
+      context.handle(
+        _timeMeta,
+        time.isAcceptableOrUnknown(data['time']!, _timeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_timeMeta);
+    }
+    if (data.containsKey('steps')) {
+      context.handle(
+        _stepsMeta,
+        steps.isAcceptableOrUnknown(data['steps']!, _stepsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stepsMeta);
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StepManualEntryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StepManualEntryRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dailyDataId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}daily_data_id'],
+      )!,
+      time: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}time'],
+      )!,
+      steps: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}steps'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+    );
+  }
+
+  @override
+  $StepManualEntriesTable createAlias(String alias) {
+    return $StepManualEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class StepManualEntryRow extends DataClass
+    implements Insertable<StepManualEntryRow> {
+  final String id;
+  final String dailyDataId;
+  final DateTime time;
+  final int steps;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  const StepManualEntryRow({
+    required this.id,
+    required this.dailyDataId,
+    required this.time,
+    required this.steps,
+    this.note,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['daily_data_id'] = Variable<String>(dailyDataId);
+    map['time'] = Variable<DateTime>(time);
+    map['steps'] = Variable<int>(steps);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    return map;
+  }
+
+  StepManualEntriesCompanion toCompanion(bool nullToAbsent) {
+    return StepManualEntriesCompanion(
+      id: Value(id),
+      dailyDataId: Value(dailyDataId),
+      time: Value(time),
+      steps: Value(steps),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+    );
+  }
+
+  factory StepManualEntryRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StepManualEntryRow(
+      id: serializer.fromJson<String>(json['id']),
+      dailyDataId: serializer.fromJson<String>(json['dailyDataId']),
+      time: serializer.fromJson<DateTime>(json['time']),
+      steps: serializer.fromJson<int>(json['steps']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dailyDataId': serializer.toJson<String>(dailyDataId),
+      'time': serializer.toJson<DateTime>(time),
+      'steps': serializer.toJson<int>(steps),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+    };
+  }
+
+  StepManualEntryRow copyWith({
+    String? id,
+    String? dailyDataId,
+    DateTime? time,
+    int? steps,
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+  }) => StepManualEntryRow(
+    id: id ?? this.id,
+    dailyDataId: dailyDataId ?? this.dailyDataId,
+    time: time ?? this.time,
+    steps: steps ?? this.steps,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+  );
+  StepManualEntryRow copyWithCompanion(StepManualEntriesCompanion data) {
+    return StepManualEntryRow(
+      id: data.id.present ? data.id.value : this.id,
+      dailyDataId: data.dailyDataId.present
+          ? data.dailyDataId.value
+          : this.dailyDataId,
+      time: data.time.present ? data.time.value : this.time,
+      steps: data.steps.present ? data.steps.value : this.steps,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StepManualEntryRow(')
+          ..write('id: $id, ')
+          ..write('dailyDataId: $dailyDataId, ')
+          ..write('time: $time, ')
+          ..write('steps: $steps, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    dailyDataId,
+    time,
+    steps,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StepManualEntryRow &&
+          other.id == this.id &&
+          other.dailyDataId == this.dailyDataId &&
+          other.time == this.time &&
+          other.steps == this.steps &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced);
+}
+
+class StepManualEntriesCompanion extends UpdateCompanion<StepManualEntryRow> {
+  final Value<String> id;
+  final Value<String> dailyDataId;
+  final Value<DateTime> time;
+  final Value<int> steps;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<int> rowid;
+  const StepManualEntriesCompanion({
+    this.id = const Value.absent(),
+    this.dailyDataId = const Value.absent(),
+    this.time = const Value.absent(),
+    this.steps = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StepManualEntriesCompanion.insert({
+    required String id,
+    required String dailyDataId,
+    required DateTime time,
+    required int steps,
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       dailyDataId = Value(dailyDataId),
+       time = Value(time),
+       steps = Value(steps),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<StepManualEntryRow> custom({
+    Expression<String>? id,
+    Expression<String>? dailyDataId,
+    Expression<DateTime>? time,
+    Expression<int>? steps,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dailyDataId != null) 'daily_data_id': dailyDataId,
+      if (time != null) 'time': time,
+      if (steps != null) 'steps': steps,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StepManualEntriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? dailyDataId,
+    Value<DateTime>? time,
+    Value<int>? steps,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<int>? rowid,
+  }) {
+    return StepManualEntriesCompanion(
+      id: id ?? this.id,
+      dailyDataId: dailyDataId ?? this.dailyDataId,
+      time: time ?? this.time,
+      steps: steps ?? this.steps,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dailyDataId.present) {
+      map['daily_data_id'] = Variable<String>(dailyDataId.value);
+    }
+    if (time.present) {
+      map['time'] = Variable<DateTime>(time.value);
+    }
+    if (steps.present) {
+      map['steps'] = Variable<int>(steps.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StepManualEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('dailyDataId: $dailyDataId, ')
+          ..write('time: $time, ')
+          ..write('steps: $steps, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $HealthProfilesTable extends HealthProfiles
+    with TableInfo<$HealthProfilesTable, HealthProfileRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $HealthProfilesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _weightKgMeta = const VerificationMeta(
+    'weightKg',
+  );
+  @override
+  late final GeneratedColumn<double> weightKg = GeneratedColumn<double>(
+    'weight_kg',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _heightCmMeta = const VerificationMeta(
+    'heightCm',
+  );
+  @override
+  late final GeneratedColumn<int> heightCm = GeneratedColumn<int>(
+    'height_cm',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ageMeta = const VerificationMeta('age');
+  @override
+  late final GeneratedColumn<int> age = GeneratedColumn<int>(
+    'age',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isMaleMeta = const VerificationMeta('isMale');
+  @override
+  late final GeneratedColumn<bool> isMale = GeneratedColumn<bool>(
+    'is_male',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_male" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _strideLengthCmMeta = const VerificationMeta(
+    'strideLengthCm',
+  );
+  @override
+  late final GeneratedColumn<double> strideLengthCm = GeneratedColumn<double>(
+    'stride_length_cm',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _customStepGoalMeta = const VerificationMeta(
+    'customStepGoal',
+  );
+  @override
+  late final GeneratedColumn<int> customStepGoal = GeneratedColumn<int>(
+    'custom_step_goal',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _useCustomStepGoalMeta = const VerificationMeta(
+    'useCustomStepGoal',
+  );
+  @override
+  late final GeneratedColumn<bool> useCustomStepGoal = GeneratedColumn<bool>(
+    'use_custom_step_goal',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("use_custom_step_goal" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _targetSleepMinutesMeta =
+      const VerificationMeta('targetSleepMinutes');
+  @override
+  late final GeneratedColumn<int> targetSleepMinutes = GeneratedColumn<int>(
+    'target_sleep_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(480),
+  );
+  static const VerificationMeta _bedtimeHourMeta = const VerificationMeta(
+    'bedtimeHour',
+  );
+  @override
+  late final GeneratedColumn<int> bedtimeHour = GeneratedColumn<int>(
+    'bedtime_hour',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(22),
+  );
+  static const VerificationMeta _bedtimeMinuteMeta = const VerificationMeta(
+    'bedtimeMinute',
+  );
+  @override
+  late final GeneratedColumn<int> bedtimeMinute = GeneratedColumn<int>(
+    'bedtime_minute',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(30),
+  );
+  static const VerificationMeta _wakeHourMeta = const VerificationMeta(
+    'wakeHour',
+  );
+  @override
+  late final GeneratedColumn<int> wakeHour = GeneratedColumn<int>(
+    'wake_hour',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(7),
+  );
+  static const VerificationMeta _wakeMinuteMeta = const VerificationMeta(
+    'wakeMinute',
+  );
+  @override
+  late final GeneratedColumn<int> wakeMinute = GeneratedColumn<int>(
+    'wake_minute',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _extraJsonMeta = const VerificationMeta(
+    'extraJson',
+  );
+  @override
+  late final GeneratedColumn<String> extraJson = GeneratedColumn<String>(
+    'extra_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    weightKg,
+    heightCm,
+    age,
+    isMale,
+    strideLengthCm,
+    customStepGoal,
+    useCustomStepGoal,
+    targetSleepMinutes,
+    bedtimeHour,
+    bedtimeMinute,
+    wakeHour,
+    wakeMinute,
+    createdAt,
+    updatedAt,
+    schemaVer,
+    synced,
+    extraJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'health_profiles';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<HealthProfileRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('weight_kg')) {
+      context.handle(
+        _weightKgMeta,
+        weightKg.isAcceptableOrUnknown(data['weight_kg']!, _weightKgMeta),
+      );
+    }
+    if (data.containsKey('height_cm')) {
+      context.handle(
+        _heightCmMeta,
+        heightCm.isAcceptableOrUnknown(data['height_cm']!, _heightCmMeta),
+      );
+    }
+    if (data.containsKey('age')) {
+      context.handle(
+        _ageMeta,
+        age.isAcceptableOrUnknown(data['age']!, _ageMeta),
+      );
+    }
+    if (data.containsKey('is_male')) {
+      context.handle(
+        _isMaleMeta,
+        isMale.isAcceptableOrUnknown(data['is_male']!, _isMaleMeta),
+      );
+    }
+    if (data.containsKey('stride_length_cm')) {
+      context.handle(
+        _strideLengthCmMeta,
+        strideLengthCm.isAcceptableOrUnknown(
+          data['stride_length_cm']!,
+          _strideLengthCmMeta,
+        ),
+      );
+    }
+    if (data.containsKey('custom_step_goal')) {
+      context.handle(
+        _customStepGoalMeta,
+        customStepGoal.isAcceptableOrUnknown(
+          data['custom_step_goal']!,
+          _customStepGoalMeta,
+        ),
+      );
+    }
+    if (data.containsKey('use_custom_step_goal')) {
+      context.handle(
+        _useCustomStepGoalMeta,
+        useCustomStepGoal.isAcceptableOrUnknown(
+          data['use_custom_step_goal']!,
+          _useCustomStepGoalMeta,
+        ),
+      );
+    }
+    if (data.containsKey('target_sleep_minutes')) {
+      context.handle(
+        _targetSleepMinutesMeta,
+        targetSleepMinutes.isAcceptableOrUnknown(
+          data['target_sleep_minutes']!,
+          _targetSleepMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bedtime_hour')) {
+      context.handle(
+        _bedtimeHourMeta,
+        bedtimeHour.isAcceptableOrUnknown(
+          data['bedtime_hour']!,
+          _bedtimeHourMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bedtime_minute')) {
+      context.handle(
+        _bedtimeMinuteMeta,
+        bedtimeMinute.isAcceptableOrUnknown(
+          data['bedtime_minute']!,
+          _bedtimeMinuteMeta,
+        ),
+      );
+    }
+    if (data.containsKey('wake_hour')) {
+      context.handle(
+        _wakeHourMeta,
+        wakeHour.isAcceptableOrUnknown(data['wake_hour']!, _wakeHourMeta),
+      );
+    }
+    if (data.containsKey('wake_minute')) {
+      context.handle(
+        _wakeMinuteMeta,
+        wakeMinute.isAcceptableOrUnknown(data['wake_minute']!, _wakeMinuteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('extra_json')) {
+      context.handle(
+        _extraJsonMeta,
+        extraJson.isAcceptableOrUnknown(data['extra_json']!, _extraJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  HealthProfileRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return HealthProfileRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      weightKg: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}weight_kg'],
+      ),
+      heightCm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}height_cm'],
+      ),
+      age: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}age'],
+      ),
+      isMale: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_male'],
+      )!,
+      strideLengthCm: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}stride_length_cm'],
+      ),
+      customStepGoal: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}custom_step_goal'],
+      ),
+      useCustomStepGoal: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}use_custom_step_goal'],
+      )!,
+      targetSleepMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target_sleep_minutes'],
+      )!,
+      bedtimeHour: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bedtime_hour'],
+      )!,
+      bedtimeMinute: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bedtime_minute'],
+      )!,
+      wakeHour: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wake_hour'],
+      )!,
+      wakeMinute: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wake_minute'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      extraJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}extra_json'],
+      ),
+    );
+  }
+
+  @override
+  $HealthProfilesTable createAlias(String alias) {
+    return $HealthProfilesTable(attachedDatabase, alias);
+  }
+}
+
+class HealthProfileRow extends DataClass
+    implements Insertable<HealthProfileRow> {
+  final String id;
+  final double? weightKg;
+  final int? heightCm;
+  final int? age;
+  final bool isMale;
+  final double? strideLengthCm;
+  final int? customStepGoal;
+  final bool useCustomStepGoal;
+  final int targetSleepMinutes;
+  final int bedtimeHour;
+  final int bedtimeMinute;
+  final int wakeHour;
+  final int wakeMinute;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? extraJson;
+  const HealthProfileRow({
+    required this.id,
+    this.weightKg,
+    this.heightCm,
+    this.age,
+    required this.isMale,
+    this.strideLengthCm,
+    this.customStepGoal,
+    required this.useCustomStepGoal,
+    required this.targetSleepMinutes,
+    required this.bedtimeHour,
+    required this.bedtimeMinute,
+    required this.wakeHour,
+    required this.wakeMinute,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.extraJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || weightKg != null) {
+      map['weight_kg'] = Variable<double>(weightKg);
+    }
+    if (!nullToAbsent || heightCm != null) {
+      map['height_cm'] = Variable<int>(heightCm);
+    }
+    if (!nullToAbsent || age != null) {
+      map['age'] = Variable<int>(age);
+    }
+    map['is_male'] = Variable<bool>(isMale);
+    if (!nullToAbsent || strideLengthCm != null) {
+      map['stride_length_cm'] = Variable<double>(strideLengthCm);
+    }
+    if (!nullToAbsent || customStepGoal != null) {
+      map['custom_step_goal'] = Variable<int>(customStepGoal);
+    }
+    map['use_custom_step_goal'] = Variable<bool>(useCustomStepGoal);
+    map['target_sleep_minutes'] = Variable<int>(targetSleepMinutes);
+    map['bedtime_hour'] = Variable<int>(bedtimeHour);
+    map['bedtime_minute'] = Variable<int>(bedtimeMinute);
+    map['wake_hour'] = Variable<int>(wakeHour);
+    map['wake_minute'] = Variable<int>(wakeMinute);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || extraJson != null) {
+      map['extra_json'] = Variable<String>(extraJson);
+    }
+    return map;
+  }
+
+  HealthProfilesCompanion toCompanion(bool nullToAbsent) {
+    return HealthProfilesCompanion(
+      id: Value(id),
+      weightKg: weightKg == null && nullToAbsent
+          ? const Value.absent()
+          : Value(weightKg),
+      heightCm: heightCm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(heightCm),
+      age: age == null && nullToAbsent ? const Value.absent() : Value(age),
+      isMale: Value(isMale),
+      strideLengthCm: strideLengthCm == null && nullToAbsent
+          ? const Value.absent()
+          : Value(strideLengthCm),
+      customStepGoal: customStepGoal == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customStepGoal),
+      useCustomStepGoal: Value(useCustomStepGoal),
+      targetSleepMinutes: Value(targetSleepMinutes),
+      bedtimeHour: Value(bedtimeHour),
+      bedtimeMinute: Value(bedtimeMinute),
+      wakeHour: Value(wakeHour),
+      wakeMinute: Value(wakeMinute),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      extraJson: extraJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(extraJson),
+    );
+  }
+
+  factory HealthProfileRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return HealthProfileRow(
+      id: serializer.fromJson<String>(json['id']),
+      weightKg: serializer.fromJson<double?>(json['weightKg']),
+      heightCm: serializer.fromJson<int?>(json['heightCm']),
+      age: serializer.fromJson<int?>(json['age']),
+      isMale: serializer.fromJson<bool>(json['isMale']),
+      strideLengthCm: serializer.fromJson<double?>(json['strideLengthCm']),
+      customStepGoal: serializer.fromJson<int?>(json['customStepGoal']),
+      useCustomStepGoal: serializer.fromJson<bool>(json['useCustomStepGoal']),
+      targetSleepMinutes: serializer.fromJson<int>(json['targetSleepMinutes']),
+      bedtimeHour: serializer.fromJson<int>(json['bedtimeHour']),
+      bedtimeMinute: serializer.fromJson<int>(json['bedtimeMinute']),
+      wakeHour: serializer.fromJson<int>(json['wakeHour']),
+      wakeMinute: serializer.fromJson<int>(json['wakeMinute']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      extraJson: serializer.fromJson<String?>(json['extraJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'weightKg': serializer.toJson<double?>(weightKg),
+      'heightCm': serializer.toJson<int?>(heightCm),
+      'age': serializer.toJson<int?>(age),
+      'isMale': serializer.toJson<bool>(isMale),
+      'strideLengthCm': serializer.toJson<double?>(strideLengthCm),
+      'customStepGoal': serializer.toJson<int?>(customStepGoal),
+      'useCustomStepGoal': serializer.toJson<bool>(useCustomStepGoal),
+      'targetSleepMinutes': serializer.toJson<int>(targetSleepMinutes),
+      'bedtimeHour': serializer.toJson<int>(bedtimeHour),
+      'bedtimeMinute': serializer.toJson<int>(bedtimeMinute),
+      'wakeHour': serializer.toJson<int>(wakeHour),
+      'wakeMinute': serializer.toJson<int>(wakeMinute),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'extraJson': serializer.toJson<String?>(extraJson),
+    };
+  }
+
+  HealthProfileRow copyWith({
+    String? id,
+    Value<double?> weightKg = const Value.absent(),
+    Value<int?> heightCm = const Value.absent(),
+    Value<int?> age = const Value.absent(),
+    bool? isMale,
+    Value<double?> strideLengthCm = const Value.absent(),
+    Value<int?> customStepGoal = const Value.absent(),
+    bool? useCustomStepGoal,
+    int? targetSleepMinutes,
+    int? bedtimeHour,
+    int? bedtimeMinute,
+    int? wakeHour,
+    int? wakeMinute,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? schemaVer,
+    bool? synced,
+    Value<String?> extraJson = const Value.absent(),
+  }) => HealthProfileRow(
+    id: id ?? this.id,
+    weightKg: weightKg.present ? weightKg.value : this.weightKg,
+    heightCm: heightCm.present ? heightCm.value : this.heightCm,
+    age: age.present ? age.value : this.age,
+    isMale: isMale ?? this.isMale,
+    strideLengthCm: strideLengthCm.present
+        ? strideLengthCm.value
+        : this.strideLengthCm,
+    customStepGoal: customStepGoal.present
+        ? customStepGoal.value
+        : this.customStepGoal,
+    useCustomStepGoal: useCustomStepGoal ?? this.useCustomStepGoal,
+    targetSleepMinutes: targetSleepMinutes ?? this.targetSleepMinutes,
+    bedtimeHour: bedtimeHour ?? this.bedtimeHour,
+    bedtimeMinute: bedtimeMinute ?? this.bedtimeMinute,
+    wakeHour: wakeHour ?? this.wakeHour,
+    wakeMinute: wakeMinute ?? this.wakeMinute,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    extraJson: extraJson.present ? extraJson.value : this.extraJson,
+  );
+  HealthProfileRow copyWithCompanion(HealthProfilesCompanion data) {
+    return HealthProfileRow(
+      id: data.id.present ? data.id.value : this.id,
+      weightKg: data.weightKg.present ? data.weightKg.value : this.weightKg,
+      heightCm: data.heightCm.present ? data.heightCm.value : this.heightCm,
+      age: data.age.present ? data.age.value : this.age,
+      isMale: data.isMale.present ? data.isMale.value : this.isMale,
+      strideLengthCm: data.strideLengthCm.present
+          ? data.strideLengthCm.value
+          : this.strideLengthCm,
+      customStepGoal: data.customStepGoal.present
+          ? data.customStepGoal.value
+          : this.customStepGoal,
+      useCustomStepGoal: data.useCustomStepGoal.present
+          ? data.useCustomStepGoal.value
+          : this.useCustomStepGoal,
+      targetSleepMinutes: data.targetSleepMinutes.present
+          ? data.targetSleepMinutes.value
+          : this.targetSleepMinutes,
+      bedtimeHour: data.bedtimeHour.present
+          ? data.bedtimeHour.value
+          : this.bedtimeHour,
+      bedtimeMinute: data.bedtimeMinute.present
+          ? data.bedtimeMinute.value
+          : this.bedtimeMinute,
+      wakeHour: data.wakeHour.present ? data.wakeHour.value : this.wakeHour,
+      wakeMinute: data.wakeMinute.present
+          ? data.wakeMinute.value
+          : this.wakeMinute,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      extraJson: data.extraJson.present ? data.extraJson.value : this.extraJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HealthProfileRow(')
+          ..write('id: $id, ')
+          ..write('weightKg: $weightKg, ')
+          ..write('heightCm: $heightCm, ')
+          ..write('age: $age, ')
+          ..write('isMale: $isMale, ')
+          ..write('strideLengthCm: $strideLengthCm, ')
+          ..write('customStepGoal: $customStepGoal, ')
+          ..write('useCustomStepGoal: $useCustomStepGoal, ')
+          ..write('targetSleepMinutes: $targetSleepMinutes, ')
+          ..write('bedtimeHour: $bedtimeHour, ')
+          ..write('bedtimeMinute: $bedtimeMinute, ')
+          ..write('wakeHour: $wakeHour, ')
+          ..write('wakeMinute: $wakeMinute, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('extraJson: $extraJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    weightKg,
+    heightCm,
+    age,
+    isMale,
+    strideLengthCm,
+    customStepGoal,
+    useCustomStepGoal,
+    targetSleepMinutes,
+    bedtimeHour,
+    bedtimeMinute,
+    wakeHour,
+    wakeMinute,
+    createdAt,
+    updatedAt,
+    schemaVer,
+    synced,
+    extraJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is HealthProfileRow &&
+          other.id == this.id &&
+          other.weightKg == this.weightKg &&
+          other.heightCm == this.heightCm &&
+          other.age == this.age &&
+          other.isMale == this.isMale &&
+          other.strideLengthCm == this.strideLengthCm &&
+          other.customStepGoal == this.customStepGoal &&
+          other.useCustomStepGoal == this.useCustomStepGoal &&
+          other.targetSleepMinutes == this.targetSleepMinutes &&
+          other.bedtimeHour == this.bedtimeHour &&
+          other.bedtimeMinute == this.bedtimeMinute &&
+          other.wakeHour == this.wakeHour &&
+          other.wakeMinute == this.wakeMinute &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.extraJson == this.extraJson);
+}
+
+class HealthProfilesCompanion extends UpdateCompanion<HealthProfileRow> {
+  final Value<String> id;
+  final Value<double?> weightKg;
+  final Value<int?> heightCm;
+  final Value<int?> age;
+  final Value<bool> isMale;
+  final Value<double?> strideLengthCm;
+  final Value<int?> customStepGoal;
+  final Value<bool> useCustomStepGoal;
+  final Value<int> targetSleepMinutes;
+  final Value<int> bedtimeHour;
+  final Value<int> bedtimeMinute;
+  final Value<int> wakeHour;
+  final Value<int> wakeMinute;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> extraJson;
+  final Value<int> rowid;
+  const HealthProfilesCompanion({
+    this.id = const Value.absent(),
+    this.weightKg = const Value.absent(),
+    this.heightCm = const Value.absent(),
+    this.age = const Value.absent(),
+    this.isMale = const Value.absent(),
+    this.strideLengthCm = const Value.absent(),
+    this.customStepGoal = const Value.absent(),
+    this.useCustomStepGoal = const Value.absent(),
+    this.targetSleepMinutes = const Value.absent(),
+    this.bedtimeHour = const Value.absent(),
+    this.bedtimeMinute = const Value.absent(),
+    this.wakeHour = const Value.absent(),
+    this.wakeMinute = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.extraJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  HealthProfilesCompanion.insert({
+    required String id,
+    this.weightKg = const Value.absent(),
+    this.heightCm = const Value.absent(),
+    this.age = const Value.absent(),
+    this.isMale = const Value.absent(),
+    this.strideLengthCm = const Value.absent(),
+    this.customStepGoal = const Value.absent(),
+    this.useCustomStepGoal = const Value.absent(),
+    this.targetSleepMinutes = const Value.absent(),
+    this.bedtimeHour = const Value.absent(),
+    this.bedtimeMinute = const Value.absent(),
+    this.wakeHour = const Value.absent(),
+    this.wakeMinute = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.extraJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<HealthProfileRow> custom({
+    Expression<String>? id,
+    Expression<double>? weightKg,
+    Expression<int>? heightCm,
+    Expression<int>? age,
+    Expression<bool>? isMale,
+    Expression<double>? strideLengthCm,
+    Expression<int>? customStepGoal,
+    Expression<bool>? useCustomStepGoal,
+    Expression<int>? targetSleepMinutes,
+    Expression<int>? bedtimeHour,
+    Expression<int>? bedtimeMinute,
+    Expression<int>? wakeHour,
+    Expression<int>? wakeMinute,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? extraJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (weightKg != null) 'weight_kg': weightKg,
+      if (heightCm != null) 'height_cm': heightCm,
+      if (age != null) 'age': age,
+      if (isMale != null) 'is_male': isMale,
+      if (strideLengthCm != null) 'stride_length_cm': strideLengthCm,
+      if (customStepGoal != null) 'custom_step_goal': customStepGoal,
+      if (useCustomStepGoal != null) 'use_custom_step_goal': useCustomStepGoal,
+      if (targetSleepMinutes != null)
+        'target_sleep_minutes': targetSleepMinutes,
+      if (bedtimeHour != null) 'bedtime_hour': bedtimeHour,
+      if (bedtimeMinute != null) 'bedtime_minute': bedtimeMinute,
+      if (wakeHour != null) 'wake_hour': wakeHour,
+      if (wakeMinute != null) 'wake_minute': wakeMinute,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (extraJson != null) 'extra_json': extraJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  HealthProfilesCompanion copyWith({
+    Value<String>? id,
+    Value<double?>? weightKg,
+    Value<int?>? heightCm,
+    Value<int?>? age,
+    Value<bool>? isMale,
+    Value<double?>? strideLengthCm,
+    Value<int?>? customStepGoal,
+    Value<bool>? useCustomStepGoal,
+    Value<int>? targetSleepMinutes,
+    Value<int>? bedtimeHour,
+    Value<int>? bedtimeMinute,
+    Value<int>? wakeHour,
+    Value<int>? wakeMinute,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? extraJson,
+    Value<int>? rowid,
+  }) {
+    return HealthProfilesCompanion(
+      id: id ?? this.id,
+      weightKg: weightKg ?? this.weightKg,
+      heightCm: heightCm ?? this.heightCm,
+      age: age ?? this.age,
+      isMale: isMale ?? this.isMale,
+      strideLengthCm: strideLengthCm ?? this.strideLengthCm,
+      customStepGoal: customStepGoal ?? this.customStepGoal,
+      useCustomStepGoal: useCustomStepGoal ?? this.useCustomStepGoal,
+      targetSleepMinutes: targetSleepMinutes ?? this.targetSleepMinutes,
+      bedtimeHour: bedtimeHour ?? this.bedtimeHour,
+      bedtimeMinute: bedtimeMinute ?? this.bedtimeMinute,
+      wakeHour: wakeHour ?? this.wakeHour,
+      wakeMinute: wakeMinute ?? this.wakeMinute,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      extraJson: extraJson ?? this.extraJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (weightKg.present) {
+      map['weight_kg'] = Variable<double>(weightKg.value);
+    }
+    if (heightCm.present) {
+      map['height_cm'] = Variable<int>(heightCm.value);
+    }
+    if (age.present) {
+      map['age'] = Variable<int>(age.value);
+    }
+    if (isMale.present) {
+      map['is_male'] = Variable<bool>(isMale.value);
+    }
+    if (strideLengthCm.present) {
+      map['stride_length_cm'] = Variable<double>(strideLengthCm.value);
+    }
+    if (customStepGoal.present) {
+      map['custom_step_goal'] = Variable<int>(customStepGoal.value);
+    }
+    if (useCustomStepGoal.present) {
+      map['use_custom_step_goal'] = Variable<bool>(useCustomStepGoal.value);
+    }
+    if (targetSleepMinutes.present) {
+      map['target_sleep_minutes'] = Variable<int>(targetSleepMinutes.value);
+    }
+    if (bedtimeHour.present) {
+      map['bedtime_hour'] = Variable<int>(bedtimeHour.value);
+    }
+    if (bedtimeMinute.present) {
+      map['bedtime_minute'] = Variable<int>(bedtimeMinute.value);
+    }
+    if (wakeHour.present) {
+      map['wake_hour'] = Variable<int>(wakeHour.value);
+    }
+    if (wakeMinute.present) {
+      map['wake_minute'] = Variable<int>(wakeMinute.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (extraJson.present) {
+      map['extra_json'] = Variable<String>(extraJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HealthProfilesCompanion(')
+          ..write('id: $id, ')
+          ..write('weightKg: $weightKg, ')
+          ..write('heightCm: $heightCm, ')
+          ..write('age: $age, ')
+          ..write('isMale: $isMale, ')
+          ..write('strideLengthCm: $strideLengthCm, ')
+          ..write('customStepGoal: $customStepGoal, ')
+          ..write('useCustomStepGoal: $useCustomStepGoal, ')
+          ..write('targetSleepMinutes: $targetSleepMinutes, ')
+          ..write('bedtimeHour: $bedtimeHour, ')
+          ..write('bedtimeMinute: $bedtimeMinute, ')
+          ..write('wakeHour: $wakeHour, ')
+          ..write('wakeMinute: $wakeMinute, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('extraJson: $extraJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SleepSessionsTable extends SleepSessions
+    with TableInfo<$SleepSessionsTable, SleepSessionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SleepSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateKeyMeta = const VerificationMeta(
+    'dateKey',
+  );
+  @override
+  late final GeneratedColumn<String> dateKey = GeneratedColumn<String>(
+    'date_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bedtimeMeta = const VerificationMeta(
+    'bedtime',
+  );
+  @override
+  late final GeneratedColumn<DateTime> bedtime = GeneratedColumn<DateTime>(
+    'bedtime',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _wakeTimeMeta = const VerificationMeta(
+    'wakeTime',
+  );
+  @override
+  late final GeneratedColumn<DateTime> wakeTime = GeneratedColumn<DateTime>(
+    'wake_time',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _inBedMinutesMeta = const VerificationMeta(
+    'inBedMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> inBedMinutes = GeneratedColumn<int>(
+    'in_bed_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _asleepMinutesMeta = const VerificationMeta(
+    'asleepMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> asleepMinutes = GeneratedColumn<int>(
+    'asleep_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _awakeMinutesMeta = const VerificationMeta(
+    'awakeMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> awakeMinutes = GeneratedColumn<int>(
+    'awake_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lightMinutesMeta = const VerificationMeta(
+    'lightMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> lightMinutes = GeneratedColumn<int>(
+    'light_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deepMinutesMeta = const VerificationMeta(
+    'deepMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> deepMinutes = GeneratedColumn<int>(
+    'deep_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remMinutesMeta = const VerificationMeta(
+    'remMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> remMinutes = GeneratedColumn<int>(
+    'rem_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sleepScoreMeta = const VerificationMeta(
+    'sleepScore',
+  );
+  @override
+  late final GeneratedColumn<int> sleepScore = GeneratedColumn<int>(
+    'sleep_score',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _efficiencyMeta = const VerificationMeta(
+    'efficiency',
+  );
+  @override
+  late final GeneratedColumn<double> efficiency = GeneratedColumn<double>(
+    'efficiency',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _qualityIndexMeta = const VerificationMeta(
+    'qualityIndex',
+  );
+  @override
+  late final GeneratedColumn<int> qualityIndex = GeneratedColumn<int>(
+    'quality_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceIndexMeta = const VerificationMeta(
+    'sourceIndex',
+  );
+  @override
+  late final GeneratedColumn<int> sourceIndex = GeneratedColumn<int>(
+    'source_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(2),
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dateKey,
+    bedtime,
+    wakeTime,
+    inBedMinutes,
+    asleepMinutes,
+    awakeMinutes,
+    lightMinutes,
+    deepMinutes,
+    remMinutes,
+    sleepScore,
+    efficiency,
+    qualityIndex,
+    sourceIndex,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sleep_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SleepSessionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('date_key')) {
+      context.handle(
+        _dateKeyMeta,
+        dateKey.isAcceptableOrUnknown(data['date_key']!, _dateKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateKeyMeta);
+    }
+    if (data.containsKey('bedtime')) {
+      context.handle(
+        _bedtimeMeta,
+        bedtime.isAcceptableOrUnknown(data['bedtime']!, _bedtimeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bedtimeMeta);
+    }
+    if (data.containsKey('wake_time')) {
+      context.handle(
+        _wakeTimeMeta,
+        wakeTime.isAcceptableOrUnknown(data['wake_time']!, _wakeTimeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_wakeTimeMeta);
+    }
+    if (data.containsKey('in_bed_minutes')) {
+      context.handle(
+        _inBedMinutesMeta,
+        inBedMinutes.isAcceptableOrUnknown(
+          data['in_bed_minutes']!,
+          _inBedMinutesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_inBedMinutesMeta);
+    }
+    if (data.containsKey('asleep_minutes')) {
+      context.handle(
+        _asleepMinutesMeta,
+        asleepMinutes.isAcceptableOrUnknown(
+          data['asleep_minutes']!,
+          _asleepMinutesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_asleepMinutesMeta);
+    }
+    if (data.containsKey('awake_minutes')) {
+      context.handle(
+        _awakeMinutesMeta,
+        awakeMinutes.isAcceptableOrUnknown(
+          data['awake_minutes']!,
+          _awakeMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('light_minutes')) {
+      context.handle(
+        _lightMinutesMeta,
+        lightMinutes.isAcceptableOrUnknown(
+          data['light_minutes']!,
+          _lightMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('deep_minutes')) {
+      context.handle(
+        _deepMinutesMeta,
+        deepMinutes.isAcceptableOrUnknown(
+          data['deep_minutes']!,
+          _deepMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('rem_minutes')) {
+      context.handle(
+        _remMinutesMeta,
+        remMinutes.isAcceptableOrUnknown(data['rem_minutes']!, _remMinutesMeta),
+      );
+    }
+    if (data.containsKey('sleep_score')) {
+      context.handle(
+        _sleepScoreMeta,
+        sleepScore.isAcceptableOrUnknown(data['sleep_score']!, _sleepScoreMeta),
+      );
+    }
+    if (data.containsKey('efficiency')) {
+      context.handle(
+        _efficiencyMeta,
+        efficiency.isAcceptableOrUnknown(data['efficiency']!, _efficiencyMeta),
+      );
+    }
+    if (data.containsKey('quality_index')) {
+      context.handle(
+        _qualityIndexMeta,
+        qualityIndex.isAcceptableOrUnknown(
+          data['quality_index']!,
+          _qualityIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_index')) {
+      context.handle(
+        _sourceIndexMeta,
+        sourceIndex.isAcceptableOrUnknown(
+          data['source_index']!,
+          _sourceIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SleepSessionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SleepSessionRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dateKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}date_key'],
+      )!,
+      bedtime: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}bedtime'],
+      )!,
+      wakeTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}wake_time'],
+      )!,
+      inBedMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}in_bed_minutes'],
+      )!,
+      asleepMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}asleep_minutes'],
+      )!,
+      awakeMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}awake_minutes'],
+      )!,
+      lightMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}light_minutes'],
+      ),
+      deepMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deep_minutes'],
+      ),
+      remMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}rem_minutes'],
+      ),
+      sleepScore: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sleep_score'],
+      )!,
+      efficiency: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}efficiency'],
+      )!,
+      qualityIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quality_index'],
+      ),
+      sourceIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_index'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $SleepSessionsTable createAlias(String alias) {
+    return $SleepSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class SleepSessionRow extends DataClass implements Insertable<SleepSessionRow> {
+  final String id;
+  final String dateKey;
+  final DateTime bedtime;
+  final DateTime wakeTime;
+  final int inBedMinutes;
+  final int asleepMinutes;
+  final int awakeMinutes;
+  final int? lightMinutes;
+  final int? deepMinutes;
+  final int? remMinutes;
+  final int sleepScore;
+  final double efficiency;
+  final int? qualityIndex;
+  final int sourceIndex;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const SleepSessionRow({
+    required this.id,
+    required this.dateKey,
+    required this.bedtime,
+    required this.wakeTime,
+    required this.inBedMinutes,
+    required this.asleepMinutes,
+    required this.awakeMinutes,
+    this.lightMinutes,
+    this.deepMinutes,
+    this.remMinutes,
+    required this.sleepScore,
+    required this.efficiency,
+    this.qualityIndex,
+    required this.sourceIndex,
+    this.note,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['date_key'] = Variable<String>(dateKey);
+    map['bedtime'] = Variable<DateTime>(bedtime);
+    map['wake_time'] = Variable<DateTime>(wakeTime);
+    map['in_bed_minutes'] = Variable<int>(inBedMinutes);
+    map['asleep_minutes'] = Variable<int>(asleepMinutes);
+    map['awake_minutes'] = Variable<int>(awakeMinutes);
+    if (!nullToAbsent || lightMinutes != null) {
+      map['light_minutes'] = Variable<int>(lightMinutes);
+    }
+    if (!nullToAbsent || deepMinutes != null) {
+      map['deep_minutes'] = Variable<int>(deepMinutes);
+    }
+    if (!nullToAbsent || remMinutes != null) {
+      map['rem_minutes'] = Variable<int>(remMinutes);
+    }
+    map['sleep_score'] = Variable<int>(sleepScore);
+    map['efficiency'] = Variable<double>(efficiency);
+    if (!nullToAbsent || qualityIndex != null) {
+      map['quality_index'] = Variable<int>(qualityIndex);
+    }
+    map['source_index'] = Variable<int>(sourceIndex);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  SleepSessionsCompanion toCompanion(bool nullToAbsent) {
+    return SleepSessionsCompanion(
+      id: Value(id),
+      dateKey: Value(dateKey),
+      bedtime: Value(bedtime),
+      wakeTime: Value(wakeTime),
+      inBedMinutes: Value(inBedMinutes),
+      asleepMinutes: Value(asleepMinutes),
+      awakeMinutes: Value(awakeMinutes),
+      lightMinutes: lightMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lightMinutes),
+      deepMinutes: deepMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deepMinutes),
+      remMinutes: remMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remMinutes),
+      sleepScore: Value(sleepScore),
+      efficiency: Value(efficiency),
+      qualityIndex: qualityIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(qualityIndex),
+      sourceIndex: Value(sourceIndex),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory SleepSessionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SleepSessionRow(
+      id: serializer.fromJson<String>(json['id']),
+      dateKey: serializer.fromJson<String>(json['dateKey']),
+      bedtime: serializer.fromJson<DateTime>(json['bedtime']),
+      wakeTime: serializer.fromJson<DateTime>(json['wakeTime']),
+      inBedMinutes: serializer.fromJson<int>(json['inBedMinutes']),
+      asleepMinutes: serializer.fromJson<int>(json['asleepMinutes']),
+      awakeMinutes: serializer.fromJson<int>(json['awakeMinutes']),
+      lightMinutes: serializer.fromJson<int?>(json['lightMinutes']),
+      deepMinutes: serializer.fromJson<int?>(json['deepMinutes']),
+      remMinutes: serializer.fromJson<int?>(json['remMinutes']),
+      sleepScore: serializer.fromJson<int>(json['sleepScore']),
+      efficiency: serializer.fromJson<double>(json['efficiency']),
+      qualityIndex: serializer.fromJson<int?>(json['qualityIndex']),
+      sourceIndex: serializer.fromJson<int>(json['sourceIndex']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dateKey': serializer.toJson<String>(dateKey),
+      'bedtime': serializer.toJson<DateTime>(bedtime),
+      'wakeTime': serializer.toJson<DateTime>(wakeTime),
+      'inBedMinutes': serializer.toJson<int>(inBedMinutes),
+      'asleepMinutes': serializer.toJson<int>(asleepMinutes),
+      'awakeMinutes': serializer.toJson<int>(awakeMinutes),
+      'lightMinutes': serializer.toJson<int?>(lightMinutes),
+      'deepMinutes': serializer.toJson<int?>(deepMinutes),
+      'remMinutes': serializer.toJson<int?>(remMinutes),
+      'sleepScore': serializer.toJson<int>(sleepScore),
+      'efficiency': serializer.toJson<double>(efficiency),
+      'qualityIndex': serializer.toJson<int?>(qualityIndex),
+      'sourceIndex': serializer.toJson<int>(sourceIndex),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  SleepSessionRow copyWith({
+    String? id,
+    String? dateKey,
+    DateTime? bedtime,
+    DateTime? wakeTime,
+    int? inBedMinutes,
+    int? asleepMinutes,
+    int? awakeMinutes,
+    Value<int?> lightMinutes = const Value.absent(),
+    Value<int?> deepMinutes = const Value.absent(),
+    Value<int?> remMinutes = const Value.absent(),
+    int? sleepScore,
+    double? efficiency,
+    Value<int?> qualityIndex = const Value.absent(),
+    int? sourceIndex,
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => SleepSessionRow(
+    id: id ?? this.id,
+    dateKey: dateKey ?? this.dateKey,
+    bedtime: bedtime ?? this.bedtime,
+    wakeTime: wakeTime ?? this.wakeTime,
+    inBedMinutes: inBedMinutes ?? this.inBedMinutes,
+    asleepMinutes: asleepMinutes ?? this.asleepMinutes,
+    awakeMinutes: awakeMinutes ?? this.awakeMinutes,
+    lightMinutes: lightMinutes.present ? lightMinutes.value : this.lightMinutes,
+    deepMinutes: deepMinutes.present ? deepMinutes.value : this.deepMinutes,
+    remMinutes: remMinutes.present ? remMinutes.value : this.remMinutes,
+    sleepScore: sleepScore ?? this.sleepScore,
+    efficiency: efficiency ?? this.efficiency,
+    qualityIndex: qualityIndex.present ? qualityIndex.value : this.qualityIndex,
+    sourceIndex: sourceIndex ?? this.sourceIndex,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  SleepSessionRow copyWithCompanion(SleepSessionsCompanion data) {
+    return SleepSessionRow(
+      id: data.id.present ? data.id.value : this.id,
+      dateKey: data.dateKey.present ? data.dateKey.value : this.dateKey,
+      bedtime: data.bedtime.present ? data.bedtime.value : this.bedtime,
+      wakeTime: data.wakeTime.present ? data.wakeTime.value : this.wakeTime,
+      inBedMinutes: data.inBedMinutes.present
+          ? data.inBedMinutes.value
+          : this.inBedMinutes,
+      asleepMinutes: data.asleepMinutes.present
+          ? data.asleepMinutes.value
+          : this.asleepMinutes,
+      awakeMinutes: data.awakeMinutes.present
+          ? data.awakeMinutes.value
+          : this.awakeMinutes,
+      lightMinutes: data.lightMinutes.present
+          ? data.lightMinutes.value
+          : this.lightMinutes,
+      deepMinutes: data.deepMinutes.present
+          ? data.deepMinutes.value
+          : this.deepMinutes,
+      remMinutes: data.remMinutes.present
+          ? data.remMinutes.value
+          : this.remMinutes,
+      sleepScore: data.sleepScore.present
+          ? data.sleepScore.value
+          : this.sleepScore,
+      efficiency: data.efficiency.present
+          ? data.efficiency.value
+          : this.efficiency,
+      qualityIndex: data.qualityIndex.present
+          ? data.qualityIndex.value
+          : this.qualityIndex,
+      sourceIndex: data.sourceIndex.present
+          ? data.sourceIndex.value
+          : this.sourceIndex,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SleepSessionRow(')
+          ..write('id: $id, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('bedtime: $bedtime, ')
+          ..write('wakeTime: $wakeTime, ')
+          ..write('inBedMinutes: $inBedMinutes, ')
+          ..write('asleepMinutes: $asleepMinutes, ')
+          ..write('awakeMinutes: $awakeMinutes, ')
+          ..write('lightMinutes: $lightMinutes, ')
+          ..write('deepMinutes: $deepMinutes, ')
+          ..write('remMinutes: $remMinutes, ')
+          ..write('sleepScore: $sleepScore, ')
+          ..write('efficiency: $efficiency, ')
+          ..write('qualityIndex: $qualityIndex, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    dateKey,
+    bedtime,
+    wakeTime,
+    inBedMinutes,
+    asleepMinutes,
+    awakeMinutes,
+    lightMinutes,
+    deepMinutes,
+    remMinutes,
+    sleepScore,
+    efficiency,
+    qualityIndex,
+    sourceIndex,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SleepSessionRow &&
+          other.id == this.id &&
+          other.dateKey == this.dateKey &&
+          other.bedtime == this.bedtime &&
+          other.wakeTime == this.wakeTime &&
+          other.inBedMinutes == this.inBedMinutes &&
+          other.asleepMinutes == this.asleepMinutes &&
+          other.awakeMinutes == this.awakeMinutes &&
+          other.lightMinutes == this.lightMinutes &&
+          other.deepMinutes == this.deepMinutes &&
+          other.remMinutes == this.remMinutes &&
+          other.sleepScore == this.sleepScore &&
+          other.efficiency == this.efficiency &&
+          other.qualityIndex == this.qualityIndex &&
+          other.sourceIndex == this.sourceIndex &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class SleepSessionsCompanion extends UpdateCompanion<SleepSessionRow> {
+  final Value<String> id;
+  final Value<String> dateKey;
+  final Value<DateTime> bedtime;
+  final Value<DateTime> wakeTime;
+  final Value<int> inBedMinutes;
+  final Value<int> asleepMinutes;
+  final Value<int> awakeMinutes;
+  final Value<int?> lightMinutes;
+  final Value<int?> deepMinutes;
+  final Value<int?> remMinutes;
+  final Value<int> sleepScore;
+  final Value<double> efficiency;
+  final Value<int?> qualityIndex;
+  final Value<int> sourceIndex;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const SleepSessionsCompanion({
+    this.id = const Value.absent(),
+    this.dateKey = const Value.absent(),
+    this.bedtime = const Value.absent(),
+    this.wakeTime = const Value.absent(),
+    this.inBedMinutes = const Value.absent(),
+    this.asleepMinutes = const Value.absent(),
+    this.awakeMinutes = const Value.absent(),
+    this.lightMinutes = const Value.absent(),
+    this.deepMinutes = const Value.absent(),
+    this.remMinutes = const Value.absent(),
+    this.sleepScore = const Value.absent(),
+    this.efficiency = const Value.absent(),
+    this.qualityIndex = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SleepSessionsCompanion.insert({
+    required String id,
+    required String dateKey,
+    required DateTime bedtime,
+    required DateTime wakeTime,
+    required int inBedMinutes,
+    required int asleepMinutes,
+    this.awakeMinutes = const Value.absent(),
+    this.lightMinutes = const Value.absent(),
+    this.deepMinutes = const Value.absent(),
+    this.remMinutes = const Value.absent(),
+    this.sleepScore = const Value.absent(),
+    this.efficiency = const Value.absent(),
+    this.qualityIndex = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       dateKey = Value(dateKey),
+       bedtime = Value(bedtime),
+       wakeTime = Value(wakeTime),
+       inBedMinutes = Value(inBedMinutes),
+       asleepMinutes = Value(asleepMinutes),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SleepSessionRow> custom({
+    Expression<String>? id,
+    Expression<String>? dateKey,
+    Expression<DateTime>? bedtime,
+    Expression<DateTime>? wakeTime,
+    Expression<int>? inBedMinutes,
+    Expression<int>? asleepMinutes,
+    Expression<int>? awakeMinutes,
+    Expression<int>? lightMinutes,
+    Expression<int>? deepMinutes,
+    Expression<int>? remMinutes,
+    Expression<int>? sleepScore,
+    Expression<double>? efficiency,
+    Expression<int>? qualityIndex,
+    Expression<int>? sourceIndex,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dateKey != null) 'date_key': dateKey,
+      if (bedtime != null) 'bedtime': bedtime,
+      if (wakeTime != null) 'wake_time': wakeTime,
+      if (inBedMinutes != null) 'in_bed_minutes': inBedMinutes,
+      if (asleepMinutes != null) 'asleep_minutes': asleepMinutes,
+      if (awakeMinutes != null) 'awake_minutes': awakeMinutes,
+      if (lightMinutes != null) 'light_minutes': lightMinutes,
+      if (deepMinutes != null) 'deep_minutes': deepMinutes,
+      if (remMinutes != null) 'rem_minutes': remMinutes,
+      if (sleepScore != null) 'sleep_score': sleepScore,
+      if (efficiency != null) 'efficiency': efficiency,
+      if (qualityIndex != null) 'quality_index': qualityIndex,
+      if (sourceIndex != null) 'source_index': sourceIndex,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SleepSessionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? dateKey,
+    Value<DateTime>? bedtime,
+    Value<DateTime>? wakeTime,
+    Value<int>? inBedMinutes,
+    Value<int>? asleepMinutes,
+    Value<int>? awakeMinutes,
+    Value<int?>? lightMinutes,
+    Value<int?>? deepMinutes,
+    Value<int?>? remMinutes,
+    Value<int>? sleepScore,
+    Value<double>? efficiency,
+    Value<int?>? qualityIndex,
+    Value<int>? sourceIndex,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return SleepSessionsCompanion(
+      id: id ?? this.id,
+      dateKey: dateKey ?? this.dateKey,
+      bedtime: bedtime ?? this.bedtime,
+      wakeTime: wakeTime ?? this.wakeTime,
+      inBedMinutes: inBedMinutes ?? this.inBedMinutes,
+      asleepMinutes: asleepMinutes ?? this.asleepMinutes,
+      awakeMinutes: awakeMinutes ?? this.awakeMinutes,
+      lightMinutes: lightMinutes ?? this.lightMinutes,
+      deepMinutes: deepMinutes ?? this.deepMinutes,
+      remMinutes: remMinutes ?? this.remMinutes,
+      sleepScore: sleepScore ?? this.sleepScore,
+      efficiency: efficiency ?? this.efficiency,
+      qualityIndex: qualityIndex ?? this.qualityIndex,
+      sourceIndex: sourceIndex ?? this.sourceIndex,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dateKey.present) {
+      map['date_key'] = Variable<String>(dateKey.value);
+    }
+    if (bedtime.present) {
+      map['bedtime'] = Variable<DateTime>(bedtime.value);
+    }
+    if (wakeTime.present) {
+      map['wake_time'] = Variable<DateTime>(wakeTime.value);
+    }
+    if (inBedMinutes.present) {
+      map['in_bed_minutes'] = Variable<int>(inBedMinutes.value);
+    }
+    if (asleepMinutes.present) {
+      map['asleep_minutes'] = Variable<int>(asleepMinutes.value);
+    }
+    if (awakeMinutes.present) {
+      map['awake_minutes'] = Variable<int>(awakeMinutes.value);
+    }
+    if (lightMinutes.present) {
+      map['light_minutes'] = Variable<int>(lightMinutes.value);
+    }
+    if (deepMinutes.present) {
+      map['deep_minutes'] = Variable<int>(deepMinutes.value);
+    }
+    if (remMinutes.present) {
+      map['rem_minutes'] = Variable<int>(remMinutes.value);
+    }
+    if (sleepScore.present) {
+      map['sleep_score'] = Variable<int>(sleepScore.value);
+    }
+    if (efficiency.present) {
+      map['efficiency'] = Variable<double>(efficiency.value);
+    }
+    if (qualityIndex.present) {
+      map['quality_index'] = Variable<int>(qualityIndex.value);
+    }
+    if (sourceIndex.present) {
+      map['source_index'] = Variable<int>(sourceIndex.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SleepSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('bedtime: $bedtime, ')
+          ..write('wakeTime: $wakeTime, ')
+          ..write('inBedMinutes: $inBedMinutes, ')
+          ..write('asleepMinutes: $asleepMinutes, ')
+          ..write('awakeMinutes: $awakeMinutes, ')
+          ..write('lightMinutes: $lightMinutes, ')
+          ..write('deepMinutes: $deepMinutes, ')
+          ..write('remMinutes: $remMinutes, ')
+          ..write('sleepScore: $sleepScore, ')
+          ..write('efficiency: $efficiency, ')
+          ..write('qualityIndex: $qualityIndex, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $KnowledgeChunksTable extends KnowledgeChunks
+    with TableInfo<$KnowledgeChunksTable, KnowledgeChunkRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $KnowledgeChunksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _topicMeta = const VerificationMeta('topic');
+  @override
+  late final GeneratedColumn<String> topic = GeneratedColumn<String>(
+    'topic',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _kbVersionMeta = const VerificationMeta(
+    'kbVersion',
+  );
+  @override
+  late final GeneratedColumn<int> kbVersion = GeneratedColumn<int>(
+    'kb_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    topic,
+    title,
+    body,
+    source,
+    kbVersion,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'knowledge_chunks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<KnowledgeChunkRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('topic')) {
+      context.handle(
+        _topicMeta,
+        topic.isAcceptableOrUnknown(data['topic']!, _topicMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_topicMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('kb_version')) {
+      context.handle(
+        _kbVersionMeta,
+        kbVersion.isAcceptableOrUnknown(data['kb_version']!, _kbVersionMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  KnowledgeChunkRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return KnowledgeChunkRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      topic: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}topic'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      ),
+      kbVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}kb_version'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $KnowledgeChunksTable createAlias(String alias) {
+    return $KnowledgeChunksTable(attachedDatabase, alias);
+  }
+}
+
+class KnowledgeChunkRow extends DataClass
+    implements Insertable<KnowledgeChunkRow> {
+  final String id;
+  final String topic;
+  final String title;
+  final String body;
+  final String? source;
+  final int kbVersion;
+  final DateTime createdAt;
+  const KnowledgeChunkRow({
+    required this.id,
+    required this.topic,
+    required this.title,
+    required this.body,
+    this.source,
+    required this.kbVersion,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['topic'] = Variable<String>(topic);
+    map['title'] = Variable<String>(title);
+    map['body'] = Variable<String>(body);
+    if (!nullToAbsent || source != null) {
+      map['source'] = Variable<String>(source);
+    }
+    map['kb_version'] = Variable<int>(kbVersion);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  KnowledgeChunksCompanion toCompanion(bool nullToAbsent) {
+    return KnowledgeChunksCompanion(
+      id: Value(id),
+      topic: Value(topic),
+      title: Value(title),
+      body: Value(body),
+      source: source == null && nullToAbsent
+          ? const Value.absent()
+          : Value(source),
+      kbVersion: Value(kbVersion),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory KnowledgeChunkRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return KnowledgeChunkRow(
+      id: serializer.fromJson<String>(json['id']),
+      topic: serializer.fromJson<String>(json['topic']),
+      title: serializer.fromJson<String>(json['title']),
+      body: serializer.fromJson<String>(json['body']),
+      source: serializer.fromJson<String?>(json['source']),
+      kbVersion: serializer.fromJson<int>(json['kbVersion']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'topic': serializer.toJson<String>(topic),
+      'title': serializer.toJson<String>(title),
+      'body': serializer.toJson<String>(body),
+      'source': serializer.toJson<String?>(source),
+      'kbVersion': serializer.toJson<int>(kbVersion),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  KnowledgeChunkRow copyWith({
+    String? id,
+    String? topic,
+    String? title,
+    String? body,
+    Value<String?> source = const Value.absent(),
+    int? kbVersion,
+    DateTime? createdAt,
+  }) => KnowledgeChunkRow(
+    id: id ?? this.id,
+    topic: topic ?? this.topic,
+    title: title ?? this.title,
+    body: body ?? this.body,
+    source: source.present ? source.value : this.source,
+    kbVersion: kbVersion ?? this.kbVersion,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  KnowledgeChunkRow copyWithCompanion(KnowledgeChunksCompanion data) {
+    return KnowledgeChunkRow(
+      id: data.id.present ? data.id.value : this.id,
+      topic: data.topic.present ? data.topic.value : this.topic,
+      title: data.title.present ? data.title.value : this.title,
+      body: data.body.present ? data.body.value : this.body,
+      source: data.source.present ? data.source.value : this.source,
+      kbVersion: data.kbVersion.present ? data.kbVersion.value : this.kbVersion,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KnowledgeChunkRow(')
+          ..write('id: $id, ')
+          ..write('topic: $topic, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('source: $source, ')
+          ..write('kbVersion: $kbVersion, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, topic, title, body, source, kbVersion, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is KnowledgeChunkRow &&
+          other.id == this.id &&
+          other.topic == this.topic &&
+          other.title == this.title &&
+          other.body == this.body &&
+          other.source == this.source &&
+          other.kbVersion == this.kbVersion &&
+          other.createdAt == this.createdAt);
+}
+
+class KnowledgeChunksCompanion extends UpdateCompanion<KnowledgeChunkRow> {
+  final Value<String> id;
+  final Value<String> topic;
+  final Value<String> title;
+  final Value<String> body;
+  final Value<String?> source;
+  final Value<int> kbVersion;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const KnowledgeChunksCompanion({
+    this.id = const Value.absent(),
+    this.topic = const Value.absent(),
+    this.title = const Value.absent(),
+    this.body = const Value.absent(),
+    this.source = const Value.absent(),
+    this.kbVersion = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  KnowledgeChunksCompanion.insert({
+    required String id,
+    required String topic,
+    required String title,
+    required String body,
+    this.source = const Value.absent(),
+    this.kbVersion = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       topic = Value(topic),
+       title = Value(title),
+       body = Value(body),
+       createdAt = Value(createdAt);
+  static Insertable<KnowledgeChunkRow> custom({
+    Expression<String>? id,
+    Expression<String>? topic,
+    Expression<String>? title,
+    Expression<String>? body,
+    Expression<String>? source,
+    Expression<int>? kbVersion,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (topic != null) 'topic': topic,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+      if (source != null) 'source': source,
+      if (kbVersion != null) 'kb_version': kbVersion,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  KnowledgeChunksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? topic,
+    Value<String>? title,
+    Value<String>? body,
+    Value<String?>? source,
+    Value<int>? kbVersion,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return KnowledgeChunksCompanion(
+      id: id ?? this.id,
+      topic: topic ?? this.topic,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      source: source ?? this.source,
+      kbVersion: kbVersion ?? this.kbVersion,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (topic.present) {
+      map['topic'] = Variable<String>(topic.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (kbVersion.present) {
+      map['kb_version'] = Variable<int>(kbVersion.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KnowledgeChunksCompanion(')
+          ..write('id: $id, ')
+          ..write('topic: $topic, ')
+          ..write('title: $title, ')
+          ..write('body: $body, ')
+          ..write('source: $source, ')
+          ..write('kbVersion: $kbVersion, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AssistantMemoriesTable extends AssistantMemories
+    with TableInfo<$AssistantMemoriesTable, AssistantMemoryRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AssistantMemoriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('fact'),
+  );
+  static const VerificationMeta _activeMeta = const VerificationMeta('active');
+  @override
+  late final GeneratedColumn<bool> active = GeneratedColumn<bool>(
+    'active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('user'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    content,
+    kind,
+    active,
+    createdAt,
+    updatedAt,
+    source,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'assistant_memories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AssistantMemoryRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    }
+    if (data.containsKey('active')) {
+      context.handle(
+        _activeMeta,
+        active.isAcceptableOrUnknown(data['active']!, _activeMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AssistantMemoryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AssistantMemoryRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      active: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}active'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+    );
+  }
+
+  @override
+  $AssistantMemoriesTable createAlias(String alias) {
+    return $AssistantMemoriesTable(attachedDatabase, alias);
+  }
+}
+
+class AssistantMemoryRow extends DataClass
+    implements Insertable<AssistantMemoryRow> {
+  final String id;
+  final String content;
+  final String kind;
+  final bool active;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String source;
+  const AssistantMemoryRow({
+    required this.id,
+    required this.content,
+    required this.kind,
+    required this.active,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.source,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['content'] = Variable<String>(content);
+    map['kind'] = Variable<String>(kind);
+    map['active'] = Variable<bool>(active);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['source'] = Variable<String>(source);
+    return map;
+  }
+
+  AssistantMemoriesCompanion toCompanion(bool nullToAbsent) {
+    return AssistantMemoriesCompanion(
+      id: Value(id),
+      content: Value(content),
+      kind: Value(kind),
+      active: Value(active),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      source: Value(source),
+    );
+  }
+
+  factory AssistantMemoryRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AssistantMemoryRow(
+      id: serializer.fromJson<String>(json['id']),
+      content: serializer.fromJson<String>(json['content']),
+      kind: serializer.fromJson<String>(json['kind']),
+      active: serializer.fromJson<bool>(json['active']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      source: serializer.fromJson<String>(json['source']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'content': serializer.toJson<String>(content),
+      'kind': serializer.toJson<String>(kind),
+      'active': serializer.toJson<bool>(active),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'source': serializer.toJson<String>(source),
+    };
+  }
+
+  AssistantMemoryRow copyWith({
+    String? id,
+    String? content,
+    String? kind,
+    bool? active,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? source,
+  }) => AssistantMemoryRow(
+    id: id ?? this.id,
+    content: content ?? this.content,
+    kind: kind ?? this.kind,
+    active: active ?? this.active,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    source: source ?? this.source,
+  );
+  AssistantMemoryRow copyWithCompanion(AssistantMemoriesCompanion data) {
+    return AssistantMemoryRow(
+      id: data.id.present ? data.id.value : this.id,
+      content: data.content.present ? data.content.value : this.content,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      active: data.active.present ? data.active.value : this.active,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      source: data.source.present ? data.source.value : this.source,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AssistantMemoryRow(')
+          ..write('id: $id, ')
+          ..write('content: $content, ')
+          ..write('kind: $kind, ')
+          ..write('active: $active, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('source: $source')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, content, kind, active, createdAt, updatedAt, source);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AssistantMemoryRow &&
+          other.id == this.id &&
+          other.content == this.content &&
+          other.kind == this.kind &&
+          other.active == this.active &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.source == this.source);
+}
+
+class AssistantMemoriesCompanion extends UpdateCompanion<AssistantMemoryRow> {
+  final Value<String> id;
+  final Value<String> content;
+  final Value<String> kind;
+  final Value<bool> active;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<String> source;
+  final Value<int> rowid;
+  const AssistantMemoriesCompanion({
+    this.id = const Value.absent(),
+    this.content = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.active = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.source = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AssistantMemoriesCompanion.insert({
+    required String id,
+    required String content,
+    this.kind = const Value.absent(),
+    this.active = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.source = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       content = Value(content),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<AssistantMemoryRow> custom({
+    Expression<String>? id,
+    Expression<String>? content,
+    Expression<String>? kind,
+    Expression<bool>? active,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<String>? source,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (content != null) 'content': content,
+      if (kind != null) 'kind': kind,
+      if (active != null) 'active': active,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (source != null) 'source': source,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AssistantMemoriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? content,
+    Value<String>? kind,
+    Value<bool>? active,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<String>? source,
+    Value<int>? rowid,
+  }) {
+    return AssistantMemoriesCompanion(
+      id: id ?? this.id,
+      content: content ?? this.content,
+      kind: kind ?? this.kind,
+      active: active ?? this.active,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      source: source ?? this.source,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (active.present) {
+      map['active'] = Variable<bool>(active.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AssistantMemoriesCompanion(')
+          ..write('id: $id, ')
+          ..write('content: $content, ')
+          ..write('kind: $kind, ')
+          ..write('active: $active, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('source: $source, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -16495,11 +23588,31 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $GlucoseReadingsTable glucoseReadings = $GlucoseReadingsTable(
     this,
   );
+  late final $MenstrualCyclesTable menstrualCycles = $MenstrualCyclesTable(
+    this,
+  );
+  late final $PeriodDaysTable periodDays = $PeriodDaysTable(this);
+  late final $PeriodSettingsTableTable periodSettingsTable =
+      $PeriodSettingsTableTable(this);
+  late final $StepDailyDataTable stepDailyData = $StepDailyDataTable(this);
+  late final $StepManualEntriesTable stepManualEntries =
+      $StepManualEntriesTable(this);
+  late final $HealthProfilesTable healthProfiles = $HealthProfilesTable(this);
+  late final $SleepSessionsTable sleepSessions = $SleepSessionsTable(this);
+  late final $KnowledgeChunksTable knowledgeChunks = $KnowledgeChunksTable(
+    this,
+  );
+  late final $AssistantMemoriesTable assistantMemories =
+      $AssistantMemoriesTable(this);
   late final CoreDao coreDao = CoreDao(this as AppDatabase);
   late final MedicationDao medicationDao = MedicationDao(this as AppDatabase);
   late final WaterDao waterDao = WaterDao(this as AppDatabase);
   late final RemindersDao remindersDao = RemindersDao(this as AppDatabase);
   late final VitalsDao vitalsDao = VitalsDao(this as AppDatabase);
+  late final PeriodDao periodDao = PeriodDao(this as AppDatabase);
+  late final StepsDao stepsDao = StepsDao(this as AppDatabase);
+  late final SleepDao sleepDao = SleepDao(this as AppDatabase);
+  late final AiDao aiDao = AiDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -16526,6 +23639,15 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     reminderCategories,
     bloodPressureReadings,
     glucoseReadings,
+    menstrualCycles,
+    periodDays,
+    periodSettingsTable,
+    stepDailyData,
+    stepManualEntries,
+    healthProfiles,
+    sleepSessions,
+    knowledgeChunks,
+    assistantMemories,
   ];
 }
 
@@ -24299,6 +31421,3390 @@ typedef $$GlucoseReadingsTableProcessedTableManager =
       GlucoseReading,
       PrefetchHooks Function()
     >;
+typedef $$MenstrualCyclesTableCreateCompanionBuilder =
+    MenstrualCyclesCompanion Function({
+      required String id,
+      required DateTime startDate,
+      Value<DateTime?> endDate,
+      Value<int?> cycleLengthDays,
+      Value<int?> periodLengthDays,
+      Value<bool> isPredicted,
+      Value<String?> note,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$MenstrualCyclesTableUpdateCompanionBuilder =
+    MenstrualCyclesCompanion Function({
+      Value<String> id,
+      Value<DateTime> startDate,
+      Value<DateTime?> endDate,
+      Value<int?> cycleLengthDays,
+      Value<int?> periodLengthDays,
+      Value<bool> isPredicted,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$MenstrualCyclesTableFilterComposer
+    extends Composer<_$AppDatabase, $MenstrualCyclesTable> {
+  $$MenstrualCyclesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startDate => $composableBuilder(
+    column: $table.startDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endDate => $composableBuilder(
+    column: $table.endDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cycleLengthDays => $composableBuilder(
+    column: $table.cycleLengthDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get periodLengthDays => $composableBuilder(
+    column: $table.periodLengthDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPredicted => $composableBuilder(
+    column: $table.isPredicted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MenstrualCyclesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MenstrualCyclesTable> {
+  $$MenstrualCyclesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startDate => $composableBuilder(
+    column: $table.startDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endDate => $composableBuilder(
+    column: $table.endDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cycleLengthDays => $composableBuilder(
+    column: $table.cycleLengthDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get periodLengthDays => $composableBuilder(
+    column: $table.periodLengthDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPredicted => $composableBuilder(
+    column: $table.isPredicted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MenstrualCyclesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MenstrualCyclesTable> {
+  $$MenstrualCyclesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startDate =>
+      $composableBuilder(column: $table.startDate, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endDate =>
+      $composableBuilder(column: $table.endDate, builder: (column) => column);
+
+  GeneratedColumn<int> get cycleLengthDays => $composableBuilder(
+    column: $table.cycleLengthDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get periodLengthDays => $composableBuilder(
+    column: $table.periodLengthDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isPredicted => $composableBuilder(
+    column: $table.isPredicted,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$MenstrualCyclesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MenstrualCyclesTable,
+          MenstrualCycleRow,
+          $$MenstrualCyclesTableFilterComposer,
+          $$MenstrualCyclesTableOrderingComposer,
+          $$MenstrualCyclesTableAnnotationComposer,
+          $$MenstrualCyclesTableCreateCompanionBuilder,
+          $$MenstrualCyclesTableUpdateCompanionBuilder,
+          (
+            MenstrualCycleRow,
+            BaseReferences<
+              _$AppDatabase,
+              $MenstrualCyclesTable,
+              MenstrualCycleRow
+            >,
+          ),
+          MenstrualCycleRow,
+          PrefetchHooks Function()
+        > {
+  $$MenstrualCyclesTableTableManager(
+    _$AppDatabase db,
+    $MenstrualCyclesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MenstrualCyclesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MenstrualCyclesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MenstrualCyclesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> startDate = const Value.absent(),
+                Value<DateTime?> endDate = const Value.absent(),
+                Value<int?> cycleLengthDays = const Value.absent(),
+                Value<int?> periodLengthDays = const Value.absent(),
+                Value<bool> isPredicted = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MenstrualCyclesCompanion(
+                id: id,
+                startDate: startDate,
+                endDate: endDate,
+                cycleLengthDays: cycleLengthDays,
+                periodLengthDays: periodLengthDays,
+                isPredicted: isPredicted,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required DateTime startDate,
+                Value<DateTime?> endDate = const Value.absent(),
+                Value<int?> cycleLengthDays = const Value.absent(),
+                Value<int?> periodLengthDays = const Value.absent(),
+                Value<bool> isPredicted = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MenstrualCyclesCompanion.insert(
+                id: id,
+                startDate: startDate,
+                endDate: endDate,
+                cycleLengthDays: cycleLengthDays,
+                periodLengthDays: periodLengthDays,
+                isPredicted: isPredicted,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MenstrualCyclesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MenstrualCyclesTable,
+      MenstrualCycleRow,
+      $$MenstrualCyclesTableFilterComposer,
+      $$MenstrualCyclesTableOrderingComposer,
+      $$MenstrualCyclesTableAnnotationComposer,
+      $$MenstrualCyclesTableCreateCompanionBuilder,
+      $$MenstrualCyclesTableUpdateCompanionBuilder,
+      (
+        MenstrualCycleRow,
+        BaseReferences<_$AppDatabase, $MenstrualCyclesTable, MenstrualCycleRow>,
+      ),
+      MenstrualCycleRow,
+      PrefetchHooks Function()
+    >;
+typedef $$PeriodDaysTableCreateCompanionBuilder =
+    PeriodDaysCompanion Function({
+      required String id,
+      required DateTime date,
+      Value<String?> cycleId,
+      Value<int> flowIndex,
+      Value<int?> mood,
+      Value<int?> energy,
+      Value<double?> bbtCelsius,
+      Value<bool?> intercourse,
+      Value<String?> symptomIdsJson,
+      Value<String?> note,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$PeriodDaysTableUpdateCompanionBuilder =
+    PeriodDaysCompanion Function({
+      Value<String> id,
+      Value<DateTime> date,
+      Value<String?> cycleId,
+      Value<int> flowIndex,
+      Value<int?> mood,
+      Value<int?> energy,
+      Value<double?> bbtCelsius,
+      Value<bool?> intercourse,
+      Value<String?> symptomIdsJson,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$PeriodDaysTableFilterComposer
+    extends Composer<_$AppDatabase, $PeriodDaysTable> {
+  $$PeriodDaysTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cycleId => $composableBuilder(
+    column: $table.cycleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get flowIndex => $composableBuilder(
+    column: $table.flowIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get mood => $composableBuilder(
+    column: $table.mood,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get energy => $composableBuilder(
+    column: $table.energy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get bbtCelsius => $composableBuilder(
+    column: $table.bbtCelsius,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get intercourse => $composableBuilder(
+    column: $table.intercourse,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get symptomIdsJson => $composableBuilder(
+    column: $table.symptomIdsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PeriodDaysTableOrderingComposer
+    extends Composer<_$AppDatabase, $PeriodDaysTable> {
+  $$PeriodDaysTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cycleId => $composableBuilder(
+    column: $table.cycleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get flowIndex => $composableBuilder(
+    column: $table.flowIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get mood => $composableBuilder(
+    column: $table.mood,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get energy => $composableBuilder(
+    column: $table.energy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get bbtCelsius => $composableBuilder(
+    column: $table.bbtCelsius,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get intercourse => $composableBuilder(
+    column: $table.intercourse,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get symptomIdsJson => $composableBuilder(
+    column: $table.symptomIdsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PeriodDaysTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PeriodDaysTable> {
+  $$PeriodDaysTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<String> get cycleId =>
+      $composableBuilder(column: $table.cycleId, builder: (column) => column);
+
+  GeneratedColumn<int> get flowIndex =>
+      $composableBuilder(column: $table.flowIndex, builder: (column) => column);
+
+  GeneratedColumn<int> get mood =>
+      $composableBuilder(column: $table.mood, builder: (column) => column);
+
+  GeneratedColumn<int> get energy =>
+      $composableBuilder(column: $table.energy, builder: (column) => column);
+
+  GeneratedColumn<double> get bbtCelsius => $composableBuilder(
+    column: $table.bbtCelsius,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get intercourse => $composableBuilder(
+    column: $table.intercourse,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get symptomIdsJson => $composableBuilder(
+    column: $table.symptomIdsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$PeriodDaysTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PeriodDaysTable,
+          PeriodDayRow,
+          $$PeriodDaysTableFilterComposer,
+          $$PeriodDaysTableOrderingComposer,
+          $$PeriodDaysTableAnnotationComposer,
+          $$PeriodDaysTableCreateCompanionBuilder,
+          $$PeriodDaysTableUpdateCompanionBuilder,
+          (
+            PeriodDayRow,
+            BaseReferences<_$AppDatabase, $PeriodDaysTable, PeriodDayRow>,
+          ),
+          PeriodDayRow,
+          PrefetchHooks Function()
+        > {
+  $$PeriodDaysTableTableManager(_$AppDatabase db, $PeriodDaysTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PeriodDaysTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PeriodDaysTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PeriodDaysTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> date = const Value.absent(),
+                Value<String?> cycleId = const Value.absent(),
+                Value<int> flowIndex = const Value.absent(),
+                Value<int?> mood = const Value.absent(),
+                Value<int?> energy = const Value.absent(),
+                Value<double?> bbtCelsius = const Value.absent(),
+                Value<bool?> intercourse = const Value.absent(),
+                Value<String?> symptomIdsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeriodDaysCompanion(
+                id: id,
+                date: date,
+                cycleId: cycleId,
+                flowIndex: flowIndex,
+                mood: mood,
+                energy: energy,
+                bbtCelsius: bbtCelsius,
+                intercourse: intercourse,
+                symptomIdsJson: symptomIdsJson,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required DateTime date,
+                Value<String?> cycleId = const Value.absent(),
+                Value<int> flowIndex = const Value.absent(),
+                Value<int?> mood = const Value.absent(),
+                Value<int?> energy = const Value.absent(),
+                Value<double?> bbtCelsius = const Value.absent(),
+                Value<bool?> intercourse = const Value.absent(),
+                Value<String?> symptomIdsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeriodDaysCompanion.insert(
+                id: id,
+                date: date,
+                cycleId: cycleId,
+                flowIndex: flowIndex,
+                mood: mood,
+                energy: energy,
+                bbtCelsius: bbtCelsius,
+                intercourse: intercourse,
+                symptomIdsJson: symptomIdsJson,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PeriodDaysTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PeriodDaysTable,
+      PeriodDayRow,
+      $$PeriodDaysTableFilterComposer,
+      $$PeriodDaysTableOrderingComposer,
+      $$PeriodDaysTableAnnotationComposer,
+      $$PeriodDaysTableCreateCompanionBuilder,
+      $$PeriodDaysTableUpdateCompanionBuilder,
+      (
+        PeriodDayRow,
+        BaseReferences<_$AppDatabase, $PeriodDaysTable, PeriodDayRow>,
+      ),
+      PeriodDayRow,
+      PrefetchHooks Function()
+    >;
+typedef $$PeriodSettingsTableTableCreateCompanionBuilder =
+    PeriodSettingsTableCompanion Function({
+      required String id,
+      Value<int> trackingModeIndex,
+      Value<int> typicalCycleLength,
+      Value<int> typicalPeriodLength,
+      Value<int> lutealPhaseLength,
+      Value<DateTime?> pregnancyStartDate,
+      Value<bool> birthControlEnabled,
+      Value<bool> cloudSyncEnabled,
+      required DateTime updatedAt,
+      Value<int> schemaVer,
+      Value<String?> extraJson,
+      Value<int> rowid,
+    });
+typedef $$PeriodSettingsTableTableUpdateCompanionBuilder =
+    PeriodSettingsTableCompanion Function({
+      Value<String> id,
+      Value<int> trackingModeIndex,
+      Value<int> typicalCycleLength,
+      Value<int> typicalPeriodLength,
+      Value<int> lutealPhaseLength,
+      Value<DateTime?> pregnancyStartDate,
+      Value<bool> birthControlEnabled,
+      Value<bool> cloudSyncEnabled,
+      Value<DateTime> updatedAt,
+      Value<int> schemaVer,
+      Value<String?> extraJson,
+      Value<int> rowid,
+    });
+
+class $$PeriodSettingsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $PeriodSettingsTableTable> {
+  $$PeriodSettingsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get trackingModeIndex => $composableBuilder(
+    column: $table.trackingModeIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get typicalCycleLength => $composableBuilder(
+    column: $table.typicalCycleLength,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get typicalPeriodLength => $composableBuilder(
+    column: $table.typicalPeriodLength,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lutealPhaseLength => $composableBuilder(
+    column: $table.lutealPhaseLength,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get pregnancyStartDate => $composableBuilder(
+    column: $table.pregnancyStartDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get birthControlEnabled => $composableBuilder(
+    column: $table.birthControlEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get cloudSyncEnabled => $composableBuilder(
+    column: $table.cloudSyncEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get extraJson => $composableBuilder(
+    column: $table.extraJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PeriodSettingsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $PeriodSettingsTableTable> {
+  $$PeriodSettingsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get trackingModeIndex => $composableBuilder(
+    column: $table.trackingModeIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get typicalCycleLength => $composableBuilder(
+    column: $table.typicalCycleLength,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get typicalPeriodLength => $composableBuilder(
+    column: $table.typicalPeriodLength,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lutealPhaseLength => $composableBuilder(
+    column: $table.lutealPhaseLength,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get pregnancyStartDate => $composableBuilder(
+    column: $table.pregnancyStartDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get birthControlEnabled => $composableBuilder(
+    column: $table.birthControlEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get cloudSyncEnabled => $composableBuilder(
+    column: $table.cloudSyncEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get extraJson => $composableBuilder(
+    column: $table.extraJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PeriodSettingsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PeriodSettingsTableTable> {
+  $$PeriodSettingsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get trackingModeIndex => $composableBuilder(
+    column: $table.trackingModeIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get typicalCycleLength => $composableBuilder(
+    column: $table.typicalCycleLength,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get typicalPeriodLength => $composableBuilder(
+    column: $table.typicalPeriodLength,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lutealPhaseLength => $composableBuilder(
+    column: $table.lutealPhaseLength,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get pregnancyStartDate => $composableBuilder(
+    column: $table.pregnancyStartDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get birthControlEnabled => $composableBuilder(
+    column: $table.birthControlEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get cloudSyncEnabled => $composableBuilder(
+    column: $table.cloudSyncEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<String> get extraJson =>
+      $composableBuilder(column: $table.extraJson, builder: (column) => column);
+}
+
+class $$PeriodSettingsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PeriodSettingsTableTable,
+          PeriodSettingsRow,
+          $$PeriodSettingsTableTableFilterComposer,
+          $$PeriodSettingsTableTableOrderingComposer,
+          $$PeriodSettingsTableTableAnnotationComposer,
+          $$PeriodSettingsTableTableCreateCompanionBuilder,
+          $$PeriodSettingsTableTableUpdateCompanionBuilder,
+          (
+            PeriodSettingsRow,
+            BaseReferences<
+              _$AppDatabase,
+              $PeriodSettingsTableTable,
+              PeriodSettingsRow
+            >,
+          ),
+          PeriodSettingsRow,
+          PrefetchHooks Function()
+        > {
+  $$PeriodSettingsTableTableTableManager(
+    _$AppDatabase db,
+    $PeriodSettingsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PeriodSettingsTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PeriodSettingsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$PeriodSettingsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> trackingModeIndex = const Value.absent(),
+                Value<int> typicalCycleLength = const Value.absent(),
+                Value<int> typicalPeriodLength = const Value.absent(),
+                Value<int> lutealPhaseLength = const Value.absent(),
+                Value<DateTime?> pregnancyStartDate = const Value.absent(),
+                Value<bool> birthControlEnabled = const Value.absent(),
+                Value<bool> cloudSyncEnabled = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<String?> extraJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeriodSettingsTableCompanion(
+                id: id,
+                trackingModeIndex: trackingModeIndex,
+                typicalCycleLength: typicalCycleLength,
+                typicalPeriodLength: typicalPeriodLength,
+                lutealPhaseLength: lutealPhaseLength,
+                pregnancyStartDate: pregnancyStartDate,
+                birthControlEnabled: birthControlEnabled,
+                cloudSyncEnabled: cloudSyncEnabled,
+                updatedAt: updatedAt,
+                schemaVer: schemaVer,
+                extraJson: extraJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<int> trackingModeIndex = const Value.absent(),
+                Value<int> typicalCycleLength = const Value.absent(),
+                Value<int> typicalPeriodLength = const Value.absent(),
+                Value<int> lutealPhaseLength = const Value.absent(),
+                Value<DateTime?> pregnancyStartDate = const Value.absent(),
+                Value<bool> birthControlEnabled = const Value.absent(),
+                Value<bool> cloudSyncEnabled = const Value.absent(),
+                required DateTime updatedAt,
+                Value<int> schemaVer = const Value.absent(),
+                Value<String?> extraJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeriodSettingsTableCompanion.insert(
+                id: id,
+                trackingModeIndex: trackingModeIndex,
+                typicalCycleLength: typicalCycleLength,
+                typicalPeriodLength: typicalPeriodLength,
+                lutealPhaseLength: lutealPhaseLength,
+                pregnancyStartDate: pregnancyStartDate,
+                birthControlEnabled: birthControlEnabled,
+                cloudSyncEnabled: cloudSyncEnabled,
+                updatedAt: updatedAt,
+                schemaVer: schemaVer,
+                extraJson: extraJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PeriodSettingsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PeriodSettingsTableTable,
+      PeriodSettingsRow,
+      $$PeriodSettingsTableTableFilterComposer,
+      $$PeriodSettingsTableTableOrderingComposer,
+      $$PeriodSettingsTableTableAnnotationComposer,
+      $$PeriodSettingsTableTableCreateCompanionBuilder,
+      $$PeriodSettingsTableTableUpdateCompanionBuilder,
+      (
+        PeriodSettingsRow,
+        BaseReferences<
+          _$AppDatabase,
+          $PeriodSettingsTableTable,
+          PeriodSettingsRow
+        >,
+      ),
+      PeriodSettingsRow,
+      PrefetchHooks Function()
+    >;
+typedef $$StepDailyDataTableCreateCompanionBuilder =
+    StepDailyDataCompanion Function({
+      required String id,
+      required DateTime date,
+      Value<int> goalSteps,
+      Value<int?> sensorSteps,
+      Value<int> manualSteps,
+      Value<double> distanceMeters,
+      Value<double> activeCalories,
+      Value<int> sourceIndex,
+      Value<String?> hourlyJson,
+      Value<bool> goalReached,
+      Value<DateTime?> goalReachedAt,
+      Value<DateTime?> lastSyncedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$StepDailyDataTableUpdateCompanionBuilder =
+    StepDailyDataCompanion Function({
+      Value<String> id,
+      Value<DateTime> date,
+      Value<int> goalSteps,
+      Value<int?> sensorSteps,
+      Value<int> manualSteps,
+      Value<double> distanceMeters,
+      Value<double> activeCalories,
+      Value<int> sourceIndex,
+      Value<String?> hourlyJson,
+      Value<bool> goalReached,
+      Value<DateTime?> goalReachedAt,
+      Value<DateTime?> lastSyncedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$StepDailyDataTableFilterComposer
+    extends Composer<_$AppDatabase, $StepDailyDataTable> {
+  $$StepDailyDataTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get goalSteps => $composableBuilder(
+    column: $table.goalSteps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sensorSteps => $composableBuilder(
+    column: $table.sensorSteps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get manualSteps => $composableBuilder(
+    column: $table.manualSteps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get distanceMeters => $composableBuilder(
+    column: $table.distanceMeters,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get activeCalories => $composableBuilder(
+    column: $table.activeCalories,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get hourlyJson => $composableBuilder(
+    column: $table.hourlyJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get goalReached => $composableBuilder(
+    column: $table.goalReached,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get goalReachedAt => $composableBuilder(
+    column: $table.goalReachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StepDailyDataTableOrderingComposer
+    extends Composer<_$AppDatabase, $StepDailyDataTable> {
+  $$StepDailyDataTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get goalSteps => $composableBuilder(
+    column: $table.goalSteps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sensorSteps => $composableBuilder(
+    column: $table.sensorSteps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get manualSteps => $composableBuilder(
+    column: $table.manualSteps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get distanceMeters => $composableBuilder(
+    column: $table.distanceMeters,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get activeCalories => $composableBuilder(
+    column: $table.activeCalories,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get hourlyJson => $composableBuilder(
+    column: $table.hourlyJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get goalReached => $composableBuilder(
+    column: $table.goalReached,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get goalReachedAt => $composableBuilder(
+    column: $table.goalReachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StepDailyDataTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StepDailyDataTable> {
+  $$StepDailyDataTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<int> get goalSteps =>
+      $composableBuilder(column: $table.goalSteps, builder: (column) => column);
+
+  GeneratedColumn<int> get sensorSteps => $composableBuilder(
+    column: $table.sensorSteps,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get manualSteps => $composableBuilder(
+    column: $table.manualSteps,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get distanceMeters => $composableBuilder(
+    column: $table.distanceMeters,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get activeCalories => $composableBuilder(
+    column: $table.activeCalories,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get hourlyJson => $composableBuilder(
+    column: $table.hourlyJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get goalReached => $composableBuilder(
+    column: $table.goalReached,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get goalReachedAt => $composableBuilder(
+    column: $table.goalReachedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$StepDailyDataTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StepDailyDataTable,
+          StepDayRow,
+          $$StepDailyDataTableFilterComposer,
+          $$StepDailyDataTableOrderingComposer,
+          $$StepDailyDataTableAnnotationComposer,
+          $$StepDailyDataTableCreateCompanionBuilder,
+          $$StepDailyDataTableUpdateCompanionBuilder,
+          (
+            StepDayRow,
+            BaseReferences<_$AppDatabase, $StepDailyDataTable, StepDayRow>,
+          ),
+          StepDayRow,
+          PrefetchHooks Function()
+        > {
+  $$StepDailyDataTableTableManager(_$AppDatabase db, $StepDailyDataTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StepDailyDataTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StepDailyDataTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StepDailyDataTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> date = const Value.absent(),
+                Value<int> goalSteps = const Value.absent(),
+                Value<int?> sensorSteps = const Value.absent(),
+                Value<int> manualSteps = const Value.absent(),
+                Value<double> distanceMeters = const Value.absent(),
+                Value<double> activeCalories = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<String?> hourlyJson = const Value.absent(),
+                Value<bool> goalReached = const Value.absent(),
+                Value<DateTime?> goalReachedAt = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StepDailyDataCompanion(
+                id: id,
+                date: date,
+                goalSteps: goalSteps,
+                sensorSteps: sensorSteps,
+                manualSteps: manualSteps,
+                distanceMeters: distanceMeters,
+                activeCalories: activeCalories,
+                sourceIndex: sourceIndex,
+                hourlyJson: hourlyJson,
+                goalReached: goalReached,
+                goalReachedAt: goalReachedAt,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required DateTime date,
+                Value<int> goalSteps = const Value.absent(),
+                Value<int?> sensorSteps = const Value.absent(),
+                Value<int> manualSteps = const Value.absent(),
+                Value<double> distanceMeters = const Value.absent(),
+                Value<double> activeCalories = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<String?> hourlyJson = const Value.absent(),
+                Value<bool> goalReached = const Value.absent(),
+                Value<DateTime?> goalReachedAt = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StepDailyDataCompanion.insert(
+                id: id,
+                date: date,
+                goalSteps: goalSteps,
+                sensorSteps: sensorSteps,
+                manualSteps: manualSteps,
+                distanceMeters: distanceMeters,
+                activeCalories: activeCalories,
+                sourceIndex: sourceIndex,
+                hourlyJson: hourlyJson,
+                goalReached: goalReached,
+                goalReachedAt: goalReachedAt,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StepDailyDataTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StepDailyDataTable,
+      StepDayRow,
+      $$StepDailyDataTableFilterComposer,
+      $$StepDailyDataTableOrderingComposer,
+      $$StepDailyDataTableAnnotationComposer,
+      $$StepDailyDataTableCreateCompanionBuilder,
+      $$StepDailyDataTableUpdateCompanionBuilder,
+      (
+        StepDayRow,
+        BaseReferences<_$AppDatabase, $StepDailyDataTable, StepDayRow>,
+      ),
+      StepDayRow,
+      PrefetchHooks Function()
+    >;
+typedef $$StepManualEntriesTableCreateCompanionBuilder =
+    StepManualEntriesCompanion Function({
+      required String id,
+      required String dailyDataId,
+      required DateTime time,
+      required int steps,
+      Value<String?> note,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+typedef $$StepManualEntriesTableUpdateCompanionBuilder =
+    StepManualEntriesCompanion Function({
+      Value<String> id,
+      Value<String> dailyDataId,
+      Value<DateTime> time,
+      Value<int> steps,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+
+class $$StepManualEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $StepManualEntriesTable> {
+  $$StepManualEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dailyDataId => $composableBuilder(
+    column: $table.dailyDataId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get time => $composableBuilder(
+    column: $table.time,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get steps => $composableBuilder(
+    column: $table.steps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StepManualEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StepManualEntriesTable> {
+  $$StepManualEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dailyDataId => $composableBuilder(
+    column: $table.dailyDataId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get time => $composableBuilder(
+    column: $table.time,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get steps => $composableBuilder(
+    column: $table.steps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StepManualEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StepManualEntriesTable> {
+  $$StepManualEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dailyDataId => $composableBuilder(
+    column: $table.dailyDataId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get time =>
+      $composableBuilder(column: $table.time, builder: (column) => column);
+
+  GeneratedColumn<int> get steps =>
+      $composableBuilder(column: $table.steps, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+}
+
+class $$StepManualEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StepManualEntriesTable,
+          StepManualEntryRow,
+          $$StepManualEntriesTableFilterComposer,
+          $$StepManualEntriesTableOrderingComposer,
+          $$StepManualEntriesTableAnnotationComposer,
+          $$StepManualEntriesTableCreateCompanionBuilder,
+          $$StepManualEntriesTableUpdateCompanionBuilder,
+          (
+            StepManualEntryRow,
+            BaseReferences<
+              _$AppDatabase,
+              $StepManualEntriesTable,
+              StepManualEntryRow
+            >,
+          ),
+          StepManualEntryRow,
+          PrefetchHooks Function()
+        > {
+  $$StepManualEntriesTableTableManager(
+    _$AppDatabase db,
+    $StepManualEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StepManualEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StepManualEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StepManualEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> dailyDataId = const Value.absent(),
+                Value<DateTime> time = const Value.absent(),
+                Value<int> steps = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StepManualEntriesCompanion(
+                id: id,
+                dailyDataId: dailyDataId,
+                time: time,
+                steps: steps,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String dailyDataId,
+                required DateTime time,
+                required int steps,
+                Value<String?> note = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StepManualEntriesCompanion.insert(
+                id: id,
+                dailyDataId: dailyDataId,
+                time: time,
+                steps: steps,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StepManualEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StepManualEntriesTable,
+      StepManualEntryRow,
+      $$StepManualEntriesTableFilterComposer,
+      $$StepManualEntriesTableOrderingComposer,
+      $$StepManualEntriesTableAnnotationComposer,
+      $$StepManualEntriesTableCreateCompanionBuilder,
+      $$StepManualEntriesTableUpdateCompanionBuilder,
+      (
+        StepManualEntryRow,
+        BaseReferences<
+          _$AppDatabase,
+          $StepManualEntriesTable,
+          StepManualEntryRow
+        >,
+      ),
+      StepManualEntryRow,
+      PrefetchHooks Function()
+    >;
+typedef $$HealthProfilesTableCreateCompanionBuilder =
+    HealthProfilesCompanion Function({
+      required String id,
+      Value<double?> weightKg,
+      Value<int?> heightCm,
+      Value<int?> age,
+      Value<bool> isMale,
+      Value<double?> strideLengthCm,
+      Value<int?> customStepGoal,
+      Value<bool> useCustomStepGoal,
+      Value<int> targetSleepMinutes,
+      Value<int> bedtimeHour,
+      Value<int> bedtimeMinute,
+      Value<int> wakeHour,
+      Value<int> wakeMinute,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> extraJson,
+      Value<int> rowid,
+    });
+typedef $$HealthProfilesTableUpdateCompanionBuilder =
+    HealthProfilesCompanion Function({
+      Value<String> id,
+      Value<double?> weightKg,
+      Value<int?> heightCm,
+      Value<int?> age,
+      Value<bool> isMale,
+      Value<double?> strideLengthCm,
+      Value<int?> customStepGoal,
+      Value<bool> useCustomStepGoal,
+      Value<int> targetSleepMinutes,
+      Value<int> bedtimeHour,
+      Value<int> bedtimeMinute,
+      Value<int> wakeHour,
+      Value<int> wakeMinute,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> extraJson,
+      Value<int> rowid,
+    });
+
+class $$HealthProfilesTableFilterComposer
+    extends Composer<_$AppDatabase, $HealthProfilesTable> {
+  $$HealthProfilesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get weightKg => $composableBuilder(
+    column: $table.weightKg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get heightCm => $composableBuilder(
+    column: $table.heightCm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get age => $composableBuilder(
+    column: $table.age,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isMale => $composableBuilder(
+    column: $table.isMale,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get strideLengthCm => $composableBuilder(
+    column: $table.strideLengthCm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get customStepGoal => $composableBuilder(
+    column: $table.customStepGoal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get useCustomStepGoal => $composableBuilder(
+    column: $table.useCustomStepGoal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get targetSleepMinutes => $composableBuilder(
+    column: $table.targetSleepMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bedtimeHour => $composableBuilder(
+    column: $table.bedtimeHour,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bedtimeMinute => $composableBuilder(
+    column: $table.bedtimeMinute,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get wakeHour => $composableBuilder(
+    column: $table.wakeHour,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get wakeMinute => $composableBuilder(
+    column: $table.wakeMinute,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get extraJson => $composableBuilder(
+    column: $table.extraJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$HealthProfilesTableOrderingComposer
+    extends Composer<_$AppDatabase, $HealthProfilesTable> {
+  $$HealthProfilesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get weightKg => $composableBuilder(
+    column: $table.weightKg,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get heightCm => $composableBuilder(
+    column: $table.heightCm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get age => $composableBuilder(
+    column: $table.age,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isMale => $composableBuilder(
+    column: $table.isMale,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get strideLengthCm => $composableBuilder(
+    column: $table.strideLengthCm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get customStepGoal => $composableBuilder(
+    column: $table.customStepGoal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get useCustomStepGoal => $composableBuilder(
+    column: $table.useCustomStepGoal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get targetSleepMinutes => $composableBuilder(
+    column: $table.targetSleepMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bedtimeHour => $composableBuilder(
+    column: $table.bedtimeHour,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bedtimeMinute => $composableBuilder(
+    column: $table.bedtimeMinute,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get wakeHour => $composableBuilder(
+    column: $table.wakeHour,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get wakeMinute => $composableBuilder(
+    column: $table.wakeMinute,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get extraJson => $composableBuilder(
+    column: $table.extraJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$HealthProfilesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $HealthProfilesTable> {
+  $$HealthProfilesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<double> get weightKg =>
+      $composableBuilder(column: $table.weightKg, builder: (column) => column);
+
+  GeneratedColumn<int> get heightCm =>
+      $composableBuilder(column: $table.heightCm, builder: (column) => column);
+
+  GeneratedColumn<int> get age =>
+      $composableBuilder(column: $table.age, builder: (column) => column);
+
+  GeneratedColumn<bool> get isMale =>
+      $composableBuilder(column: $table.isMale, builder: (column) => column);
+
+  GeneratedColumn<double> get strideLengthCm => $composableBuilder(
+    column: $table.strideLengthCm,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get customStepGoal => $composableBuilder(
+    column: $table.customStepGoal,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get useCustomStepGoal => $composableBuilder(
+    column: $table.useCustomStepGoal,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get targetSleepMinutes => $composableBuilder(
+    column: $table.targetSleepMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bedtimeHour => $composableBuilder(
+    column: $table.bedtimeHour,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bedtimeMinute => $composableBuilder(
+    column: $table.bedtimeMinute,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get wakeHour =>
+      $composableBuilder(column: $table.wakeHour, builder: (column) => column);
+
+  GeneratedColumn<int> get wakeMinute => $composableBuilder(
+    column: $table.wakeMinute,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get extraJson =>
+      $composableBuilder(column: $table.extraJson, builder: (column) => column);
+}
+
+class $$HealthProfilesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $HealthProfilesTable,
+          HealthProfileRow,
+          $$HealthProfilesTableFilterComposer,
+          $$HealthProfilesTableOrderingComposer,
+          $$HealthProfilesTableAnnotationComposer,
+          $$HealthProfilesTableCreateCompanionBuilder,
+          $$HealthProfilesTableUpdateCompanionBuilder,
+          (
+            HealthProfileRow,
+            BaseReferences<
+              _$AppDatabase,
+              $HealthProfilesTable,
+              HealthProfileRow
+            >,
+          ),
+          HealthProfileRow,
+          PrefetchHooks Function()
+        > {
+  $$HealthProfilesTableTableManager(
+    _$AppDatabase db,
+    $HealthProfilesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$HealthProfilesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$HealthProfilesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$HealthProfilesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<double?> weightKg = const Value.absent(),
+                Value<int?> heightCm = const Value.absent(),
+                Value<int?> age = const Value.absent(),
+                Value<bool> isMale = const Value.absent(),
+                Value<double?> strideLengthCm = const Value.absent(),
+                Value<int?> customStepGoal = const Value.absent(),
+                Value<bool> useCustomStepGoal = const Value.absent(),
+                Value<int> targetSleepMinutes = const Value.absent(),
+                Value<int> bedtimeHour = const Value.absent(),
+                Value<int> bedtimeMinute = const Value.absent(),
+                Value<int> wakeHour = const Value.absent(),
+                Value<int> wakeMinute = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> extraJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HealthProfilesCompanion(
+                id: id,
+                weightKg: weightKg,
+                heightCm: heightCm,
+                age: age,
+                isMale: isMale,
+                strideLengthCm: strideLengthCm,
+                customStepGoal: customStepGoal,
+                useCustomStepGoal: useCustomStepGoal,
+                targetSleepMinutes: targetSleepMinutes,
+                bedtimeHour: bedtimeHour,
+                bedtimeMinute: bedtimeMinute,
+                wakeHour: wakeHour,
+                wakeMinute: wakeMinute,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                extraJson: extraJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<double?> weightKg = const Value.absent(),
+                Value<int?> heightCm = const Value.absent(),
+                Value<int?> age = const Value.absent(),
+                Value<bool> isMale = const Value.absent(),
+                Value<double?> strideLengthCm = const Value.absent(),
+                Value<int?> customStepGoal = const Value.absent(),
+                Value<bool> useCustomStepGoal = const Value.absent(),
+                Value<int> targetSleepMinutes = const Value.absent(),
+                Value<int> bedtimeHour = const Value.absent(),
+                Value<int> bedtimeMinute = const Value.absent(),
+                Value<int> wakeHour = const Value.absent(),
+                Value<int> wakeMinute = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> extraJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HealthProfilesCompanion.insert(
+                id: id,
+                weightKg: weightKg,
+                heightCm: heightCm,
+                age: age,
+                isMale: isMale,
+                strideLengthCm: strideLengthCm,
+                customStepGoal: customStepGoal,
+                useCustomStepGoal: useCustomStepGoal,
+                targetSleepMinutes: targetSleepMinutes,
+                bedtimeHour: bedtimeHour,
+                bedtimeMinute: bedtimeMinute,
+                wakeHour: wakeHour,
+                wakeMinute: wakeMinute,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                extraJson: extraJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$HealthProfilesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $HealthProfilesTable,
+      HealthProfileRow,
+      $$HealthProfilesTableFilterComposer,
+      $$HealthProfilesTableOrderingComposer,
+      $$HealthProfilesTableAnnotationComposer,
+      $$HealthProfilesTableCreateCompanionBuilder,
+      $$HealthProfilesTableUpdateCompanionBuilder,
+      (
+        HealthProfileRow,
+        BaseReferences<_$AppDatabase, $HealthProfilesTable, HealthProfileRow>,
+      ),
+      HealthProfileRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SleepSessionsTableCreateCompanionBuilder =
+    SleepSessionsCompanion Function({
+      required String id,
+      required String dateKey,
+      required DateTime bedtime,
+      required DateTime wakeTime,
+      required int inBedMinutes,
+      required int asleepMinutes,
+      Value<int> awakeMinutes,
+      Value<int?> lightMinutes,
+      Value<int?> deepMinutes,
+      Value<int?> remMinutes,
+      Value<int> sleepScore,
+      Value<double> efficiency,
+      Value<int?> qualityIndex,
+      Value<int> sourceIndex,
+      Value<String?> note,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$SleepSessionsTableUpdateCompanionBuilder =
+    SleepSessionsCompanion Function({
+      Value<String> id,
+      Value<String> dateKey,
+      Value<DateTime> bedtime,
+      Value<DateTime> wakeTime,
+      Value<int> inBedMinutes,
+      Value<int> asleepMinutes,
+      Value<int> awakeMinutes,
+      Value<int?> lightMinutes,
+      Value<int?> deepMinutes,
+      Value<int?> remMinutes,
+      Value<int> sleepScore,
+      Value<double> efficiency,
+      Value<int?> qualityIndex,
+      Value<int> sourceIndex,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$SleepSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $SleepSessionsTable> {
+  $$SleepSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get bedtime => $composableBuilder(
+    column: $table.bedtime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get wakeTime => $composableBuilder(
+    column: $table.wakeTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get inBedMinutes => $composableBuilder(
+    column: $table.inBedMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get asleepMinutes => $composableBuilder(
+    column: $table.asleepMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get awakeMinutes => $composableBuilder(
+    column: $table.awakeMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lightMinutes => $composableBuilder(
+    column: $table.lightMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deepMinutes => $composableBuilder(
+    column: $table.deepMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get remMinutes => $composableBuilder(
+    column: $table.remMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sleepScore => $composableBuilder(
+    column: $table.sleepScore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get efficiency => $composableBuilder(
+    column: $table.efficiency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get qualityIndex => $composableBuilder(
+    column: $table.qualityIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SleepSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SleepSessionsTable> {
+  $$SleepSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get bedtime => $composableBuilder(
+    column: $table.bedtime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get wakeTime => $composableBuilder(
+    column: $table.wakeTime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get inBedMinutes => $composableBuilder(
+    column: $table.inBedMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get asleepMinutes => $composableBuilder(
+    column: $table.asleepMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get awakeMinutes => $composableBuilder(
+    column: $table.awakeMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lightMinutes => $composableBuilder(
+    column: $table.lightMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deepMinutes => $composableBuilder(
+    column: $table.deepMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get remMinutes => $composableBuilder(
+    column: $table.remMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sleepScore => $composableBuilder(
+    column: $table.sleepScore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get efficiency => $composableBuilder(
+    column: $table.efficiency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get qualityIndex => $composableBuilder(
+    column: $table.qualityIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SleepSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SleepSessionsTable> {
+  $$SleepSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dateKey =>
+      $composableBuilder(column: $table.dateKey, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get bedtime =>
+      $composableBuilder(column: $table.bedtime, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get wakeTime =>
+      $composableBuilder(column: $table.wakeTime, builder: (column) => column);
+
+  GeneratedColumn<int> get inBedMinutes => $composableBuilder(
+    column: $table.inBedMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get asleepMinutes => $composableBuilder(
+    column: $table.asleepMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get awakeMinutes => $composableBuilder(
+    column: $table.awakeMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lightMinutes => $composableBuilder(
+    column: $table.lightMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get deepMinutes => $composableBuilder(
+    column: $table.deepMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get remMinutes => $composableBuilder(
+    column: $table.remMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sleepScore => $composableBuilder(
+    column: $table.sleepScore,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get efficiency => $composableBuilder(
+    column: $table.efficiency,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get qualityIndex => $composableBuilder(
+    column: $table.qualityIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$SleepSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SleepSessionsTable,
+          SleepSessionRow,
+          $$SleepSessionsTableFilterComposer,
+          $$SleepSessionsTableOrderingComposer,
+          $$SleepSessionsTableAnnotationComposer,
+          $$SleepSessionsTableCreateCompanionBuilder,
+          $$SleepSessionsTableUpdateCompanionBuilder,
+          (
+            SleepSessionRow,
+            BaseReferences<_$AppDatabase, $SleepSessionsTable, SleepSessionRow>,
+          ),
+          SleepSessionRow,
+          PrefetchHooks Function()
+        > {
+  $$SleepSessionsTableTableManager(_$AppDatabase db, $SleepSessionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SleepSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SleepSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SleepSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> dateKey = const Value.absent(),
+                Value<DateTime> bedtime = const Value.absent(),
+                Value<DateTime> wakeTime = const Value.absent(),
+                Value<int> inBedMinutes = const Value.absent(),
+                Value<int> asleepMinutes = const Value.absent(),
+                Value<int> awakeMinutes = const Value.absent(),
+                Value<int?> lightMinutes = const Value.absent(),
+                Value<int?> deepMinutes = const Value.absent(),
+                Value<int?> remMinutes = const Value.absent(),
+                Value<int> sleepScore = const Value.absent(),
+                Value<double> efficiency = const Value.absent(),
+                Value<int?> qualityIndex = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SleepSessionsCompanion(
+                id: id,
+                dateKey: dateKey,
+                bedtime: bedtime,
+                wakeTime: wakeTime,
+                inBedMinutes: inBedMinutes,
+                asleepMinutes: asleepMinutes,
+                awakeMinutes: awakeMinutes,
+                lightMinutes: lightMinutes,
+                deepMinutes: deepMinutes,
+                remMinutes: remMinutes,
+                sleepScore: sleepScore,
+                efficiency: efficiency,
+                qualityIndex: qualityIndex,
+                sourceIndex: sourceIndex,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String dateKey,
+                required DateTime bedtime,
+                required DateTime wakeTime,
+                required int inBedMinutes,
+                required int asleepMinutes,
+                Value<int> awakeMinutes = const Value.absent(),
+                Value<int?> lightMinutes = const Value.absent(),
+                Value<int?> deepMinutes = const Value.absent(),
+                Value<int?> remMinutes = const Value.absent(),
+                Value<int> sleepScore = const Value.absent(),
+                Value<double> efficiency = const Value.absent(),
+                Value<int?> qualityIndex = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SleepSessionsCompanion.insert(
+                id: id,
+                dateKey: dateKey,
+                bedtime: bedtime,
+                wakeTime: wakeTime,
+                inBedMinutes: inBedMinutes,
+                asleepMinutes: asleepMinutes,
+                awakeMinutes: awakeMinutes,
+                lightMinutes: lightMinutes,
+                deepMinutes: deepMinutes,
+                remMinutes: remMinutes,
+                sleepScore: sleepScore,
+                efficiency: efficiency,
+                qualityIndex: qualityIndex,
+                sourceIndex: sourceIndex,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SleepSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SleepSessionsTable,
+      SleepSessionRow,
+      $$SleepSessionsTableFilterComposer,
+      $$SleepSessionsTableOrderingComposer,
+      $$SleepSessionsTableAnnotationComposer,
+      $$SleepSessionsTableCreateCompanionBuilder,
+      $$SleepSessionsTableUpdateCompanionBuilder,
+      (
+        SleepSessionRow,
+        BaseReferences<_$AppDatabase, $SleepSessionsTable, SleepSessionRow>,
+      ),
+      SleepSessionRow,
+      PrefetchHooks Function()
+    >;
+typedef $$KnowledgeChunksTableCreateCompanionBuilder =
+    KnowledgeChunksCompanion Function({
+      required String id,
+      required String topic,
+      required String title,
+      required String body,
+      Value<String?> source,
+      Value<int> kbVersion,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$KnowledgeChunksTableUpdateCompanionBuilder =
+    KnowledgeChunksCompanion Function({
+      Value<String> id,
+      Value<String> topic,
+      Value<String> title,
+      Value<String> body,
+      Value<String?> source,
+      Value<int> kbVersion,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$KnowledgeChunksTableFilterComposer
+    extends Composer<_$AppDatabase, $KnowledgeChunksTable> {
+  $$KnowledgeChunksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get topic => $composableBuilder(
+    column: $table.topic,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get kbVersion => $composableBuilder(
+    column: $table.kbVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$KnowledgeChunksTableOrderingComposer
+    extends Composer<_$AppDatabase, $KnowledgeChunksTable> {
+  $$KnowledgeChunksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get topic => $composableBuilder(
+    column: $table.topic,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get kbVersion => $composableBuilder(
+    column: $table.kbVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$KnowledgeChunksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $KnowledgeChunksTable> {
+  $$KnowledgeChunksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get topic =>
+      $composableBuilder(column: $table.topic, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<int> get kbVersion =>
+      $composableBuilder(column: $table.kbVersion, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$KnowledgeChunksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $KnowledgeChunksTable,
+          KnowledgeChunkRow,
+          $$KnowledgeChunksTableFilterComposer,
+          $$KnowledgeChunksTableOrderingComposer,
+          $$KnowledgeChunksTableAnnotationComposer,
+          $$KnowledgeChunksTableCreateCompanionBuilder,
+          $$KnowledgeChunksTableUpdateCompanionBuilder,
+          (
+            KnowledgeChunkRow,
+            BaseReferences<
+              _$AppDatabase,
+              $KnowledgeChunksTable,
+              KnowledgeChunkRow
+            >,
+          ),
+          KnowledgeChunkRow,
+          PrefetchHooks Function()
+        > {
+  $$KnowledgeChunksTableTableManager(
+    _$AppDatabase db,
+    $KnowledgeChunksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$KnowledgeChunksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$KnowledgeChunksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$KnowledgeChunksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> topic = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<String?> source = const Value.absent(),
+                Value<int> kbVersion = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => KnowledgeChunksCompanion(
+                id: id,
+                topic: topic,
+                title: title,
+                body: body,
+                source: source,
+                kbVersion: kbVersion,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String topic,
+                required String title,
+                required String body,
+                Value<String?> source = const Value.absent(),
+                Value<int> kbVersion = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => KnowledgeChunksCompanion.insert(
+                id: id,
+                topic: topic,
+                title: title,
+                body: body,
+                source: source,
+                kbVersion: kbVersion,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$KnowledgeChunksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $KnowledgeChunksTable,
+      KnowledgeChunkRow,
+      $$KnowledgeChunksTableFilterComposer,
+      $$KnowledgeChunksTableOrderingComposer,
+      $$KnowledgeChunksTableAnnotationComposer,
+      $$KnowledgeChunksTableCreateCompanionBuilder,
+      $$KnowledgeChunksTableUpdateCompanionBuilder,
+      (
+        KnowledgeChunkRow,
+        BaseReferences<_$AppDatabase, $KnowledgeChunksTable, KnowledgeChunkRow>,
+      ),
+      KnowledgeChunkRow,
+      PrefetchHooks Function()
+    >;
+typedef $$AssistantMemoriesTableCreateCompanionBuilder =
+    AssistantMemoriesCompanion Function({
+      required String id,
+      required String content,
+      Value<String> kind,
+      Value<bool> active,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<String> source,
+      Value<int> rowid,
+    });
+typedef $$AssistantMemoriesTableUpdateCompanionBuilder =
+    AssistantMemoriesCompanion Function({
+      Value<String> id,
+      Value<String> content,
+      Value<String> kind,
+      Value<bool> active,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<String> source,
+      Value<int> rowid,
+    });
+
+class $$AssistantMemoriesTableFilterComposer
+    extends Composer<_$AppDatabase, $AssistantMemoriesTable> {
+  $$AssistantMemoriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get active => $composableBuilder(
+    column: $table.active,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AssistantMemoriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AssistantMemoriesTable> {
+  $$AssistantMemoriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get active => $composableBuilder(
+    column: $table.active,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AssistantMemoriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AssistantMemoriesTable> {
+  $$AssistantMemoriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<bool> get active =>
+      $composableBuilder(column: $table.active, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+}
+
+class $$AssistantMemoriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AssistantMemoriesTable,
+          AssistantMemoryRow,
+          $$AssistantMemoriesTableFilterComposer,
+          $$AssistantMemoriesTableOrderingComposer,
+          $$AssistantMemoriesTableAnnotationComposer,
+          $$AssistantMemoriesTableCreateCompanionBuilder,
+          $$AssistantMemoriesTableUpdateCompanionBuilder,
+          (
+            AssistantMemoryRow,
+            BaseReferences<
+              _$AppDatabase,
+              $AssistantMemoriesTable,
+              AssistantMemoryRow
+            >,
+          ),
+          AssistantMemoryRow,
+          PrefetchHooks Function()
+        > {
+  $$AssistantMemoriesTableTableManager(
+    _$AppDatabase db,
+    $AssistantMemoriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AssistantMemoriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AssistantMemoriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AssistantMemoriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<bool> active = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AssistantMemoriesCompanion(
+                id: id,
+                content: content,
+                kind: kind,
+                active: active,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                source: source,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String content,
+                Value<String> kind = const Value.absent(),
+                Value<bool> active = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<String> source = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AssistantMemoriesCompanion.insert(
+                id: id,
+                content: content,
+                kind: kind,
+                active: active,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                source: source,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AssistantMemoriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AssistantMemoriesTable,
+      AssistantMemoryRow,
+      $$AssistantMemoriesTableFilterComposer,
+      $$AssistantMemoriesTableOrderingComposer,
+      $$AssistantMemoriesTableAnnotationComposer,
+      $$AssistantMemoriesTableCreateCompanionBuilder,
+      $$AssistantMemoriesTableUpdateCompanionBuilder,
+      (
+        AssistantMemoryRow,
+        BaseReferences<
+          _$AppDatabase,
+          $AssistantMemoriesTable,
+          AssistantMemoryRow
+        >,
+      ),
+      AssistantMemoryRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -24345,4 +34851,22 @@ class $AppDatabaseManager {
       $$BloodPressureReadingsTableTableManager(_db, _db.bloodPressureReadings);
   $$GlucoseReadingsTableTableManager get glucoseReadings =>
       $$GlucoseReadingsTableTableManager(_db, _db.glucoseReadings);
+  $$MenstrualCyclesTableTableManager get menstrualCycles =>
+      $$MenstrualCyclesTableTableManager(_db, _db.menstrualCycles);
+  $$PeriodDaysTableTableManager get periodDays =>
+      $$PeriodDaysTableTableManager(_db, _db.periodDays);
+  $$PeriodSettingsTableTableTableManager get periodSettingsTable =>
+      $$PeriodSettingsTableTableTableManager(_db, _db.periodSettingsTable);
+  $$StepDailyDataTableTableManager get stepDailyData =>
+      $$StepDailyDataTableTableManager(_db, _db.stepDailyData);
+  $$StepManualEntriesTableTableManager get stepManualEntries =>
+      $$StepManualEntriesTableTableManager(_db, _db.stepManualEntries);
+  $$HealthProfilesTableTableManager get healthProfiles =>
+      $$HealthProfilesTableTableManager(_db, _db.healthProfiles);
+  $$SleepSessionsTableTableManager get sleepSessions =>
+      $$SleepSessionsTableTableManager(_db, _db.sleepSessions);
+  $$KnowledgeChunksTableTableManager get knowledgeChunks =>
+      $$KnowledgeChunksTableTableManager(_db, _db.knowledgeChunks);
+  $$AssistantMemoriesTableTableManager get assistantMemories =>
+      $$AssistantMemoriesTableTableManager(_db, _db.assistantMemories);
 }

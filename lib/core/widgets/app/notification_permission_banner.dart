@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../design/app_design.dart';
@@ -97,7 +98,7 @@ class _NotificationPermissionBannerState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                Icons.notifications_off_rounded,
+                Symbols.notifications_off_rounded,
                 color: warning.onContainer,
                 size: 22,
               ),
@@ -129,7 +130,7 @@ class _NotificationPermissionBannerState
             alignment: Alignment.centerLeft,
             child: AppButton(
               label: 'Enable notifications',
-              leadingIcon: Icons.notifications_active_rounded,
+              leadingIcon: Symbols.notifications_active_rounded,
               size: AppButtonSize.sm,
               accent: warning,
               loading: _working,

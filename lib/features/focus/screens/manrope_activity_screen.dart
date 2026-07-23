@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/services/haptic_service.dart';
 import '../theme/manrope_theme.dart';
@@ -207,7 +208,7 @@ class _ManropeActivityScreenState extends State<ManropeActivityScreen>
               }
             },
             icon: Icon(
-              Icons.arrow_back_rounded,
+              Symbols.arrow_back_rounded,
               color: isDark
                   ? ManropeTheme.textPrimaryDark
                   : ManropeTheme.textPrimary,
@@ -550,7 +551,7 @@ class _ManropeActivityScreenState extends State<ManropeActivityScreen>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Icon(
-                        Icons.air_rounded,
+                        Symbols.air_rounded,
                         color: Colors.white,
                         size: 24,
                       ),
@@ -645,9 +646,9 @@ class _ManropeActivityScreenState extends State<ManropeActivityScreen>
                           Icon(
                             isRunning
                                 ? (isPaused
-                                    ? Icons.play_arrow_rounded
-                                    : Icons.pause_rounded)
-                                : Icons.play_arrow_rounded,
+                                    ? Symbols.play_arrow_rounded
+                                    : Symbols.pause_rounded)
+                                : Symbols.play_arrow_rounded,
                             color: Colors.white,
                             size: 28,
                           ),

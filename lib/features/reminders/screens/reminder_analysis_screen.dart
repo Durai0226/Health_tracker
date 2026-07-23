@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -20,7 +21,7 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary),
+          icon: const Icon(Symbols.arrow_back_rounded, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -71,7 +72,7 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.analytics_outlined,
+              Symbols.analytics_rounded,
               color: AppColors.success,
               size: 32,
             ),
@@ -184,11 +185,11 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
         children: [
           Row(
             children: [
-              _buildStatItem('Total', '$totalReminders', AppColors.primary, Icons.notifications_rounded),
+              _buildStatItem('Total', '$totalReminders', AppColors.primary, Symbols.notifications_rounded),
               const SizedBox(width: 16),
-              _buildStatItem('Active', '$activeReminders', AppColors.success, Icons.notifications_active_rounded),
+              _buildStatItem('Active', '$activeReminders', AppColors.success, Symbols.notifications_active_rounded),
               const SizedBox(width: 16),
-              _buildStatItem('Rate', '$adherenceRate%', AppColors.warning, Icons.trending_up_rounded),
+              _buildStatItem('Rate', '$adherenceRate%', AppColors.warning, Symbols.trending_up_rounded),
             ],
           ),
         ],
@@ -262,10 +263,10 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildBreakdownItem('Medicine', medicines, AppColors.primary, Icons.medication_rounded),
-          _buildBreakdownItem('Fitness', fitness, AppColors.success, Icons.fitness_center_rounded),
-          _buildBreakdownItem('Water', water, AppColors.info, Icons.water_drop_rounded),
-          _buildBreakdownItem('Period', period, AppColors.periodPrimary, Icons.calendar_today_rounded),
+          _buildBreakdownItem('Medicine', medicines, AppColors.primary, Symbols.medication_rounded),
+          _buildBreakdownItem('Fitness', fitness, AppColors.success, Symbols.fitness_center_rounded),
+          _buildBreakdownItem('Water', water, AppColors.info, Symbols.water_drop_rounded),
+          _buildBreakdownItem('Period', period, AppColors.periodPrimary, Symbols.calendar_today_rounded),
         ],
       ),
     );
@@ -334,7 +335,7 @@ class _ReminderAnalysisScreenState extends State<ReminderAnalysisScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.schedule_rounded, color: AppColors.primary, size: 20),
+              Icon(Symbols.schedule_rounded, color: AppColors.primary, size: 20),
               SizedBox(width: 8),
               Text(
                 'Today\'s Schedule',

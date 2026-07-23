@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -86,7 +87,7 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.arrow_back_rounded, size: 20),
+          child: const Icon(Symbols.arrow_back_rounded, size: 20),
         ),
       ),
       title: const Text(
@@ -286,7 +287,7 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
             textCapitalization: TextCapitalization.characters,
             decoration: InputDecoration(
               hintText: 'Enter Room Code',
-              prefixIcon: const Icon(Icons.meeting_room_rounded),
+              prefixIcon: const Icon(Symbols.meeting_room_rounded),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -434,7 +435,7 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
                     color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.close_rounded, size: 20),
+                  child: const Icon(Symbols.close_rounded, size: 20),
                 ),
               ),
               const Spacer(),
@@ -464,7 +465,7 @@ class _GroupFocusScreenState extends State<GroupFocusScreen> {
                             const SnackBar(content: Text('Code copied!')),
                           );
                         },
-                        icon: const Icon(Icons.copy_rounded, size: 18),
+                        icon: const Icon(Symbols.content_copy_rounded, size: 18),
                       ),
                     ],
                   ),

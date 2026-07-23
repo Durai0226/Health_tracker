@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/design/app_design.dart';
@@ -47,7 +48,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     final saved = await AppBottomSheet.show<bool>(
       context,
       title: edit == null ? 'Log blood pressure' : 'Edit reading',
-      icon: Icons.favorite_rounded,
+      icon: Symbols.favorite_rounded,
       accent: accent,
       builder: (_) => _BpLogForm(accent: accent, existing: edit),
     );
@@ -55,8 +56,24 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
   }
 
   Future<void> _delete(BloodPressureReading r) async {
+    // Soft delete: remove now, but offer Undo — deleting a health record must
+    // never be a one-swipe, unrecoverable action.
+    final messenger = ScaffoldMessenger.of(context);
     await VitalsStorageService.deleteBp(r.id);
     _load();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Reading deleted'),
+        persist: false,
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            await VitalsStorageService.saveBp(r);
+            _load();
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -67,7 +84,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     return AppScaffold(
       safeTop: true,
       floatingActionButton: AppFab(
-        icon: Icons.add_rounded,
+        icon: Symbols.add_rounded,
         label: 'Log',
         accent: accent,
         onPressed: () => _openLogSheet(),
@@ -76,10 +93,10 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
         children: [
           AppHeader(
             title: 'Blood Pressure',
-            icon: Icons.favorite_rounded,
+            icon: Symbols.favorite_rounded,
             accent: accent,
             leading: AppIconButton(
-              icon: Icons.arrow_back_rounded,
+              icon: Symbols.arrow_back_rounded,
               filled: false,
               accent: accent,
               onPressed: () => Navigator.pop(context),
@@ -95,7 +112,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
               ),
               if (_readings.isNotEmpty)
                 AppIconButton(
-                  icon: Icons.assessment_rounded,
+                  icon: Symbols.assessment_rounded,
                   filled: false,
                   accent: accent,
                   onPressed: () => Navigator.push(
@@ -170,7 +187,9 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
           VitalsStatusHero(
             bigValue: '${latest.systolic}/${latest.diastolic}',
             unitLabel: 'mmHg',
-            ringProgress: (cat.index + 1) / 5,
+            // Ring convention (shared with the glucose screen): FULL = healthy,
+            // the ring empties as the reading worsens. normal→1.0 … crisis→0.2.
+            ringProgress: (5 - cat.index) / 5,
             bandColor: band,
             categoryIcon: VitalsColors.bpIcon(cat),
             categoryLabel: VitalsAnalyzer.bpLabel(cat),
@@ -183,19 +202,19 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
             StatTile(
               value: avgSys != null ? '${avgSys.round()}/${avgDia!.round()}' : '—',
               label: '7-day avg',
-              icon: Icons.timeline_rounded,
+              icon: Symbols.timeline_rounded,
               accent: accent,
             ),
             StatTile(
               value: amAvg ?? '—',
               label: 'Morning',
-              icon: Icons.wb_sunny_rounded,
+              icon: Symbols.wb_sunny_rounded,
               accent: accent,
             ),
             StatTile(
               value: pmAvg ?? '—',
               label: 'Evening',
-              icon: Icons.nightlight_rounded,
+              icon: Symbols.nightlight_rounded,
               accent: accent,
             ),
           ]),
@@ -204,7 +223,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
             InsightCard(insight: insight),
           ],
           const SizedBox(height: AppSpacing.lg),
-          SectionHeader(title: 'Trend', icon: Icons.show_chart_rounded, accent: accent),
+          SectionHeader(title: 'Trend', icon: Symbols.show_chart_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             child: VitalsTrendChart(
@@ -223,7 +242,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          SectionHeader(title: 'History', icon: Icons.history_rounded, accent: accent),
+          SectionHeader(title: 'History', icon: Symbols.history_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
           ..._readings.map((r) => _logRow(ext, r)),
         ],
@@ -244,7 +263,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
         margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         decoration: BoxDecoration(
             color: ext.error.container, borderRadius: AppRadius.brMd),
-        child: Icon(Icons.delete_rounded, color: ext.mark(ext.error)),
+        child: Icon(Symbols.delete_rounded, color: ext.mark(ext.error)),
       ),
       onDismissed: (_) => _delete(r),
       child: Padding(
@@ -271,7 +290,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: ext.textTertiary, size: 18),
+              Icon(Symbols.chevron_right_rounded, color: ext.textTertiary, size: 18),
             ],
           ),
         ),
@@ -327,7 +346,7 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.gutter),
       children: [
         const SizedBox(height: 24),
-        Icon(Icons.favorite_rounded, size: 56, color: ext.mark(accent)),
+        Icon(Symbols.favorite_rounded, size: 56, color: ext.mark(accent)),
         const SizedBox(height: AppSpacing.md),
         Text('Track your blood pressure',
             textAlign: TextAlign.center,
@@ -343,13 +362,13 @@ class _EmptyState extends StatelessWidget {
             children: [
               SectionHeader(
                   title: 'For an accurate reading',
-                  icon: Icons.check_circle_outline_rounded,
+                  icon: Symbols.check_circle_rounded,
                   accent: accent),
               const SizedBox(height: AppSpacing.sm),
               ...tips.map((t) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(children: [
-                      Icon(Icons.done_rounded, size: 16, color: ext.mark(accent)),
+                      Icon(Symbols.done_rounded, size: 16, color: ext.mark(accent)),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                           child: Text(t,
@@ -363,7 +382,7 @@ class _EmptyState extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         AppButton(
           label: 'Log your first reading',
-          leadingIcon: Icons.add_rounded,
+          leadingIcon: Symbols.add_rounded,
           accent: accent,
           fullWidth: true,
           size: AppButtonSize.lg,
@@ -478,7 +497,7 @@ class _BpLogFormState extends State<_BpLogForm> {
           child: Row(
             children: [
               Icon(
-                cat == null ? Icons.info_outline_rounded : VitalsColors.bpIcon(cat),
+                cat == null ? Symbols.info_rounded : VitalsColors.bpIcon(cat),
                 color: cat == null
                     ? ext.textTertiary
                     : VitalsColors.bpBand(ext.isDark, cat),
@@ -539,8 +558,8 @@ class _BpLogFormState extends State<_BpLogForm> {
           index: _arm,
           accent: widget.accent,
           items: const [
-            SegmentItem(icon: Icons.back_hand_rounded, label: 'Left'),
-            SegmentItem(icon: Icons.front_hand_rounded, label: 'Right'),
+            SegmentItem(icon: Symbols.back_hand_rounded, label: 'Left'),
+            SegmentItem(icon: Symbols.front_hand_rounded, label: 'Right'),
           ],
           onChanged: (i) => setState(() => _arm = i),
         ),
@@ -573,7 +592,7 @@ class _BpLogFormState extends State<_BpLogForm> {
         const SizedBox(height: AppSpacing.lg),
         AppButton(
           label: widget.existing == null ? 'Save reading' : 'Update reading',
-          leadingIcon: Icons.check_rounded,
+          leadingIcon: Symbols.check_rounded,
           accent: widget.accent,
           fullWidth: true,
           size: AppButtonSize.lg,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'app_palette.dart';
 
 /// Which feature's accent to resolve. `home`/shell chrome uses the brand teal.
-enum FeatureAccent { brand, medicine, water, focus, reminders }
+enum FeatureAccent { brand, medicine, water, focus, reminders, period, steps, sleep }
 
 /// A complete accent role-set. Pick the right role for the right context:
 /// - [base]   : fill / graphical (rings, chart bars, filled chips).
@@ -49,6 +49,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
   final Color brandText, brandPressed;
   // feature accents
   final AccentSwatch medicine, water, focus, reminders;
+  final AccentSwatch period, steps, sleep;
   // semantic
   final AccentSwatch success, warning, error, info;
   final bool isDark;
@@ -72,6 +73,9 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
     required this.water,
     required this.focus,
     required this.reminders,
+    required this.period,
+    required this.steps,
+    required this.sleep,
     required this.success,
     required this.warning,
     required this.error,
@@ -90,6 +94,12 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
         return focus;
       case FeatureAccent.reminders:
         return reminders;
+      case FeatureAccent.period:
+        return period;
+      case FeatureAccent.steps:
+        return steps;
+      case FeatureAccent.sleep:
+        return sleep;
     }
   }
 
@@ -154,6 +164,27 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.remindersStrong,
       container: AppPalette.remindersContainer,
       onContainer: AppPalette.onRemindersContainer,
+    ),
+    period: AccentSwatch(
+      base: AppPalette.period,
+      on: AppPalette.onPeriod,
+      strong: AppPalette.periodStrong,
+      container: AppPalette.periodContainer,
+      onContainer: AppPalette.onPeriodContainer,
+    ),
+    steps: AccentSwatch(
+      base: AppPalette.steps,
+      on: AppPalette.onSteps,
+      strong: AppPalette.stepsStrong,
+      container: AppPalette.stepsContainer,
+      onContainer: AppPalette.onStepsContainer,
+    ),
+    sleep: AccentSwatch(
+      base: AppPalette.sleep,
+      on: AppPalette.onSleep,
+      strong: AppPalette.sleepStrong,
+      container: AppPalette.sleepContainer,
+      onContainer: AppPalette.onSleepContainer,
     ),
     success: AccentSwatch(
       base: AppPalette.success,
@@ -234,6 +265,27 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       container: AppPalette.remindersContainerDark,
       onContainer: AppPalette.onRemindersContainerDark,
     ),
+    period: AccentSwatch(
+      base: AppPalette.periodDark,
+      on: AppPalette.onPeriodDark,
+      strong: AppPalette.periodStrongDark,
+      container: AppPalette.periodContainerDark,
+      onContainer: AppPalette.onPeriodContainerDark,
+    ),
+    steps: AccentSwatch(
+      base: AppPalette.stepsDark,
+      on: AppPalette.onStepsDark,
+      strong: AppPalette.stepsStrongDark,
+      container: AppPalette.stepsContainerDark,
+      onContainer: AppPalette.onStepsContainerDark,
+    ),
+    sleep: AccentSwatch(
+      base: AppPalette.sleepDark,
+      on: AppPalette.onSleepDark,
+      strong: AppPalette.sleepStrongDark,
+      container: AppPalette.sleepContainerDark,
+      onContainer: AppPalette.onSleepContainerDark,
+    ),
     success: AccentSwatch(
       base: AppPalette.successDark,
       on: AppPalette.onSuccessContainer,
@@ -289,6 +341,9 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       water: AccentSwatch.lerp(water, other.water, t),
       focus: AccentSwatch.lerp(focus, other.focus, t),
       reminders: AccentSwatch.lerp(reminders, other.reminders, t),
+      period: AccentSwatch.lerp(period, other.period, t),
+      steps: AccentSwatch.lerp(steps, other.steps, t),
+      sleep: AccentSwatch.lerp(sleep, other.sleep, t),
       success: AccentSwatch.lerp(success, other.success, t),
       warning: AccentSwatch.lerp(warning, other.warning, t),
       error: AccentSwatch.lerp(error, other.error, t),

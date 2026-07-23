@@ -59,9 +59,9 @@ class ReminderCategory {
     }
     // Fall back to legacy / seeded code points (const map => tree-shake safe).
     const legacyIconMap = {
-      0xe7fd: Icons.person, // seed: Personal
-      0xe89c: Icons.work, // seed: Work
-      0xe3f4: Icons.health_and_safety, // seed: Health
+      0xe7fd: Icons.person_rounded, // seed: Personal
+      0xe89c: Icons.work_rounded, // seed: Work
+      0xe3f4: Icons.health_and_safety_rounded, // seed: Health
       0xe7e9: Icons.notifications_outlined,
       0xe547: Icons.local_hospital_outlined,
       0xe8c9: Icons.school_outlined,

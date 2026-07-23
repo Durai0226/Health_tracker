@@ -17,6 +17,9 @@ class ReminderRescheduleService {
       try {
         final medicines = await MedicineCleanStorageService.getAllMedicines();
         final reminderService = MedicationReminderService();
+        // One-time: clear any medicine alarms left under the old hash-based IDs
+        // before we reschedule with the new dense (collision-free) scheme.
+        await reminderService.migrateNotificationIdsIfNeeded();
         await reminderService.scheduleAllReminders(medicines);
         successCount += medicines.where((m) => m.reminderEnabled).length;
         debugPrint('✓ Medicine reminders scheduled: ${medicines.length} medicines');

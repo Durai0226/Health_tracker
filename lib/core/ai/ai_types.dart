@@ -43,7 +43,16 @@ enum AiEnginePreference { auto, localOnly, onDevice, cloud }
 
 /// A natural-language logging command parsed from free text ("log 150/95",
 /// "drank 500ml", "took my pill"). [data] holds the extracted fields.
-enum CommandKind { logBloodPressure, logGlucose, logWater, takeMedicine, none }
+enum CommandKind {
+  logBloodPressure,
+  logGlucose,
+  logWater,
+  takeMedicine,
+  logSteps,
+  logSleep,
+  logPeriod,
+  none,
+}
 
 class ParsedCommand {
   final CommandKind kind;

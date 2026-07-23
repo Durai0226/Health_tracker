@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 
 /// Base glassmorphic navigation foundation
@@ -250,7 +251,7 @@ class GlassNavFab extends StatelessWidget {
     super.key,
     required this.onTap,
     required this.color,
-    this.icon = Icons.add_rounded,
+    this.icon = Symbols.add_rounded,
     this.size = 56,
   });
 

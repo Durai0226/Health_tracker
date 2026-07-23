@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/clinic.dart';
@@ -132,10 +133,10 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
           children: [
             AppHeader(
               title: widget.isSelectionMode ? 'Select Clinic' : 'Clinics',
-              icon: Icons.local_hospital_rounded,
+              icon: Symbols.local_hospital_rounded,
               accent: med,
               leading: IconButton(
-                icon: Icon(Icons.arrow_back_rounded, color: ext.textPrimary),
+                icon: Icon(Symbols.arrow_back_rounded, color: ext.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -144,7 +145,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                   ? Center(child: CircularProgressIndicator(color: ext.mark(med)))
                   : _clinics.isEmpty
                       ? EmptyState(
-                          icon: Icons.local_hospital_rounded,
+                          icon: Symbols.local_hospital_rounded,
                           title: 'No clinics added',
                           message: 'Add clinics and hospitals you visit',
                           accent: med,
@@ -154,7 +155,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
           ],
         ),
         floatingActionButton: AppFab(
-          icon: Icons.add_rounded,
+          icon: Symbols.add_rounded,
           label: 'Add Clinic',
           accent: med,
           onPressed: () => _navigateToAddEdit(),
@@ -191,7 +192,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: Icon(Icons.delete_rounded, color: ext.error.on),
+        child: Icon(Symbols.delete_rounded, color: ext.error.on),
       ),
       confirmDismiss: (direction) async {
         _deleteClinic(clinic);
@@ -273,7 +274,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  Icon(Icons.location_on_rounded,
+                  Icon(Symbols.location_on_rounded,
                       size: 16, color: ext.textTertiary),
                   const SizedBox(width: 6),
                   Expanded(
@@ -296,7 +297,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                     Expanded(
                       child: AppButton(
                         label: 'Call',
-                        leadingIcon: Icons.phone_rounded,
+                        leadingIcon: Symbols.phone_rounded,
                         variant: AppButtonVariant.secondary,
                         size: AppButtonSize.sm,
                         accent: ext.success,
@@ -309,7 +310,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                     Expanded(
                       child: AppButton(
                         label: 'Map',
-                        leadingIcon: Icons.map_rounded,
+                        leadingIcon: Symbols.map_rounded,
                         variant: AppButtonVariant.secondary,
                         size: AppButtonSize.sm,
                         accent: ext.info,
@@ -328,17 +329,17 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
   IconData _getClinicIcon(String? type) {
     switch (type) {
       case ClinicType.hospital:
-        return Icons.local_hospital_rounded;
+        return Symbols.local_hospital_rounded;
       case ClinicType.pharmacy:
-        return Icons.local_pharmacy_rounded;
+        return Symbols.local_pharmacy_rounded;
       case ClinicType.lab:
-        return Icons.science_rounded;
+        return Symbols.science_rounded;
       case ClinicType.imaging:
-        return Icons.medical_information_rounded;
+        return Symbols.medical_information_rounded;
       case ClinicType.urgent:
-        return Icons.emergency_rounded;
+        return Symbols.emergency_rounded;
       default:
-        return Icons.local_hospital_rounded;
+        return Symbols.local_hospital_rounded;
     }
   }
 }

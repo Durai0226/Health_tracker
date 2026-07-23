@@ -1,5 +1,26 @@
 import '../models/medicine_enums.dart';
 import '../models/drug_interaction.dart';
+import 'drug_name_catalog.dart';
+
+/// A pluggable interaction data source. The default is the built-in curated
+/// on-device table (a general reference — see the disclaimer shown in the UI).
+///
+/// AUTHORITATIVE-DATA PATH (deliberate, per sourcing research):
+/// - There is NO free, structured, commercially-licensed DDI dataset that can
+///   ship on-device: RxNav's interaction API was retired (Jan 2024); DrugBank /
+///   DDInter open dumps are CC BY-NC (an ad-supported app is commercial, so
+///   they're off-limits); openFDA/DailyMed labels are CC0 but unstructured prose
+///   needing NLP extraction.
+/// - Clinical-grade products (First Databank, Medi-Span, DrugBank/Micromedex
+///   APIs) are enterprise-priced AND network APIs (they'd move a drug list
+///   off-device, breaking the privacy claim).
+/// So an authoritative checker is a business/procurement decision. When one is
+/// licensed, implement this interface (e.g. an API-backed or bundled-CC0-dataset
+/// source) and call [DrugInteractionService.configureSource] once at startup —
+/// no call-site changes.
+abstract class DrugInteractionSource {
+  List<DrugInteraction> checkAll(List<String> drugNames);
+}
 
 /// Premium feature: Drug Interaction Checker Service
 /// Provides comprehensive drug interaction checking like Medisafe premium
@@ -7,6 +28,12 @@ class DrugInteractionService {
   static final DrugInteractionService _instance = DrugInteractionService._internal();
   factory DrugInteractionService() => _instance;
   DrugInteractionService._internal();
+
+  /// Optional injected source. When set, it overrides the built-in table — the
+  /// drop-in seam for a licensed/authoritative data source.
+  DrugInteractionSource? _externalSource;
+  void configureSource(DrugInteractionSource? source) =>
+      _externalSource = source;
 
   /// Check interactions between two drugs
   List<DrugInteraction> checkInteraction(String drug1, String drug2) {
@@ -30,8 +57,12 @@ class DrugInteractionService {
     return interactions;
   }
 
-  /// Check all interactions for a list of medicines
+  /// Check all interactions for a list of medicines. Delegates to an injected
+  /// authoritative source when configured, else uses the built-in curated table.
   List<DrugInteraction> checkAllInteractions(List<String> drugNames) {
+    final external = _externalSource;
+    if (external != null) return external.checkAll(drugNames);
+
     final interactions = <DrugInteraction>[];
     final checked = <String>{};
 
@@ -66,6 +97,46 @@ class DrugInteractionService {
       }
     }
     return null;
+  }
+
+  /// A plain-language "what it's for" line for [name] (with an optional known
+  /// [genericName]), built from the curated monograph. Resolves brand → generic
+  /// via the on-device [DrugNameCatalog] when a direct lookup misses. Returns
+  /// null when no monograph matches — the caller then falls back to the user's
+  /// own note. GENERAL REFERENCE ONLY: purpose/uses, never dosing advice.
+  /// Resolve a medicine to its monograph: direct generic/brand lookup, then a
+  /// brand→generic hop via the on-device catalog. Null when uncovered.
+  DrugInfo? _resolveInfo(String name, String? genericName) {
+    var info = getDrugInfo(genericName ?? name);
+    info ??= getDrugInfo(name);
+    if (info == null) {
+      final resolved = DrugNameCatalog.genericFor(name);
+      if (resolved != null) info = getDrugInfo(resolved);
+    }
+    return info;
+  }
+
+  /// Up to [max] primary uses as a short lower-case phrase (e.g. "pain relief,
+  /// fever"), or null — for a compact "For: …" line at dose time.
+  String? primaryUses({required String name, String? genericName, int max = 2}) {
+    final uses = _resolveInfo(name, genericName)?.uses;
+    if (uses == null || uses.isEmpty) return null;
+    return uses.take(max).map((u) => u.toLowerCase()).join(', ');
+  }
+
+  String? purposeSummary({required String name, String? genericName}) {
+    final info = _resolveInfo(name, genericName);
+    if (info == null) return null;
+
+    final buf = StringBuffer(info.genericName);
+    final desc = info.description?.trim();
+    buf.write(' · ${(desc != null && desc.isNotEmpty) ? desc : info.drugClass}');
+    final uses = info.uses;
+    if (uses != null && uses.isNotEmpty) {
+      buf.write(
+          ' — commonly used for ${uses.take(4).map((u) => u.toLowerCase()).join(', ')}.');
+    }
+    return buf.toString();
   }
 
   /// Search drugs by name
@@ -396,7 +467,9 @@ class DrugInteractionService {
   static final List<DrugInfo> _drugDatabase = [
     DrugInfo(
       genericName: 'Acetaminophen',
-      brandNames: ['Tylenol', 'Panadol', 'Crocin'],
+      // 'Paracetamol' is the same drug (non-US name) — include it so lookups by
+      // the common Indian/EU name (and brands like Dolo/Calpol) resolve.
+      brandNames: ['Tylenol', 'Panadol', 'Crocin', 'Paracetamol', 'Dolo', 'Calpol'],
       drugClass: 'Analgesic/Antipyretic',
       description: 'Pain reliever and fever reducer.',
       uses: ['Pain relief', 'Fever reduction', 'Headache', 'Muscle aches'],
@@ -567,7 +640,8 @@ class DrugInteractionService {
     ),
     DrugInfo(
       genericName: 'Vitamin D',
-      brandNames: ['Calcirol', 'Drisdol'],
+      // Include the chemical/common synonyms so catalog generics resolve.
+      brandNames: ['Calcirol', 'Drisdol', 'Cholecalciferol', 'Vitamin D3'],
       drugClass: 'Vitamin Supplement',
       description: 'Essential vitamin for bone health and immune function.',
       uses: ['Vitamin D deficiency', 'Osteoporosis prevention', 'Bone health'],

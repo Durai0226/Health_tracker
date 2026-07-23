@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../../../core/design/app_colors_ext.dart';
 import '../models/enhanced_water_log.dart';
@@ -52,13 +53,13 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(Symbols.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Statistics'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.file_download_outlined),
+            icon: const Icon(Symbols.file_download_rounded),
             onPressed: _exportData,
             tooltip: 'Export Data',
           ),
@@ -113,7 +114,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: const Icon(Icons.chevron_left),
+            icon: const Icon(Symbols.chevron_left_rounded),
             onPressed: () => _changeMonth(-1),
           ),
           Text(
@@ -125,7 +126,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_right),
+            icon: const Icon(Symbols.chevron_right_rounded),
             onPressed: _selectedMonth == DateTime.now().month &&
                     _selectedYear == DateTime.now().year
                 ? null
@@ -142,7 +143,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
       children: [
         Expanded(
           child: _buildOverviewCard(
-            icon: Icons.water_drop,
+            icon: Symbols.water_drop_rounded,
             iconColor: ext.mark(ext.water),
             value: '${(_monthlyStats.totalIntakeMl / 1000).toStringAsFixed(1)}L',
             label: 'Total Intake',
@@ -152,7 +153,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: _buildOverviewCard(
-            icon: Icons.analytics,
+            icon: Symbols.analytics_rounded,
             iconColor: ext.mark(ext.success),
             value: '${_monthlyStats.averageDailyMl}ml',
             label: 'Daily Average',
@@ -578,7 +579,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Icon(
-              Icons.local_fire_department,
+              Symbols.local_fire_department_rounded,
               color: Colors.white,
               size: 40,
             ),
@@ -635,7 +636,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.lightbulb_outline, color: ext.mark(ext.warning)),
+              Icon(Symbols.lightbulb_rounded, color: ext.mark(ext.warning)),
               const SizedBox(width: 8),
               Text(
                 'Insights',
@@ -714,7 +715,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                   color: ext.mark(ext.water).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.summarize, color: ext.mark(ext.water)),
+                child: Icon(Symbols.summarize_rounded, color: ext.mark(ext.water)),
               ),
               title: const Text('Summary CSV'),
               subtitle: const Text('Daily totals'),
@@ -734,7 +735,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                   color: ext.mark(ext.success).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.list_alt, color: ext.mark(ext.success)),
+                child: Icon(Symbols.list_alt_rounded, color: ext.mark(ext.success)),
               ),
               title: const Text('Detailed CSV'),
               subtitle: const Text('All drink logs'),

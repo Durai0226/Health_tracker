@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/features/focus/models/relaxation_game_models.dart';
 
@@ -33,10 +34,10 @@ void main() {
     });
 
     test('All new play modes have icons', () {
-      expect(PlayMode.oceanAquarium.icon, Icons.pool_rounded);
-      expect(PlayMode.starryNight.icon, Icons.star_rounded);
-      expect(PlayMode.colorBloom.icon, Icons.palette_rounded);
-      expect(PlayMode.floatingLantern.icon, Icons.light_mode_rounded);
+      expect(PlayMode.oceanAquarium.icon, Symbols.pool_rounded);
+      expect(PlayMode.starryNight.icon, Symbols.star_rounded);
+      expect(PlayMode.colorBloom.icon, Symbols.palette_rounded);
+      expect(PlayMode.floatingLantern.icon, Symbols.light_mode_rounded);
     });
 
     test('PlayMode enum contains all 9 modes', () {
@@ -100,7 +101,7 @@ void main() {
     test('Original play modes retain their properties', () {
       expect(PlayMode.liquidTouch.name, 'Liquid Touch');
       expect(PlayMode.energyOrb.emoji, '🔮');
-      expect(PlayMode.zenGarden.icon, Icons.grass_rounded);
+      expect(PlayMode.zenGarden.icon, Symbols.grass_rounded);
     });
   });
 }

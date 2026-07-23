@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,14 +37,35 @@ Future<void> _handleBackgroundSnoozeAction(int notificationId, String? payload) 
     final prefs = await SharedPreferences.getInstance();
     final snoozeMinutes = prefs.getInt('snooze_interval_minutes') ?? 5;
     
-    // Initialize timezone
+    // Initialize timezone. Snooze uses a RELATIVE offset (now + minutes) so the
+    // absolute instant is correct regardless, but keep tz.local honest instead
+    // of the old hardcoded IST.
     tz_data.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+    try {
+      tz.setLocalLocation(
+          tz.getLocation(await FlutterTimezone.getLocalTimezone()));
+    } catch (_) {
+      tz.setLocalLocation(tz.getLocation('UTC'));
+    }
     
     // Calculate snooze time
     final now = tz.TZDateTime.now(tz.local);
     final snoozeTime = now.add(Duration(minutes: snoozeMinutes));
     final snoozeId = notificationId + 100000;
+
+    // Parse the rich `alarm:{json}` payload for a clean title/body — otherwise
+    // the raw JSON would be shown as the notification body.
+    var snoozeTitle = '⏰ Snoozed Reminder';
+    var snoozeBody = 'Time for your reminder!';
+    if (payload != null && payload.startsWith('alarm:')) {
+      try {
+        final decoded = jsonDecode(payload.substring('alarm:'.length));
+        if (decoded is Map) {
+          snoozeTitle = '⏰ Snoozed: ${decoded['title'] ?? 'Reminder'}';
+          snoozeBody = (decoded['body'] ?? snoozeBody).toString();
+        }
+      } catch (_) {}
+    }
     
     // Initialize notifications plugin for background
     final notifications = FlutterLocalNotificationsPlugin();
@@ -53,8 +76,8 @@ Future<void> _handleBackgroundSnoozeAction(int notificationId, String? payload) 
     // Schedule snoozed notification using alarm channel
     await notifications.zonedSchedule(
       snoozeId,
-      '⏰ Snoozed Reminder',
-      payload ?? 'Time for your reminder!',
+      snoozeTitle,
+      snoozeBody,
       snoozeTime,
       NotificationDetails(
         android: AndroidNotificationDetails(
@@ -175,10 +198,11 @@ class NotificationService {
     }
     
     try {
-      // Initialize timezone (lightweight)
+      // Initialize timezone from the REAL device zone (never hardcode — that
+      // fires every reminder at the wrong wall-clock time for users abroad).
       try {
         tz_data.initializeTimeZones();
-        final String timeZoneName = _getLocalTimeZone();
+        final String timeZoneName = await _resolveDeviceTimeZone();
         tz.setLocalLocation(tz.getLocation(timeZoneName));
         debugPrint('✓ Timezone set to: $timeZoneName');
       } catch (e) {
@@ -188,11 +212,15 @@ class NotificationService {
 
       const androidSettings =
           AndroidInitializationSettings('@mipmap/ic_launcher');
+      // Do NOT request permission at plugin init — that fires the iOS system
+      // prompt at cold start, before the user has seen the app (kills grant
+      // rates and defeats the welcome "Turn on reminders" priming pane). The
+      // welcome pane requests it explicitly via requestPermissionsIfNeeded().
       const iosSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
-        requestCriticalPermission: true,
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+        requestCriticalPermission: false,
       );
 
       const initSettings = InitializationSettings(
@@ -236,10 +264,16 @@ class NotificationService {
         
         // Create notification channels
         await _createNotificationChannels();
-        
-        // Request permissions
-        await _requestPermissions();
-        
+
+        // Request permissions — but NOT at cold start on first launch. The
+        // welcome "Turn on reminders" pane primes and requests it there (correct
+        // permission-priming UX; an OS prompt before the user sees the app kills
+        // grant rates). Returning users already decided, so this stays a
+        // harmless re-check for them.
+        if (!CleanStorageService.isFirstLaunch) {
+          await _requestPermissions();
+        }
+
         debugPrint('✓ Background notification setup complete');
       } catch (e) {
         debugPrint('⚠️ Background notification setup failed: $e');
@@ -247,9 +281,18 @@ class NotificationService {
     });
   }
   
-  String _getLocalTimeZone() {
-    // Return India timezone - can be made dynamic if needed
-    return 'Asia/Kolkata';
+  /// Resolves the device's real IANA timezone (e.g. "America/New_York").
+  /// Falls back to UTC on any failure so scheduling never crashes. NEVER
+  /// hardcode a zone — that would fire every reminder at the wrong wall-clock
+  /// time for any user outside that zone.
+  Future<String> _resolveDeviceTimeZone() async {
+    try {
+      final name = await FlutterTimezone.getLocalTimezone();
+      return name.trim().isEmpty ? 'UTC' : name;
+    } catch (e) {
+      debugPrint('⚠️ Could not resolve device timezone: $e');
+      return 'UTC';
+    }
   }
   
   Future<void> _createNotificationChannels() async {
@@ -353,6 +396,26 @@ class NotificationService {
             enableLights: true,
             showBadge: true,
           ),
+          const AndroidNotificationChannel(
+            'steps_channel',
+            'Step Reminders',
+            description: 'Nudges to reach your daily step goal',
+            importance: Importance.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            showBadge: true,
+          ),
+          const AndroidNotificationChannel(
+            'sleep_channel',
+            'Sleep & Bedtime',
+            description: 'Bedtime and wind-down reminders',
+            importance: Importance.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            showBadge: true,
+          ),
         ];
 
         for (final channel in channels) {
@@ -394,7 +457,17 @@ class NotificationService {
         } catch (e) {
           debugPrint('⚠️ Exact alarm permission check failed: $e');
         }
-        
+
+        // Full-screen intent permission (Android 14+). Without it the reminder
+        // is downgraded from the full-screen AlarmScreen to a heads-up banner.
+        try {
+          final fsi =
+              await androidImplementation?.requestFullScreenIntentPermission();
+          debugPrint('🖥️ Full-screen intent permission: $fsi');
+        } catch (e) {
+          debugPrint('⚠️ Full-screen intent permission request failed: $e');
+        }
+
         return _permissionsGranted;
       } else if (Platform.isIOS) {
         final iosImplementation =
@@ -491,12 +564,27 @@ class NotificationService {
     // Handle actions
     if (response.actionId == 'snooze') {
       final settings = CleanStorageService.getUserSettings();
-      snoozeReminder(response.id ?? 0, settings.snoozeIntervalMinutes);
+      String? t, b;
+      final p = response.payload;
+      if (p != null && p.startsWith('alarm:')) {
+        final m = parseAlarmPayload(p, response.id);
+        t = m['title']?.toString();
+        b = m['body']?.toString();
+      }
+      snoozeReminder(response.id ?? 0, settings.snoozeIntervalMinutes,
+          title: t, body: b);
     } else if (response.actionId == 'dismiss') {
        _notifications.cancel(response.id ?? 0);
        debugPrint('✓ Notification dismissed via tap: ${response.id}');
     } else {
-      // Normal tap — note deep-linking removed with the Notes feature.
+      // Normal body-tap → open the full-screen alarm when this is an alarm
+      // payload. This makes the redesigned AlarmScreen reachable while the app
+      // is already alive (cold-launch is handled separately in main()).
+      final p = response.payload;
+      if (p != null && p.startsWith('alarm:')) {
+        final args = parseAlarmPayload(p, response.id);
+        navigatorKey.currentState?.pushNamed('/alarm', arguments: args);
+      }
     }
   }
   
@@ -508,6 +596,8 @@ class NotificationService {
     required int hour,
     required int minute,
     required String frequency,
+    String? scheduleJson,
+    String? medicineId,
   }) async {
     try {
       debugPrint('🔔 Attempting to schedule medicine reminder at $hour:$minute');
@@ -537,6 +627,13 @@ class NotificationService {
           title: 'Medicine Reminder 💊',
           body: 'Time to take $medicineName',
           channelId: 'medicine_channel',
+          // Route the full-screen alarm to the AlarmScreen with the real name.
+          payload: _buildAlarmPayload(
+              id, 'Time for your $medicineName', 'Medicine reminder', null,
+              medicineId: medicineId, hour: hour, minute: minute),
+          // Serialized schedule → the alarm callback gates firing to active days
+          // (fixes non-daily regimens alarming every day).
+          scheduleJson: scheduleJson,
         );
         debugPrint('✓ Background alarm scheduled for medicine reminder');
         return result;
@@ -567,14 +664,233 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: _getMatchComponents(frequency),
-        payload: 'medicine:$medicineName',
+        // Route to the full-screen AlarmScreen with the real medicine name
+        // (was `medicine:$name`, which never opened the alarm).
+        payload: _buildAlarmPayload(
+            id, 'Time for your $medicineName', 'Medicine reminder', null,
+            medicineId: medicineId, hour: hour, minute: minute),
       );
-      
+
       debugPrint('✓ Scheduled medicine reminder at ${scheduledDate.hour}:${scheduledDate.minute}');
       return true;
     } catch (e) {
       debugPrint('❌ Failed to schedule medicine reminder: $e');
       return false;
+    }
+  }
+
+  /// Reserved id for the sleep/bedtime reminder — kept well clear of medicine
+  /// and water (900000-block) ids so it can never clobber a critical reminder.
+  static const int bedtimeReminderId = 910000;
+
+  /// Schedule (or cancel) a gentle daily wind-down reminder on the dedicated
+  /// [sleep_channel].
+  ///
+  /// Deliberately NON-alarm and safe next to the medicine core: Importance.high
+  /// (not max), **inexact** scheduling (the exact-alarm budget is reserved for
+  /// medicine), no full-screen intent, a reminder category, and its own reserved
+  /// id — so it can never hide, replace, or out-rank a medicine reminder. Fires
+  /// daily at [minuteOfDay]. Passing `enabled: false` just cancels it.
+  Future<void> scheduleBedtimeReminder({
+    required bool enabled,
+    required int minuteOfDay,
+  }) async {
+    try {
+      await _notifications.cancel(bedtimeReminderId);
+      if (!enabled) {
+        debugPrint('✓ Bedtime reminder cancelled');
+        return;
+      }
+      if (!_isInitialized) {
+        try {
+          await init();
+        } catch (_) {}
+      }
+      if (!await checkPermissions()) {
+        debugPrint('❌ Bedtime reminder: notifications not permitted');
+        return;
+      }
+
+      final hour = (minuteOfDay ~/ 60) % 24;
+      final minute = minuteOfDay % 60;
+      final now = tz.TZDateTime.now(tz.local);
+      var when =
+          tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+      if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'sleep_channel',
+          'Sleep & Bedtime',
+          channelDescription: 'Bedtime and wind-down reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          category: AndroidNotificationCategory.reminder,
+          visibility: NotificationVisibility.public,
+          // Intentionally NOT full-screen and NOT on the alarm channel.
+        ),
+      );
+
+      await _notifications.zonedSchedule(
+        bedtimeReminderId,
+        'Wind-down time 🌙',
+        'A calm moment now helps you sleep better tonight.',
+        when,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+      debugPrint('✓ Bedtime reminder at $hour:$minute (inexact, sleep_channel)');
+    } catch (e) {
+      debugPrint('❌ Bedtime reminder schedule failed: $e');
+    }
+  }
+
+  /// Reserved id for the optional daily wake alarm (own block, clear of medicine).
+  static const int wakeAlarmId = 910002;
+
+  /// Schedule (or cancel) a plain daily wake alarm at [hour]:[minute].
+  ///
+  /// Unlike the gentle bedtime/step reminders, a wake alarm legitimately uses
+  /// the exact-alarm + full-screen path (the user asked to be woken), routed
+  /// through the same reliable [BackgroundAlarmService] the medicine core uses —
+  /// but with its OWN reserved id so it never collides with a dose alarm. This
+  /// is the plain-window tier only; no sleep-stage detection is claimed.
+  Future<void> scheduleWakeAlarm({
+    required bool enabled,
+    required int hour,
+    required int minute,
+  }) async {
+    try {
+      if (Platform.isAndroid) {
+        await BackgroundAlarmService().cancelAlarm(wakeAlarmId);
+      }
+      await _notifications.cancel(wakeAlarmId);
+      if (!enabled) {
+        debugPrint('✓ Wake alarm cancelled');
+        return;
+      }
+      if (!_isInitialized) {
+        try {
+          await init();
+        } catch (_) {}
+      }
+      if (!await checkPermissions()) {
+        debugPrint('❌ Wake alarm: notifications not permitted');
+        return;
+      }
+
+      const title = 'Wake up ☀️';
+      const body = 'Good morning — time to start your day.';
+      final payload = _buildAlarmPayload(wakeAlarmId, title, body, null);
+
+      if (Platform.isAndroid) {
+        await BackgroundAlarmService().scheduleDailyAlarm(
+          id: wakeAlarmId,
+          hour: hour,
+          minute: minute,
+          title: title,
+          body: body,
+          channelId: 'alarm_channel',
+          channelName: 'Alarm Reminders',
+          payload: payload,
+        );
+        debugPrint('✓ Wake alarm scheduled at $hour:$minute');
+        return;
+      }
+
+      // iOS fallback (dev only — release is Android): exact daily zonedSchedule.
+      final now = tz.TZDateTime.now(tz.local);
+      var when =
+          tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+      if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+      await _notifications.zonedSchedule(
+        wakeAlarmId,
+        title,
+        body,
+        when,
+        _notificationDetails(priority: ReminderPriority.high),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: payload,
+      );
+      debugPrint('✓ Wake alarm scheduled (iOS) at $hour:$minute');
+    } catch (e) {
+      debugPrint('❌ Wake alarm schedule failed: $e');
+    }
+  }
+
+  /// Reserved id for the evening step reminder (own block, clear of medicine).
+  static const int stepReminderId = 910001;
+
+  /// Schedule (or cancel) a gentle daily evening step reminder on [steps_channel].
+  ///
+  /// Deliberately NOT the data-aware "X steps to go" variant (that would need a
+  /// cold background isolate to re-open Drift at fire time, and could show a
+  /// stale number). This is a calm, generic, opt-in nudge at a user-set time —
+  /// Importance.high (not max), inexact, no full-screen, its own id — so it can
+  /// never crowd out or clobber a medicine reminder.
+  Future<void> scheduleStepReminder({
+    required bool enabled,
+    required int minuteOfDay,
+  }) async {
+    try {
+      await _notifications.cancel(stepReminderId);
+      if (!enabled) {
+        debugPrint('✓ Step reminder cancelled');
+        return;
+      }
+      if (!_isInitialized) {
+        try {
+          await init();
+        } catch (_) {}
+      }
+      if (!await checkPermissions()) {
+        debugPrint('❌ Step reminder: notifications not permitted');
+        return;
+      }
+
+      final hour = (minuteOfDay ~/ 60) % 24;
+      final minute = minuteOfDay % 60;
+      final now = tz.TZDateTime.now(tz.local);
+      var when =
+          tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+      if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'steps_channel',
+          'Step Reminders',
+          channelDescription: 'Nudges to reach your daily step goal',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          category: AndroidNotificationCategory.reminder,
+          visibility: NotificationVisibility.public,
+        ),
+      );
+
+      await _notifications.zonedSchedule(
+        stepReminderId,
+        'A little movement? 🚶',
+        'A short walk now could close today\'s step goal.',
+        when,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+      debugPrint('✓ Step reminder at $hour:$minute (inexact, steps_channel)');
+    } catch (e) {
+      debugPrint('❌ Step reminder schedule failed: $e');
     }
   }
 
@@ -607,6 +923,7 @@ class NotificationService {
           body: body,
           channelId: 'health_channel',
           channelName: 'Health Check Reminders',
+          payload: _buildAlarmPayload(id, title, body, null),
         );
         debugPrint('✓ Background health alarm scheduled: $result');
         return result;
@@ -637,8 +954,9 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: _getMatchComponents(frequency),
+        payload: _buildAlarmPayload(id, title, body, null),
       );
-      
+
       debugPrint('✓ Scheduled health check: $title at ${scheduledDate.hour}:${scheduledDate.minute}');
       return true;
     } catch (e) {
@@ -672,6 +990,7 @@ class NotificationService {
           body: body,
           channelId: 'fitness_channel',
           channelName: 'Fitness Reminders',
+          payload: _buildAlarmPayload(id, title, body, null),
         );
         debugPrint('✓ Background fitness alarm scheduled: $result');
         return result;
@@ -679,14 +998,14 @@ class NotificationService {
 
       // Fallback for iOS
       if (frequency == 'daily') {
-        await _scheduleDaily(id, title, body, hour, minute, 'fitness_channel', 'Fitness Reminders', payload: 'alarm:$id');
+        await _scheduleDaily(id, title, body, hour, minute, 'fitness_channel', 'Fitness Reminders', payload: _buildAlarmPayload(id, title, body, null));
       } else if (frequency == 'weekdays') {
         for (int i = 1; i <= 5; i++) {
-          await _scheduleWeeklyFitness(id * 10 + i, title, body, hour, minute, i, 'fitness_channel', 'Fitness Reminders', payload: 'alarm:${id * 10 + i}');
+          await _scheduleWeeklyFitness(id * 10 + i, title, body, hour, minute, i, 'fitness_channel', 'Fitness Reminders', payload: _buildAlarmPayload(id * 10 + i, title, body, null));
         }
       } else if (frequency == 'weekends') {
         for (int i = 6; i <= 7; i++) {
-          await _scheduleWeeklyFitness(id * 10 + i, title, body, hour, minute, i, 'fitness_channel', 'Fitness Reminders', payload: 'alarm:${id * 10 + i}');
+          await _scheduleWeeklyFitness(id * 10 + i, title, body, hour, minute, i, 'fitness_channel', 'Fitness Reminders', payload: _buildAlarmPayload(id * 10 + i, title, body, null));
         }
       }
       
@@ -716,8 +1035,26 @@ class NotificationService {
         return false;
       }
 
-      // Cancel existing notification with same ID first
+      // Clamp the base id into the 32-bit range (hashCode can overflow) — done
+      // identically here + in cancelGenericReminder so schedule/cancel stay
+      // symmetric.
+      id = _safeId(id);
+
+      // Clear ANY prior schedule for this reminder — base + every weekday/custom
+      // sub-id — so editing the repeat type/days never leaves orphan
+      // notifications firing forever. cancelNotification also tears down the
+      // Android AlarmManager alarm for the base (none/daily) case.
       await cancelNotification(id);
+      for (int day = 1; day <= 7; day++) {
+        await cancelNotification(_generateId(id, day));
+      }
+
+      // Rich alarm payload (title/body/sound) unless the caller supplied its own
+      // — built up-front so BOTH the Android AlarmManager branch and the
+      // cross-platform branch route to the full-screen AlarmScreen, which loops
+      // the user's chosen sound.
+      final basePayload = payload ??
+          _buildAlarmPayload(id, title, body, snoozeDuration, sound: sound);
 
       if (Platform.isAndroid) {
         final alarmService = BackgroundAlarmService();
@@ -737,10 +1074,10 @@ class NotificationService {
               channelName: 'General Reminders',
               snoozeDuration: snoozeDuration,
               sound: sound,
-              payload: payload,
+              payload: basePayload,
             );
             return true;
-            
+
           case RepeatType.daily:
             await alarmService.scheduleDailyAlarm(
               id: id,
@@ -752,7 +1089,7 @@ class NotificationService {
               channelName: 'General Reminders',
               snoozeDuration: snoozeDuration,
               sound: sound,
-              payload: payload,
+              payload: basePayload,
             );
             return true;
             
@@ -808,7 +1145,10 @@ class NotificationService {
         sound: null, // Use system default alarm sound from channel
         enableVibration: true,
         vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
-        fullScreenIntent: priority == ReminderPriority.high,
+        // Always request full-screen intent on the alarm channel so the
+        // AlarmScreen (which loops the chosen sound) launches when the device is
+        // locked/idle — the whole point of a reminder alarm.
+        fullScreenIntent: true,
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
         audioAttributesUsage: AudioAttributesUsage.alarm,
@@ -852,7 +1192,7 @@ class NotificationService {
             androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
-            payload: payload,
+            payload: basePayload,
           );
           break;
 
@@ -867,7 +1207,7 @@ class NotificationService {
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
             matchDateTimeComponents: DateTimeComponents.time,
-            payload: payload ?? 'alarm:$id',
+            payload: basePayload,
           );
           break;
 
@@ -876,48 +1216,55 @@ class NotificationService {
             id,
             title,
             body,
-            _nextInstanceOfTime(scheduledTime), // Needs to be correct day
+            // Seed on the CHOSEN weekday (was _nextInstanceOfTime → today's
+            // weekday, so a "weekly on Tuesday" fired on whatever day it was
+            // created). dayOfWeekAndTime then repeats on that correct day.
+            _nextInstanceOfDay(scheduledTime.weekday, scheduledTime),
             details,
             androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
             matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-            payload: payload ?? 'alarm:$id',
+            payload: basePayload,
           );
           break;
 
         case RepeatType.weekdays:
           // Schedule 5 notifications, one for each weekday
           for (int day = 1; day <= 5; day++) { // Mon=1 to Fri=5
+             final nid = _generateId(id, day);
              await _scheduleWeekly(
-               id: _generateId(id, day),
+               id: nid,
                title: title,
                body: body,
                time: scheduledTime,
                dayOfWeek: day,
                details: details,
-               payload: payload,
+               payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration),
              );
           }
           break;
 
         case RepeatType.weekends:
            // Sat=6, Sun=7
-           await _scheduleWeekly(id: _generateId(id, 6), title: title, body: body, time: scheduledTime, dayOfWeek: 6, details: details, payload: payload);
-           await _scheduleWeekly(id: _generateId(id, 7), title: title, body: body, time: scheduledTime, dayOfWeek: 7, details: details, payload: payload);
+           for (final day in const [6, 7]) {
+             final nid = _generateId(id, day);
+             await _scheduleWeekly(id: nid, title: title, body: body, time: scheduledTime, dayOfWeek: day, details: details, payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration));
+           }
           break;
 
         case RepeatType.custom:
           if (customDays != null) {
             for (final day in customDays) {
+              final nid = _generateId(id, day);
               await _scheduleWeekly(
-               id: _generateId(id, day),
+               id: nid,
                title: title,
                body: body,
                time: scheduledTime,
                dayOfWeek: day,
                details: details,
-               payload: payload,
+               payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration),
              );
             }
           }
@@ -944,11 +1291,42 @@ class NotificationService {
     // depends on how we want to cancel them later.
     // To cancel all, we need to know all IDs.
     // If we use `baseId` for the main record, we need a way to reconstruct these IDs.
-    return baseId + dayOffset; // Simple offset
+    return _safeId(baseId + dayOffset);
   }
+
+  /// Clamps a notification id into the positive 32-bit range that
+  /// flutter_local_notifications / Android require. A `String.hashCode` can
+  /// exceed 32 bits (or be negative), which would make `zonedSchedule` throw or
+  /// silently drop the notification. Masking keeps ids valid + deterministic.
+  int _safeId(int id) => id & 0x7FFFFFFF;
+
+  /// Builds the launch payload for the full-screen alarm. The `alarm:` prefix is
+  /// the gate `main.dart` uses to route to [AlarmScreen]; the JSON after it
+  /// carries the real title/body/id so the alarm shows the actual reminder (was
+  /// just `alarm:$id`, which made the screen show a generic "Reminder"). The
+  /// notifId encoded here is the ACTUAL firing notification id so dismiss/snooze
+  /// act on the right one.
+  String _buildAlarmPayload(int notifId, String title, String body, int? snooze,
+          {String? sound,
+          String? medicineId,
+          int? hour,
+          int? minute}) =>
+      'alarm:${jsonEncode({
+            'id': notifId,
+            'title': title,
+            'body': body,
+            if (snooze != null) 'snoozeDuration': snooze,
+            if (sound != null) 'sound': sound,
+            // Dose identity for 1-tap Take/Skip from the notification. hour/minute
+            // let the action handler reconstruct today's dose time at fire time.
+            if (medicineId != null) 'medicineId': medicineId,
+            if (hour != null) 'hour': hour,
+            if (minute != null) 'minute': minute,
+          })}';
 
   // Cancel Generic Reminder and all its potential sub-notifications
   Future<void> cancelGenericReminder(int id, RepeatType repeatType, List<int>? customDays) async {
+      id = _safeId(id); // match the clamp used when scheduling
       await cancelNotification(id);
       
       // Cancel sub-notifications for complex types
@@ -1044,31 +1422,57 @@ class NotificationService {
     debugPrint('✓ Scheduled daily fitness reminder at $hour:$minute');
   }
 
-  Future<void> snoozeReminder(int notificationId, int minutes) async {
+  Future<void> snoozeReminder(int notificationId, int minutes,
+      {String? title, String? body}) async {
     try {
       final reminders = CleanStorageService.getReminders();
-      // Find reminder by hashcode of ID if possible, or we might need the original ID.
-      // For now, looking for any reminder that matches the ID hash.
-      final reminder = reminders.firstWhere(
-        (r) => r.id.hashCode == notificationId,
-        orElse: () => reminders.firstWhere((r) => r.id.hashCode == (notificationId - 100000))
-      );
-      
+      // Match the fired notification (or its snoozed `+100000` variant) to a
+      // reminder WITHOUT throwing: the old nested firstWhere had no final
+      // orElse, so any medicine/water/fitness/recurring notification (not in
+      // this reminders list) threw a StateError that was swallowed — the snooze
+      // silently no-op'd and the reminder was lost. Now we degrade gracefully.
+      Reminder? reminder;
+      var baseId = notificationId;
+      for (final r in reminders) {
+        final h = r.id.hashCode;
+        if (h == notificationId) {
+          reminder = r;
+          baseId = notificationId;
+          break;
+        }
+        if (h == notificationId - 100000) {
+          reminder = r;
+          baseId = notificationId - 100000; // this was already a snoozed id
+          break;
+        }
+      }
+
       final now = tz.TZDateTime.now(tz.local);
       final snoozeTime = now.add(Duration(minutes: minutes));
-      
-      await _notifications.zonedSchedule(
-        notificationId + 100000,
-        '⏰ Snoozed: ${reminder.title}',
-        reminder.body,
-        snoozeTime,
-        _notificationDetails(priority: reminder.priority),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        payload: 'alarm:${reminder.id}',
-      );
-      
+      // Prefer the title/body the caller already knows (e.g. the AlarmScreen
+      // holds it in the payload) — medicine/health/water aren't in the generic
+      // reminders list, so the lookup can't recover their names.
+      final cleanTitle = title ?? reminder?.title ?? 'Reminder';
+      final cleanBody = body ?? reminder?.body ?? 'Time for your reminder';
+      final priority = reminder?.priority ?? ReminderPriority.high;
+
+      // Clear the fired notification first, then reschedule at a STABLE snooze id
+      // (baseId + 100000) so repeated snoozes reuse the same id instead of
+      // drifting upward. The rescheduled notification carries a RICH alarm
+      // payload so re-firing still opens the AlarmScreen with the real content.
+      final snoozeId = _safeId(baseId + 100000);
       await _notifications.cancel(notificationId);
+      await _notifications.zonedSchedule(
+        snoozeId,
+        '⏰ Snoozed: $cleanTitle',
+        cleanBody,
+        snoozeTime,
+        _notificationDetails(priority: priority),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: _buildAlarmPayload(snoozeId, cleanTitle, cleanBody, minutes),
+      );
       debugPrint('✓ Reminder snoozed for $minutes minutes');
     } catch (e) {
       debugPrint('❌ Failed to snooze: $e');
@@ -1190,6 +1594,15 @@ class NotificationService {
 
   Future<void> cancelNotification(int id) async {
     await _notifications.cancel(id);
+    // On Android many reminders (generic none/daily, medicine, health, water)
+    // are AndroidAlarmManager alarms, which flutter_local_notifications' cancel
+    // does NOT touch. Tear that down too so cancelling/editing never leaves an
+    // orphan alarm firing forever. (No-op for ids that were never AlarmManager.)
+    if (Platform.isAndroid) {
+      try {
+        await BackgroundAlarmService().cancelAlarm(id);
+      } catch (_) {}
+    }
   }
 
   Future<void> cancelFitnessNotification(int baseId, String frequency) async {
@@ -1305,9 +1718,10 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
-        payload: 'alarm:$id',
+        payload: _buildAlarmPayload(
+            id, 'Water Reminder 💧', 'Time to drink water — stay hydrated', null),
       );
-      
+
       debugPrint('✓ Scheduled water reminder at $hour:$minute');
       return true;
     } catch (e) {

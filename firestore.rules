@@ -15,6 +15,13 @@ rules_version = '2';
 //   users/{uid}/reminders/{id}               — RemindersCloudService / SyncService
 //   users/{uid}/reminder_categories/{id}     — RemindersCloudService
 //   users/{uid}/backups/{id}                 — BackupService
+//   users/{uid}/menstrual_cycles/{id}        — CloudSyncService (period, opt-in)
+//   users/{uid}/period_days/{dateKey}        — CloudSyncService (period, opt-in)
+//   users/{uid}/period_settings/{id}         — CloudSyncService (period, opt-in)
+//   users/{uid}/step_days/{dateKey}          — CloudSyncService (steps)
+//   users/{uid}/step_entries/{id}            — CloudSyncService (steps)
+//   users/{uid}/health_profile/{id}          — CloudSyncService (steps/sleep)
+//   users/{uid}/sleep_sessions/{id}          — CloudSyncService (sleep)
 //
 // Rules for the removed features (period, finance, fitness, notes, habit, mood,
 // js_learning, luna, workouts, nutrition, exam-prep) and their shared/global
@@ -73,6 +80,41 @@ service cloud.firestore {
       // Cloud backups (blobs written by BackupService).
       match /backups/{backupId} {
         allow read, write: if isOwner(userId);
+      }
+
+      // Period / menstrual cycle (synced only when the user opts in; still
+      // owner-private regardless — sensitive data never leaves without consent).
+      match /menstrual_cycles/{cycleId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && hasStringId();
+      }
+      match /period_days/{dateKey} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && hasStringId();
+      }
+      match /period_settings/{docId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && hasStringId();
+      }
+
+      // Steps (+ shared health profile).
+      match /step_days/{dateKey} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && hasStringId();
+      }
+      match /step_entries/{entryId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && hasStringId();
+      }
+      match /health_profile/{docId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && hasStringId();
+      }
+
+      // Sleep.
+      match /sleep_sessions/{sessionId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && hasStringId();
       }
 
       // Any other subcollection under the user is denied (future-proofing:

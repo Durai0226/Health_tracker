@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 
 /// Premium water insights card with streak system
@@ -77,7 +78,7 @@ class _WaterInsightsCardState extends State<WaterInsightsCard>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
-                  Icons.insights,
+                  Symbols.insights_rounded,
                   color: Colors.white,
                   size: 18,
                 ),

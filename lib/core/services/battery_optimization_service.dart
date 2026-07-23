@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class BatteryOptimizationService {
@@ -51,7 +52,7 @@ class BatteryOptimizationService {
       builder: (context) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.battery_alert_rounded, color: Colors.orange, size: 28),
+            Icon(Symbols.battery_alert_rounded, color: Colors.orange, size: 28),
             SizedBox(width: 12),
             Expanded(child: Text('Enable Reliable Reminders')),
           ],
@@ -73,7 +74,7 @@ class BatteryOptimizationService {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  const Icon(Symbols.info_rounded, color: Colors.orange, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

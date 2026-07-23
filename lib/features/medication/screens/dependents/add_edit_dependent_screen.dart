@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:tablet_remainder/core/widgets/app/app_pickers.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../models/dependent_profile.dart';
@@ -51,23 +53,12 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
   }
 
   Future<void> _selectDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dateOfBirth ?? DateTime.now(),
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: Colors.white,
-              surface: AppColors.getSurface(context),
-            ),
-          ),
-          child: child!,
-        );
-      },
+    final picked = await AppDatePicker.show(
+      context,
+      initial: _dateOfBirth ?? DateTime.now(),
+      first: DateTime(1900),
+      last: DateTime.now(),
+      title: 'Date of birth',
     );
     if (picked != null) {
       setState(() => _dateOfBirth = picked);
@@ -169,7 +160,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                           color: AppColors.primary,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                        child: const Icon(Symbols.camera_alt_rounded, color: Colors.white, size: 16),
                       ),
                     ),
                   ],
@@ -183,7 +174,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                 controller: _nameController,
                 label: 'Full Name',
                 hint: 'Jane Doe',
-                icon: Icons.person_rounded,
+                icon: Symbols.person_rounded,
                 validator: (v) => v?.trim().isEmpty == true ? 'Name is required' : null,
                 isDark: isDark,
               ),
@@ -202,7 +193,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                     value: _relationship,
                     decoration: const InputDecoration(
                       border: InputBorder.none,
-                      prefixIcon: Icon(Icons.people_rounded),
+                      prefixIcon: Icon(Symbols.people_rounded),
                       labelText: 'Relationship',
                     ),
                     items: RelationshipType.values
@@ -232,7 +223,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                     ),
                     label: 'Date of Birth',
                     hint: 'YYYY-MM-DD',
-                    icon: Icons.calendar_today_rounded,
+                    icon: Symbols.calendar_today_rounded,
                     isDark: isDark,
                   ),
                 ),
@@ -248,7 +239,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                       controller: _bloodTypeController,
                       label: 'Blood Type',
                       hint: 'O+',
-                      icon: Icons.bloodtype_rounded,
+                      icon: Symbols.bloodtype_rounded,
                       isDark: isDark,
                     ),
                   ),
@@ -285,7 +276,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                 controller: _emergencyContactController,
                 label: 'Contact Name',
                 hint: 'Emergency Contact Person',
-                icon: Icons.contact_emergency_rounded,
+                icon: Symbols.contact_emergency_rounded,
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
@@ -293,7 +284,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                 controller: _emergencyPhoneController,
                 label: 'Phone Number',
                 hint: '+1 234 567 890',
-                icon: Icons.phone_rounded,
+                icon: Symbols.phone_rounded,
                 keyboardType: TextInputType.phone,
                 isDark: isDark,
               ),

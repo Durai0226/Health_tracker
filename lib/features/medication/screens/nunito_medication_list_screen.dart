@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
@@ -31,10 +36,18 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
   void initState() {
     super.initState();
     _loadMedicines();
+    // Live refresh when a medicine/dose changes anywhere (detail edit, delete,
+    // dose taken) — keeps this list in sync without relying on pop callbacks.
+    MedicineCleanStorageService.revision.addListener(_onMedicineRevision);
+  }
+
+  void _onMedicineRevision() {
+    if (mounted) _loadMedicines(showLoader: false);
   }
 
   @override
   void dispose() {
+    MedicineCleanStorageService.revision.removeListener(_onMedicineRevision);
     _searchController.dispose();
     super.dispose();
   }
@@ -45,15 +58,15 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     _filterMedicines();
   }
 
-  Future<void> _loadMedicines() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadMedicines({bool showLoader = true}) async {
+    if (showLoader) setState(() => _isLoading = true);
     try {
       _medicines = await MedicineCleanStorageService.getAllMedicines();
       _filterMedicines();
     } catch (e) {
       debugPrint('Error loading medicines: $e');
     }
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _filterMedicines() {
@@ -118,6 +131,9 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(medicine.isArchived ? 'Medicine restored' : 'Medicine archived'),
+          // SnackBar.persist defaults to `action != null`, which would pin this
+          // toast open forever; force auto-dismiss while keeping Undo.
+          persist: false,
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () async {
@@ -141,9 +157,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     }
   }
 
-  /// Build a clinician-shareable adherence PDF over the last 30 days and hand it
-  /// to the OS share sheet.
-  Future<void> _exportAdherenceReport() async {
+  Future<List<MedicineReportEntry>?> _buildReportEntries() async {
     final active = _medicines.where((m) => m.isActive && !m.isArchived).toList();
     if (active.isEmpty) {
       if (mounted) {
@@ -151,15 +165,70 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
           const SnackBar(content: Text('No active medications to report yet.')),
         );
       }
-      return;
+      return null;
     }
+    final entries = <MedicineReportEntry>[];
+    for (final m in active) {
+      final logs = await MedicineCleanStorageService.getLogsForMedicine(m.id);
+      entries.add(MedicineReportEntry(medicine: m, logs: logs));
+    }
+    return entries;
+  }
+
+  void _reportError() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not create the report. Please try again.')),
+      );
+    }
+  }
+
+  /// Let the user share their last-30-day record with a doctor/caregiver as a
+  /// polished PDF or a spreadsheet CSV. Strictly local — the OS share sheet
+  /// decides where it goes; nothing is uploaded by the app.
+  void _openExportChooser() {
+    _hapticService.light();
+    final ext = AppColorsExt.of(context);
+    AppBottomSheet.show<void>(
+      context,
+      title: 'Share with your doctor',
+      icon: Symbols.ios_share_rounded,
+      accent: ext.medicine,
+      builder: (sheetCtx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppListTile(
+            icon: Symbols.picture_as_pdf_rounded,
+            title: 'Adherence report (PDF)',
+            subtitle: 'A clean summary for a doctor visit',
+            accent: ext.medicine,
+            onTap: () {
+              Navigator.of(sheetCtx).pop();
+              _exportAdherenceReport();
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppListTile(
+            icon: Symbols.table_rows_rounded,
+            title: 'Dose log (CSV)',
+            subtitle: 'Every dose as a spreadsheet',
+            accent: ext.medicine,
+            onTap: () {
+              Navigator.of(sheetCtx).pop();
+              _exportCsv();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build a clinician-shareable adherence PDF over the last 30 days.
+  Future<void> _exportAdherenceReport() async {
     _hapticService.medium();
+    final entries = await _buildReportEntries();
+    if (entries == null) return;
     try {
-      final entries = <MedicineReportEntry>[];
-      for (final m in active) {
-        final logs = await MedicineCleanStorageService.getLogsForMedicine(m.id);
-        entries.add(MedicineReportEntry(medicine: m, logs: logs));
-      }
       final now = DateTime.now();
       final bytes = await AdherenceReportService.buildPdf(
         entries: entries,
@@ -168,11 +237,31 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
       );
       await Printing.sharePdf(bytes: bytes, filename: 'adherence-report.pdf');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not create the report. Please try again.')),
-        );
-      }
+      _reportError();
+    }
+  }
+
+  /// Export the last-30-day dose log as a CSV via the OS share sheet.
+  Future<void> _exportCsv() async {
+    _hapticService.medium();
+    final entries = await _buildReportEntries();
+    if (entries == null) return;
+    try {
+      final now = DateTime.now();
+      final csv = AdherenceReportService.buildCsv(
+        entries: entries,
+        from: now.subtract(const Duration(days: 30)),
+        to: now,
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/medication-log.csv');
+      await file.writeAsString(csv);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'Medication log (last 30 days)',
+      );
+    } catch (e) {
+      _reportError();
     }
   }
 
@@ -227,20 +316,20 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
           children: [
             AppHeader(
               title: 'Medications',
-              icon: Icons.medication_rounded,
+              icon: Symbols.medication_rounded,
               accent: ext.medicine,
               leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
+                icon: Symbols.arrow_back_rounded,
                 filled: false,
                 accent: ext.medicine,
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
                 AppIconButton(
-                  icon: Icons.ios_share_rounded,
+                  icon: Symbols.ios_share_rounded,
                   filled: false,
                   accent: ext.medicine,
-                  onPressed: _exportAdherenceReport,
+                  onPressed: _openExportChooser,
                 ),
               ],
               bottom: Column(
@@ -248,13 +337,13 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
                   AppTextField(
                     controller: _searchController,
                     hint: 'Search medications...',
-                    prefixIcon: Icons.search_rounded,
+                    prefixIcon: Symbols.search_rounded,
                     accent: ext.medicine,
                     onChanged: _onSearchChanged,
                     textInputAction: TextInputAction.search,
                     suffix: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear_rounded,
+                            icon: Icon(Symbols.clear_rounded,
                                 color: ext.textTertiary),
                             onPressed: () {
                               _searchController.clear();
@@ -269,9 +358,9 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
                     onChanged: _onTabChanged,
                     accent: ext.medicine,
                     items: const [
-                      SegmentItem(icon: Icons.medication_rounded, label: 'Active'),
-                      SegmentItem(icon: Icons.archive_rounded, label: 'Archived'),
-                      SegmentItem(icon: Icons.apps_rounded, label: 'All'),
+                      SegmentItem(icon: Symbols.medication_rounded, label: 'Active'),
+                      SegmentItem(icon: Symbols.archive_rounded, label: 'Archived'),
+                      SegmentItem(icon: Symbols.apps_rounded, label: 'All'),
                     ],
                   ),
                 ],
@@ -287,7 +376,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
           ],
         ),
         floatingActionButton: AppFab(
-          icon: Icons.add_rounded,
+          icon: Symbols.add_rounded,
           label: 'Add',
           accent: ext.medicine,
           onPressed: _navigateToAdd,
@@ -299,7 +388,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
   Widget _buildEmptyState() {
     final ext = AppColorsExt.of(context);
     return EmptyState(
-      icon: Icons.medication_rounded,
+      icon: Symbols.medication_rounded,
       accent: ext.medicine,
       title: _selectedTab == 0
           ? 'No active medications'
@@ -334,7 +423,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
         ),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.only(left: 24),
-        child: Icon(Icons.archive_rounded, color: ext.warning.onContainer),
+        child: Icon(Symbols.archive_rounded, color: ext.warning.onContainer),
       ),
       secondaryBackground: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -344,7 +433,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
-        child: Icon(Icons.delete_rounded, color: ext.error.onContainer),
+        child: Icon(Symbols.delete_rounded, color: ext.error.onContainer),
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
@@ -414,13 +503,13 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
                             label: medicine.currentStock != null
                                 ? 'Low stock · ${medicine.currentStock}'
                                 : 'Low stock',
-                            icon: Icons.warning_amber_rounded,
+                            icon: Symbols.warning_amber_rounded,
                             swatch: ext.warning,
                           ),
                         if (medicine.isArchived)
                           _statusPill(
                             label: 'Archived',
-                            icon: Icons.archive_rounded,
+                            icon: Symbols.archive_rounded,
                             swatch: ext.info,
                           ),
                       ],
@@ -430,7 +519,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+            Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
           ],
         ),
       ),

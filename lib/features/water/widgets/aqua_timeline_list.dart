@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../theme/aqua_theme.dart';
 import '../models/enhanced_water_log.dart';
@@ -63,7 +64,7 @@ class AquaTimelineList extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons.water_drop_outlined,
+              Symbols.water_drop_rounded,
               size: 40,
               color: AquaTheme.waterPrimary.withOpacity(0.5),
             ),
@@ -110,7 +111,7 @@ class AquaTimelineList extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Icon(
-              Icons.arrow_forward_ios_rounded,
+              Symbols.arrow_forward_ios_rounded,
               size: 12,
               color: AquaTheme.waterPrimary,
             ),
@@ -191,7 +192,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                 padding: const EdgeInsets.only(right: 20),
                 color: AquaTheme.error.withOpacity(0.1),
                 child: Icon(
-                  Icons.delete_outline,
+                  Symbols.delete_rounded,
                   color: AquaTheme.error,
                 ),
               ),
@@ -277,7 +278,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    Icons.check,
+                                    Symbols.check_rounded,
                                     size: 12,
                                     color: AquaTheme.success,
                                   ),

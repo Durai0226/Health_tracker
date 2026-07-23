@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
 
 /// Flat scaffold on the token background.
@@ -122,24 +123,44 @@ class AppChip extends StatelessWidget {
     final ext = AppColorsExt.of(context);
     final s = accent ?? AccentScope.swatchOf(context);
     final tt = Theme.of(context).textTheme;
-    final bg = selected ? s.container : ext.surfaceVariant;
-    final fg = selected ? s.onContainer : ext.textSecondary;
+    // Premium chip: a defined bordered pill (not a flat grey fill). At rest the
+    // glyph carries a spot of the feature accent so the chip reads coloured and
+    // tactile; selected fills with the accent container + an accent ring.
+    final bg = selected ? s.container : ext.surface;
+    final fgText = selected ? s.onContainer : ext.textPrimary;
+    final fgIcon = selected ? s.onContainer : ext.mark(s);
+    final borderColor = selected ? ext.mark(s) : ext.outline;
     return Material(
       color: bg,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.brFull),
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.brFull,
+        side: BorderSide(color: borderColor, width: selected ? 1.5 : 1),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
+        // Actionable chips get a >=44px hit target (Apple/Material floor) while
+        // the pill stays visually compact and HUGS its content. NB: no
+        // `alignment:` here — a Container with alignment expands to fill bounded
+        // width, which would stretch chips full-width inside a Wrap/stretch
+        // column. The minHeight + the Row's default vertical centering are
+        // enough to size and centre the pill.
+        child: Container(
+          constraints:
+              BoxConstraints(minHeight: onTap != null ? 44 : 0),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 15, color: fg),
-                const SizedBox(width: 6),
+                Icon(icon, size: 16, color: fgIcon),
+                const SizedBox(width: 7),
               ],
-              Text(label, style: tt.labelMedium?.copyWith(color: fg)),
+              Text(label,
+                  style: tt.labelMedium?.copyWith(
+                      color: fgText,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w600)),
             ],
           ),
         ),
@@ -287,7 +308,7 @@ class AppListTile extends StatelessWidget {
                 ),
               ),
               trailing ??
-                  Icon(Icons.chevron_right_rounded, color: ext.textTertiary),
+                  Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
             ],
           ),
         ),

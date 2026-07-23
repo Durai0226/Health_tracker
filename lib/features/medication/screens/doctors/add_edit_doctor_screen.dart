@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
 
@@ -123,7 +125,7 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
                 controller: _nameController,
                 label: 'Name',
                 hint: 'Dr. John Doe',
-                icon: Icons.person_rounded,
+                icon: Symbols.person_rounded,
                 validator: (v) => v?.trim().isEmpty == true ? 'Name is required' : null,
                 isDark: isDark,
               ),
@@ -132,7 +134,7 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
                 controller: _specialtyController,
                 label: 'Specialty',
                 hint: 'Cardiologist, GP, etc.',
-                icon: Icons.medical_services_rounded,
+                icon: Symbols.medical_services_rounded,
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
@@ -140,7 +142,7 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
                 controller: _clinicController,
                 label: 'Clinic/Hospital',
                 hint: 'City General Hospital',
-                icon: Icons.local_hospital_rounded,
+                icon: Symbols.local_hospital_rounded,
                 isDark: isDark,
               ),
               
@@ -151,7 +153,7 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
                 controller: _phoneController,
                 label: 'Phone',
                 hint: '+1 234 567 890',
-                icon: Icons.phone_rounded,
+                icon: Symbols.phone_rounded,
                 keyboardType: TextInputType.phone,
                 isDark: isDark,
               ),
@@ -160,7 +162,7 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
                 controller: _emailController,
                 label: 'Email',
                 hint: 'doctor@hospital.com',
-                icon: Icons.email_rounded,
+                icon: Symbols.email_rounded,
                 keyboardType: TextInputType.emailAddress,
                 isDark: isDark,
               ),
@@ -169,7 +171,7 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
                 controller: _addressController,
                 label: 'Address',
                 hint: '123 Medical Dr, Suite 100',
-                icon: Icons.location_on_rounded,
+                icon: Symbols.location_on_rounded,
                 maxLines: 2,
                 isDark: isDark,
               ),
@@ -177,7 +179,7 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
               const SizedBox(height: 24),
               _buildSectionTitle('Additional', isDark),
               const SizedBox(height: 16),
-              SwitchListTile(
+              ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(
                   'Primary Care Physician',
@@ -193,16 +195,18 @@ class _AddEditDoctorScreenState extends State<AddEditDoctorScreen> {
                     fontSize: 12,
                   ),
                 ),
-                value: _isPrimary,
-                onChanged: (val) => setState(() => _isPrimary = val),
-                activeColor: AppColors.primary,
+                trailing: AppSwitch(
+                  value: _isPrimary,
+                  onChanged: (val) => setState(() => _isPrimary = val),
+                ),
+                onTap: () => setState(() => _isPrimary = !_isPrimary),
               ),
               const SizedBox(height: 12),
               _buildTextField(
                 controller: _notesController,
                 label: 'Notes',
                 hint: 'Consultation hours, special instructions...',
-                icon: Icons.note_rounded,
+                icon: Symbols.note_rounded,
                 maxLines: 3,
                 isDark: isDark,
               ),

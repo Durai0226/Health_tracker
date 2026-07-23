@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_colors_ext.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../models/hydration_profile.dart';
 import '../services/water_service.dart';
 
@@ -80,7 +82,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             SnackBar(
               content: Row(
                 children: [
-                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const Icon(Symbols.check_circle_rounded, color: Colors.white, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -106,7 +108,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             SnackBar(
               content: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                  const Icon(Symbols.error_rounded, color: Colors.white, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -153,7 +155,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              const Icon(Symbols.warning_amber_rounded, color: Colors.white, size: 20),
               const SizedBox(width: 12),
               Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
             ],
@@ -176,7 +178,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(Symbols.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Hydration Profile'),
@@ -229,7 +231,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.water_drop, color: Colors.white, size: 48),
+          const Icon(Symbols.water_drop_rounded, color: Colors.white, size: 48),
           const SizedBox(height: 12),
           Text(
             _profile.useCustomGoal ? 'Custom Goal' : 'Recommended Goal',
@@ -280,7 +282,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     final ext = AppColorsExt.of(context);
     return _buildSection(
       title: 'Personal Information',
-      icon: Icons.person_outline,
+      icon: Symbols.person_rounded,
       child: Column(
         children: [
           Row(
@@ -361,7 +363,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     final waterMark = ext.mark(ext.water);
     return _buildSection(
       title: 'Activity Level',
-      icon: Icons.directions_run,
+      icon: Symbols.directions_run_rounded,
       child: Column(
         children: ActivityLevel.values.map((level) {
           final isSelected = _profile.activityLevel == level;
@@ -412,7 +414,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                     ),
                   ),
                   if (isSelected)
-                    Icon(Icons.check_circle, color: waterMark),
+                    Icon(Symbols.check_circle_rounded, color: waterMark),
                 ],
               ),
             ),
@@ -425,15 +427,15 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   IconData _getActivityIcon(ActivityLevel level) {
     switch (level) {
       case ActivityLevel.sedentary:
-        return Icons.weekend;
+        return Symbols.weekend_rounded;
       case ActivityLevel.light:
-        return Icons.directions_walk;
+        return Symbols.directions_walk_rounded;
       case ActivityLevel.moderate:
-        return Icons.directions_run;
+        return Symbols.directions_run_rounded;
       case ActivityLevel.active:
-        return Icons.fitness_center;
+        return Symbols.fitness_center_rounded;
       case ActivityLevel.veryActive:
-        return Icons.sports_martial_arts;
+        return Symbols.sports_martial_arts_rounded;
     }
   }
 
@@ -472,7 +474,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     final waterMark = ext.mark(ext.water);
     return _buildSection(
       title: 'Climate',
-      icon: Icons.thermostat,
+      icon: Symbols.thermostat_rounded,
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -553,7 +555,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     final ext = AppColorsExt.of(context);
     return _buildSection(
       title: 'Special Conditions',
-      icon: Icons.favorite_outline,
+      icon: Symbols.favorite_rounded,
       child: Column(
         children: [
           if (!_profile.isMale) ...[
@@ -614,10 +616,10 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
               style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary),
             ),
           ),
-          Switch(
+          AppSwitch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: ext.water.base,
+            accent: ext.water,
           ),
         ],
       ),
@@ -629,7 +631,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     final waterMark = ext.mark(ext.water);
     return _buildSection(
       title: 'Custom Goal',
-      icon: Icons.tune,
+      icon: Symbols.tune_rounded,
       child: Column(
         children: [
           Row(
@@ -640,14 +642,14 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                   style: TextStyle(color: ext.textSecondary),
                 ),
               ),
-              Switch(
+              AppSwitch(
                 value: _profile.useCustomGoal,
                 onChanged: (value) {
                   setState(() {
                     _profile = _profile.copyWith(useCustomGoal: value);
                   });
                 },
-                activeThumbColor: ext.water.base,
+                accent: ext.water,
               ),
             ],
           ),
@@ -670,7 +672,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                       color: waterMark.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.remove, color: waterMark),
+                    child: Icon(Symbols.remove_rounded, color: waterMark),
                   ),
                 ),
                 const SizedBox(width: 24),
@@ -697,7 +699,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                       color: waterMark.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.add, color: waterMark),
+                    child: Icon(Symbols.add_rounded, color: waterMark),
                   ),
                 ),
               ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,13 +18,13 @@ class _RemindersPatternsSettingsScreenState extends State<RemindersPatternsSetti
   static const _primaryColor = Color(0xFFEC4899);
 
   final List<Map<String, dynamic>> _patterns = [
-    {'id': 'once', 'name': 'Once', 'description': 'Single occurrence', 'icon': Icons.looks_one},
-    {'id': 'daily', 'name': 'Daily', 'description': 'Every day', 'icon': Icons.today},
-    {'id': 'weekly', 'name': 'Weekly', 'description': 'Same day each week', 'icon': Icons.date_range},
-    {'id': 'monthly', 'name': 'Monthly', 'description': 'Same date each month', 'icon': Icons.calendar_month},
-    {'id': 'yearly', 'name': 'Yearly', 'description': 'Annual reminder', 'icon': Icons.event},
-    {'id': 'weekdays', 'name': 'Weekdays', 'description': 'Monday to Friday', 'icon': Icons.work_outline},
-    {'id': 'custom', 'name': 'Custom', 'description': 'Create your own pattern', 'icon': Icons.tune},
+    {'id': 'once', 'name': 'Once', 'description': 'Single occurrence', 'icon': Symbols.looks_one_rounded},
+    {'id': 'daily', 'name': 'Daily', 'description': 'Every day', 'icon': Symbols.today_rounded},
+    {'id': 'weekly', 'name': 'Weekly', 'description': 'Same day each week', 'icon': Symbols.date_range_rounded},
+    {'id': 'monthly', 'name': 'Monthly', 'description': 'Same date each month', 'icon': Symbols.calendar_month_rounded},
+    {'id': 'yearly', 'name': 'Yearly', 'description': 'Annual reminder', 'icon': Symbols.event_rounded},
+    {'id': 'weekdays', 'name': 'Weekdays', 'description': 'Monday to Friday', 'icon': Symbols.work_rounded},
+    {'id': 'custom', 'name': 'Custom', 'description': 'Create your own pattern', 'icon': Symbols.tune_rounded},
   ];
 
   @override
@@ -60,7 +61,7 @@ class _RemindersPatternsSettingsScreenState extends State<RemindersPatternsSetti
       appBar: AppBar(
         backgroundColor: const Color(0xFFFDF2F8),
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: const Text('Repeat Patterns', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
       ),
@@ -109,7 +110,7 @@ class _RemindersPatternsSettingsScreenState extends State<RemindersPatternsSetti
                 ],
               ),
             ),
-            if (isSelected) Icon(Icons.check_circle, color: _primaryColor),
+            if (isSelected) Icon(Symbols.check_circle_rounded, color: _primaryColor),
           ],
         ),
       ),

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/haptic_service.dart';
 import '../theme/manrope_theme.dart';
 import '../models/meditation_activity.dart';
@@ -102,7 +103,7 @@ class _ManropeStatsScreenState extends State<ManropeStatsScreen>
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: Icon(
-              Icons.arrow_back_rounded,
+              Symbols.arrow_back_rounded,
               color: isDark
                   ? ManropeTheme.textPrimaryDark
                   : ManropeTheme.textPrimary,
@@ -126,7 +127,7 @@ class _ManropeStatsScreenState extends State<ManropeStatsScreen>
               borderRadius: ManropeTheme.borderRadiusMedium,
             ),
             child: const Icon(
-              Icons.bar_chart_rounded,
+              Symbols.bar_chart_rounded,
               color: Colors.white,
               size: 24,
             ),
@@ -201,7 +202,7 @@ class _ManropeStatsScreenState extends State<ManropeStatsScreen>
               title: 'Total Time',
               value: '${stats.totalMinutes}',
               unit: 'min',
-              icon: Icons.timer_outlined,
+              icon: Symbols.timer_rounded,
               color: ManropeTheme.primaryOrange,
               isDark: isDark,
             ),
@@ -212,7 +213,7 @@ class _ManropeStatsScreenState extends State<ManropeStatsScreen>
               title: 'Sessions',
               value: '${stats.completedSessions}',
               unit: 'completed',
-              icon: Icons.check_circle_outline_rounded,
+              icon: Symbols.check_circle_rounded,
               color: ManropeTheme.accentGreen,
               isDark: isDark,
             ),
@@ -576,7 +577,7 @@ class _ManropeStatsScreenState extends State<ManropeStatsScreen>
                     borderRadius: ManropeTheme.borderRadiusMedium,
                   ),
                   child: const Icon(
-                    Icons.lightbulb_outline_rounded,
+                    Symbols.lightbulb_rounded,
                     color: ManropeTheme.deepPurple,
                     size: 24,
                   ),
@@ -594,19 +595,19 @@ class _ManropeStatsScreenState extends State<ManropeStatsScreen>
             ),
             const SizedBox(height: 16),
             _buildInsightRow(
-              icon: Icons.schedule_outlined,
+              icon: Symbols.schedule_rounded,
               text: 'Average session: $avgSession minutes',
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildInsightRow(
-              icon: Icons.trending_up_rounded,
+              icon: Symbols.trending_up_rounded,
               text: 'Completion rate: ${(stats.completionRate * 100).toInt()}%',
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildInsightRow(
-              icon: Icons.calendar_today_outlined,
+              icon: Symbols.calendar_today_rounded,
               text: stats.lastSessionDate != null
                   ? 'Last session: ${_formatDate(stats.lastSessionDate!)}'
                   : 'No sessions yet',

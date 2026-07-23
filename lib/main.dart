@@ -1,12 +1,17 @@
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'core/services/clean_storage_service.dart';
 import 'core/services/llm_service.dart';
+import 'core/ai/knowledge_base.dart';
+import 'core/ai/ai_assistant.dart';
 import 'core/database/app_database.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/haptic_service.dart';
@@ -14,6 +19,9 @@ import 'core/services/vitavibe_service.dart';
 import 'features/medication/services/medicine_storage_service.dart';
 import 'features/medication/services/intake_tracking_service.dart';
 import 'features/water/services/water_service.dart';
+import 'features/period/services/period_service.dart';
+import 'features/steps/services/step_service.dart';
+import 'features/sleep/services/sleep_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/reminder_reschedule_service.dart';
 import 'core/services/sync_service.dart';
@@ -30,6 +38,17 @@ import 'features/reminders/screens/alarm_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// Test-only flag (set via `--dart-define=E2E_TEST=true`) to make the app
+/// drivable by integration tests: skips the first-run welcome and the ads/ATT
+/// init, whose native permission dialog a widget-test can't dismiss. Defaults to
+/// false, so production builds are completely unaffected.
+const bool kE2ETest = bool.fromEnvironment('E2E_TEST');
+
+/// Debug-only: skip NotificationService.init() so the iOS-simulator plugin
+/// permission prompt doesn't block screenshots of the welcome flow. Defaults
+/// false — production is unaffected.
+const bool kSkipNotifInit = bool.fromEnvironment('SKIP_NOTIF_INIT');
 
 /// Global theme-mode notifier so a settings change rebuilds [MaterialApp]
 /// instantly (ONB-5 follow-system support). Updated on save in Settings.
@@ -82,11 +101,18 @@ void _initDeferredServices() {
       
       // Initialize non-critical services in background
       await Future.wait([
-        _initService('SimpleAdService', () => SimpleAdService().init()),
+        // Skip ads/ATT under E2E or screenshot mode — its native permission
+        // dialog blocks tests/screenshots.
+        if (!kE2ETest && !kSkipNotifInit)
+          _initService('SimpleAdService', () => SimpleAdService().init()),
         _initService('SyncService', () async => SyncService().init()),
         _initService('BackgroundAlarmService', () => BackgroundAlarmService().init()),
         _initService('FeatureFlagService', () => FeatureFlagService().init()),
         _initService('VitaVibeService', () => VitaVibeService().init()),
+        // Seed the on-device RAG knowledge base (idempotent + versioned).
+        _initService('KnowledgeBaseSeeder', () => KnowledgeBaseSeeder.ensureSeeded()),
+        // Attach the on-device LLM only if the user opted in + a model is present.
+        _initService('OnDeviceAI', () => AiAssistant().maybeActivateOnDeviceAtStartup()),
         // Other services can be initialized on-demand
       ]);
       
@@ -105,6 +131,24 @@ void _initDeferredServices() {
   });
 }
 
+/// Parses an `alarm:{json}` launch payload into the map the [AlarmScreen] reads
+/// (`id`, `title`, `body`, `snoozeDuration`). Falls back to the legacy
+/// `alarm:$id` format so older scheduled notifications still open correctly.
+Map<String, dynamic> parseAlarmPayload(String payload, int? notifId) {
+  final raw = payload.substring('alarm:'.length);
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map) {
+      final m = Map<String, dynamic>.from(decoded);
+      m['payload'] = payload;
+      return m;
+    }
+  } catch (_) {
+    // legacy `alarm:$id` — not JSON
+  }
+  return {'id': notifId ?? int.tryParse(raw) ?? raw, 'payload': payload};
+}
+
 void main() async {
   // Catch all Flutter framework errors
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -121,7 +165,24 @@ void main() async {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-      
+
+      // App Check — attest that requests come from a genuine, untampered build
+      // BEFORE any Firestore/Auth use, so the backend can reject abuse (e.g.
+      // scripted anonymous writes). Debug builds use the debug provider (print
+      // the token once and register it in the Firebase console); release builds
+      // use Play Integrity (Android) / App Attest (iOS). Non-fatal on failure.
+      try {
+        await FirebaseAppCheck.instance.activate(
+          androidProvider:
+              kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+          appleProvider:
+              kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
+        );
+        debugPrint('✓ Firebase App Check activated');
+      } catch (e) {
+        debugPrint('⚠️ App Check activation failed: $e');
+      }
+
       // Enable Firestore persistence with reasonable cache size for faster startup
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: true,
@@ -150,6 +211,9 @@ void main() async {
       _initService('MedicineCleanStorageService', () => MedicineCleanStorageService.init()),
       _initService('IntakeTrackingService', () => IntakeTrackingService.init()),
       _initService('WaterService', () => WaterService.init()),
+      _initService('PeriodService', () => PeriodService.init()),
+      _initService('StepService', () => StepService.init()),
+      _initService('SleepService', () => SleepService.init()),
       _initService('LlmService', () => LlmService().init()),
     ]);
     
@@ -158,7 +222,8 @@ void main() async {
     
     // Initialize only critical services for startup
     await Future.wait([
-      _initService('NotificationService', () => NotificationService().init()),
+      if (!kSkipNotifInit)
+        _initService('NotificationService', () => NotificationService().init()),
       _initService('AuthService', () => AuthService().init()),
       _initService('HapticService', () => HapticService().init()),
       _initService('FeatureManager', () => FeatureManager().init()),
@@ -178,12 +243,11 @@ void main() async {
       final payload = notificationAppLaunchDetails?.notificationResponse?.payload;
       if (payload != null && payload.startsWith('alarm:')) {
         initialRoute = '/alarm';
-        // Extract ID and other data if needed, or pass full payload
-        // For now, we'll reconstruct a basic payload map
-        alarmPayload = {
-          'id': payload.split(':').last,
-          'payload': payload,
-        };
+        // The payload is `alarm:{json}` carrying the real title/body/id so the
+        // AlarmScreen shows the actual reminder (with a fallback for the old
+        // `alarm:$id` format).
+        alarmPayload = parseAlarmPayload(
+            payload, notificationAppLaunchDetails?.notificationResponse?.id);
       }
     }
 
@@ -235,6 +299,7 @@ class _MyAppState extends State<MyApp> {
     // Determine initial route based on launch state
     String determineInitialRoute() {
       if (widget.initialRoute != null) return widget.initialRoute!;
+      if (kE2ETest) return '/home'; // tests skip onboarding
       if (isFirstLaunch) return '/welcome';
       return '/home';
     }
@@ -254,8 +319,13 @@ class _MyAppState extends State<MyApp> {
             '/welcome': (context) => const WelcomeScreen(),
             '/home': (context) => const AppShell(),
             '/alarm': (context) => AlarmScreen(
-              payload: widget.alarmPayload ??
-                (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {}),
+              // Per-navigation arguments (a tapped notification while the app is
+              // alive) MUST win over the one-time cold-launch payload, else a
+              // second alarm would show the first one's content.
+              payload: (ModalRoute.of(context)?.settings.arguments
+                      as Map<String, dynamic>?) ??
+                  widget.alarmPayload ??
+                  {},
             ),
           },
         );

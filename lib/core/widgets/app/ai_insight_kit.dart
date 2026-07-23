@@ -1,18 +1,147 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
 import '../../design/app_colors_ext.dart';
+import '../../design/app_icons.dart';
 import '../../ai/ai_types.dart';
 import '../../ai/insight.dart';
 import '../../ai/safety_guard.dart';
 import 'app_card.dart';
+import 'progress_ring.dart';
 import 'vitals_theme.dart';
 
 /// Shared, honest AI-UX kit (Apple HIG / Google PAIR / Microsoft HAX / NN/g).
 /// Deterministic output is labelled by function, generative output carries the
 /// sparkle — never "AI-wash" a rule.
+///
+/// The "Briefing" design language: one outlined [AiSeal] hallmark at three
+/// sizes, tabular figures on every numeral, small-caps overlines, and 1px
+/// hairlines on a strict 4pt grid — an Oura/Whoop data-page feel that stays
+/// inside the flat, no-gradient Calm Clarity contract.
 
-/// The single, consistent entry marker for genuinely generative AI.
-const IconData kAiSparkle = Icons.auto_awesome_rounded;
+/// The single, consistent entry marker for genuinely generative AI — routed
+/// through the icon facade so the hallmark upgrades app-wide from one place.
+const IconData kAiSparkle = AppIcons.aiSeal;
+
+/// Tabular figures — the identity cue and the fix for numeral misalignment.
+/// Applied to every number rendered by the AI surfaces.
+const List<FontFeature> kTabular = [FontFeature.tabularFigures()];
+
+/// The cohesive AI hallmark: an outlined circle enclosing the sparkle. Repeated
+/// at 20 / 24 / 32 / 36 / 56 across every AI surface so one mark — not a
+/// gradient orb — carries the AI identity. Asset-free, theme-aware.
+class AiSeal extends StatelessWidget {
+  final double size;
+  final AccentSwatch? accent;
+
+  /// Override the stroke/glyph colour (e.g. `onContainer` on a tinted cover).
+  final Color? color;
+  const AiSeal({super.key, this.size = 36, this.accent, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final c = color ?? ext.mark(accent ?? ext.brand);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: c, width: size >= 48 ? 2.5 : 2.0),
+      ),
+      child: Icon(kAiSparkle, size: size * 0.5, color: c),
+    );
+  }
+}
+
+/// A 7-dot week strip: filled dots = accent, remainder = outline. Makes a
+/// "days hit" count legible at a glance without dead space.
+class WeekDotStrip extends StatelessWidget {
+  final int filled;
+  final int total;
+  final AccentSwatch accent;
+  const WeekDotStrip(
+      {super.key, required this.filled, this.total = 7, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < total; i++)
+          Padding(
+            padding: EdgeInsets.only(right: i == total - 1 ? 0 : AppSpacing.xs),
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: i < filled ? ext.mark(accent) : ext.outline,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A ring-backed KPI cell — a [ProgressRing] wrapping a tabular numeral over a
+/// small-caps label. Empty state → track-only ring + muted numeral so a zero
+/// reads as "nothing yet", not broken.
+class KpiCell extends StatelessWidget {
+  final double progress;
+  final String value;
+  final String label;
+  final AccentSwatch accent;
+  final bool muted;
+  const KpiCell({
+    super.key,
+    required this.progress,
+    required this.value,
+    required this.label,
+    required this.accent,
+    this.muted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ProgressRing(
+          progress: progress,
+          size: 60,
+          stroke: 6,
+          accent: accent,
+          animate: !MediaQuery.of(context).disableAnimations,
+          center: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: tt.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                fontFeatures: kTabular,
+                color: muted ? ext.textTertiary : ext.textPrimary,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          label.toUpperCase(),
+          textAlign: TextAlign.center,
+          style: tt.labelSmall
+              ?.copyWith(color: ext.textSecondary, letterSpacing: 0.5),
+        ),
+      ],
+    );
+  }
+}
 
 /// Resolve a feature's accent + icon.
 class InsightVisuals {
@@ -33,6 +162,12 @@ class InsightVisuals {
         return VitalsColors.bpAccent(ext.isDark);
       case InsightFeature.bloodSugar:
         return VitalsColors.glucoseAccent(ext.isDark);
+      case InsightFeature.period:
+        return ext.period;
+      case InsightFeature.steps:
+        return ext.steps;
+      case InsightFeature.sleep:
+        return ext.sleep;
       case InsightFeature.crossCutting:
         return ext.brand;
     }
@@ -41,19 +176,25 @@ class InsightVisuals {
   static IconData icon(InsightFeature f) {
     switch (f) {
       case InsightFeature.medicine:
-        return Icons.medication_rounded;
+        return Symbols.medication_rounded;
       case InsightFeature.water:
-        return Icons.water_drop_rounded;
+        return Symbols.water_drop_rounded;
       case InsightFeature.focus:
-        return Icons.self_improvement_rounded;
+        return Symbols.self_improvement_rounded;
       case InsightFeature.reminders:
-        return Icons.notifications_rounded;
+        return Symbols.notifications_rounded;
       case InsightFeature.bloodPressure:
-        return Icons.favorite_rounded;
+        return Symbols.favorite_rounded;
       case InsightFeature.bloodSugar:
-        return Icons.bloodtype_rounded;
+        return Symbols.bloodtype_rounded;
+      case InsightFeature.period:
+        return Symbols.calendar_month_rounded;
+      case InsightFeature.steps:
+        return Symbols.directions_walk_rounded;
+      case InsightFeature.sleep:
+        return Symbols.bedtime_rounded;
       case InsightFeature.crossCutting:
-        return Icons.insights_rounded;
+        return Symbols.insights_rounded;
     }
   }
 
@@ -82,9 +223,9 @@ class EngineBadge extends StatelessWidget {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     final (label, icon) = switch (engine) {
-      AiEngineKind.ruleBased => ('On-device', Icons.offline_bolt_rounded),
-      AiEngineKind.onDevice => ('On-device AI', Icons.memory_rounded),
-      AiEngineKind.cloud => ('Cloud AI', Icons.cloud_rounded),
+      AiEngineKind.ruleBased => ('On-device', Symbols.offline_bolt_rounded),
+      AiEngineKind.onDevice => ('On-device AI', Symbols.memory_rounded),
+      AiEngineKind.cloud => ('Cloud AI', Symbols.cloud_rounded),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -123,7 +264,7 @@ class WhyThisChip extends StatelessWidget {
           backgroundColor: AppColorsExt.of(ctx).surface,
           shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
           title: Row(children: [
-            Icon(Icons.info_outline_rounded, size: 20, color: ext.textSecondary),
+            Icon(Symbols.info_rounded, size: 20, color: ext.textSecondary),
             const SizedBox(width: AppSpacing.sm),
             const Text('Why you\'re seeing this'),
           ]),
@@ -141,9 +282,70 @@ class WhyThisChip extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.help_outline_rounded, size: 13, color: ext.textTertiary),
+          Icon(Symbols.help_rounded, size: 13, color: ext.textTertiary),
           const SizedBox(width: 4),
           Text('Why this?',
+              style: tt.labelSmall?.copyWith(color: ext.textTertiary)),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Provenance affordance for a grounded (RAG) answer — a "Source" chip that
+/// reveals the exact curated knowledge-base text the answer was drawn from.
+/// Makes the assistant inspectable: the user can see it isn't inventing claims.
+class SourceChip extends StatelessWidget {
+  final String label;
+  final String quote;
+  const SourceChip({super.key, required this.label, required this.quote});
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return InkWell(
+      borderRadius: AppRadius.brFull,
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColorsExt.of(ctx).surface,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
+          title: Row(children: [
+            Icon(Symbols.menu_book_rounded, size: 20, color: ext.textSecondary),
+            const SizedBox(width: AppSpacing.sm),
+            const Expanded(child: Text('Source')),
+          ]),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: tt.labelLarge?.copyWith(
+                      color: AppColorsExt.of(ctx).textPrimary,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: AppSpacing.sm),
+              Text('“$quote”',
+                  style: tt.bodyMedium?.copyWith(
+                      color: AppColorsExt.of(ctx).textSecondary, height: 1.4)),
+              const SizedBox(height: AppSpacing.md),
+              Text('General wellness information — not a diagnosis.',
+                  style: tt.labelSmall
+                      ?.copyWith(color: AppColorsExt.of(ctx).textTertiary)),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('Got it')),
+          ],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Symbols.menu_book_rounded, size: 13, color: ext.textTertiary),
+          const SizedBox(width: 4),
+          Text('Source',
               style: tt.labelSmall?.copyWith(color: ext.textTertiary)),
         ]),
       ),
@@ -193,7 +395,9 @@ class PromptChipRow extends StatelessWidget {
   }
 }
 
-/// Persistent, action-oriented safety line for any AI surface.
+/// Persistent safety line for any AI surface — a quiet print-footnote: a top
+/// hairline + shield + tertiary text. Distinct from cards (which keep fills),
+/// consistent across all three screens.
 class SafetyDisclaimerBar extends StatelessWidget {
   const SafetyDisclaimerBar({super.key});
 
@@ -201,20 +405,24 @@ class SafetyDisclaimerBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: ext.surfaceVariant,
-        borderRadius: AppRadius.brMd,
-      ),
-      child: Row(children: [
-        Icon(Icons.shield_outlined, size: 15, color: ext.textTertiary),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(SafetyGuard.disclaimer,
-              style: tt.bodySmall?.copyWith(color: ext.textTertiary, height: 1.3)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(height: 1, color: ext.outline),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Symbols.shield_rounded, size: 14, color: ext.textTertiary),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(SafetyGuard.disclaimer,
+                  style: tt.bodySmall
+                      ?.copyWith(color: ext.textTertiary, height: 1.3)),
+            ),
+          ],
         ),
-      ]),
+      ],
     );
   }
 }
@@ -281,15 +489,55 @@ class ProactiveNudgeBanner extends StatelessWidget {
   }
 }
 
-/// The structured deterministic insight card: feature icon + severity color +
-/// engine badge, headline + metric + detail, and a "Why this?" affordance with
-/// an optional action. The glanceable "one big thing" surface.
+/// The structured deterministic insight card, in the "Briefing" grammar:
+/// a small-caps overline (feature glyph + feature word + severity word + dot),
+/// an editorial title, the metric set large as a tabular-figure hero on its own
+/// line, the detail, a footer hairline, then engine badge + why-this + action.
+/// The glanceable "one big thing" surface.
 class InsightCard extends StatelessWidget {
   final Insight insight;
   final VoidCallback? onAction;
   final VoidCallback? onTap;
 
   const InsightCard({super.key, required this.insight, this.onAction, this.onTap});
+
+  static String _featureName(InsightFeature f) {
+    switch (f) {
+      case InsightFeature.medicine:
+        return 'Medicine';
+      case InsightFeature.water:
+        return 'Water';
+      case InsightFeature.focus:
+        return 'Focus';
+      case InsightFeature.reminders:
+        return 'Reminders';
+      case InsightFeature.bloodPressure:
+        return 'Blood pressure';
+      case InsightFeature.bloodSugar:
+        return 'Blood sugar';
+      case InsightFeature.period:
+        return 'Cycle';
+      case InsightFeature.steps:
+        return 'Steps';
+      case InsightFeature.sleep:
+        return 'Sleep';
+      case InsightFeature.crossCutting:
+        return 'Across features';
+    }
+  }
+
+  static String _severityWord(InsightSeverity s) {
+    switch (s) {
+      case InsightSeverity.good:
+        return 'On track';
+      case InsightSeverity.info:
+        return 'Note';
+      case InsightSeverity.attention:
+        return 'Needs attention';
+      case InsightSeverity.urgent:
+        return 'Act now';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -303,36 +551,49 @@ class InsightCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Row 1 — OVERLINE: feature glyph + feature · severity + severity dot.
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: accent.container,
-                  borderRadius: AppRadius.brSm,
-                ),
-                child: Icon(InsightVisuals.icon(insight.feature),
-                    size: 18, color: accent.onContainer),
-              ),
-              const SizedBox(width: AppSpacing.md),
+              Icon(InsightVisuals.icon(insight.feature),
+                  size: 14, color: ext.mark(accent)),
+              const SizedBox(width: 6),
               Expanded(
-                child: Text(insight.title,
-                    style: tt.titleMedium?.copyWith(
-                        color: ext.textPrimary, fontWeight: FontWeight.w700)),
+                child: Text(
+                  '${_featureName(insight.feature).toUpperCase()} · ${_severityWord(insight.severity).toUpperCase()}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.labelSmall
+                      ?.copyWith(color: ext.textTertiary, letterSpacing: 0.5),
+                ),
               ),
-              // Severity dot (color + shape redundancy; never color alone).
-              Container(width: 9, height: 9, decoration: BoxDecoration(color: sev, shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+              // Severity dot (colour + shape redundancy; never colour alone).
+              Container(
+                  width: 9,
+                  height: 9,
+                  decoration:
+                      BoxDecoration(color: sev, shape: BoxShape.circle)),
             ],
           ),
+          const SizedBox(height: AppSpacing.sm),
+          // Row 2 — editorial title.
+          Text(insight.title,
+              style: tt.headlineSmall?.copyWith(color: ext.textPrimary)),
+          // Row 3 — METRIC HERO on its own left-aligned line.
           if (insight.metric != null) ...[
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 6),
             Text(insight.metric!,
-                style: tt.headlineSmall?.copyWith(
-                    color: sev, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                style: tt.headlineMedium?.copyWith(
+                    color: sev,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: kTabular,
+                    letterSpacing: -0.5)),
           ],
           const SizedBox(height: 6),
           Text(insight.detail,
               style: tt.bodyMedium?.copyWith(color: ext.textSecondary, height: 1.4)),
+          const SizedBox(height: AppSpacing.md),
+          Container(height: 1, color: ext.outline),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [

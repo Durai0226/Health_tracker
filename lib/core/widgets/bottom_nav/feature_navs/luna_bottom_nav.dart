@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../base/glass_nav_base.dart';
 
@@ -100,7 +101,7 @@ class _LunaBottomNavState extends State<LunaBottomNav>
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                        child: const Icon(Symbols.add_rounded, color: Colors.white, size: 28),
                       ),
                     );
                   },

@@ -70,6 +70,42 @@ class AppPalette {
   static const onRemindersContainer = Color(0xFF92400E);
   static const onRemindersContainerDark = Color(0xFFFDE68A);
 
+  // ── Feature accent: PERIOD — Rose/Pink ──
+  static const period = Color(0xFFEC4899);
+  static const periodDark = Color(0xFFF472B6);
+  static const onPeriod = Color(0xFFFFFFFF);
+  static const onPeriodDark = Color(0xFF4A0E27);
+  static const periodStrong = Color(0xFFBE185D); // small text/icon on light
+  static const periodStrongDark = Color(0xFFF9A8D4);
+  static const periodContainer = Color(0xFFFCE7F3);
+  static const periodContainerDark = Color(0xFF831843);
+  static const onPeriodContainer = Color(0xFF9D174D);
+  static const onPeriodContainerDark = Color(0xFFFBCFE8);
+
+  // ── Feature accent: STEPS — Green (never `base` as small fg on light) ──
+  static const steps = Color(0xFF22C55E);
+  static const stepsDark = Color(0xFF4ADE80);
+  static const onSteps = Color(0xFF052E16); // near-black; white fails on green
+  static const onStepsDark = Color(0xFF052E16);
+  static const stepsStrong = Color(0xFF15803D);
+  static const stepsStrongDark = Color(0xFF86EFAC);
+  static const stepsContainer = Color(0xFFDCFCE7);
+  static const stepsContainerDark = Color(0xFF14532D);
+  static const onStepsContainer = Color(0xFF166534);
+  static const onStepsContainerDark = Color(0xFFBBF7D0);
+
+  // ── Feature accent: SLEEP — Indigo-violet "night" ──
+  static const sleep = Color(0xFF7C6FF0);
+  static const sleepDark = Color(0xFFA5B4FC);
+  static const onSleep = Color(0xFFFFFFFF);
+  static const onSleepDark = Color(0xFF1E1B4B);
+  static const sleepStrong = Color(0xFF5B4BD6);
+  static const sleepStrongDark = Color(0xFFC7D2FE);
+  static const sleepContainer = Color(0xFFECE9FD);
+  static const sleepContainerDark = Color(0xFF312B6B);
+  static const onSleepContainer = Color(0xFF4338CA);
+  static const onSleepContainerDark = Color(0xFFDDD6FE);
+
   // ── Surfaces ──
   static const backgroundL = Color(0xFFF5F6F8);
   static const backgroundD = Color(0xFF0F1319);

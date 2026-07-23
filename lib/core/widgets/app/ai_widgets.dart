@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../design/app_design.dart';
+import '../../design/app_icons.dart';
 import 'app_card.dart';
 import 'app_button.dart';
 import 'primitives.dart';
@@ -121,11 +123,11 @@ class _AiInsightCardState extends State<AiInsightCard> {
                 child: Text(widget.title,
                     style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
               ),
-              const Icon(Icons.auto_awesome_rounded, size: 14),
+              const Icon(AppIcons.aiSeal, size: 14),
               const SizedBox(width: 6),
               IconButton(
                 onPressed: _loading ? null : _load,
-                icon: Icon(Icons.refresh_rounded, color: ext.mark(s), size: 20),
+                icon: Icon(Symbols.refresh_rounded, color: ext.mark(s), size: 20),
                 tooltip: 'Refresh',
                 visualDensity: VisualDensity.compact,
               ),
@@ -176,7 +178,7 @@ class AiAskSheet {
     return AppBottomSheet.show<void>(
       context,
       title: title,
-      icon: Icons.auto_awesome_rounded,
+      icon: Symbols.auto_awesome_rounded,
       accent: accent,
       builder: (ctx) => _AiAskBody(
         accent: accent,
@@ -267,7 +269,7 @@ class _AiAskBodyState extends State<_AiAskBody> {
         const SizedBox(height: AppSpacing.md),
         AppButton(
           label: 'Ask',
-          leadingIcon: Icons.auto_awesome_rounded,
+          leadingIcon: Symbols.auto_awesome_rounded,
           accent: widget.accent,
           loading: _loading,
           fullWidth: true,

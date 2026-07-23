@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/ai/ai_assistant.dart';
@@ -8,6 +9,7 @@ import '../../../core/widgets/app/ai_insight_kit.dart';
 import '../../../core/widgets/app/ai_widgets.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/water_hero_gauge.dart';
+import '../widgets/aqua_shimmer.dart';
 import '../widgets/aqua_glass_card.dart';
 import '../widgets/aqua_quick_add_grid.dart';
 import '../widgets/aqua_timeline_list.dart';
@@ -61,7 +63,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   void initState() {
     super.initState();
     _initAnimations();
-    _loadData();
+    _loadData(showLoading: true);
     _scrollController.addListener(_onScroll);
   }
 
@@ -98,8 +100,11 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     });
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  /// [showLoading] gates the full-screen shimmer skeleton. Only the first load
+  /// (from initState) shows it; post-add/undo/return refreshes update data in
+  /// place so the skeleton doesn't flash over the content on every tap.
+  Future<void> _loadData({bool showLoading = false}) async {
+    if (showLoading) setState(() => _isLoading = true);
 
     try {
       await WaterService.init();
@@ -203,6 +208,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                 borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
               ),
               duration: const Duration(seconds: 3),
+              // Without this, SnackBar.persist defaults to `action != null`
+              // (SDK snack_bar.dart) so the Undo action would keep the toast on
+              // screen forever. Keep Undo but let it auto-dismiss after 3s.
+              persist: false,
               action: addedLogId == null
                   ? null
                   : SnackBarAction(
@@ -318,7 +327,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         color: beverage.primary.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.remove, color: beverage.primary),
+                      child: Icon(Symbols.remove_rounded, color: beverage.primary),
                     ),
                   ),
                   const SizedBox(width: AquaTheme.spacingL),
@@ -356,7 +365,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         color: beverage.primary.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.add, color: beverage.primary),
+                      child: Icon(Symbols.add_rounded, color: beverage.primary),
                     ),
                   ),
                 ],
@@ -398,7 +407,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.check, color: Colors.white),
+                      const Icon(Symbols.check_rounded, color: Colors.white),
                       const SizedBox(width: 8),
                       Text(
                         'Save Goal',
@@ -429,16 +438,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      final loading = Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('💧', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 16),
-            CircularProgressIndicator(color: AquaTheme.waterPrimary),
-          ],
-        ),
-      );
+      final loading = AquaDashboardSkeleton(embedded: widget.embedded);
       if (widget.embedded) return loading;
       return Scaffold(
         backgroundColor: AquaTheme.getBackground(context),
@@ -517,7 +517,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         // Quick add section
                         AquaSectionHeader(
                           title: 'Quick Add',
-                          icon: Icons.add_circle_outline,
+                          icon: Symbols.add_circle_rounded,
                           beverageId: _selectedBeverageId,
                         ),
                         const SizedBox(height: AquaTheme.spacingS),
@@ -537,7 +537,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         // engine via AiAssistant, so the tip always renders.
                         AiInsightCard(
                           title: 'Hydration tips',
-                          icon: Icons.water_drop_rounded,
+                          icon: Symbols.water_drop_rounded,
                           accent: AppColorsExt.of(context).water,
                           // Cache per data signature (100ml + 3h buckets, plus
                           // streak — the tip text embeds it) so re-opening the
@@ -559,7 +559,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         // Today's log
                         AquaSectionHeader(
                           title: "Today's Log",
-                          icon: Icons.history,
+                          icon: Symbols.history_rounded,
                           actionText: 'Edit',
                           onAction: () => _navigateToHistory(),
                           beverageId: _selectedBeverageId,
@@ -647,7 +647,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                 boxShadow: AquaTheme.subtleShadow,
               ),
               child: Icon(
-                Icons.arrow_back_ios_rounded,
+                Symbols.arrow_back_rounded,
                 color: AquaTheme.getTextPrimary(context),
                 size: 18,
               ),
@@ -657,19 +657,19 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       ),
       actions: [
         _buildHeaderAction(
-          Icons.flag_outlined,
+          Symbols.flag_rounded,
           () => _showGoalDialog(),
           beverage,
           label: 'Set daily goal',
         ),
         _buildHeaderAction(
-          Icons.bar_chart_rounded,
+          Symbols.bar_chart_rounded,
           () => _navigateToStats(),
           beverage,
           label: 'Statistics',
         ),
         _buildHeaderAction(
-          Icons.settings_outlined,
+          Symbols.settings_rounded,
           () => _navigateToProfile(),
           beverage,
           label: 'Settings',
@@ -758,19 +758,19 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     // "Drinks" tile is omitted since the beverage selector already surfaces it.
     final entries = <_FeatureEntry>[
       if (widget.embedded)
-        _FeatureEntry(Icons.analytics_outlined, 'Stats', _navigateToStats),
+        _FeatureEntry(Symbols.analytics_rounded, 'Stats', _navigateToStats),
       _FeatureEntry(
-          Icons.calendar_month_outlined, 'Calendar', _navigateToCalendar),
+          Symbols.calendar_month_rounded, 'Calendar', _navigateToCalendar),
       _FeatureEntry(
-          Icons.local_cafe_outlined, 'Cups', _openCupCreator),
+          Symbols.local_cafe_rounded, 'Cups', _openCupCreator),
       _FeatureEntry(
-          Icons.emoji_events_outlined, 'Awards', _navigateToAchievements),
-      _FeatureEntry(Icons.flag_outlined, 'Challenges', _navigateToChallenges),
-      _FeatureEntry(Icons.coffee_outlined, 'Caffeine', _navigateToCaffeine),
+          Symbols.emoji_events_rounded, 'Awards', _navigateToAchievements),
+      _FeatureEntry(Symbols.flag_rounded, 'Challenges', _navigateToChallenges),
+      _FeatureEntry(Symbols.coffee_rounded, 'Caffeine', _navigateToCaffeine),
       _FeatureEntry(
-          Icons.notifications_outlined, 'Reminders', _navigateToReminders),
+          Symbols.notifications_rounded, 'Reminders', _navigateToReminders),
       if (widget.embedded)
-        _FeatureEntry(Icons.person_outline, 'Profile', _navigateToProfile),
+        _FeatureEntry(Symbols.person_rounded, 'Profile', _navigateToProfile),
     ];
 
     return Column(
@@ -778,7 +778,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       children: [
         AquaSectionHeader(
           title: 'More Features',
-          icon: Icons.apps_rounded,
+          icon: Symbols.apps_rounded,
           beverageId: 'water',
         ),
         const SizedBox(height: AquaTheme.spacingS),

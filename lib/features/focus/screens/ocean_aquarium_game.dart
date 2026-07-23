@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../services/relaxation_game_service.dart';
 import '../widgets/relaxation_game_widgets.dart';
@@ -689,7 +690,7 @@ class _OceanAquariumGameState extends State<OceanAquariumGame>
                 borderRadius: BorderRadius.circular(16),
                 padding: const EdgeInsets.all(12),
                 child: Icon(
-                  Icons.arrow_back_rounded,
+                  Symbols.arrow_back_rounded,
                   color: _isDayMode ? Colors.white : Colors.white70,
                   size: 24,
                 ),
@@ -731,7 +732,7 @@ class _OceanAquariumGameState extends State<OceanAquariumGame>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.stars, color: Colors.white, size: 14),
+                              const Icon(Symbols.stars_rounded, color: Colors.white, size: 14),
                               const SizedBox(width: 4),
                               Text(
                                 '$_coins',
@@ -770,7 +771,7 @@ class _OceanAquariumGameState extends State<OceanAquariumGame>
                 borderRadius: BorderRadius.circular(16),
                 padding: const EdgeInsets.all(12),
                 child: Icon(
-                  _isDayMode ? Icons.nights_stay_rounded : Icons.wb_sunny_rounded,
+                  _isDayMode ? Symbols.nights_stay_rounded : Symbols.wb_sunny_rounded,
                   color: _isDayMode ? Colors.amber : Colors.amber.shade200,
                   size: 24,
                 ),
@@ -831,7 +832,7 @@ class _OceanAquariumGameState extends State<OceanAquariumGame>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.add, color: Colors.white, size: 20),
+                  const Icon(Symbols.add_rounded, color: Colors.white, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     'Add Fish',

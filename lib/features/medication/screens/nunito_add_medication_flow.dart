@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:uuid/uuid.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
+import '../services/drug_name_catalog.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/ai/ai_assistant.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -16,7 +21,12 @@ enum _DurationMode { ongoing, endDate, duration }
 class NunitoAddMedicationFlow extends StatefulWidget {
   final EnhancedMedicine? editMedicine;
 
-  const NunitoAddMedicationFlow({super.key, this.editMedicine});
+  /// QA/debug only: start the wizard on a given step (0-based). Lets the visual
+  /// harness screenshot a specific step (e.g. Schedule) without tapping through.
+  final int? debugInitialStep;
+
+  const NunitoAddMedicationFlow(
+      {super.key, this.editMedicine, this.debugInitialStep});
 
   @override
   State<NunitoAddMedicationFlow> createState() => _NunitoAddMedicationFlowState();
@@ -30,7 +40,17 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   // Step 1: Basic Info
   final _nameController = TextEditingController();
+  // Generic (active-ingredient) name — powers the disclaimed interaction/allergy
+  // reference checks, which key off the generic, not the brand.
+  final _genericNameController = TextEditingController();
   DosageForm _selectedForm = DosageForm.tablet;
+
+  // Optional expiry date → drives the "expiring soon / expired" surfacing.
+  DateTime? _expiryDate;
+
+  // Offline drug-name typeahead suggestions for the name field.
+  List<DrugNameEntry> _nameSuggestions = const [];
+  bool _suppressNameSuggest = false;
 
   // Step 1: Smart add (AI) — describe a medicine in plain language and let the
   // assistant pre-fill the wizard fields. Purely optional; the manual flow is
@@ -81,13 +101,15 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   final HapticService _hapticService = HapticService();
   final MedicationReminderService _reminderService = MedicationReminderService();
-  final PageController _pageController = PageController();
+  late final PageController _pageController;
 
   bool get _isEditing => widget.editMedicine != null;
 
   @override
   void initState() {
     super.initState();
+    _currentStep = widget.debugInitialStep ?? 0;
+    _pageController = PageController(initialPage: _currentStep);
     _progressController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -99,12 +121,30 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (_isEditing) {
       _loadExistingMedicine();
     }
+    // Offline drug-name typeahead (privacy-first, bundled asset).
+    DrugNameCatalog.ensureLoaded();
+    _nameController.addListener(_onNameChanged);
     _updateProgress();
+  }
+
+  void _onNameChanged() {
+    if (_suppressNameSuggest) return;
+    final next = DrugNameCatalog.suggest(_nameController.text);
+    if (next.length != _nameSuggestions.length ||
+        (next.isNotEmpty &&
+            _nameSuggestions.isNotEmpty &&
+            next.first.name != _nameSuggestions.first.name)) {
+      setState(() => _nameSuggestions = next);
+    } else if (next.isEmpty && _nameSuggestions.isNotEmpty) {
+      setState(() => _nameSuggestions = const []);
+    }
   }
 
   void _loadExistingMedicine() {
     final m = widget.editMedicine!;
     _nameController.text = m.name;
+    _genericNameController.text = m.genericName ?? '';
+    _expiryDate = m.expiryDate;
     _selectedForm = m.dosageForm;
     _dosageController.text = m.dosageAmount.toString();
     _strengthController.text = m.strength ?? '';
@@ -150,7 +190,9 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   void dispose() {
     _progressController.dispose();
     _pageController.dispose();
+    _nameController.removeListener(_onNameChanged);
     _nameController.dispose();
+    _genericNameController.dispose();
     _dosageController.dispose();
     _strengthController.dispose();
     _stockController.dispose();
@@ -241,6 +283,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   Future<void> _saveMedicine() async {
     setState(() => _isLoading = true);
 
+    final EnhancedMedicine medicine;
+    // STEP 1 — persistence (the only thing that can legitimately fail a "save").
     try {
       final scheduleTimesList = _isPRN
           ? <ScheduledTime>[]
@@ -272,13 +316,17 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         minHoursBetweenDoses: _isPRN ? _minHoursBetweenDoses : null,
       );
 
-      final medicine = EnhancedMedicine(
+      medicine = EnhancedMedicine(
         id: _isEditing ? widget.editMedicine!.id : const Uuid().v4(),
         name: _nameController.text.trim(),
         dosageForm: _selectedForm,
-        dosageAmount: double.parse(_dosageController.text),
+        dosageAmount: double.tryParse(_dosageController.text.trim()) ?? 1.0,
         dosageUnit: _dosageUnit,
         strength: _strengthController.text.isNotEmpty ? _strengthController.text : null,
+        genericName: _genericNameController.text.trim().isNotEmpty
+            ? _genericNameController.text.trim()
+            : null,
+        expiryDate: _expiryDate,
         currentStock: _stockController.text.trim().isNotEmpty
             ? int.tryParse(_stockController.text.trim())
             : null,
@@ -297,23 +345,35 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       );
 
       await MedicineCleanStorageService.saveMedicine(medicine);
+    } catch (e, st) {
+      // Surface the REAL cause: the old generic toast masked every failure
+      // behind "Failed to save medication", making the root cause invisible.
+      debugPrint('Error saving medicine: $e\n$st');
+      _showError(kDebugMode
+          ? 'Failed to save medication: $e'
+          : "Couldn't save this medication. Please check the details and try again.");
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
+    // STEP 2 — post-save side-effects. The medicine is ALREADY persisted, so a
+    // failure here must NOT report "failed to save" (the old bug: a reminder /
+    // haptic error surfaced as a save failure even though the row was written,
+    // leaving the user thinking creation failed when it actually succeeded).
+    try {
       if (_reminderEnabled) {
         await _reminderService.scheduleReminders(medicine);
       } else {
         await _reminderService.cancelReminders(medicine);
       }
-
-      _hapticService.success();
-
-      if (mounted) {
-        Navigator.pop(context, true);
-      }
     } catch (e) {
-      debugPrint('Error saving medicine: $e');
-      _showError('Failed to save medication');
+      debugPrint('⚠️ Post-save reminder scheduling failed (medicine saved): $e');
     }
+    try {
+      _hapticService.success();
+    } catch (_) {}
 
+    if (mounted) Navigator.pop(context, true);
     // Guard: the success path pops this screen, so it may be unmounted here.
     if (mounted) setState(() => _isLoading = false);
   }
@@ -353,7 +413,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       title: _isEditing ? 'Edit Medication' : 'Add Medication',
       accent: ext.medicine,
       leading: AppIconButton(
-        icon: Icons.close_rounded,
+        icon: Symbols.close_rounded,
         filled: false,
         accent: ext.medicine,
         onPressed: () => Navigator.pop(context),
@@ -434,6 +494,42 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             accent: med,
             textCapitalization: TextCapitalization.words,
           ),
+          if (_nameSuggestions.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final s in _nameSuggestions)
+                  AppChip(
+                    label: s.name,
+                    accent: med,
+                    onTap: () {
+                      _hapticService.selection();
+                      _suppressNameSuggest = true;
+                      _nameController.text = s.name;
+                      _nameController.selection = TextSelection.collapsed(
+                          offset: s.name.length);
+                      if (_genericNameController.text.trim().isEmpty) {
+                        _genericNameController.text = s.generic;
+                      }
+                      _suppressNameSuggest = false;
+                      setState(() => _nameSuggestions = const []);
+                    },
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: _genericNameController,
+            label: 'Generic name (optional)',
+            hint: 'Active ingredient, e.g., Acetaminophen',
+            accent: med,
+            textCapitalization: TextCapitalization.words,
+            helperText:
+                'Helps flag general interactions — always confirm with your pharmacist.',
+          ),
           const SizedBox(height: AppSpacing.xl),
           Text('Type',
               style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
@@ -489,7 +585,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome_rounded,
+              Icon(Symbols.auto_awesome_rounded,
                   color: med.onContainer, size: 18),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -516,18 +612,86 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             onSubmitted: (_) => _fillWithAi(),
           ),
           const SizedBox(height: AppSpacing.md),
-          AppButton(
-            label: 'Fill with AI',
-            leadingIcon: Icons.auto_awesome_rounded,
-            variant: AppButtonVariant.primary,
-            size: AppButtonSize.sm,
-            accent: med,
-            loading: _aiFilling,
-            onPressed: _aiFilling ? null : _fillWithAi,
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  label: 'Fill with AI',
+                  leadingIcon: Symbols.auto_awesome_rounded,
+                  variant: AppButtonVariant.primary,
+                  size: AppButtonSize.sm,
+                  accent: med,
+                  loading: _aiFilling,
+                  onPressed: _aiFilling ? null : _fillWithAi,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                label: 'Scan',
+                leadingIcon: Symbols.document_scanner_rounded,
+                variant: AppButtonVariant.secondary,
+                size: AppButtonSize.sm,
+                accent: med,
+                onPressed: _aiFilling ? null : _scanLabel,
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  /// Scan a printed Rx label with the camera and pipe the recognised text
+  /// through the same offline parser as "Fill with AI". On-device OCR (Google
+  /// ML Kit) — no image or text leaves the phone. Degrades gracefully to the
+  /// manual flow if the camera / recognizer is unavailable.
+  Future<void> _scanLabel() async {
+    try {
+      final shot = await ImagePicker()
+          .pickImage(source: ImageSource.camera, imageQuality: 85);
+      if (shot == null) return;
+      if (!mounted) return;
+      FocusScope.of(context).unfocus();
+      setState(() => _aiFilling = true);
+
+      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      String text = '';
+      try {
+        final result =
+            await recognizer.processImage(InputImage.fromFilePath(shot.path));
+        text = result.text.trim();
+      } finally {
+        await recognizer.close();
+      }
+
+      if (text.isEmpty) {
+        if (mounted) {
+          setState(() => _aiFilling = false);
+          _showError("Couldn't read the label. Try better lighting or type it in.");
+        }
+        return;
+      }
+
+      // Show what was read, then parse it with the offline engine.
+      _aiDescController.text = text;
+      final parsed = await AiAssistant().parseMedicine(text);
+      if (!mounted) return;
+      setState(() => _aiFilling = false);
+      if (parsed != null) {
+        setState(() => _applyAiExtraction(parsed));
+        _hapticService.success();
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(parsed != null
+            ? 'Scanned — please review each step'
+            : 'Scanned text added — review and adjust'),
+      ));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _aiFilling = false);
+        _showError('Scan unavailable. You can type the details instead.');
+      }
+    }
   }
 
   Future<void> _fillWithAi() async {
@@ -603,6 +767,21 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       if (unitStr != null) _dosageUnit = unitStr;
     }
 
+    // A bare, unit-less strength the parser pulled from the name ("Dolo 650" →
+    // "650"). Fill the strength field only if nothing already populated it.
+    final strengthRaw = data['strength'];
+    if (strengthRaw != null &&
+        '$strengthRaw'.trim().isNotEmpty &&
+        _strengthController.text.trim().isEmpty) {
+      _strengthController.text = '$strengthRaw'.trim();
+    }
+
+    // Meal timing FIRST — it anchors the auto-generated times below, so
+    // "twice daily after meals" lands on breakfast + dinner rather than a flat
+    // 8am/8pm. Also powers the habit-anchor reminder text.
+    final meal = _parseMealTiming(data);
+    if (meal != null) _mealTiming = meal;
+
     final freq = _parseFrequency(data['frequency']);
     if (freq != null) {
       _frequencyType = freq;
@@ -612,13 +791,29 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         final ivNum = iv is num ? iv.toInt() : int.tryParse('${iv ?? ''}');
         if (ivNum != null && ivNum > 0) _intervalHours = ivNum;
       }
+      // Auto-spaces the reminder times (meal-aligned) — so AI fills the
+      // medicine AND its times, not just the frequency.
       _updateTimesForFrequency();
     }
 
+    // If the user literally typed clock times ("8am and 8pm"), honor those.
     final times = _parseTimes(data['times']);
     if (times.isNotEmpty && !_isPRN) {
       _scheduleTimes = times;
     }
+  }
+
+  /// Map the parser's meal-timing / with-food output to a [MealTiming].
+  MealTiming? _parseMealTiming(Map<String, dynamic> data) {
+    final raw = (data['mealTiming'] ?? data['withFood'])?.toString().toLowerCase();
+    if (raw == null || raw.isEmpty) return null;
+    if (raw == 'true' || raw.contains('with')) return MealTiming.withMeal;
+    if (raw.contains('before') && raw.contains('bed')) return MealTiming.beforeBed;
+    if (raw.contains('before')) return MealTiming.beforeMeal;
+    if (raw.contains('after')) return MealTiming.afterMeal;
+    if (raw.contains('empty')) return MealTiming.emptyStomach;
+    if (raw.contains('wake') || raw.contains('morning')) return MealTiming.wakeUp;
+    return null;
   }
 
   DosageForm? _parseForm(dynamic raw) {
@@ -797,8 +992,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               children: [
                 Icon(
                   _refillReminderEnabled
-                      ? Icons.inventory_2_rounded
-                      : Icons.inventory_2_outlined,
+                      ? Symbols.inventory_2_rounded
+                      : Symbols.inventory_2_rounded,
                   color:
                       _refillReminderEnabled ? ext.mark(med) : ext.textTertiary,
                 ),
@@ -818,14 +1013,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                     ],
                   ),
                 ),
-                Switch(
+                AppSwitch(
                   value: _refillReminderEnabled,
                   onChanged: (v) {
                     _hapticService.toggle();
                     setState(() => _refillReminderEnabled = v);
                   },
-                  activeColor: ext.mark(med),
-                  activeTrackColor: med.container,
+                  accent: med,
                 ),
               ],
             ),
@@ -860,59 +1054,225 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
+  // The four everyday regimens people pick 90% of the time — shown up front as a
+  // compact "times per day" row instead of a 9-item radio list.
+  static const List<FrequencyType> _dailyCounts = [
+    FrequencyType.onceDaily,
+    FrequencyType.twiceDaily,
+    FrequencyType.thriceDaily,
+    FrequencyType.fourTimesDaily,
+  ];
+
+  // The rarer patterns, tucked behind "More schedule options" (progressive
+  // disclosure — Apple Health / Medisafe pattern).
+  static const List<FrequencyType> _advancedFreqs = [
+    FrequencyType.everyXHours,
+    FrequencyType.everyXDays,
+    FrequencyType.specificDays,
+    FrequencyType.cyclical,
+    FrequencyType.asNeeded,
+  ];
+
   Widget _buildFrequencySelector(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final med = ext.medicine;
     final tt = Theme.of(context).textTheme;
+    final isAdvanced = _advancedFreqs.contains(_frequencyType);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Frequency',
+        Text('How often?',
             style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
         const SizedBox(height: AppSpacing.sm),
-        ...FrequencyType.values.map((freq) {
-          final isSelected = _frequencyType == freq;
-          return GestureDetector(
-            onTap: () {
-              _hapticService.selection();
-              setState(() {
-                _frequencyType = freq;
-                _updateTimesForFrequency();
-              });
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isSelected ? med.container : ext.surface,
-                borderRadius: AppRadius.brMd,
-                border: Border.all(
-                  color: isSelected ? med.base : ext.outline,
+        // Primary path: pick a count in one glance (Once → 4× a day).
+        Row(
+          children: [
+            for (var i = 0; i < _dailyCounts.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _buildCountOption(
+                  context,
+                  i + 1,
+                  _dailyCounts[i],
+                  selected: !isAdvanced && _frequencyType == _dailyCounts[i],
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    isSelected
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-                    color: isSelected ? ext.mark(med) : ext.textTertiary,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    freq.displayName,
-                    style: tt.bodyMedium?.copyWith(
-                      color: isSelected ? med.onContainer : ext.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (isAdvanced)
+          _buildAdvancedSummary(context)
+        else
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              label: 'More schedule options',
+              leadingIcon: Symbols.tune_rounded,
+              variant: AppButtonVariant.ghost,
+              size: AppButtonSize.sm,
+              accent: med,
+              onPressed: _showMoreScheduleOptions,
             ),
-          );
-        }),
+          ),
       ],
     );
+  }
+
+  /// One big, two-line "N× a day" tile in the count row.
+  Widget _buildCountOption(BuildContext context, int count, FrequencyType freq,
+      {required bool selected}) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: () {
+        _hapticService.selection();
+        setState(() {
+          _frequencyType = freq;
+          _updateTimesForFrequency();
+        });
+      },
+      child: Container(
+        height: 68,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? med.container : ext.surface,
+          borderRadius: AppRadius.brMd,
+          border: Border.all(
+            color: selected ? med.base : ext.outline,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('$count×',
+                style: tt.titleLarge?.copyWith(
+                  color: selected ? med.onContainer : ext.textPrimary,
+                  fontWeight: FontWeight.w700,
+                )),
+            Text('a day',
+                style: tt.bodySmall?.copyWith(
+                  color: selected ? med.onContainer : ext.textTertiary,
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// When an advanced pattern is active, show it as a summary card with a
+  /// "Change" affordance (instead of the count row) so it's clearly selected.
+  Widget _buildAdvancedSummary(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: med.container,
+        borderRadius: AppRadius.brMd,
+        border: Border.all(color: med.base),
+      ),
+      child: Row(
+        children: [
+          Icon(_freqIcon(_frequencyType), color: med.onContainer, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_frequencyType.displayName,
+                    style: tt.titleMedium?.copyWith(color: med.onContainer)),
+                Text(_freqDescription(_frequencyType),
+                    style: tt.bodySmall?.copyWith(
+                        color: med.onContainer.withOpacity(0.75))),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          AppButton(
+            label: 'Change',
+            variant: AppButtonVariant.ghost,
+            size: AppButtonSize.sm,
+            accent: med,
+            onPressed: _showMoreScheduleOptions,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMoreScheduleOptions() {
+    final med = AppColorsExt.of(context).medicine;
+    AppBottomSheet.show(
+      context,
+      title: 'More schedule options',
+      icon: Symbols.tune_rounded,
+      accent: med,
+      builder: (ctx) {
+        final ext = AppColorsExt.of(ctx);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final f in _advancedFreqs)
+              AppListTile(
+                icon: _freqIcon(f),
+                title: f.displayName,
+                subtitle: _freqDescription(f),
+                accent: med,
+                trailing: _frequencyType == f
+                    ? Icon(Symbols.check_circle_rounded, color: ext.mark(med))
+                    : null,
+                onTap: () {
+                  _hapticService.selection();
+                  setState(() {
+                    _frequencyType = f;
+                    _updateTimesForFrequency();
+                  });
+                  Navigator.pop(ctx);
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  IconData _freqIcon(FrequencyType f) {
+    switch (f) {
+      case FrequencyType.everyXHours:
+        return Symbols.timer_rounded;
+      case FrequencyType.everyXDays:
+        return Symbols.calendar_month_rounded;
+      case FrequencyType.specificDays:
+        return Symbols.event_repeat_rounded;
+      case FrequencyType.cyclical:
+        return Symbols.autorenew_rounded;
+      case FrequencyType.asNeeded:
+        return Symbols.touch_app_rounded;
+      default:
+        return Symbols.schedule_rounded;
+    }
+  }
+
+  String _freqDescription(FrequencyType f) {
+    switch (f) {
+      case FrequencyType.everyXHours:
+        return 'Fixed interval, e.g. every 8 hours';
+      case FrequencyType.everyXDays:
+        return 'Skip days, e.g. every 2 days';
+      case FrequencyType.specificDays:
+        return 'Only on chosen weekdays';
+      case FrequencyType.cyclical:
+        return 'On for a while, then off (e.g. 21 on / 7 off)';
+      case FrequencyType.asNeeded:
+        return 'Take only when you need it (PRN)';
+      default:
+        return '';
+    }
   }
 
   /// Per-frequency configuration: weekday chips, interval steppers, cycle
@@ -1080,7 +1440,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             child: Text(label,
                 style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
           ),
-          stepButton(Icons.remove_rounded, value > min,
+          stepButton(Symbols.remove_rounded, value > min,
               () => onChanged((value - 1).clamp(min, max))),
           Container(
             constraints: const BoxConstraints(minWidth: 88),
@@ -1093,7 +1453,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               ),
             ),
           ),
-          stepButton(Icons.add_rounded, value < max,
+          stepButton(Symbols.add_rounded, value < max,
               () => onChanged((value + 1).clamp(min, max))),
         ],
       ),
@@ -1104,30 +1464,15 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final ext = AppColorsExt.of(context);
     final med = ext.medicine;
     final tt = Theme.of(context).textTheme;
-    final timesLabel = _frequencyType == FrequencyType.everyXHours
-        ? 'First dose'
-        : 'Times';
+    final isInterval = _frequencyType == FrequencyType.everyXHours;
+    final timesLabel = isInterval ? 'First dose' : 'Reminder times';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(timesLabel,
-                style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
-            if (_frequencyType != FrequencyType.everyXHours)
-              AppButton(
-                label: 'Add Time',
-                leadingIcon: Icons.add_rounded,
-                variant: AppButtonVariant.ghost,
-                size: AppButtonSize.sm,
-                accent: med,
-                onPressed: _addTime,
-              ),
-          ],
-        ),
-        if (_frequencyType == FrequencyType.everyXHours)
+        Text(timesLabel,
+            style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+        if (isInterval)
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 4),
             child: Text(
@@ -1137,49 +1482,85 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             ),
           ),
         const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _scheduleTimes.asMap().entries.map((entry) {
-            final index = entry.key;
-            final time = entry.value;
-            final canRemove = _scheduleTimes.length > 1 &&
-                _frequencyType != FrequencyType.everyXHours;
-            return GestureDetector(
-              onTap: () => _editTime(index),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: med.container,
-                  borderRadius: AppRadius.brSm,
-                  border: Border.all(color: med.base),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.access_time_rounded,
-                        size: 18, color: med.onContainer),
-                    const SizedBox(width: 8),
-                    Text(
-                      time.format(context),
-                      style:
-                          tt.labelMedium?.copyWith(color: med.onContainer),
-                    ),
-                    if (canRemove) ...[
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => _removeTime(index),
-                        child: Icon(Icons.close_rounded,
-                            size: 16, color: med.onContainer),
-                      ),
-                    ],
-                  ],
-                ),
+        // Full-width, tappable rows — clearer than small chips, and each carries
+        // a proper 44px remove target (older-adult accessibility).
+        ..._scheduleTimes.asMap().entries.map((entry) {
+          final index = entry.key;
+          final time = entry.value;
+          final canRemove = _scheduleTimes.length > 1 && !isInterval;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildTimeRow(context, index, time, canRemove),
+          );
+        }),
+        if (!isInterval) ...[
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            child: AppButton(
+              label: 'Add another time',
+              leadingIcon: Symbols.add_rounded,
+              variant: AppButtonVariant.secondary,
+              accent: med,
+              onPressed: _addTime,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTimeRow(
+      BuildContext context, int index, TimeOfDay time, bool canRemove) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    final label =
+        _scheduleTimes.length > 1 ? 'Dose ${index + 1}' : 'Reminder';
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _editTime(index),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: med.container,
+                borderRadius: AppRadius.brMd,
+                border: Border.all(color: med.base),
               ),
-            );
-          }).toList(),
+              child: Row(
+                children: [
+                  Icon(Symbols.access_time_rounded,
+                      size: 20, color: med.onContainer),
+                  const SizedBox(width: 12),
+                  Text(label,
+                      style: tt.bodyMedium?.copyWith(color: med.onContainer)),
+                  const Spacer(),
+                  Text(
+                    time.format(context),
+                    style: tt.titleMedium?.copyWith(
+                        color: med.onContainer, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Symbols.edit_rounded, size: 16, color: med.onContainer),
+                ],
+              ),
+            ),
+          ),
         ),
+        if (canRemove) ...[
+          const SizedBox(width: 8),
+          AppIconButton(
+            icon: Symbols.close_rounded,
+            accent: med,
+            size: 44,
+            filled: false,
+            tooltip: 'Remove time',
+            onPressed: () => _removeTime(index),
+          ),
+        ],
       ],
     );
   }
@@ -1238,7 +1619,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             ),
             child: Row(
               children: [
-                Icon(Icons.event_rounded, size: 20, color: ext.mark(med)),
+                Icon(Symbols.event_rounded, size: 20, color: ext.mark(med)),
                 const SizedBox(width: 12),
                 Text('Start',
                     style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
@@ -1276,7 +1657,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               ),
               child: Row(
                 children: [
-                  Icon(Icons.event_available_rounded,
+                  Icon(Symbols.event_available_rounded,
                       size: 20, color: ext.mark(med)),
                   const SizedBox(width: 12),
                   Text('End',
@@ -1336,11 +1717,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   }
 
   Future<void> _pickStartDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _startDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    final picked = await AppDatePicker.show(
+      context,
+      initial: _startDate,
+      first: DateTime.now().subtract(const Duration(days: 365)),
+      last: DateTime.now().add(const Duration(days: 365 * 5)),
     );
     if (picked != null) {
       setState(() {
@@ -1353,13 +1734,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   }
 
   Future<void> _pickEndDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _endDate != null && _endDate!.isAfter(_startDate)
+    final picked = await AppDatePicker.show(
+      context,
+      initial: _endDate != null && _endDate!.isAfter(_startDate)
           ? _endDate!
           : _startDate.add(const Duration(days: 7)),
-      firstDate: _startDate,
-      lastDate: _startDate.add(const Duration(days: 365 * 5)),
+      first: _startDate,
+      last: _startDate.add(const Duration(days: 365 * 5)),
     );
     if (picked != null) {
       setState(() => _endDate = picked);
@@ -1369,28 +1750,10 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   void _updateTimesForFrequency() {
     switch (_frequencyType) {
       case FrequencyType.onceDaily:
-        _scheduleTimes = [const TimeOfDay(hour: 8, minute: 0)];
-        break;
       case FrequencyType.twiceDaily:
-        _scheduleTimes = [
-          const TimeOfDay(hour: 8, minute: 0),
-          const TimeOfDay(hour: 20, minute: 0),
-        ];
-        break;
       case FrequencyType.thriceDaily:
-        _scheduleTimes = [
-          const TimeOfDay(hour: 8, minute: 0),
-          const TimeOfDay(hour: 14, minute: 0),
-          const TimeOfDay(hour: 20, minute: 0),
-        ];
-        break;
       case FrequencyType.fourTimesDaily:
-        _scheduleTimes = [
-          const TimeOfDay(hour: 8, minute: 0),
-          const TimeOfDay(hour: 12, minute: 0),
-          const TimeOfDay(hour: 16, minute: 0),
-          const TimeOfDay(hour: 20, minute: 0),
-        ];
+        _scheduleTimes = _defaultTimesFor(_frequencyType, _mealTiming);
         break;
       case FrequencyType.everyXHours:
         // A single anchor time; the interval fans it out across the day.
@@ -1415,20 +1778,74 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     }
   }
 
+  /// Evenly-spaced default reminder times for a daily [freq] count, anchored to
+  /// meals / waking / bedtime when the [meal] timing implies them (so AI-filled
+  /// or count-picked schedules land near when the dose is actually taken).
+  /// `anytime` keeps the original flat spacing — no behavior change there.
+  List<TimeOfDay> _defaultTimesFor(FrequencyType freq, MealTiming meal) {
+    TimeOfDay t(int h) => TimeOfDay(hour: h, minute: 0);
+    final count = switch (freq) {
+      FrequencyType.onceDaily => 1,
+      FrequencyType.twiceDaily => 2,
+      FrequencyType.thriceDaily => 3,
+      FrequencyType.fourTimesDaily => 4,
+      _ => 1,
+    };
+    late final List<int> hours;
+    switch (meal) {
+      case MealTiming.beforeMeal:
+      case MealTiming.withMeal:
+      case MealTiming.afterMeal:
+        // Around meals: breakfast / lunch / dinner (+ a late dose for 4×).
+        hours = const [
+          [8],
+          [8, 20],
+          [8, 13, 20],
+          [8, 13, 18, 22],
+        ][count - 1];
+        break;
+      case MealTiming.beforeBed:
+        hours = const [
+          [22],
+          [8, 22],
+          [8, 14, 22],
+          [8, 13, 18, 22],
+        ][count - 1];
+        break;
+      case MealTiming.wakeUp:
+      case MealTiming.emptyStomach:
+        // Early / empty-stomach: start at waking.
+        hours = const [
+          [7],
+          [7, 19],
+          [7, 13, 19],
+          [7, 12, 17, 22],
+        ][count - 1];
+        break;
+      case MealTiming.anytime:
+        // Original even spacing — unchanged for the common case.
+        hours = const [
+          [8],
+          [8, 20],
+          [8, 14, 20],
+          [8, 12, 16, 20],
+        ][count - 1];
+        break;
+    }
+    return hours.map(t).toList();
+  }
+
   Future<void> _addTime() async {
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
+    final time = await AppTimePicker.show(context, initial: TimeOfDay.now());
     if (time != null) {
       setState(() => _scheduleTimes.add(time));
     }
   }
 
   Future<void> _editTime(int index) async {
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _scheduleTimes[index],
+    final time = await AppTimePicker.show(
+      context,
+      initial: _scheduleTimes[index],
     );
     if (time != null) {
       setState(() => _scheduleTimes[index] = time);
@@ -1499,7 +1916,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                         : null,
                   ),
                   child: isSelected
-                      ? Icon(Icons.check_rounded,
+                      ? Icon(Symbols.check_rounded,
                           color: _contrastOn(swatchColor), size: 20)
                       : null,
                 ),
@@ -1564,6 +1981,51 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             accent: med,
             textCapitalization: TextCapitalization.sentences,
           ),
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            onTap: () async {
+              _hapticService.selection();
+              final now = DateTime.now();
+              final picked = await showDatePicker(
+                context: context,
+                initialDate:
+                    _expiryDate ?? now.add(const Duration(days: 180)),
+                firstDate: now.subtract(const Duration(days: 365)),
+                lastDate: now.add(const Duration(days: 3650)),
+              );
+              if (picked != null) setState(() => _expiryDate = picked);
+            },
+            child: Row(
+              children: [
+                Icon(Symbols.event_busy_rounded,
+                    color: _expiryDate != null ? ext.mark(med) : ext.textTertiary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Expiry date (optional)', style: tt.titleLarge),
+                      Text(
+                        _expiryDate != null
+                            ? '${_expiryDate!.day}/${_expiryDate!.month}/${_expiryDate!.year}'
+                            : 'Not set',
+                        style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_expiryDate != null)
+                  AppIconButton(
+                    icon: Symbols.close_rounded,
+                    filled: false,
+                    tooltip: 'Clear',
+                    onPressed: () => setState(() => _expiryDate = null),
+                  )
+                else
+                  Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
+              ],
+            ),
+          ),
           const SizedBox(height: AppSpacing.xl),
           AppCard(
             onTap: () {
@@ -1574,8 +2036,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               children: [
                 Icon(
                   _reminderEnabled
-                      ? Icons.notifications_active_rounded
-                      : Icons.notifications_off_rounded,
+                      ? Symbols.notifications_active_rounded
+                      : Symbols.notifications_off_rounded,
                   color: _reminderEnabled ? ext.mark(med) : ext.textTertiary,
                 ),
                 const SizedBox(width: 12),
@@ -1597,14 +2059,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                     ],
                   ),
                 ),
-                Switch(
+                AppSwitch(
                   value: _reminderEnabled,
                   onChanged: (v) {
                     _hapticService.toggle();
                     setState(() => _reminderEnabled = v);
                   },
-                  activeColor: ext.mark(med),
-                  activeTrackColor: med.container,
+                  accent: med,
                 ),
               ],
             ),

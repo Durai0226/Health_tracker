@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io';
@@ -222,18 +223,18 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
   IconData _getSoundIcon(String iconName) {
     switch (iconName) {
-      case 'notifications': return Icons.notifications_rounded;
-      case 'music_note': return Icons.music_note_rounded;
-      case 'notifications_active': return Icons.notifications_active_rounded;
-      case 'flutter_dash': return Icons.flutter_dash_rounded;
-      case 'water': return Icons.water_rounded;
-      case 'wb_sunny': return Icons.wb_sunny_rounded;
-      case 'star': return Icons.star_rounded;
-      case 'warning': return Icons.warning_rounded;
-      case 'alarm': return Icons.alarm_rounded;
-      case 'self_improvement': return Icons.self_improvement_rounded;
-      case 'graphic_eq': return Icons.graphic_eq_rounded;
-      default: return Icons.music_note_rounded;
+      case 'notifications': return Symbols.notifications_rounded;
+      case 'music_note': return Symbols.music_note_rounded;
+      case 'notifications_active': return Symbols.notifications_active_rounded;
+      case 'flutter_dash': return Symbols.flutter_dash_rounded;
+      case 'water': return Symbols.water_rounded;
+      case 'wb_sunny': return Symbols.wb_sunny_rounded;
+      case 'star': return Symbols.star_rounded;
+      case 'warning': return Symbols.warning_rounded;
+      case 'alarm': return Symbols.alarm_rounded;
+      case 'self_improvement': return Symbols.self_improvement_rounded;
+      case 'graphic_eq': return Symbols.graphic_eq_rounded;
+      default: return Symbols.music_note_rounded;
     }
   }
 
@@ -247,11 +248,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         _selectedDate.isBefore(defaultFirst) ? _selectedDate : defaultFirst;
     final initialDate =
         _selectedDate.isAfter(lastDate) ? lastDate : _selectedDate;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
+    final picked = await AppDatePicker.show(
+      context,
+      initial: initialDate,
+      first: firstDate,
+      last: lastDate,
     );
     if (picked != null) {
       setState(() {
@@ -261,10 +262,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Future<void> _selectTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime,
-    );
+    final picked = await AppTimePicker.show(context, initial: _selectedTime);
     if (picked != null) {
       setState(() {
         _selectedTime = picked;
@@ -364,10 +362,10 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           children: [
             AppHeader(
               title: isEditing ? 'Edit Reminder' : 'New Reminder',
-              icon: Icons.notifications_active_rounded,
+              icon: Symbols.notifications_active_rounded,
               accent: rem,
               leading: IconButton(
-                icon: Icon(Icons.close_rounded, color: ext.textPrimary),
+                icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
@@ -413,7 +411,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Schedule ----
                       SectionHeader(
                         title: 'Schedule',
-                        icon: Icons.event_rounded,
+                        icon: Symbols.event_rounded,
                         accent: rem,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -421,14 +419,14 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         child: Column(
                           children: [
                             _buildTimeRow(
-                              icon: Icons.calendar_today_rounded,
+                              icon: Symbols.calendar_today_rounded,
                               label: 'Date',
                               value: dateFormat.format(_selectedDate),
                               onTap: _selectDate,
                             ),
                             Divider(height: AppSpacing.xl, color: ext.outline),
                             _buildTimeRow(
-                              icon: Icons.access_time_rounded,
+                              icon: Symbols.access_time_rounded,
                               label: 'Time',
                               value: _selectedTime.format(context),
                               onTap: _selectTime,
@@ -441,7 +439,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Repeat ----
                       SectionHeader(
                         title: 'Repeat',
-                        icon: Icons.repeat_rounded,
+                        icon: Symbols.repeat_rounded,
                         accent: rem,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -454,7 +452,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                           borderRadius: AppRadius.brMd,
                           dropdownColor: ext.surface,
                           style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
-                          icon: Icon(Icons.keyboard_arrow_down_rounded,
+                          icon: Icon(Symbols.keyboard_arrow_down_rounded,
                               color: ext.mark(rem)),
                           items: RepeatType.values.where((type) {
                             if (type == RepeatType.custom) {
@@ -511,7 +509,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Snooze ----
                       SectionHeader(
                         title: 'Snooze Duration',
-                        icon: Icons.snooze_rounded,
+                        icon: Symbols.snooze_rounded,
                         accent: rem,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -524,7 +522,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                           borderRadius: AppRadius.brMd,
                           dropdownColor: ext.surface,
                           style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
-                          icon: Icon(Icons.keyboard_arrow_down_rounded,
+                          icon: Icon(Symbols.keyboard_arrow_down_rounded,
                               color: ext.mark(rem)),
                           items: [5, 10, 15, 30, 60].map((int value) {
                             return DropdownMenuItem<int>(
@@ -546,7 +544,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Alarm Sound ----
                       SectionHeader(
                         title: 'Alarm Sound',
-                        icon: Icons.music_note_rounded,
+                        icon: Symbols.music_note_rounded,
                         accent: rem,
                         actionLabel: _isPlayingPreview ? 'Stop' : null,
                         onAction: _isPlayingPreview ? _stopPreview : null,
@@ -569,7 +567,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                     ),
                                     child: Icon(
                                       _isCustomSound
-                                          ? Icons.audiotrack_rounded
+                                          ? Symbols.audiotrack_rounded
                                           : _getSoundIcon(_soundOptions[_sound]
                                                   ?['icon'] ??
                                               'notifications'),
@@ -612,8 +610,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                         : _previewSound,
                                     icon: Icon(
                                       _isPlayingPreview
-                                          ? Icons.stop_circle_rounded
-                                          : Icons.play_circle_rounded,
+                                          ? Symbols.stop_circle_rounded
+                                          : Symbols.play_circle_rounded,
                                       color: _isPlayingPreview
                                           ? ext.mark(ext.error)
                                           : ext.mark(rem),
@@ -637,7 +635,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                   // Pick any audio file from the device.
                                   AppChip(
                                     label: 'Choose from device',
-                                    icon: Icons.folder_open_rounded,
+                                    icon: Symbols.folder_open_rounded,
                                     selected: _isCustomSound,
                                     accent: rem,
                                     onTap: _pickCustomSound,
@@ -668,7 +666,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Priority ----
                       SectionHeader(
                         title: 'Priority',
-                        icon: Icons.flag_rounded,
+                        icon: Symbols.flag_rounded,
                         accent: rem,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -695,7 +693,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Category ----
                       SectionHeader(
                         title: 'Category',
-                        icon: Icons.label_rounded,
+                        icon: Symbols.label_rounded,
                         accent: rem,
                         actionLabel: 'Manage',
                         onAction: () async {
@@ -721,7 +719,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                           style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
                           hint: Text('Select Category',
                               style: tt.bodyLarge?.copyWith(color: ext.textTertiary)),
-                          icon: Icon(Icons.keyboard_arrow_down_rounded,
+                          icon: Icon(Symbols.keyboard_arrow_down_rounded,
                               color: ext.mark(rem)),
                           items: [
                             DropdownMenuItem<String?>(
@@ -761,7 +759,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Note ----
                       SectionHeader(
                         title: 'Note',
-                        icon: Icons.sticky_note_2_rounded,
+                        icon: Symbols.sticky_note_2_rounded,
                         accent: rem,
                       ),
                       const SizedBox(height: AppSpacing.sm),
@@ -777,7 +775,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       // ---- Attachments ----
                       SectionHeader(
                         title: 'Attachments',
-                        icon: Icons.attach_file_rounded,
+                        icon: Symbols.attach_file_rounded,
                         accent: rem,
                         actionLabel: _selectedImagePath == null ? 'Add Image' : null,
                         onAction: _selectedImagePath == null ? _pickImage : null,
@@ -806,7 +804,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                   onTap: _removeImage,
                                   child: Padding(
                                     padding: const EdgeInsets.all(6),
-                                    child: Icon(Icons.close_rounded,
+                                    child: Icon(Symbols.close_rounded,
                                         color: ext.mark(ext.error), size: 20),
                                   ),
                                 ),
@@ -824,7 +822,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         fullWidth: true,
                         size: AppButtonSize.lg,
                         loading: _isLoading,
-                        leadingIcon: Icons.check_rounded,
+                        leadingIcon: Symbols.check_rounded,
                         onPressed: _saveReminder,
                       ),
                     ],
@@ -917,9 +915,9 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
   IconData _getPriorityIcon(ReminderPriority priority) {
     switch (priority) {
-      case ReminderPriority.high: return Icons.notifications_active_rounded;
-      case ReminderPriority.medium: return Icons.notifications_rounded;
-      case ReminderPriority.low: return Icons.notifications_none_rounded;
+      case ReminderPriority.high: return Symbols.notifications_active_rounded;
+      case ReminderPriority.medium: return Symbols.notifications_rounded;
+      case ReminderPriority.low: return Symbols.notifications_none_rounded;
     }
   }
 

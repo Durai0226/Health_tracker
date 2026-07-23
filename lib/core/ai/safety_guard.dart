@@ -34,17 +34,38 @@ class SafetyGuard {
         caseSensitive: false),
     RegExp(r'\b(anaphylaxis|throat (closing|swelling)|swollen (tongue|throat)|severe allergic)\b',
         caseSensitive: false),
-    RegExp(r'\b(suicidal|kill myself|end my life|want to die|self.?harm)\b', caseSensitive: false),
     RegExp(r'\b(unconscious|unresponsive|passed out|seizure|convulsi)\b', caseSensitive: false),
     RegExp(r'\b(severe bleeding|bleeding (won\x27t|will not) stop|coughing up blood|vomiting blood)\b',
         caseSensitive: false),
   ];
 
-  /// Returns a fixed emergency card if [text] contains a red flag, else null.
-  /// Uses the user's [locale] to nudge toward the right number without hard-
-  /// coding a country-specific one (e.g. 911 vs 112 vs 999).
+  // Mental-health crisis / self-harm red flags — routed to CRISIS resources
+  // (not the generic "call an ambulance" card), checked before other emergencies.
+  static final List<RegExp> _crisisPatterns = [
+    RegExp(
+        r'\b(suicid(e|al)|kill myself|killing myself|end my life|ending my life|'
+        r"want to die|wanna die|don.?t want to (live|be here)|no reason to live|"
+        r'self.?harm|harm(ing)? myself|hurt(ing)? myself|cut myself)\b',
+        caseSensitive: false),
+  ];
+
+  /// Returns a fixed emergency/crisis card if [text] contains a red flag, else
+  /// null. Uses the user's [locale] to nudge toward the right number without
+  /// hard-coding a country-specific one (e.g. 911 vs 112 vs 999).
   static String? emergencyResponse(String text, {String? locale}) {
     final t = text.toLowerCase();
+
+    // Mental-health crisis takes priority + gets its own compassionate card.
+    if (_crisisPatterns.any((p) => p.hasMatch(t))) {
+      final line = _crisisLineFor(locale);
+      return '💙 You matter, and you don\'t have to go through this alone.\n\n'
+          'If you\'re thinking about harming yourself, please reach out right '
+          'now — talk to someone who can help:\n\n$line\n\n'
+          'If you\'re in immediate danger, call your local emergency number or '
+          'go to the nearest emergency department. This app can\'t provide crisis '
+          'care, but people who can are available 24/7.';
+    }
+
     final hit = _emergencyPatterns.any((p) => p.hasMatch(t));
     if (!hit) return null;
     final number = _emergencyNumberFor(locale);
@@ -52,6 +73,28 @@ class SafetyGuard {
         'If you or someone else is in danger, call your local emergency number '
         '$number now, or go to the nearest emergency department. '
         'Do not wait for an app.';
+  }
+
+  /// Best-effort local crisis line from a locale string. Falls back to an
+  /// international pointer rather than guessing wrong.
+  static String _crisisLineFor(String? locale) {
+    final l = (locale ?? '').toLowerCase();
+    if (l.contains('us') || l.startsWith('en_us')) {
+      return '• US: call or text 988 (Suicide & Crisis Lifeline)\n'
+          '• Crisis Text Line: text HOME to 741741';
+    }
+    if (l.contains('gb') || l.contains('uk')) {
+      return '• UK & ROI: call 116 123 (Samaritans), free, 24/7\n'
+          '• Or text SHOUT to 85258';
+    }
+    if (l.contains('in')) {
+      return '• India: call 9152987821 (iCall) or 112 for emergencies';
+    }
+    if (l.contains('au')) {
+      return '• Australia: call 13 11 14 (Lifeline), 24/7';
+    }
+    return '• Find your local crisis line at findahelpline.com\n'
+        '• Or call your local emergency number';
   }
 
   /// Best-effort local emergency number from a locale string; falls back to a

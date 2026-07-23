@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../services/relaxation_game_service.dart';
 import '../widgets/relaxation_game_widgets.dart';
@@ -268,7 +269,7 @@ class _ColorBloomGameState extends State<ColorBloomGame>
                 borderRadius: BorderRadius.circular(16),
                 padding: const EdgeInsets.all(12),
                 child: const Icon(
-                  Icons.arrow_back_rounded,
+                  Symbols.arrow_back_rounded,
                   color: Colors.white70,
                   size: 24,
                 ),
@@ -383,7 +384,7 @@ class _ColorBloomGameState extends State<ColorBloomGame>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.slow_motion_video,
+                    Symbols.slow_motion_video_rounded,
                     color: _slowMotionMode ? const Color(0xFF10B981) : Colors.white70,
                     size: 20,
                   ),
@@ -411,7 +412,7 @@ class _ColorBloomGameState extends State<ColorBloomGame>
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh, color: Colors.white70, size: 20),
+                  Icon(Symbols.refresh_rounded, color: Colors.white70, size: 20),
                   SizedBox(width: 8),
                   Text(
                     'Clear',

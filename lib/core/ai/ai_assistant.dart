@@ -7,6 +7,24 @@ import 'safety_guard.dart';
 import 'ai_merge.dart';
 import 'on_device_llm_engine.dart';
 import 'openfda_grounding.dart';
+import 'package:flutter/foundation.dart';
+import 'rag_service.dart';
+import 'memory_service.dart';
+
+/// A grounded answer from the curated knowledge base: the (verbatim or, later,
+/// LLM-phrased) answer text plus the retrieved chunks that back it, so the UI
+/// can render Source citations. Null is never returned here — the caller gets
+/// null from [AiAssistant.groundedAnswer] when retrieval abstains.
+class GroundedAnswer {
+  final String text;
+  final List<RetrievedChunk> sources;
+
+  /// The engine that produced [text]: ruleBased for the v1 verbatim path, or the
+  /// active LLM tier when it phrased the answer.
+  final AiEngineKind engine;
+  const GroundedAnswer(this.text, this.sources,
+      {this.engine = AiEngineKind.ruleBased});
+}
 
 /// Single entry point for all AI in the app. Features call intent methods here
 /// and never touch a specific provider.
@@ -44,6 +62,63 @@ class AiAssistant {
 
   Future<void> setPreference(AiEnginePreference p) async {
     await CleanStorageService.setAppPreference(_kPref, p.name);
+  }
+
+  // ---- On-device LLM (opt-in, phased) ---------------------------------------
+  static const _kOnDeviceEnabled = 'aiOnDeviceEnabled';
+  static const _kOnDeviceModelUrl = 'aiOnDeviceModelUrl';
+
+  bool get onDeviceSupported => OnDeviceLlmEngine.isSupportedPlatform;
+
+  bool get onDeviceEnabled =>
+      CleanStorageService.getAppPreference(_kOnDeviceEnabled, false) == true;
+
+  Future<void> setOnDeviceEnabled(bool v) async {
+    await CleanStorageService.setAppPreference(_kOnDeviceEnabled, v);
+    if (!v) {
+      final e = onDeviceEngine;
+      if (e is OnDeviceLlmEngine) await e.dispose();
+    }
+  }
+
+  String get onDeviceModelUrl =>
+      CleanStorageService.getAppPreference(_kOnDeviceModelUrl, '')?.toString() ??
+      '';
+
+  Future<void> setOnDeviceModelUrl(String url) =>
+      CleanStorageService.setAppPreference(_kOnDeviceModelUrl, url.trim());
+
+  Future<bool> onDeviceModelInstalled() async {
+    final e = onDeviceEngine;
+    return e is OnDeviceLlmEngine ? e.isModelInstalled() : false;
+  }
+
+  /// Streams download progress (0–100) for the configured model.
+  Stream<int> downloadOnDeviceModel(String url) {
+    final e = onDeviceEngine;
+    return e is OnDeviceLlmEngine ? e.downloadModel(url) : const Stream.empty();
+  }
+
+  /// Attaches the downloaded model so [activeKind] can start using it.
+  Future<bool> activateOnDevice() async {
+    final e = onDeviceEngine;
+    return e is OnDeviceLlmEngine ? e.init() : false;
+  }
+
+  Future<void> removeOnDeviceModel() async {
+    final e = onDeviceEngine;
+    if (e is OnDeviceLlmEngine) await e.deleteModel();
+  }
+
+  /// Called from deferred startup: if the user enabled on-device AI and a model
+  /// is present, attach it (best-effort, never blocks or throws).
+  Future<void> maybeActivateOnDeviceAtStartup() async {
+    if (!onDeviceEnabled || !onDeviceSupported) return;
+    try {
+      if (await onDeviceModelInstalled()) await activateOnDevice();
+    } catch (e) {
+      debugPrint('⚠️ On-device startup activation skipped: $e');
+    }
   }
 
   /// Which engine will serve requests right now (for Settings display).
@@ -167,6 +242,89 @@ class AiAssistant {
         totalSessions: totalSessions);
   }
 
+  Future<String?> stepsTip({
+    required int steps,
+    required int goal,
+    required int streakDays,
+    required int hour,
+  }) async {
+    final llm = _activeLlm();
+    if (llm != null) {
+      final t = await llm.completeText(
+        system:
+            'You are an encouraging activity coach. Reply with ONE short, specific '
+            'tip (max 2 sentences).',
+        user: 'Steps $steps of $goal goal; streak $streakDays days; hour $hour.',
+      );
+      if (t != null) return t;
+    }
+    return _rule.stepsTip(
+        steps: steps, goal: goal, streakDays: streakDays, hour: hour);
+  }
+
+  Future<String?> sleepTip({
+    required int lastNightMinutes,
+    required int targetMinutes,
+    required int debtMinutes,
+    required double regularity,
+  }) async {
+    final llm = _activeLlm();
+    if (llm != null) {
+      final t = await llm.completeText(
+        system:
+            'You are a calm sleep coach. Reply with ONE short, actionable '
+            'suggestion (max 2 sentences). Never give a diagnosis.',
+        user:
+            'Last night ${lastNightMinutes}m of ${targetMinutes}m target; weekly '
+            'debt ${debtMinutes}m; regularity ${regularity.toStringAsFixed(2)}.',
+      );
+      if (t != null) return t;
+    }
+    return _rule.sleepTip(
+        lastNightMinutes: lastNightMinutes,
+        targetMinutes: targetMinutes,
+        debtMinutes: debtMinutes,
+        regularity: regularity);
+  }
+
+  /// Honest cycle companion. Fertility is an estimate (never contraception),
+  /// never a diagnosis — the LLM output is disclaimer-wrapped.
+  Future<String?> cycleInsight({
+    int? daysUntilNextPeriod,
+    bool inFertileWindow = false,
+    bool isLate = false,
+    int lateDays = 0,
+    bool irregular = false,
+    bool learning = false,
+    bool pregnancy = false,
+    int? cycleDay,
+  }) async {
+    final llm = _activeLlm();
+    if (llm != null) {
+      final t = await llm.completeText(
+        system:
+            'You are a supportive, non-judgmental menstrual-cycle companion. Reply '
+            'with ONE short, honest sentence (max 2). Any fertility info is an '
+            'estimate and NOT reliable for contraception. Never give a diagnosis.',
+        user:
+            'daysUntilNext ${daysUntilNextPeriod ?? 'unknown'}, fertileWindow '
+            '$inFertileWindow, late $isLate ($lateDays d), irregular $irregular, '
+            'learning $learning, pregnancy $pregnancy, cycleDay ${cycleDay ?? 'unknown'}.',
+      );
+      if (t != null) return SafetyGuard.ensureDisclaimer(t);
+    }
+    return _rule.cycleInsight(
+      daysUntilNextPeriod: daysUntilNextPeriod,
+      inFertileWindow: inFertileWindow,
+      isLate: isLate,
+      lateDays: lateDays,
+      irregular: irregular,
+      learning: learning,
+      pregnancy: pregnancy,
+      cycleDay: cycleDay,
+    );
+  }
+
   Future<String?> dailyBriefing({
     required int medsTaken,
     required int medsTotal,
@@ -174,6 +332,9 @@ class AiAssistant {
     required int focusMinutes,
     required int remindersLeft,
     required int hour,
+    int steps = 0,
+    int stepGoal = 0,
+    int sleepMinutes = 0,
   }) async {
     final llm = _activeLlm();
     if (llm != null) {
@@ -181,7 +342,8 @@ class AiAssistant {
         system:
             'Give a short, warm daily briefing (max 2 sentences) from the status.',
         user:
-            'meds $medsTaken/$medsTotal, water $waterPct%, focus ${focusMinutes}m, '
+            'meds $medsTaken/$medsTotal, water $waterPct%, steps $steps/$stepGoal, '
+            'sleep ${sleepMinutes}m, focus ${focusMinutes}m, '
             'reminders left $remindersLeft, hour $hour.',
       );
       if (t != null) return t;
@@ -193,6 +355,9 @@ class AiAssistant {
       focusMinutes: focusMinutes,
       remindersLeft: remindersLeft,
       hour: hour,
+      steps: steps,
+      stepGoal: stepGoal,
+      sleepMinutes: sleepMinutes,
     );
   }
 
@@ -270,6 +435,54 @@ class AiAssistant {
       if (t != null) return SafetyGuard.ensureDisclaimer(t);
     }
     return SafetyGuard.ensureDisclaimer(_rule.explainInteractions(descriptions));
+  }
+
+  /// Grounded knowledge-base answer — the single retrieval seam every AI tier
+  /// shares. Retrieves curated chunks (FTS5/BM25) + the user's active memory,
+  /// and:
+  ///  • v1 (no LLM active) → returns the top chunk VERBATIM (+ disclaimer).
+  ///  • Phase 2 (on-device Gemma active) → the LLM answers ONLY from the
+  ///    retrieved context and MUST refuse if it isn't there — so even the LLM
+  ///    tail stays cited, disclaimered, and abstaining.
+  /// Returns null when nothing relevant is retrieved (the caller then abstains).
+  Future<GroundedAnswer?> groundedAnswer(String question) async {
+    final chunks = await const RagService().retrieve(question, k: 3);
+    if (chunks.isEmpty) return null; // abstain — never guess
+
+    final top = chunks.first;
+    final llm = _activeLlm();
+    if (llm != null) {
+      final context =
+          chunks.map((c) => '- ${c.title}: ${c.body}').join('\n');
+      // Memory is device-only: it grounds the on-device LLM but is NEVER put in
+      // a prompt bound for the cloud engine (the system prompt isn't redacted,
+      // and free-text memories like "trying to conceive" must not leave the
+      // device). Cloud answers stay grounded on the curated KB alone.
+      final memory =
+          llm.id == 'cloud' ? null : await const MemoryService().contextBlock();
+      final t = await llm.completeText(
+        system: 'Answer the user ONLY from the CONTEXT below. If the context '
+            'does not contain the answer, say you don\'t know — do not use '
+            'outside knowledge. Cite the source title. Never give a diagnosis.\n\n'
+            'CONTEXT:\n$context'
+            '${memory != null ? '\n\nUSER NOTES:\n$memory' : ''}',
+        user: _redact(question, llm),
+      );
+      if (t != null && t.trim().isNotEmpty) {
+        final kind = llm.id == 'cloud'
+            ? AiEngineKind.cloud
+            : AiEngineKind.onDevice;
+        return GroundedAnswer(SafetyGuard.ensureDisclaimer(t), chunks,
+            engine: kind);
+      }
+      // LLM produced nothing usable → fall through to the deterministic answer.
+    }
+
+    // v1 deterministic: verbatim curated text. 'app' snippets carry their own
+    // framing; medical topics get the not-a-diagnosis note appended.
+    final text =
+        top.topic == 'app' ? top.body : SafetyGuard.ensureDisclaimer(top.body);
+    return GroundedAnswer(text, chunks, engine: AiEngineKind.ruleBased);
   }
 
   /// Light-touch PII scrub before an off-device (cloud) call (defense-in-depth;

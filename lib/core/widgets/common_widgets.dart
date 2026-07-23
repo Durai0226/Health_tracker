@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_spacing.dart';
@@ -639,15 +640,15 @@ class AnalyticsCard extends StatelessWidget {
     
     switch (trend) {
       case 'up':
-        icon = Icons.trending_up_rounded;
+        icon = Symbols.trending_up_rounded;
         bgColor = AppColors.success;
         break;
       case 'down':
-        icon = Icons.trending_down_rounded;
+        icon = Symbols.trending_down_rounded;
         bgColor = AppColors.error;
         break;
       default:
-        icon = Icons.remove_rounded;
+        icon = Symbols.remove_rounded;
         bgColor = AppColors.textSecondary;
     }
 

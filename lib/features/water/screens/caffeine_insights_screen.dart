@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../../../core/design/app_colors_ext.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -80,7 +81,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
         backgroundColor: Colors.brown.shade700,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: const Icon(Symbols.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -96,7 +97,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, size: 64, color: ext.error.base),
+                Icon(Symbols.error_rounded, size: 64, color: ext.error.base),
                 const SizedBox(height: 16),
                 const Text('Failed to load caffeine data'),
                 const SizedBox(height: 16),
@@ -259,21 +260,21 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           Row(
             children: [
               _buildSummaryItem(
-                icon: Icons.coffee,
+                icon: Symbols.coffee_rounded,
                 value: '${caffeinedrinks.length}',
                 label: 'Drinks',
                 color: Colors.brown,
               ),
               const SizedBox(width: 16),
               _buildSummaryItem(
-                icon: Icons.speed,
+                icon: Symbols.speed_rounded,
                 value: '${todayData.totalCaffeineMg}mg',
                 label: 'Total',
                 color: _caffeineColor,
               ),
               const SizedBox(width: 16),
               _buildSummaryItem(
-                icon: Icons.water_drop,
+                icon: Symbols.water_drop_rounded,
                 value: '${_calculateHydrationImpact()}ml',
                 label: 'Hydration Impact',
                 color: ext.mark(ext.water),
@@ -624,7 +625,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.lightbulb_outline,
+              Icon(Symbols.lightbulb_rounded,
                   color: ext.isDark ? ext.mark(ext.warning) : Colors.orange.shade800),
               const SizedBox(width: 8),
               Text(

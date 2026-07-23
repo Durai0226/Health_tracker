@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_colors_ext.dart';
 import '../../../core/widgets/common_tab_widgets.dart';
@@ -74,7 +75,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
       pinned: true,
       backgroundColor: headerTeal,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+        icon: const Icon(Symbols.arrow_back_rounded, color: Colors.white),
         onPressed: () => Navigator.pop(context),
       ),
       flexibleSpace: FlexibleSpaceBar(
@@ -99,7 +100,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.emoji_events, color: Colors.amber, size: 32),
+                  const Icon(Symbols.emoji_events_rounded, color: Colors.amber, size: 32),
                   const SizedBox(width: 8),
                   Text(
                     '${_userAchievements.unlockedAchievements.length}/${_userAchievements.achievements.length}',
@@ -144,19 +145,19 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildStatItem(
-                icon: Icons.stars,
+                icon: Symbols.stars_rounded,
                 value: '${_userAchievements.totalPoints}',
                 label: 'Total Points',
               ),
               Container(width: 1, height: 50, color: Colors.white24),
               _buildStatItem(
-                icon: Icons.trending_up,
+                icon: Symbols.trending_up_rounded,
                 value: 'Level ${_userAchievements.level}',
                 label: '${_userAchievements.pointsToNextLevel} to next',
               ),
               Container(width: 1, height: 50, color: Colors.white24),
               _buildStatItem(
-                icon: Icons.local_fire_department,
+                icon: Symbols.local_fire_department_rounded,
                 value: '${_userAchievements.currentStreak}',
                 label: 'Day Streak',
               ),
@@ -225,7 +226,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.emoji_events_outlined,
+              Symbols.emoji_events_rounded,
               size: 64,
               color: ext.textSecondary.withOpacity(0.5),
             ),

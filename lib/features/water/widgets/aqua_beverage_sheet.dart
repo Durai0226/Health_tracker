@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../theme/aqua_theme.dart';
 import '../models/beverage_type.dart';
@@ -21,7 +22,7 @@ class AquaBeverageSheet extends StatefulWidget {
     return AppBottomSheet.show<String>(
       context,
       title: 'Select Beverage',
-      icon: Icons.local_drink_rounded,
+      icon: Symbols.local_drink_rounded,
       accent: ext.water,
       builder: (ctx) => AquaBeverageSheet(
         selectedBeverageId: currentBeverageId,

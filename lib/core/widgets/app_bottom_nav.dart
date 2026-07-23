@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 import '../constants/app_colors.dart';
@@ -22,7 +23,7 @@ class AppBottomNav extends StatelessWidget {
     this.activeColor,
     this.showFab = false,
     this.onFabTap,
-    this.fabIcon = Icons.add_rounded,
+    this.fabIcon = Symbols.add_rounded,
   });
 
   @override
@@ -209,7 +210,7 @@ class FeatureNavFab extends StatelessWidget {
     super.key,
     required this.onTap,
     required this.color,
-    this.icon = Icons.add_rounded,
+    this.icon = Symbols.add_rounded,
   });
 
   @override

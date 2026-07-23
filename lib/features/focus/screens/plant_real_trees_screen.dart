@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/focus_coins.dart';
 import '../services/coins_service.dart';
@@ -61,7 +62,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.arrow_back_rounded, size: 20),
+          child: const Icon(Symbols.arrow_back_rounded, size: 20),
         ),
       ),
       title: const Text(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -65,7 +66,7 @@ class _FocusDurationsSettingsScreenState extends State<FocusDurationsSettingsScr
         backgroundColor: const Color(0xFFF5F5F5),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87),
+          icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Session Durations', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
@@ -137,7 +138,7 @@ class _FocusDurationsSettingsScreenState extends State<FocusDurationsSettingsScr
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(color: _primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-            child: Icon(Icons.coffee_outlined, color: _primaryColor),
+            child: Icon(Symbols.coffee_rounded, color: _primaryColor),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -151,12 +152,12 @@ class _FocusDurationsSettingsScreenState extends State<FocusDurationsSettingsScr
           ),
           Row(
             children: [
-              _buildAdjustButton(Icons.remove, value > min ? () => onChanged(value - 1) : null),
+              _buildAdjustButton(Symbols.remove_rounded, value > min ? () => onChanged(value - 1) : null),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text('$value', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _primaryColor)),
               ),
-              _buildAdjustButton(Icons.add, value < max ? () => onChanged(value + 1) : null),
+              _buildAdjustButton(Symbols.add_rounded, value < max ? () => onChanged(value + 1) : null),
             ],
           ),
         ],

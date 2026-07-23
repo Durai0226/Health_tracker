@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import '../theme/aqua_theme.dart';
@@ -310,7 +311,7 @@ class _AquaDropletWidgetState extends State<AquaDropletWidget>
                 if (isComplete)
                   const Padding(
                     padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.check, color: Colors.white, size: 16),
+                    child: Icon(Symbols.check_rounded, color: Colors.white, size: 16),
                   ),
                 Text(
                   '${(progress * 100).toInt()}%',

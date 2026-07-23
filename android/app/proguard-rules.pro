@@ -28,3 +28,11 @@
 -keep class com.google.android.play.core.** { *; }
 -dontwarn com.google.android.play.core.**
 -keep interface com.google.android.play.core.** { *; }
+
+# flutter_gemma / MediaPipe GenAI (on-device LLM) references optional vision +
+# protobuf classes that aren't bundled (we use TEXT-only inference). Keep the
+# GenAI classes and suppress R8 warnings for the missing optional references.
+-keep class com.google.mediapipe.** { *; }
+-keep class com.google.protobuf.** { *; }
+-dontwarn com.google.mediapipe.**
+-dontwarn com.google.protobuf.**

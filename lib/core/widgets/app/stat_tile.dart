@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
 import 'app_card.dart';
 
@@ -32,8 +33,12 @@ class StatTile extends StatelessWidget {
     final s = accent ?? AccentScope.swatchOf(context);
     final tt = Theme.of(context).textTheme;
 
+    // In a row (compact) each tile is centred within its equal-width cell, so
+    // short values ("0", "0/0") sit balanced instead of hugging the left edge.
+    // Standalone tiles keep their natural left alignment.
     final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          compact ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         if (icon != null)
@@ -44,6 +49,7 @@ class StatTile extends StatelessWidget {
           ),
         if (icon != null) const SizedBox(height: 10),
         Row(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
@@ -51,6 +57,8 @@ class StatTile extends StatelessWidget {
               child: Text(value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  textAlign:
+                      compact ? TextAlign.center : TextAlign.start,
                   style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             ),
             if (trend != null) ...[
@@ -63,20 +71,25 @@ class StatTile extends StatelessWidget {
         Text(label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            textAlign: compact ? TextAlign.center : TextAlign.start,
             style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
       ],
     );
 
     if (compact) {
-      return GestureDetector(onTap: onTap, child: content);
+      return GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Center(child: content),
+      );
     }
     return AppCard(onTap: onTap, child: content);
   }
 
   IconData get _trendIcon => switch (trend!) {
-        StatTrend.up => Icons.trending_up_rounded,
-        StatTrend.down => Icons.trending_down_rounded,
-        StatTrend.flat => Icons.trending_flat_rounded,
+        StatTrend.up => Symbols.trending_up_rounded,
+        StatTrend.down => Symbols.trending_down_rounded,
+        StatTrend.flat => Symbols.trending_flat_rounded,
       };
 
   Color _trendColor(AppColorsExt ext) => switch (trend!) {
@@ -108,12 +121,24 @@ class StatTileRow extends StatelessWidget {
         ),
       ));
       if (i != tiles.length - 1) {
-        children.add(Container(width: 1, height: 40, color: ext.outline));
+        // Full-height hairline divider (IntrinsicHeight + stretch) with a small
+        // vertical inset — matches the cell height instead of a floating stub.
+        children.add(const SizedBox(width: 4));
+        children.add(Container(
+          width: 1,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          color: ext.outline,
+        ));
         children.add(const SizedBox(width: 4));
       }
     }
     return AppCard(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: children),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
+      ),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/ai/ai_assistant.dart';
 import '../../../core/ai/insight_engine.dart';
@@ -157,11 +158,11 @@ class _FocusScreenState extends State<FocusScreen> {
     return AppHeader(
       title: 'Focus',
       greeting: _focusService.isRunning ? 'Stay focused' : 'Ready to focus?',
-      icon: Icons.center_focus_strong_rounded,
+      icon: Symbols.center_focus_strong_rounded,
       accent: ext.focus,
       actions: [
         AppIconButton(
-          icon: Icons.spa_rounded,
+          icon: Symbols.spa_rounded,
           accent: ext.success,
           onPressed: () {
             _hapticService.navigation();
@@ -169,7 +170,7 @@ class _FocusScreenState extends State<FocusScreen> {
           },
         ),
         AppIconButton(
-          icon: Icons.park_rounded,
+          icon: Symbols.park_rounded,
           accent: ext.focus,
           onPressed: () {
             _hapticService.navigation();
@@ -177,7 +178,7 @@ class _FocusScreenState extends State<FocusScreen> {
           },
         ),
         AppIconButton(
-          icon: Icons.insights_rounded,
+          icon: Symbols.insights_rounded,
           accent: ext.info,
           onPressed: () {
             _hapticService.navigation();
@@ -189,7 +190,7 @@ class _FocusScreenState extends State<FocusScreen> {
         children: [
           AppChip(
             label: '${_focusService.stats.currentStreak} day streak',
-            icon: Icons.local_fire_department_rounded,
+            icon: Symbols.local_fire_department_rounded,
             selected: true,
             accent: ext.warning,
           ),
@@ -197,7 +198,7 @@ class _FocusScreenState extends State<FocusScreen> {
           // Live coin balance (FOCUS-1). Rebuilds via the merged ListenableBuilder.
           AppChip(
             label: '${_coinsService.totalCoins} coins',
-            icon: Icons.monetization_on_rounded,
+            icon: Symbols.monetization_on_rounded,
             selected: true,
             accent: ext.focus,
           ),
@@ -310,7 +311,7 @@ class _FocusScreenState extends State<FocusScreen> {
         ? (_focusService.isLongBreak ? 'Long Break' : 'Short Break')
         : 'Focus';
     final IconData icon =
-        onBreak ? Icons.self_improvement_rounded : Icons.center_focus_strong_rounded;
+        onBreak ? Symbols.self_improvement_rounded : Symbols.center_focus_strong_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
@@ -375,7 +376,7 @@ class _FocusScreenState extends State<FocusScreen> {
         label: _focusService.mode == FocusMode.pomodoro
             ? 'Start Pomodoro'
             : 'Start Focus',
-        leadingIcon: Icons.play_arrow_rounded,
+        leadingIcon: Symbols.play_arrow_rounded,
         accent: ext.focus,
         size: AppButtonSize.lg,
         fullWidth: true,
@@ -393,8 +394,8 @@ class _FocusScreenState extends State<FocusScreen> {
           child: AppButton(
             label: _focusService.isPaused ? 'Resume' : 'Pause',
             leadingIcon: _focusService.isPaused
-                ? Icons.play_arrow_rounded
-                : Icons.pause_rounded,
+                ? Symbols.play_arrow_rounded
+                : Symbols.pause_rounded,
             accent: accent,
             size: AppButtonSize.lg,
             fullWidth: true,
@@ -413,7 +414,7 @@ class _FocusScreenState extends State<FocusScreen> {
         Expanded(
           child: AppButton(
             label: 'Give Up',
-            leadingIcon: Icons.close_rounded,
+            leadingIcon: Symbols.close_rounded,
             variant: AppButtonVariant.danger,
             size: AppButtonSize.lg,
             fullWidth: true,
@@ -439,8 +440,8 @@ class _FocusScreenState extends State<FocusScreen> {
           _focusService.setMode(FocusMode.values[i]);
         },
         items: const [
-          SegmentItem(icon: Icons.timer_outlined, label: 'Single'),
-          SegmentItem(icon: Icons.repeat_rounded, label: 'Pomodoro'),
+          SegmentItem(icon: Symbols.timer_rounded, label: 'Single'),
+          SegmentItem(icon: Symbols.repeat_rounded, label: 'Pomodoro'),
         ],
       ),
     );
@@ -472,7 +473,7 @@ class _FocusScreenState extends State<FocusScreen> {
         children: [
           AiInsightCard(
             title: 'Focus coach',
-            icon: Icons.psychology_rounded,
+            icon: Symbols.psychology_rounded,
             accent: ext.focus,
             cacheKey:
                 'focus:${_focusService.todayMinutes ~/ 15}:${_focusService.stats.currentStreak}:${_focusService.stats.totalSessions}',
@@ -506,7 +507,7 @@ class _FocusScreenState extends State<FocusScreen> {
         children: [
           SectionHeader(
             title: 'Pomodoro',
-            icon: Icons.repeat_rounded,
+            icon: Symbols.repeat_rounded,
             accent: ext.focus,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -616,7 +617,7 @@ class _FocusScreenState extends State<FocusScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeader(title: 'Duration', icon: Icons.timer_outlined, accent: ext.focus),
+          SectionHeader(title: 'Duration', icon: Symbols.timer_rounded, accent: ext.focus),
           const SizedBox(height: AppSpacing.sm),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -639,7 +640,7 @@ class _FocusScreenState extends State<FocusScreen> {
                   label: isCustom
                       ? '${_focusService.selectedMinutes} min'
                       : 'Custom',
-                  icon: Icons.tune_rounded,
+                  icon: Symbols.tune_rounded,
                   selected: isCustom,
                   accent: ext.focus,
                   onTap: _showCustomDurationSheet,
@@ -661,7 +662,7 @@ class _FocusScreenState extends State<FocusScreen> {
     AppBottomSheet.show(
       context,
       title: 'Custom duration',
-      icon: Icons.tune_rounded,
+      icon: Symbols.tune_rounded,
       accent: AppColorsExt.of(context).focus,
       builder: (ctx) {
         final ext = AppColorsExt.of(ctx);
@@ -683,7 +684,7 @@ class _FocusScreenState extends State<FocusScreen> {
                   controller: controller,
                   label: 'Minutes',
                   hint: 'e.g. 50',
-                  prefixIcon: Icons.timer_outlined,
+                  prefixIcon: Symbols.timer_rounded,
                   accent: ext.focus,
                   keyboardType: TextInputType.number,
                   errorText: errorText,
@@ -722,7 +723,7 @@ class _FocusScreenState extends State<FocusScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeader(title: 'Activity', icon: Icons.category_outlined, accent: ext.focus),
+          SectionHeader(title: 'Activity', icon: Symbols.category_rounded, accent: ext.focus),
           const SizedBox(height: AppSpacing.sm),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -764,7 +765,7 @@ class _FocusScreenState extends State<FocusScreen> {
         children: [
           SectionHeader(
             title: 'Tags',
-            icon: Icons.label_outline_rounded,
+            icon: Symbols.label_rounded,
             accent: ext.focus,
             actionLabel: 'Manage',
             onAction: () {
@@ -823,7 +824,7 @@ class _FocusScreenState extends State<FocusScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isSelected) ...[
-              Icon(Icons.check_rounded, size: 15, color: tagColor),
+              Icon(Symbols.check_rounded, size: 15, color: tagColor),
               const SizedBox(width: 6),
             ] else if (tag.emoji != null) ...[
               Text(tag.emoji!, style: const TextStyle(fontSize: 14)),
@@ -857,7 +858,7 @@ class _FocusScreenState extends State<FocusScreen> {
               Expanded(
                 child: SectionHeader(
                   title: 'Choose Plant',
-                  icon: Icons.local_florist_outlined,
+                  icon: Symbols.local_florist_rounded,
                   accent: ext.focus,
                 ),
               ),
@@ -962,7 +963,7 @@ class _FocusScreenState extends State<FocusScreen> {
         children: [
           SectionHeader(
             title: 'Ambient Sound',
-            icon: Icons.music_note_outlined,
+            icon: Symbols.music_note_rounded,
             accent: ext.focus,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1002,8 +1003,8 @@ class _FocusScreenState extends State<FocusScreen> {
                 ),
                 AppIconButton(
                   icon: _focusService.isAudioPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
+                      ? Symbols.pause_rounded
+                      : Symbols.play_arrow_rounded,
                   accent: ext.focus,
                   onPressed: () => _focusService.toggleAudio(),
                 ),
@@ -1025,7 +1026,7 @@ class _FocusScreenState extends State<FocusScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeader(title: 'Breathing', icon: Icons.air_outlined, accent: ext.focus),
+          SectionHeader(title: 'Breathing', icon: Symbols.air_rounded, accent: ext.focus),
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
             height: 112,
@@ -1121,7 +1122,7 @@ class _FocusScreenState extends State<FocusScreen> {
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_rounded, color: ext.mark(ext.focus), size: 22),
+            Icon(Symbols.arrow_forward_rounded, color: ext.mark(ext.focus), size: 22),
           ],
         ),
       ),
@@ -1140,7 +1141,7 @@ class _FocusScreenState extends State<FocusScreen> {
         children: [
           SectionHeader(
             title: "Today's Progress",
-            icon: Icons.trending_up_rounded,
+            icon: Symbols.trending_up_rounded,
             accent: ext.focus,
             actionLabel: 'View All',
             onAction: () => Navigator.push(
@@ -1150,19 +1151,19 @@ class _FocusScreenState extends State<FocusScreen> {
           StatTileRow(
             tiles: [
               StatTile(
-                icon: Icons.timer_rounded,
+                icon: Symbols.timer_rounded,
                 value: '${_focusService.todayMinutes}',
                 label: 'Minutes',
                 accent: ext.info,
               ),
               StatTile(
-                icon: Icons.local_florist_rounded,
+                icon: Symbols.local_florist_rounded,
                 value: '${_focusService.todayPlants.length}',
                 label: 'Plants',
                 accent: ext.success,
               ),
               StatTile(
-                icon: Icons.local_fire_department_rounded,
+                icon: Symbols.local_fire_department_rounded,
                 value: '${_focusService.stats.currentStreak}',
                 label: 'Streak',
                 accent: ext.warning,
@@ -1184,7 +1185,7 @@ class _FocusScreenState extends State<FocusScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeader(title: 'More Features', icon: Icons.apps_rounded, accent: ext.focus),
+          SectionHeader(title: 'More Features', icon: Symbols.apps_rounded, accent: ext.focus),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -1310,7 +1311,7 @@ class _FocusScreenState extends State<FocusScreen> {
                     borderRadius: AppRadius.brMd,
                   ),
                   child: Icon(
-                    onBreak ? Icons.self_improvement_rounded : Icons.lock_rounded,
+                    onBreak ? Symbols.self_improvement_rounded : Symbols.lock_rounded,
                     color: accent.onContainer,
                     size: 22,
                   ),
@@ -1342,7 +1343,7 @@ class _FocusScreenState extends State<FocusScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.pause_circle_rounded,
+                        Icon(Symbols.pause_circle_rounded,
                             color: ext.warning.onContainer, size: 16),
                         const SizedBox(width: 4),
                         Text(
@@ -1434,7 +1435,7 @@ class _FocusScreenState extends State<FocusScreen> {
     AppBottomSheet.show(
       context,
       title: 'Ambient Sounds',
-      icon: Icons.music_note_rounded,
+      icon: Symbols.music_note_rounded,
       accent: AppColorsExt.of(context).focus,
       builder: (ctx) => AmbientSoundSelector(
         selectedSound: _focusService.selectedSound,
@@ -1507,7 +1508,7 @@ class _FocusScreenState extends State<FocusScreen> {
         shape: RoundedRectangleBorder(borderRadius: AppRadius.brSheet),
         title: Row(
           children: [
-            Icon(Icons.lock_rounded, color: ext.mark(ext.warning), size: 28),
+            Icon(Symbols.lock_rounded, color: ext.mark(ext.warning), size: 28),
             const SizedBox(width: 12),
             const Text('Session Locked'),
           ],

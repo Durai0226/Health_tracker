@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/design/app_design.dart';
@@ -65,7 +66,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     final saved = await AppBottomSheet.show<bool>(
       context,
       title: edit == null ? 'Log blood sugar' : 'Edit reading',
-      icon: Icons.water_drop_rounded,
+      icon: Symbols.water_drop_rounded,
       accent: accent,
       builder: (_) => _GlucoseLogForm(accent: accent, unit: _unit, existing: edit),
     );
@@ -73,8 +74,24 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
   }
 
   Future<void> _delete(GlucoseReading r) async {
+    // Soft delete: remove now, but offer Undo — deleting a health record must
+    // never be a one-swipe, unrecoverable action.
+    final messenger = ScaffoldMessenger.of(context);
     await VitalsStorageService.deleteGlucose(r.id);
     _load();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Reading deleted'),
+        persist: false,
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            await VitalsStorageService.saveGlucose(r);
+            _load();
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -85,7 +102,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     return AppScaffold(
       safeTop: true,
       floatingActionButton: AppFab(
-        icon: Icons.add_rounded,
+        icon: Symbols.add_rounded,
         label: 'Log',
         accent: accent,
         onPressed: () => _openLogSheet(),
@@ -94,10 +111,10 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
         children: [
           AppHeader(
             title: 'Blood Sugar',
-            icon: Icons.water_drop_rounded,
+            icon: Symbols.water_drop_rounded,
             accent: accent,
             leading: AppIconButton(
-              icon: Icons.arrow_back_rounded,
+              icon: Symbols.arrow_back_rounded,
               filled: false,
               accent: accent,
               onPressed: () => Navigator.pop(context),
@@ -120,7 +137,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
               ),
               if (_readings.isNotEmpty)
                 AppIconButton(
-                  icon: Icons.assessment_rounded,
+                  icon: Symbols.assessment_rounded,
                   filled: false,
                   accent: accent,
                   onPressed: () => Navigator.push(
@@ -178,7 +195,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
             VitalsEmergencyCard(
               title: 'Severe low blood sugar',
               message:
-                  'Your latest reading (${latest.valueMgdl} mg/dL) is dangerously low. '
+                  'Your latest reading (${_display(latest.valueMgdl)} $_unitLabel) is dangerously low. '
                   'If you can swallow: take 15 g of fast-acting carbs, wait 15 minutes, and recheck (the 15-15 rule). '
                   'If confused or unable to swallow, this is an emergency — use glucagon and get help now.',
               primaryLabel: 'Call emergency',
@@ -204,19 +221,19 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
             StatTile(
               value: avg != null ? _display(avg.round()) : '—',
               label: 'Avg ($_unitLabel)',
-              icon: Icons.timeline_rounded,
+              icon: Symbols.timeline_rounded,
               accent: accent,
             ),
             StatTile(
               value: inRange != null ? '${(inRange * 100).round()}%' : '—',
               label: 'In range',
-              icon: Icons.check_circle_rounded,
+              icon: Symbols.check_circle_rounded,
               accent: accent,
             ),
             StatTile(
               value: eA1c != null ? '${eA1c.toStringAsFixed(1)}%' : '—',
               label: 'Est. A1C',
-              icon: Icons.science_rounded,
+              icon: Symbols.science_rounded,
               accent: accent,
             ),
           ]),
@@ -233,7 +250,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
             InsightCard(insight: insight),
           ],
           const SizedBox(height: AppSpacing.lg),
-          SectionHeader(title: 'Trend', icon: Icons.show_chart_rounded, accent: accent),
+          SectionHeader(title: 'Trend', icon: Symbols.show_chart_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             child: VitalsTrendChart(
@@ -248,7 +265,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          SectionHeader(title: 'History', icon: Icons.history_rounded, accent: accent),
+          SectionHeader(title: 'History', icon: Symbols.history_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
           ..._readings.map((r) => _logRow(ext, r)),
         ],
@@ -269,7 +286,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
         margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         decoration: BoxDecoration(
             color: ext.error.container, borderRadius: AppRadius.brMd),
-        child: Icon(Icons.delete_rounded, color: ext.mark(ext.error)),
+        child: Icon(Symbols.delete_rounded, color: ext.mark(ext.error)),
       ),
       onDismissed: (_) => _delete(r),
       child: Padding(
@@ -295,7 +312,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: ext.textTertiary, size: 18),
+              Icon(Symbols.chevron_right_rounded, color: ext.textTertiary, size: 18),
             ],
           ),
         ),
@@ -303,16 +320,19 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     );
   }
 
+  // Ring convention (shared with the blood-pressure screen): FULL = healthy,
+  // the ring empties monotonically as the reading worsens — so a mild low/high
+  // shows more ring than a severe one, and in-range is full.
   double _ringFor(GlucoseClass c) {
     switch (c) {
       case GlucoseClass.inRange:
         return 1.0;
       case GlucoseClass.low:
       case GlucoseClass.high:
-        return 0.6;
+        return 0.5;
       case GlucoseClass.severeLow:
       case GlucoseClass.veryHigh:
-        return 0.85;
+        return 0.2;
     }
   }
 
@@ -355,7 +375,7 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.gutter),
       children: [
         const SizedBox(height: 24),
-        Icon(Icons.water_drop_rounded, size: 56, color: ext.mark(accent)),
+        Icon(Symbols.water_drop_rounded, size: 56, color: ext.mark(accent)),
         const SizedBox(height: AppSpacing.md),
         Text('Track your blood sugar',
             textAlign: TextAlign.center,
@@ -371,13 +391,13 @@ class _EmptyState extends StatelessWidget {
             children: [
               SectionHeader(
                   title: 'For a useful reading',
-                  icon: Icons.check_circle_outline_rounded,
+                  icon: Symbols.check_circle_rounded,
                   accent: accent),
               const SizedBox(height: AppSpacing.sm),
               ...tips.map((t) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(children: [
-                      Icon(Icons.done_rounded, size: 16, color: ext.mark(accent)),
+                      Icon(Symbols.done_rounded, size: 16, color: ext.mark(accent)),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                           child: Text(t,
@@ -391,7 +411,7 @@ class _EmptyState extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         AppButton(
           label: 'Log your first reading',
-          leadingIcon: Icons.add_rounded,
+          leadingIcon: Symbols.add_rounded,
           accent: accent,
           fullWidth: true,
           size: AppButtonSize.lg,
@@ -510,7 +530,7 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
           child: Row(
             children: [
               Icon(
-                cls == null ? Icons.info_outline_rounded : VitalsColors.glucoseIcon(cls),
+                cls == null ? Symbols.info_rounded : VitalsColors.glucoseIcon(cls),
                 color: cls == null
                     ? ext.textTertiary
                     : VitalsColors.glucoseBand(ext.isDark, cls),
@@ -577,7 +597,7 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
         const SizedBox(height: AppSpacing.lg),
         AppButton(
           label: widget.existing == null ? 'Save reading' : 'Update reading',
-          leadingIcon: Icons.check_rounded,
+          leadingIcon: Symbols.check_rounded,
           accent: widget.accent,
           fullWidth: true,
           size: AppButtonSize.lg,

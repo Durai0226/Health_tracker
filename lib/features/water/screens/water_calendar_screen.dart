@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_colors_ext.dart';
 import '../models/enhanced_water_log.dart';
@@ -73,7 +74,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(Symbols.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('History'),
@@ -113,7 +114,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: const Icon(Icons.chevron_left),
+            icon: const Icon(Symbols.chevron_left_rounded),
             onPressed: () => _changeMonth(-1),
           ),
           Text(
@@ -125,7 +126,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_right),
+            icon: const Icon(Symbols.chevron_right_rounded),
             onPressed: _selectedMonth.month == DateTime.now().month &&
                     _selectedMonth.year == DateTime.now().year
                 ? null
@@ -368,7 +369,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    progress >= 1 ? Icons.check : Icons.water_drop,
+                    progress >= 1 ? Symbols.check_rounded : Symbols.water_drop_rounded,
                     color: progress >= 1 ? ext.success.on : ext.water.on,
                   ),
                 ),
@@ -417,7 +418,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: Icon(Icons.edit_outlined, color: ext.mark(ext.water)),
+                  icon: Icon(Symbols.edit_rounded, color: ext.mark(ext.water)),
                   onPressed: () => _openHistoryEdit(),
                   tooltip: 'Edit',
                 ),
@@ -430,19 +431,19 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
             child: Row(
               children: [
                 _buildDayStatItem(
-                  icon: Icons.local_drink,
+                  icon: Symbols.local_drink_rounded,
                   value: '${data.drinksCount}',
                   label: 'Drinks',
                   color: ext.mark(ext.water),
                 ),
                 _buildDayStatItem(
-                  icon: Icons.coffee,
+                  icon: Symbols.coffee_rounded,
                   value: '${data.totalCaffeineMg}mg',
                   label: 'Caffeine',
                   color: Colors.brown,
                 ),
                 _buildDayStatItem(
-                  icon: Icons.wine_bar,
+                  icon: Symbols.wine_bar_rounded,
                   value: '${data.alcoholicDrinksCount}',
                   label: 'Alcohol',
                   color: Colors.purple,
@@ -486,7 +487,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.water_drop_outlined,
+            Symbols.water_drop_rounded,
             size: 64,
             color: ext.textSecondary.withOpacity(0.5),
           ),

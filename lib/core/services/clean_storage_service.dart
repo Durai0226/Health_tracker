@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:drift/drift.dart';
 import '../database/app_database.dart';
 import '../database/daos/core_dao.dart';
@@ -16,6 +17,9 @@ import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/medication/services/vitals_storage_service.dart';
 import '../../features/focus/services/focus_service.dart';
 import '../../features/water/services/water_service.dart';
+import '../../features/period/services/period_service.dart';
+import '../../features/steps/services/step_service.dart';
+import '../../features/sleep/services/sleep_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/water/models/water_reminder_config.dart';
 
@@ -34,6 +38,19 @@ class CleanStorageService {
   static MedicationDao get _medicationDao => database.medicationDao;
   static WaterDao get _waterDao => database.waterDao;
   static RemindersDao get _remindersDao => database.remindersDao;
+
+  /// Test-only: drop the cached DB handle + in-memory caches so the service
+  /// re-reads `AppDatabase.instance` (which a test may have pointed at an
+  /// in-memory database). Does NOT close the old handle — the test owns it.
+  @visibleForTesting
+  static void resetForTesting() {
+    _database = null;
+    _isInitialized = false;
+    _appPreferencesCache.clear();
+    _medicinesCache.clear();
+    _remindersCache.clear();
+    _categoriesCache.clear();
+  }
 
   static Future<void> init() async {
     if (_isInitialized) {
@@ -71,21 +88,21 @@ class CleanStorageService {
           id: 'personal',
           name: 'Personal',
           colorValue: 0xFF4CAF50,
-          iconCodePoint: 0xe7fd, // Icons.person
+          iconCodePoint: 0xe7fd, // Symbols.person_rounded
         ));
         
         await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
           id: 'work', 
           name: 'Work',
           colorValue: 0xFF2196F3,
-          iconCodePoint: 0xe89c, // Icons.work
+          iconCodePoint: 0xe89c, // Symbols.work_rounded
         ));
         
         await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
           id: 'health',
           name: 'Health',
           colorValue: 0xFFFF5722,
-          iconCodePoint: 0xe3f4, // Icons.health_and_safety
+          iconCodePoint: 0xe3f4, // Symbols.health_and_safety_rounded
         ));
         
         debugPrint('✓ Default categories created');
@@ -573,6 +590,17 @@ class CleanStorageService {
       await db.delete(db.enhancedWaterLogs).go();
       await db.delete(db.dailyWaterDataTable).go();
       await db.delete(db.waterAchievements).go();
+      // Period / steps / sleep trackers
+      await db.delete(db.periodDays).go();
+      await db.delete(db.menstrualCycles).go();
+      await db.delete(db.periodSettingsTable).go();
+      await db.delete(db.stepDailyData).go();
+      await db.delete(db.stepManualEntries).go();
+      await db.delete(db.sleepSessions).go();
+      await db.delete(db.healthProfiles).go();
+      // AI: user-curated assistant memories (the only personal AI data). The
+      // curated knowledge base is non-personal + re-seeds, so it's left intact.
+      await db.delete(db.assistantMemories).go();
 
       // Focus state persisted as app-preference JSON (focus* keys). App config
       // (theme, haptics, onboarding flags) is intentionally left untouched.
@@ -588,6 +616,9 @@ class CleanStorageService {
       _medicinesCache.clear();
       _remindersCache.clear();
       WaterService.clearInMemory();
+      PeriodService.clearInMemory();
+      StepService.clearInMemory();
+      SleepService.clearInMemory();
 
       debugPrint('✓ All persistent data cleared');
     } catch (e) {

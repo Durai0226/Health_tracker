@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 
 /// Reminders Notification Settings Screen
 class RemindersNotificationsSettingsScreen extends StatefulWidget {
@@ -62,7 +64,7 @@ class _RemindersNotificationsSettingsScreenState extends State<RemindersNotifica
       appBar: AppBar(
         backgroundColor: const Color(0xFFFDF2F8),
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: const Text('Notification Settings', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
       ),
@@ -70,13 +72,13 @@ class _RemindersNotificationsSettingsScreenState extends State<RemindersNotifica
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildToggleCard(Icons.notifications, 'Push Notifications', 'Receive reminder alerts', _pushNotifications, (v) => setState(() => _pushNotifications = v)),
+            _buildToggleCard(Symbols.notifications_rounded, 'Push Notifications', 'Receive reminder alerts', _pushNotifications, (v) => setState(() => _pushNotifications = v)),
             const SizedBox(height: 12),
-            _buildToggleCard(Icons.volume_up, 'Sound', 'Play notification sound', _soundEnabled, (v) => setState(() => _soundEnabled = v)),
+            _buildToggleCard(Symbols.volume_up_rounded, 'Sound', 'Play notification sound', _soundEnabled, (v) => setState(() => _soundEnabled = v)),
             const SizedBox(height: 12),
-            _buildToggleCard(Icons.vibration, 'Vibration', 'Vibrate on notification', _vibrationEnabled, (v) => setState(() => _vibrationEnabled = v)),
+            _buildToggleCard(Symbols.vibration_rounded, 'Vibration', 'Vibrate on notification', _vibrationEnabled, (v) => setState(() => _vibrationEnabled = v)),
             const SizedBox(height: 12),
-            _buildToggleCard(Icons.preview, 'Show Preview', 'Display reminder content', _showPreview, (v) => setState(() => _showPreview = v)),
+            _buildToggleCard(Symbols.preview_rounded, 'Show Preview', 'Display reminder content', _showPreview, (v) => setState(() => _showPreview = v)),
             const SizedBox(height: 12),
             _buildSnoozeCard(),
             const SizedBox(height: 32),
@@ -96,7 +98,7 @@ class _RemindersNotificationsSettingsScreenState extends State<RemindersNotifica
           Container(width: 44, height: 44, decoration: BoxDecoration(color: value ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: value ? _primaryColor : Colors.grey)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600)), Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 13))])),
-          Switch.adaptive(value: value, onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); }, activeColor: _primaryColor),
+          AppSwitch(value: value, onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); }),
         ],
       ),
     );
@@ -109,7 +111,7 @@ class _RemindersNotificationsSettingsScreenState extends State<RemindersNotifica
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [Icon(Icons.snooze, color: _primaryColor), const SizedBox(width: 12), const Text('Default Snooze Time', style: TextStyle(fontWeight: FontWeight.w600)), const Spacer(), Text('$_snoozeMinutes min', style: TextStyle(color: _primaryColor, fontWeight: FontWeight.w500))]),
+          Row(children: [Icon(Symbols.snooze_rounded, color: _primaryColor), const SizedBox(width: 12), const Text('Default Snooze Time', style: TextStyle(fontWeight: FontWeight.w600)), const Spacer(), Text('$_snoozeMinutes min', style: TextStyle(color: _primaryColor, fontWeight: FontWeight.w500))]),
           const SizedBox(height: 12),
           Slider(value: _snoozeMinutes.toDouble(), min: 5, max: 60, divisions: 11, activeColor: _primaryColor, onChanged: (v) { HapticFeedback.selectionClick(); setState(() => _snoozeMinutes = v.round()); }),
         ],

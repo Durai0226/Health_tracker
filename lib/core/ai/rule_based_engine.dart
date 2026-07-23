@@ -59,6 +59,32 @@ class RuleBasedEngine {
       return const ParsedCommand(CommandKind.takeMedicine);
     }
 
+    // Steps: "walked 6000 steps", "6000 steps", "log 8000 steps".
+    if (RegExp(r'\bsteps?\b|\bwalk(?:ed|ing)?\b').hasMatch(q)) {
+      final m = RegExp(r'\b(\d{2,6})\b').firstMatch(q.replaceAll(',', ''));
+      final v = m != null ? int.tryParse(m.group(1)!) : null;
+      if (v != null && v >= 100 && v <= 100000) {
+        return ParsedCommand(CommandKind.logSteps, {'steps': v});
+      }
+    }
+
+    // Sleep: "slept 7 hours", "slept 7.5h", "8 hours of sleep". Requires an
+    // explicit duration so questions like "how did I sleep?" route to Q&A.
+    if (RegExp(r'\bsle(?:pt|ep)\b|\bhours? of sleep\b').hasMatch(q)) {
+      final hm = RegExp(r'\b(\d{1,2}(?:\.\d)?)\s*(?:h|hr|hrs|hour|hours)\b')
+          .firstMatch(q);
+      final h = hm != null ? double.tryParse(hm.group(1)!) : null;
+      if (h != null && h >= 1 && h <= 16) {
+        return ParsedCommand(CommandKind.logSleep, {'minutes': (h * 60).round()});
+      }
+    }
+
+    // Period: "period started", "started my period", "log period", "on my period".
+    if (RegExp(r'\bperiod\b|\bmenstruat').hasMatch(q) &&
+        RegExp(r'\b(start|started|begin|began|log|today|got|on)\b').hasMatch(q)) {
+      return const ParsedCommand(CommandKind.logPeriod);
+    }
+
     return const ParsedCommand(CommandKind.none);
   }
 
@@ -490,6 +516,24 @@ class RuleBasedEngine {
     name = name.replaceAll(RegExp(r'\b\d{1,2}(?::\d{2})?\s*(am|pm)\b', caseSensitive: false), ' ');
     name = name.replaceAll(RegExp(r'\band\b|\bat\b', caseSensitive: false), ' ');
     name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    // A bare strength number left standing in the name with no unit
+    // (e.g. "Dolo 650", "Vitamin D3 1000") is the medicine STRENGTH, not a dose
+    // count. Pull it out so the wizard's strength field is populated and the
+    // name stays clean. Only a whole standalone 2–4 digit token qualifies, so
+    // vitamin names that fuse a digit ("B12", "D3", "K2") are preserved, and we
+    // never override a unit-tagged dose already captured above.
+    if (res['dosageAmount'] == null && res['strength'] == null) {
+      final tokens = name.split(' ');
+      final numIdx =
+          tokens.indexWhere((t) => RegExp(r'^\d{2,4}$').hasMatch(t));
+      if (numIdx != -1) {
+        res['strength'] = tokens[numIdx];
+        tokens.removeAt(numIdx);
+        name = tokens.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+      }
+    }
+
     if (name.isNotEmpty) res['name'] = _capitalize(name);
     return res;
   }
@@ -550,6 +594,106 @@ class RuleBasedEngine {
     return 'Strong work: ${todayMinutes}m focused today${streakDays > 0 ? ', $streakDays-day streak' : ''}. Take a short break, then one more round.';
   }
 
+  static String _commas(int n) {
+    final s = n.abs().toString();
+    final b = StringBuffer(n < 0 ? '-' : '');
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+
+  /// Deterministic activity coach. Pace- and time-aware, mirrors [hydrationTip].
+  String stepsTip({
+    required int steps,
+    required int goal,
+    required int streakDays,
+    required int hour,
+  }) {
+    final pct = goal > 0 ? (steps / goal * 100).round() : 0;
+    final streak =
+        streakDays > 0 ? ' Your $streakDays-day streak is going strong!' : '';
+    if (goal > 0 && steps >= goal) {
+      return '🎉 Goal reached — ${_commas(steps)} steps today! Every extra step is a bonus.$streak';
+    }
+    if (steps == 0) {
+      return hour < 11
+          ? 'Fresh start — a short morning walk gets your ${_commas(goal)}-step day moving.'
+          : 'No steps logged yet. A 10-minute walk (~1,000 steps) is an easy first win.';
+    }
+    final short = (goal - steps).clamp(0, goal);
+    if (hour >= 18 && short > 0) {
+      final mins = (short / 100).ceil().clamp(1, 120);
+      return 'You\'re at $pct% (${_commas(steps)} of ${_commas(goal)}). A brisk $mins-min walk closes the gap.$streak';
+    }
+    return 'On the move — $pct% of your goal (${_commas(short)} to go). Keep it up.$streak';
+  }
+
+  /// Deterministic sleep coach — duration, debt and consistency aware.
+  String sleepTip({
+    required int lastNightMinutes,
+    required int targetMinutes,
+    required int debtMinutes,
+    required double regularity,
+  }) {
+    if (lastNightMinutes <= 0) {
+      return 'Log last night\'s sleep and I\'ll track your duration, consistency and sleep debt.';
+    }
+    final dur = '${lastNightMinutes ~/ 60}h ${lastNightMinutes % 60}m';
+    if (lastNightMinutes >= targetMinutes) {
+      return '😴 $dur last night — you hit your target. A steady schedule keeps it that way.';
+    }
+    if (debtMinutes >= 180) {
+      return '$dur last night, and about ${(debtMinutes / 60).round()}h of sleep debt this week. An earlier night or two helps you recover.';
+    }
+    if (regularity < 0.5) {
+      return '$dur last night. Your bedtimes vary a lot — a more regular wind-down time improves quality more than duration alone.';
+    }
+    final shortM = targetMinutes - lastNightMinutes;
+    return '$dur last night — about ${(shortM / 60).toStringAsFixed(1)}h under target. Try starting your wind-down a little earlier tonight.';
+  }
+
+  /// Deterministic, HONEST cycle coach. Fertility is always an estimate and
+  /// never framed as contraception-grade; nothing here is a diagnosis.
+  String cycleInsight({
+    int? daysUntilNextPeriod,
+    bool inFertileWindow = false,
+    bool isLate = false,
+    int lateDays = 0,
+    bool irregular = false,
+    bool learning = false,
+    bool pregnancy = false,
+    int? cycleDay,
+  }) {
+    if (pregnancy) {
+      return 'Pregnancy mode is on — cycle predictions are paused. You can still log symptoms any time.';
+    }
+    if (learning) {
+      return 'Still learning your cycle. Log each period start and I\'ll predict your next one, your phases and fertile window — with a confidence you can see.';
+    }
+    if (isLate && lateDays >= 1) {
+      return 'Your period is about $lateDays day${lateDays == 1 ? '' : 's'} past the estimate. Cycles naturally vary — log any flow to update the prediction. (Not a diagnosis.)';
+    }
+    if (daysUntilNextPeriod != null &&
+        daysUntilNextPeriod >= 0 &&
+        daysUntilNextPeriod <= 3) {
+      return daysUntilNextPeriod == 0
+          ? 'Your period is estimated to start today, based on your own logged cycles.'
+          : 'Your period is estimated in about $daysUntilNextPeriod day${daysUntilNextPeriod == 1 ? '' : 's'}, based on your own logged cycles.';
+    }
+    if (inFertileWindow) {
+      return 'You may be in your estimated fertile window${cycleDay != null ? ' (cycle day $cycleDay)' : ''}. This is a calendar estimate — not reliable for contraception.';
+    }
+    if (irregular) {
+      return 'Your recent cycles vary quite a bit, so predictions are less certain. If that continues, a clinician can help — this isn\'t a diagnosis.';
+    }
+    if (cycleDay != null) {
+      return 'You\'re on day $cycleDay of your cycle. Logging flow and symptoms sharpens your predictions.';
+    }
+    return 'Log your period days and symptoms and I\'ll surface your phase, next-period estimate and trends.';
+  }
+
   String dailyBriefing({
     required int medsTaken,
     required int medsTotal,
@@ -557,6 +701,9 @@ class RuleBasedEngine {
     required int focusMinutes,
     required int remindersLeft,
     required int hour,
+    int steps = 0,
+    int stepGoal = 0,
+    int sleepMinutes = 0,
   }) {
     final greeting = hour < 12
         ? 'Good morning'
@@ -564,6 +711,12 @@ class RuleBasedEngine {
     final parts = <String>[];
     if (medsTotal > 0) parts.add('meds $medsTaken/$medsTotal');
     parts.add('water $waterPct%');
+    if (stepGoal > 0 && steps > 0) {
+      parts.add('steps ${(steps / stepGoal * 100).round()}%');
+    }
+    if (sleepMinutes > 0) {
+      parts.add('sleep ${sleepMinutes ~/ 60}h ${sleepMinutes % 60}m');
+    }
     if (focusMinutes > 0) parts.add('focus ${focusMinutes}m');
     if (remindersLeft > 0) {
       parts.add('$remindersLeft reminder${remindersLeft == 1 ? '' : 's'} left');

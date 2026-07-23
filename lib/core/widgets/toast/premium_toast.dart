@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'toast_theme.dart';
 import 'toast_animations.dart';
@@ -394,7 +395,7 @@ class _PremiumToastState extends State<PremiumToast>
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
-          Icons.close_rounded,
+          Symbols.close_rounded,
           size: 18,
           color: ToastTheme.getTextSecondary(context),
         ),

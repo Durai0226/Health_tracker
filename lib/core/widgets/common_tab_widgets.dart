@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_spacing.dart';
@@ -451,7 +452,7 @@ class _TabBarModalState extends State<TabBarModal> with SingleTickerProviderStat
                       ),
                       IconButton(
                         icon: Icon(
-                          Icons.close_rounded,
+                          Symbols.close_rounded,
                           color: AppColors.getTextSecondary(context),
                         ),
                         onPressed: () => Navigator.pop(context),

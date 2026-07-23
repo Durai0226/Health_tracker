@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
@@ -134,10 +135,10 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
         children: [
           AppHeader(
             title: 'Daily Goal',
-            icon: Icons.flag_rounded,
+            icon: Symbols.flag_rounded,
             accent: water,
             leading: AppIconButton(
-              icon: Icons.arrow_back_ios_new_rounded,
+              icon: Symbols.arrow_back_rounded,
               accent: water,
               filled: false,
               onPressed: () => Navigator.pop(context),
@@ -164,7 +165,7 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
                           variant: AppButtonVariant.secondary,
                           size: AppButtonSize.lg,
                           fullWidth: true,
-                          leadingIcon: Icons.auto_awesome_rounded,
+                          leadingIcon: Symbols.auto_awesome_rounded,
                           loading: _suggesting,
                           onPressed: _suggesting ? null : _suggestGoalWithAi,
                         ),
@@ -174,7 +175,7 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
                           accent: water,
                           size: AppButtonSize.lg,
                           fullWidth: true,
-                          leadingIcon: Icons.check_rounded,
+                          leadingIcon: Symbols.check_rounded,
                           onPressed: _saveSettings,
                         ),
                       ],
@@ -194,7 +195,7 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
         width: double.infinity,
         child: Column(
           children: [
-            Icon(Icons.water_drop_rounded, color: water.onContainer, size: 48),
+            Icon(Symbols.water_drop_rounded, color: water.onContainer, size: 48),
             const SizedBox(height: AppSpacing.md),
             Text(
               _formatGoal(_dailyGoalMl),
@@ -219,7 +220,7 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
         children: [
           SectionHeader(
             title: 'Quick Select',
-            icon: Icons.bolt_rounded,
+            icon: Symbols.bolt_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -251,7 +252,7 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
         children: [
           SectionHeader(
             title: 'Measurement Unit',
-            icon: Icons.straighten_rounded,
+            icon: Symbols.straighten_rounded,
             accent: water,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -259,8 +260,8 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
             index: _unit == 'oz' ? 1 : 0,
             accent: water,
             items: const [
-              SegmentItem(icon: Icons.water_drop_outlined, label: 'ml'),
-              SegmentItem(icon: Icons.local_drink_outlined, label: 'oz'),
+              SegmentItem(icon: Symbols.water_drop_rounded, label: 'ml'),
+              SegmentItem(icon: Symbols.local_drink_rounded, label: 'oz'),
             ],
             onChanged: (i) {
               HapticFeedback.lightImpact();

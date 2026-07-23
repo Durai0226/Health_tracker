@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../models/app_allow_list.dart';
@@ -66,7 +68,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddAppDialog,
         backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        icon: const Icon(Symbols.add_rounded, color: Colors.white),
         label: const Text('Add App', style: TextStyle(color: Colors.white)),
       ),
     );
@@ -84,7 +86,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.arrow_back_rounded, size: 20),
+          child: const Icon(Symbols.arrow_back_rounded, size: 20),
         ),
       ),
       title: const Text(
@@ -122,7 +124,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           _buildSettingSwitch(
             'Strict Mode',
             'Only allowed apps can be used during focus',
-            Icons.shield_rounded,
+            Symbols.shield_rounded,
             _allowList.isStrictMode,
             (value) {
               setState(() {
@@ -135,7 +137,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           _buildSettingSwitch(
             'Block Notifications',
             'Silence notifications from non-allowed apps',
-            Icons.notifications_off_rounded,
+            Symbols.notifications_off_rounded,
             _allowList.blockNotifications,
             (value) {
               setState(() {
@@ -148,7 +150,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           _buildSettingSwitch(
             'Show Warning',
             'Display warning when opening blocked app',
-            Icons.warning_rounded,
+            Symbols.warning_rounded,
             _allowList.showWarningOnBlockedApp,
             (value) {
               setState(() {
@@ -166,7 +168,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.timer_rounded, color: AppColors.primary, size: 20),
+                child: const Icon(Symbols.timer_rounded, color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 16),
               const Expanded(
@@ -262,10 +264,9 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
             ],
           ),
         ),
-        Switch(
+        AppSwitch(
           value: value,
           onChanged: onChanged,
-          activeThumbColor: AppColors.primary,
         ),
       ],
     );
@@ -314,7 +315,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           children: [
             Text(label),
             const SizedBox(width: 8),
-            const Icon(Icons.add_circle_outline_rounded, size: 18, color: AppColors.primary),
+            const Icon(Symbols.add_circle_rounded, size: 18, color: AppColors.primary),
           ],
         ),
       ),
@@ -450,7 +451,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               ],
             ),
           ),
-          Switch(
+          AppSwitch(
             value: app.isAllowed,
             onChanged: (value) {
               setState(() {
@@ -460,7 +461,6 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               });
               _saveData();
             },
-            activeThumbColor: AppColors.primary,
           ),
           IconButton(
             onPressed: () {
@@ -471,7 +471,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               });
               _saveData();
             },
-            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+            icon: const Icon(Symbols.delete_rounded, color: AppColors.error),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/services/clean_storage_service.dart';
@@ -55,10 +56,10 @@ class _VitalsReminderButtonState extends State<VitalsReminderButton> {
       }
       return;
     }
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: _hour, minute: _min),
-      helpText: 'Remind me to measure',
+    final picked = await AppTimePicker.show(
+      context,
+      initial: TimeOfDay(hour: _hour, minute: _min),
+      title: 'Remind me to measure',
     );
     if (picked == null) return;
     await NotificationService().scheduleDailyNotification(
@@ -89,7 +90,7 @@ class _VitalsReminderButtonState extends State<VitalsReminderButton> {
   @override
   Widget build(BuildContext context) {
     return AppIconButton(
-      icon: _enabled ? Icons.alarm_on_rounded : Icons.alarm_add_rounded,
+      icon: _enabled ? Symbols.alarm_on_rounded : Symbols.alarm_add_rounded,
       filled: _enabled,
       accent: widget.accent,
       onPressed: _toggle,
