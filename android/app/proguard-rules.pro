@@ -36,3 +36,14 @@
 -keep class com.google.protobuf.** { *; }
 -dontwarn com.google.mediapipe.**
 -dontwarn com.google.protobuf.**
+
+# ML Kit text recognition (OCR label scan) references optional script models —
+# Chinese / Devanagari / Japanese / Korean — that aren't bundled (we ship the
+# default Latin recognizer only). Keep the used MLKit classes and suppress R8
+# errors for the missing optional script recognizers so the release build (R8)
+# doesn't fail on them.
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.vision.text.chinese.**
+-dontwarn com.google.mlkit.vision.text.devanagari.**
+-dontwarn com.google.mlkit.vision.text.japanese.**
+-dontwarn com.google.mlkit.vision.text.korean.**
