@@ -122,10 +122,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     HapticFeedback.selectionClick();
     _persist();
     if (m.feedback != 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Thanks — this helps me improve.'),
-        duration: Duration(seconds: 2),
-      ));
+      context.toastInfo('Thanks — this helps me improve.');
     }
   }
 
@@ -430,8 +427,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: m.text));
                       HapticFeedback.selectionClick();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Copied'), duration: Duration(seconds: 1)));
+                      context.toastSuccess('Copied');
                     }),
               ]),
             ],

@@ -12,6 +12,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../../../core/design/app_colors_ext.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../main.dart' show navigatorKey;
 import '../../medication/services/medicine_storage_service.dart';
 
 /// The full-screen reminder alert — "Aurora Veil" glassmorphism.
@@ -170,8 +171,16 @@ class _AlarmScreenState extends State<AlarmScreen>
   Future<void> _handleDismiss() async {
     HapticFeedback.lightImpact();
     final id = _payloadId();
-    if (id != null) await NotificationService().cancelNotification(id);
+    // Close + silence FIRST so dismiss is instant and can never be blocked by a
+    // slow/throwing platform call (the old order awaited cancelNotification —
+    // which does an AndroidAlarmManager.cancelAlarm platform call — before
+    // exiting, so if that hung or threw, the screen just sat there ringing).
     _exit();
+    if (id != null) {
+      try {
+        await NotificationService().cancelNotification(id);
+      } catch (_) {}
+    }
   }
 
   /// Medicine alarms only: log the dose taken right here (foreground → Drift is
@@ -179,9 +188,11 @@ class _AlarmScreenState extends State<AlarmScreen>
   Future<void> _handleTake() async {
     HapticFeedback.mediumImpact();
     final medId = widget.payload['medicineId']?.toString();
+    final hour = (widget.payload['hour'] as num?)?.toInt();
+    final minute = (widget.payload['minute'] as num?)?.toInt();
+    final id = _payloadId();
+    _exit(); // close instantly; the logging/cancel below can never block it
     if (medId != null && medId.isNotEmpty) {
-      final hour = (widget.payload['hour'] as num?)?.toInt();
-      final minute = (widget.payload['minute'] as num?)?.toInt();
       final now = DateTime.now();
       final scheduled = (hour != null && minute != null)
           ? DateTime(now.year, now.month, now.day, hour, minute)
@@ -191,43 +202,64 @@ class _AlarmScreenState extends State<AlarmScreen>
             medicineId: medId, scheduledTime: scheduled);
       } catch (_) {}
     }
-    final id = _payloadId();
-    if (id != null) await NotificationService().cancelNotification(id);
-    _exit();
+    if (id != null) {
+      try {
+        await NotificationService().cancelNotification(id);
+      } catch (_) {}
+    }
   }
 
   Future<void> _handleSnooze() async {
     HapticFeedback.lightImpact();
     final id = _payloadId();
+    final d = widget.payload['snoozeDuration'];
+    final mins = d is int ? d : (d is String ? int.tryParse(d) ?? 5 : 5);
+    final title = widget.payload['title']?.toString();
+    final body = widget.payload['body']?.toString();
+    final medicineId = widget.payload['medicineId']?.toString();
+    final hour = (widget.payload['hour'] as num?)?.toInt();
+    final minute = (widget.payload['minute'] as num?)?.toInt();
+    _exit(); // close instantly
     if (id != null) {
-      final d = widget.payload['snoozeDuration'];
-      final mins = d is int ? d : (d is String ? int.tryParse(d) ?? 5 : 5);
-      // Pass the title/body we already have so the snoozed alarm keeps the real
-      // reminder name (medicine/health/water aren't in the generic list).
-      await NotificationService().snoozeReminder(
-        id,
-        mins,
-        title: widget.payload['title']?.toString(),
-        body: widget.payload['body']?.toString(),
-        // Carry the dose identity so a snoozed medicine re-fire still shows Take
-        // and logs correctly, instead of losing its medicine link.
-        medicineId: widget.payload['medicineId']?.toString(),
-        hour: (widget.payload['hour'] as num?)?.toInt(),
-        minute: (widget.payload['minute'] as num?)?.toInt(),
-      );
+      try {
+        // Pass the title/body/dose-identity we already hold so the snoozed alarm
+        // keeps the real reminder name + still shows Take on re-fire.
+        await NotificationService().snoozeReminder(
+          id,
+          mins,
+          title: title,
+          body: body,
+          medicineId: medicineId,
+          hour: hour,
+          minute: minute,
+        );
+      } catch (_) {}
     }
-    _exit();
   }
 
-  /// Leaves the alarm. When it was the app's cold-launch route there is nothing
-  /// to pop into (popping → black screen / app close), so fall through to home.
+  /// Leaves the alarm. Called BEFORE any async cleanup so it always runs. When
+  /// it was the app's cold-launch route there is nothing to pop into (popping →
+  /// black screen / app close), so fall through to home. Guarded + falls back to
+  /// the global navigator so a dismiss tap always closes the screen.
+  bool _exited = false;
   void _exit() {
-    _stopAlarmSound(); // silence the ring on dismiss/snooze
+    if (_exited) return;
+    _exited = true;
+    _stopAlarmSound(); // silence the ring on dismiss/take/snooze
     if (!mounted) return;
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context).pushReplacementNamed('/home');
+    try {
+      final nav = Navigator.of(context);
+      if (nav.canPop()) {
+        nav.pop();
+      } else {
+        nav.pushReplacementNamed('/home');
+      }
+    } catch (_) {
+      // Last resort: the app's global navigator, clearing back to home.
+      try {
+        navigatorKey.currentState
+            ?.pushNamedAndRemoveUntil('/home', (r) => false);
+      } catch (_) {}
     }
   }
 

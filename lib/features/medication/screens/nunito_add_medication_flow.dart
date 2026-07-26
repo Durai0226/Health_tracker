@@ -286,14 +286,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   }
 
   void _showError(String message) {
-    _hapticService.error();
-    final ext = AppColorsExt.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: ext.fillBg(ext.error),
-      ),
-    );
+    context.toastError(message);
   }
 
   Future<void> _saveMedicine() async {

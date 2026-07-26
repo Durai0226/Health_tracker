@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import '../../../core/constants/app_colors.dart';
+import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../models/enhanced_water_log.dart';
 import '../models/beverage_type.dart';
@@ -94,23 +95,12 @@ class _WaterDashboardScreenState extends State<WaterDashboardScreen>
       
       if (mounted) {
         HapticFeedback.mediumImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Added ${amountMl}ml of water! 💧'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        context.toastSuccess('Added ${amountMl}ml of water! 💧');
       }
     } catch (e) {
       debugPrint('Error adding water: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to add water: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        context.toastError('Failed to add water: $e');
       }
     }
   }

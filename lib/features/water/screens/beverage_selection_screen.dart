@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/widgets/common_tab_widgets.dart';
+import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../models/beverage_type.dart';
 import '../models/enhanced_water_log.dart';
 import '../models/water_container.dart';
@@ -143,12 +144,7 @@ class _BeverageSelectionScreenState extends State<BeverageSelectionScreen>
     } catch (e) {
       debugPrint('Error logging drink: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error logging drink: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        context.toastError('Error logging drink: $e');
       }
     } finally {
       if (mounted) setState(() => _isLogging = false);

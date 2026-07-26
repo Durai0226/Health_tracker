@@ -77,53 +77,13 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         await WaterService.saveProfile(updated);
 
         if (mounted) {
-          final ext = AppColorsExt.of(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Symbols.check_circle_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Profile saved! Daily goal: ${updated.effectiveGoalMl}ml',
-                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: ext.success.base,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
+          context.toastSuccess('Profile saved! Daily goal: ${updated.effectiveGoalMl}ml');
           Navigator.pop(context, true);
         }
       } catch (e) {
         debugPrint('Error saving profile: $e');
         if (mounted) {
-          final ext = AppColorsExt.of(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Symbols.error_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Failed to save profile. Please try again.',
-                      style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: ext.error.base,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
+          context.toastError('Failed to save profile. Please try again.');
         }
       } finally {
         if (mounted) setState(() => _isSaving = false);
@@ -150,22 +110,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
 
   void _showValidationError(String message) {
     if (mounted) {
-      final ext = AppColorsExt.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Symbols.warning_amber_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 12),
-              Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
-            ],
-          ),
-          backgroundColor: ext.warning.base,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      context.toastWarning(message);
     }
   }
 

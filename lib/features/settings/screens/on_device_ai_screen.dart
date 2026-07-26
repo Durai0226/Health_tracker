@@ -54,7 +54,7 @@ class _OnDeviceAiScreenState extends State<OnDeviceAiScreen> {
   void _download() {
     final url = _urlController.text.trim();
     if (url.isEmpty) {
-      _toast('Paste a model download URL first.');
+      context.toastInfo('Paste a model download URL first.');
       return;
     }
     _ai.setOnDeviceModelUrl(url);
@@ -67,11 +67,13 @@ class _OnDeviceAiScreenState extends State<OnDeviceAiScreen> {
       onDone: () async {
         await _refresh();
         if (mounted) setState(() => _downloading = false);
-        _toast('Model downloaded.');
+        if (mounted) context.toastSuccess('Model downloaded.');
       },
       onError: (e) {
         if (mounted) setState(() => _downloading = false);
-        _toast('Download failed. Check the URL and your connection.');
+        if (mounted) {
+          context.toastError('Download failed. Check the URL and your connection.');
+        }
       },
     );
   }
@@ -81,7 +83,9 @@ class _OnDeviceAiScreenState extends State<OnDeviceAiScreen> {
     await _ai.setOnDeviceEnabled(v);
     if (v) {
       final ok = await _ai.activateOnDevice();
-      if (!ok) _toast('Couldn\'t start the model on this device.');
+      if (!ok && mounted) {
+        context.toastError('Couldn\'t start the model on this device.');
+      }
     }
     await _refresh();
   }
@@ -91,13 +95,7 @@ class _OnDeviceAiScreenState extends State<OnDeviceAiScreen> {
     await _ai.removeOnDeviceModel();
     await _ai.setOnDeviceEnabled(false);
     await _refresh();
-    _toast('Model removed.');
-  }
-
-  void _toast(String m) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), duration: const Duration(seconds: 2)));
+    if (mounted) context.toastSuccess('Model removed.');
   }
 
   @override

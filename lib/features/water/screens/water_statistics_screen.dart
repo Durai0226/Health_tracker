@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../../../core/design/app_colors_ext.dart';
+import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
 
@@ -723,9 +724,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                 final csv = WaterService.exportToCsv();
                 debugPrint(csv);
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Summary exported (check console)')),
-                );
+                context.toastSuccess('Summary exported (check console)');
               },
             ),
             ListTile(
@@ -743,9 +742,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
                 final csv = WaterService.exportDetailedCsv();
                 debugPrint(csv);
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Detailed log exported (check console)')),
-                );
+                context.toastSuccess('Detailed log exported (check console)');
               },
             ),
             SizedBox(height: MediaQuery.of(context).padding.bottom + 16),

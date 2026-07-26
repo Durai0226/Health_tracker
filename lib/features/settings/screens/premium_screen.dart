@@ -117,12 +117,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     accent: accent,
                     fullWidth: true,
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'In-app purchases are coming soon. Thanks for '
-                                'your interest!')),
-                      );
+                      context.toastInfo(
+                          'In-app purchases are coming soon. Thanks for '
+                          'your interest!');
                     },
                   ),
                   const SizedBox(height: AppSpacing.sm),

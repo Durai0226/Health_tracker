@@ -148,13 +148,7 @@ class _NotificationSettingsScreenState
       );
 
       if (mounted) {
-        // No action -> auto-dismisses (SnackBar-persist gotcha).
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Test notification sent'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        context.toastSuccess('Test notification sent');
       }
     } catch (e) {
       debugPrint('Test notification error: $e');

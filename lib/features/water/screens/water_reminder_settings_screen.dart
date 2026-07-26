@@ -55,19 +55,13 @@ class _WaterReminderSettingsScreenState
       (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute);
 
   void _snack(String message, {bool error = false, bool success = false}) {
-    final ext = AppColorsExt.of(context);
-    final bg = error
-        ? ext.fillBg(ext.error)
-        : success
-            ? ext.fillBg(ext.success)
-            : ext.fillBg(ext.water);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: TextStyle(color: ext.fillFg(ext.water))),
-        backgroundColor: bg,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (error) {
+      context.toastError(message);
+    } else if (success) {
+      context.toastSuccess(message);
+    } else {
+      context.toastInfo(message);
+    }
   }
 
   void _generateIntervalReminders() {

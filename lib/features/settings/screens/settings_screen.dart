@@ -42,27 +42,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isLoading = false);
 
     if (!mounted) return;
-    final ext = AppColorsExt.of(context);
     if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Successfully signed in with Google!'),
-          backgroundColor: ext.fillBg(ext.success),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      context.toastSuccess('Successfully signed in with Google!');
     } else if (result != 'cancelled') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result),
-          backgroundColor: ext.fillBg(ext.error),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      context.toastError(result);
     }
   }
 
@@ -136,16 +119,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showResultSnack(String message, {required bool isError}) {
     if (!mounted) return;
-    final ext = AppColorsExt.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: ext.fillBg(isError ? ext.error : ext.success),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
+    if (isError) {
+      context.toastError(message);
+    } else {
+      context.toastSuccess(message);
+    }
   }
 
   @override
@@ -358,12 +336,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   builder: (_) => const BackupScreen()),
                             );
                           } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Sign in with Google to enable cloud backup.'),
-                              ),
-                            );
+                            context.toastInfo(
+                                'Sign in with Google to enable cloud backup.');
                           }
                         },
                         trailing: _authService.isAuthenticated

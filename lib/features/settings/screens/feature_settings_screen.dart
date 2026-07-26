@@ -318,17 +318,7 @@ class _FeatureSettingsScreenState extends State<FeatureSettingsScreen> {
               await _featureManager.resetToDefaults();
               if (mounted) {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Features reset to defaults'),
-                    backgroundColor: AppColors.success,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    margin: const EdgeInsets.all(16),
-                  ),
-                );
+                context.toastSuccess('Features reset to defaults');
               }
             },
             child: const Text(

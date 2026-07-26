@@ -60,8 +60,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
     HapticFeedback.selectionClick();
     await _load();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Removed'), duration: Duration(seconds: 2)));
+      context.toastSuccess('Removed');
     }
   }
 

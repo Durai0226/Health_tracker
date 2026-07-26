@@ -61,15 +61,7 @@ class _WaterBeveragesSettingsScreenState
         'water_enabled_beverages', jsonEncode(_enabledBeverages));
 
     if (mounted) {
-      final ext = AppColorsExt.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Beverages saved!'),
-          backgroundColor: ext.water.base,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        ),
-      );
+      context.toastSuccess('Beverages saved!');
       Navigator.pop(context);
     }
   }

@@ -331,22 +331,11 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
           await WaterService.removeWaterLogForDate(widget.date, log.id);
           await _loadData();
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Entry deleted successfully'),
-                backgroundColor: ext.success.base,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+            context.toastSuccess('Entry deleted successfully');
           }
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error deleting entry: $e'),
-                backgroundColor: ext.error.base,
-              ),
-            );
+            context.toastError('Error deleting entry: $e');
             await _loadData();
           }
         }
@@ -530,28 +519,17 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
   }
 
   Future<void> _save() async {
-    final ext = AppColorsExt.of(context);
     final amount = int.tryParse(_amountController.text) ?? 0;
     if (amount <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Please enter a valid amount'),
-            backgroundColor: ext.error.base,
-          ),
-        );
+        context.toastError('Please enter a valid amount');
       }
       return;
     }
 
     if (amount > 5000) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Amount cannot exceed 5000ml'),
-            backgroundColor: ext.error.base,
-          ),
-        );
+        context.toastError('Amount cannot exceed 5000ml');
       }
       return;
     }
@@ -578,13 +556,7 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
           note: _noteController.text.isNotEmpty ? _noteController.text : null,
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Entry updated successfully'),
-              backgroundColor: ext.success.base,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          context.toastSuccess('Entry updated successfully');
         }
       } else {
         await WaterService.addWaterLogForDate(
@@ -596,13 +568,7 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
           note: _noteController.text.isNotEmpty ? _noteController.text : null,
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Entry added successfully'),
-              backgroundColor: ext.success.base,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          context.toastSuccess('Entry added successfully');
         }
       }
 
@@ -610,13 +576,7 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
     } catch (e) {
       debugPrint('Error saving water entry: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: ext.error.base,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        context.toastError('Error: ${e.toString()}');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

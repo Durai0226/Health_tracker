@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../models/relaxation_music.dart';
@@ -1054,16 +1055,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
             onPressed: () {
               Navigator.pop(context);
               _relaxationService.abandonSession();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Session ended'),
-                  backgroundColor: AppColors.warning,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              );
+              context.toastWarning('Session ended');
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('End Session'),

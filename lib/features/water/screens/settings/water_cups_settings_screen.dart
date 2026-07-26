@@ -52,15 +52,7 @@ class _WaterCupsSettingsScreenState extends State<WaterCupsSettingsScreen> {
     await prefs.setString('water_cups', jsonEncode(_cups));
 
     if (mounted) {
-      final ext = AppColorsExt.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Cup sizes saved!'),
-          backgroundColor: ext.water.base,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        ),
-      );
+      context.toastSuccess('Cup sizes saved!');
       Navigator.pop(context);
     }
   }

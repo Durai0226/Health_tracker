@@ -80,8 +80,7 @@ class LogSomethingSheet {
       ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     if (!context.mounted) return;
     if (pending.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No doses due right now')));
+      context.toastInfo('No doses due right now');
       return;
     }
     if (pending.length == 1) {
@@ -131,8 +130,7 @@ class LogSomethingSheet {
         WaterService.getBeverage('water') ?? BeverageType.defaultBeverages.first;
     await WaterService.addWaterLog(amountMl: 250, beverage: beverage);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Added 250 ml of water')));
+      context.toastSuccess('Added 250 ml of water');
     }
   }
 

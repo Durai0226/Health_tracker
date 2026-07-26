@@ -97,13 +97,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
   Future<void> _checkMilestones() async {
     final r = await MilestonesService.sync();
     if (!mounted || r.newlyEarned.isEmpty) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('Milestone reached · ${r.newlyEarned.first.title}'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ));
+    context.toastSuccess('Milestone reached · ${r.newlyEarned.first.title}');
   }
 
   bool get _healthAvailable => _availability == HealthAvailability.available;

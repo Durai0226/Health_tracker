@@ -102,15 +102,11 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
   }
 
   void _snack(String message, {bool error = false}) {
-    final ext = AppColorsExt.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: error ? ext.error.base : ext.water.base,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-      ),
-    );
+    if (error) {
+      context.toastError(message);
+    } else {
+      context.toastSuccess(message);
+    }
   }
 
   Future<void> _save() async {
@@ -682,15 +678,7 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
   }
 
   void _snack(String message) {
-    final ext = AppColorsExt.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: ext.error.base,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-      ),
-    );
+    context.toastError(message);
   }
 
   @override

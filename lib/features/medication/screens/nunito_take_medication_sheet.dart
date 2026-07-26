@@ -79,9 +79,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     } catch (e) {
       debugPrint('Error taking medication: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        context.toastError('Error: $e');
       }
     }
 
@@ -115,9 +113,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     } catch (e) {
       debugPrint('Error skipping medication: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        context.toastError('Error: $e');
       }
     }
 
@@ -175,18 +171,14 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
       // suppresses missed-dose reconciliation for that slot. The dose stays
       // open and will reconcile to 'missed' if never taken.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Snoozed for $minutes min')),
-        );
+        context.toastInfo('Snoozed for $minutes min');
         Navigator.pop(context, {'snoozed': true, 'minutes': minutes});
       }
     } catch (e) {
       debugPrint('Error snoozing medication: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        context.toastError('Error: $e');
       }
     }
   }

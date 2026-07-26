@@ -63,15 +63,7 @@ class _WaterRemindersSettingsScreenState
     await prefs.setBool('water_smart_reminders', _smartReminders);
 
     if (mounted) {
-      final ext = AppColorsExt.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Reminders saved!'),
-          backgroundColor: ext.water.base,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        ),
-      );
+      context.toastSuccess('Reminders saved!');
       Navigator.pop(context);
     }
   }

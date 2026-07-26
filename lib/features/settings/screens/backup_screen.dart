@@ -40,9 +40,7 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       await _backupService.createBackup();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Backup created successfully')),
-      );
+      context.toastSuccess('Backup created successfully');
       _loadBackups();
     } catch (e) {
       _showError('Failed to create backup: $e');
@@ -79,9 +77,7 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       await _backupService.restoreBackup(backup.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Backup restored successfully')),
-      );
+      context.toastSuccess('Backup restored successfully');
       // Maybe navigate to home or restart app logic?
       // Navigator.pop(context); // Optional
     } catch (e) {
@@ -120,9 +116,7 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       await _backupService.deleteBackup(backup.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Backup deleted successfully')),
-      );
+      context.toastSuccess('Backup deleted successfully');
       _loadBackups();
     } catch (e) {
       _showError('Failed to delete backup: $e');
@@ -132,10 +126,7 @@ class _BackupScreenState extends State<BackupScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    final ext = AppColorsExt.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: ext.fillBg(ext.error)),
-    );
+    context.toastError(message);
   }
 
   @override

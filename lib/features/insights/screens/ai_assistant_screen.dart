@@ -38,22 +38,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _taps++;
 
     final remaining = _tapsToUnlock - _taps;
-    final messenger = ScaffoldMessenger.of(context);
     if (_taps >= _tapsToUnlock) {
       _taps = 0;
       await AiDeveloperScreen.setUnlocked(true);
       if (!mounted) return;
-      messenger.clearSnackBars();
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Developer options unlocked 🛠️'),
-          duration: Duration(seconds: 2)));
+      context.toastSuccess('Developer options unlocked 🛠️');
       setState(() {}); // reveal the Developer row
     } else if (remaining <= 3) {
-      messenger.clearSnackBars();
-      messenger.showSnackBar(SnackBar(
-          content: Text(
-              '$remaining ${remaining == 1 ? 'tap' : 'taps'} from developer options'),
-          duration: const Duration(milliseconds: 900)));
+      context.toastInfo(
+          '$remaining ${remaining == 1 ? 'tap' : 'taps'} from developer options');
     }
   }
 

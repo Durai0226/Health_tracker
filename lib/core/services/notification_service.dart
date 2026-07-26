@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+import 'dart:ui' as ui; // IsolateNameServer — stop a ringing AlarmScreen
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -558,9 +559,24 @@ class NotificationService {
     }
   }
 
+  /// Tell a live full-screen [AlarmScreen] (same isolate) to stop ringing and
+  /// close, when the user acts from the NOTIFICATION instead of the on-screen
+  /// buttons. No-op when no alarm screen is showing.
+  void _signalStopAlarmScreen(int? id) {
+    try {
+      ui.IsolateNameServer.lookupPortByName('db_alarm_stop_${id ?? 'default'}')
+          ?.send('stop');
+    } catch (_) {}
+  }
+
   void _onNotificationTap(NotificationResponse response) {
     debugPrint('🔔 Notification response: ${response.actionId}');
-    
+    // Any action from the notification should also silence + close a ringing
+    // full-screen AlarmScreen (its looping player lives in the foreground).
+    if (response.actionId != null && response.actionId!.isNotEmpty) {
+      _signalStopAlarmScreen(response.id);
+    }
+
     // Handle actions
     if (response.actionId == 'snooze') {
       final settings = CleanStorageService.getUserSettings();

@@ -6,6 +6,7 @@ export 'app_card.dart';
 export 'app_logo.dart';
 export 'app_nav_bar.dart';
 export 'app_button.dart';
+export 'app_toast.dart';
 export 'app_switch.dart';
 export 'settings_tile.dart';
 export 'primitives.dart';

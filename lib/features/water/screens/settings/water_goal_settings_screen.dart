@@ -54,15 +54,7 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
         profile.copyWith(customGoalMl: _dailyGoalMl, useCustomGoal: true));
 
     if (mounted) {
-      final ext = AppColorsExt.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Goal saved!'),
-          backgroundColor: ext.water.base,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        ),
-      );
+      context.toastSuccess('Goal saved!');
       Navigator.pop(context);
     }
   }
@@ -72,8 +64,6 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
   /// free on-device rule engine via AiAssistant. On any failure it leaves the
   /// current goal untouched. Manual entry stays fully intact either way.
   Future<void> _suggestGoalWithAi() async {
-    final ext = AppColorsExt.of(context);
-
     setState(() => _suggesting = true);
     HapticFeedback.mediumImpact();
 
@@ -90,28 +80,14 @@ class _WaterGoalSettingsScreenState extends State<WaterGoalSettingsScreen> {
       if (!mounted) return;
 
       if (goalMl == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Couldn't suggest a goal right now. Try again."),
-            backgroundColor: ext.water.base,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-          ),
-        );
+        context.toastError("Couldn't suggest a goal right now. Try again.");
         return;
       }
 
       final clamped = goalMl.clamp(1500, 4000);
       setState(() => _dailyGoalMl = clamped);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'AI suggests ${_formatGoal(clamped)}. Review, then tap Save Goal.'),
-          backgroundColor: ext.water.base,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        ),
-      );
+      context.toastInfo(
+          'AI suggests ${_formatGoal(clamped)}. Review, then tap Save Goal.');
     } finally {
       if (mounted) setState(() => _suggesting = false);
     }

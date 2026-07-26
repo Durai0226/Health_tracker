@@ -28,11 +28,9 @@ class AiDeveloperScreen extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     Future<void> lock() async {
-      final messenger = ScaffoldMessenger.of(context);
       final navigator = Navigator.of(context);
       await AiDeveloperScreen.setUnlocked(false);
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Developer options locked')));
+      context.toastInfo('Developer options locked');
       navigator.pop();
     }
 

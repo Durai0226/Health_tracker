@@ -7,6 +7,7 @@ import '../../../core/ai/insight_engine.dart';
 import '../../../core/ai/hydration_pacer.dart';
 import '../../../core/widgets/app/ai_insight_kit.dart';
 import '../../../core/widgets/app/ai_widgets.dart';
+import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/water_hero_gauge.dart';
 import '../widgets/aqua_shimmer.dart';
@@ -154,16 +155,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       if (beverage == null) {
         debugPrint('⚠️ Unknown beverage id "$beverageId" — skipping log');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Unknown beverage — not logged'),
-              backgroundColor: AquaTheme.warning,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-              ),
-            ),
-          );
+          context.toastWarning('Unknown beverage — not logged');
         }
         return;
       }
@@ -229,12 +221,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     } catch (e) {
       debugPrint('Error adding water: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to add water: $e'),
-            backgroundColor: AquaTheme.error,
-          ),
-        );
+        context.toastError('Failed to add water: $e');
       }
     }
   }

@@ -110,29 +110,25 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       final ids = _drainedLogIds;
       _drainedLogIds = const [];
       final n = ids.length;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text('Logged $n dose${n == 1 ? '' : 's'} from your reminder'),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () async {
-              for (final id in ids) {
-                // Reverse the stock decrement for taken doses before deleting,
-                // otherwise Undo silently loses inventory.
-                final log = await MedicineCleanStorageService.getLog(id);
-                if (log != null && log.isTaken) {
-                  await MedicineCleanStorageService.restoreStock(
-                      log.medicineId, log.dosageTaken);
-                }
-                await MedicineCleanStorageService.deleteLog(id);
+      context.toastSuccess(
+        'Logged $n dose${n == 1 ? '' : 's'} from your reminder',
+        action: AppToastAction(
+          label: 'Undo',
+          onPressed: () async {
+            for (final id in ids) {
+              // Reverse the stock decrement for taken doses before deleting,
+              // otherwise Undo silently loses inventory.
+              final log = await MedicineCleanStorageService.getLog(id);
+              if (log != null && log.isTaken) {
+                await MedicineCleanStorageService.restoreStock(
+                    log.medicineId, log.dosageTaken);
               }
-              await _loadData();
-            },
-          ),
-        ));
+              await MedicineCleanStorageService.deleteLog(id);
+            }
+            await _loadData();
+          },
+        ),
+      );
     }
 
     // One-shot: after a real adherence "win", ask for a store rating (never nags).
