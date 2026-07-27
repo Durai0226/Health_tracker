@@ -600,17 +600,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   // 5 — 4-up pulse row (Meds · Water · Focus · Reminders).
                   _buildPulseRow(ext),
                   const SizedBox(height: AppSpacing.xl),
-                  // 6/7 — Quick log deck.
-                  SectionHeader(
-                      title: 'Quick log',
-                      icon: Symbols.bolt_rounded,
-                      accent: ext.brand,
-                      actionLabel: 'More',
-                      onAction: () => LogSomethingSheet.show(context)),
-                  const SizedBox(height: AppSpacing.xs),
-                  _buildQuickLogDeck(ext),
-                  const SizedBox(height: AppSpacing.xl),
-                  // 8/9 — customizable feature feed.
+                  // Today = one hero + one roll-up (pulse row) + the feed below.
+                  // The old "Quick log" deck was removed — it restated the pulse
+                  // row and the center "+ Log" action (three copies of the same
+                  // four features). Quick logging still lives on "+ Log" and the
+                  // feed cards.
                   SectionHeader(
                       title: 'Today',
                       accent: ext.brand,
