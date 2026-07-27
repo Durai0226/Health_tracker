@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../core/ai/insight.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/services/voice_input_service.dart';
 import '../services/assistant_service.dart';
 import '../services/chat_store.dart';
 import 'memories_screen.dart';
@@ -27,10 +28,12 @@ class AssistantScreen extends StatefulWidget {
 
 class _AssistantScreenState extends State<AssistantScreen> {
   final _controller = TextEditingController();
+  final _inputFocus = FocusNode();
   final _scroll = ScrollController();
   final List<ChatMessage> _messages = [];
   List<String> _followups = AssistantService.starters;
   bool _thinking = false;
+  bool _listening = false;
 
   @override
   void initState() {
@@ -51,9 +54,51 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   @override
   void dispose() {
+    VoiceInputService.instance.cancel();
     _controller.dispose();
+    _inputFocus.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Puts an example into the composer (without sending) so the user can tweak
+  /// a number then send — used by the "just log it" examples.
+  void _prefill(String text) {
+    _controller.text = text;
+    _controller.selection = TextSelection.collapsed(offset: text.length);
+    _inputFocus.requestFocus();
+  }
+
+  /// Toggles voice dictation into the composer. Falls back silently (a toast)
+  /// when the device has no recognizer or the mic permission is denied.
+  Future<void> _toggleMic() async {
+    if (_listening) {
+      await VoiceInputService.instance.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    HapticFeedback.selectionClick();
+    FocusScope.of(context).unfocus();
+    final started = await VoiceInputService.instance.start(
+      onText: (text, isFinal) {
+        if (!mounted) return;
+        setState(() {
+          _controller.text = text;
+          _controller.selection =
+              TextSelection.collapsed(offset: text.length);
+        });
+      },
+      onDone: () {
+        if (mounted) setState(() => _listening = false);
+      },
+    );
+    if (!mounted) return;
+    if (started) {
+      setState(() => _listening = true);
+    } else {
+      context.toastInfo(
+          'Voice input isn\'t available on this device. You can type instead.');
+    }
   }
 
   Future<void> _send(String raw) async {
@@ -219,6 +264,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 _starterMenu(ext),
+                const SizedBox(height: AppSpacing.xl),
+                _logMenu(ext, accent),
               ],
             ),
           ),
@@ -287,6 +334,33 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ],
             ],
           ),
+        ),
+      ],
+    );
+  }
+
+  /// "Just log it" examples — tapping pre-fills the composer so the user learns
+  /// they can record entries in plain words ("drank 500 ml" → ✓), not only ask.
+  Widget _logMenu(AppColorsExt ext, AccentSwatch accent) {
+    final tt = Theme.of(context).textTheme;
+    const items = AssistantService.logExamples;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('OR JUST LOG IT',
+            style: tt.labelSmall
+                ?.copyWith(color: ext.textTertiary, letterSpacing: 0.6)),
+        const SizedBox(height: AppSpacing.xs),
+        Text('Tell me in plain words and I\'ll record it — tap one to try.',
+            style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in items)
+              AppChip(label: e, accent: accent, onTap: () => _prefill(e)),
+          ],
         ),
       ],
     );
@@ -553,12 +627,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    focusNode: _inputFocus,
                     textInputAction: TextInputAction.send,
                     onSubmitted: _send,
                     minLines: 1,
                     maxLines: 4,
                     decoration: InputDecoration(
-                      hintText: 'Ask about your health…',
+                      hintText: _listening
+                          ? 'Listening…'
+                          : 'Ask, or just log — e.g. "drank 500 ml"',
                       filled: true,
                       fillColor: ext.surfaceVariant,
                       contentPadding: const EdgeInsets.symmetric(
@@ -566,6 +643,33 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       border: const OutlineInputBorder(
                           borderRadius: AppRadius.brFull,
                           borderSide: BorderSide.none),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Semantics(
+                  button: true,
+                  label: _listening ? 'Stop voice input' : 'Voice input',
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Material(
+                      color: _listening
+                          ? ext.fillBg(accent)
+                          : ext.surfaceVariant,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _thinking ? null : _toggleMic,
+                        child: Icon(
+                            _listening
+                                ? Symbols.stop_rounded
+                                : Symbols.mic_rounded,
+                            color: _listening
+                                ? ext.fillFg(accent)
+                                : ext.textSecondary,
+                            size: 22),
+                      ),
                     ),
                   ),
                 ),

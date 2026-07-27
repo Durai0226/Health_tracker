@@ -96,6 +96,18 @@ class AssistantService {
     'What are my streaks?',
   ];
 
+  /// Natural-language logging examples. The assistant can *record* entries from
+  /// plain text ("drank 500 ml" → ✓), but that's invisible unless surfaced —
+  /// tapping one pre-fills the composer so the user can tweak the number and
+  /// send. Makes the "just tell me and I'll log it" capability discoverable.
+  static const List<String> logExamples = [
+    'I took my medicine',
+    'Drank 500 ml of water',
+    'My BP is 120/80',
+    'Blood sugar 110',
+    'Walked 6000 steps',
+  ];
+
   /// Answers [question]. [contextTopic] is the topic of the previous answer, so
   /// a bare follow-up ("why?", "tell me more", "is that bad?") is resolved
   /// against it — a lightweight, deterministic multi-turn.

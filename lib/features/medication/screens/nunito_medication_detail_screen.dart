@@ -319,6 +319,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       onAsk: (q) => AiAssistant().medicineAnswer(
         name: name,
         dose: dose,
+        generic: _medicine.genericName,
         question: q,
         instructions: _medicine.instructions,
       ),

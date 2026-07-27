@@ -88,6 +88,8 @@ dependencies:
   app_tracking_transparency: ^2.0.6
   lottie: ^3.1.0
   flutter_tts: ^4.2.5
+  # On-device speech-to-text for the AI chat mic (uses the OS recognizer).
+  speech_to_text: ^7.4.0
   webview_flutter: ^4.10.0
   flutter_markdown: ^0.7.4
   url_launcher: ^6.2.5

@@ -35,7 +35,9 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>We need FaceID access to secure your private notes.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>We need microphone access to let you record audio notes.</string>
+	<string>We need microphone access to let you record audio notes and speak to the AI assistant.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>We use speech recognition to turn your voice into text when you talk to the AI assistant.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photo library to let you attach images to your notes.</string>
 	<key>NSUserNotificationsUsageDescription</key>

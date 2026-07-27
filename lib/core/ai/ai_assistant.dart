@@ -3,6 +3,7 @@ import 'ai_types.dart';
 import 'llm_engine.dart';
 import 'cloud_engine.dart';
 import 'rule_based_engine.dart';
+import 'drug_info_catalog.dart';
 import 'safety_guard.dart';
 import 'ai_merge.dart';
 import 'on_device_llm_engine.dart';
@@ -385,6 +386,7 @@ class AiAssistant {
   Future<String?> medicineAnswer({
     required String name,
     String? dose,
+    String? generic,
     required String question,
     String? instructions,
     String? locale,
@@ -417,6 +419,24 @@ class AiAssistant {
       );
       if (t != null) return SafetyGuard.ensureDisclaimer(t);
     }
+
+    // Curated OFFLINE drug-info KB: a real, well-established, drug-specific
+    // answer (uses / side-effects / food / precautions) instead of a generic
+    // "ask your pharmacist" deflection. Resolves brand → generic first.
+    await DrugInfoCatalog.ensureLoaded();
+    final grounded = DrugInfoCatalog.answer(
+      question: question,
+      generic: generic,
+      displayName: name,
+    );
+    if (grounded != null) {
+      final withNote =
+          instructions != null && instructions.trim().isNotEmpty
+              ? '$grounded\n\n_Your saved note: "${instructions.trim()}"._'
+              : grounded;
+      return SafetyGuard.ensureDisclaimer(withNote);
+    }
+
     final answer = _rule.medicineAnswer(
         name: name, dose: dose, question: question, instructions: instructions);
     // Guarantee the not-a-diagnosis note on every medical answer.
