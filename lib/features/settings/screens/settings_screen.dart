@@ -15,6 +15,9 @@ import 'vitavibe_settings_screen.dart';
 import '../../../core/services/vitavibe_service.dart';
 import 'backup_screen.dart';
 import '../../backup/presentation/screens/backup_settings_screen.dart';
+import '../../sleep/screens/sleep_schedule_settings_screen.dart';
+import '../../steps/screens/steps_goal_settings_screen.dart';
+import '../../water/screens/water_reminder_settings_screen.dart';
 import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
@@ -261,6 +264,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       _buildHapticSettingsTile(),
                       _buildVitaVibeSettingsTile(),
+                    ],
+                  ),
+
+                  // ---- Feature settings ----
+                  // One place to reach the per-feature reminder/goal settings
+                  // that were previously only reachable from inside each feature.
+                  _section(
+                    title: 'Feature settings',
+                    icon: Symbols.tune_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Symbols.water_drop_rounded,
+                        iconColor: ext.mark(ext.info),
+                        title: 'Water reminders',
+                        subtitle: 'Hydration reminder schedule',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const WaterReminderSettingsScreen())),
+                      ),
+                      AppListTile(
+                        icon: Symbols.bedtime_rounded,
+                        iconColor: ext.mark(ext.focus),
+                        title: 'Sleep schedule',
+                        subtitle: 'Bedtime & wake-up goals',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const SleepScheduleSettingsScreen())),
+                      ),
+                      AppListTile(
+                        icon: Symbols.directions_walk_rounded,
+                        iconColor: ext.mark(ext.success),
+                        title: 'Step goal',
+                        subtitle: 'Daily step target',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const StepsGoalSettingsScreen())),
+                      ),
                     ],
                   ),
 
