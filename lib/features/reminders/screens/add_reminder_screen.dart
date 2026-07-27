@@ -48,7 +48,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
-  final _noteController = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   DateTime _selectedDate = DateTime.now();
@@ -92,8 +91,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
     if (widget.reminder != null) {
       _titleController.text = widget.reminder!.title;
-      _bodyController.text = widget.reminder!.body;
-      _noteController.text = widget.reminder!.note ?? ''; // Load note
+      // Single free-text field: fold any legacy separate "note" into the
+      // Description (body) when body is empty, so old records aren't lost.
+      _bodyController.text = widget.reminder!.body.isNotEmpty
+          ? widget.reminder!.body
+          : (widget.reminder!.note ?? '');
       _selectedDate = widget.reminder!.scheduledTime;
       _selectedTime = TimeOfDay.fromDateTime(widget.reminder!.scheduledTime);
       _repeatType = widget.reminder!.repeatType;
@@ -155,7 +157,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
-    _noteController.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -301,7 +302,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         sound: _sound,
         priority: _priority,
         categoryId: _selectedCategoryId,
-        note: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null,
+        note: null, // merged into `body`; field kept (deprecated) for old records
         imagePath: _selectedImagePath,
         noteId: widget.noteId ?? widget.reminder?.noteId,
       );
@@ -752,22 +753,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                             setState(() => _selectedCategoryId = value);
                           },
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-
-                      // ---- Note ----
-                      SectionHeader(
-                        title: 'Note',
-                        icon: Symbols.sticky_note_2_rounded,
-                        accent: rem,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      AppTextField(
-                        controller: _noteController,
-                        hint: 'Add additional details...',
-                        accent: rem,
-                        maxLines: 3,
-                        textCapitalization: TextCapitalization.sentences,
                       ),
                       const SizedBox(height: AppSpacing.xl),
 

@@ -130,7 +130,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: AppMotion.slow,
-        pageBuilder: (_, __, ___) => const AppShell(),
+        // Land a brand-new user on the Meds tab — its empty state guides them
+        // straight to "Add your first medicine", so the "never miss a dose"
+        // promise has an immediate next step instead of an empty Today.
+        pageBuilder: (_, __, ___) => const AppShell(initialIndex: 1),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
           opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
           child: child,

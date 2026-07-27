@@ -2135,6 +2135,10 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final ext = AppColorsExt.of(context);
     final med = ext.medicine;
     final isLastStep = _currentStep == _totalSteps - 1;
+    // Once Schedule (step 2) is done the medicine has everything it needs — the
+    // remaining steps (Look, More) are purely optional. Let the user finish here
+    // instead of paging through two optional screens.
+    final canFinish = _currentStep >= 2;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -2147,31 +2151,54 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         color: ext.surface,
         border: Border(top: BorderSide(color: ext.outline)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (_currentStep > 0) ...[
-            Expanded(
+          // From Schedule onward, offer the optional Look/More steps as a light
+          // secondary rather than forcing users through them.
+          if (canFinish && !isLastStep) ...[
+            SizedBox(
+              width: double.infinity,
               child: AppButton(
-                label: 'Back',
-                variant: AppButtonVariant.secondary,
+                label: 'Add appearance & extras',
+                variant: AppButtonVariant.ghost,
                 accent: med,
-                fullWidth: true,
-                onPressed: _previousStep,
+                trailingIcon: Symbols.arrow_forward_rounded,
+                onPressed: _isLoading ? null : _nextStep,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(height: 8),
           ],
-          Expanded(
-            child: AppButton(
-              label: isLastStep
-                  ? (_isEditing ? 'Save Changes' : 'Add Medication')
-                  : 'Continue',
-              variant: AppButtonVariant.primary,
-              accent: med,
-              fullWidth: true,
-              loading: _isLoading,
-              onPressed: _isLoading ? null : _nextStep,
-            ),
+          Row(
+            children: [
+              if (_currentStep > 0) ...[
+                Expanded(
+                  child: AppButton(
+                    label: 'Back',
+                    variant: AppButtonVariant.secondary,
+                    accent: med,
+                    fullWidth: true,
+                    onPressed: _previousStep,
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: AppButton(
+                  label: canFinish
+                      ? (_isEditing ? 'Save Changes' : 'Add Medication')
+                      : 'Continue',
+                  variant: AppButtonVariant.primary,
+                  accent: med,
+                  fullWidth: true,
+                  loading: _isLoading,
+                  // Schedule reached → save directly; earlier steps → advance.
+                  onPressed: _isLoading
+                      ? null
+                      : (canFinish ? _saveMedicine : _nextStep),
+                ),
+              ),
+            ],
           ),
         ],
       ),

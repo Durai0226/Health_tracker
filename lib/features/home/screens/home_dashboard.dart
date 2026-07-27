@@ -21,9 +21,6 @@ import '../../insights/screens/insights_hub_screen.dart';
 import '../../insights/screens/proactive_nudge.dart';
 import '../widgets/log_something_sheet.dart';
 import '../../../widgets/smart_ad_widgets.dart';
-import '../../../core/widgets/app/vitals_theme.dart';
-import '../../medication/services/vitals_storage_service.dart';
-import '../../period/services/period_service.dart';
 
 /// The unified landing screen — one calm "today" snapshot across every feature.
 /// The only greeting in the app.
@@ -60,10 +57,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
   // reset on pull-to-refresh, so it doesn't re-run on every unrelated rebuild.
   Future<String?>? _briefingFuture;
 
-  // Latest BP/glucose readings for the quick-log deck are async; memoize them
-  // against the vitals revision so they only re-query on an actual vitals write.
-  int _vitalsRev = -1;
-  Future<_DeckVitals>? _vitalsFuture;
 
   Future<_MedicineHomeData> _medicineData(int rev) {
     if (_medFuture == null || _medRev != rev) {
@@ -100,7 +93,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
     setState(() {
       _medFuture = null; // force a fresh medicine query
       _briefingFuture = null; // re-run the daily briefing
-      _vitalsFuture = null; // re-read latest BP/glucose
     });
     await Future.delayed(const Duration(milliseconds: 300));
   }
@@ -847,187 +839,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   // ---- quick log deck ------------------------------------------------------
 
-  /// A colorful 3×2 deck of capture tiles — each with its own accent badge and a
-  /// live value (or an inviting "Log"). Row 1 groups the ambient trackers
-  /// (Water · Steps · Sleep); row 2 the vitals/cycle (BP · Glucose · Period).
-  /// Wrapped in the water/focus notifiers + vitals revision so values stay live.
-  Widget _buildQuickLogDeck(AppColorsExt ext) {
-    final waterListenable = WaterService.listenToDailyData();
-    return ListenableBuilder(
-      listenable: _focus,
-      builder: (context, _) {
-        Widget content() => ValueListenableBuilder<int>(
-              valueListenable: VitalsStorageService.revision,
-              builder: (context, vrev, __) => FutureBuilder<_DeckVitals>(
-                future: _deckVitals(vrev),
-                builder: (context, snap) => _deckBody(ext, snap.data),
-              ),
-            );
-        if (waterListenable == null) return content();
-        return ValueListenableBuilder<Map<String, DailyWaterData>>(
-          valueListenable: waterListenable,
-          builder: (context, ___, ____) => content(),
-        );
-      },
-    );
-  }
-
-  Widget _deckBody(AppColorsExt ext, _DeckVitals? vitals) {
-    // Ambient trackers — synchronous reads, each guarded (mirrors _briefingData).
-    String? waterVal;
-    bool waterDone = false;
-    try {
-      final goal = WaterService.getDailyGoal();
-      final w = WaterService.getTodayData();
-      waterVal = w.effectiveHydrationMl > 0
-          ? _formatLitres(w.effectiveHydrationMl)
-          : null;
-      waterDone = goal > 0 && w.goalReached;
-    } catch (_) {}
-
-    String? stepsVal;
-    bool stepsDone = false;
-    try {
-      final st = StepService.getTodayData();
-      stepsVal = st.effectiveSteps > 0 ? _formatThousands(st.effectiveSteps) : null;
-      stepsDone = st.goalReached;
-    } catch (_) {}
-
-    // Sleep tile reflects TODAY's night specifically, so it reads as a genuine
-    // "log last night" prompt in the morning (empty → invites a log; logged →
-    // shows the duration and a done check), not a stale older night.
-    String? sleepVal;
-    bool sleepDone = false;
-    try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final s = SleepService.getForDate(today);
-      if (s != null && s.asleepMinutes > 0) {
-        sleepVal = _formatDuration(s.asleepMinutes);
-        sleepDone = true;
-      }
-    } catch (_) {}
-
-    String? periodVal;
-    try {
-      final day = PeriodService.getPrediction().dayOfCycle;
-      if (day != null) periodVal = 'Day $day';
-    } catch (_) {}
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _QuickLogTile(
-                accent: ext.water,
-                icon: Symbols.water_drop_rounded,
-                label: 'Water',
-                value: waterVal,
-                done: waterDone,
-                onTap: () => LogSomethingSheet.logWater(context),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _QuickLogTile(
-                accent: ext.steps,
-                icon: Symbols.footprint_rounded,
-                label: 'Steps',
-                value: stepsVal,
-                done: stepsDone,
-                onTap: () => LogSomethingSheet.logSteps(context),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _QuickLogTile(
-                accent: ext.sleep,
-                icon: Symbols.bedtime_rounded,
-                label: 'Sleep',
-                value: sleepVal,
-                done: sleepDone,
-                onTap: () => LogSomethingSheet.logSleep(context),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: _QuickLogTile(
-                accent: VitalsColors.bpAccent(ext.isDark),
-                icon: Symbols.cardiology_rounded,
-                label: 'BP',
-                value: vitals?.bp,
-                done: false,
-                onTap: () => LogSomethingSheet.logBloodPressure(context),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _QuickLogTile(
-                accent: VitalsColors.glucoseAccent(ext.isDark),
-                icon: Symbols.glucose_rounded,
-                label: 'Glucose',
-                value: vitals?.glucose,
-                done: false,
-                onTap: () => LogSomethingSheet.logBloodSugar(context),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _QuickLogTile(
-                accent: ext.period,
-                icon: Symbols.menstrual_health_rounded,
-                label: 'Period',
-                value: periodVal,
-                done: false,
-                onTap: () => LogSomethingSheet.logPeriod(context),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Future<_DeckVitals> _deckVitals(int rev) {
-    if (_vitalsFuture == null || _vitalsRev != rev) {
-      _vitalsRev = rev;
-      _vitalsFuture = _loadDeckVitals();
-    }
-    return _vitalsFuture!;
-  }
-
-  Future<_DeckVitals> _loadDeckVitals() async {
-    String? bp;
-    String? glucose;
-    try {
-      final list = await VitalsStorageService.getAllBp();
-      if (list.isNotEmpty) {
-        final r = list.first; // getAllBp is ordered newest-first
-        bp = '${r.systolic}/${r.diastolic}';
-      }
-    } catch (_) {}
-    try {
-      final list = await VitalsStorageService.getAllGlucose();
-      if (list.isNotEmpty) glucose = '${list.first.valueMgdl}';
-    } catch (_) {}
-    return _DeckVitals(bp: bp, glucose: glucose);
-  }
-
-  String _formatLitres(int ml) => '${(ml / 1000).toStringAsFixed(1)} L';
-
-  String _formatThousands(int n) => NumberFormat.decimalPattern().format(n);
-
-  String _formatDuration(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return h <= 0 ? '${m}m' : '${h}h ${m}m';
-  }
-
   void _addReminder() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AddReminderScreen()))
         .then((_) => mounted ? setState(() {}) : null);
@@ -1604,12 +1415,6 @@ class _PillarStats {
   });
 }
 
-/// Latest BP / glucose readings for the quick-log deck (null → invite "Log").
-class _DeckVitals {
-  final String? bp;
-  final String? glucose;
-  const _DeckVitals({this.bp, this.glucose});
-}
 
 /// A slow-pulsing 8px dot (0.5↔1.0 over ~1.2s). Reduce-motion → a static dot.
 class _PulseDot extends StatefulWidget {

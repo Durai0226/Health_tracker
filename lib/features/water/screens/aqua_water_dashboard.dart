@@ -366,11 +366,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                     customGoalMl: newGoal,
                     useCustomGoal: true,
                   );
+                  // Single canonical write: saveProfile already recomputes and
+                  // persists today's goal from effectiveGoalMl, so the separate
+                  // saveDailyData was redundant (and a second source of truth).
                   await WaterService.saveProfile(updatedProfile);
-
-                  final todayData = WaterService.getTodayData();
-                  final updatedData = todayData.copyWith(dailyGoalMl: newGoal);
-                  await WaterService.saveDailyData(updatedData);
 
                   if (context.mounted) {
                     Navigator.pop(context);
