@@ -15,6 +15,9 @@ import 'core/theme/app_theme.dart';
 import 'features/medication/screens/nunito_medication_dashboard.dart';
 import 'features/medication/screens/nunito_add_medication_flow.dart';
 import 'features/medication/services/medicine_storage_service.dart';
+import 'features/home/screens/home_dashboard.dart';
+import 'features/settings/screens/settings_screen.dart';
+import 'features/reminders/screens/add_reminder_screen.dart';
 import 'features/insights/screens/trends_dashboard_screen.dart';
 import 'features/insights/services/trends_data_service.dart' show TrendRange;
 import 'features/sleep/screens/sleep_dashboard_screen.dart';
@@ -135,6 +138,10 @@ class _QaHubState extends State<_QaHub> {
         // Add-medicine wizard opened straight on the Schedule step (index 2) to
         // screenshot the redesigned frequency + times UI.
         'add_med' => const NunitoAddMedicationFlow(debugInitialStep: 2),
+        // Phase 1-3 UX-review screens.
+        'home' => HomeDashboard(onNavigate: (i, {healthTab}) {}),
+        'settings' => const SettingsScreen(),
+        'add_reminder' => const AddReminderScreen(),
         _ => const StepsDashboardScreen(),
       };
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => target));
