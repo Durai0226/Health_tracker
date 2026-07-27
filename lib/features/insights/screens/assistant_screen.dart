@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../core/ai/insight.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../services/assistant_service.dart';
@@ -470,14 +471,13 @@ class _AssistantScreenState extends State<AssistantScreen> {
   Widget _answerBody(TextTheme tt, Color fg, String text) {
     final m = RegExp(r'^([\s\S]*?)\n\n_(.+)_\s*$').firstMatch(text);
     if (m == null) {
-      return Text(text, style: tt.bodyMedium?.copyWith(color: fg, height: 1.4));
+      return _md(tt, fg, text);
     }
     final ext = AppColorsExt.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(m.group(1)!.trimRight(),
-            style: tt.bodyMedium?.copyWith(color: fg, height: 1.4)),
+        _md(tt, fg, m.group(1)!.trimRight()),
         const SizedBox(height: AppSpacing.sm),
         Text(m.group(2)!,
             style: tt.bodySmall?.copyWith(
@@ -485,6 +485,26 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 height: 1.35,
                 fontStyle: FontStyle.italic)),
       ],
+    );
+  }
+
+  /// Renders assistant text as markdown so **bold**, bullets and headings show
+  /// properly instead of leaking literal asterisks. Bubble-colour aware.
+  Widget _md(TextTheme tt, Color fg, String data) {
+    final body = tt.bodyMedium?.copyWith(color: fg, height: 1.4);
+    return MarkdownBody(
+      data: data,
+      shrinkWrap: true,
+      styleSheet: MarkdownStyleSheet(
+        p: body,
+        listBullet: body,
+        strong: body?.copyWith(fontWeight: FontWeight.w700),
+        em: body?.copyWith(fontStyle: FontStyle.italic),
+        h1: tt.titleMedium?.copyWith(color: fg, fontWeight: FontWeight.w700),
+        h2: tt.titleSmall?.copyWith(color: fg, fontWeight: FontWeight.w700),
+        h3: tt.titleSmall?.copyWith(color: fg, fontWeight: FontWeight.w600),
+        blockSpacing: AppSpacing.sm,
+      ),
     );
   }
 

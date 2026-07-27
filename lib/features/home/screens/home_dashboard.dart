@@ -17,7 +17,7 @@ import '../../sleep/services/sleep_service.dart';
 import '../../reminders/models/reminder_model.dart';
 import '../../reminders/screens/add_reminder_screen.dart';
 import '../../settings/screens/settings_screen.dart';
-import '../../insights/screens/insights_hub_screen.dart';
+import '../../insights/screens/assistant_screen.dart';
 import '../../insights/screens/proactive_nudge.dart';
 import '../widgets/log_something_sheet.dart';
 import '../../../widgets/smart_ad_widgets.dart';
@@ -698,6 +698,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// output is DETERMINISTIC (rule engine), so it wears a time-of-day glyph, not
   /// the AI sparkle. Loads through the same [_briefingData] + [AiAssistant]
   /// path (and SafetyGuard) as before; no AiSeal / auto_awesome anywhere.
+  /// Opens the AI chat directly. The briefing sentence *is* the assistant
+  /// talking, so tapping it (or "Ask") should let the user ask follow-ups —
+  /// one tap, instead of hopping through the Insights hub first.
+  void _openAssistant() => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => const AssistantScreen()));
+
   Widget _buildBriefingStrip(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
     final hour = DateTime.now().hour;
@@ -724,38 +730,39 @@ class _HomeDashboardState extends State<HomeDashboard> {
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: FutureBuilder<String?>(
-                  future: _briefingSentence(),
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const LoadingSkeleton.line(width: 220);
-                    }
-                    final t = snap.data?.trim();
-                    final text = (t == null || t.isEmpty)
-                        ? "Here's your day — one small step at a time."
-                        : t;
-                    return Text(text,
-                        style:
-                            tt.bodyMedium?.copyWith(color: ext.textSecondary),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis);
-                  },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openAssistant,
+                  child: FutureBuilder<String?>(
+                    future: _briefingSentence(),
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const LoadingSkeleton.line(width: 220);
+                      }
+                      final t = snap.data?.trim();
+                      final text = (t == null || t.isEmpty)
+                          ? "Here's your day — one small step at a time."
+                          : t;
+                      return Text(text,
+                          style:
+                              tt.bodyMedium?.copyWith(color: ext.textSecondary),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis);
+                    },
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               InkWell(
                 borderRadius: AppRadius.brFull,
-                onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const InsightsHubScreen())),
+                onTap: _openAssistant,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 4, vertical: 6),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Insights',
+                      Text('Ask',
                           style: tt.labelMedium
                               ?.copyWith(color: ext.mark(ext.brand))),
                       Icon(Symbols.chevron_right_rounded,

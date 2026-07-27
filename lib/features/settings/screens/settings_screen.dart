@@ -10,6 +10,7 @@ import 'notification_settings_screen.dart';
 import 'premium_screen.dart';
 import '../../../core/services/premium_service.dart';
 import '../../insights/screens/ai_assistant_screen.dart';
+import '../../insights/screens/assistant_screen.dart';
 import 'haptic_settings_screen.dart';
 import 'vitavibe_settings_screen.dart';
 import '../../../core/services/vitavibe_service.dart';
@@ -311,18 +312,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   // ---- AI Assistant ----
-                  // One clear entry. Everything AI — the explainer, Memory, and
-                  // Privacy — lives inside AiAssistantScreen; engine/online-AI/key
-                  // are hidden developer controls unlocked there (tap version 7×).
+                  // Two clear entries: "Ask AI" opens the chat itself; "Assistant
+                  // settings" holds the explainer, Memory & Privacy (engine/model
+                  // are hidden developer controls unlocked there, tap version 7×).
                   _section(
                     title: 'Assistant',
                     icon: Symbols.auto_awesome_rounded,
                     tiles: [
                       AppListTile(
-                        icon: Symbols.auto_awesome_rounded,
+                        icon: Symbols.chat_rounded,
                         iconColor: ext.mark(ext.focus),
-                        title: 'AI Assistant',
-                        subtitle: 'Private, on-device · memory & data',
+                        title: 'Ask AI',
+                        subtitle: 'Chat about your health · private, on-device',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AssistantScreen())),
+                      ),
+                      AppListTile(
+                        icon: Symbols.tune_rounded,
+                        iconColor: ext.mark(ext.focus),
+                        title: 'Assistant settings',
+                        subtitle: 'What it remembers · privacy & data',
                         onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
