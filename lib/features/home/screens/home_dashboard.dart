@@ -447,7 +447,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
   List<String> _hiddenTodayCards() {
     final raw = CleanStorageService.getAppPreference(
         'today_hidden_cards', const <String>[]);
-    return raw is List ? raw.map((e) => e.toString()).toList() : const <String>[];
+    final list =
+        raw is List ? raw.map((e) => e.toString()).toList() : <String>[];
+    // 'activity' (Focus & Reminders) is their only home on the Today surface —
+    // never allow it to be hidden, or those features become unreachable.
+    return list.where((id) => id != 'activity').toList();
   }
 
   String _todayCardLabel(String id) {
@@ -521,16 +525,19 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       .bodyMedium
                       ?.copyWith(color: ext.textSecondary)),
               const SizedBox(height: AppSpacing.xs),
+              // 'activity' (Focus & Reminders) is intentionally not toggleable —
+              // it's their only home, so it always stays on Today.
               for (final id in _todayCardOrder)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(_todayCardLabel(id)),
-                  trailing: AppSwitch(
-                    value: !hidden.contains(id),
-                    onChanged: (v) => setCardVisible(id, v),
+                if (id != 'activity')
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_todayCardLabel(id)),
+                    trailing: AppSwitch(
+                      value: !hidden.contains(id),
+                      onChanged: (v) => setCardVisible(id, v),
+                    ),
+                    onTap: () => setCardVisible(id, hidden.contains(id)),
                   ),
-                  onTap: () => setCardVisible(id, hidden.contains(id)),
-                ),
               const SizedBox(height: AppSpacing.sm),
             ],
           );

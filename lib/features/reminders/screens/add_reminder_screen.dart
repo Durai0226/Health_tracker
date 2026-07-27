@@ -370,15 +370,9 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
-              actions: [
-                AppButton(
-                  label: 'Save',
-                  size: AppButtonSize.sm,
-                  accent: rem,
-                  loading: _isLoading,
-                  onPressed: _saveReminder,
-                ),
-              ],
+              // Single Save affordance — the primary "Create Reminder" / "Save
+              // Changes" button at the end of the form (the duplicate header
+              // Save was removed).
             ),
             Expanded(
               child: SingleChildScrollView(
