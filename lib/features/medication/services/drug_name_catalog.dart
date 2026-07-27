@@ -3,14 +3,23 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
-/// One suggestible drug: a display [name] (brand or generic) and its [generic]
-/// (active ingredient). Selecting a suggestion can pre-fill the generic, which
-/// powers the disclaimed interaction reference checks.
+import '../models/medicine_enums.dart';
+
+/// One suggestible drug: a display [name] (brand or generic), its [generic]
+/// (active ingredient), and the typical dosage [form]. Selecting a suggestion
+/// can pre-fill the generic (which powers the disclaimed interaction reference
+/// checks) and auto-select the [form] (tablet / drops / cream / …) so the user
+/// doesn't have to pick it manually.
 @immutable
 class DrugNameEntry {
   final String name;
   final String generic;
-  const DrugNameEntry({required this.name, required this.generic});
+
+  /// Typical dosage form for this medicine, when known. Null for older entries
+  /// that predate the form column (kept backward-compatible).
+  final DosageForm? form;
+
+  const DrugNameEntry({required this.name, required this.generic, this.form});
 }
 
 /// A small, bundled, offline drug-name catalog for typeahead on the add-medicine
@@ -31,12 +40,27 @@ class DrugNameCatalog {
         for (final e in list)
           if (e is Map && e['name'] != null && e['generic'] != null)
             DrugNameEntry(
-                name: e['name'].toString(), generic: e['generic'].toString())
+                name: e['name'].toString(),
+                generic: e['generic'].toString(),
+                form: _formFromName(e['form']))
       ];
     } catch (e) {
       debugPrint('⚠️ DrugNameCatalog load failed: $e');
       _entries = const [];
     }
+  }
+
+  /// Maps a JSON `form` string (an enum name like "drops"/"cream") to a
+  /// [DosageForm]. Returns null for unknown/absent values so old entries and
+  /// unrecognised forms degrade gracefully rather than breaking the load.
+  static DosageForm? _formFromName(dynamic raw) {
+    if (raw is! String) return null;
+    final v = raw.trim().toLowerCase();
+    if (v.isEmpty) return null;
+    for (final f in DosageForm.values) {
+      if (f.name == v) return f;
+    }
+    return null;
   }
 
   /// Resolve a display/brand name to its generic (active ingredient) via an

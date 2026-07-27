@@ -511,7 +511,9 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               children: [
                 for (final s in _nameSuggestions)
                   AppChip(
-                    label: s.name,
+                    // Prefix the form glyph (💊 / 💧 / 🧴 …) so the user can tell
+                    // a tablet from drops/cream before tapping.
+                    label: s.form != null ? '${s.form!.icon} ${s.name}' : s.name,
                     accent: med,
                     onTap: () {
                       _hapticService.selection();
@@ -521,6 +523,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                           offset: s.name.length);
                       if (_genericNameController.text.trim().isEmpty) {
                         _genericNameController.text = s.generic;
+                      }
+                      // Auto-select the typical form + its unit so the common
+                      // case (pick a suggestion) needs no manual form step.
+                      if (s.form != null) {
+                        _selectedForm = s.form!;
+                        _dosageUnit = s.form!.unit;
                       }
                       _suppressNameSuggest = false;
                       setState(() => _nameSuggestions = const []);
@@ -546,7 +554,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: DosageForm.values.take(8).map((form) {
+            children: _formOptions().map((form) {
               final isSelected = _selectedForm == form;
               return _buildSelectablePill(
                 context: context,
@@ -839,6 +847,15 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final wf = data['withFood']?.toString().toLowerCase();
     if (wf == 'true' || wf == 'with') return MealTiming.withMeal;
     return null;
+  }
+
+  /// The forms shown as quick-pick pills: the common eight, plus the currently
+  /// selected form if a suggestion auto-selected one outside that set (e.g.
+  /// inhaler / gel / spray) so it stays visible and highlighted.
+  List<DosageForm> _formOptions() {
+    final base = DosageForm.values.take(8).toList();
+    if (!base.contains(_selectedForm)) base.add(_selectedForm);
+    return base;
   }
 
   DosageForm? _parseForm(dynamic raw) {
