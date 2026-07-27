@@ -57,7 +57,9 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   List<int> _customDays = [];
   int _snoozeDuration = 5;
   String _sound = 'default';
-  ReminderPriority _priority = ReminderPriority.high;
+  // Default to a normal alert level — not every new reminder should fire at the
+  // most aggressive priority. Users can raise it when it truly matters.
+  ReminderPriority _priority = ReminderPriority.medium;
   String? _selectedCategoryId;
   String? _selectedImagePath;
   bool _isLoading = false;
@@ -647,11 +649,14 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                           entry.value['icon'] ?? 'notifications'),
                                       selected: _sound == entry.key,
                                       accent: rem,
-                                      // Select AND play the bundled sound so the
-                                      // user hears what they picked.
+                                      // Tap to select (no surprise auto-play);
+                                      // tap the already-selected one to preview.
                                       onTap: () {
-                                        setState(() => _sound = entry.key);
-                                        _previewSound();
+                                        if (_sound == entry.key) {
+                                          _previewSound();
+                                        } else {
+                                          setState(() => _sound = entry.key);
+                                        }
                                       },
                                     );
                                   }),
