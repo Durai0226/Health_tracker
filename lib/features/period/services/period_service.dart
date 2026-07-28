@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' as db;
 import 'package:tablet_remainder/core/database/daos/period_dao.dart';
@@ -9,6 +11,7 @@ import '../models/menstrual_cycle.dart';
 import '../models/period_day.dart';
 import '../models/period_settings.dart';
 import 'cycle_predictor.dart';
+import 'period_reminder_service.dart';
 
 /// Reactive menstrual-cycle service. Mirrors `WaterService`: an all-static class
 /// with a static [ValueNotifier], an idempotent [init] guarded by
@@ -63,6 +66,9 @@ class PeriodService {
     // Derive cycles in memory; don't write on a read-only launch.
     _recomputeCyclesInMemory();
     _isInitialized = true;
+    // Re-arm predictive period reminders on every startup (dates shift each
+    // cycle; the planner no-ops when nothing is enabled).
+    unawaited(PeriodReminderService.reschedule());
   }
 
   // ---- Days --------------------------------------------------------------
@@ -95,6 +101,7 @@ class PeriodService {
       await _persistDay(merged);
     }
     await _recomputeCycles();
+    unawaited(PeriodReminderService.reschedule()); // prediction shifted
   }
 
   /// Set just the flow for [date], preserving anything else already logged.
@@ -109,6 +116,7 @@ class PeriodService {
     _daysNotifier.value = map;
     await _deletePersist(id);
     await _recomputeCycles();
+    unawaited(PeriodReminderService.reschedule()); // prediction shifted
   }
 
   // ---- Cycles / stats / prediction --------------------------------------
@@ -154,6 +162,8 @@ class PeriodService {
     } catch (e) {
       debugPrint('⚠️ PeriodService save settings failed: $e');
     }
+    // Tracking-mode / cycle-length changes move the predicted dates.
+    unawaited(PeriodReminderService.reschedule());
   }
 
   // ---- Teardown ----------------------------------------------------------

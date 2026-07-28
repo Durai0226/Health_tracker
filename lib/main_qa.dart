@@ -31,7 +31,9 @@ import 'features/water/screens/hydration_profile_screen.dart';
 import 'features/water/screens/water_statistics_screen.dart';
 import 'features/water/screens/custom_cup_creator_screen.dart';
 import 'features/period/screens/period_dashboard.dart';
+import 'features/period/screens/period_reminder_settings_screen.dart';
 import 'features/period/services/period_service.dart';
+import 'features/settings/screens/reminders_hub_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -128,6 +130,8 @@ class _QaApp extends StatelessWidget {
       'water_stats' => const WaterStatisticsScreen(),
       'custom_cup' => const CustomCupCreatorScreen(),
       'period' => const PeriodDashboard(embedded: false),
+      'reminders_hub' => const RemindersHubScreen(),
+      'period_reminders' => const PeriodReminderSettingsScreen(),
       _ => _QaHub(screen: screen),
     };
     return MaterialApp(

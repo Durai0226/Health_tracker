@@ -19,6 +19,8 @@ import '../../backup/presentation/screens/backup_settings_screen.dart';
 import '../../sleep/screens/sleep_schedule_settings_screen.dart';
 import '../../steps/screens/steps_goal_settings_screen.dart';
 import '../../water/screens/water_reminder_settings_screen.dart';
+import '../../period/screens/period_reminder_settings_screen.dart';
+import 'reminders_hub_screen.dart';
 import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
@@ -276,6 +278,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Symbols.tune_rounded,
                     tiles: [
                       AppListTile(
+                        icon: Symbols.notifications_active_rounded,
+                        iconColor: ext.mark(ext.reminders),
+                        title: 'All reminders',
+                        subtitle: 'Every feature\'s nudges in one place',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const RemindersHubScreen())),
+                      ),
+                      AppListTile(
                         icon: Symbols.water_drop_rounded,
                         iconColor: ext.mark(ext.info),
                         title: 'Water reminders',
@@ -307,6 +319,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             MaterialPageRoute(
                                 builder: (_) =>
                                     const StepsGoalSettingsScreen())),
+                      ),
+                      AppListTile(
+                        icon: Symbols.calendar_month_rounded,
+                        iconColor: ext.mark(ext.period),
+                        title: 'Period reminders',
+                        subtitle: 'Cycle heads-ups & log nudges',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const PeriodReminderSettingsScreen())),
                       ),
                     ],
                   ),

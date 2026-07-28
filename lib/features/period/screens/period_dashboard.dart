@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
+import 'period_reminder_settings_screen.dart';
 import 'package:tablet_remainder/core/ai/ai_assistant.dart';
 
 import '../models/cycle_phase.dart';
@@ -176,6 +177,16 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
           ),
           const SizedBox(width: AppSpacing.md),
           Text('Cycle', style: tt.displaySmall),
+          const Spacer(),
+          AppIconButton(
+            icon: Symbols.notifications_rounded,
+            filled: false,
+            accent: ext.period,
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const PeriodReminderSettingsScreen())),
+          ),
         ],
       ),
     );
