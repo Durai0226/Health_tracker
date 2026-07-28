@@ -105,7 +105,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       body: Column(
         children: [
           AppHeader(
-            title: 'AI Assistant',
+            title: 'Assistant settings',
             accent: accent,
             leading: AppIconButton(
               icon: Symbols.arrow_back_rounded,

@@ -19,6 +19,7 @@ import 'features/home/screens/home_dashboard.dart';
 import 'features/settings/screens/settings_screen.dart';
 import 'features/reminders/screens/add_reminder_screen.dart';
 import 'features/insights/screens/trends_dashboard_screen.dart';
+import 'features/insights/screens/assistant_screen.dart';
 import 'features/insights/services/trends_data_service.dart' show TrendRange;
 import 'features/sleep/screens/sleep_dashboard_screen.dart';
 import 'features/sleep/services/sleep_service.dart';
@@ -102,11 +103,16 @@ class _QaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Full flows (the add-medicine wizard) render directly as home; the
+    // Full flows / self-scaffolded screens render directly as home; the
     // hub-then-push pattern is only needed for the dashboards.
-    final Widget home = screen == 'add_med'
-        ? const NunitoAddMedicationFlow(debugInitialStep: 2)
-        : _QaHub(screen: screen);
+    final Widget home = switch (screen) {
+      'add_med' => const NunitoAddMedicationFlow(debugInitialStep: 2),
+      // Step 1 (Basic info) to screenshot the name auto-suggestion chips.
+      'add_med_step1' => const NunitoAddMedicationFlow(debugInitialStep: 0),
+      // The AI chat empty state (starters + "OR JUST LOG IT" + composer/mic).
+      'assistant' => const AssistantScreen(),
+      _ => _QaHub(screen: screen),
+    };
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
