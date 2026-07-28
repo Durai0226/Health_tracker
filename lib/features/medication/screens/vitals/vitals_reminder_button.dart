@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
-import '../../../../core/design/app_colors_ext.dart';
-import '../../../../core/services/clean_storage_service.dart';
-import '../../../../core/services/notification_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
+import '../../services/vitals_reminder_service.dart';
 
 /// A one-tap "remind me to measure" control for a vitals tracker. Tapping when
 /// off asks for a time and schedules a daily local notification; tapping when on
@@ -36,20 +34,29 @@ class _VitalsReminderButtonState extends State<VitalsReminderButton> {
   int _hour = 9;
   int _min = 0;
 
+  // Build a spec from this button's params so the header button, the Vitals
+  // reminder settings screen and the Reminders hub share one source of truth.
+  VitalsReminderSpec get _spec => VitalsReminderSpec(
+        id: widget.id,
+        prefKey: widget.prefKey,
+        title: widget.title,
+        body: widget.body,
+        defaultHour: widget.defaultHour,
+      );
+
   @override
   void initState() {
     super.initState();
-    _hour = widget.defaultHour;
-    _enabled = CleanStorageService.getAppPreference('${widget.prefKey}_on', false) == true;
-    _hour = CleanStorageService.getAppPreference('${widget.prefKey}_h', widget.defaultHour) as int? ?? widget.defaultHour;
-    _min = CleanStorageService.getAppPreference('${widget.prefKey}_m', 0) as int? ?? 0;
+    _enabled = VitalsReminderService.isEnabled(_spec);
+    final t = VitalsReminderService.timeOf(_spec);
+    _hour = t.hour;
+    _min = t.minute;
   }
 
   Future<void> _toggle() async {
     HapticFeedback.selectionClick();
     if (_enabled) {
-      await NotificationService().cancelNotification(widget.id);
-      await CleanStorageService.setAppPreference('${widget.prefKey}_on', false);
+      await VitalsReminderService.apply(_spec, enabled: false);
       if (mounted) {
         setState(() => _enabled = false);
         _snack('Daily reminder turned off');
@@ -62,16 +69,8 @@ class _VitalsReminderButtonState extends State<VitalsReminderButton> {
       title: 'Remind me to measure',
     );
     if (picked == null) return;
-    await NotificationService().scheduleDailyNotification(
-      id: widget.id,
-      title: widget.title,
-      body: widget.body,
-      hour: picked.hour,
-      minute: picked.minute,
-    );
-    await CleanStorageService.setAppPreference('${widget.prefKey}_on', true);
-    await CleanStorageService.setAppPreference('${widget.prefKey}_h', picked.hour);
-    await CleanStorageService.setAppPreference('${widget.prefKey}_m', picked.minute);
+    await VitalsReminderService.apply(_spec,
+        enabled: true, hour: picked.hour, minute: picked.minute);
     if (mounted) {
       setState(() {
         _enabled = true;

@@ -33,6 +33,7 @@ import 'features/water/screens/custom_cup_creator_screen.dart';
 import 'features/period/screens/period_dashboard.dart';
 import 'features/period/screens/period_reminder_settings_screen.dart';
 import 'features/period/services/period_service.dart';
+import 'features/medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import 'features/settings/screens/reminders_hub_screen.dart';
 
 Future<void> main() async {
@@ -132,6 +133,7 @@ class _QaApp extends StatelessWidget {
       'period' => const PeriodDashboard(embedded: false),
       'reminders_hub' => const RemindersHubScreen(),
       'period_reminders' => const PeriodReminderSettingsScreen(),
+      'vitals_reminders' => const VitalsReminderSettingsScreen(),
       _ => _QaHub(screen: screen),
     };
     return MaterialApp(

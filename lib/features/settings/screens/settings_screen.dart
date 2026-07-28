@@ -20,6 +20,7 @@ import '../../sleep/screens/sleep_schedule_settings_screen.dart';
 import '../../steps/screens/steps_goal_settings_screen.dart';
 import '../../water/screens/water_reminder_settings_screen.dart';
 import '../../period/screens/period_reminder_settings_screen.dart';
+import '../../medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import 'reminders_hub_screen.dart';
 import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
@@ -330,6 +331,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             MaterialPageRoute(
                                 builder: (_) =>
                                     const PeriodReminderSettingsScreen())),
+                      ),
+                      AppListTile(
+                        icon: Symbols.favorite_rounded,
+                        iconColor: ext.mark(ext.medicine),
+                        title: 'Vitals reminders',
+                        subtitle: 'Blood pressure & blood sugar checks',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const VitalsReminderSettingsScreen())),
                       ),
                     ],
                   ),

@@ -4,6 +4,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../focus/screens/settings/focus_reminders_settings_screen.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
+import '../../medication/screens/vitals/vitals_reminder_settings_screen.dart';
+import '../../medication/services/vitals_reminder_service.dart';
 import '../../period/screens/period_reminder_settings_screen.dart';
 import '../../period/services/period_reminder_service.dart';
 import '../../sleep/screens/sleep_schedule_settings_screen.dart';
@@ -21,6 +23,9 @@ class RemindersHubScreen extends StatelessWidget {
     final ext = AppColorsExt.of(context);
     final acc = ext.reminders;
     final periodOn = PeriodReminderService.getConfig().anyEnabled;
+    final bpOn = VitalsReminderService.isEnabled(VitalsReminderService.bp);
+    final sugarOn =
+        VitalsReminderService.isEnabled(VitalsReminderService.glucose);
 
     void go(Widget dest) =>
         Navigator.push(context, MaterialPageRoute(builder: (_) => dest));
@@ -75,6 +80,22 @@ class RemindersHubScreen extends StatelessWidget {
                       title: 'Steps',
                       subtitle: 'A nudge toward your daily goal',
                       onTap: () => go(const StepsGoalSettingsScreen()),
+                    ),
+                    SettingsTile(
+                      icon: Symbols.favorite_rounded,
+                      accent: ext.medicine,
+                      title: 'Blood pressure',
+                      subtitle: 'A daily nudge to measure & log',
+                      value: bpOn ? 'On' : 'Off',
+                      onTap: () => go(const VitalsReminderSettingsScreen()),
+                    ),
+                    SettingsTile(
+                      icon: Symbols.bloodtype_rounded,
+                      accent: ext.medicine,
+                      title: 'Blood sugar',
+                      subtitle: 'A daily nudge to measure & log',
+                      value: sugarOn ? 'On' : 'Off',
+                      onTap: () => go(const VitalsReminderSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.self_improvement_rounded,
