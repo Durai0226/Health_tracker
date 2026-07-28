@@ -229,7 +229,15 @@ class SleepService {
     String? note,
   }) async {
     var inBed = wakeTime.difference(bedtime).inMinutes;
-    if (inBed <= 0) inBed = 1; // guard degenerate input
+    if (inBed <= 0) {
+      // wake ≤ bedtime → assume the bedtime was the previous evening (an
+      // overnight session) instead of silently recording a 1-minute night.
+      // The manual sheet already shifts; other callers (quick-log, AI NL
+      // logging) may pass same-day times.
+      bedtime = bedtime.subtract(const Duration(days: 1));
+      inBed = wakeTime.difference(bedtime).inMinutes;
+    }
+    if (inBed <= 0) inBed = 1; // final fallback for still-degenerate input
 
     // Estimated efficiency scales with the 1..5 quality rating.
     final q = quality.clamp(1, 5);
