@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'core/database/app_database.dart';
 import 'core/services/clean_storage_service.dart';
+import 'core/services/feature_flag_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/medication/screens/nunito_medication_dashboard.dart';
 import 'features/medication/screens/nunito_add_medication_flow.dart';
@@ -30,6 +31,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppDatabase.instance; // open Drift
   await CleanStorageService.init();
+  await FeatureFlagService().init();
   await StepService.init();
   await SleepService.init();
   try {

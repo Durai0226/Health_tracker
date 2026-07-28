@@ -13,7 +13,10 @@ class FeatureFlagService {
   factory FeatureFlagService() => _instance;
   FeatureFlagService._internal();
 
-  late SharedPreferences _prefs;
+  // Nullable (not `late`) so a flag read BEFORE init() degrades to its default
+  // instead of throwing a LateInitializationError. A feature flag is not worth
+  // crashing a screen over.
+  SharedPreferences? _prefs;
   final ValueNotifier<bool> _notifier = ValueNotifier(false);
 
   Future<void> init() async {
@@ -21,11 +24,12 @@ class FeatureFlagService {
   }
 
   bool isEnabled(String key, {bool defaultValue = false}) {
-    return _prefs.getBool('$_prefix$key') ?? defaultValue;
+    return _prefs?.getBool('$_prefix$key') ?? defaultValue;
   }
 
   Future<void> setEnabled(String key, bool value) async {
-    await _prefs.setBool('$_prefix$key', value);
+    final prefs = _prefs ??= await SharedPreferences.getInstance();
+    await prefs.setBool('$_prefix$key', value);
     _notifier.value = !_notifier.value;
   }
 

@@ -104,7 +104,9 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           : [];
       _snoozeDuration = widget.reminder?.snoozeDuration ?? 5;
       _sound = widget.reminder?.sound ?? 'default';
-      _priority = widget.reminder?.priority ?? ReminderPriority.high;
+      // New reminders default to Medium (matches the model default) — High for
+      // every reminder was needlessly aggressive.
+      _priority = widget.reminder?.priority ?? ReminderPriority.medium;
       _selectedCategoryId = widget.reminder?.categoryId;
       _selectedImagePath = widget.reminder?.imagePath; // Load image path
     }

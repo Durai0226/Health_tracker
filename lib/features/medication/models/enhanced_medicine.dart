@@ -112,6 +112,10 @@ class EnhancedMedicine {
 
   // Computed properties
   bool get isLowStock {
+    // Refill/stock tracking is opt-in (refillReminderEnabled, default off). An
+    // untracked medicine's stock is persisted as 0, so without this gate every
+    // medicine added without a quantity would read as a false "low stock".
+    if (!refillReminderEnabled) return false;
     if (currentStock == null || lowStockThreshold == null) return false;
     return currentStock! <= lowStockThreshold!;
   }
@@ -136,7 +140,8 @@ class EnhancedMedicine {
           : HealthCategory.custom;
 
   int get estimatedDaysRemaining {
-    if (currentStock == null) return -1;
+    // Only meaningful when stock is actually tracked (see [isLowStock]).
+    if (!refillReminderEnabled || currentStock == null) return -1;
     // Average units consumed per day over a representative window, using the
     // schedule's real per-day slots. `schedule.times.length` alone was wrong for
     // everyXHours (interval fan-out) and for specificDays / everyXDays / cyclical
