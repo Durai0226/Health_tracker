@@ -104,11 +104,13 @@ class HydrationProfile {
       baseMl *= 0.9;
     }
 
-    // Pregnancy/breastfeeding adjustment
-    if (isPregnant) {
+    // Pregnancy/breastfeeding adjustment — only for female profiles. Guarded on
+    // !isMale so switching gender to Male doesn't leave a stale +300/+700 bonus
+    // (the toggles are only shown for females and aren't reset on gender change).
+    if (!isMale && isPregnant) {
       baseMl += 300;
     }
-    if (isBreastfeeding) {
+    if (!isMale && isBreastfeeding) {
       baseMl += 700;
     }
 

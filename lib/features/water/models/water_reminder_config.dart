@@ -51,7 +51,12 @@ class WaterReminderConfig {
     if (!respectQuietHours) return sorted;
     final lo = wakeHour * 60;
     final hi = bedHour * 60;
-    return sorted.where((m) => m >= lo && m <= hi).toList();
+    if (lo <= hi) {
+      return sorted.where((m) => m >= lo && m <= hi).toList();
+    }
+    // Overnight awake window (e.g. a night-shift profile: wake 22:00, bed 06:00)
+    // wraps past midnight, so a single lo..hi range would filter out everything.
+    return sorted.where((m) => m >= lo || m <= hi).toList();
   }
 
   WaterReminderConfig copyWith({

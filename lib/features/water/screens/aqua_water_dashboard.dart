@@ -53,6 +53,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   DailyWaterData? _todayData;
   int _dailyGoal = 2500;
   bool _isLoading = true;
+  bool _savingGoal = false; // reentrancy guard for the quick-goal sheet
   String _selectedBeverageId = 'water';
   List<DayProgress> _weekData = [];
 
@@ -360,6 +361,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
               const SizedBox(height: AquaTheme.spacingXL),
               GestureDetector(
                 onTap: () async {
+                  // Reentrancy guard: a rapid double-tap otherwise saved twice
+                  // AND popped twice — the second pop closed the dashboard route.
+                  if (_savingGoal) return;
+                  _savingGoal = true;
                   HapticFeedback.mediumImpact();
                   final profile = WaterService.getProfile();
                   final updatedProfile = profile.copyWith(
@@ -369,9 +374,13 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                   // Single canonical write: saveProfile already recomputes and
                   // persists today's goal from effectiveGoalMl, so the separate
                   // saveDailyData was redundant (and a second source of truth).
-                  await WaterService.saveProfile(updatedProfile);
+                  try {
+                    await WaterService.saveProfile(updatedProfile);
+                  } finally {
+                    _savingGoal = false;
+                  }
 
-                  if (context.mounted) {
+                  if (context.mounted && Navigator.canPop(context)) {
                     Navigator.pop(context);
                     _loadData();
                   }

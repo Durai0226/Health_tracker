@@ -110,6 +110,8 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
   }
 
   Future<void> _save() async {
+    if (_isSaving) return; // reentrancy guard at entry — a same-frame double-tap
+    // could otherwise pass validation twice before the button disables → dup cup.
     if (!_formKey.currentState!.validate()) return;
 
     final name = _nameController.text.trim();

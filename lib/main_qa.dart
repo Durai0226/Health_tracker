@@ -26,6 +26,12 @@ import 'features/sleep/screens/sleep_dashboard_screen.dart';
 import 'features/sleep/services/sleep_service.dart';
 import 'features/steps/screens/steps_dashboard_screen.dart';
 import 'features/steps/services/step_service.dart';
+import 'features/water/screens/aqua_water_dashboard.dart';
+import 'features/water/screens/hydration_profile_screen.dart';
+import 'features/water/screens/water_statistics_screen.dart';
+import 'features/water/screens/custom_cup_creator_screen.dart';
+import 'features/period/screens/period_dashboard.dart';
+import 'features/period/services/period_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +42,9 @@ Future<void> main() async {
   await SleepService.init();
   try {
     await MedicineCleanStorageService.init();
+  } catch (_) {}
+  try {
+    await PeriodService.init();
   } catch (_) {}
   await _seed();
 
@@ -113,6 +122,12 @@ class _QaApp extends StatelessWidget {
       'add_med_step1' => const NunitoAddMedicationFlow(debugInitialStep: 0),
       // The AI chat empty state (starters + "OR JUST LOG IT" + composer/mic).
       'assistant' => const AssistantScreen(),
+      // Health-feature screens (self-scaffolded).
+      'water' => const AquaWaterDashboard(embedded: false),
+      'hydration_profile' => const HydrationProfileScreen(),
+      'water_stats' => const WaterStatisticsScreen(),
+      'custom_cup' => const CustomCupCreatorScreen(),
+      'period' => const PeriodDashboard(embedded: false),
       _ => _QaHub(screen: screen),
     };
     return MaterialApp(
