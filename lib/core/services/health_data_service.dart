@@ -6,7 +6,21 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Availability of device health data, so callers can fall back to manual entry.
-enum HealthAvailability { available, unavailable, notDetermined, denied }
+///
+/// * [available]        — reads are permitted right now.
+/// * [notDetermined]    — we can ask; the user hasn't decided yet.
+/// * [denied]           — we asked and were refused (or access was revoked).
+/// * [unavailable]      — no provider on this device (Simulator, no Health
+///                        Connect, unsupported platform).
+/// * [needsProviderUpdate] — Android only: Health Connect is present but must be
+///                        installed/updated from the Play Store first.
+enum HealthAvailability {
+  available,
+  unavailable,
+  notDetermined,
+  denied,
+  needsProviderUpdate,
+}
 
 /// Thin, all-static-ish, never-throws wrapper over Apple HealthKit /
 /// Android Health Connect (`package:health`) + the live step sensor
@@ -14,7 +28,28 @@ enum HealthAvailability { available, unavailable, notDetermined, denied }
 ///
 /// Every read returns data-or-empty; failures are swallowed (logged) so the
 /// Steps/Sleep features degrade gracefully to manual entry — which is also the
-/// only path available on the iOS Simulator (no pedometer, no real HealthKit).
+/// only path available on the iOS Simulator.
+///
+/// ## Why the type lists are per-platform
+///
+/// `package:health` exposes one `HealthDataType` enum but each platform only
+/// implements a subset (`dataTypeKeysIOS` / `dataTypeKeysAndroid`), and the
+/// plugin fails **hard and silently** on a type the running platform doesn't
+/// know:
+///
+/// * Android: `hasPermissions` / `requestAuthorization` bail out with
+///   `success(false)` on the FIRST unmapped type — the Health Connect consent
+///   sheet is never even shown. `DISTANCE_WALKING_RUNNING` (Android wants
+///   `DISTANCE_DELTA`) and `SLEEP_IN_BED` (iOS-only) both do this, which is why
+///   granting access used to leave the "Enable" card up forever.
+/// * iOS: `SLEEP_SESSION` is Android-only; the Swift side silently falls back to
+///   *body mass*, so we'd be asking for the wrong scope.
+/// * Reads: `getHealthDataFromTypes` throws `HealthException` for a type that
+///   isn't available on the platform, and it throws from inside the loop — so a
+///   single bad type discards every segment already collected (all sleep data).
+///
+/// So: build the request per platform, and read one type at a time so a future
+/// plugin gap degrades to "that metric is missing" instead of "nothing works".
 class HealthDataService {
   HealthDataService._();
   static final HealthDataService instance = HealthDataService._();
@@ -22,31 +57,80 @@ class HealthDataService {
   final Health _health = Health();
   bool _configured = false;
 
-  static const List<HealthDataType> readTypes = [
-    HealthDataType.STEPS,
-    HealthDataType.DISTANCE_WALKING_RUNNING,
-    HealthDataType.ACTIVE_ENERGY_BURNED,
+  // ---- platform-correct data types ----------------------------------------
+  //
+  // The per-platform lists are named statics (not just branches inside the
+  // getters) so a test can assert BOTH against `package:health`'s own
+  // `dataTypeKeysAndroid` / `dataTypeKeysIOS` — see
+  // test/features/health_data_types_test.dart. Checking only the running
+  // platform is what let the Android list rot unnoticed.
+
+  /// Cumulative distance. Health Connect models it as a delta record; HealthKit
+  /// as walking+running distance.
+  static const HealthDataType distanceTypeAndroid =
+      HealthDataType.DISTANCE_DELTA;
+  static const HealthDataType distanceTypeIOS =
+      HealthDataType.DISTANCE_WALKING_RUNNING;
+
+  static HealthDataType get distanceType =>
+      Platform.isAndroid ? distanceTypeAndroid : distanceTypeIOS;
+
+  /// Sleep stage types.
+  ///
+  /// On Android every entry maps to the same `SleepSessionRecord` (a single
+  /// `READ_SLEEP` permission); `SLEEP_SESSION` returns the whole night, which the
+  /// SleepService uses only as a fallback when no stages exist. `SLEEP_IN_BED` is
+  /// HealthKit-only and `SLEEP_SESSION` Health-Connect-only — swapping either
+  /// across platforms is what silently broke sleep import.
+  static const List<HealthDataType> sleepTypesAndroid = [
+    HealthDataType.SLEEP_ASLEEP,
+    HealthDataType.SLEEP_DEEP,
+    HealthDataType.SLEEP_LIGHT,
+    HealthDataType.SLEEP_REM,
+    HealthDataType.SLEEP_AWAKE,
+    HealthDataType.SLEEP_SESSION,
+  ];
+
+  static const List<HealthDataType> sleepTypesIOS = [
     HealthDataType.SLEEP_ASLEEP,
     HealthDataType.SLEEP_DEEP,
     HealthDataType.SLEEP_LIGHT,
     HealthDataType.SLEEP_REM,
     HealthDataType.SLEEP_AWAKE,
     HealthDataType.SLEEP_IN_BED,
-    HealthDataType.SLEEP_SESSION,
   ];
 
-  static const List<HealthDataType> sleepTypes = [
-    HealthDataType.SLEEP_ASLEEP,
-    HealthDataType.SLEEP_DEEP,
-    HealthDataType.SLEEP_LIGHT,
-    HealthDataType.SLEEP_REM,
-    HealthDataType.SLEEP_AWAKE,
-    HealthDataType.SLEEP_IN_BED,
-    HealthDataType.SLEEP_SESSION,
-  ];
+  static List<HealthDataType> get sleepTypes =>
+      Platform.isAndroid ? sleepTypesAndroid : sleepTypesIOS;
 
-  List<HealthDataAccess> get _readAccess =>
-      readTypes.map((_) => HealthDataAccess.READ).toList();
+  /// The types the features genuinely need. Without these there is nothing to
+  /// sync, so a grant that misses them counts as "not connected".
+  static List<HealthDataType> essentialTypesFor(bool android) => [
+        HealthDataType.STEPS,
+        ...(android ? sleepTypesAndroid : sleepTypesIOS),
+      ];
+
+  /// Nice-to-have metrics: we derive both from the profile when absent, so a
+  /// user who refuses them still gets working steps + sleep.
+  static List<HealthDataType> optionalTypesFor(bool android) => [
+        android ? distanceTypeAndroid : distanceTypeIOS,
+        HealthDataType.ACTIVE_ENERGY_BURNED,
+      ];
+
+  /// Everything we ask for, in one consent sheet.
+  static List<HealthDataType> readTypesFor(bool android) => [
+        ...essentialTypesFor(android),
+        ...optionalTypesFor(android),
+      ];
+
+  static List<HealthDataType> get essentialTypes =>
+      essentialTypesFor(Platform.isAndroid);
+  static List<HealthDataType> get optionalTypes =>
+      optionalTypesFor(Platform.isAndroid);
+  static List<HealthDataType> get readTypes => readTypesFor(Platform.isAndroid);
+
+  static List<HealthDataAccess> _readAccessFor(List<HealthDataType> types) =>
+      types.map((_) => HealthDataAccess.READ).toList();
 
   Future<void> _ensureConfigured() async {
     if (_configured) return;
@@ -58,51 +142,122 @@ class HealthDataService {
     }
   }
 
-  /// Whether health data can be read (Android Health Connect present + perms).
+  /// Whether health data can be read right now.
+  ///
+  /// Android (Health Connect) *does* disclose read-permission status, so it is
+  /// the source of truth there — that way a user who revokes access in the
+  /// Health Connect app is detected instead of being stuck "connected". iOS
+  /// HealthKit never discloses READ authorization (`hasPermissions` returns null
+  /// by design), so there we fall back to the persisted "user completed the
+  /// connect flow" flag.
   Future<HealthAvailability> availability() async {
     try {
       await _ensureConfigured();
+
       if (Platform.isAndroid) {
         final status = await _health.getHealthConnectSdkStatus();
+        // Health Connect ships with Android 14+ and is a Play Store app below
+        // that. minSdk is 26 and Health Connect supports 26+, so "not available"
+        // here almost always means "not installed / too old" — which the user can
+        // fix. Report it as actionable rather than as a dead end (the manual
+        // logging path stays available either way).
         if (status != HealthConnectSdkStatus.sdkAvailable) {
-          return HealthAvailability.unavailable;
+          debugPrint('HealthDataService: Health Connect status $status');
+          return HealthAvailability.needsProviderUpdate;
         }
-      } else if (!Platform.isIOS) {
-        return HealthAvailability.unavailable;
+        // Health Connect reports real grant state — trust it over any flag.
+        if (await _hasEssentialPermissions()) {
+          await _setConnected(true);
+          return HealthAvailability.available;
+        }
+        await _setConnected(false);
+        return await _wasAsked()
+            ? HealthAvailability.denied
+            : HealthAvailability.notDetermined;
       }
-      // Once the user has explicitly connected, treat health as available.
-      // iOS HealthKit NEVER discloses READ-authorization status — hasPermissions()
-      // returns null for read scopes by design — so gating solely on it would
-      // leave the "Connect" card up forever and block every sync even after the
-      // user granted access. The persisted connect flag (set in
-      // requestPermissions) is our reliable cross-platform "connected" signal.
+
+      if (!Platform.isIOS) return HealthAvailability.unavailable;
+
+      // iOS: read status is undisclosable, so the connect flag is our signal.
       if (await _isConnected()) return HealthAvailability.available;
-      final has = await _health.hasPermissions(readTypes, permissions: _readAccess);
-      if (has == true) return HealthAvailability.available;
-      return HealthAvailability.notDetermined;
+      if (await _hasEssentialPermissions()) return HealthAvailability.available;
+      return await _wasAsked()
+          ? HealthAvailability.denied
+          : HealthAvailability.notDetermined;
     } catch (e) {
       debugPrint('HealthDataService.availability failed: $e');
       return HealthAvailability.unavailable;
     }
   }
 
+  /// True when the types we actually need are granted. Never throws; a null
+  /// answer (iOS read scopes) is treated as "unknown", i.e. not a grant.
+  Future<bool> _hasEssentialPermissions() async {
+    try {
+      final types = essentialTypes;
+      final has =
+          await _health.hasPermissions(types, permissions: _readAccessFor(types));
+      return has == true;
+    } catch (e) {
+      debugPrint('HealthDataService.hasPermissions failed: $e');
+      return false;
+    }
+  }
+
   /// Request read permissions (+ Android activity-recognition for the pedometer).
-  /// On success, persists a "connected" flag so [availability] can report
-  /// available even where the platform won't disclose read-permission status.
+  ///
+  /// Asks for everything in one sheet, then falls back to the essential types
+  /// alone if the full set wasn't granted — Health Connect is all-or-nothing per
+  /// request, so a user who allowed steps + sleep but not calories/distance would
+  /// otherwise be told "not granted" and left with the Enable card up.
   Future<bool> requestPermissions() async {
     try {
       await _ensureConfigured();
+      await _setAsked(true);
+
       if (Platform.isAndroid) {
+        // Live pedometer needs the runtime activity-recognition permission; it is
+        // independent of Health Connect and must not gate the health grant.
         await Permission.activityRecognition.request();
+
+        final status = await _health.getHealthConnectSdkStatus();
+        if (status != HealthConnectSdkStatus.sdkAvailable) {
+          debugPrint('HealthDataService: Health Connect status $status');
+          return false;
+        }
       }
-      final has = await _health.hasPermissions(readTypes, permissions: _readAccess);
-      if (has == true) {
+
+      if (await _hasEssentialPermissions()) {
         await _setConnected(true);
         return true;
       }
-      final granted =
-          await _health.requestAuthorization(readTypes, permissions: _readAccess);
-      if (granted) await _setConnected(true);
+
+      final all = readTypes;
+      var granted = await _health.requestAuthorization(all,
+          permissions: _readAccessFor(all));
+
+      // `requestAuthorization` reports false when *any* requested scope was
+      // refused, so on Android ask Health Connect what actually stuck before
+      // concluding anything — steps + sleep may well have been allowed while
+      // calories/distance weren't. Doing this BEFORE any retry matters: Health
+      // Connect throttles an app that re-prompts, so a redundant second sheet
+      // can burn the user's remaining attempts.
+      if (!granted && Platform.isAndroid) {
+        granted = await _hasEssentialPermissions();
+      }
+
+      if (!granted) {
+        // Still nothing: ask once more for the essentials alone, which is a
+        // smaller, easier-to-accept request than the full set.
+        final core = essentialTypes;
+        granted = await _health.requestAuthorization(core,
+            permissions: _readAccessFor(core));
+        if (!granted && Platform.isAndroid) {
+          granted = await _hasEssentialPermissions();
+        }
+      }
+
+      await _setConnected(granted);
       return granted;
     } catch (e) {
       debugPrint('HealthDataService.requestPermissions failed: $e');
@@ -110,35 +265,72 @@ class HealthDataService {
     }
   }
 
-  // --- Persisted "user has connected health" flag ------------------------------
+  /// Send the user to the Play Store to install / update Health Connect.
+  Future<void> installHealthConnect() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _health.installHealthConnect();
+    } catch (e) {
+      debugPrint('HealthDataService.installHealthConnect failed: $e');
+    }
+  }
+
+  // --- Persisted connect / asked flags -----------------------------------------
   // HealthKit read-status is undisclosable on iOS, so we remember that the user
-  // completed the connect flow and thereafter attempt syncs / clear the card.
+  // completed the connect flow. `asked` lets us tell "never asked" (offer
+  // Enable) from "asked and refused" (offer Try again / Settings).
   static const String _connectedPrefKey = 'health_connected';
+  static const String _askedPrefKey = 'health_permission_asked';
   bool? _connectedCache;
+  bool? _askedCache;
 
   Future<bool> _isConnected() async {
     if (_connectedCache != null) return _connectedCache!;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _connectedCache = prefs.getBool(_connectedPrefKey) ?? false;
-    } catch (_) {
-      _connectedCache = false;
-    }
+    _connectedCache = await _readFlag(_connectedPrefKey);
     return _connectedCache!;
   }
 
   Future<void> _setConnected(bool value) async {
+    if (_connectedCache == value) return;
     _connectedCache = value;
+    await _writeFlag(_connectedPrefKey, value);
+  }
+
+  Future<bool> _wasAsked() async {
+    if (_askedCache != null) return _askedCache!;
+    _askedCache = await _readFlag(_askedPrefKey);
+    return _askedCache!;
+  }
+
+  Future<void> _setAsked(bool value) async {
+    if (_askedCache == value) return;
+    _askedCache = value;
+    await _writeFlag(_askedPrefKey, value);
+  }
+
+  Future<bool> _readFlag(String key) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_connectedPrefKey, value);
+      return prefs.getBool(key) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _writeFlag(String key, bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
     } catch (_) {
       // Non-fatal: the in-memory cache still reflects this session.
     }
   }
 
   /// Forget the connect flag (used by "disconnect" / full data wipe).
-  Future<void> resetConnected() => _setConnected(false);
+  Future<void> resetConnected() async {
+    await _setConnected(false);
+    await _setAsked(false);
+  }
 
   Future<int?> readTodaySteps() async {
     final now = DateTime.now();
@@ -177,17 +369,16 @@ class HealthDataService {
   }
 
   Future<double?> readActiveEnergy(DateTime from, DateTime to) =>
-      _sumNumeric(const [HealthDataType.ACTIVE_ENERGY_BURNED], from, to);
+      _sumNumeric([HealthDataType.ACTIVE_ENERGY_BURNED], from, to);
 
   Future<double?> readDistanceMeters(DateTime from, DateTime to) =>
-      _sumNumeric(const [HealthDataType.DISTANCE_WALKING_RUNNING], from, to);
+      _sumNumeric([distanceType], from, to);
 
   Future<double?> _sumNumeric(
       List<HealthDataType> types, DateTime from, DateTime to) async {
     try {
       await _ensureConfigured();
-      final pts = await _health.getHealthDataFromTypes(
-          startTime: from, endTime: to, types: types);
+      final pts = await _readPoints(types, from, to);
       if (pts.isEmpty) return null;
       double sum = 0;
       for (final p in pts) {
@@ -207,12 +398,28 @@ class HealthDataService {
       DateTime from, DateTime to) async {
     try {
       await _ensureConfigured();
-      return await _health.getHealthDataFromTypes(
-          startTime: from, endTime: to, types: sleepTypes);
+      return await _readPoints(sleepTypes, from, to);
     } catch (e) {
       debugPrint('HealthDataService.readSleepSegments failed: $e');
       return [];
     }
+  }
+
+  /// Read [types] one at a time so an unsupported / unavailable type degrades to
+  /// a missing metric instead of throwing away every point already collected
+  /// (`getHealthDataFromTypes` throws from inside its own loop).
+  Future<List<HealthDataPoint>> _readPoints(
+      List<HealthDataType> types, DateTime from, DateTime to) async {
+    final out = <HealthDataPoint>[];
+    for (final type in types) {
+      try {
+        out.addAll(await _health.getHealthDataFromTypes(
+            startTime: from, endTime: to, types: [type]));
+      } catch (e) {
+        debugPrint('HealthDataService: read ${type.name} failed: $e');
+      }
+    }
+    return out;
   }
 
   /// Live cumulative step stream (since device boot) while the app is open.

@@ -3,7 +3,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
-import '../models/medicine_log.dart';
 import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
@@ -95,17 +94,16 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     setState(() => _isLoading = true);
 
     try {
-      final log = MedicineLog(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+      // Route through the service (as the take path does) so the log id is
+      // namespaced per medicine+slot instead of a bare timestamp, which two
+      // near-simultaneous skips could collide on.
+      final log = await MedicineCleanStorageService.markMedicineSkipped(
         medicineId: widget.medicine.id,
         scheduledTime: widget.scheduledTime,
-        actionTime: DateTime.now(),
-        status: MedicineStatus.skipped,
-        skipReason: reason,
-        skipNote: _notesController.text.isNotEmpty ? _notesController.text : null,
+        reason: reason,
+        skipNote:
+            _notesController.text.isNotEmpty ? _notesController.text : null,
       );
-
-      await MedicineCleanStorageService.addLog(log);
 
       if (mounted) {
         Navigator.pop(context, {'skipped': true, 'log': log});

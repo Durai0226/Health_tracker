@@ -74,16 +74,25 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     );
     _fadeAnimation = CurvedAnimation(parent: _controller, curve: AppMotion.standard);
     _loadData();
+    // Doses can be logged from anywhere (a notification, the dashboard timeline,
+    // the quick-log sheet). Without this the history/adherence on this screen
+    // stayed stale until it was popped and reopened.
+    MedicineCleanStorageService.revision.addListener(_onMedicineRevision);
+  }
+
+  void _onMedicineRevision() {
+    if (mounted) _loadData(showLoader: false);
   }
 
   @override
   void dispose() {
+    MedicineCleanStorageService.revision.removeListener(_onMedicineRevision);
     _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadData({bool showLoader = true}) async {
+    if (showLoader) setState(() => _isLoading = true);
     try {
       // Ensure the brand→generic catalog is ready for the "What it's for" bridge.
       await DrugNameCatalog.ensureLoaded();
@@ -1263,7 +1272,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   /// but never recorded as taken.
   Future<void> _logDose() async {
     _hapticService.medium();
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
+    await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1272,7 +1281,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         scheduledTime: DateTime.now(),
       ),
     );
-    if (result != null) await _loadData();
+    // The write already bumped `revision`, which refreshed this screen — no
+    // second full-loader reload.
   }
 
   Widget _buildActionsSection() {

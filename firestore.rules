@@ -5,33 +5,48 @@ rules_version = '2';
 // ==============================================================================
 // A single-user personal tracker. Every document lives under `users/{userId}`
 // and is private to that user, so the security model is strict and simple:
-// you may only read/write your own data, only while signed in. Anything not
-// explicitly matched is denied by default.
+// you may only read/write your own data, only while signed in.
 //
-// Collections the app actually syncs (verified against the codebase):
-//   users/{uid}                              — user root doc
-//   users/{uid}/medicines/{id}               — CloudSyncService
-//   users/{uid}/water_intake/{dateKey}       — CloudSyncService
-//   users/{uid}/reminders/{id}               — RemindersCloudService / SyncService
-//   users/{uid}/reminder_categories/{id}     — RemindersCloudService
-//   users/{uid}/backups/{id}                 — BackupService
-//   users/{uid}/menstrual_cycles/{id}        — CloudSyncService (period, opt-in)
-//   users/{uid}/period_days/{dateKey}        — CloudSyncService (period, opt-in)
-//   users/{uid}/period_settings/{id}         — CloudSyncService (period, opt-in)
-//   users/{uid}/step_days/{dateKey}          — CloudSyncService (steps)
-//   users/{uid}/step_entries/{id}            — CloudSyncService (steps)
-//   users/{uid}/health_profile/{id}          — CloudSyncService (steps/sleep)
-//   users/{uid}/sleep_sessions/{id}          — CloudSyncService (sleep)
+// ## How to read this file
 //
-// Rules for the removed features (period, finance, fitness, notes, habit, mood,
-// js_learning, luna, workouts, nutrition, exam-prep) and their shared/global
-// collections were deleted along with those features.
+// Firestore rules are **default-deny and additive**: a path with no matching
+// `allow` is denied, and `allow ... if false` grants nothing — it can never
+// *revoke* an `allow` granted by another matching rule. So there are no
+// "catch-all deny" blocks here: anything not listed below is already denied, and
+// writing `if false` rules only creates the false impression that a later rule
+// can subtract from an earlier one.
+//
+// Consequence for maintainers: to expose a new collection you MUST add a `match`
+// for it. Adding a field needs no rule change (the client owns the schema).
+//
+// ## Least privilege
+//
+// Only the collections the app actually syncs are listed — verified against
+// every Firestore call site in `lib/`:
+//
+//   users/{uid}                          — CloudSyncService (root doc)
+//   users/{uid}/medicines/{id}           — CloudSyncService
+//   users/{uid}/water_intake/{dateKey}   — CloudSyncService
+//   users/{uid}/reminders/{id}           — RemindersCloudService / SyncService
+//   users/{uid}/reminder_categories/{id} — RemindersCloudService
+//   users/{uid}/backups/{isoTimestamp}   — BackupService
+//   users/{uid}/step_days/{dateKey}      — HealthCloudSyncService
+//   users/{uid}/sleep_sessions/{id}      — HealthCloudSyncService
+//   users/{uid}/health_profile/{id}      — HealthCloudSyncService
+//   users/{uid}/period_days/{dateKey}    — HealthCloudSyncService (opt-in)
+//   users/{uid}/menstrual_cycles/{id}    — HealthCloudSyncService (opt-in)
+//
+// `step_entries` and `period_settings` were removed: no code path writes them,
+// and an unused-but-writable path is attack surface for nothing.
+//
+// Deploy with:  firebase deploy --only firestore:rules
 // ==============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ---- helpers -----------------------------------------------------------
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -40,93 +55,106 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Lightweight sanity check for synced records (the client owns the schema;
-    // the real security boundary is ownership, not field validation).
-    function hasStringId() {
+    // Documents are keyed by their own record id, so the payload's `id` must
+    // agree with the document path. Without this a client could file a record
+    // under one key while claiming a different identity inside it, which the
+    // last-write-wins merge would then propagate to every other device.
+    function idMatchesPath(docId) {
       return request.resource.data.id is string
-             && request.resource.data.id.size() > 0;
+             && request.resource.data.id == docId;
+    }
+
+    // Cheap blast-radius cap on a compromised/buggy client: a synced record is a
+    // flat map of a few dozen fields, never hundreds. (Firestore already caps a
+    // document at 1 MiB; this bounds field count, which cost is driven by.)
+    function isReasonableSize() {
+      return request.resource.data.keys().size() <= 100;
+    }
+
+    function isValidRecord(docId) {
+      return idMatchesPath(docId) && isReasonableSize();
     }
 
     // ---- per-user private data --------------------------------------------
+
     match /users/{userId} {
 
-      // The user root document.
-      allow read, write: if isOwner(userId);
+      // The user root document (profile / sync metadata). `create`/`update` are
+      // listed separately from `delete` on purpose: on a delete there is no
+      // `request.resource`, so folding them together under `write` would make the
+      // size check error out and silently block account cleanup.
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isReasonableSize();
 
       // Medicines (synced by CloudSyncService).
       match /medicines/{medicineId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId) && isValidRecord(medicineId);
       }
 
-      // Daily water intake (synced by CloudSyncService).
+      // Daily water intake. Keyed by a date string rather than the record id,
+      // so the id/path check doesn't apply here — ownership plus the size cap is
+      // the boundary.
       match /water_intake/{dateKey} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId)
+                              && request.resource.data.id is string
+                              && isReasonableSize();
       }
 
       // Reminders (synced by RemindersCloudService / SyncService).
       match /reminders/{reminderId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId) && isValidRecord(reminderId);
       }
 
       // Reminder categories (synced by RemindersCloudService).
       match /reminder_categories/{categoryId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId) && isValidRecord(categoryId);
       }
 
-      // Cloud backups (blobs written by BackupService).
+      // Cloud backups: one document per backup (keyed by its ISO-8601 creation
+      // instant), holding the export as a JSON string. Deliberately no `update`
+      // rule — a backup that can be rewritten in place is not a backup, and
+      // BackupService only ever creates a fresh doc or deletes an old one.
       match /backups/{backupId} {
-        allow read, write: if isOwner(userId);
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+                      && idMatchesPath(backupId)
+                      && request.resource.data.data is string
+                      && request.resource.data.sizeBytes is int
+                      && isReasonableSize();
       }
 
-      // Period / menstrual cycle (synced only when the user opts in; still
-      // owner-private regardless — sensitive data never leaves without consent).
+      // Period / menstrual cycle. Synced only when the user opts in, and
+      // owner-private either way — sensitive data never leaves without consent.
       match /menstrual_cycles/{cycleId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId) && isValidRecord(cycleId);
       }
       match /period_days/{dateKey} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
-      }
-      match /period_settings/{docId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId) && isValidRecord(dateKey);
       }
 
-      // Steps (+ shared health profile).
+      // Steps.
       match /step_days/{dateKey} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
-      }
-      match /step_entries/{entryId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
-      }
-      match /health_profile/{docId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId) && isValidRecord(dateKey);
       }
 
       // Sleep.
       match /sleep_sessions/{sessionId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && hasStringId();
+        allow create, update: if isOwner(userId) && isValidRecord(sessionId);
       }
 
-      // Any other subcollection under the user is denied (future-proofing:
-      // no accidental writes to a mistyped/legacy path).
-      match /{document=**} {
-        allow read, write: if false;
+      // Shared health profile (height/weight/stride — used by Steps and Sleep).
+      match /health_profile/{docId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidRecord(docId);
       }
-    }
-
-    // ---- global default deny ----------------------------------------------
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

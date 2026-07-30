@@ -7,6 +7,7 @@ import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/drug_interaction.dart';
 import '../models/medicine_enums.dart';
+import '../models/medicine_log.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/today_schedule_service.dart';
 import '../services/drug_interaction_service.dart';
@@ -41,6 +42,9 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   // Log ids applied this load from queued notification actions (for Undo).
   List<String> _drainedLogIds = const [];
   DateTime _selectedDate = DateTime.now();
+  // Guards against overlapping / re-entrant loads (see _loadData).
+  bool _loadInFlight = false;
+  bool _reloadQueued = false;
 
   final DrugInteractionService _interactionService = DrugInteractionService();
   List<DrugInteraction> _interactions = [];
@@ -84,6 +88,27 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   }
 
   Future<void> _loadData({bool showLoader = true}) async {
+    // Writes bump `revision`, which re-enters this method while an earlier load
+    // is still awaiting — and `reconcileMissedDoses`/`drainPendingDoseActions`
+    // write too, so a load can re-enter itself. Serialise: coalesce anything
+    // arriving mid-flight into a single follow-up pass.
+    if (_loadInFlight) {
+      _reloadQueued = true;
+      return;
+    }
+    _loadInFlight = true;
+    try {
+      await _loadDataOnce(showLoader: showLoader);
+    } finally {
+      _loadInFlight = false;
+    }
+    if (_reloadQueued && mounted) {
+      _reloadQueued = false;
+      await _loadData(showLoader: false);
+    }
+  }
+
+  Future<void> _loadDataOnce({bool showLoader = true}) async {
     if (showLoader) setState(() => _isLoading = true);
     try {
       await MedicineCleanStorageService.init();
@@ -201,9 +226,62 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       ),
     );
 
-    if (result != null) {
-      await _loadData();
+    if (result == null) return;
+
+    // Reflect the outcome on the row BEFORE the reload. The sheet already wrote
+    // the log, so re-querying is only for the derived stats — waiting on it (and
+    // on the full-screen loader it used to raise) made a Take/Skip look like it
+    // hadn't registered until the screen came back.
+    final log = result['log'];
+    if (log is MedicineLog) _applyLogLocally(dose, log);
+
+    // No loader: the schedule is already correct on screen, so this quietly
+    // refreshes streak / adherence / refill state underneath.
+    await _loadData(showLoader: false);
+
+    if (!mounted) return;
+    if (result['skipped'] == true && log is MedicineLog) {
+      _confirmDoseOutcome('${dose.medicine.name} skipped', log);
+    } else if (result['taken'] == true && log is MedicineLog) {
+      _confirmDoseOutcome('${dose.medicine.name} taken', log);
     }
+  }
+
+  /// Optimistically swap the dose's log in place so the timeline flips to
+  /// Taken/Skipped on the same frame the sheet closes.
+  void _applyLogLocally(_ScheduledDose dose, MedicineLog log) {
+    final i = _todaysDoses.indexWhere((d) =>
+        d.medicine.id == dose.medicine.id && d.timeIndex == dose.timeIndex);
+    if (i < 0) return;
+    setState(() {
+      _todaysDoses[i] = _ScheduledDose(
+        medicine: _todaysDoses[i].medicine,
+        scheduledTime: _todaysDoses[i].scheduledTime,
+        timeIndex: _todaysDoses[i].timeIndex,
+        log: log,
+      );
+      _takenStatus['${dose.medicine.id}_${dose.timeIndex}'] = log.isTaken;
+    });
+  }
+
+  /// One-line confirmation with Undo — a mis-tapped Skip used to be permanent
+  /// (the row simply became non-actionable with no way back).
+  void _confirmDoseOutcome(String message, MedicineLog log) {
+    context.toastSuccess(
+      message,
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          // Reverse the stock decrement first, or Undo silently loses inventory.
+          if (log.isTaken) {
+            await MedicineCleanStorageService.restoreStock(
+                log.medicineId, log.dosageTaken);
+          }
+          await MedicineCleanStorageService.deleteLog(log.id);
+          await _loadData(showLoader: false);
+        },
+      ),
+    );
   }
 
   void _navigateToAddMedication() async {

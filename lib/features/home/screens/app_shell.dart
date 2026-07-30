@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../medication/services/medicine_storage_service.dart';
 import '../../focus/screens/focus_screen.dart';
 import '../../reminders/screens/reminders_screen.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
@@ -26,12 +28,67 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // Selected NAV SLOT (never 2 — that's the Log action).
   late int _slot = widget.initialIndex;
   // Bumped when Today is re-selected so it refreshes sync-only surfaces
   // (reminders) — see HomeDashboard.refreshTick.
   int _homeTick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// A Take/Skip tapped on a notification is handled in a background isolate that
+  /// can't reach Drift, so it lands in the dose-action queue instead. Draining it
+  /// here (rather than only inside a screen's own load) means the dose appears the
+  /// moment the user comes back, not after they navigate or pull-to-refresh.
+  /// Every affected surface listens to `revision`, which the drain's writes bump.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    _drainQueuedDoseActions();
+  }
+
+  Future<void> _drainQueuedDoseActions() async {
+    List<String> ids;
+    try {
+      ids = await MedicineCleanStorageService.drainPendingDoseActions();
+    } catch (e) {
+      debugPrint('⚠️ Draining queued dose actions on resume failed: $e');
+      return;
+    }
+    if (ids.isEmpty || !mounted) return;
+
+    // Confirm what we applied on the user's behalf, with a way back — logging a
+    // dose silently from a notification tap is not something to leave unsaid.
+    final n = ids.length;
+    context.toastSuccess(
+      'Logged $n dose${n == 1 ? '' : 's'} from your reminder',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          for (final id in ids) {
+            // Put the units back before deleting, or Undo loses inventory.
+            final log = await MedicineCleanStorageService.getLog(id);
+            if (log != null && log.isTaken) {
+              await MedicineCleanStorageService.restoreStock(
+                  log.medicineId, log.dosageTaken);
+            }
+            await MedicineCleanStorageService.deleteLog(id);
+          }
+        },
+      ),
+    );
+  }
 
   // Slots {0,1,3,4} → stack children {0,1,2,3}.
   int get _stackIndex => _slot < 2 ? _slot : _slot - 1;

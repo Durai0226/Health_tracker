@@ -159,8 +159,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
   _PillarStats _pillarStats(DailyMedicineSummary? summary) {
     final medTotal = summary?.totalScheduled ?? 0;
     final medTaken = summary?.taken ?? 0;
-    // Nothing due today counts as done — you can't do more.
-    final medDone = medTotal == 0 || medTaken >= medTotal;
+    // Nothing due today counts as done — you can't do more. A dose that was
+    // deliberately skipped (or has already gone missed) is *resolved*, not
+    // outstanding: counting only `taken` left the pillar permanently incomplete
+    // after a skip, with nothing the user could do about it.
+    final medResolved =
+        medTaken + (summary?.skipped ?? 0) + (summary?.missed ?? 0);
+    final medDone = medTotal == 0 || medResolved >= medTotal;
 
     final goal = WaterService.getDailyGoal();
     final water = WaterService.getTodayData();
@@ -324,12 +329,18 @@ class _HomeDashboardState extends State<HomeDashboard> {
             );
           }
 
-          // ALL-DONE — meds exist, nothing due, and everything's been taken.
-          if (hasMeds && total > 0 && taken >= total) {
+          // NOTHING-LEFT — meds exist and every due dose is resolved. "Resolved"
+          // includes skipped/missed, otherwise a skipped dose dropped the hero
+          // all the way to the generic "no medicines" fallback.
+          final resolved =
+              taken + (data?.summary.skipped ?? 0) + (data?.summary.missed ?? 0);
+          if (hasMeds && total > 0 && resolved >= total) {
+            final perfect = taken >= total;
             return _heroShell(
               ext,
               color: Color.alphaBlend(
-                  ext.success.container.withOpacity(ext.isDark ? 0.18 : 0.5),
+                  (perfect ? ext.success.container : ext.medicine.container)
+                      .withOpacity(ext.isDark ? 0.18 : 0.5),
                   ext.surfaceElevated),
               child: Row(
                 children: [
@@ -338,22 +349,31 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     height: 56,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: ext.fillBg(ext.success),
+                        color: ext.fillBg(
+                            perfect ? ext.success : ext.medicine),
                         borderRadius: AppRadius.brMd),
                     child: Icon(Symbols.task_alt_rounded,
-                        color: ext.fillFg(ext.success), size: 28),
+                        color: ext.fillFg(
+                            perfect ? ext.success : ext.medicine),
+                        size: 28),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Perfect day — everything's done",
+                        Text(
+                            perfect
+                                ? "Perfect day — everything's done"
+                                : 'Nothing left to take today',
                             style: tt.titleMedium?.copyWith(
                                 color: ext.textPrimary,
                                 fontWeight: FontWeight.w700)),
                         const SizedBox(height: 2),
-                        Text('$taken of $total today · nice work',
+                        Text(
+                            perfect
+                                ? '$taken of $total today · nice work'
+                                : '$taken of $total taken · the rest is logged',
                             style: tt.bodySmall
                                 ?.copyWith(color: ext.textSecondary)),
                       ],

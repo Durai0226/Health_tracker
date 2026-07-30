@@ -26,6 +26,7 @@ class StepsPermissionCard extends StatelessWidget {
 
     final unavailable = availability == HealthAvailability.unavailable;
     final denied = availability == HealthAvailability.denied;
+    final needsUpdate = availability == HealthAvailability.needsProviderUpdate;
 
     final (title, body) = unavailable
         ? (
@@ -33,17 +34,26 @@ class StepsPermissionCard extends StatelessWidget {
             'This device has no step sensor or health provider. You can still '
                 'track everything by logging steps manually.'
           )
-        : denied
+        : needsUpdate
             ? (
-                'Health access is off',
-                'Step permission was declined. Turn it on to sync automatically, '
-                    'or keep logging steps manually.'
+                'Health Connect needs an update',
+                'Android stores step data in Health Connect. Install or update it '
+                    'to sync automatically — or log steps manually to start now.'
               )
-            : (
-                'Connect your step data',
-                'Allow health access to sync steps, distance and calories '
-                    'automatically — or log them manually to start now.'
-              );
+            : denied
+                ? (
+                    'Health access is off',
+                    'Step permission was declined. Turn it on to sync automatically, '
+                        'or keep logging steps manually.'
+                  )
+                : (
+                    'Connect your step data',
+                    'Allow health access to sync steps, distance and calories '
+                        'automatically — or log them manually to start now.'
+                  );
+    final enableLabel = needsUpdate
+        ? 'Get Health Connect'
+        : (denied ? 'Try again' : 'Enable');
 
     return AppCard(
       child: Column(
@@ -76,7 +86,7 @@ class StepsPermissionCard extends StatelessWidget {
               if (!unavailable) ...[
                 Expanded(
                   child: AppButton(
-                    label: denied ? 'Try again' : 'Enable',
+                    label: enableLabel,
                     accent: s,
                     leadingIcon: Symbols.favorite_rounded,
                     onPressed: onEnable,

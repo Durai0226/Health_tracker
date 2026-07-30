@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -37,14 +39,46 @@ class SleepDashboardScreen extends StatefulWidget {
   State<SleepDashboardScreen> createState() => _SleepDashboardScreenState();
 }
 
-class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
+class _SleepDashboardScreenState extends State<SleepDashboardScreen>
+    with WidgetsBindingObserver {
   bool _loading = true;
   HealthAvailability _availability = HealthAvailability.notDetermined;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Granting health access happens *outside* the app (the Health Connect /
+  /// Apple Health consent screen), so the only reliable moment to notice it is on
+  /// resume. Without this the card kept saying "Connect" after the user had
+  /// already allowed access.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAvailability();
+  }
+
+  Future<void> _refreshAvailability() async {
+    HealthAvailability avail;
+    try {
+      avail = await HealthDataService.instance.availability();
+    } catch (_) {
+      return; // keep what we had; never downgrade on a transient failure
+    }
+    final becameAvailable =
+        avail == HealthAvailability.available && !_healthAvailable;
+    if (!mounted) return;
+    setState(() => _availability = avail);
+    // Access just appeared — pull the nights we couldn't read before.
+    if (becameAvailable) await SleepService.syncFromHealth();
   }
 
   Future<void> _load() async {
@@ -67,18 +101,8 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
       );
     }
     HomeWidgetService.pushSnapshot(); // refresh the home-screen widget (if any)
-    HealthAvailability avail;
-    try {
-      avail = await HealthDataService.instance.availability();
-    } catch (_) {
-      avail = HealthAvailability.unavailable;
-    }
-    if (mounted) {
-      setState(() {
-        _availability = avail;
-        _loading = false;
-      });
-    }
+    await _refreshAvailability();
+    if (mounted) setState(() => _loading = false);
     _checkMilestones();
   }
 
@@ -101,7 +125,12 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
   }
 
   bool get _healthAvailable => _availability == HealthAvailability.available;
-  bool get _canConnect => _availability == HealthAvailability.notDetermined;
+
+  /// Anything short of "no provider on this device" is worth a CTA: a refused
+  /// grant can be retried and a stale Health Connect can be updated. Only
+  /// [HealthAvailability.unavailable] is a genuine dead end.
+  bool get _canConnect => _availability != HealthAvailability.available &&
+      _availability != HealthAvailability.unavailable;
   bool get _hasData => SleepService.getLastNight() != null;
 
   /// Whether to show the gentle morning "log last night" prompt.
@@ -160,6 +189,17 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
     // an async gap, and always give the user explicit feedback — the old
     // handler was silent, so denial / no-data / success all looked identical.
     final messenger = ScaffoldMessenger.of(context);
+
+    // Health Connect missing/outdated: the consent sheet can't open at all, so
+    // send the user to the Play Store instead of failing silently.
+    if (_availability == HealthAvailability.needsProviderUpdate) {
+      await HealthDataService.instance.installHealthConnect();
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Install Health Connect, then come back to connect.'),
+      ));
+      return;
+    }
+
     final ok = await HealthDataService.instance.requestPermissions();
     var imported = 0;
     if (ok) imported = await SleepService.syncFromHealth();
@@ -168,10 +208,12 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
     setState(() => _availability = avail);
 
     final String msg;
-    if (!ok && avail == HealthAvailability.unavailable) {
+    if (avail == HealthAvailability.unavailable) {
       msg = "Health data isn't available on this device.";
+    } else if (avail == HealthAvailability.needsProviderUpdate) {
+      msg = 'Health Connect needs to be installed or updated first.';
     } else if (!ok) {
-      msg = 'Health access not granted. Enable it in Settings › Health.';
+      msg = 'Sleep access not granted. Allow it in ${_storeName()} to sync.';
     } else if (imported > 0) {
       msg = 'Connected — imported $imported night${imported == 1 ? '' : 's'}.';
     } else {
@@ -179,6 +221,9 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
     }
     messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
+
+  static String _storeName() =>
+      Platform.isIOS ? 'Apple Health' : 'Health Connect';
 
   void _openSettings() {
     Navigator.push(
@@ -262,6 +307,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
     if (lastNight == null) {
       if (!_healthAvailable) {
         sections.add(SleepPermissionCard(
+          availability: _availability,
           onLogManually: _openManualLog,
           onConnect: _canConnect ? _connect : null,
         ));
@@ -322,6 +368,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen> {
         sections
           ..add(const SizedBox(height: AppSpacing.lg))
           ..add(SleepPermissionCard(
+            availability: _availability,
             onLogManually: _openManualLog,
             onConnect: _connect,
           ));

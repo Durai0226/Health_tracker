@@ -362,6 +362,11 @@ class SleepService {
     DateTime? bed;
     DateTime? wake;
     var light = 0, deep = 0, rem = 0, awake = 0, asleepGeneric = 0, inBedRaw = 0;
+    // Whole-night span reported by Health Connect's SleepSessionRecord. Many
+    // Android providers (and every phone-only tracker) write ONLY the session and
+    // no stage breakdown, so without this fallback those nights aggregated to
+    // zero asleep minutes and were silently dropped.
+    var sessionMinutes = 0;
 
     for (final p in points) {
       final minutes = p.dateTo.difference(p.dateFrom).inMinutes;
@@ -387,15 +392,26 @@ class SleepService {
         case HealthDataType.SLEEP_IN_BED:
           inBedRaw += minutes;
           break;
+        case HealthDataType.SLEEP_SESSION:
+          // Fallback only — never added to the stage totals (Health Connect
+          // returns the session *and* its stages, so summing would double count).
+          sessionMinutes += minutes;
+          break;
         default:
-          break; // SESSION / AWAKE_IN_BED / OUT_OF_BED / UNKNOWN ignored
+          break; // AWAKE_IN_BED / OUT_OF_BED / UNKNOWN ignored
       }
     }
     if (bed == null || wake == null) return null;
 
     final stagesTotal = light + deep + rem;
     final hasStages = stagesTotal > 0;
-    final asleep = hasStages ? stagesTotal : asleepGeneric;
+    // Prefer measured stages → generic "asleep" → the session span minus any
+    // awake time, so a stage-less provider still yields an honest night.
+    final asleep = hasStages
+        ? stagesTotal
+        : (asleepGeneric > 0
+            ? asleepGeneric
+            : (sessionMinutes > awake ? sessionMinutes - awake : sessionMinutes));
     if (asleep <= 0) return null;
 
     final windowMinutes = wake.difference(bed).inMinutes;

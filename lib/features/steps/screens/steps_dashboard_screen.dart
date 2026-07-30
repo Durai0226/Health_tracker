@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -42,7 +43,7 @@ class StepsDashboardScreen extends StatefulWidget {
 }
 
 class _StepsDashboardScreenState extends State<StepsDashboardScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   HealthAvailability _availability = HealthAvailability.notDetermined;
   bool _loading = true;
 
@@ -78,7 +79,34 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
         weight: 60,
       ),
     ]).animate(_celebrateCtrl);
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  /// Health access is granted on a screen we don't own (the Health Connect /
+  /// Apple Health consent UI), so resume is the only reliable moment to notice
+  /// it. Without this the permission card kept offering "Enable" long after the
+  /// user had allowed access.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAvailability();
+  }
+
+  Future<void> _refreshAvailability() async {
+    HealthAvailability avail;
+    try {
+      avail = await HealthDataService.instance
+          .availability()
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {
+      return; // keep whatever we had; never downgrade on a transient failure
+    }
+    final becameAvailable =
+        avail == HealthAvailability.available && !_healthAvailable;
+    if (!mounted || avail == _availability) return;
+    setState(() => _availability = avail);
+    // Access just appeared — import the days we couldn't read before.
+    if (becameAvailable) await StepService.syncFromHealth();
   }
 
   Future<void> _init() async {
@@ -117,10 +145,13 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _celebrateCtrl.dispose();
     StepService.stopLiveTracking();
     super.dispose();
   }
+
+  bool get _healthAvailable => _availability == HealthAvailability.available;
 
   /// Fire a calm celebration only on a genuine false→true goal crossing observed
   /// while this screen is open, and only once per calendar day. Opening the app
@@ -165,6 +196,17 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     // Capture the messenger before awaiting so we never use context across an
     // async gap; always give explicit feedback (the old handler was silent).
     final messenger = ScaffoldMessenger.of(context);
+
+    // Health Connect missing/outdated: the consent sheet can't open at all, so
+    // send the user to the Play Store rather than failing silently.
+    if (_availability == HealthAvailability.needsProviderUpdate) {
+      await HealthDataService.instance.installHealthConnect();
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Install Health Connect, then come back to connect.'),
+      ));
+      return;
+    }
+
     final ok = await HealthDataService.instance.requestPermissions();
     var imported = 0;
     if (ok) imported = await StepService.syncFromHealth();
@@ -173,10 +215,14 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     setState(() => _availability = avail);
 
     final String msg;
-    if (!ok && avail == HealthAvailability.unavailable) {
+    if (avail == HealthAvailability.unavailable) {
       msg = "Health data isn't available on this device.";
+    } else if (avail == HealthAvailability.needsProviderUpdate) {
+      msg = 'Health Connect needs to be installed or updated first.';
     } else if (!ok) {
-      msg = 'Health access not granted. Enable it in Settings › Health.';
+      msg = Platform.isIOS
+          ? 'Step access not granted. Allow it in Apple Health › Sharing.'
+          : 'Step access not granted. Allow it in Health Connect › App permissions.';
     } else if (imported > 0) {
       msg = 'Connected — imported $imported day${imported == 1 ? '' : 's'} of steps.';
     } else {
@@ -269,7 +315,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     // Only float the FAB in health-connected (data) mode. When health is
     // unavailable the permission card owns the "Log manually" affordance, so the
     // FAB would just overlap that card and duplicate its CTA.
-    final showFab = _availability == HealthAvailability.available;
+    final showFab = _healthAvailable;
     return AppScaffold(
       floatingActionButton: showFab
           ? AppFab(
@@ -340,7 +386,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     final streakResult = StepService.getStreakResult();
     final streak = streakResult.current;
     final weekly = StepService.getWeeklyStats();
-    final healthy = _availability == HealthAvailability.available;
+    final healthy = _healthAvailable;
 
     // Check for a fresh goal crossing after this frame paints.
     WidgetsBinding.instance
