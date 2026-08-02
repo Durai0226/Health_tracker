@@ -1,0 +1,39 @@
+# === Generated Code (35K+ lines of zero-value content) ===
+**/*.g.dart
+**/*.freezed.dart
+**/*.mocks.dart
+
+# === Build Artifacts (5.7 GB) ===
+build/
+.dart_tool/
+.flutter-plugins-dependencies
+
+# === IDE & Platform Configs ===
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# === Lock Files (70KB of dependency hashes) ===
+pubspec.lock
+
+# === Stale Log/Output Files ===
+analysis_output.txt
+build_log.txt
+build_output.txt
+build_output_2.txt
+build_output_3.txt
+ios_build_log.txt
+finance_test_log.txt
+
+# === Platform-specific native code ===
+android/
+ios/
+macos/
+linux/
+windows/
+web/
+DlyMinder/
+
+# === Third-party vendored code ===
+third_party/

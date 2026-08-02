@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allowedTools": [
+      "Read",
+      "Edit",
+      "Write",
+      "Bash",
+      "Artifact"
+    ]
+  },
+  "mcpServers": {
+    "github": {
+      "type": "remote",
+      "url": "https://api.github.com",
+      "auth": {
+        "type": "bearer",
+        "tokenEnv": "GITHUB_TOKEN"
+      }
+    },
+    "firebase": {
+      "type": "local",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@google/firebase-mcp"
+      ],
+      "env": {
+        "FIREBASE_PROJECT_ID": "remedly-86882"
+      }
+    }
+  },
+  "contextFiles": [
+    ".claude/agents/AGENTS.md"
+  ],
+  "excludePatterns": [
+    "**/*.g.dart",
+    "**/*.freezed.dart",
+    "**/*.mocks.dart",
+    "build/",
+    ".dart_tool/",
+    "pubspec.lock",
+    "analysis_output.txt",
+    "build_log.txt"
+  ]
+}
