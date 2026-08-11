@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_colors_ext.dart';
-import '../../../core/ai/insight.dart';
-import '../../../core/ai/vitals_analyzer.dart';
+import '../../../core/health/insight.dart';
+import '../../../core/health/vitals_analyzer.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/vitals_storage_service.dart';
@@ -65,11 +65,14 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
 
     int? adherence;
     try {
-      final logs = (await MedicineCleanStorageService.getAllLogs())
-          .where((l) => l.scheduledTime.isAfter(from))
-          .toList();
-      final due = logs.where((l) => l.isTaken || l.isMissed || l.isSkipped).length;
-      final taken = logs.where((l) => l.isTaken).length;
+      // One row per slot: a pre-fix install can hold both a `missed` and a
+      // `taken` row for one dose, which would inflate `due`.
+      final logs = MedicineCleanStorageService.dedupeByDose(
+          (await MedicineCleanStorageService.getAllLogs())
+              .where((l) => l.scheduledTime.isAfter(from)));
+      final due =
+          logs.where((l) => l.countsAsTaken || l.isMissed || l.isSkipped).length;
+      final taken = logs.where((l) => l.countsAsTaken).length;
       if (due > 0) adherence = (taken / due * 100).round();
     } catch (_) {}
 
@@ -185,7 +188,6 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
                 if (Navigator.canPop(context)) Navigator.pop(context);
               },
             ),
-            actions: const [AiSeal(size: 24)],
             bottom: Container(height: 1, color: ext.outline),
           ),
           Expanded(
@@ -429,11 +431,6 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
               Text(narrative,
                   style: tt.headlineSmall?.copyWith(color: on, height: 1.3)),
             ],
-          ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: AiSeal(size: 20, color: on),
           ),
         ],
       ),

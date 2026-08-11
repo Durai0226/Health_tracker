@@ -3,7 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
-import '../../../../core/ai/vitals_analyzer.dart';
+import '../../../../core/health/vitals_analyzer.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
 import '../../models/blood_pressure_reading.dart';
@@ -83,7 +83,7 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
       body: Column(
         children: [
           AppHeader(
-            title: 'BP Report',
+            title: 'Blood pressure report',
             icon: Symbols.assessment_rounded,
             accent: accent,
             leading: AppIconButton(

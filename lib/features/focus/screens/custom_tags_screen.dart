@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
@@ -13,6 +15,16 @@ class CustomTagsScreen extends StatefulWidget {
 }
 
 class _CustomTagsScreenState extends State<CustomTagsScreen> {
+
+  /// Tag colours are user-chosen and persisted, so we lighten them for
+  /// FOREGROUND use in dark mode rather than rewriting stored data. Deep hues
+  /// otherwise fail badly against the dark chip — Meditation's brown
+  /// (#795548) measured 2.65:1 and Reading's purple (#9C27B0) 2.80:1.
+  Color _readableTagColor(BuildContext context, Color c) {
+    if (Theme.of(context).brightness != Brightness.dark) return c;
+    final hsl = HSLColor.fromColor(c);
+    return hsl.withLightness(math.max(hsl.lightness, 0.7)).toColor();
+  }
   final TagService _tagService = TagService();
   final FocusService _focusService = FocusService();
 
@@ -25,7 +37,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _tagService,
@@ -65,13 +77,13 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
   Widget _buildAppBar() {
     return SliverAppBar(
       pinned: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       leading: IconButton(
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.getCardBg(context),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Symbols.arrow_back_rounded, size: 20),
@@ -105,11 +117,13 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem('🏷️', '${tags.length}', 'Total Tags'),
+          // Each stat takes an equal share so the 3-up row can never run past
+          // the card edge on a narrow phone or at large text sizes.
+          Expanded(child: _buildStatItem('🏷️', '${tags.length}', 'Total Tags')),
           Container(width: 1, height: 50, color: Colors.white24),
-          _buildStatItem('✨', '$customCount', 'Custom'),
+          Expanded(child: _buildStatItem('✨', '$customCount', 'Custom')),
           Container(width: 1, height: 50, color: Colors.white24),
-          _buildStatItem('📊', '$totalUsage', 'Total Uses'),
+          Expanded(child: _buildStatItem('📊', '$totalUsage', 'Total Uses')),
         ],
       ),
     );
@@ -120,19 +134,31 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       children: [
         Text(emoji, style: const TextStyle(fontSize: 24)),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+        // scaleDown never enlarges, so the default rendering is unchanged and
+        // only genuinely-too-wide values shrink to fit their column.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            softWrap: false,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.white.withOpacity(0.8),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withOpacity(0.8),
+            ),
           ),
         ),
       ],
@@ -146,18 +172,27 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(
-              '${tags.length} tags',
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                '${tags.length} tags',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.getTextSecondary(context),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -167,7 +202,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.getCardBg(context),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Center(
@@ -175,9 +210,9 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                 title == 'Custom Tags' 
                     ? 'Create your first custom tag!'
                     : 'No tags available',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: AppColors.getTextSecondary(context),
                 ),
               ),
             ),
@@ -210,12 +245,19 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
               Text(tag.emoji!, style: const TextStyle(fontSize: 18)),
               const SizedBox(width: 8),
             ],
-            Text(
-              tag.name,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: tag.color,
+            // The chip lives in a Wrap, so its width is bounded by the row.
+            // Flexible lets a long tag name ellipsize instead of pushing the
+            // emoji and usage badge past the chip's right edge at large text.
+            Flexible(
+              child: Text(
+                tag.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _readableTagColor(context, tag.color),
+                ),
               ),
             ),
             if (tag.usageCount > 0) ...[
@@ -231,7 +273,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: tag.color,
+                    color: _readableTagColor(context, tag.color),
                   ),
                 ),
               ),
@@ -252,7 +294,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -297,6 +339,8 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                           children: [
                             Text(
                               stat.tagName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -304,33 +348,44 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                             ),
                             Text(
                               '${stat.sessionCount} sessions',
-                              style: const TextStyle(
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary,
+                                color: AppColors.getTextSecondary(context),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${stat.totalHours}h ${stat.totalMinutes % 60}m',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: stat.tagColor,
+                      const SizedBox(width: 8),
+                      // Trailing totals share the row instead of running off the
+                      // card: they shrink and ellipsize at large text sizes.
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${stat.totalHours}h ${stat.totalMinutes % 60}m',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: stat.tagColor,
+                              ),
                             ),
-                          ),
-                          Text(
-                            'avg ${stat.averageSessionMinutes.toStringAsFixed(0)}m',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: AppColors.textSecondary,
+                            Text(
+                              'avg ${stat.averageSessionMinutes.toStringAsFixed(0)}m',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.getTextSecondary(context),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -339,7 +394,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: percentage,
-                      backgroundColor: Colors.grey.shade100,
+                      backgroundColor: AppColors.getGrey200(context),
                       valueColor: AlwaysStoppedAnimation(stat.tagColor),
                       minHeight: 6,
                     ),
@@ -367,9 +422,9 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
           padding: EdgeInsets.fromLTRB(
             24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: AppColors.getCardBg(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -421,7 +476,10 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                         color: color,
                         shape: BoxShape.circle,
                         border: isSelected
-                            ? Border.all(color: Colors.black, width: 3)
+                            ? Border.all(
+                                color: AppColors.getTextPrimary(context),
+                                width: 3,
+                              )
                             : null,
                       ),
                       child: isSelected
@@ -452,7 +510,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       decoration: BoxDecoration(
                         color: isSelected
                             ? selectedColor.withOpacity(0.2)
-                            : Colors.grey.shade100,
+                            : AppColors.getGrey200(context),
                         borderRadius: BorderRadius.circular(12),
                         border: isSelected
                             ? Border.all(color: selectedColor, width: 2)
@@ -506,9 +564,9 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: AppColors.getCardBg(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -542,7 +600,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: tag.color,
+                color: _readableTagColor(context, tag.color),
               ),
             ),
             const SizedBox(height: 24),
@@ -556,14 +614,14 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: tag.color,
+                        color: _readableTagColor(context, tag.color),
                       ),
                     ),
-                    const Text(
+                    Text(
                       'Times Used',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: AppColors.getTextSecondary(context),
                       ),
                     ),
                   ],
@@ -575,14 +633,14 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: tag.color,
+                        color: _readableTagColor(context, tag.color),
                       ),
                     ),
-                    const Text(
+                    Text(
                       'Type',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: AppColors.getTextSecondary(context),
                       ),
                     ),
                   ],

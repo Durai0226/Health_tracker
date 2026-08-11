@@ -129,7 +129,15 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
               ),
             ),
             const SizedBox(width: 6),
-            Text(label, style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+            // A Wrap hands each run item the full line width, so a long legend
+            // label ("Symptoms logged") overran the card at 1.3x text on a
+            // 320pt phone. Flexible lets it wrap to a second line inside its
+            // own item instead; short labels are unaffected because the Row
+            // still sizes to its content.
+            Flexible(
+              child: Text(label,
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+            ),
           ],
         );
 

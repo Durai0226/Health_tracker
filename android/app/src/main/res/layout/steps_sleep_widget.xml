@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Steps + Sleep home-screen widget (2x1). RemoteViews only supports a limited
+  subset of views/layouts (FrameLayout, LinearLayout, RelativeLayout,
+  GridLayout; TextView, ImageView, Button, ImageButton, ProgressBar,
+  Chronometer, AnalogClock, TextClock, ViewFlipper, ListView, GridView,
+  StackView, AdapterViewFlipper, ViewStub) — an unsupported view/layout here
+  crashes widget inflation at runtime with no stack trace on-device, and there
+  is no emulator in this environment to catch that. Everything below sticks to
+  LinearLayout + TextView + ProgressBar only. Icons are plain emoji glyphs in
+  TextViews (no ImageView/bitmap decode needed, so nothing to fail to load).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <!-- Steps row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:textSize="18sp"
+            android:text="🚶" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/steps_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/widget_text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                tools:text="4,321 steps" />
+
+            <ProgressBar
+                android:id="@+id/steps_progress"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="4dp"
+                android:max="100"
+                android:progress="0"
+                android:progressTint="@color/widget_accent"
+                android:progressBackgroundTint="@color/widget_progress_track" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/steps_pct"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="12sp"
+            tools:text="72%" />
+    </LinearLayout>
+
+    <!-- Divider: RemoteViews has no plain <View>, so an empty LinearLayout
+         with a background color stands in for a 1dp rule. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="10dp"
+        android:background="@color/widget_divider" />
+
+    <!-- Sleep row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:textSize="18sp"
+            android:text="🌙" />
+
+        <TextView
+            android:id="@+id/sleep_value"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            tools:text="Sleep: 7h 30m" />
+
+        <TextView
+            android:id="@+id/sleep_score"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="12sp"
+            tools:text="Score 82" />
+    </LinearLayout>
+
+</LinearLayout>

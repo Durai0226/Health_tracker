@@ -3,17 +3,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
+import 'core/services/active_profile_service.dart';
+import 'core/services/app_lock_service.dart';
 import 'core/services/clean_storage_service.dart';
-import 'core/services/llm_service.dart';
-import 'core/ai/knowledge_base.dart';
-import 'core/ai/ai_assistant.dart';
 import 'core/database/app_database.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/cloud_sync_service.dart';
 import 'core/services/haptic_service.dart';
 import 'core/services/vitavibe_service.dart';
 import 'features/medication/services/medicine_storage_service.dart';
@@ -36,6 +34,8 @@ import 'features/onboarding/screens/welcome_screen.dart';
 import 'features/home/screens/app_shell.dart';
 import 'features/reminders/screens/alarm_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'core/services/app_check_service.dart';
+import 'features/settings/screens/app_lock_gate.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -109,10 +109,6 @@ void _initDeferredServices() {
         _initService('BackgroundAlarmService', () => BackgroundAlarmService().init()),
         _initService('FeatureFlagService', () => FeatureFlagService().init()),
         _initService('VitaVibeService', () => VitaVibeService().init()),
-        // Seed the on-device RAG knowledge base (idempotent + versioned).
-        _initService('KnowledgeBaseSeeder', () => KnowledgeBaseSeeder.ensureSeeded()),
-        // Attach the on-device LLM only if the user opted in + a model is present.
-        _initService('OnDeviceAI', () => AiAssistant().maybeActivateOnDeviceAtStartup()),
         // Other services can be initialized on-demand
       ]);
       
@@ -123,7 +119,39 @@ void _initDeferredServices() {
       } catch (e) {
         debugPrint('⚠️ Reminder reschedule failed: $e');
       }
-      
+
+      // Cloud sync (medicines, water, and — via HealthCloudSyncService —
+      // period/steps/sleep) was fully implemented but never actually invoked
+      // anywhere; wire it in here so it runs once per app start for a signed-
+      // in user, the same best-effort, non-blocking way as the reschedule above.
+      // Health data may only leave the device with explicit consent.
+      //
+      // This used to gate on `currentUser?.id != null`, which is satisfied by
+      // the ANONYMOUS Firebase account that AuthService.init() creates silently
+      // on first launch — so medicines, water and 60 days of steps/sleep were
+      // uploaded for every user, including people who tapped "Continue as
+      // guest", while onboarding told them "Private · on-device · no account".
+      //
+      // Two guards now, matching what SyncService already does
+      // (sync_service.dart: `if (user.isAnonymous) return;`):
+      //   1. isAuthenticated — excludes anonymous users and offline guests
+      //   2. cloudSyncEnabled — the user's own opt-in, default false
+      final auth = AuthService();
+      final userId = auth.currentUser?.id;
+      if (auth.isAuthenticated &&
+          CleanStorageService.cloudSyncEnabled &&
+          userId != null &&
+          userId.isNotEmpty) {
+        try {
+          await CloudSyncService().syncUserData(userId);
+          debugPrint('✓ Cloud sync completed in background');
+        } catch (e) {
+          debugPrint('⚠️ Cloud sync failed: $e');
+        }
+      } else {
+        debugPrint('• Cloud sync skipped — data stays on device');
+      }
+
       debugPrint('✓ All deferred services initialized');
     } catch (e) {
       debugPrint('⚠️ Deferred services initialization failed: $e');
@@ -168,20 +196,10 @@ void main() async {
 
       // App Check — attest that requests come from a genuine, untampered build
       // BEFORE any Firestore/Auth use, so the backend can reject abuse (e.g.
-      // scripted anonymous writes). Debug builds use the debug provider (print
-      // the token once and register it in the Firebase console); release builds
-      // use Play Integrity (Android) / App Attest (iOS). Non-fatal on failure.
-      try {
-        await FirebaseAppCheck.instance.activate(
-          androidProvider:
-              kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-          appleProvider:
-              kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
-        );
-        debugPrint('✓ Firebase App Check activated');
-      } catch (e) {
-        debugPrint('⚠️ App Check activation failed: $e');
-      }
+      // scripted anonymous writes). It is also the ONLY credential behind the
+      // Smart answers tier, so AppCheckService can explain a failure rather than
+      // leaving the AI silently unavailable. Non-fatal on failure.
+      await AppCheckService.activate();
 
       // Enable Firestore persistence with reasonable cache size for faster startup
       FirebaseFirestore.instance.settings = const Settings(
@@ -214,7 +232,6 @@ void main() async {
       _initService('PeriodService', () => PeriodService.init()),
       _initService('StepService', () => StepService.init()),
       _initService('SleepService', () => SleepService.init()),
-      _initService('LlmService', () => LlmService().init()),
     ]);
     
     // Sync snooze settings asynchronously (non-blocking)
@@ -227,6 +244,8 @@ void main() async {
       _initService('AuthService', () => AuthService().init()),
       _initService('HapticService', () => HapticService().init()),
       _initService('FeatureManager', () => FeatureManager().init()),
+      _initService('ActiveProfileService', () => ActiveProfileService().init()),
+      _initService('AppLockService', () => AppLockService().init()),
     ]);
     
     // Defer non-critical services to after app launch
@@ -314,6 +333,32 @@ class _MyAppState extends State<MyApp> {
           darkTheme: AppTheme.darkTheme,
           themeMode: themeMode,
           navigatorKey: navigatorKey,
+          navigatorObservers: [appLockRouteObserver],
+          // Wraps the Navigator (passed in as `child`) so the app-lock PIN
+          // overlay can sit above EVERY screen without threading itself into
+          // each route individually. See AppLockGate's doc comment.
+          builder: (context, child) {
+            // Honour Dynamic Type up to 200%, which is what WCAG 2.2 SC 1.4.4
+            // requires ("text can be resized up to 200 percent without loss of
+            // content or functionality").
+            //
+            // This was temporarily capped at 1.3x while the layout was fixed —
+            // at the time 12 screens overflowed at 2.0x. They now pass, so the
+            // cap is at the standard. test/responsive/responsive_overflow_test.dart
+            // renders every screen at 1.0x / 1.3x / 2.0x across four phone
+            // widths and is the regression gate; do not lower this without
+            // making that harness green at the lower value first.
+            //
+            // The ceiling remains because beyond 200% the fixed-geometry
+            // elements (progress rings, the focus timer) have no reflow story.
+            final mq = MediaQuery.of(context);
+            return MediaQuery(
+              data: mq.copyWith(
+                textScaler: mq.textScaler.clamp(maxScaleFactor: 2.0),
+              ),
+              child: AppLockGate(child: child ?? const SizedBox.shrink()),
+            );
+          },
           initialRoute: determineInitialRoute(),
           routes: {
             '/welcome': (context) => const WelcomeScreen(),

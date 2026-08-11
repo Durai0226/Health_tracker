@@ -118,12 +118,19 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
             icon: const Icon(Symbols.chevron_left_rounded),
             onPressed: () => _changeMonth(-1),
           ),
-          Text(
-            '${monthNames[_selectedMonth - 1]} $_selectedYear',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: ext.textPrimary,
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '${monthNames[_selectedMonth - 1]} $_selectedYear',
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: ext.textPrimary,
+                ),
+              ),
             ),
           ),
           IconButton(
@@ -263,26 +270,38 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'This Week',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: ext.textPrimary,
+              Flexible(
+                child: Text(
+                  'This Week',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: ext.textPrimary,
+                  ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: ext.mark(ext.water).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${((_weeklyStats['completionRate'] as double) * 100).toInt()}% complete',
-                  style: TextStyle(
-                    color: ext.mark(ext.water),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: ext.mark(ext.water).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${((_weeklyStats['completionRate'] as double) * 100).toInt()}% complete',
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: ext.mark(ext.water),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -347,40 +366,47 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: ext.success.base,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'Goal met',
-                style: TextStyle(fontSize: 10, color: ext.textSecondary),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: ext.water.base,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'In progress',
-                style: TextStyle(fontSize: 10, color: ext.textSecondary),
-              ),
-            ],
+          // Wrap, not Row: the two legend entries flow onto a second line on a
+          // 320pt screen at large text sizes instead of overflowing.
+          Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16,
+              runSpacing: 4,
+              children: [
+                _buildChartLegendItem(ext.success.base, 'Goal met'),
+                _buildChartLegendItem(ext.water.base, 'In progress'),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildChartLegendItem(Color color, String label) {
+    final ext = AppColorsExt.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: ext.textSecondary),
+          ),
+        ),
+      ],
     );
   }
 

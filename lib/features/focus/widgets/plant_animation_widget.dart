@@ -159,28 +159,37 @@ class _PlantAnimationWidgetState extends State<PlantAnimationWidget>
         ),
         shape: BoxShape.circle,
       ),
+      // The circle is a fixed size, so scaled-up text has nowhere to go: at
+      // accessibility sizes this overflowed by 85px and "Seed" broke across
+      // two lines. scaleDown shrinks the whole stack to fit the circle.
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Plant emoji with size based on growth
-            Text(
-              _getPlantEmoji(growthStage),
-              style: TextStyle(
-                fontSize: widget.size * (0.2 + widget.progress * 0.2),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Plant emoji with size based on growth
+              Text(
+                _getPlantEmoji(growthStage),
+                style: TextStyle(
+                  fontSize: widget.size * (0.2 + widget.progress * 0.2),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            // Growth stage text
-            Text(
-              _getGrowthText(growthStage),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: widget.plantType.primaryColor,
+              const SizedBox(height: 8),
+              // Growth stage text
+              Text(
+                _getGrowthText(growthStage),
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: widget.plantType.primaryColor,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

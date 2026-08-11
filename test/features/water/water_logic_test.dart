@@ -117,5 +117,52 @@ void main() {
       final c = WaterReminderConfig(reminderMinutes: [120, 660, 1400]);
       expect(c.effectiveReminderMinutes(wakeHour: 22, bedHour: 6), [120, 1400]);
     });
+
+    test(
+        'explicit wakeMinute/bedMinute=0 produces the same result as '
+        'omitting them (no silent behavior change for existing callers)', () {
+      final c = WaterReminderConfig(reminderMinutes: [360, 600, 1380]);
+      final withDefaults = c.effectiveReminderMinutes(wakeHour: 7, bedHour: 22);
+      final withExplicitZeros = c.effectiveReminderMinutes(
+          wakeHour: 7, bedHour: 22, wakeMinute: 0, bedMinute: 0);
+      expect(withExplicitZeros, withDefaults);
+    });
+
+    test('minute-precision window from a sleep-derived wake/bed time', () {
+      // wake 07:15 (435), bed 22:45 (1365).
+      final c = WaterReminderConfig(reminderMinutes: [434, 435, 1365, 1366]);
+      expect(
+        c.effectiveReminderMinutes(
+            wakeHour: 7, bedHour: 22, wakeMinute: 15, bedMinute: 45),
+        [435, 1365],
+      );
+    });
+  });
+
+  group('useSleepSchedule', () {
+    test('round-trips through toJson/fromJson', () {
+      final c = WaterReminderConfig(useSleepSchedule: true);
+      final decoded = WaterReminderConfig.fromJson(c.toJson());
+      expect(decoded.useSleepSchedule, true);
+    });
+
+    test('defaults to false and round-trips false', () {
+      final c = WaterReminderConfig();
+      expect(c.useSleepSchedule, false);
+      final decoded = WaterReminderConfig.fromJson(c.toJson());
+      expect(decoded.useSleepSchedule, false);
+    });
+
+    test('fromJson missing the key defaults to false', () {
+      final json = WaterReminderConfig().toJson()..remove('useSleepSchedule');
+      expect(WaterReminderConfig.fromJson(json).useSleepSchedule, false);
+    });
+
+    test('copyWith toggles it independently of respectQuietHours', () {
+      final c = const WaterReminderConfig();
+      final updated = c.copyWith(useSleepSchedule: true);
+      expect(updated.useSleepSchedule, true);
+      expect(updated.respectQuietHours, c.respectQuietHours);
+    });
   });
 }

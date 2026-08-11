@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
@@ -69,8 +71,18 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
     final ext = AppColorsExt.of(context);
     // Saturated teal that keeps white text readable in both themes.
     final headerTeal = ext.isDark ? ext.water.container : ext.water.strong;
+    final textScaler = MediaQuery.textScalerOf(context);
+    // FlexibleSpaceBar pins its title 16pt above the bottom of the header and
+    // blows it up by expandedTitleScale (1.5x), so the bottom `titleBand` logical
+    // px belong to the title alone. The trophy count used to be centred in the
+    // WHOLE header behind a hard `EdgeInsets.only(top: 40)`, which parked it
+    // right on top of that band (they overlapped by ~2pt on a 375pt phone).
+    // Reserving the band and bottom-anchoring the count above it keeps the two
+    // lines a single stacked block at every text scale.
+    final titleBand = textScaler.scale(22) * 1.5 + 24; // 22 = titleLarge line box
+    final countBand = math.max(40.0, textScaler.scale(24) * 1.4) + 24;
     return SliverAppBar(
-      expandedHeight: 120,
+      expandedHeight: titleBand + countBand,
       floating: false,
       pinned: true,
       backgroundColor: headerTeal,
@@ -79,9 +91,20 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
         onPressed: () => Navigator.pop(context),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        title: const Text(
-          'Achievements',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        // Centre both lines on the same axis, explicitly: the platform default
+        // left-aligns the title at start:72 (Android/desktop) while the count
+        // below it is centred, so the block read as two mis-centred fragments.
+        centerTitle: true,
+        titlePadding:
+            const EdgeInsetsDirectional.only(start: 16, end: 16, bottom: 16),
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            'Achievements',
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
         ),
         background: Container(
           decoration: BoxDecoration(
@@ -94,23 +117,27 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               ],
             ),
           ),
-          child: Center(
+          child: Align(
+            alignment: Alignment.bottomCenter,
             child: Padding(
-              padding: const EdgeInsets.only(top: 40),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Symbols.emoji_events_rounded, color: Colors.amber, size: 32),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_userAchievements.unlockedAchievements.length}/${_userAchievements.achievements.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+              padding: EdgeInsets.only(left: 16, right: 16, bottom: titleBand),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Symbols.emoji_events_rounded, color: Colors.amber, size: 32),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${_userAchievements.unlockedAchievements.length}/${_userAchievements.achievements.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -144,22 +171,28 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem(
-                icon: Symbols.stars_rounded,
-                value: '${_userAchievements.totalPoints}',
-                label: 'Total Points',
+              Expanded(
+                child: _buildStatItem(
+                  icon: Symbols.stars_rounded,
+                  value: '${_userAchievements.totalPoints}',
+                  label: 'Total Points',
+                ),
               ),
               Container(width: 1, height: 50, color: Colors.white24),
-              _buildStatItem(
-                icon: Symbols.trending_up_rounded,
-                value: 'Level ${_userAchievements.level}',
-                label: '${_userAchievements.pointsToNextLevel} to next',
+              Expanded(
+                child: _buildStatItem(
+                  icon: Symbols.trending_up_rounded,
+                  value: 'Level ${_userAchievements.level}',
+                  label: '${_userAchievements.pointsToNextLevel} to next',
+                ),
               ),
               Container(width: 1, height: 50, color: Colors.white24),
-              _buildStatItem(
-                icon: Symbols.local_fire_department_rounded,
-                value: '${_userAchievements.currentStreak}',
-                label: 'Day Streak',
+              Expanded(
+                child: _buildStatItem(
+                  icon: Symbols.local_fire_department_rounded,
+                  value: '${_userAchievements.currentStreak}',
+                  label: 'Day Streak',
+                ),
               ),
             ],
           ),
@@ -187,16 +220,24 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
       children: [
         Icon(icon, color: Colors.white, size: 28),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            softWrap: false,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         Text(
           label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: Colors.white.withOpacity(0.8),
             fontSize: 11,
@@ -328,6 +369,10 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               : null,
         ),
         child: Row(
+          // The details column is taller than the 56pt icon tile, so the default
+          // centre alignment floated the 🔒 / emoji tile mid-row with a big gap
+          // above it while the title sat at the top. Top-align them.
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Icon
             Container(
@@ -356,6 +401,7 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Text(
@@ -373,6 +419,14 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                         achievement.tierEmoji,
                         style: const TextStyle(fontSize: 16),
                       ),
+                      const SizedBox(width: 8),
+                      // Points badge. It lives INSIDE the details column rather
+                      // than beside it so that it shares a right edge with the
+                      // progress counter two rows below — as a sibling of the
+                      // column the two right-hand values sat ~19pt apart. Moving
+                      // it in also gives the title/description/progress row the
+                      // badge's width back.
+                      _buildPointsBadge(achievement, isUnlocked),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -385,8 +439,10 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                   ),
                   const SizedBox(height: 8),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
+                        flex: 3,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
@@ -400,12 +456,24 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        '${achievement.currentValue}/${achievement.targetValue}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
+                      // "0/1000000" at large text sizes is wider than the whole
+                      // column on a 320pt phone, so the counter is flexible and
+                      // scales down rather than shoving the bar out of the row.
+                      Flexible(
+                        flex: 2,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            '${achievement.currentValue}/${achievement.targetValue}',
+                            maxLines: 1,
+                            softWrap: false,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -413,26 +481,28 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            // Points
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: isUnlocked
-                    ? Colors.amber.shade100
-                    : ext.surfaceVariant,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '+${achievement.points}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
-                  fontSize: 12,
-                ),
-              ),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPointsBadge(WaterAchievement achievement, bool isUnlocked) {
+    final ext = AppColorsExt.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isUnlocked ? Colors.amber.shade100 : ext.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '+${achievement.points}',
+        maxLines: 1,
+        softWrap: false,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
+          fontSize: 12,
         ),
       ),
     );

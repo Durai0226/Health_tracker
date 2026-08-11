@@ -4,6 +4,9 @@ import 'package:health/health.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../features/medication/models/blood_pressure_reading.dart';
+import '../../features/medication/models/glucose_reading.dart';
+import '../../features/medication/models/weight_reading.dart';
 
 /// Availability of device health data, so callers can fall back to manual entry.
 ///
@@ -131,6 +134,127 @@ class HealthDataService {
 
   static List<HealthDataAccess> _readAccessFor(List<HealthDataType> types) =>
       types.map((_) => HealthDataAccess.READ).toList();
+
+  // ---- vitals write (BP / glucose / weight) ---------------------------------
+  //
+  // Opt-in and, for BP/glucose, one-directional: this app never reads BP or
+  // glucose back from Health Connect/HealthKit, it only offers to publish
+  // what the user already logged locally. `writeBloodPressure`/
+  // `BLOOD_GLUCOSE`/`WEIGHT` are identical types on both platforms (unlike
+  // sleep/distance above), so no per-platform split is needed here. Mood has
+  // no native record type on either platform, so it is never written.
+  //
+  // Weight is the one exception to "one-directional": [readWeightSamples]
+  // below is a separate, explicit, user-triggered pull (see
+  // VitalsStorageService.importFromHealthConnect) that lets a reading logged
+  // by a smart scale or another app — never touching this app's write path —
+  // flow into the local Weight tracker. It reuses this same READ_WRITE grant
+  // rather than requesting a standalone read scope.
+  //
+  // `package:health` v11.1.1 has no clientRecordId/upsert support anywhere in
+  // its write path (Dart or native) — every write always creates a brand-new
+  // record. Duplicate-write avoidance is therefore handled entirely at the
+  // Dart level by the caller (see VitalsStorageService's synced-flag), not by
+  // this service or the platform.
+  static const List<HealthDataType> vitalsWriteTypes = [
+    HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+    HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+    HealthDataType.BLOOD_GLUCOSE,
+    HealthDataType.WEIGHT,
+  ];
+
+  static List<HealthDataAccess> _readWriteAccessFor(
+          List<HealthDataType> types) =>
+      types.map((_) => HealthDataAccess.READ_WRITE).toList();
+
+  /// Whether the vitals write scope is currently granted.
+  ///
+  /// Checked with [HealthDataAccess.WRITE], NOT `READ_WRITE` — on iOS,
+  /// HealthKit only discloses status for a plain READ or WRITE query;
+  /// `READ_WRITE` falls into the same undisclosed branch as READ and always
+  /// returns null (i.e. "not granted"), even right after a real grant.
+  Future<bool> hasVitalsWritePermission() async {
+    try {
+      await _ensureConfigured();
+      final has = await _health.hasPermissions(vitalsWriteTypes,
+          permissions:
+              vitalsWriteTypes.map((_) => HealthDataAccess.WRITE).toList());
+      return has == true;
+    } catch (e) {
+      debugPrint('HealthDataService.hasVitalsWritePermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Ask for the vitals write scope. `package:health` has no write-only
+  /// request — requesting WRITE always requests READ alongside it.
+  Future<bool> requestVitalsWritePermission() async {
+    try {
+      await _ensureConfigured();
+      final granted = await _health.requestAuthorization(vitalsWriteTypes,
+          permissions: _readWriteAccessFor(vitalsWriteTypes));
+      return granted == true;
+    } catch (e) {
+      debugPrint('HealthDataService.requestVitalsWritePermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Writes systolic+diastolic as ONE combined record — Health Connect models
+  /// blood pressure that way, and the plugin refuses to write either number
+  /// alone. Only the numbers and the time are written: the plugin exposes no
+  /// parameter for [BloodPressureReading.arm]/[position].
+  Future<bool> writeBloodPressure(BloodPressureReading reading) async {
+    try {
+      await _ensureConfigured();
+      return await _health.writeBloodPressure(
+        systolic: reading.systolic,
+        diastolic: reading.diastolic,
+        startTime: reading.takenAt,
+        recordingMethod: RecordingMethod.manual,
+      );
+    } catch (e) {
+      debugPrint('HealthDataService.writeBloodPressure failed: $e');
+      return false;
+    }
+  }
+
+  /// Writes the glucose value + time. The plugin exposes no parameter for
+  /// [GlucoseReading.context] (fasting/pre/post-meal) — there is no dedicated
+  /// glucose writer, only the generic [Health.writeHealthData] call.
+  Future<bool> writeGlucose(GlucoseReading reading) async {
+    try {
+      await _ensureConfigured();
+      return await _health.writeHealthData(
+        value: reading.valueMgdl.toDouble(),
+        type: HealthDataType.BLOOD_GLUCOSE,
+        unit: HealthDataUnit.MILLIGRAM_PER_DECILITER,
+        startTime: reading.takenAt,
+        recordingMethod: RecordingMethod.manual,
+      );
+    } catch (e) {
+      debugPrint('HealthDataService.writeGlucose failed: $e');
+      return false;
+    }
+  }
+
+  /// Writes body weight in kilograms — [WeightReading.valueKg] is already the
+  /// canonical unit, so no conversion is needed here.
+  Future<bool> writeWeight(WeightReading reading) async {
+    try {
+      await _ensureConfigured();
+      return await _health.writeHealthData(
+        value: reading.valueKg,
+        type: HealthDataType.WEIGHT,
+        unit: HealthDataUnit.KILOGRAM,
+        startTime: reading.takenAt,
+        recordingMethod: RecordingMethod.manual,
+      );
+    } catch (e) {
+      debugPrint('HealthDataService.writeWeight failed: $e');
+      return false;
+    }
+  }
 
   Future<void> _ensureConfigured() async {
     if (_configured) return;
@@ -401,6 +525,23 @@ class HealthDataService {
       return await _readPoints(sleepTypes, from, to);
     } catch (e) {
       debugPrint('HealthDataService.readSleepSegments failed: $e');
+      return [];
+    }
+  }
+
+  /// Raw weight samples in [from]..[to] — the read-direction counterpart to
+  /// [writeWeight], for pulling in readings a user already logged via a smart
+  /// scale or another app (see VitalsStorageService.importFromHealthConnect).
+  /// Each point's value is a [NumericHealthValue] in kilograms (`WEIGHT`'s
+  /// fixed unit on both platforms), matching [WeightReading.valueKg]'s
+  /// canonical unit exactly — no conversion needed.
+  Future<List<HealthDataPoint>> readWeightSamples(
+      DateTime from, DateTime to) async {
+    try {
+      await _ensureConfigured();
+      return await _readPoints([HealthDataType.WEIGHT], from, to);
+    } catch (e) {
+      debugPrint('HealthDataService.readWeightSamples failed: $e');
       return [];
     }
   }

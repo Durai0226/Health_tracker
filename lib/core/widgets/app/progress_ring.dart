@@ -59,7 +59,16 @@ class ProgressRing extends StatelessWidget {
               size: Size.square(size),
               painter: _RingPainter(value, fill, track, stroke),
             ),
-          if (center != null) Padding(padding: EdgeInsets.all(stroke), child: center),
+          // A ring is a fixed-size circle, so its readout must shrink to fit
+          // rather than reflow: at accessibility text sizes the centre column
+          // overflowed and labels like "of 400 mg" / "OF 4" escaped onto the
+          // card behind it. Doing this here covers every ring in the app.
+          // scaleDown never enlarges, so default sizes render unchanged.
+          if (center != null)
+            Padding(
+              padding: EdgeInsets.all(stroke),
+              child: FittedBox(fit: BoxFit.scaleDown, child: center),
+            ),
         ],
       ),
     );

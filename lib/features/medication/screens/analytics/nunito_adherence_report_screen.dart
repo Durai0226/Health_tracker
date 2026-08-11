@@ -100,8 +100,20 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     final medicines = (await MedicineCleanStorageService.getAllMedicines())
         .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
         .toList();
-    final logs =
-        await MedicineCleanStorageService.getLogsForDateRange(startDay, now);
+    // The numerator MUST be drawn from the same population the denominator is
+    // built from — the eligible set (active, non-archived, non-PRN) that
+    // MedicineCleanStorageService.getAdherenceStats uses. Counting taken logs
+    // from PRN / archived / inactive medicines against a schedule-only
+    // denominator made a day's adherence exceed 100% (it only *looked* sane
+    // because the clamp pinned the bar to full height).
+    final eligibleIds = medicines.map((m) => m.id).toSet();
+    // Deduped per slot for the same reason getAdherenceStats does it: installs
+    // written before the deterministic-log-id fix can hold both a `missed` and
+    // a `taken` row for one dose, which would double-count here.
+    final logs = MedicineCleanStorageService.dedupeByDose(
+      (await MedicineCleanStorageService.getLogsForDateRange(startDay, now))
+          .where((l) => eligibleIds.contains(l.medicineId)),
+    );
 
     for (var day = startDay;
         !day.isAfter(today);
@@ -120,7 +132,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
 
       final taken = logs
           .where((l) =>
-              l.isTaken &&
+              l.countsAsTaken &&
               l.scheduledTime.year == day.year &&
               l.scheduledTime.month == day.month &&
               l.scheduledTime.day == day.day)
@@ -312,10 +324,15 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
 
   Widget _buildChartEmptyState(AppColorsExt c) {
     final tt = Theme.of(context).textTheme;
-    return SizedBox(
-      height: 150,
+    // Min-height, not a fixed 150: the message wraps to more lines as Dynamic
+    // Type grows and a hard height simply clipped it (bottom overflow at 200%
+    // on narrow phones). A minimum keeps the 150px chart-sized placeholder at
+    // default sizes and lets the box grow only when the text needs it.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 150),
       child: Center(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Symbols.bar_chart_rounded, size: 36, color: c.textTertiary),
@@ -336,9 +353,13 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     // Subtle gridlines at 0% / 50% / 100% behind the bars.
     Widget gridline() => Container(height: 1, color: c.outline.withOpacity(0.5));
 
-    return SizedBox(
-      height: 170,
+    // Min-height, not a fixed 170: only the plot area is a fixed 140px band —
+    // the axis labels underneath grow with Dynamic Type, and a hard height
+    // clipped them. The minimum keeps the default chart exactly 170 tall.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 170),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
             height: 140,
@@ -370,14 +391,22 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
           Row(
             children: bars.map((bar) {
               return Expanded(
-                child: Text(
-                  bar.label,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  style: tt.bodySmall?.copyWith(
-                    fontSize: 10,
-                    color: c.textTertiary,
+                // Up to 12 labels share the card's width, so each cell is only
+                // ~25pt wide. Shrink-to-fit keeps "Mon"/"MMM ''yy" legible at
+                // large Dynamic Type instead of clipping it mid-glyph;
+                // scaleDown never enlarges, so default sizes are untouched.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Text(
+                    bar.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: tt.bodySmall?.copyWith(
+                      fontSize: 10,
+                      color: c.textTertiary,
+                    ),
                   ),
                 ),
               );

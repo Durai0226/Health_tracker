@@ -4,8 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
-import '../../../core/ai/ai_assistant.dart';
-import '../../../core/ai/ai_types.dart';
+import '../../../core/health/coach_text.dart';
 import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
 import '../utils/reminder_helper.dart';
@@ -216,12 +215,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
     ).whenComplete(controller.dispose);
   }
 
-  /// Extracts structured reminder fields from free text via the AiAssistant
-  /// facade (always available — the free on-device rule engine parses offline).
-  /// Returns null only when parseReminder returns null (blank/empty input).
+  /// Extracts structured reminder fields from free text. Deterministic and
+  /// offline — see [CoachText.parseReminder]. Returns null for blank input.
   Future<_SmartReminder?> _parseSmartReminder(String text) async {
-    final parsed = await AiAssistant().parseReminder(text);
-    if (parsed == null) return null;
+    if (text.trim().isEmpty) return null;
+    final parsed = const CoachText().parseReminder(text);
 
     final repeat = _repeatFromString(parsed.repeat);
     final priority = _priorityFromString(parsed.priority);
@@ -373,16 +371,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
             if (_reminders.isNotEmpty) _filterBar(ext),
             Expanded(
               child: _visibleReminders.isEmpty
-                  ? EmptyState(
-                      icon: Symbols.notifications_none_rounded,
-                      title: _hasActiveFilter
-                          ? 'No matching reminders'
-                          : 'No reminders yet',
-                      message: _hasActiveFilter
-                          ? 'Try a different search or filter.'
-                          : 'Tap + to create your first reminder.',
-                      accent: ext.reminders,
-                    )
+                  ? _emptyState(ext)
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(
                           AppSpacing.gutter, AppSpacing.xs, AppSpacing.gutter, 120),
@@ -390,6 +379,31 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Empty state that stays centred while it fits and scrolls once it doesn't.
+  /// [EmptyState] is a Center + Column with no scrolling of its own, so inside
+  /// the Expanded it was pinned to the leftover viewport height and overflowed
+  /// at 200% text on a short phone. The minHeight keeps the centred look at
+  /// every normal size — only the overflow case starts scrolling.
+  Widget _emptyState(AppColorsExt ext) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: EmptyState(
+            icon: Symbols.notifications_none_rounded,
+            title: _hasActiveFilter
+                ? 'No matching reminders'
+                : 'No reminders yet',
+            message: _hasActiveFilter
+                ? 'Try a different search or filter.'
+                : 'Tap + to create your first reminder.',
+            accent: ext.reminders,
+          ),
         ),
       ),
     );
@@ -600,11 +614,17 @@ class _RemindersScreenState extends State<RemindersScreen> {
         children: [
           Icon(c.iconObj, size: 12, color: col),
           const SizedBox(width: 4),
-          Text(
-            c.name,
-            style: tt.labelSmall?.copyWith(
-              color: col,
-              fontWeight: FontWeight.w600,
+          // Category names are user-typed, so the pill has to be able to give
+          // up width at large text sizes.
+          Flexible(
+            child: Text(
+              c.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: tt.labelSmall?.copyWith(
+                color: col,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -620,7 +640,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
         Icon(icon, size: 13, color: ext.textTertiary),
         if (label != null && label.isNotEmpty) ...[
           const SizedBox(width: 4),
-          Text(label, style: tt.labelSmall?.copyWith(color: ext.textSecondary)),
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.labelSmall?.copyWith(color: ext.textSecondary)),
+          ),
         ],
       ],
     );
@@ -759,10 +784,17 @@ class _RemindersScreenState extends State<RemindersScreen> {
                           color: overdue ? ext.error.strong : ext.textSecondary,
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          overdue ? '$when · overdue' : when,
-                          style: tt.bodySmall?.copyWith(
-                            color: overdue ? ext.error.strong : ext.textSecondary,
+                        // "Mar 3 · 9:30 AM · overdue" is wider than the card at
+                        // 200% text, so let it wrap instead of overflowing.
+                        Expanded(
+                          child: Text(
+                            overdue ? '$when · overdue' : when,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.bodySmall?.copyWith(
+                              color:
+                                  overdue ? ext.error.strong : ext.textSecondary,
+                            ),
                           ),
                         ),
                       ],

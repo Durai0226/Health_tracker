@@ -153,16 +153,23 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _doctors.isEmpty
-                      ? EmptyState(
-                          icon: Symbols.person_add_rounded,
-                          title: 'No doctors added',
-                          message: 'Add your doctors to keep their info handy.',
-                          accent: accent,
-                          action: AppButton(
-                            label: 'Add Doctor',
+                      // Hosted in a scroller: the Expanded hands the empty
+                      // state exactly the height the header leaves over, and
+                      // at large Dynamic Type the circle + title + message +
+                      // button need more than that (bottom overflow at 200%).
+                      ? _ScrollableFill(
+                          child: EmptyState(
+                            icon: Symbols.person_add_rounded,
+                            title: 'No doctors added',
+                            message:
+                                'Add your doctors to keep their info handy.',
                             accent: accent,
-                            leadingIcon: Symbols.add_rounded,
-                            onPressed: () => _navigateToAddEdit(),
+                            action: AppButton(
+                              label: 'Add Doctor',
+                              accent: accent,
+                              leadingIcon: Symbols.add_rounded,
+                              onPressed: () => _navigateToAddEdit(),
+                            ),
                           ),
                         )
                       : _buildDoctorList(ext, accent),
@@ -216,12 +223,21 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
                 color: accent.container,
                 borderRadius: AppRadius.brLg,
               ),
+              // The avatar is a FIXED 56pt square, so its initials must shrink
+              // to fit rather than reflow — at large Dynamic Type "AF" wrapped
+              // to two lines and got clipped. scaleDown never enlarges, so the
+              // default rendering is unchanged.
               child: Center(
-                child: Text(
-                  _getInitials(doctor.name),
-                  style: tt.titleLarge?.copyWith(
-                    color: accent.onContainer,
-                    fontWeight: FontWeight.w800,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _getInitials(doctor.name),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: tt.titleLarge?.copyWith(
+                      color: accent.onContainer,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -231,18 +247,24 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  // Wrap, not Row: the avatar and the call/email buttons leave
+                  // this column barely 70pt on a 320pt phone — less than the
+                  // "Primary" badge alone needs, so in a Row the badge
+                  // overflowed even at the default text size (the name's
+                  // Flexible simply collapsed to nothing). Wrapping drops the
+                  // badge under the name instead of off the card.
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
-                      Flexible(
-                        child: Text(
-                          'Dr. ${doctor.name}',
-                          style: tt.titleLarge?.copyWith(color: ext.textPrimary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Text(
+                        'Dr. ${doctor.name}',
+                        style: tt.titleLarge?.copyWith(color: ext.textPrimary),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      if (doctor.isPrimary) ...[
-                        const SizedBox(width: 8),
+                      if (doctor.isPrimary)
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
@@ -252,13 +274,13 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
                           ),
                           child: Text(
                             'Primary',
+                            maxLines: 1,
                             style: tt.labelSmall?.copyWith(
                               color: ext.success.onContainer,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                   if (doctor.specialty != null && doctor.specialty!.isNotEmpty) ...[
@@ -307,5 +329,29 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
     return parts.isNotEmpty ? parts[0][0].toUpperCase() : '?';
+  }
+}
+
+/// Gives its child the incoming viewport height as a MINIMUM instead of a
+/// fixed size, and lets it scroll past that.
+///
+/// Anything dropped into an [Expanded] gets a tight height, which is fine
+/// until Dynamic Type grows the content past it — then a centred column of
+/// text simply gets clipped ("BOTTOM OVERFLOWED"). Because the constraint is
+/// only a minimum, layout at default text sizes is byte-for-byte unchanged.
+class _ScrollableFill extends StatelessWidget {
+  final Widget child;
+  const _ScrollableFill({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: child,
+        ),
+      ),
+    );
   }
 }

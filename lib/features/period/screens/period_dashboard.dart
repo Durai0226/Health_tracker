@@ -3,7 +3,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'period_reminder_settings_screen.dart';
-import 'package:tablet_remainder/core/ai/ai_assistant.dart';
 
 import '../models/cycle_phase.dart';
 import '../models/cycle_prediction.dart';
@@ -16,6 +15,7 @@ import '../widgets/log_today_sheet.dart';
 import '../widgets/prediction_card.dart';
 import 'cycle_history_screen.dart';
 import 'period_calendar_screen.dart';
+import '../../../core/health/coach_text.dart';
 
 /// The headline Period feature screen. In [embedded] mode the Health hub owns
 /// the header, so this drops its own app bar and background.
@@ -117,7 +117,7 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
       if (mode != TrackingMode.pregnancy &&
           prediction.state != CycleState.onboarding) ...[
         const SizedBox(height: AppSpacing.lg),
-        _aiCoachCard(context, prediction),
+        _coachCard(context, prediction),
       ],
       const SizedBox(height: AppSpacing.xl),
       _quickActions(context),
@@ -135,7 +135,7 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
 
   /// Self-loading generative AI cycle-coach card (on-device rule engine by
   /// default; honest, disclaimer-wrapped).
-  Widget _aiCoachCard(BuildContext context, CyclePrediction p) {
+  Widget _coachCard(BuildContext context, CyclePrediction p) {
     final ext = AppColorsExt.of(context);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -143,13 +143,11 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
         p.fertileEnd != null &&
         !today.isBefore(p.fertileStart!) &&
         !today.isAfter(p.fertileEnd!);
-    return AiInsightCard(
+    return TipCard(
       title: 'Cycle insight',
-      icon: kAiSparkle,
+      icon: Symbols.calendar_month_rounded,
       accent: ext.period,
-      cacheKey:
-          'cycle:${p.state.name}:${p.daysUntilNextPeriod}:$inFertile:${p.dayOfCycle}',
-      loader: () => AiAssistant().cycleInsight(
+      text: const CoachText().cycleInsight(
         daysUntilNextPeriod: p.daysUntilNextPeriod,
         inFertileWindow: inFertile,
         isLate: p.state == CycleState.late,
@@ -176,8 +174,22 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
                 color: ext.period.onContainer, size: 20),
           ),
           const SizedBox(width: AppSpacing.md),
-          Text('Cycle', style: tt.displaySmall),
-          const Spacer(),
+          // Expanded (instead of Text + Spacer) hands the title the leftover
+          // width; scaleDown never enlarges, so at the default text size this
+          // renders exactly as before — at 200% it stops "Cycle" from pushing
+          // the notifications button off a 320pt screen.
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Cycle',
+                maxLines: 1,
+                softWrap: false,
+                style: tt.displaySmall,
+              ),
+            ),
+          ),
           AppIconButton(
             icon: Symbols.notifications_rounded,
             filled: false,
@@ -293,9 +305,15 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
           Icon(PeriodTheme.phaseIcon(phase),
               size: 15, color: swatch.onContainer),
           const SizedBox(width: 8),
-          Text('${phase.label} phase',
-              style: tt.labelMedium?.copyWith(
-                  color: swatch.onContainer, fontWeight: FontWeight.w700)),
+          // Flexible + wrap: "Follicular phase" at 200% text is wider than a
+          // 320pt screen, so the pill grows taller instead of overflowing.
+          Flexible(
+            child: Text('${phase.label} phase',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: tt.labelMedium?.copyWith(
+                    color: swatch.onContainer, fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
     );

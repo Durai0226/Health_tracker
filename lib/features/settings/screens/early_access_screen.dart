@@ -17,13 +17,18 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AppColors.getBackground(context),
       appBar: AppBar(
-        title: const Text('Early Access', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.transparent,
+        title: Text(
+          'Early Access',
+          style: TextStyle(color: AppColors.getTextPrimary(context)),
+        ),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black),
+          icon: Icon(
+            Symbols.arrow_back_rounded,
+            color: AppColors.getTextPrimary(context),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -35,12 +40,12 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
             children: [
               _buildWarningCard(),
               const SizedBox(height: 24),
-              const Text(
-                'EXPERIMENTAL FEATURES',
+              Text(
+                'Experimental features',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF9098B1),
+                  color: AppColors.getTextSecondary(context),
                   letterSpacing: 1.2,
                 ),
               ),
@@ -64,7 +69,7 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
               _buildFeatureToggle(
                 key: FeatureFlagService.keyBetaFeatures,
                 title: 'Beta Features',
-                description: 'Opt-in to the latest beta features (May be unstable).',
+                description: 'Opt in to the latest beta features (may be unstable).',
                 icon: Symbols.science_rounded,
                 color: Colors.orange,
               ),
@@ -91,18 +96,21 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
+              children: [
+                const Text(
                   'Heads up!',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.orange,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
                   'These features are in early development and might change, break, or disappear at any time.',
-                  style: TextStyle(color: Color(0xFF2D3142), fontSize: 13),
+                  style: TextStyle(
+                    color: AppColors.getTextPrimary(context),
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -123,7 +131,7 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -152,18 +160,18 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: Color(0xFF2D3142),
+                      color: AppColors.getTextPrimary(context),
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     description,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF9098B1),
+                      color: AppColors.getTextSecondary(context),
                     ),
                   ),
                 ],

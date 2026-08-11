@@ -67,7 +67,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
 
   Widget _buildSelectionScreen() {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -110,7 +110,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.getCardBg(context),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
@@ -137,7 +137,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                 Text(
                   'Select music & set your session',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: AppColors.getTextSecondary(context),
                   ),
                 ),
               ],
@@ -152,112 +152,122 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Choose Your Goal',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.getTextPrimary(context),
           ),
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 110,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: RelaxationCategory.values.length,
-            itemBuilder: (context, index) {
-              final category = RelaxationCategory.values[index];
-              final isSelected = _relaxationService.selectedCategory == category;
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    onTap: () {
-                      _hapticService.tap();
-                      _vitaVibeService.tap();
-                      _relaxationService.setCategory(category);
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    splashColor: category.color.withOpacity(0.3),
-                    highlightColor: category.color.withOpacity(0.15),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 130,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        gradient: isSelected
-                            ? LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  category.color,
-                                  category.color.withOpacity(0.8),
-                                ],
-                              )
-                            : null,
-                        color: isSelected ? null : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? category.color : Colors.grey.shade200,
-                          width: isSelected ? 0 : 1,
-                        ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: category.color.withOpacity(0.4),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ]
-                            : [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            category.emoji,
-                            style: const TextStyle(fontSize: 28),
-                          ),
-                          const Spacer(),
-                          Text(
-                            category.name,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            category.description,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isSelected 
-                                  ? Colors.white.withOpacity(0.8) 
-                                  : AppColors.textSecondary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+        // Horizontally scrollable strip whose height is driven by the tallest
+        // card (min 110 keeps the default look) so wrapped names/descriptions
+        // at large text sizes grow the strip instead of overflowing it.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 110),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: RelaxationCategory.values
+                    .map(_buildCategoryCard)
+                    .toList(),
+              ),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCategoryCard(RelaxationCategory category) {
+    final isSelected = _relaxationService.selectedCategory == category;
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () {
+            _hapticService.tap();
+            _vitaVibeService.tap();
+            _relaxationService.setCategory(category);
+          },
+          borderRadius: BorderRadius.circular(20),
+          splashColor: category.color.withOpacity(0.3),
+          highlightColor: category.color.withOpacity(0.15),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 130,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: isSelected
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        category.color,
+                        category.color.withOpacity(0.8),
+                      ],
+                    )
+                  : null,
+              color: isSelected ? null : AppColors.getCardBg(context),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? category.color : Colors.grey.shade200,
+                width: isSelected ? 0 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: category.color.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category.emoji,
+                  style: const TextStyle(fontSize: 28),
+                ),
+                const Spacer(),
+                Text(
+                  category.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  category.description,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isSelected 
+                        ? Colors.white.withOpacity(0.8) 
+                        : AppColors.getTextSecondary(context),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -270,19 +280,28 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Select Music',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+            Expanded(
+              child: Text(
+                'Select Music',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.getTextPrimary(context),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(
-              '${tracks.length} tracks',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                '${tracks.length} tracks',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.getTextSecondary(context),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -312,7 +331,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isSelected ? track.color.withOpacity(0.1) : Colors.white,
+                      color: isSelected ? track.color.withOpacity(0.1) : AppColors.getCardBg(context),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isSelected ? track.color : Colors.grey.shade200,
@@ -354,15 +373,15 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
-                                  color: isSelected ? track.color : AppColors.textPrimary,
+                                  color: isSelected ? track.color : AppColors.getTextPrimary(context),
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 track.description,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.getTextSecondary(context),
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -401,12 +420,12 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Session Duration',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: AppColors.getTextPrimary(context),
           ),
         ),
         const SizedBox(height: 12),
@@ -431,7 +450,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   decoration: BoxDecoration(
-                    color: isSelected ? color : Colors.white,
+                    color: isSelected ? color : AppColors.getCardBg(context),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isSelected ? color : Colors.grey.shade200,
@@ -451,7 +470,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                      color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
                     ),
                   ),
                 ),
@@ -551,7 +570,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -564,12 +583,12 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Your Relaxation Journey',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: AppColors.getTextPrimary(context),
             ),
           ),
           const SizedBox(height: 16),
@@ -629,9 +648,9 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
             ),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textSecondary,
+                color: AppColors.getTextSecondary(context),
               ),
             ),
           ],
@@ -754,7 +773,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                   height: 200,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white,
+                    color: AppColors.getCardBg(context),
                     boxShadow: [
                       BoxShadow(
                         color: category.color.withOpacity(0.15),
@@ -802,9 +821,9 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                   const SizedBox(height: 10),
                   Text(
                     '${(_relaxationService.progress * 100).toInt()}% complete',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textSecondary,
+                      color: AppColors.getTextSecondary(context),
                     ),
                   ),
                 ],
@@ -820,7 +839,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -855,10 +874,10 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                   children: [
                     Text(
                       music.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: AppColors.getTextPrimary(context),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -941,7 +960,7 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.getCardBg(context),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(

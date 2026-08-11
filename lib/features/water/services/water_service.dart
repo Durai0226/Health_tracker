@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' show Value;
 import '../../../core/database/app_database.dart' as db;
 import '../../../core/database/daos/water_dao.dart';
+import '../../../core/health/streak_engine.dart';
 import '../models/beverage_type.dart';
 import '../models/water_container.dart';
 import '../models/hydration_profile.dart';
@@ -32,13 +33,22 @@ class WaterService {
 
   static WaterDao get _dao => db.AppDatabase.instance.waterDao;
 
+  /// How much history [init] pre-loads into the in-memory cache at start-up.
+  ///
+  /// This is a *warm cache*, not the extent of the stored history: any older
+  /// day is pulled in on demand by [_ensureDayLoaded] / [loadDataForDate] /
+  /// [ensureRangeLoaded]. Nothing may read or write a day without going through
+  /// one of those — a day that is merely absent from this window must never be
+  /// mistaken for a day with no data.
+  static const Duration warmCacheWindow = Duration(days: 90);
+
   /// Initialize the water service — loads persisted data from Drift.
   static Future<void> init() async {
     if (_isInitialized) return;
     try {
       final now = DateTime.now();
       final rows = await _dao.getDataForRange(
-        now.subtract(const Duration(days: 90)),
+        now.subtract(warmCacheWindow),
         now.add(const Duration(days: 1)),
       );
       final map = <String, DailyWaterData>{};
@@ -480,10 +490,75 @@ class WaterService {
     return _dailyWaterNotifier.value[key]!;
   }
 
-  /// Get water data for a specific date
+  /// Get water data for a specific date.
+  ///
+  /// Cache-only, so it returns null for a stored day that is older than
+  /// [warmCacheWindow] and has not been pulled in yet. Use [loadDataForDate]
+  /// (or [ensureRangeLoaded] first) whenever the date can be arbitrary —
+  /// treating this null as "no data" is what used to let history be overwritten.
   static DailyWaterData? getDataForDate(DateTime date) {
     final key = _getDateKey(date);
     return _dailyWaterNotifier.value[key];
+  }
+
+  /// Loads one day (its row *and* its logs) from Drift into the cache unless it
+  /// is already there, and returns it — null only when the day was never saved.
+  ///
+  /// [init] warms just [warmCacheWindow], so an older day is missing from the
+  /// notifier even though it exists on disk. Every read of an arbitrary date,
+  /// and *every write*, goes through here: building a write on the empty
+  /// in-memory view persisted zeroed totals over the stored day and orphaned its
+  /// logs. Errors deliberately propagate to the callers that mutate data, so a
+  /// day that could not be read is never rewritten from a blank.
+  static Future<DailyWaterData?> _ensureDayLoaded(String key) async {
+    final cached = _dailyWaterNotifier.value[key];
+    if (cached != null) return cached;
+
+    final row = await _dao.getDailyData(key);
+    if (row == null) return null;
+
+    final logRows = await _dao.getLogsForDay(key);
+    final data = _dailyFromRow(row, logRows.map(_logFromRow).toList());
+    _dailyWaterNotifier.value[key] = data;
+    _notifyListeners();
+    return data;
+  }
+
+  /// Water data for [date], loading it from storage when it falls outside the
+  /// warm cache. Display-safe: if the read fails it falls back to whatever is
+  /// cached instead of throwing, so a history screen degrades rather than dies.
+  static Future<DailyWaterData?> loadDataForDate(DateTime date) async {
+    final key = _getDateKey(date);
+    try {
+      return await _ensureDayLoaded(key);
+    } catch (e) {
+      debugPrint('⚠️ WaterService load day $key failed: $e');
+      return _dailyWaterNotifier.value[key];
+    }
+  }
+
+  /// Warms the cache for [start]..[end] (inclusive) so the synchronous readers
+  /// — [getDataForDate], [getDataForRange], [getMonthlyStats] — can see days
+  /// older than [warmCacheWindow]. Call this before rendering a historical
+  /// month or range; days already cached are left untouched.
+  static Future<void> ensureRangeLoaded(DateTime start, DateTime end) async {
+    try {
+      final from = DateTime(start.year, start.month, start.day);
+      final to = DateTime(end.year, end.month, end.day)
+          .add(const Duration(days: 1));
+      final rows = await _dao.getDataForRange(from, to);
+      var loadedAny = false;
+      for (final row in rows) {
+        if (_dailyWaterNotifier.value.containsKey(row.id)) continue;
+        final logRows = await _dao.getLogsForDay(row.id);
+        _dailyWaterNotifier.value[row.id] =
+            _dailyFromRow(row, logRows.map(_logFromRow).toList());
+        loadedAny = true;
+      }
+      if (loadedAny) _notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ WaterService range load failed: $e');
+    }
   }
 
   /// Get water data for date range
@@ -532,7 +607,9 @@ class WaterService {
   /// Remove water log for a specific date
   static Future<void> removeWaterLogForDate(DateTime date, String logId) async {
     final key = _getDateKey(date);
-    final data = _dailyWaterNotifier.value[key];
+    // Read the persisted day, not just the warm cache: an older day was seen as
+    // null here, so the delete silently did nothing and left the log on disk.
+    final data = await _ensureDayLoaded(key);
     if (data != null) {
       final updatedLogs = data.logs.where((l) => l.id != logId).toList();
       final updatedData = _recalculateDailyData(data, updatedLogs);
@@ -573,15 +650,15 @@ class WaterService {
       note: note,
     );
 
-    // Get or create daily data
-    var data = _dailyWaterNotifier.value[key];
-    if (data == null) {
-      data = DailyWaterData(
-        id: key,
-        date: date,
-        dailyGoalMl: getDailyGoal(),
-      );
-    }
+    // Get or create daily data. The load must hit storage first: for a day
+    // outside the warm cache the in-memory view is empty, and adding an entry
+    // on top of that blank would persist it over the day's real totals.
+    final data = await _ensureDayLoaded(key) ??
+        DailyWaterData(
+          id: key,
+          date: date,
+          dailyGoalMl: getDailyGoal(),
+        );
 
     // Add log and recalculate
     final updatedLogs = [...data.logs, log];
@@ -613,8 +690,10 @@ class WaterService {
     String? note,
   }) async {
     final key = _getDateKey(date);
-    final data = _dailyWaterNotifier.value[key];
-    
+    // Same rule as the add path: the edit is applied to the persisted day, so
+    // editing one entry of an old day cannot drop that day's other entries.
+    final data = await _ensureDayLoaded(key);
+
     if (data == null) {
       return addWaterLogForDate(
         date: date,
@@ -808,29 +887,31 @@ class WaterService {
 
   static DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// Consecutive goal-reached days ending at (or just before) today.
-  static int _computeCurrentStreak() {
-    final map = _dailyWaterNotifier.value;
-    var streak = 0;
-    var cursor = _dayOnly(DateTime.now());
-
-    // Today counts only if the goal is already reached (it may be in progress).
-    final today = map[_getDateKey(cursor)];
-    if (today != null && today.goalReached) streak++;
-
-    // Walk backwards from yesterday while each day reached its goal.
-    cursor = cursor.subtract(const Duration(days: 1));
-    while (true) {
-      final day = map[_getDateKey(cursor)];
-      if (day != null && day.goalReached) {
-        streak++;
-        cursor = cursor.subtract(const Duration(days: 1));
-      } else {
-        break;
-      }
+  /// Days (in persisted history) whose hydration goal was reached — the input
+  /// to the shared, forgiving [StreakEngine].
+  static Set<DateTime> _goalReachedDays() {
+    final out = <DateTime>{};
+    for (final d in _dailyWaterNotifier.value.values) {
+      if (d.goalReached) out.add(_dayOnly(d.date));
     }
-    return streak;
+    return out;
   }
+
+  /// Forgiving streak (current + longest) via the shared [StreakEngine] — the
+  /// same engine, and the same one-grace-day-per-rolling-week, that medicine
+  /// and steps use. Replaces the old naive backward walk that hard-reset the
+  /// streak to 0 on a single missed day. Today still only counts once its goal
+  /// is reached (it may be in progress); the engine starts from yesterday when
+  /// today isn't complete, so an unfinished today never breaks the run.
+  static StreakResult _streakResult() => StreakEngine.compute(
+        completedDays: _goalReachedDays(),
+        today: DateTime.now(),
+        graceDaysPerWeek: 1,
+      );
+
+  /// Consecutive (grace-forgiven) goal-reached days ending at or just before
+  /// today.
+  static int _computeCurrentStreak() => _streakResult().current;
 
   /// Longest run of consecutive calendar days satisfying [predicate].
   static int _computeLongestRun(bool Function(DailyWaterData) predicate) {
@@ -857,8 +938,10 @@ class WaterService {
     return longest;
   }
 
-  static int _computeLongestStreak() =>
-      _computeLongestRun((d) => d.goalReached);
+  /// Longest goal-reached run, from the same [StreakEngine] pass as the current
+  /// streak so the two can never disagree (a forgiven current streak must not
+  /// be able to exceed the "longest" it is part of).
+  static int _computeLongestStreak() => _streakResult().longest;
 
   /// Recompute every achievement against persisted daily data, flip
   /// [WaterAchievement.isUnlocked], accumulate points, and persist. Returns the
@@ -1063,10 +1146,11 @@ class WaterService {
 
   /// Get current streak.
   ///
-  /// Derived from persisted [DailyWaterData] (survives restart): walk backwards
-  /// from today over consecutive calendar days where the goal was reached.
-  /// Today may still be in progress, so it only adds to the streak once already
-  /// reached; the streak otherwise counts from yesterday backwards.
+  /// Derived from persisted [DailyWaterData] (survives restart) and computed by
+  /// the shared, forgiving [StreakEngine]: consecutive goal-reached days ending
+  /// at today, with one missed day forgiven per rolling week. Today may still be
+  /// in progress, so it only adds to the streak once already reached; the streak
+  /// otherwise counts from yesterday backwards.
   static int getCurrentStreak() {
     return _computeCurrentStreak();
   }

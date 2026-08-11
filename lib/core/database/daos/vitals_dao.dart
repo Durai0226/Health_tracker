@@ -4,7 +4,8 @@ import '../tables/vitals_tables.dart';
 
 part 'vitals_dao.g.dart';
 
-@DriftAccessor(tables: [BloodPressureReadings, GlucoseReadings])
+@DriftAccessor(
+    tables: [BloodPressureReadings, GlucoseReadings, WeightReadings, MoodEntries])
 class VitalsDao extends DatabaseAccessor<AppDatabase> with _$VitalsDaoMixin {
   VitalsDao(AppDatabase db) : super(db);
 
@@ -66,5 +67,64 @@ class VitalsDao extends DatabaseAccessor<AppDatabase> with _$VitalsDaoMixin {
 
   Future<void> deleteGlucose(String id) async {
     await (delete(glucoseReadings)..where((t) => t.id.equals(id))).go();
+  }
+
+  // ============ WEIGHT ============
+
+  Future<List<WeightReading>> getAllWeight() async {
+    return await (select(weightReadings)
+          ..orderBy([(t) => OrderingTerm.desc(t.takenAt)]))
+        .get();
+  }
+
+  Future<List<WeightReading>> getWeightForRange(
+      DateTime from, DateTime to) async {
+    return await (select(weightReadings)
+          ..where((t) => t.takenAt.isBetweenValues(from, to))
+          ..orderBy([(t) => OrderingTerm.desc(t.takenAt)]))
+        .get();
+  }
+
+  Stream<List<WeightReading>> watchWeight() {
+    return (select(weightReadings)
+          ..orderBy([(t) => OrderingTerm.desc(t.takenAt)]))
+        .watch();
+  }
+
+  Future<void> upsertWeight(WeightReadingsCompanion row) async {
+    await into(weightReadings).insertOnConflictUpdate(row);
+  }
+
+  Future<void> deleteWeight(String id) async {
+    await (delete(weightReadings)..where((t) => t.id.equals(id))).go();
+  }
+
+  // ============ MOOD ============
+
+  Future<List<MoodEntry>> getAllMood() async {
+    return await (select(moodEntries)
+          ..orderBy([(t) => OrderingTerm.desc(t.takenAt)]))
+        .get();
+  }
+
+  Future<List<MoodEntry>> getMoodForRange(DateTime from, DateTime to) async {
+    return await (select(moodEntries)
+          ..where((t) => t.takenAt.isBetweenValues(from, to))
+          ..orderBy([(t) => OrderingTerm.desc(t.takenAt)]))
+        .get();
+  }
+
+  Stream<List<MoodEntry>> watchMood() {
+    return (select(moodEntries)
+          ..orderBy([(t) => OrderingTerm.desc(t.takenAt)]))
+        .watch();
+  }
+
+  Future<void> upsertMood(MoodEntriesCompanion row) async {
+    await into(moodEntries).insertOnConflictUpdate(row);
+  }
+
+  Future<void> deleteMood(String id) async {
+    await (delete(moodEntries)..where((t) => t.id.equals(id))).go();
   }
 }

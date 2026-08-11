@@ -46,32 +46,47 @@ class AquaWeeklyProgress extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AquaTheme.spacingS),
-              Text(
-                'This Week',
-                style: AquaTheme.heading3.copyWith(
-                  color: AquaTheme.getTextPrimary(context),
+              // Unflexed title + Spacer + "History" action was 50px too wide on
+              // a 320pt phone at default text size. Expanded replaces the
+              // Spacer — the action stays flush right, the title yields.
+              Expanded(
+                child: Text(
+                  'This Week',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AquaTheme.heading3.copyWith(
+                    color: AquaTheme.getTextPrimary(context),
+                  ),
                 ),
               ),
-              const Spacer(),
               if (onTapHistory != null)
                 GestureDetector(
                   onTap: onTapHistory,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'History',
-                        style: AquaTheme.labelMedium.copyWith(
-                          color: beverage.primary,
-                        ),
+                  behavior: HitTestBehavior.opaque,
+                  // A bare text+chevron link is only ~17pt tall — under even the
+                  // WCAG 2.2 24pt floor, let alone Apple's 44pt. Reserve a 44pt
+                  // hit box without moving the label.
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'History',
+                            style: AquaTheme.labelMedium.copyWith(
+                              color: beverage.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Symbols.arrow_forward_ios_rounded,
+                            size: 12,
+                            color: beverage.primary,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Symbols.arrow_forward_ios_rounded,
-                        size: 12,
-                        color: beverage.primary,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
             ],
@@ -79,30 +94,43 @@ class AquaWeeklyProgress extends StatelessWidget {
           
           const SizedBox(height: AquaTheme.spacingL),
           
-          // Day indicators
+          // Day indicators.
+          // Seven fixed 38pt dials need 266pt; a 320pt phone only leaves 256
+          // inside the card, so spaceAround overflowed by 10pt. Each day gets
+          // an equal Expanded slot instead — for seven equal-width children
+          // that lays out identically to spaceAround wherever they already fit,
+          // and on a narrow screen the dial shrinks to its slot (see
+          // _DayIndicator) rather than running off the card.
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(7, (index) {
               final dayNum = index + 1;
               final isToday = dayNum == today;
               final isPast = dayNum < today;
               final isFuture = dayNum > today;
               
-              // Get progress for this day
+              // Progress for this day. A day the caller supplied no entry for
+              // is NOT invented: it renders as an empty dial, exactly like a
+              // logged day with no intake. This used to fall back to
+              // `0.7 + index * 0.05` for past days, so a patient-facing chart
+              // reported 70-100% hydration nobody ever drank (and the "Goals
+              // Hit" figure below it — which reads weekData directly —
+              // disagreed with the dials).
+              // goalMl is guarded too: 0/0 is NaN and NaN.clamp(0, 1) returns
+              // the UPPER limit, which would paint a bogus "goal reached" tick.
               double progress = 0;
-              if (index < weekData.length) {
+              if (index < weekData.length && goalMl > 0) {
                 progress = (weekData[index].intakeMl / goalMl).clamp(0.0, 1.0);
-              } else if (isPast) {
-                progress = 0.7 + (index * 0.05); // Demo data for past days
               }
 
-              return _DayIndicator(
-                day: days[index],
-                progress: progress,
-                isToday: isToday,
-                isPast: isPast,
-                isFuture: isFuture,
-                beverage: beverage,
+              return Expanded(
+                child: _DayIndicator(
+                  day: days[index],
+                  progress: progress,
+                  isToday: isToday,
+                  isPast: isPast,
+                  isFuture: isFuture,
+                  beverage: beverage,
+                ),
               );
             }),
           ),
@@ -219,96 +247,108 @@ class _DayIndicator extends StatelessWidget {
     final isDark = AquaTheme.isDark(context);
     final isComplete = progress >= 1.0;
 
-    return Column(
-      children: [
-        SizedBox(
-          width: 38,
-          height: 38,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Background circle
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isFuture 
-                      ? (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100)
-                      : null,
-                ),
-              ),
-              
-              // Progress ring
-              if (!isFuture)
-                CustomPaint(
-                  size: const Size(38, 38),
-                  painter: _CircularProgressPainter(
-                    progress: progress,
-                    strokeWidth: 3,
-                    backgroundColor: isDark 
-                        ? Colors.white.withOpacity(0.1) 
-                        : Colors.grey.shade200,
-                    progressColor: isComplete 
-                        ? AquaTheme.success 
-                        : beverage.primary,
-                    gradientColors: isComplete 
-                        ? [AquaTheme.success, const Color(0xFF34D399)]
-                        : [beverage.primary, beverage.secondary],
-                  ),
-                ),
-              
-              // Center content
-              if (isComplete)
+    return LayoutBuilder(builder: (context, constraints) {
+      // 38 is the design size; on a 320pt phone the seven slots are only ~36.6
+      // wide, so the dial takes the slot instead of overflowing the card. It is
+      // never enlarged, so every other phone renders exactly as before.
+      final dial = constraints.maxWidth.isFinite
+          ? math.min(38.0, constraints.maxWidth)
+          : 38.0;
+      return Column(
+        children: [
+          SizedBox(
+            width: dial,
+            height: dial,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Background circle
                 Container(
-                  width: 24,
-                  height: 24,
+                  width: dial,
+                  height: dial,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF10B981), Color(0xFF34D399)],
-                    ),
-                  ),
-                  child: const Icon(
-                    Symbols.check_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                )
-              else if (!isFuture && progress > 0)
-                Text(
-                  '${(progress * 100).toInt()}',
-                  style: AquaTheme.caption.copyWith(
-                    color: beverage.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 10,
+                    color: isFuture
+                        ? (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100)
+                        : null,
                   ),
                 ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            gradient: isToday ? beverage.gradient : null,
-            color: isToday ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
-          ),
-          child: Text(
-            day,
-            style: AquaTheme.labelMedium.copyWith(
-              color: isToday 
-                  ? Colors.white 
-                  : (isFuture 
-                      ? AquaTheme.textTertiary 
-                      : AquaTheme.getTextSecondary(context)),
-              fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+
+                // Progress ring
+                if (!isFuture)
+                  CustomPaint(
+                    size: Size(dial, dial),
+                    painter: _CircularProgressPainter(
+                      progress: progress,
+                      strokeWidth: 3,
+                      backgroundColor: isDark
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.grey.shade200,
+                      progressColor: isComplete
+                          ? AquaTheme.success
+                          : beverage.primary,
+                      gradientColors: isComplete
+                          ? [AquaTheme.success, const Color(0xFF34D399)]
+                          : [beverage.primary, beverage.secondary],
+                    ),
+                  ),
+
+                // Center content
+                if (isComplete)
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF10B981), Color(0xFF34D399)],
+                      ),
+                    ),
+                    child: const Icon(
+                      Symbols.check_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  )
+                else if (!isFuture && progress > 0)
+                  Text(
+                    '${(progress * 100).toInt()}',
+                    style: AquaTheme.caption.copyWith(
+                      color: beverage.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                    ),
+                  ),
+              ],
             ),
           ),
-        ),
-      ],
-    );
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              gradient: isToday ? beverage.gradient : null,
+              color: isToday ? null : Colors.transparent,
+              borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+            ),
+            // A single-letter day never needs to wrap; keeping it on one line
+            // stops a wide Dynamic Type letter from stretching the slot.
+            child: Text(
+              day,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AquaTheme.labelMedium.copyWith(
+                color: isToday
+                    ? Colors.white
+                    : (isFuture
+                        ? AquaTheme.textTertiary
+                        : AquaTheme.getTextSecondary(context)),
+                fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      );
+    });
   }
 }
 

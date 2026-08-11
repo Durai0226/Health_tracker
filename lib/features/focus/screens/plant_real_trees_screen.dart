@@ -1,8 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/focus_coins.dart';
 import '../services/coins_service.dart';
+
+/// Height a shop tile needs at 1.0x text: 32 padding + 48pt emoji line +
+/// 12 + name + 4 + two description lines + the price chip.
+const double _treeTileMinExtent = 208;
 
 class PlantRealTreesScreen extends StatefulWidget {
   const PlantRealTreesScreen({super.key});
@@ -24,7 +30,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _coinsService,
@@ -53,13 +59,13 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   Widget _buildAppBar() {
     return SliverAppBar(
       pinned: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       leading: IconButton(
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.getCardBg(context),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Symbols.arrow_back_rounded, size: 20),
@@ -99,59 +105,90 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              // The coin balance takes the leftover width; the trees badge
+              // keeps its natural size but may shrink its label.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('🪙', style: TextStyle(fontSize: 32)),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${_coinsService.totalCoins}',
+                              maxLines: 1,
+                              softWrap: false,
+                              style: const TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Available Coins',
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
                     children: [
-                      const Text('🪙', style: TextStyle(fontSize: 32)),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${_coinsService.totalCoins}',
-                        style: const TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      const Text('🌍', style: TextStyle(fontSize: 24)),
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${_coinsService.treesPlanted}',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Trees Planted',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Available Coins',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  children: [
-                    const Text('🌍', style: TextStyle(fontSize: 24)),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${_coinsService.treesPlanted}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      'Trees Planted',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.white.withOpacity(0.8),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],
@@ -166,9 +203,15 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildImpactStat('${_coinsService.totalCO2Offset} kg', 'CO₂ Offset'),
+                Expanded(
+                  child: _buildImpactStat(
+                      '${_coinsService.totalCO2Offset} kg', 'CO₂ Offset'),
+                ),
                 Container(width: 1, height: 30, color: Colors.white24),
-                _buildImpactStat('${_coinsService.lifetimeCoins}', 'Lifetime Coins'),
+                Expanded(
+                  child: _buildImpactStat(
+                      '${_coinsService.lifetimeCoins}', 'Lifetime Coins'),
+                ),
               ],
             ),
           ),
@@ -180,19 +223,29 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   Widget _buildImpactStat(String value, String label) {
     return Column(
       children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            softWrap: false,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.white.withOpacity(0.7),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withOpacity(0.7),
+            ),
           ),
         ),
       ],
@@ -222,10 +275,10 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.white,
+            color: isSelected ? AppColors.primary : AppColors.getCardBg(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? AppColors.primary : Colors.grey.shade200,
+              color: isSelected ? AppColors.primary : AppColors.getGrey200(context),
             ),
           ),
           child: Center(
@@ -234,7 +287,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColors.textPrimary,
+                color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
               ),
             ),
           ),
@@ -244,12 +297,22 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   }
 
   Widget _buildTreeShop() {
+    // The tile is text-driven (emoji + name + 2-line blurb + price chip), so a
+    // pure aspect ratio clips it on narrow phones — 0.75 of a 320pt phone's
+    // 128pt column is only 171pt for ~202pt of content. Keep the designed
+    // ratio wherever it is already tall enough and grow it otherwise.
+    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
+    // Column width inside the sliver's 24pt padding, 2 columns, 16pt gap.
+    final columnWidth = (MediaQuery.sizeOf(context).width - 48 - 16) / 2;
+    final tileExtent =
+        math.max(columnWidth / 0.75, _treeTileMinExtent * textScale);
+
     return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         mainAxisSpacing: 16,
         crossAxisSpacing: 16,
-        childAspectRatio: 0.75,
+        mainAxisExtent: tileExtent,
       ),
       delegate: SliverChildBuilderDelegate(
         (context, index) {
@@ -269,10 +332,10 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.getCardBg(context),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: canAfford ? treeType.color.withOpacity(0.3) : Colors.grey.shade200,
+            color: canAfford ? treeType.color.withOpacity(0.3) : AppColors.getGrey200(context),
           ),
           boxShadow: [
             BoxShadow(
@@ -300,15 +363,21 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: canAfford ? AppColors.textPrimary : Colors.grey,
+                color: canAfford
+                    ? AppColors.getTextPrimary(context)
+                    : AppColors.getTextSecondary(context),
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
             Text(
               treeType.description,
               style: TextStyle(
                 fontSize: 10,
-                color: canAfford ? AppColors.textSecondary : Colors.grey,
+                color: canAfford
+                    ? AppColors.getTextSecondary(context)
+                    : AppColors.getTextLight(context),
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -317,23 +386,33 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: canAfford ? treeType.color.withOpacity(0.1) : Colors.grey.shade100,
+                color: canAfford ? treeType.color.withOpacity(0.1) : AppColors.getGrey100(context),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('🪙', style: TextStyle(fontSize: 14)),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${treeType.coinCost}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: canAfford ? treeType.color : Colors.grey,
+              // The chip is only ~72pt wide inside a 320pt-phone tile, so the
+              // coin + price pair scales down together rather than spilling.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('🪙', style: TextStyle(fontSize: 14)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${treeType.coinCost}',
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: canAfford
+                            ? treeType.color
+                            : AppColors.getTextSecondary(context),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -346,27 +425,27 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
     final trees = _coinsService.plantedTrees;
     
     if (trees.isEmpty) {
-      return const SliverFillRemaining(
+      return SliverFillRemaining(
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('🌍', style: TextStyle(fontSize: 64)),
-              SizedBox(height: 16),
+              const Text('🌍', style: TextStyle(fontSize: 64)),
+              const SizedBox(height: 16),
               Text(
                 'Your forest is empty',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.getTextPrimary(context),
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
                 'Plant your first real tree!',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: AppColors.getTextSecondary(context),
                 ),
               ),
             ],
@@ -388,7 +467,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -425,16 +504,16 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '📍 ${tree.location ?? "Unknown location"}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: AppColors.getTextSecondary(context),
                   ),
                 ),
                 Text(
                   '🏢 ${tree.partnerOrganization ?? "Partner organization"}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: AppColors.getTextSecondary(context),
                   ),
                 ),
               ],
@@ -445,9 +524,9 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             children: [
               Text(
                 _formatDate(tree.plantedAt),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: AppColors.getTextSecondary(context),
                 ),
               ),
               const SizedBox(height: 4),
@@ -477,27 +556,27 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
     final transactions = _coinsService.transactions;
     
     if (transactions.isEmpty) {
-      return const SliverFillRemaining(
+      return SliverFillRemaining(
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('📜', style: TextStyle(fontSize: 64)),
-              SizedBox(height: 16),
+              const Text('📜', style: TextStyle(fontSize: 64)),
+              const SizedBox(height: 16),
               Text(
                 'No transactions yet',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.getTextPrimary(context),
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
                 'Complete focus sessions to earn coins!',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: AppColors.getTextSecondary(context),
                 ),
               ),
             ],
@@ -521,7 +600,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -556,9 +635,9 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 ),
                 Text(
                   transaction.description,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: AppColors.getTextSecondary(context),
                   ),
                 ),
               ],
@@ -583,9 +662,9 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: AppColors.getCardBg(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -594,7 +673,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: AppColors.getGrey300(context),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -612,9 +691,9 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             Text(
               treeType.description,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textSecondary,
+                color: AppColors.getTextSecondary(context),
               ),
             ),
             const SizedBox(height: 24),

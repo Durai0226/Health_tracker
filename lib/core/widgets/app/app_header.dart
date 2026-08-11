@@ -38,10 +38,21 @@ class AppHeader extends StatelessWidget {
     final s = accent ?? AccentScope.swatchOf(context);
     final tt = Theme.of(context).textTheme;
 
-    final row = Row(
+    // On a narrow phone the fixed chrome (back button + icon badge + up to
+    // three actions) can consume ~260 of 320pt, leaving the title so little
+    // room that shrink-to-fit renders it at half size — legible-ish, but ugly.
+    // The icon badge is decorative, so it is the first thing to give way; the
+    // title is the one thing the user actually needs.
+    Widget buildRow(double maxWidth) {
+      final reserved = (leading != null ? 52.0 : 0.0) + actions.length * 52.0;
+      final badgeWidth = icon != null ? 52.0 : 0.0;
+      final showBadge =
+          icon != null && (maxWidth - reserved - badgeWidth) >= 110.0;
+
+      return Row(
       children: [
         if (leading != null) ...[leading!, const SizedBox(width: 8)],
-        if (icon != null) ...[
+        if (showBadge) ...[
           Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(color: s.container, borderRadius: AppRadius.brMd),
@@ -57,25 +68,43 @@ class AppHeader extends StatelessWidget {
               if (greeting != null)
                 Text(greeting!,
                     style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
-              Text(title, style: tt.headlineLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+              // Shrink-to-fit rather than ellipsize. With a back button, an
+              // icon badge and 2-3 actions there can be under 100pt left for
+              // the title, which truncated real titles to "Wei…" / "Blood s…"
+              // / "Family & careg…". scaleDown never enlarges, so short
+              // titles are unaffected.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(title,
+                    style: tt.headlineLarge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
         ),
         for (final a in actions) ...[const SizedBox(width: 8), a],
       ],
-    );
+      );
+    }
 
     return Padding(
       padding: padding,
       child: SafeArea(
         bottom: false,
         top: safeTop,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            row,
-            if (bottom != null) ...[const SizedBox(height: AppSpacing.md), bottom!],
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildRow(constraints.maxWidth),
+              if (bottom != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                bottom!,
+              ],
+            ],
+          ),
         ),
       ),
     );

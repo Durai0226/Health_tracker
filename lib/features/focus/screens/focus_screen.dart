@@ -2,9 +2,8 @@ import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
-import '../../../core/ai/ai_assistant.dart';
-import '../../../core/ai/insight_engine.dart';
-import '../../../core/ai/focus_insights.dart';
+import '../../../core/health/insight_engine.dart';
+import '../../../core/health/focus_insights.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../models/focus_session.dart';
@@ -24,6 +23,7 @@ import 'app_allow_list_screen.dart';
 import 'custom_tags_screen.dart';
 import 'detailed_stats_screen.dart';
 import '../services/coins_service.dart';
+import '../../../core/health/coach_text.dart';
 
 class FocusScreen extends StatefulWidget {
   const FocusScreen({super.key});
@@ -186,21 +186,27 @@ class _FocusScreenState extends State<FocusScreen> {
           },
         ),
       ],
+      // Flexible so the pair shares the row instead of the second chip
+      // running off the right edge at large text sizes.
       bottom: Row(
         children: [
-          AppChip(
-            label: '${_focusService.stats.currentStreak} day streak',
-            icon: Symbols.local_fire_department_rounded,
-            selected: true,
-            accent: ext.warning,
+          Flexible(
+            child: AppChip(
+              label: '${_focusService.stats.currentStreak} day streak',
+              icon: Symbols.local_fire_department_rounded,
+              selected: true,
+              accent: ext.warning,
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           // Live coin balance (FOCUS-1). Rebuilds via the merged ListenableBuilder.
-          AppChip(
-            label: '${_coinsService.totalCoins} coins',
-            icon: Symbols.monetization_on_rounded,
-            selected: true,
-            accent: ext.focus,
+          Flexible(
+            child: AppChip(
+              label: '${_coinsService.totalCoins} coins',
+              icon: Symbols.monetization_on_rounded,
+              selected: true,
+              accent: ext.focus,
+            ),
           ),
         ],
       ),
@@ -269,16 +275,23 @@ class _FocusScreenState extends State<FocusScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text(
-              _focusService.isRunning
-                  ? _focusService.formattedTime
-                  : '$idleMinutes:00',
-              style: TextStyle(
-                fontSize: 52,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 3,
-                color: ext.mark(accentSwatch),
-                fontFeatures: const [FontFeature.tabularFigures()],
+            // A clock must never wrap mid-number — at large text sizes this
+            // rendered as "25:0" / "0" on two lines. scaleDown keeps it on one.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                _focusService.isRunning
+                    ? _focusService.formattedTime
+                    : '$idleMinutes:00',
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 52,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 3,
+                  color: ext.mark(accentSwatch),
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ),
             if (_focusService.isRunning) ...[
@@ -471,20 +484,15 @@ class _FocusScreenState extends State<FocusScreen> {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       child: Column(
         children: [
-          AiInsightCard(
+          TipCard(
             title: 'Focus coach',
             icon: Symbols.psychology_rounded,
             accent: ext.focus,
-            cacheKey:
-                'focus:${_focusService.todayMinutes ~/ 15}:${_focusService.stats.currentStreak}:${_focusService.stats.totalSessions}',
-            loader: () {
-              final stats = _focusService.stats;
-              return AiAssistant().focusCoach(
-                todayMinutes: _focusService.todayMinutes,
-                streakDays: stats.currentStreak,
-                totalSessions: stats.totalSessions,
-              );
-            },
+            text: const CoachText().focusCoach(
+              todayMinutes: _focusService.todayMinutes,
+              streakDays: _focusService.stats.currentStreak,
+              totalSessions: _focusService.stats.totalSessions,
+            ),
           ),
           if (insight != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -871,7 +879,9 @@ class _FocusScreenState extends State<FocusScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
-            height: 122,
+            // The tile is emoji + label, so the strip has to follow the text
+            // scale: at 1.3x a flat 122 clips the label off the bottom.
+            height: MediaQuery.textScalerOf(context).scale(122).clamp(122.0, 244.0),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
@@ -1029,7 +1039,10 @@ class _FocusScreenState extends State<FocusScreen> {
           SectionHeader(title: 'Breathing', icon: Symbols.air_rounded, accent: ext.focus),
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
-            height: 112,
+            // Each card is an icon plus a two-line pattern name, so the strip
+            // has to follow the text scale exactly like the plant strip above:
+            // a flat 112 clips the second label line at 200% text.
+            height: MediaQuery.textScalerOf(context).scale(112).clamp(112.0, 260.0),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),

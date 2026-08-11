@@ -13,6 +13,7 @@ import 'package:just_audio/just_audio.dart';
 import '../../../core/design/app_colors_ext.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../main.dart' show navigatorKey;
+import '../../medication/models/medicine_enums.dart' show SkipReason;
 import '../../medication/services/medicine_storage_service.dart';
 
 /// The full-screen reminder alert — "Aurora Veil" glassmorphism.
@@ -183,23 +184,68 @@ class _AlarmScreenState extends State<AlarmScreen>
     }
   }
 
-  /// Medicine alarms only: log the dose taken right here (foreground → Drift is
-  /// available), cancel the notification, and leave. Payload carries the dose id.
-  Future<void> _handleTake() async {
-    HapticFeedback.mediumImpact();
+  /// Every medicine due at this alarm's slot: a grouped reminder (Phase 1)
+  /// carries a `medicines` list; a solo reminder falls back to its single
+  /// flat `medicineId`. Either way, foreground Drift access lets Take/Skip log
+  /// every medicine directly instead of queueing for the background isolate.
+  List<String> _payloadMedicineIds() {
+    final medicines = widget.payload['medicines'] as List?;
+    if (medicines != null && medicines.isNotEmpty) {
+      return medicines
+          .map((m) => (m as Map)['medicineId']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+    }
     final medId = widget.payload['medicineId']?.toString();
+    return (medId != null && medId.isNotEmpty) ? [medId] : const [];
+  }
+
+  DateTime _payloadScheduledTime() {
     final hour = (widget.payload['hour'] as num?)?.toInt();
     final minute = (widget.payload['minute'] as num?)?.toInt();
+    final now = DateTime.now();
+    return (hour != null && minute != null)
+        ? DateTime(now.year, now.month, now.day, hour, minute)
+        : now;
+  }
+
+  /// Medicine alarms only: log every due medicine taken right here (foreground
+  /// → Drift is available), cancel the notification, and leave.
+  Future<void> _handleTake() async {
+    HapticFeedback.mediumImpact();
+    final medIds = _payloadMedicineIds();
+    final scheduled = _payloadScheduledTime();
     final id = _payloadId();
     _exit(); // close instantly; the logging/cancel below can never block it
-    if (medId != null && medId.isNotEmpty) {
-      final now = DateTime.now();
-      final scheduled = (hour != null && minute != null)
-          ? DateTime(now.year, now.month, now.day, hour, minute)
-          : now;
+    for (final medId in medIds) {
       try {
         await MedicineCleanStorageService.markMedicineTaken(
             medicineId: medId, scheduledTime: scheduled);
+      } catch (_) {}
+    }
+    if (id != null) {
+      try {
+        await NotificationService().cancelNotification(id);
+      } catch (_) {}
+    }
+  }
+
+  /// Medicine alarms only: log every due medicine as skipped, cancel the
+  /// notification, and leave. Symmetric to [_handleTake] — a real, logged
+  /// action rather than a bare dismiss.
+  Future<void> _handleSkip() async {
+    HapticFeedback.lightImpact();
+    final medIds = _payloadMedicineIds();
+    final scheduled = _payloadScheduledTime();
+    final id = _payloadId();
+    _exit();
+    for (final medId in medIds) {
+      try {
+        await MedicineCleanStorageService.markMedicineSkipped(
+          medicineId: medId,
+          scheduledTime: scheduled,
+          reason: SkipReason.other,
+        );
       } catch (_) {}
     }
     if (id != null) {
@@ -362,31 +408,43 @@ class _AlarmScreenState extends State<AlarmScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                DateFormat('h:mm').format(_now),
-                style: TextStyle(
-                  fontSize: 64,
-                  height: 1,
-                  fontWeight: FontWeight.w200,
-                  letterSpacing: 1,
-                  color: ext.textPrimary,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+          // The 64pt clock plus its AM/PM marker is wider than a 320pt phone's
+          // pill (68px over at default text size, 152px at the 1.3x clamp), and
+          // a time must never wrap or ellipsise. Shrink the whole cluster to fit
+          // instead; scaleDown never enlarges, so every phone that already fit
+          // renders pixel-identically.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('h:mm').format(_now),
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: 64,
+                    height: 1,
+                    fontWeight: FontWeight.w200,
+                    letterSpacing: 1,
+                    color: ext.textPrimary,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(DateFormat('a').format(_now),
-                    style: tt.labelMedium?.copyWith(
-                        color: ext.mark(ext.brand),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1)),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(DateFormat('a').format(_now),
+                      maxLines: 1,
+                      softWrap: false,
+                      style: tt.labelMedium?.copyWith(
+                          color: ext.mark(ext.brand),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1)),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 2),
           Text(DateFormat('EEEE, MMMM d').format(_now),
@@ -513,8 +571,9 @@ class _AlarmScreenState extends State<AlarmScreen>
   }
 
   Widget _actions(AppColorsExt ext, bool dark) {
-    final isMedicine =
-        (widget.payload['medicineId']?.toString().isNotEmpty ?? false);
+    final medIds = _payloadMedicineIds();
+    final isMedicine = medIds.isNotEmpty;
+    final isGroup = medIds.length > 1;
     // Same resolution _handleSnooze uses, so the chip's a11y label matches the
     // real duration instead of a hardcoded "10 minutes".
     final sd = widget.payload['snoozeDuration'];
@@ -522,7 +581,17 @@ class _AlarmScreenState extends State<AlarmScreen>
     return Column(
       children: [
         if (isMedicine) ...[
-          _TakeChip(ext: ext, onTap: _handleTake),
+          _TakeChip(
+            ext: ext,
+            label: isGroup ? 'Take all (${medIds.length})' : 'Take now',
+            onTap: _handleTake,
+          ),
+          const SizedBox(height: 12),
+          _SkipChip(
+            ext: ext,
+            label: isGroup ? 'Skip all' : 'Skip',
+            onTap: _handleSkip,
+          ),
           const SizedBox(height: 12),
         ],
         Row(
@@ -688,7 +757,12 @@ class _DismissChipState extends State<_DismissChip> {
               ],
             ),
             child: Center(
-              child: Row(
+              // The chip is a fixed half-width; scaleDown lets the label give
+              // way instead of overflowing. Never enlarges, so wider phones
+              // render identically.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Symbols.check_rounded,
@@ -701,6 +775,76 @@ class _DismissChipState extends State<_DismissChip> {
                           letterSpacing: 0.5,
                           fontSize: 15)),
                 ],
+              ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Logged skip, straight from the alarm — the foreground counterpart to the
+/// notification's "Take"/"Take all" action. Outlined/neutral so it doesn't
+/// visually compete with the primary Take chip.
+class _SkipChip extends StatefulWidget {
+  final AppColorsExt ext;
+  final String label;
+  final VoidCallback onTap;
+  const _SkipChip({required this.ext, required this.label, required this.onTap});
+  @override
+  State<_SkipChip> createState() => _SkipChipState();
+}
+
+class _SkipChipState extends State<_SkipChip> {
+  bool _down = false;
+  @override
+  Widget build(BuildContext context) {
+    final ext = widget.ext;
+    final accent = ext.textSecondary;
+    return Semantics(
+      button: true,
+      label: 'Skip this dose',
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _down = true),
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: (_) => setState(() => _down = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _down ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          child: Container(
+            height: 56,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: accent.withOpacity(0.30), width: 1.2),
+            ),
+            child: Center(
+              // The chip is a fixed half-width; scaleDown lets the label give
+              // way instead of overflowing. Never enlarges, so wider phones
+              // render identically.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Symbols.skip_next_rounded, size: 20, color: accent),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(widget.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: accent,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            fontSize: 15)),
+                  ),
+                ],
+              ),
               ),
             ),
           ),
@@ -745,7 +889,12 @@ class _SnoozeChipState extends State<_SnoozeChip> {
               border: Border.all(color: accent.withOpacity(0.45), width: 1.2),
             ),
             child: Center(
-              child: Row(
+              // The chip is a fixed half-width; scaleDown lets the label give
+              // way instead of overflowing. Never enlarges, so wider phones
+              // render identically.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Symbols.snooze_rounded, size: 20, color: accent),
@@ -758,6 +907,7 @@ class _SnoozeChipState extends State<_SnoozeChip> {
                           fontSize: 15)),
                 ],
               ),
+              ),
             ),
           ),
         ),
@@ -769,8 +919,9 @@ class _SnoozeChipState extends State<_SnoozeChip> {
 /// Prominent primary "Take now" button for medicine alarms (foreground path).
 class _TakeChip extends StatefulWidget {
   final AppColorsExt ext;
+  final String label;
   final VoidCallback onTap;
-  const _TakeChip({required this.ext, required this.onTap});
+  const _TakeChip({required this.ext, required this.label, required this.onTap});
   @override
   State<_TakeChip> createState() => _TakeChipState();
 }
@@ -798,19 +949,29 @@ class _TakeChipState extends State<_TakeChip> {
               color: accent,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Center(
-              child: Row(
+            child: Center(
+              // The chip is a fixed half-width; scaleDown lets the label give
+              // way instead of overflowing. Never enlarges, so wider phones
+              // render identically.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Symbols.check_rounded, size: 22, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Take now',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                          fontSize: 16)),
+                  const Icon(Symbols.check_rounded, size: 22, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(widget.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            fontSize: 16)),
+                  ),
                 ],
+              ),
               ),
             ),
           ),

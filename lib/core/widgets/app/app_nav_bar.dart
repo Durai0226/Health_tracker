@@ -9,8 +9,12 @@ class AppNavItem {
   final AccentSwatch accent;
 
   /// An action slot (e.g. a center "+ Log") — rendered as a permanently-raised
-  /// orb that never enters the selection, and whose tap always fires (even when
-  /// another destination is selected).
+  /// FAB-shaped button that never enters the selection, and whose tap always
+  /// fires (even when another destination is selected).
+  ///
+  /// M3 allows exactly one active indicator, so an action slot must never wear
+  /// the selected treatment (round indicator + accent label + w700): it is a
+  /// rounded-square FAB with a neutral elevation shadow and a plain label.
   final bool isAction;
 
   const AppNavItem({
@@ -28,6 +32,10 @@ class AppNavItem {
 /// between tabs and **morphs to the feature's color** as you switch; the other
 /// tabs stay as quiet icons + labels below. Distinct, tactile, and calm — no
 /// glass, per-feature color built in.
+///
+/// Exactly one active indicator is ever drawn (M3): an [AppNavItem.isAction]
+/// slot renders as a docked FAB (rounded-square, neutral shadow, plain label)
+/// so it stays prominent without impersonating the current destination.
 class AppNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -45,7 +53,6 @@ class AppNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
     final active = items[currentIndex];
     final n = items.length;
     final actionIndex = items.indexWhere((e) => e.isAction);
@@ -79,94 +86,45 @@ class AppNavBar extends StatelessWidget {
                 child: Row(
                   children: [
                     for (var i = 0; i < n; i++)
-                      Expanded(
-                        child: Semantics(
-                          button: true,
-                          selected: i == currentIndex,
-                          label: items[i].label,
-                          excludeSemantics: true,
-                          child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            // Action slots always fire (they don't get selected);
-                            // destinations only fire when not already selected.
-                            if (items[i].isAction || i != currentIndex) {
-                              HapticFeedback.selectionClick();
-                              onTap(i);
-                            }
-                          },
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // The raised orb (sliding for the selection, fixed
-                              // for the action slot) shows the icon, so the flat
-                              // icon is hidden for both.
-                              SizedBox(
-                                height: 26,
-                                child: (i == currentIndex || items[i].isAction)
-                                    ? null
-                                    // Outline-at-rest: inactive tabs render the
-                                    // Symbols glyph unfilled; the selected tab
-                                    // sits filled inside the orb.
-                                    : Icon(items[i].icon,
-                                        size: 24,
-                                        fill: 0,
-                                        color: ext.textSecondary),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                items[i].label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: tt.labelSmall?.copyWith(
-                                  color: (i == currentIndex || items[i].isAction)
-                                      ? items[i].accent.strong
-                                      : ext.textSecondary,
-                                  fontWeight:
-                                      (i == currentIndex || items[i].isAction)
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ),
-                      ),
+                      Expanded(child: _slot(context, i)),
                   ],
                 ),
               ),
 
-              // Fixed center ACTION orb (e.g. "+ Log"). Drawn BEFORE the sliding
-              // orb so the selection orb glides cleanly OVER it during a
-              // cross-centre tab switch instead of vanishing behind it (the old
-              // ordering caused a flicker as the orb slid past the centre).
+              // Fixed center ACTION button (e.g. "+ Log") — a docked FAB, NOT a
+              // destination. M3 allows one active indicator, so this deliberately
+              // avoids the selection's language: rounded-square instead of round,
+              // smaller than the selection orb, and a neutral elevation shadow
+              // instead of the accent glow.
+              //
+              // Drawn BEFORE the sliding orb so the selection orb glides cleanly
+              // OVER it during a cross-centre tab switch instead of vanishing
+              // behind it (the old ordering caused a flicker as the orb slid
+              // past the centre).
               if (actionIndex != -1)
                 IgnorePointer(
                   child: Align(
                     alignment: Alignment(_alignX(actionIndex, n), -1),
                     child: Transform.translate(
-                      offset: const Offset(0, -22),
+                      offset: const Offset(0, -20),
                       child: Container(
-                        width: 56,
-                        height: 56,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
                           color: items[actionIndex].accent.base,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: ext.surface, width: 4),
+                          borderRadius: AppRadius.brLg,
+                          border: Border.all(color: ext.surface, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: items[actionIndex]
-                                  .accent
-                                  .base
-                                  .withOpacity(0.5),
-                              blurRadius: 18,
-                              offset: const Offset(0, 6),
+                              color: Colors.black
+                                  .withOpacity(ext.isDark ? 0.4 : 0.18),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
                         child: Icon(items[actionIndex].activeIcon,
-                            color: items[actionIndex].accent.on, size: 30),
+                            color: items[actionIndex].accent.on, size: 26),
                       ),
                     ),
                   ),
@@ -206,6 +164,71 @@ class AppNavBar extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// One tap target in the bar: the flat icon (inactive only) + its label.
+  ///
+  /// Only the current destination wears the selected treatment (accent label at
+  /// w700, icon hoisted into the round orb). The action slot is prominent via
+  /// its docked FAB, but its label stays neutral so the bar never presents two
+  /// selected-looking destinations.
+  Widget _slot(BuildContext context, int i) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final item = items[i];
+    final isSelected = i == currentIndex;
+    final isAction = item.isAction;
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: item.label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          // Action slots always fire (they don't get selected); destinations
+          // only fire when not already selected.
+          if (isAction || !isSelected) {
+            HapticFeedback.selectionClick();
+            onTap(i);
+          }
+        },
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // The raised orb (selection) and the docked FAB (action) each draw
+            // their own icon, so the flat icon is hidden for both.
+            SizedBox(
+              height: 26,
+              child: (isSelected || isAction)
+                  ? null
+                  // Outline-at-rest: inactive tabs render the Symbols glyph
+                  // unfilled; the selected tab sits filled inside the orb.
+                  : Icon(item.icon, size: 24, fill: 0, color: ext.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: tt.labelSmall?.copyWith(
+                color: isSelected
+                    ? item.accent.strong
+                    : isAction
+                        ? ext.textPrimary
+                        : ext.textSecondary,
+                fontWeight: isSelected
+                    ? FontWeight.w700
+                    : isAction
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );

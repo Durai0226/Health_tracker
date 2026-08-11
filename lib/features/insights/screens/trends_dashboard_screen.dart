@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/app/vitals_theme.dart';
@@ -8,10 +9,12 @@ import '../../focus/screens/focus_screen.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
 import '../../medication/screens/vitals/blood_pressure_screen.dart';
 import '../../medication/screens/vitals/blood_sugar_screen.dart';
+import '../../medication/screens/vitals/weight_screen.dart';
 import '../../period/screens/period_calendar_screen.dart';
 import '../../sleep/screens/sleep_dashboard_screen.dart';
 import '../../steps/screens/steps_dashboard_screen.dart';
 import '../../water/screens/aqua_water_dashboard.dart';
+import '../../medication/services/medicine_storage_service.dart';
 import '../services/trends_data_service.dart';
 import '../widgets/trend_chart_card.dart';
 
@@ -23,7 +26,19 @@ class TrendsDashboardScreen extends StatefulWidget {
   /// Range to open on (defaults to 7 days). Lets a caller deep-link a range and
   /// leaves room to restore the user's last-used range later.
   final TrendRange initialRange;
-  const TrendsDashboardScreen({super.key, this.initialRange = TrendRange.d7});
+
+  /// True when this is a bottom-nav destination rather than a pushed screen.
+  ///
+  /// It matters: as a root tab there is nothing to pop, so the header's back
+  /// arrow would render but do nothing when tapped. Same flag the deleted
+  /// Insights hub used for the same reason.
+  final bool isRoot;
+
+  const TrendsDashboardScreen({
+    super.key,
+    this.initialRange = TrendRange.d7,
+    this.isRoot = false,
+  });
 
   @override
   State<TrendsDashboardScreen> createState() => _TrendsDashboardScreenState();
@@ -46,6 +61,29 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         : widget.initialRange.index;
     _range = TrendRange.values[idx];
     _future = TrendsDataService.build(_range);
+
+    // As a root tab this screen stays alive in the shell's IndexedStack, so
+    // without a listener the charts would keep showing whatever was true at
+    // launch. Pull-to-refresh covers the manual case; this covers logging a dose
+    // in another tab. ActiveProfileService is ALSO needed for the same reason
+    // (see nunito_medication_dashboard.dart/home_dashboard.dart's identical
+    // fix): without it, switching the active profile via Home's switcher and
+    // tapping back to this tab kept showing the PREVIOUS profile's vitals/med
+    // trends, since VitalsStorageService.getBpForRange/getGlucoseForRange are
+    // scoped by ActiveProfileService but nothing here ever re-queried them.
+    MedicineCleanStorageService.revision.addListener(_onDataChanged);
+    ActiveProfileService().addListener(_onDataChanged);
+  }
+
+  void _onDataChanged() {
+    if (mounted) _reload();
+  }
+
+  @override
+  void dispose() {
+    MedicineCleanStorageService.revision.removeListener(_onDataChanged);
+    ActiveProfileService().removeListener(_onDataChanged);
+    super.dispose();
   }
 
   void _setRange(int i) {
@@ -75,14 +113,17 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
             title: 'Trends',
             icon: Symbols.monitoring_rounded,
             accent: ext.brand,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: ext.brand,
-              onPressed: () {
-                if (Navigator.canPop(context)) Navigator.pop(context);
-              },
-            ),
+            // No back arrow on the root tab — there would be nothing to pop.
+            leading: widget.isRoot
+                ? null
+                : AppIconButton(
+                    icon: Symbols.arrow_back_rounded,
+                    filled: false,
+                    accent: ext.brand,
+                    onPressed: () {
+                      if (Navigator.canPop(context)) Navigator.pop(context);
+                    },
+                  ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -248,13 +289,27 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
       TrendTimeInRangeCard(
         accent: VitalsColors.glucoseAccent(ext.isDark),
         icon: Symbols.bloodtype_rounded,
-        title: 'Glucose',
+        title: 'Blood sugar',
         tir: b.glucoseTir,
         series: b.glucose,
         rangeDays: days,
         featureName: 'glucose',
         formatValue: (v) => '${v.round()} mg/dL',
         onTap: () => _open(const BloodSugarScreen()),
+      ),
+      // WEIGHT — simple line chart, no target band (no universal good/bad).
+      TrendChartCard(
+        accent: VitalsColors.weightAccent(ext.isDark),
+        icon: Symbols.monitor_weight_rounded,
+        title: 'Weight',
+        headline:
+            b.weight.latest != null ? '${b.weight.latest!.toStringAsFixed(1)} kg' : '—',
+        series: b.weight,
+        kind: TrendChartKind.line,
+        rangeDays: days,
+        featureName: 'weight',
+        formatValue: (v) => '${v.toStringAsFixed(1)} kg',
+        onTap: () => _open(const WeightScreen()),
       ),
       // PERIOD — cycle ring when the day can be placed, else the flow strip.
       if (b.cycle != null)
@@ -289,16 +344,31 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         ),
     ];
 
-    // At-a-glance summary on top, then the per-feature small-multiples.
+    // At-a-glance summary on top, then the per-feature small-multiples, and the
+    // medical disclaimer last — this is the app's main interpretation surface, so
+    // it carries the same "not a diagnosis" footnote the Insights hub did.
     cards.insert(0, _summaryCard(ext, b));
+    cards.add(const SafetyDisclaimerBar());
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
-          AppSpacing.gutter, AppSpacing.huge),
-      itemCount: cards.length,
-      separatorBuilder: (_, i) => const SizedBox(height: AppSpacing.lg),
-      itemBuilder: (_, i) => cards[i],
+    return RefreshIndicator(
+      color: ext.brand.base,
+      onRefresh: _reload,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
+            AppSpacing.gutter, AppSpacing.huge),
+        itemCount: cards.length,
+        separatorBuilder: (_, i) => const SizedBox(height: AppSpacing.lg),
+        itemBuilder: (_, i) => cards[i],
+      ),
     );
+  }
+
+  /// Rebuild the bundle from storage. Used by pull-to-refresh and by the
+  /// medicine-revision listener.
+  Future<void> _reload() async {
+    if (!mounted) return;
+    setState(() => _future = TrendsDataService.build(_range));
+    await _future;
   }
 
   /// A calm at-a-glance header: how many areas are tracked this range + the one
@@ -308,7 +378,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
 
     final allSeries = <TrendSeries>[
       b.adherence, b.water, b.steps, b.sleep, b.focus,
-      b.bloodPressure, b.glucose, b.period,
+      b.bloodPressure, b.glucose, b.weight, b.period,
     ];
     final tracked = allSeries.where((s) => s.hasData).length;
 

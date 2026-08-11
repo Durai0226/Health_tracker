@@ -158,11 +158,25 @@ class DrugInteractionService {
       .where((t) => t.isNotEmpty)
       .toSet();
 
+  /// Generic pharmacy filler words — dosage forms, marketing suffixes, and
+  /// common complaint words — that appear in countless UNRELATED product
+  /// names. Excluded from the shared-token check below so two products that
+  /// only share one of THESE don't falsely register as the same drug (e.g.
+  /// a user-typed "Blood Pressure Tablet" vs. the curated interaction row's
+  /// "Blood Thinners" used to match on the shared token "blood").
+  static const Set<String> _genericFillerTokens = {
+    'tablet', 'tablets', 'tab', 'tabs', 'capsule', 'capsules', 'cap', 'caps',
+    'syrup', 'drop', 'drops', 'injection', 'cream', 'ointment', 'gel', 'spray',
+    'medicine', 'medication', 'drug', 'drugs', 'pill', 'pills', 'dose',
+    'doses', 'extra', 'strength', 'forte', 'plus', 'blood', 'pressure',
+    'pain', 'relief', 'fever', 'cold', 'flu', 'daily', 'night', 'day',
+  };
+
   /// Whether two drug names refer to the same drug: exact normalized equality,
-  /// or a shared WHOLE token of >= 4 chars (e.g. "Dolo 650" ~ brand "Dolo").
-  /// Replaces loose bidirectional substring containment, which produced wrong
-  /// monographs and false interaction warnings when one short name happened to
-  /// be a substring of another.
+  /// or a shared WHOLE token of >= 4 chars that isn't a generic filler word
+  /// (e.g. "Dolo 650" ~ brand "Dolo"). Replaces loose bidirectional substring
+  /// containment, which produced wrong monographs and false interaction
+  /// warnings when one short name happened to be a substring of another.
   bool _namesMatch(String a, String b) {
     final na = _normalizeDrugName(a);
     final nb = _normalizeDrugName(b);
@@ -170,7 +184,9 @@ class DrugInteractionService {
     if (na == nb) return true;
     final tb = _drugTokens(b);
     for (final t in _drugTokens(a)) {
-      if (t.length >= 4 && tb.contains(t)) return true;
+      if (t.length >= 4 && !_genericFillerTokens.contains(t) && tb.contains(t)) {
+        return true;
+      }
     }
     return false;
   }
@@ -277,10 +293,31 @@ class DrugInteractionService {
     ),
 
     // Antibiotics
+    // 'Antacids' is a class, not a real product name _namesMatch can ever hit
+    // against a user's own typed medicine name — one row per common real
+    // antacid product, same interaction.
     DrugInteraction(
-      id: 'int_011',
+      id: 'int_011a',
       drug1Name: 'Ciprofloxacin',
-      drug2Name: 'Antacids',
+      drug2Name: 'Calcium Carbonate',
+      severity: InteractionSeverity.moderate,
+      description: 'Antacids reduce antibiotic absorption significantly.',
+      recommendation: 'Take ciprofloxacin 2 hours before or 6 hours after antacids.',
+      mechanism: 'Metal ions in antacids bind to the antibiotic.',
+    ),
+    DrugInteraction(
+      id: 'int_011b',
+      drug1Name: 'Ciprofloxacin',
+      drug2Name: 'Magnesium Hydroxide',
+      severity: InteractionSeverity.moderate,
+      description: 'Antacids reduce antibiotic absorption significantly.',
+      recommendation: 'Take ciprofloxacin 2 hours before or 6 hours after antacids.',
+      mechanism: 'Metal ions in antacids bind to the antibiotic.',
+    ),
+    DrugInteraction(
+      id: 'int_011c',
+      drug1Name: 'Ciprofloxacin',
+      drug2Name: 'Tums',
       severity: InteractionSeverity.moderate,
       description: 'Antacids reduce antibiotic absorption significantly.',
       recommendation: 'Take ciprofloxacin 2 hours before or 6 hours after antacids.',
@@ -295,10 +332,30 @@ class DrugInteractionService {
       recommendation: 'Avoid alcohol during treatment and 3 days after.',
       mechanism: 'Disulfiram-like reaction inhibits alcohol metabolism.',
     ),
+    // 'Birth Control' is a class, not a real product name — one row per
+    // common real oral contraceptive name/brand, same interaction.
     DrugInteraction(
-      id: 'int_013',
+      id: 'int_013a',
       drug1Name: 'Amoxicillin',
-      drug2Name: 'Birth Control',
+      drug2Name: 'Ethinyl Estradiol',
+      severity: InteractionSeverity.mild,
+      description: 'May slightly reduce contraceptive effectiveness.',
+      recommendation: 'Use backup contraception during antibiotic treatment.',
+      mechanism: 'Antibiotics may affect gut bacteria that recycle estrogen.',
+    ),
+    DrugInteraction(
+      id: 'int_013b',
+      drug1Name: 'Amoxicillin',
+      drug2Name: 'Yasmin',
+      severity: InteractionSeverity.mild,
+      description: 'May slightly reduce contraceptive effectiveness.',
+      recommendation: 'Use backup contraception during antibiotic treatment.',
+      mechanism: 'Antibiotics may affect gut bacteria that recycle estrogen.',
+    ),
+    DrugInteraction(
+      id: 'int_013c',
+      drug1Name: 'Amoxicillin',
+      drug2Name: 'Ortho Tri-Cyclen',
       severity: InteractionSeverity.mild,
       description: 'May slightly reduce contraceptive effectiveness.',
       recommendation: 'Use backup contraception during antibiotic treatment.',
@@ -315,10 +372,39 @@ class DrugInteractionService {
     ),
 
     // Pain Medications
+    // 'SSRI' is a class, not a real drug name (Fluoxetine already has its own
+    // real-named row below, int_018) — one row per other common real SSRI.
     DrugInteraction(
-      id: 'int_015',
+      id: 'int_015a',
       drug1Name: 'Tramadol',
-      drug2Name: 'SSRI',
+      drug2Name: 'Sertraline',
+      severity: InteractionSeverity.severe,
+      description: 'Risk of serotonin syndrome - potentially life-threatening.',
+      recommendation: 'Use alternative pain medication or monitor closely.',
+      mechanism: 'Both drugs increase serotonin levels.',
+    ),
+    DrugInteraction(
+      id: 'int_015b',
+      drug1Name: 'Tramadol',
+      drug2Name: 'Citalopram',
+      severity: InteractionSeverity.severe,
+      description: 'Risk of serotonin syndrome - potentially life-threatening.',
+      recommendation: 'Use alternative pain medication or monitor closely.',
+      mechanism: 'Both drugs increase serotonin levels.',
+    ),
+    DrugInteraction(
+      id: 'int_015c',
+      drug1Name: 'Tramadol',
+      drug2Name: 'Paroxetine',
+      severity: InteractionSeverity.severe,
+      description: 'Risk of serotonin syndrome - potentially life-threatening.',
+      recommendation: 'Use alternative pain medication or monitor closely.',
+      mechanism: 'Both drugs increase serotonin levels.',
+    ),
+    DrugInteraction(
+      id: 'int_015d',
+      drug1Name: 'Tramadol',
+      drug2Name: 'Escitalopram',
       severity: InteractionSeverity.severe,
       description: 'Risk of serotonin syndrome - potentially life-threatening.',
       recommendation: 'Use alternative pain medication or monitor closely.',
@@ -353,10 +439,39 @@ class DrugInteractionService {
       recommendation: 'Avoid combination. Use alternative pain medication.',
       mechanism: 'Both increase serotonin. Fluoxetine inhibits tramadol metabolism.',
     ),
+    // 'MAO Inhibitors' is a class, not a real drug name — one row per common
+    // real MAOI.
     DrugInteraction(
-      id: 'int_019',
+      id: 'int_019a',
       drug1Name: 'Sertraline',
-      drug2Name: 'MAO Inhibitors',
+      drug2Name: 'Phenelzine',
+      severity: InteractionSeverity.contraindicated,
+      description: 'Life-threatening serotonin syndrome.',
+      recommendation: 'Never combine. Wait 14 days between switching medications.',
+      mechanism: 'Extreme serotonin accumulation.',
+    ),
+    DrugInteraction(
+      id: 'int_019b',
+      drug1Name: 'Sertraline',
+      drug2Name: 'Tranylcypromine',
+      severity: InteractionSeverity.contraindicated,
+      description: 'Life-threatening serotonin syndrome.',
+      recommendation: 'Never combine. Wait 14 days between switching medications.',
+      mechanism: 'Extreme serotonin accumulation.',
+    ),
+    DrugInteraction(
+      id: 'int_019c',
+      drug1Name: 'Sertraline',
+      drug2Name: 'Selegiline',
+      severity: InteractionSeverity.contraindicated,
+      description: 'Life-threatening serotonin syndrome.',
+      recommendation: 'Never combine. Wait 14 days between switching medications.',
+      mechanism: 'Extreme serotonin accumulation.',
+    ),
+    DrugInteraction(
+      id: 'int_019d',
+      drug1Name: 'Sertraline',
+      drug2Name: 'Isocarboxazid',
       severity: InteractionSeverity.contraindicated,
       description: 'Life-threatening serotonin syndrome.',
       recommendation: 'Never combine. Wait 14 days between switching medications.',
@@ -402,10 +517,31 @@ class DrugInteractionService {
       recommendation: 'Never combine. Avoid alcohol when taking sleep medications.',
       mechanism: 'Both depress the central nervous system.',
     ),
+    // 'Blood Thinners' is a class, not a real drug name — one row per common
+    // real anticoagulant/antiplatelet (Aspirin/Clopidogrel already appear
+    // elsewhere in this table under their own real names).
     DrugInteraction(
-      id: 'int_024',
+      id: 'int_024a',
       drug1Name: 'Melatonin',
-      drug2Name: 'Blood Thinners',
+      drug2Name: 'Warfarin',
+      severity: InteractionSeverity.mild,
+      description: 'Melatonin may increase bleeding risk.',
+      recommendation: 'Inform your doctor if using both.',
+      mechanism: 'Melatonin has mild antiplatelet effects.',
+    ),
+    DrugInteraction(
+      id: 'int_024b',
+      drug1Name: 'Melatonin',
+      drug2Name: 'Aspirin',
+      severity: InteractionSeverity.mild,
+      description: 'Melatonin may increase bleeding risk.',
+      recommendation: 'Inform your doctor if using both.',
+      mechanism: 'Melatonin has mild antiplatelet effects.',
+    ),
+    DrugInteraction(
+      id: 'int_024c',
+      drug1Name: 'Melatonin',
+      drug2Name: 'Clopidogrel',
       severity: InteractionSeverity.mild,
       description: 'Melatonin may increase bleeding risk.',
       recommendation: 'Inform your doctor if using both.',
@@ -435,10 +571,30 @@ class DrugInteractionService {
     ),
 
     // Supplements
+    // 'Birth Control' is a class, not a real product name — same real-name
+    // expansion as int_013 above.
     DrugInteraction(
-      id: 'int_027',
+      id: 'int_027a',
       drug1Name: 'St. John\'s Wort',
-      drug2Name: 'Birth Control',
+      drug2Name: 'Ethinyl Estradiol',
+      severity: InteractionSeverity.severe,
+      description: 'May significantly reduce contraceptive effectiveness.',
+      recommendation: 'Avoid combination. Use backup contraception.',
+      mechanism: 'St. John\'s Wort induces drug-metabolizing enzymes.',
+    ),
+    DrugInteraction(
+      id: 'int_027b',
+      drug1Name: 'St. John\'s Wort',
+      drug2Name: 'Yasmin',
+      severity: InteractionSeverity.severe,
+      description: 'May significantly reduce contraceptive effectiveness.',
+      recommendation: 'Avoid combination. Use backup contraception.',
+      mechanism: 'St. John\'s Wort induces drug-metabolizing enzymes.',
+    ),
+    DrugInteraction(
+      id: 'int_027c',
+      drug1Name: 'St. John\'s Wort',
+      drug2Name: 'Ortho Tri-Cyclen',
       severity: InteractionSeverity.severe,
       description: 'May significantly reduce contraceptive effectiveness.',
       recommendation: 'Avoid combination. Use backup contraception.',
@@ -455,10 +611,40 @@ class DrugInteractionService {
     ),
 
     // Additional Common Interactions
+    // 'NSAIDs' is a class, not a real drug name — one row per common real
+    // NSAID (Ibuprofen already appears elsewhere in this table for a
+    // different pairing, under its own real name).
     DrugInteraction(
-      id: 'int_029',
+      id: 'int_029a',
       drug1Name: 'Prednisone',
-      drug2Name: 'NSAIDs',
+      drug2Name: 'Ibuprofen',
+      severity: InteractionSeverity.moderate,
+      description: 'Increased risk of GI bleeding and ulcers.',
+      recommendation: 'Use with caution. Consider gastroprotection.',
+      mechanism: 'Both can damage GI mucosa.',
+    ),
+    DrugInteraction(
+      id: 'int_029b',
+      drug1Name: 'Prednisone',
+      drug2Name: 'Naproxen',
+      severity: InteractionSeverity.moderate,
+      description: 'Increased risk of GI bleeding and ulcers.',
+      recommendation: 'Use with caution. Consider gastroprotection.',
+      mechanism: 'Both can damage GI mucosa.',
+    ),
+    DrugInteraction(
+      id: 'int_029c',
+      drug1Name: 'Prednisone',
+      drug2Name: 'Diclofenac',
+      severity: InteractionSeverity.moderate,
+      description: 'Increased risk of GI bleeding and ulcers.',
+      recommendation: 'Use with caution. Consider gastroprotection.',
+      mechanism: 'Both can damage GI mucosa.',
+    ),
+    DrugInteraction(
+      id: 'int_029d',
+      drug1Name: 'Prednisone',
+      drug2Name: 'Aspirin',
       severity: InteractionSeverity.moderate,
       description: 'Increased risk of GI bleeding and ulcers.',
       recommendation: 'Use with caution. Consider gastroprotection.',

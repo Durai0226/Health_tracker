@@ -48,3 +48,36 @@ class GlucoseReadings extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// Body-weight readings. Value is stored canonically as kilograms (matching
+/// `DependentProfile.weight`'s convention); the display unit (kg vs lb) is a
+/// user preference applied only at render, same pattern as glucose's mg/dL.
+class WeightReadings extends Table {
+  TextColumn get id => text()();
+  TextColumn get dependentId => text().nullable()();
+  RealColumn get valueKg => real()();
+  DateTimeColumn get takenAt => dateTime()();
+  TextColumn get tagsJson => text().nullable()(); // JSON string[]
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  BoolColumn get synced => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Daily mood entries. `moodIndex` follows `moodRatingLabels`' convention (0 =
+/// Great … 4 = Terrible), so the same rating already collected per-dose can be
+/// compared against a standalone daily mood without a second scale to reconcile.
+class MoodEntries extends Table {
+  TextColumn get id => text()();
+  TextColumn get dependentId => text().nullable()();
+  IntColumn get moodIndex => integer()();
+  DateTimeColumn get takenAt => dateTime()();
+  TextColumn get tagsJson => text().nullable()(); // JSON string[]
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

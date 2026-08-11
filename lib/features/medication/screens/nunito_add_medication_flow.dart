@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:uuid/uuid.dart';
@@ -7,12 +8,15 @@ import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../services/drug_name_catalog.dart';
+import '../services/drug_interaction_service.dart';
+import '../models/drug_interaction.dart';
+import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/ai/ai_assistant.dart';
+import '../../../core/health/coach_text.dart';
+import '../../../core/health/med_safety_checker.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 
 /// How the end of a medication course is expressed in the wizard.
@@ -44,6 +48,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   // reference checks, which key off the generic, not the brand.
   final _genericNameController = TextEditingController();
   DosageForm _selectedForm = DosageForm.tablet;
+  // Only meaningful (and only shown) for forms DosageForm alone leaves
+  // ambiguous — injection (IM/SC/IV) and drops (eye/ear/nose). Every other
+  // form already unambiguously implies its route, so asking would be
+  // redundant clutter for the common case.
+  AdministrationRoute? _selectedRoute;
 
   // Optional expiry date → drives the "expiring soon / expired" surfacing.
   DateTime? _expiryDate;
@@ -55,22 +64,60 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   // Step 1: Smart add (AI) — describe a medicine in plain language and let the
   // assistant pre-fill the wizard fields. Purely optional; the manual flow is
   // untouched when there's no AI key.
-  final _aiDescController = TextEditingController();
-  bool _aiFilling = false;
+  final _descController = TextEditingController();
+  bool _filling = false;
 
   // Step 2: Dosage
   final _dosageController = TextEditingController(text: '1');
   final _strengthController = TextEditingController();
   String _dosageUnit = 'pill(s)';
 
+  /// Upper bound for one dose. The field counts units of the dosage FORM
+  /// (pills, ml, drops...), never mg, so anything past this is a slipped
+  /// keypad rather than a prescription.
+  static const int _maxDoseAmount = 1000;
+
+  /// The dose amount, or null when the field doesn't hold a usable quantity
+  /// (unparseable, non-finite, zero/negative, or above [_maxDoseAmount]).
+  /// Step-1 validation and the save both read this, so a quantity that fails
+  /// validation can't reach [EnhancedMedicine.dosageAmount] by another route
+  /// (the AI pre-fill writes straight into the controller).
+  double? get _doseAmount {
+    final v = double.tryParse(_dosageController.text.trim());
+    if (v == null || !v.isFinite || v <= 0 || v > _maxDoseAmount) return null;
+    return v;
+  }
+
   // Step 2: Stock & refill (optional — blank quantity means untracked)
   final _stockController = TextEditingController();
   int _lowStockThreshold = 7;
   bool _refillReminderEnabled = false;
 
+  // Step 2: Titration (dose escalation) — opt-in list of "Day N+: X <unit>"
+  // steps that override the base dosage above from a given day onward. Off
+  // by default; existing medicines are completely unaffected — see
+  // MedicineSchedule.effectiveDosageAmount's null/empty-list early return.
+  // Each row's day-offset/dose live in parallel controller lists (mirrors
+  // _scheduleTimes' index-based approach) rather than a list of TitrationStep
+  // directly, since the fields are edited as free text until save time.
+  bool _titrationEnabled = false;
+  final List<TextEditingController> _titrationDayControllers = [];
+  final List<TextEditingController> _titrationDoseControllers = [];
+
   // Step 3: Schedule
   FrequencyType _frequencyType = FrequencyType.onceDaily;
   List<TimeOfDay> _scheduleTimes = [const TimeOfDay(hour: 8, minute: 0)];
+  // Weekend mode: shift every weekday dose time by the same offset on Sat/Sun
+  // (e.g. "sleep in" 2 hours later) rather than a fully independent time
+  // list — simpler to set up and matches how people actually think about it.
+  bool _weekendOverrideEnabled = false;
+  TimeOfDay? _weekendAnchorTime;
+  // Opt-in reminder window (Phase 4), keyed by minute-of-day (hour*60+minute)
+  // rather than list index — _scheduleTimes gets re-sorted whenever a time is
+  // added, and a value-keyed map can never desync from that the way a
+  // parallel same-index list could. Absent from this map = exact time, the
+  // untouched default.
+  final Map<int, int> _windowMinutesByTime = {};
   List<int> _selectedDays = [1, 2, 3, 4, 5, 6, 7]; // All days
   int _intervalHours = 8; // everyXHours
   int _intervalDays = 2; // everyXDays
@@ -101,6 +148,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   final HapticService _hapticService = HapticService();
   final MedicationReminderService _reminderService = MedicationReminderService();
+  final DrugInteractionService _interactionService = DrugInteractionService();
   late final PageController _pageController;
 
   bool get _isEditing => widget.editMedicine != null;
@@ -145,6 +193,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _genericNameController.text = m.genericName ?? '';
     _expiryDate = m.expiryDate;
     _selectedForm = m.dosageForm;
+    _selectedRoute = m.route;
     _dosageController.text = m.dosageAmount % 1 == 0
         ? m.dosageAmount.toInt().toString()
         : m.dosageAmount.toString();
@@ -162,6 +211,16 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (_scheduleTimes.isEmpty && !_isPRN) {
       _scheduleTimes = [const TimeOfDay(hour: 8, minute: 0)];
     }
+    _windowMinutesByTime.clear();
+    for (final t in sched.times) {
+      if (t.hasWindow) _windowMinutesByTime[t.hour * 60 + t.minute] = t.windowMinutes!;
+    }
+    _weekendOverrideEnabled = sched.hasWeekendOverride;
+    _weekendAnchorTime = sched.hasWeekendOverride
+        ? TimeOfDay(
+            hour: sched.weekendTimes!.first.hour,
+            minute: sched.weekendTimes!.first.minute)
+        : null;
     _selectedDays = sched.specificDays ?? [1, 2, 3, 4, 5, 6, 7];
     _intervalHours = sched.intervalHours ?? 8;
     _intervalDays = sched.intervalDays ?? 2;
@@ -185,6 +244,17 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _instructionsController.text = m.instructions ?? '';
     _purposeController.text = m.purpose ?? '';
     _reminderEnabled = m.reminderEnabled;
+    _titrationEnabled = sched.isTitrating;
+    if (_titrationEnabled) {
+      for (final step in sched.titrationSteps!) {
+        _titrationDayControllers
+            .add(TextEditingController(text: step.startDayOffset.toString()));
+        _titrationDoseControllers.add(TextEditingController(
+            text: step.dosageAmount % 1 == 0
+                ? step.dosageAmount.toInt().toString()
+                : step.dosageAmount.toString()));
+      }
+    }
   }
 
   @override
@@ -199,7 +269,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _stockController.dispose();
     _instructionsController.dispose();
     _purposeController.dispose();
-    _aiDescController.dispose();
+    _descController.dispose();
+    for (final c in _titrationDayControllers) {
+      c.dispose();
+    }
+    for (final c in _titrationDoseControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -223,6 +299,38 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     }
   }
 
+  /// The "Save Changes" / "Add Medication" primary button, available from the
+  /// Schedule step onward.
+  ///
+  /// It used to call [_saveMedicine] directly, which skipped
+  /// [_validateCurrentStep] entirely — a medicine could be saved with no
+  /// schedule times, no selected days, an "end date" duration with no end date,
+  /// or an invalid titration dose, none of which the Continue path allows.
+  /// Finishing early may skip the OPTIONAL steps (Look / More), never the
+  /// guarded ones, so re-run every guarded step up to where the user is; if an
+  /// earlier one fails, jump back to it so the error names a field on screen.
+  void _finishAndSave() {
+    const lastGuardedStep = 2; // Schedule — steps after it are optional.
+    final upTo = _currentStep < lastGuardedStep ? _currentStep : lastGuardedStep;
+    for (var step = 0; step <= upTo; step++) {
+      if (_validateStep(step)) continue;
+      if (step != _currentStep) _goToStep(step);
+      return;
+    }
+    _hapticService.light();
+    _saveMedicine();
+  }
+
+  void _goToStep(int step) {
+    setState(() => _currentStep = step);
+    _pageController.animateToPage(
+      step,
+      duration: AppMotion.base,
+      curve: Curves.easeOutCubic,
+    );
+    _updateProgress();
+  }
+
   void _previousStep() {
     _hapticService.light();
     if (_currentStep > 0) {
@@ -237,8 +345,15 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     }
   }
 
-  bool _validateCurrentStep() {
-    switch (_currentStep) {
+  bool _validateCurrentStep() => _validateStep(_currentStep);
+
+  /// Guards for a single wizard step. Split out of [_validateCurrentStep] so
+  /// the "finish early" path ([_finishAndSave]) can re-run the guards of every
+  /// step it is about to skip past, instead of saving unvalidated input.
+  /// Shows the relevant error itself and returns false when the step is not
+  /// yet valid.
+  bool _validateStep(int step) {
+    switch (step) {
       case 0:
         if (_nameController.text.trim().isEmpty) {
           _showError('Please enter a medication name');
@@ -246,8 +361,21 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         }
         return true;
       case 1:
-        if (_dosageController.text.isEmpty || double.tryParse(_dosageController.text) == null) {
+        // `double.tryParse != null` alone accepted '0' and '-5', and the value
+        // went straight through to dosageAmount — a saved dose of zero silently
+        // disables adherence maths, a negative one is nonsense the rest of the
+        // app never guards against. Require a real, bounded quantity.
+        final dose = double.tryParse(_dosageController.text.trim());
+        if (dose == null || !dose.isFinite) {
           _showError('Please enter a valid dosage');
+          return false;
+        }
+        if (dose <= 0) {
+          _showError('Dose must be greater than 0');
+          return false;
+        }
+        if (dose > _maxDoseAmount) {
+          _showError('Dose must be $_maxDoseAmount or less');
           return false;
         }
         // Stock is optional, but if entered it must be a non-negative whole
@@ -258,6 +386,41 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           if (stock == null || stock < 0) {
             _showError('Enter a whole number for quantity, or leave it blank');
             return false;
+          }
+        }
+        // Titration rows carry a real dose that REPLACES the one above from a
+        // given day onward (MedicineSchedule.effectiveDosageAmount), so each
+        // row needs exactly the same guard as the dose field itself. Parsing
+        // with `double.tryParse` alone let '0' and '-5' through, and an
+        // unparseable row was silently dropped at build time rather than
+        // reported — either way the user ended up with a dose they never
+        // intended.
+        if (_titrationEnabled) {
+          if (_titrationDayControllers.isEmpty) {
+            _showError('Add a dose step, or turn off "Dose changes over time"');
+            return false;
+          }
+          for (var i = 0; i < _titrationDayControllers.length; i++) {
+            final day = _titrationDayAt(i);
+            if (day == null) {
+              _showError(
+                  'Step ${i + 1}: enter the day this dose starts (0 or more)');
+              return false;
+            }
+            final text = _titrationDoseControllers[i].text.trim();
+            final stepDose = double.tryParse(text);
+            if (stepDose == null || !stepDose.isFinite) {
+              _showError('Step ${i + 1}: enter a valid dose');
+              return false;
+            }
+            if (stepDose <= 0) {
+              _showError('Step ${i + 1}: dose must be greater than 0');
+              return false;
+            }
+            if (stepDose > _maxDoseAmount) {
+              _showError('Step ${i + 1}: dose must be $_maxDoseAmount or less');
+              return false;
+            }
           }
         }
         return true;
@@ -289,70 +452,173 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     context.toastError(message);
   }
 
+  /// Who this medicine will actually belong to once saved. For an edit that's
+  /// simply the existing record's owner (this form has no dependent picker of
+  /// its own); for a brand-new medicine it's whichever profile is currently
+  /// active, since that's what MedicineCleanStorageService.saveMedicine's own
+  /// stamping applies — checked here BEFORE saving specifically so the
+  /// allergy check below (which needs to know who's actually taking it) sees
+  /// the right owner even though the stamp itself hasn't happened yet.
+  String? get _effectiveDependentId =>
+      _isEditing ? widget.editMedicine!.dependentId : ActiveProfileService().activeDependentId;
+
+  /// Warns (with a chance to cancel) if this medicine plausibly conflicts
+  /// with an allergy on file for whoever it belongs to. Returns true to
+  /// proceed with the save, false to abort. A self-owned medicine is never
+  /// checked — [DependentProfile.allergies] is dependent-only data, matching
+  /// the same scope MedSafetyChecker already uses on the detail screen.
+  Future<bool> _confirmAllergySafety(EnhancedMedicine medicine) async {
+    // NOT medicine.dependentId — a brand-new medicine's dependentId is still
+    // null at this point (MedicineCleanStorageService.saveMedicine stamps the
+    // active profile onto it AFTER this check runs), so that would only ever
+    // fire for edits of an already dependent-owned medicine, missing the far
+    // more common "adding a new medicine while a dependent is active" case.
+    final dependentId = _effectiveDependentId;
+    if (dependentId == null) return true;
+    List<String> allergies;
+    try {
+      final deps = await MedicineCleanStorageService.getAllDependents();
+      allergies = deps.where((d) => d.id == dependentId).firstOrNull?.allergies ??
+          const [];
+    } catch (_) {
+      return true; // best-effort — never block a save on a lookup failure.
+    }
+    if (allergies.isEmpty) return true;
+    final warnings = MedSafetyChecker.checkAllergies(
+      name: medicine.name,
+      genericName: medicine.genericName,
+      allergies: allergies,
+    );
+    if (warnings.isEmpty) return true;
+    if (!mounted) return true;
+
+    final ext = AppColorsExt.of(context);
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: ext.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
+        title: Text('Possible allergy conflict',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: ext.textPrimary)),
+        content: Text(warnings.map((w) => w.message).join('\n\n'),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: ext.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: ext.warning.strong),
+            child: const Text('Save anyway'),
+          ),
+        ],
+      ),
+    );
+    return proceed ?? false;
+  }
+
+  /// Warns (with a chance to cancel) if this medicine plausibly interacts with
+  /// another currently-active medicine belonging to the same profile. Returns
+  /// true to proceed with the save, false to abort. Mirrors
+  /// [_confirmAllergySafety]'s exact shape — including the "own dependentId,
+  /// not scoped-active-profile" lookup, so this stays correct regardless of
+  /// which profile happens to be active in the UI right now — and, per that
+  /// method's lesson, is only ever called AFTER [_saveMedicine]'s re-entrancy
+  /// guard is already set (an async DB read before the guard let a double-tap
+  /// create duplicates once already).
+  Future<bool> _confirmDrugInteractions(EnhancedMedicine medicine) async {
+    final dependentId = _effectiveDependentId;
+    List<EnhancedMedicine> others;
+    try {
+      final all =
+          await MedicineCleanStorageService.getAllMedicines(scopeToActiveProfile: false);
+      others = all
+          .where((m) =>
+              m.id != medicine.id &&
+              m.isActive &&
+              !m.isArchived &&
+              m.dependentId == dependentId)
+          .toList();
+    } catch (_) {
+      return true; // best-effort — never block a save on a lookup failure.
+    }
+    if (others.isEmpty) return true;
+
+    // One representative name per medicine (generic when known) — avoids
+    // pairing a brand against its own generic, same as the interactions tab.
+    String repName(EnhancedMedicine m) =>
+        (m.genericName != null && m.genericName!.trim().isNotEmpty)
+            ? m.genericName!
+            : m.name;
+    final candidateName = repName(medicine);
+    final interactions = <DrugInteraction>[];
+    for (final other in others) {
+      interactions.addAll(_interactionService.checkInteraction(candidateName, repName(other)));
+    }
+    if (interactions.isEmpty) return true;
+    if (!mounted) return true;
+
+    interactions.sort((a, b) => b.severity.index.compareTo(a.severity.index));
+    final ext = AppColorsExt.of(context);
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: ext.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
+        title: Text('Possible drug interaction',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: ext.textPrimary)),
+        content: SingleChildScrollView(
+          child: Text(
+            interactions
+                .map((i) => '${i.severity.displayName}: ${i.description}')
+                .join('\n\n'),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: ext.textSecondary),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: ext.warning.strong),
+            child: const Text('Save anyway'),
+          ),
+        ],
+      ),
+    );
+    return proceed ?? false;
+  }
+
   Future<void> _saveMedicine() async {
+    // Re-entrancy guard, checked AND set before anything async — including
+    // the allergy check below, which does a real DB read
+    // (getAllDependents()). A previous version of this method set
+    // _isLoading only after that await resolved, leaving the Save/Add button
+    // tappable for its whole duration: two fast taps each built their own
+    // candidate with their own fresh UUID (id: existing?.id ?? Uuid().v4()
+    // in _buildMedicineFromForm) and both went on to create a genuinely
+    // duplicate medicine with its own duplicate set of reminders.
+    if (_isLoading) return;
     setState(() => _isLoading = true);
 
-    final EnhancedMedicine medicine;
+    final candidate = _buildMedicineFromForm();
+    if (!await _confirmAllergySafety(candidate)) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    if (!mounted) return;
+    if (!await _confirmDrugInteractions(candidate)) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    if (!mounted) return;
+
+    final EnhancedMedicine medicine = candidate;
     // STEP 1 — persistence (the only thing that can legitimately fail a "save").
     try {
-      final scheduleTimesList = _isPRN
-          ? <ScheduledTime>[]
-          : _scheduleTimes
-              .map((t) => ScheduledTime(hour: t.hour, minute: t.minute))
-              .toList();
-
-      final schedule = MedicineSchedule(
-        frequencyType: _frequencyType,
-        times: scheduleTimesList,
-        intervalHours:
-            _frequencyType == FrequencyType.everyXHours ? _intervalHours : null,
-        intervalDays:
-            _frequencyType == FrequencyType.everyXDays ? _intervalDays : null,
-        specificDays: _frequencyType == FrequencyType.specificDays
-            ? _selectedDays
-            : null,
-        cycleDaysOn:
-            _frequencyType == FrequencyType.cyclical ? _cycleDaysOn : null,
-        cycleDaysOff:
-            _frequencyType == FrequencyType.cyclical ? _cycleDaysOff : null,
-        startDate: _startDate,
-        endDate: _durationMode == _DurationMode.endDate ? _endDate : null,
-        durationDays:
-            _durationMode == _DurationMode.duration ? _durationDays : null,
-        mealTiming: _mealTiming,
-        isPRN: _isPRN,
-        maxDailyDoses: _isPRN ? _maxDailyDoses : null,
-        minHoursBetweenDoses: _isPRN ? _minHoursBetweenDoses : null,
-      );
-
-      medicine = EnhancedMedicine(
-        id: _isEditing ? widget.editMedicine!.id : const Uuid().v4(),
-        name: _nameController.text.trim(),
-        dosageForm: _selectedForm,
-        dosageAmount: double.tryParse(_dosageController.text.trim()) ?? 1.0,
-        dosageUnit: _dosageUnit,
-        strength: _strengthController.text.isNotEmpty ? _strengthController.text : null,
-        genericName: _genericNameController.text.trim().isNotEmpty
-            ? _genericNameController.text.trim()
-            : null,
-        expiryDate: _expiryDate,
-        currentStock: _stockController.text.trim().isNotEmpty
-            ? int.tryParse(_stockController.text.trim())
-            : null,
-        lowStockThreshold: _lowStockThreshold,
-        refillReminderEnabled: _refillReminderEnabled,
-        schedule: schedule,
-        color: _selectedColor,
-        shape: _selectedShape,
-        instructions: _instructionsController.text.isNotEmpty ? _instructionsController.text : null,
-        purpose: _purposeController.text.isNotEmpty ? _purposeController.text : null,
-        reminderEnabled: _reminderEnabled,
-        isActive: true,
-        isArchived: false,
-        createdAt: _isEditing ? widget.editMedicine!.createdAt : DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-
       await MedicineCleanStorageService.saveMedicine(medicine);
     } catch (e, st) {
       // Surface the REAL cause: the old generic toast masked every failure
@@ -385,6 +651,114 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (mounted) Navigator.pop(context, true);
     // Guard: the success path pops this screen, so it may be unmounted here.
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  EnhancedMedicine _buildMedicineFromForm() {
+    final scheduleTimesList = _isPRN
+          ? <ScheduledTime>[]
+          : _scheduleTimes
+              .map((t) => ScheduledTime(
+                    hour: t.hour,
+                    minute: t.minute,
+                    windowMinutes: _windowMinutesByTime[t.hour * 60 + t.minute],
+                  ))
+              .toList();
+
+      final schedule = MedicineSchedule(
+        frequencyType: _frequencyType,
+        times: scheduleTimesList,
+        intervalHours:
+            _frequencyType == FrequencyType.everyXHours ? _intervalHours : null,
+        intervalDays:
+            _frequencyType == FrequencyType.everyXDays ? _intervalDays : null,
+        specificDays: _frequencyType == FrequencyType.specificDays
+            ? _selectedDays
+            : null,
+        cycleDaysOn:
+            _frequencyType == FrequencyType.cyclical ? _cycleDaysOn : null,
+        cycleDaysOff:
+            _frequencyType == FrequencyType.cyclical ? _cycleDaysOff : null,
+        startDate: _startDate,
+        endDate: _durationMode == _DurationMode.endDate ? _endDate : null,
+        durationDays:
+            _durationMode == _DurationMode.duration ? _durationDays : null,
+        mealTiming: _mealTiming,
+        isPRN: _isPRN,
+        maxDailyDoses: _isPRN ? _maxDailyDoses : null,
+        minHoursBetweenDoses: _isPRN ? _minHoursBetweenDoses : null,
+        weekendTimes: _buildWeekendTimes(),
+        titrationSteps: _buildTitrationSteps(),
+      );
+
+      // On an edit, `existing` carries forward every field this form doesn't
+      // itself present a control for — most importantly `dependentId`. The
+      // previous version of this constructor call omitted all of these,
+      // silently resetting them to null/default on every single edit: a
+      // caregiver-managed dependent's medicine reverted to "self" the moment
+      // it was edited (undetectable in the UI, and defeating the whole
+      // family-profile feature for any medicine ever touched again after
+      // creation). copyWith isn't used here instead because several of these
+      // (strength, genericName, instructions, purpose, currentStock,
+      // expiryDate) are FORM fields the user can legitimately clear, and
+      // copyWith's `param ?? this.field` can't tell "not passed" from
+      // "explicitly cleared" without a dedicated sentinel per field.
+      final existing = _isEditing ? widget.editMedicine! : null;
+      final medicine = EnhancedMedicine(
+        id: existing?.id ?? const Uuid().v4(),
+        name: _nameController.text.trim(),
+        dosageForm: _selectedForm,
+        route: _selectedRoute,
+        dosageAmount: _doseAmount ?? 1.0,
+        dosageUnit: _dosageUnit,
+        strength: _strengthController.text.isNotEmpty ? _strengthController.text : null,
+        genericName: _genericNameController.text.trim().isNotEmpty
+            ? _genericNameController.text.trim()
+            : null,
+        expiryDate: _expiryDate,
+        currentStock: _stockController.text.trim().isNotEmpty
+            ? int.tryParse(_stockController.text.trim())
+            : null,
+        lowStockThreshold: _lowStockThreshold,
+        refillReminderEnabled: _refillReminderEnabled,
+        schedule: schedule,
+        color: _selectedColor,
+        shape: _selectedShape,
+        instructions: _instructionsController.text.isNotEmpty ? _instructionsController.text : null,
+        purpose: _purposeController.text.isNotEmpty ? _purposeController.text : null,
+        reminderEnabled: _reminderEnabled,
+        isActive: existing?.isActive ?? true,
+        isArchived: existing?.isArchived ?? false,
+        createdAt: existing?.createdAt ?? DateTime.now(),
+        updatedAt: DateTime.now(),
+        // Fields this form has no control for at all — always carry forward.
+        brandName: existing?.brandName,
+        imprint: existing?.imprint,
+        imagePath: existing?.imagePath,
+        condition: existing?.condition,
+        lastRefillDate: existing?.lastRefillDate,
+        costPerUnit: existing?.costPerUnit,
+        prescriptionNumber: existing?.prescriptionNumber,
+        doctorId: existing?.doctorId,
+        pharmacyId: existing?.pharmacyId,
+        prescribedDate: existing?.prescribedDate,
+        refillsRemaining: existing?.refillsRemaining,
+        reminderSound: existing?.reminderSound,
+        criticalAlert: existing?.criticalAlert ?? false,
+        snoozeMinutes: existing?.snoozeMinutes ?? 10,
+        drugInfo: existing?.drugInfo,
+        warnings: existing?.warnings,
+        sideEffects: existing?.sideEffects,
+        dependentId: existing?.dependentId,
+        notes: existing?.notes,
+        customFields: existing?.customFields,
+        healthCategories: existing?.healthCategories,
+        customHealthCategory: existing?.customHealthCategory,
+        patientProfileId: existing?.patientProfileId,
+        requiresContinuousIntake: existing?.requiresContinuousIntake ?? false,
+        minimumConsecutiveDays: existing?.minimumConsecutiveDays,
+      );
+
+    return medicine;
   }
 
   @override
@@ -464,22 +838,76 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             }),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(_totalSteps, (index) {
-              final isCurrent = index == _currentStep;
-              return Text(
-                steps[index],
-                style: tt.bodySmall?.copyWith(
-                  color: isCurrent ? ext.mark(med) : ext.textTertiary,
-                  fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+          // At large Dynamic Type the five labels stop fitting side by side and
+          // run together ("InfoDosageScheduleLoo…M") while the last ones get
+          // pushed off-screen. Measure them at the CURRENT text scale: while
+          // they fit, render exactly as before; once they can't, collapse to the
+          // active step only — the five progress bars above still show where we
+          // are. No font size is changed either way.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (_stepLabelsFit(context, steps, constraints.maxWidth)) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(_totalSteps, (index) {
+                    final isCurrent = index == _currentStep;
+                    return Text(
+                      steps[index],
+                      maxLines: 1,
+                      style: tt.bodySmall?.copyWith(
+                        color: isCurrent ? ext.mark(med) : ext.textTertiary,
+                        fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    );
+                  }),
+                );
+              }
+              return SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Step ${_currentStep + 1} of $_totalSteps · '
+                  '${steps[_currentStep]}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(
+                    color: ext.mark(med),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               );
-            }),
+            },
           ),
         ],
       ),
     );
+  }
+
+  /// Can all five step labels sit side by side in [maxWidth] at the reader's
+  /// current text scale, with a little breathing room between them? Measured
+  /// bold (the widest weight any of them takes) so the answer holds whichever
+  /// step is active.
+  bool _stepLabelsFit(
+      BuildContext context, List<String> steps, double maxWidth) {
+    if (!maxWidth.isFinite) return true;
+    final style = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(fontWeight: FontWeight.w700);
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    // Minimum gap between adjacent labels — without it they render as one word.
+    var needed = 8.0 * (steps.length - 1);
+    for (final label in steps) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textDirection: direction,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      needed += painter.width;
+      painter.dispose();
+    }
+    return needed <= maxWidth;
   }
 
   Widget _buildStep1BasicInfo(BuildContext context) {
@@ -564,6 +992,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   setState(() {
                     _selectedForm = form;
                     _dosageUnit = form.unit;
+                    // Stale route from the previous form's option set (e.g.
+                    // "Intramuscular" surviving a switch to drops) would be
+                    // meaningless once its picker disappears.
+                    if (!_routeOptionsForSelectedForm().contains(_selectedRoute)) {
+                      _selectedRoute = null;
+                    }
                   });
                 },
                 child: Row(
@@ -582,9 +1016,66 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               );
             }).toList(),
           ),
+          if (_routeOptionsForSelectedForm().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xl),
+            Text('Route (optional)',
+                style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              _selectedForm == DosageForm.injection
+                  ? 'How this injection is given'
+                  : 'Where these drops are used',
+              style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _routeOptionsForSelectedForm().map((route) {
+                final isSelected = _selectedRoute == route;
+                return _buildSelectablePill(
+                  context: context,
+                  selected: isSelected,
+                  onTap: () {
+                    _hapticService.selection();
+                    setState(() =>
+                        _selectedRoute = isSelected ? null : route);
+                  },
+                  child: Text(
+                    route.displayName,
+                    style: tt.labelMedium?.copyWith(
+                      color: isSelected ? med.onContainer : ext.textPrimary,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Route options relevant to the currently selected [DosageForm] — only
+  /// injection and drops are ambiguous enough to ask about; every other form
+  /// already unambiguously implies its route (see [_selectedRoute]'s doc).
+  List<AdministrationRoute> _routeOptionsForSelectedForm() {
+    switch (_selectedForm) {
+      case DosageForm.injection:
+        return const [
+          AdministrationRoute.subcutaneousInjection,
+          AdministrationRoute.intramuscularInjection,
+          AdministrationRoute.intravenousInjection,
+        ];
+      case DosageForm.drops:
+        return const [
+          AdministrationRoute.ophthalmic,
+          AdministrationRoute.otic,
+          AdministrationRoute.nasal,
+        ];
+      default:
+        return const [];
+    }
   }
 
   /// Smart add: a plain-language description + "Fill with AI" button. Extracts
@@ -602,12 +1093,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         children: [
           Row(
             children: [
-              Icon(Symbols.auto_awesome_rounded,
-                  color: med.onContainer, size: 18),
+              Icon(Symbols.edit_note_rounded, color: med.onContainer, size: 18),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  'Describe it (AI)',
+                  'Describe it',
                   style: tt.titleMedium?.copyWith(color: med.onContainer),
                 ),
               ),
@@ -620,26 +1110,26 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           ),
           const SizedBox(height: AppSpacing.md),
           AppTextField(
-            controller: _aiDescController,
+            controller: _descController,
             hint: 'Describe your medication…',
             accent: med,
             maxLines: 2,
             textCapitalization: TextCapitalization.sentences,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _fillWithAi(),
+            onSubmitted: (_) => _quickFill(),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
               Expanded(
                 child: AppButton(
-                  label: 'Fill with AI',
-                  leadingIcon: Symbols.auto_awesome_rounded,
+                  label: 'Quick fill',
+                  leadingIcon: Symbols.bolt_rounded,
                   variant: AppButtonVariant.primary,
                   size: AppButtonSize.sm,
                   accent: med,
-                  loading: _aiFilling,
-                  onPressed: _aiFilling ? null : _fillWithAi,
+                  loading: _filling,
+                  onPressed: _filling ? null : _quickFill,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -649,7 +1139,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                 variant: AppButtonVariant.secondary,
                 size: AppButtonSize.sm,
                 accent: med,
-                onPressed: _aiFilling ? null : _scanLabel,
+                onPressed: _filling ? null : _scanLabel,
               ),
             ],
           ),
@@ -669,7 +1159,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       if (shot == null) return;
       if (!mounted) return;
       FocusScope.of(context).unfocus();
-      setState(() => _aiFilling = true);
+      setState(() => _filling = true);
 
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       String text = '';
@@ -683,19 +1173,21 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
       if (text.isEmpty) {
         if (mounted) {
-          setState(() => _aiFilling = false);
+          setState(() => _filling = false);
           _showError("Couldn't read the label. Try better lighting or type it in.");
         }
         return;
       }
 
       // Show what was read, then parse it with the offline engine.
-      _aiDescController.text = text;
-      final parsed = await AiAssistant().parseMedicine(text);
+      _descController.text = text;
+      final parsed = text.trim().isEmpty
+          ? null
+          : const CoachText().parseMedicine(text);
       if (!mounted) return;
-      setState(() => _aiFilling = false);
+      setState(() => _filling = false);
       if (parsed != null) {
-        setState(() => _applyAiExtraction(parsed));
+        setState(() => _applyExtraction(parsed));
         _hapticService.success();
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -705,37 +1197,35 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       ));
     } catch (e) {
       if (mounted) {
-        setState(() => _aiFilling = false);
+        setState(() => _filling = false);
         _showError('Scan unavailable. You can type the details instead.');
       }
     }
   }
 
-  Future<void> _fillWithAi() async {
-    final desc = _aiDescController.text.trim();
+  Future<void> _quickFill() async {
+    final desc = _descController.text.trim();
     if (desc.isEmpty) {
       _showError('Describe the medication first');
       return;
     }
 
     FocusScope.of(context).unfocus();
-    setState(() => _aiFilling = true);
+    setState(() => _filling = true);
 
-    final result = await AiAssistant().parseMedicine(desc);
+    final result = const CoachText().parseMedicine(desc);
 
     if (!mounted) return;
-    setState(() => _aiFilling = false);
+    setState(() => _filling = false);
 
-    if (result == null) {
-      _showError('Couldn\'t read that. Try rephrasing or fill it in manually.');
-      return;
-    }
-
-    setState(() => _applyAiExtraction(result));
+    // No null branch: the parser is deterministic and always returns a map
+    // (blank input is rejected above), so it cannot fail here.
+    setState(() => _applyExtraction(result));
     _hapticService.success();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Filled from AI — please review each step')),
+        const SnackBar(
+            content: Text('Filled in — please review each step')),
       );
     }
   }
@@ -743,7 +1233,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   /// Map a loosely-typed AI JSON payload onto the wizard's existing state.
   /// Every field is defensive: anything missing/unrecognized is left as-is so
   /// the manual defaults survive.
-  void _applyAiExtraction(Map<String, dynamic> data) {
+  void _applyExtraction(Map<String, dynamic> data) {
     final name = data['name'];
     if (name is String && name.trim().isNotEmpty) {
       _nameController.text = name.trim();
@@ -948,26 +1438,49 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                 child: AppTextField(
                   controller: _dosageController,
                   keyboardType: TextInputType.number,
-                  hint: 'Amount',
+                  // WCAG 3.3.2 — this was the only numeric health input in the
+                  // app with no persistent label: the hint 'Amount' was the
+                  // field's sole identification and it disappeared the moment
+                  // anything was typed (and never reached a screen reader as a
+                  // label at all).
+                  label: 'Amount',
+                  hint: 'e.g. 1',
                   accent: med,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 flex: 3,
-                child: Container(
-                  height: 52,
-                  alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: ext.surfaceVariant,
-                    borderRadius: AppRadius.brMd,
-                    border: Border.all(color: ext.outline),
-                  ),
-                  child: Text(
-                    _dosageUnit,
-                    style: tt.bodyLarge?.copyWith(color: ext.textSecondary),
-                  ),
+                // The read-only unit box gets a matching label so it stays
+                // baseline-aligned with the amount field now that the field
+                // carries one. Same style AppTextField uses for its own label.
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Unit',
+                      style: tt.labelLarge?.copyWith(color: ext.textSecondary),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      height: 52,
+                      alignment: Alignment.centerLeft,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      decoration: BoxDecoration(
+                        color: ext.surfaceVariant,
+                        borderRadius: AppRadius.brMd,
+                        border: Border.all(color: ext.outline),
+                      ),
+                      child: Text(
+                        _dosageUnit,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodyLarge?.copyWith(color: ext.textSecondary),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -981,6 +1494,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           ),
           const SizedBox(height: AppSpacing.xl),
           _buildStockSection(context),
+          const SizedBox(height: AppSpacing.xl),
+          _buildTitrationSection(context),
         ],
       ),
     );
@@ -1071,6 +1586,169 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
+  /// "Dose changes over time" (titration): an opt-in toggle + a simple list
+  /// editor of "Day N+: X <unit>" steps, mirroring [_buildWeekendModeSection]'s
+  /// AppCard-toggle-then-conditional-editor shape. Deliberately simpler than
+  /// the core time-list editor — free-text day-offset + dose fields per row
+  /// are enough for a feature this niche.
+  Widget _buildTitrationSection(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppCard(
+          onTap: () {
+            _hapticService.toggle();
+            setState(() {
+              _titrationEnabled = !_titrationEnabled;
+              if (_titrationEnabled && _titrationDayControllers.isEmpty) {
+                _addTitrationStep();
+              }
+            });
+          },
+          child: Row(
+            children: [
+              Icon(Symbols.trending_up_rounded,
+                  color:
+                      _titrationEnabled ? ext.mark(med) : ext.textTertiary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Dose changes over time', style: tt.titleLarge),
+                    Text(
+                      _titrationEnabled
+                          ? 'Dose increases in steps (e.g. titration)'
+                          : 'Same dose every time',
+                      style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              AppSwitch(
+                value: _titrationEnabled,
+                onChanged: (v) => setState(() {
+                  _titrationEnabled = v;
+                  if (v && _titrationDayControllers.isEmpty) {
+                    _addTitrationStep();
+                  }
+                }),
+                accent: med,
+              ),
+            ],
+          ),
+        ),
+        if (_titrationEnabled) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            "Starting from the medicine's start date (day 0 = the dose "
+            'above), add a step for each later change.',
+            style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ..._titrationDayControllers.asMap().entries.map((entry) {
+            final i = entry.key;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: AppTextField(
+                      controller: _titrationDayControllers[i],
+                      keyboardType: TextInputType.number,
+                      label: 'Day N+',
+                      hint: 'e.g. 14',
+                      accent: med,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AppTextField(
+                      controller: _titrationDoseControllers[i],
+                      keyboardType: TextInputType.number,
+                      label: 'Dose ($_dosageUnit)',
+                      hint: 'e.g. 50',
+                      accent: med,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: () => setState(() => _removeTitrationStep(i)),
+                    icon: Icon(Symbols.delete_outline_rounded,
+                        color: ext.textTertiary),
+                  ),
+                ],
+              ),
+            );
+          }),
+          AppButton(
+            label: 'Add a step',
+            leadingIcon: Symbols.add_rounded,
+            variant: AppButtonVariant.secondary,
+            accent: med,
+            onPressed: () => setState(_addTitrationStep),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _addTitrationStep() {
+    final lastDay = _titrationDayControllers.isNotEmpty
+        ? int.tryParse(_titrationDayControllers.last.text.trim()) ?? 0
+        : 0;
+    _titrationDayControllers
+        .add(TextEditingController(text: (lastDay + 7).toString()));
+    _titrationDoseControllers
+        .add(TextEditingController(text: _dosageController.text));
+  }
+
+  void _removeTitrationStep(int index) {
+    _titrationDayControllers.removeAt(index).dispose();
+    _titrationDoseControllers.removeAt(index).dispose();
+  }
+
+  /// The [TitrationStep] list built from the row controllers, or null when
+  /// titration is off or every row failed to parse — mirrors
+  /// [_buildWeekendTimes]'s null-means-"no override" contract so an empty/
+  /// invalid editor never accidentally persists a titration schedule.
+  List<TitrationStep>? _buildTitrationSteps() {
+    if (!_titrationEnabled) return null;
+    final steps = <TitrationStep>[];
+    for (var i = 0; i < _titrationDayControllers.length; i++) {
+      final day = _titrationDayAt(i);
+      final dose = _titrationDoseAt(i);
+      // Step-1 validation already rejects these, so reaching here means the
+      // save arrived by some other route — never persist an unusable dose.
+      if (day == null || dose == null) continue;
+      steps.add(TitrationStep(startDayOffset: day, dosageAmount: dose));
+    }
+    return steps.isEmpty ? null : steps;
+  }
+
+  /// Day offset for titration row [i], or null when it isn't a whole number of
+  /// days from the start date (negative offsets can never be reached, so they
+  /// are as unusable as an unparseable field).
+  int? _titrationDayAt(int i) {
+    final v = int.tryParse(_titrationDayControllers[i].text.trim());
+    if (v == null || v < 0) return null;
+    return v;
+  }
+
+  /// Dose for titration row [i] under exactly the same rule as [_doseAmount] —
+  /// this value REPLACES the base dose from its day onward, so a zero,
+  /// negative, or absurd quantity must never reach [TitrationStep].
+  double? _titrationDoseAt(int i) {
+    final v = double.tryParse(_titrationDoseControllers[i].text.trim());
+    if (v == null || !v.isFinite || v <= 0 || v > _maxDoseAmount) return null;
+    return v;
+  }
+
   Widget _buildStep3Schedule(BuildContext context) {
     final tt = Theme.of(context).textTheme;
 
@@ -1086,6 +1764,10 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           if (!_isPRN) ...[
             const SizedBox(height: AppSpacing.xl),
             _buildTimesSection(context),
+          ],
+          if (!_isPRN && _frequencyType != FrequencyType.everyXHours) ...[
+            const SizedBox(height: AppSpacing.xl),
+            _buildWeekendModeSection(context),
           ],
           const SizedBox(height: AppSpacing.xl),
           _buildMealTimingSelector(context),
@@ -1180,7 +1862,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         });
       },
       child: Container(
-        height: 68,
+        // 68 is now a FLOOR, not a ceiling: as a fixed height it clipped the
+        // two-line label at large Dynamic Type (a "BOTTOM OVERFLOWED" stripe
+        // under every chip). The tile grows with the text instead.
+        constraints: const BoxConstraints(minHeight: 68),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? med.container : ext.surface,
@@ -1190,19 +1876,28 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             width: selected ? 1.5 : 1,
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('$count×',
-                style: tt.titleLarge?.copyWith(
-                  color: selected ? med.onContainer : ext.textPrimary,
-                  fontWeight: FontWeight.w700,
-                )),
-            Text('a day',
-                style: tt.bodySmall?.copyWith(
-                  color: selected ? med.onContainer : ext.textTertiary,
-                )),
-          ],
+        // Four chips share the row width, so "a day" can outgrow its tile
+        // sideways too. scaleDown only ever shrinks — at default sizes this
+        // renders identically.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('$count×',
+                  maxLines: 1,
+                  style: tt.titleLarge?.copyWith(
+                    color: selected ? med.onContainer : ext.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  )),
+              Text('a day',
+                  maxLines: 1,
+                  style: tt.bodySmall?.copyWith(
+                    color: selected ? med.onContainer : ext.textTertiary,
+                  )),
+            ],
+          ),
         ),
       ),
     );
@@ -1372,7 +2067,22 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         );
       case FrequencyType.asNeeded:
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Framed explicitly as a CAREGIVER safety limit when this medicine
+            // belongs to a dependent — the person taking it may not be the one
+            // setting it, unlike a self-owned PRN medicine.
+            if (_effectiveDependentId != null) ...[
+              Text(
+                'Caregiver safety limit — the most doses allowed per day, and '
+                'the minimum time required between them.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColorsExt.of(context).textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             _buildStepperRow(
               context: context,
               label: 'Max doses / day',
@@ -1505,6 +2215,119 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
+  /// "Sleep in on weekends": one toggle + one time picker for the FIRST
+  /// dose's Sat/Sun time; every other dose that day shifts by the same
+  /// offset, preserving the gaps between doses rather than needing a whole
+  /// second time-list editor.
+  Widget _buildWeekendModeSection(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppCard(
+          onTap: () {
+            _hapticService.toggle();
+            setState(() {
+              _weekendOverrideEnabled = !_weekendOverrideEnabled;
+              if (_weekendOverrideEnabled) {
+                _weekendAnchorTime ??= _scheduleTimes.first;
+              }
+            });
+          },
+          child: Row(
+            children: [
+              Icon(Symbols.weekend_rounded,
+                  color: _weekendOverrideEnabled
+                      ? ext.mark(med)
+                      : ext.textTertiary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Different times on weekends', style: tt.titleLarge),
+                    Text(
+                      _weekendOverrideEnabled
+                          ? 'Sat/Sun doses shift to start at '
+                              '${_weekendAnchorTime?.format(context) ?? ''}'
+                          : 'Same times every day',
+                      style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              AppSwitch(
+                value: _weekendOverrideEnabled,
+                onChanged: (v) => setState(() {
+                  _weekendOverrideEnabled = v;
+                  if (v) _weekendAnchorTime ??= _scheduleTimes.first;
+                }),
+              ),
+            ],
+          ),
+        ),
+        if (_weekendOverrideEnabled) ...[
+          const SizedBox(height: AppSpacing.md),
+          GestureDetector(
+            onTap: () async {
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: _weekendAnchorTime ?? _scheduleTimes.first,
+              );
+              if (picked != null) setState(() => _weekendAnchorTime = picked);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: med.container,
+                borderRadius: AppRadius.brMd,
+                border: Border.all(color: med.base),
+              ),
+              child: Row(
+                children: [
+                  Icon(Symbols.weekend_rounded, size: 20, color: med.onContainer),
+                  const SizedBox(width: 12),
+                  Text('Weekend start time',
+                      style: tt.bodyMedium?.copyWith(color: med.onContainer)),
+                  const Spacer(),
+                  Text(
+                    (_weekendAnchorTime ?? _scheduleTimes.first).format(context),
+                    style: tt.titleMedium?.copyWith(
+                        color: med.onContainer, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Symbols.edit_rounded, size: 16, color: med.onContainer),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The weekend-shifted [ScheduledTime] list, or null when the override is
+  /// off — every weekday dose shifted by the same (weekendAnchor - firstDose)
+  /// offset, wrapping within a single day.
+  List<ScheduledTime>? _buildWeekendTimes() {
+    if (!_weekendOverrideEnabled || _weekendAnchorTime == null) return null;
+    if (_scheduleTimes.isEmpty) return null;
+    final anchor = _scheduleTimes.first;
+    final offsetMinutes = (_weekendAnchorTime!.hour * 60 + _weekendAnchorTime!.minute) -
+        (anchor.hour * 60 + anchor.minute);
+    return _scheduleTimes.map((t) {
+      final shifted = (t.hour * 60 + t.minute + offsetMinutes) % (24 * 60);
+      final normalized = shifted < 0 ? shifted + 24 * 60 : shifted;
+      return ScheduledTime(
+        hour: normalized ~/ 60,
+        minute: normalized % 60,
+      );
+    }).toList();
+  }
+
   Widget _buildTimesSection(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final med = ext.medicine;
@@ -1535,7 +2358,15 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           final canRemove = _scheduleTimes.length > 1 && !isInterval;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: _buildTimeRow(context, index, time, canRemove),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTimeRow(context, index, time, canRemove),
+                // "Every X hours" doses repeat all day by construction — a
+                // window doesn't make sense layered on top of that.
+                if (!isInterval) _buildWindowToggle(context, time),
+              ],
+            ),
           );
         }),
         if (!isInterval) ...[
@@ -1580,13 +2411,34 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   Icon(Symbols.access_time_rounded,
                       size: 20, color: med.onContainer),
                   const SizedBox(width: 12),
-                  Text(label,
-                      style: tt.bodyMedium?.copyWith(color: med.onContainer)),
-                  const Spacer(),
-                  Text(
-                    time.format(context),
-                    style: tt.titleMedium?.copyWith(
-                        color: med.onContainer, fontWeight: FontWeight.w700),
+                  // Label and value used to share one unbounded row (label +
+                  // Spacer + value), so at large Dynamic Type they collided
+                  // ("Reminder8:00 A…") and ran under the edit icon. Each now
+                  // owns a bounded share; the value keeps the right edge it
+                  // had, so default rendering is unchanged.
+                  Expanded(
+                    flex: 3,
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodyMedium?.copyWith(color: med.onContainer)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    // The time is the data — shrink it to fit rather than
+                    // clipping it to "8:0…".
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        time.format(context),
+                        maxLines: 1,
+                        style: tt.titleMedium?.copyWith(
+                            color: med.onContainer,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Icon(Symbols.edit_rounded, size: 16, color: med.onContainer),
@@ -1608,6 +2460,108 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         ],
       ],
     );
+  }
+
+  /// Opt-in reminder window (Phase 4) for one dose time — exact time (no
+  /// window) stays the untouched default; tapping opens a duration picker.
+  /// Off by default and easy to miss at a glance, deliberately: this is an
+  /// advanced option, not something every user needs to see.
+  Widget _buildWindowToggle(BuildContext context, TimeOfDay time) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    final key = time.hour * 60 + time.minute;
+    final window = _windowMinutesByTime[key];
+    final on = window != null;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, left: 4),
+      child: GestureDetector(
+        onTap: () => _selectWindowDuration(key),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              on ? Symbols.hourglass_top_rounded : Symbols.hourglass_empty_rounded,
+              size: 15,
+              color: on ? ext.mark(med) : ext.textTertiary,
+            ),
+            const SizedBox(width: 6),
+            // This caption is long; unbounded in a min-width Row it shot off
+            // the right edge at large Dynamic Type. Flexible lets it wrap
+            // inside the row's real width instead.
+            Flexible(
+              child: Text(
+                on
+                    ? 'Reminds across a ${_formatWindow(window)} window · 3 nudges'
+                    : 'Use a reminder window instead of one exact time',
+                style: tt.bodySmall?.copyWith(
+                  color: on ? ext.mark(med) : ext.textTertiary,
+                  decoration: on ? TextDecoration.underline : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatWindow(int minutes) {
+    if (minutes < 60) return '$minutes-min';
+    final hours = minutes / 60;
+    return hours == hours.roundToDouble()
+        ? '${hours.round()}-hour'
+        : '${hours.toStringAsFixed(1)}-hour';
+  }
+
+  /// [timeKey] is minute-of-day (hour*60+minute) — see [_windowMinutesByTime].
+  /// The sheet returns null for BOTH "dismissed without choosing" and would be
+  /// ambiguous with "chose exact time" if that used null too, so "explicit
+  /// off" is its own sentinel (-1) instead.
+  Future<void> _selectWindowDuration(int timeKey) async {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    const offSentinel = -1;
+
+    final result = await AppBottomSheet.show<int>(
+      context,
+      title: 'Reminder window',
+      icon: Symbols.hourglass_top_rounded,
+      accent: med,
+      builder: (sheetCtx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppListTile(
+            icon: Symbols.schedule_rounded,
+            title: 'Exact time (default)',
+            subtitle: 'One reminder at the exact minute',
+            accent: med,
+            trailing: const SizedBox.shrink(),
+            onTap: () => Navigator.pop(sheetCtx, offSentinel),
+          ),
+          for (final mins in const [30, 60, 90, 120])
+            AppListTile(
+              icon: Symbols.hourglass_top_rounded,
+              title: '${_formatWindow(mins)} window',
+              subtitle: 'Up to 3 nudges spread across the window',
+              accent: med,
+              trailing: const SizedBox.shrink(),
+              onTap: () => Navigator.pop(sheetCtx, mins),
+            ),
+        ],
+      ),
+    );
+
+    if (result == null) return; // dismissed — leave the current choice as-is
+    setState(() {
+      if (result == offSentinel) {
+        _windowMinutesByTime.remove(timeKey);
+      } else {
+        _windowMinutesByTime[timeKey] = result;
+      }
+    });
   }
 
   Widget _buildMealTimingSelector(BuildContext context) {
@@ -1828,6 +2782,27 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               ? _scheduleTimes.first
               : const TimeOfDay(hour: 8, minute: 0)
         ];
+        // The window toggle is hidden for this frequency (a window doesn't
+        // make sense layered on interval fan-out — see _buildTimesSection),
+        // but a value set for this SAME anchor time under a PRIOR frequency
+        // would otherwise survive untouched, since the key (hour*60+minute)
+        // doesn't change. Left unremoved, groupRemindersBySlot drops
+        // windowMinutes when expanding the interval's fan-out times (so the
+        // anchor slot schedules as an ordinary exact-time alarm) while
+        // _recomputeWindowNudges reads the raw, un-expanded schedule.times
+        // and still sees hasWindow==true on it — scheduling a second, full
+        // 3-nudge sequence for the same dose on top of the exact-time alarm.
+        //
+        // Only removes the SURVIVING anchor's own entry — NOT the whole map.
+        // A blanket clear() here also wiped window settings for every OTHER
+        // time (e.g. a 3x-daily medicine's 14:00/20:00 doses), which are
+        // simply unused while everyXHours is selected (nothing ever reads a
+        // _windowMinutesByTime entry for a clock time absent from the
+        // current _scheduleTimes) but would otherwise correctly reappear if
+        // the user switches back to a frequency whose regenerated default
+        // times land on those same clock times again.
+        final anchor = _scheduleTimes.first;
+        _windowMinutesByTime.remove(anchor.hour * 60 + anchor.minute);
         break;
       case FrequencyType.asNeeded:
         // PRN has no fixed times.
@@ -1921,7 +2896,17 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       initial: _scheduleTimes[index],
     );
     if (time != null) {
-      setState(() => _scheduleTimes[index] = time);
+      final oldKey = _scheduleTimes[index].hour * 60 + _scheduleTimes[index].minute;
+      final newKey = time.hour * 60 + time.minute;
+      setState(() {
+        _scheduleTimes[index] = time;
+        // A window is keyed by clock time, not list position — moving the
+        // dose to a new minute must carry its window along, or the toggle
+        // would silently read as "off" at the new time.
+        if (oldKey != newKey && _windowMinutesByTime.containsKey(oldKey)) {
+          _windowMinutesByTime[newKey] = _windowMinutesByTime.remove(oldKey)!;
+        }
+      });
     }
   }
 
@@ -2209,10 +3194,10 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   accent: med,
                   fullWidth: true,
                   loading: _isLoading,
-                  // Schedule reached → save directly; earlier steps → advance.
+                  // Schedule reached → validate, then save; earlier → advance.
                   onPressed: _isLoading
                       ? null
-                      : (canFinish ? _saveMedicine : _nextStep),
+                      : (canFinish ? _finishAndSave : _nextStep),
                 ),
               ),
             ],

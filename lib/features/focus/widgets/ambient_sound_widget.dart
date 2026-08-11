@@ -31,7 +31,7 @@ class AmbientSoundSelector extends StatelessWidget {
         ],
         
         // Sound categories
-        ...categories.entries.map((entry) => _buildCategory(entry.key, entry.value)),
+        ...categories.entries.map((entry) => _buildCategory(context, entry.key, entry.value)),
       ],
     );
   }
@@ -81,7 +81,7 @@ class AmbientSoundSelector extends StatelessWidget {
     return grouped;
   }
 
-  Widget _buildCategory(String category, List<AmbientSoundType> sounds) {
+  Widget _buildCategory(BuildContext context, String category, List<AmbientSoundType> sounds) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -89,24 +89,24 @@ class AmbientSoundSelector extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 12),
           child: Text(
             category,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: AppColors.getTextSecondary(context),
             ),
           ),
         ),
         Wrap(
           spacing: 10,
           runSpacing: 10,
-          children: sounds.map((sound) => _buildSoundChip(sound)).toList(),
+          children: sounds.map((sound) => _buildSoundChip(context, sound)).toList(),
         ),
         const SizedBox(height: 20),
       ],
     );
   }
 
-  Widget _buildSoundChip(AmbientSoundType sound) {
+  Widget _buildSoundChip(BuildContext context, AmbientSoundType sound) {
     final isSelected = selectedSound == sound;
     
     return GestureDetector(
@@ -115,7 +115,7 @@ class AmbientSoundSelector extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? sound.color : Colors.white,
+          color: isSelected ? sound.color : AppColors.getCardBg(context),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? sound.color : Colors.grey.withOpacity(0.2),
@@ -143,7 +143,7 @@ class AmbientSoundSelector extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColors.textPrimary,
+                color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
               ),
             ),
           ],
@@ -177,19 +177,19 @@ class AmbientSoundMiniPlayer extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            color: AppColors.getGrey100(context),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Symbols.music_note_rounded, color: Colors.grey, size: 20),
-              SizedBox(width: 8),
+              const Icon(Symbols.music_note_rounded, color: Colors.grey, size: 20),
+              const SizedBox(width: 8),
               Text(
                 'Add Sound',
                 style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textSecondary,
+                  color: AppColors.getTextSecondary(context),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -274,7 +274,7 @@ class SoundCategoryTab extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : AppColors.textSecondary,
+            color: isSelected ? Colors.white : AppColors.getTextSecondary(context),
           ),
         ),
       ),

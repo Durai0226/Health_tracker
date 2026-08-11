@@ -6,7 +6,7 @@ import '../../medication/services/medicine_storage_service.dart';
 import '../../focus/screens/focus_screen.dart';
 import '../../reminders/screens/reminders_screen.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
-import '../../insights/screens/insights_hub_screen.dart';
+import '../../insights/screens/trends_dashboard_screen.dart';
 import 'home_dashboard.dart';
 import 'health_browse_screen.dart';
 import '../widgets/log_something_sheet.dart';
@@ -35,6 +35,25 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // (reminders) — see HomeDashboard.refreshTick.
   int _homeTick = 0;
 
+  /// One [ScrollController] per tab.
+  ///
+  /// This is load-bearing, not tidiness. `ModalRoute` wraps a route's content in
+  /// exactly ONE [PrimaryScrollController], and any vertical `ScrollView` with no
+  /// explicit controller silently attaches to it. Because [IndexedStack] keeps
+  /// every tab alive simultaneously, Today, Health and Insights were all
+  /// attaching their scroll views to that single controller at the same time.
+  ///
+  /// A controller driving three positions at once reports and corrects the wrong
+  /// one, which is exactly what the two reported bugs were: skipping a dose on
+  /// Today shrank the content, the offset correction landed on another tab's
+  /// position, and Today was left unable to scroll — plus visible jumping when
+  /// switching tabs. Giving each tab its own controller makes the offsets
+  /// independent, and keeps per-tab scroll-to-top working.
+  late final List<ScrollController> _tabScrollControllers =
+      List<ScrollController>.generate(_tabCount, (_) => ScrollController());
+
+  static const int _tabCount = 4;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +62,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    for (final c in _tabScrollControllers) {
+      c.dispose();
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -79,7 +101,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           for (final id in ids) {
             // Put the units back before deleting, or Undo loses inventory.
             final log = await MedicineCleanStorageService.getLog(id);
-            if (log != null && log.isTaken) {
+            if (log != null && log.countsAsTaken) {
               await MedicineCleanStorageService.restoreStock(
                   log.medicineId, log.dosageTaken);
             }
@@ -130,16 +152,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final screens = [
       HomeDashboard(onNavigate: _legacyNavigate, refreshTick: _homeTick),
       const NunitoMedicationDashboard(),
-      const HealthBrowseScreen(),
-      const InsightsHubScreen(isRoot: true),
+      HealthBrowseScreen(onOpenTrends: () => _onTap(4)),
+      const TrendsDashboardScreen(isRoot: true),
     ];
+    // Adding a tab without a matching controller would silently reintroduce the
+    // shared-controller bug for the new tab only — fail loudly instead.
+    assert(screens.length == _tabCount,
+        'Add a ScrollController for every tab: ${screens.length} tabs vs $_tabCount controllers');
 
     return Scaffold(
       // Docked nav (not floating): keep the body ABOVE the nav so each tab's
       // FAB / bottom content isn't hidden behind the bar.
       extendBody: false,
       backgroundColor: ext.background,
-      body: IndexedStack(index: _stackIndex, children: screens),
+      // Each tab gets its own PrimaryScrollController so the four live children
+      // never share one scroll position. See [_tabScrollControllers].
+      body: IndexedStack(
+        index: _stackIndex,
+        children: [
+          for (var i = 0; i < screens.length; i++)
+            PrimaryScrollController(
+              controller: _tabScrollControllers[i],
+              child: screens[i],
+            ),
+        ],
+      ),
       bottomNavigationBar: AppNavBar(
         currentIndex: _slot,
         onTap: _onTap,
@@ -170,9 +207,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             accent: ext.water,
           ),
           AppNavItem(
-            icon: Symbols.insights_rounded,
-            activeIcon: Symbols.insights_rounded,
-            label: 'Insights',
+            icon: Symbols.bar_chart_rounded,
+            activeIcon: Symbols.bar_chart_rounded,
+            label: 'Trends',
             accent: ext.brand,
           ),
         ],

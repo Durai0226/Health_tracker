@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'cloud_sync_service.dart';
+import 'clean_storage_service.dart';
 import '../config/env_config.dart';
 import '../utils/validators.dart';
 
@@ -108,6 +109,27 @@ class AuthService extends ChangeNotifier {
         debugPrint('AuthService Init: No Firebase user, signing in anonymously');
         await _clearSavedUser();
         await signInAnonymously();
+        // signInAnonymously()'s SUCCESS path never assigns _currentUser
+        // itself (only its own failure path does, via
+        // _enableOfflineGuestMode) — it relies on the authStateChanges()
+        // listener below to pick the new user up. But that listener calls
+        // .skip(1), and Firebase's authStateChanges() replays the CURRENT
+        // state to a fresh listener — so on a first-ever launch, the skipped
+        // event IS this anonymous sign-in, and _currentUser stays null for
+        // the rest of the session (breaking anything that reads it, e.g.
+        // cloud sync). Read the now-current Firebase user directly instead of
+        // relying on that listener. The `_currentUser == null` guard leaves
+        // an already-set offline-guest fallback (from a signInAnonymously
+        // failure) untouched.
+        if (_currentUser == null) {
+          final signedInUser = _firebaseAuth?.currentUser;
+          if (signedInUser != null) {
+            _isGuestMode = signedInUser.isAnonymous;
+            _currentUser = UserModel.fromFirebaseUser(signedInUser);
+            debugPrint(
+                'AuthService Init: Anonymous sign-in complete - uid: ${signedInUser.uid}');
+          }
+        }
       }
       
       // Listen to subsequent Firebase auth state changes
@@ -342,11 +364,19 @@ class AuthService extends ChangeNotifier {
           final hasCloudData = await cloudSync.hasCloudData(userId);
           
           if (hasCloudData) {
+            // Downloading brings the user's own data TO the device — no
+            // privacy question, and it is what a returning user expects.
             debugPrint('Cloud data found, downloading to device');
             await cloudSync.downloadDataFromCloud(userId);
-          } else {
+          } else if (CleanStorageService.cloudSyncEnabled) {
+            // Uploading is the direction that needs consent. Signing in is not
+            // itself consent to sync — a user may sign in only to use cloud
+            // BACKUP, or to restore. Without this gate, signing in silently
+            // uploaded every local medicine, vitals reading and health record.
             debugPrint('No cloud data found, uploading local data');
             await cloudSync.uploadDataToCloud(userId);
+          } else {
+            debugPrint('• Upload skipped — cloud sync is off');
           }
           
           debugPrint('Cloud sync completed successfully');
@@ -400,8 +430,19 @@ class AuthService extends ChangeNotifier {
     
     await _clearSavedUser();
 
-    // Auto sign-in as guest after logout
-    await signInAnonymously();
+    // Signing out also turns cloud sync off. Leaving it on would mean the next
+    // sign-in silently resumes uploading, which is not what "sign out" means
+    // to a user handing their phone to someone else.
+    await CleanStorageService.setCloudSyncEnabled(false);
+
+    // Deliberately NOT re-signing in anonymously here.
+    //
+    // This used to call signInAnonymously(), so there was no path in the whole
+    // app that reached a state without a Firebase identity — sign out, and you
+    // silently got a fresh anonymous account instead. Local-only mode now
+    // means local-only. An anonymous identity is created on demand if and when
+    // something actually needs one.
+    _enableOfflineGuestMode();
   }
 
   /// Send password reset email

@@ -155,7 +155,7 @@ class _AuthGateSheetState extends State<AuthGateSheet>
                       textAlign: TextAlign.center, style: tt.headlineSmall),
                   const SizedBox(height: 6),
                   Text(
-                    'Sync your day across devices — or keep everything private on this one.',
+                    'Sign in to enable optional cloud sync and backup — or continue with everything kept on this device.',
                     textAlign: TextAlign.center,
                     style: tt.bodyMedium?.copyWith(color: ext.textSecondary, height: 1.4),
                   ),

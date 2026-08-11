@@ -15,6 +15,7 @@ import 'package:uuid/uuid.dart';
 import '../../features/medication/models/medicine.dart';
 import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/medication/services/vitals_storage_service.dart';
+import '../../features/diary/services/diary_storage_service.dart';
 import '../../features/focus/services/focus_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/period/services/period_service.dart';
@@ -117,6 +118,21 @@ class CleanStorageService {
   
   static Future<void> setFirstLaunchComplete() async {
     await setAppPreference('isFirstLaunch', false);
+  }
+
+  /// Explicit consent for uploading health data to Firestore.
+  ///
+  /// Defaults to FALSE and is the single gate on every cloud upload. The app
+  /// tells users their data stays on the device; previously an anonymous
+  /// Firebase account was created on first launch and `main.dart` synced
+  /// medicines, water, and 60 days of steps/sleep for every user — including
+  /// people who chose "Continue as guest". Nothing may leave the device unless
+  /// the user turns this on.
+  static bool get cloudSyncEnabled =>
+      getAppPreference('cloudSyncEnabled', false) == true;
+
+  static Future<void> setCloudSyncEnabled(bool value) async {
+    await setAppPreference('cloudSyncEnabled', value);
   }
 
   // ============ REMINDERS (cached for sync access) ============
@@ -323,6 +339,18 @@ class CleanStorageService {
 
   static dynamic getAppPreference(String key, [dynamic defaultValue]) {
     return _appPreferencesCache[key] ?? defaultValue;
+  }
+
+  /// Forget a preference entirely, rather than writing a falsy value over it.
+  /// Used by one-time migrations that retire a setting (see [AiLegacyCleanup]) —
+  /// leaving a stale row behind would make `getAppPreference` keep returning it.
+  static Future<void> removeAppPreference(String key) async {
+    _appPreferencesCache.remove(key);
+    try {
+      await _coreDao.deletePreference(key);
+    } catch (e) {
+      debugPrint('Error removing preference $key: $e');
+    }
   }
 
   static Future<void> loadAppPreferences() async {
@@ -543,9 +571,10 @@ class CleanStorageService {
     final water = WaterService.listenToDailyData()?.value.values.toList() ??
         const <DailyWaterData>[];
     return {
-      // v4: adds a 'vitals' section (BP + glucose). Older backups simply omit
-      // sections and are restored non-destructively by importData.
-      'version': 4,
+      // v4: adds a 'vitals' section (BP + glucose, later weight). v5 adds
+      // 'diary'. Older backups simply omit sections and are restored
+      // non-destructively by importData.
+      'version': 5,
       'timestamp': DateTime.now().toIso8601String(),
       'settings': getUserSettings().toJson(),
       'medicines': await MedicineCleanStorageService.exportMedicinesJson(),
@@ -555,6 +584,7 @@ class CleanStorageService {
       'reminders': getReminders().map((r) => r.toJson()).toList(),
       'water': water.map((d) => d.toJson()).toList(),
       'vitals': await VitalsStorageService.exportJson(),
+      'diary': await DiaryStorageService.exportJson(),
       'preferences': Map<String, dynamic>.from(_appPreferencesCache),
     };
   }
@@ -578,6 +608,46 @@ class CleanStorageService {
   /// and stats in memory for the current process and re-persists them on its
   /// next save, so a complete focus reset only takes full effect after an app
   /// restart. Everything backed purely by Drift/preferences is cleared here.
+  /// Clears ONLY the tables that [importData] is able to put back.
+  ///
+  /// A destructive restore used to call [clearAllPersistentData], which wipes
+  /// 18 tables — but the backup format covers far fewer. Everything in the gap
+  /// was deleted with nothing to restore it, while the UI reported "Backup
+  /// restored successfully":
+  ///
+  ///   * medicineLogs        — ALL dose/adherence history (exportMedicinesJson
+  ///                           serialises medicines only; the logs-carrying
+  ///                           exportAllMedicineData has no callers)
+  ///   * periodDays / menstrualCycles / periodSettingsTable
+  ///   * stepDailyData / stepManualEntries  — incl. hand-typed entries
+  ///   * sleepSessions / healthProfiles
+  ///   * enhancedWaterLogs / waterAchievements — per-drink history; the day
+  ///                           totals restore, the individual logs do not
+  ///
+  /// The rollback snapshot uses the same lossy export, so the failure path
+  /// could not recover them either. Restoring a backup must never destroy data
+  /// the backup does not contain.
+  ///
+  /// If [exportAllData]/[importData] are ever extended to cover more tables,
+  /// add them here in the same change — the two lists must stay in sync.
+  static Future<void> clearRestorableData() async {
+    final db = database;
+    try {
+      await db.delete(db.reminders).go();
+      await db.delete(db.enhancedMedicines).go();
+      await db.delete(db.dailyWaterDataTable).go();
+      await db.delete(db.bloodPressureReadings).go();
+      await db.delete(db.glucoseReadings).go();
+      await db.delete(db.weightReadings).go();
+      await db.delete(db.moodEntries).go();
+      await db.delete(db.diaryEntries).go();
+      debugPrint('✓ Restorable data cleared (backup-covered tables only)');
+    } catch (e) {
+      debugPrint('Error clearing restorable data: $e');
+      rethrow;
+    }
+  }
+
   static Future<void> clearAllPersistentData() async {
     final db = database;
     try {
@@ -598,9 +668,32 @@ class CleanStorageService {
       await db.delete(db.stepManualEntries).go();
       await db.delete(db.sleepSessions).go();
       await db.delete(db.healthProfiles).go();
-      // AI: user-curated assistant memories (the only personal AI data). The
-      // curated knowledge base is non-personal + re-seeds, so it's left intact.
-      await db.delete(db.assistantMemories).go();
+      // Vitals — these were previously left behind entirely, so "Delete all
+      // data" silently kept every blood-pressure and blood-sugar reading.
+      await db.delete(db.bloodPressureReadings).go();
+      await db.delete(db.glucoseReadings).go();
+      // Same gap, caught before shipping this time: weight/mood/diary.
+      await db.delete(db.weightReadings).go();
+      await db.delete(db.moodEntries).go();
+      await db.delete(db.diaryEntries).go();
+
+      // Residue from the removed AI feature: its Drift tables went in schema v8,
+      // but the chat transcript and engine settings live in `app_preferences`,
+      // which survives. Without this the deleted assistant's conversation is
+      // still loaded every launch and still uploaded inside every cloud backup.
+      for (final k in const [
+        'aiChatThread',
+        'aiProvider',
+        'aiHost',
+        'aiModel',
+        'aiOffDeviceConsent',
+        'aiDailyCallCount',
+        'aiDailyCallDate',
+        'aiMemoryEnabled',
+        'aiAssistantTone',
+      ]) {
+        await removeAppPreference(k);
+      }
 
       // Focus state persisted as app-preference JSON (focus* keys). App config
       // (theme, haptics, onboarding flags) is intentionally left untouched.
@@ -646,14 +739,21 @@ class CleanStorageService {
     }
     try {
       if (clearExisting) {
-        await clearAllPersistentData();
+        // Only the backup-covered tables. Using clearAllPersistentData() here
+        // deleted dose history, period history, sleep/step entries and
+        // per-drink water logs that the backup cannot restore — permanently,
+        // while the UI said "Backup restored successfully".
+        await clearRestorableData();
       }
       await importData(data);
     } catch (e) {
       debugPrint('Restore failed: $e — attempting rollback');
-      if (snapshot != null) {
+      // Roll back ONLY when we were the ones who cleared. A non-destructive
+      // restore (clearExisting == false) is a pure merge that deleted nothing,
+      // so wiping here would destroy strictly more than the failure did.
+      if (snapshot != null && clearExisting) {
         try {
-          await clearAllPersistentData();
+          await clearRestorableData();
           await importData(snapshot);
           debugPrint('✓ Rolled back to pre-restore snapshot');
         } catch (rollbackError) {
@@ -720,6 +820,14 @@ class CleanStorageService {
               Map<String, dynamic>.from(data['vitals'] as Map));
         } catch (e) {
           debugPrint('Import vitals failed: $e');
+        }
+      }
+      // Diary (v5+). Missing key → leave existing entries intact.
+      if (data['diary'] is List) {
+        try {
+          await DiaryStorageService.importJson(data['diary'] as List);
+        } catch (e) {
+          debugPrint('Import diary failed: $e');
         }
       }
       if (data['preferences'] is Map) {

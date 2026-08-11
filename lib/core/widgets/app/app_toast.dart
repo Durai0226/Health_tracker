@@ -77,13 +77,14 @@ extension AppToastX on BuildContext {
 }
 
 Duration _defaultDuration(AppToastVariant v, bool hasAction) {
-  // WCAG 2.2.1: give actionable toasts enough time to find + hit the action.
+  // M3 snackbars must stay up 4–10s; WCAG 2.2.1 additionally asks that
+  // actionable toasts give enough time to find + hit the action.
   if (hasAction) return const Duration(seconds: 7);
   switch (v) {
     case AppToastVariant.success:
-      return const Duration(seconds: 3);
+      return const Duration(seconds: 4);
     case AppToastVariant.info:
-      return const Duration(milliseconds: 3500);
+      return const Duration(seconds: 4);
     case AppToastVariant.warning:
       return const Duration(seconds: 4);
     case AppToastVariant.error:
@@ -204,7 +205,9 @@ class _AppToastCard extends StatelessWidget {
                           color: (title != null && title!.isNotEmpty)
                               ? ext.textSecondary
                               : ext.textPrimary),
-                      maxLines: 3,
+                      // M3 caps a snackbar at two lines of text; the optional
+                      // title above already consumes one of them.
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],

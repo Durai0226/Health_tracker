@@ -1,5 +1,20 @@
 import 'medicine_enums.dart';
 
+/// Whole CALENDAR days from [from] to [to], time-of-day ignored.
+///
+/// Must NOT be `to.difference(from).inDays` on local DateTimes: a local day is
+/// 23 or 25 hours long across a DST transition, so an elapsed-time diff
+/// truncates to one day fewer (spring forward) or reports one day too many
+/// after 25h spans accumulate. That off-by-one is load-bearing here — it
+/// decides whether a fixed-duration course is still active, which day of an
+/// every-X-days parity or an on/off cycle a date falls on, and which titration
+/// step applies. Anchoring both ends at UTC midnight removes DST entirely
+/// while preserving the civil (local calendar) date.
+int _calendarDaysBetween(DateTime from, DateTime to) =>
+    DateTime.utc(to.year, to.month, to.day)
+        .difference(DateTime.utc(from.year, from.month, from.day))
+        .inDays;
+
 /// Represents a single scheduled time for medication
 class ScheduledTime {
   final int hour;
@@ -7,12 +22,23 @@ class ScheduledTime {
   final String? label; // e.g., "Morning", "Afternoon", "Evening", "Bedtime"
   final double dosageAmount;
 
+  /// Opt-in reminder window, in minutes, starting at [hour]:[minute]. Null
+  /// (the default) means an exact-time reminder — nothing about existing
+  /// schedules changes unless a user explicitly turns this on for a dose.
+  /// When set, up to 3 nudges fire across the window (start/mid/end) instead
+  /// of one reminder at the exact minute — see reminder_slot_grouping.dart's
+  /// windowNudgeMinutes for the placement logic.
+  final int? windowMinutes;
+
   ScheduledTime({
     required this.hour,
     required this.minute,
     this.label,
     this.dosageAmount = 1,
+    this.windowMinutes,
   });
+
+  bool get hasWindow => windowMinutes != null && windowMinutes! > 0;
 
   String get formattedTime {
     final h = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
@@ -30,6 +56,7 @@ class ScheduledTime {
     'minute': minute,
     'label': label,
     'dosageAmount': dosageAmount,
+    if (windowMinutes != null) 'windowMinutes': windowMinutes,
   };
 
   factory ScheduledTime.fromJson(Map<String, dynamic> json) => ScheduledTime(
@@ -37,6 +64,7 @@ class ScheduledTime {
     minute: json['minute'] ?? 0,
     label: json['label'],
     dosageAmount: (json['dosageAmount'] ?? 1).toDouble(),
+    windowMinutes: json['windowMinutes'],
   );
 
   ScheduledTime copyWith({
@@ -44,12 +72,60 @@ class ScheduledTime {
     int? minute,
     String? label,
     double? dosageAmount,
+    int? windowMinutes,
+    bool clearWindow = false,
   }) {
     return ScheduledTime(
       hour: hour ?? this.hour,
       minute: minute ?? this.minute,
       label: label ?? this.label,
       dosageAmount: dosageAmount ?? this.dosageAmount,
+      windowMinutes:
+          clearWindow ? null : (windowMinutes ?? this.windowMinutes),
+    );
+  }
+}
+
+/// A single dose-escalation step for a titrating medicine — e.g. "Week 2
+/// onward: 50mg" instead of one fixed dose forever. Opt-in via
+/// [MedicineSchedule.titrationSteps]; a schedule with no steps is completely
+/// unaffected — see [MedicineSchedule.effectiveDosageAmount].
+class TitrationStep {
+  /// Days since the schedule's [MedicineSchedule.startDate] (day 0) at which
+  /// this step's [dosageAmount] takes over. Steps are evaluated by picking
+  /// the one with the LARGEST offset that is still <= the elapsed days — see
+  /// [MedicineSchedule.effectiveDosageAmount].
+  final int startDayOffset;
+  final double dosageAmount;
+  final String? label; // e.g., "Week 2"
+
+  TitrationStep({
+    required this.startDayOffset,
+    required this.dosageAmount,
+    this.label,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'startDayOffset': startDayOffset,
+    'dosageAmount': dosageAmount,
+    'label': label,
+  };
+
+  factory TitrationStep.fromJson(Map<String, dynamic> json) => TitrationStep(
+    startDayOffset: json['startDayOffset'] ?? 0,
+    dosageAmount: (json['dosageAmount'] ?? 0).toDouble(),
+    label: json['label'],
+  );
+
+  TitrationStep copyWith({
+    int? startDayOffset,
+    double? dosageAmount,
+    String? label,
+  }) {
+    return TitrationStep(
+      startDayOffset: startDayOffset ?? this.startDayOffset,
+      dosageAmount: dosageAmount ?? this.dosageAmount,
+      label: label ?? this.label,
     );
   }
 }
@@ -70,6 +146,18 @@ class MedicineSchedule {
   final bool isPRN; // As-needed medication
   final int? maxDailyDoses; // For PRN meds
   final int? minHoursBetweenDoses; // For PRN meds
+  // Opt-in weekend override for fixed-time schedules (onceDaily, twiceDaily,
+  // etc.) — e.g. "sleep in and take it later on Sat/Sun". Null/empty means no
+  // override, so nothing about an existing schedule changes unless a user
+  // explicitly turns this on. Deliberately does NOT affect everyXHours (an
+  // anchor+interval, not a day-shaped list) or specificDays/everyXDays/
+  // cyclical/asNeeded, which already have their own day semantics.
+  final List<ScheduledTime>? weekendTimes;
+  // Opt-in dose-escalation ("titration") schedule — e.g. "Week 1: 25mg, Week
+  // 2: 50mg, Week 3 onward: 100mg" instead of one fixed dose forever.
+  // Null/empty means no titration, so nothing about an existing schedule
+  // changes unless a user explicitly adds steps — see [effectiveDosageAmount].
+  final List<TitrationStep>? titrationSteps;
 
   MedicineSchedule({
     required this.frequencyType,
@@ -86,7 +174,44 @@ class MedicineSchedule {
     this.isPRN = false,
     this.maxDailyDoses,
     this.minHoursBetweenDoses,
+    this.weekendTimes,
+    this.titrationSteps,
   });
+
+  bool get hasWeekendOverride =>
+      weekendTimes != null && weekendTimes!.isNotEmpty;
+
+  bool get isTitrating => titrationSteps != null && titrationSteps!.isNotEmpty;
+
+  /// The dosage amount that applies on [date] for a titrating medicine — e.g.
+  /// "Week 1: 25mg, Week 2: 50mg, Week 3 onward: 100mg" instead of one fixed
+  /// dose forever. Returns [baseDosageAmount] UNCHANGED when [titrationSteps]
+  /// is null/empty (existing medicines are completely unaffected) or when
+  /// [startDate] is unset or [date] falls before the first step's offset.
+  /// Otherwise picks the step with the LARGEST [TitrationStep.startDayOffset]
+  /// that is still <= the days elapsed since [startDate] (day 0).
+  ///
+  /// Both sides are reduced to CALENDAR days before diffing — see
+  /// [_calendarDaysBetween] for why a raw `difference().inDays` between two
+  /// local DateTimes is off by one across a DST transition (a titration step
+  /// would otherwise escalate the dose a day late).
+  double effectiveDosageAmount(DateTime date, double baseDosageAmount) {
+    final steps = titrationSteps;
+    final start = startDate;
+    if (steps == null || steps.isEmpty || start == null) {
+      return baseDosageAmount;
+    }
+    final elapsedDays = _calendarDaysBetween(start, date);
+
+    TitrationStep? best;
+    for (final step in steps) {
+      if (step.startDayOffset <= elapsedDays &&
+          (best == null || step.startDayOffset > best.startDayOffset)) {
+        best = step;
+      }
+    }
+    return best?.dosageAmount ?? baseDosageAmount;
+  }
 
   bool get isOngoing => endDate == null && durationDays == null;
 
@@ -94,7 +219,9 @@ class MedicineSchedule {
     // Normalize to date-only. The alarm isolate and the timeline pass a
     // DateTime carrying a time-of-day; using it raw makes `difference().inDays`
     // truncate to the wrong day count (off-by-one for every-X-days / cyclical /
-    // duration) and makes the end-date exclusive. Compare whole calendar days.
+    // duration) and makes the end-date exclusive. Day OFFSETS additionally go
+    // through [_calendarDaysBetween] rather than `difference().inDays`, because
+    // a DST transition inside the span makes elapsed time drift a whole day.
     final d = DateTime(date.year, date.month, date.day);
     final start = startDate == null
         ? null
@@ -106,7 +233,7 @@ class MedicineSchedule {
       if (d.isAfter(end)) return false; // end date is inclusive
     }
     if (durationDays != null && start != null) {
-      final daysSinceStart = d.difference(start).inDays;
+      final daysSinceStart = _calendarDaysBetween(start, d);
       if (daysSinceStart >= durationDays!) return false;
     }
 
@@ -119,7 +246,7 @@ class MedicineSchedule {
     // Check cyclical
     if (frequencyType == FrequencyType.cyclical &&
         cycleDaysOn != null && cycleDaysOff != null && start != null) {
-      final daysSinceStart = d.difference(start).inDays;
+      final daysSinceStart = _calendarDaysBetween(start, d);
       final cycleLength = cycleDaysOn! + cycleDaysOff!;
       final dayInCycle = daysSinceStart % cycleLength;
       return dayInCycle < cycleDaysOn!;
@@ -128,7 +255,7 @@ class MedicineSchedule {
     // Check interval days
     if (frequencyType == FrequencyType.everyXDays &&
         intervalDays != null && start != null) {
-      final daysSinceStart = d.difference(start).inDays;
+      final daysSinceStart = _calendarDaysBetween(start, d);
       return daysSinceStart % intervalDays! == 0;
     }
 
@@ -161,8 +288,12 @@ class MedicineSchedule {
     }
 
     // Day-based filtering (specificDays / everyXDays / cyclical) is handled by
-    // isActiveOnDate above; on active days the fixed [times] are the slots.
-    return times.map((t) => t.toDateTime(date)).toList()
+    // isActiveOnDate above; on active days the fixed [times] are the slots —
+    // unless a weekend override applies on a Sat/Sun.
+    final isWeekend = date.weekday == DateTime.saturday ||
+        date.weekday == DateTime.sunday;
+    final effectiveTimes = (isWeekend && hasWeekendOverride) ? weekendTimes! : times;
+    return effectiveTimes.map((t) => t.toDateTime(date)).toList()
       ..sort((a, b) => a.compareTo(b));
   }
 
@@ -212,6 +343,10 @@ class MedicineSchedule {
     'isPRN': isPRN,
     'maxDailyDoses': maxDailyDoses,
     'minHoursBetweenDoses': minHoursBetweenDoses,
+    if (weekendTimes != null)
+      'weekendTimes': weekendTimes!.map((t) => t.toJson()).toList(),
+    if (titrationSteps != null)
+      'titrationSteps': titrationSteps!.map((t) => t.toJson()).toList(),
   };
 
   factory MedicineSchedule.fromJson(Map<String, dynamic> json) => MedicineSchedule(
@@ -229,6 +364,12 @@ class MedicineSchedule {
     isPRN: json['isPRN'] ?? false,
     maxDailyDoses: json['maxDailyDoses'],
     minHoursBetweenDoses: json['minHoursBetweenDoses'],
+    weekendTimes: (json['weekendTimes'] as List?)
+        ?.map((t) => ScheduledTime.fromJson(t))
+        .toList(),
+    titrationSteps: (json['titrationSteps'] as List?)
+        ?.map((t) => TitrationStep.fromJson(t))
+        .toList(),
   );
 
   MedicineSchedule copyWith({
@@ -246,6 +387,14 @@ class MedicineSchedule {
     bool? isPRN,
     int? maxDailyDoses,
     int? minHoursBetweenDoses,
+    List<ScheduledTime>? weekendTimes,
+    // See EnhancedMedicine.copyWith's clearDependentId doc — same reason:
+    // turning the weekend override back off needs a real clear, not a no-op.
+    bool clearWeekendOverride = false,
+    List<TitrationStep>? titrationSteps,
+    // Same reason as clearWeekendOverride — turning titration back off needs
+    // a real clear, not a no-op.
+    bool clearTitrationSteps = false,
   }) {
     return MedicineSchedule(
       frequencyType: frequencyType ?? this.frequencyType,
@@ -260,8 +409,13 @@ class MedicineSchedule {
       cycleDaysOff: cycleDaysOff ?? this.cycleDaysOff,
       mealTiming: mealTiming ?? this.mealTiming,
       isPRN: isPRN ?? this.isPRN,
+      weekendTimes:
+          clearWeekendOverride ? null : (weekendTimes ?? this.weekendTimes),
       maxDailyDoses: maxDailyDoses ?? this.maxDailyDoses,
       minHoursBetweenDoses: minHoursBetweenDoses ?? this.minHoursBetweenDoses,
+      titrationSteps: clearTitrationSteps
+          ? null
+          : (titrationSteps ?? this.titrationSteps),
     );
   }
 

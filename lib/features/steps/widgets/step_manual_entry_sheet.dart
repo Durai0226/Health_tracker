@@ -58,6 +58,9 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
   static const _presets = [250, 500, 1000, 2500, 5000];
   static const _maxDaysBack = 7;
 
+  /// Magnitude ceiling for one entry, in either direction.
+  static const _maxSteps = 50000;
+
   @override
   void initState() {
     super.initState();
@@ -77,13 +80,13 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
   // ── Value math (wiring preserved) ─────────────────────────────────────────
   void _bump(int delta) {
     HapticFeedback.selectionClick();
-    setState(() => _amount = (_amount + delta).clamp(-50000, 50000));
+    setState(() => _amount = (_amount + delta).clamp(-_maxSteps, _maxSteps));
   }
 
   /// Silent apply used by the long-press repeater (haptic on start only, so a
   /// held stepper does not machine-gun the taptic engine).
   void _applyDelta(int delta) {
-    setState(() => _amount = (_amount + delta).clamp(-50000, 50000));
+    setState(() => _amount = (_amount + delta).clamp(-_maxSteps, _maxSteps));
   }
 
   void _startRepeat(int delta) {
@@ -103,6 +106,10 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
 
   /// Tap-to-edit: type an exact figure that writes back to the same [_amount]
   /// source of truth, so presets / CTA / disable logic keep working unchanged.
+  ///
+  /// This is a MAGNITUDE editor — it is seeded with `_amount.abs()` and a typed
+  /// figure is always a positive step count. Subtracting stays on the minus
+  /// stepper, which is the only signed control the sheet advertises.
   Future<void> _openEditor() async {
     final ext = AppColorsExt.of(context);
     final s = ext.steps;
@@ -112,30 +119,62 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
     final result = await showDialog<int>(
       context: context,
       builder: (dialogCtx) {
-        void submit() =>
-            Navigator.of(dialogCtx).pop(int.tryParse(controller.text.trim()));
-        return AlertDialog(
-          backgroundColor: ext.surfaceElevated,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.brCard),
-          title: Text('Enter steps', style: tt.titleLarge),
-          content: AppTextField(
-            controller: controller,
-            accent: s,
-            hint: 'e.g. 3000',
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => submit(),
-          ),
-          actions: [
-            AppButton(
-              label: 'Cancel',
-              variant: AppButtonVariant.ghost,
-              accent: s,
-              onPressed: () => Navigator.of(dialogCtx).pop(),
-            ),
-            AppButton(label: 'Set', accent: s, onPressed: submit),
-          ],
+        // Bare `int.tryParse` accepted '0' and '-5': '0' popped the dialog onto
+        // a permanently disabled CTA with no explanation, and a negative
+        // silently flipped the whole sheet into subtract mode with a figure the
+        // user never chose. An out-of-range value is now refused in place
+        // instead of being quietly clamped to a different number.
+        String? error;
+        return StatefulBuilder(
+          builder: (_, setDialogState) {
+            void submit() {
+              final value = int.tryParse(controller.text.trim());
+              final message = value == null
+                  ? 'Enter a number of steps'
+                  : value <= 0
+                      ? 'Enter a number greater than 0'
+                      : value > _maxSteps
+                          ? 'Enter ${_formatUnsigned(_maxSteps)} or less'
+                          : null;
+              if (message != null) {
+                setDialogState(() => error = message);
+                return;
+              }
+              Navigator.of(dialogCtx).pop(value);
+            }
+
+            return AlertDialog(
+              backgroundColor: ext.surfaceElevated,
+              shape:
+                  const RoundedRectangleBorder(borderRadius: AppRadius.brCard),
+              title: Text('Enter steps', style: tt.titleLarge),
+              content: AppTextField(
+                controller: controller,
+                accent: s,
+                // WCAG 3.3.2 — the field was hint-only, so its one piece of
+                // identification vanished as soon as a digit was typed.
+                label: 'Steps',
+                hint: 'e.g. 3000',
+                errorText: error,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onChanged: error == null
+                    ? null
+                    : (_) => setDialogState(() => error = null),
+                onSubmitted: (_) => submit(),
+              ),
+              actions: [
+                AppButton(
+                  label: 'Cancel',
+                  variant: AppButtonVariant.ghost,
+                  accent: s,
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                ),
+                AppButton(label: 'Set', accent: s, onPressed: submit),
+              ],
+            );
+          },
         );
       },
     );
@@ -143,11 +182,16 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
     controller.dispose();
     if (result != null) {
       HapticFeedback.selectionClick();
-      setState(() => _amount = result.clamp(-50000, 50000));
+      // Validated to 1.._maxSteps above; the clamp is belt-and-braces.
+      setState(() => _amount = result.clamp(-_maxSteps, _maxSteps));
     }
   }
 
   Future<void> _submit() async {
+    // A negative _amount is deliberate here (a correction for steps the sensor
+    // over-counted) — see _ctaLabel's "Adjust steps" and
+    // StepService.addManualStepsForDate, which stores it as a signed entry.
+    // Zero is the only meaningless value, and it is also gated on the CTA.
     if (_amount == 0 || _saving) return;
     setState(() => _saving = true);
     final note = _noteController.text.trim();

@@ -1,4 +1,4 @@
-import '../../../core/ai/vitals_analyzer.dart';
+import '../../../core/health/vitals_analyzer.dart';
 
 /// An immutable blood-glucose reading. Value is stored canonically as integer
 /// mg/dL; the display unit is a user preference applied only at render. Class is
@@ -35,6 +35,10 @@ class GlucoseReading {
   bool get isEmergencyLow => VitalsAnalyzer.isGlucoseEmergencyLow(valueMgdl);
 
   GlucoseReading copyWith({
+    String? dependentId,
+    // See EnhancedMedicine.copyWith's clearDependentId doc — same reason:
+    // reassigning a reading back to self needs a real clear, not a no-op.
+    bool clearDependentId = false,
     int? valueMgdl,
     GlucoseContext? context,
     DateTime? takenAt,
@@ -46,7 +50,7 @@ class GlucoseReading {
   }) {
     return GlucoseReading(
       id: id,
-      dependentId: dependentId,
+      dependentId: clearDependentId ? null : (dependentId ?? this.dependentId),
       valueMgdl: valueMgdl ?? this.valueMgdl,
       context: context ?? this.context,
       takenAt: takenAt ?? this.takenAt,

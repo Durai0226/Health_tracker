@@ -7,6 +7,7 @@ class EnhancedMedicines extends Table {
   TextColumn get genericName => text().nullable()();
   TextColumn get brandName => text().nullable()();
   IntColumn get dosageForm => integer()(); // DosageForm enum
+  IntColumn get routeIndex => integer().nullable()(); // AdministrationRoute enum
   RealColumn get strength => real().withDefault(const Constant(1.0))();
   TextColumn get strengthUnit => text().withDefault(const Constant('mg'))();
   // The user-entered clinical strength string (e.g. "500mg"). Kept separate from
@@ -58,6 +59,10 @@ class MedicineLogs extends Table {
   BoolColumn get isTaken => boolean().withDefault(const Constant(false))();
   BoolColumn get isSkipped => boolean().withDefault(const Constant(false))();
   BoolColumn get isMissed => boolean().withDefault(const Constant(false))();
+  // Logged in advance of scheduledTime (travel/timezone, pre-filled pillbox).
+  // A 4th independent flag, not an enum index — status here is reconstructed
+  // from these booleans, not persisted as MedicineStatus.index.
+  BoolColumn get isPreLogged => boolean().withDefault(const Constant(false))();
   RealColumn get dosageTaken => real().withDefault(const Constant(1.0))();
   IntColumn get skipReason => integer().nullable()(); // SkipReason enum
   TextColumn get skipNote => text().nullable()();

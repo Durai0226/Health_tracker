@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/active_profile_service.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/dependent_profile.dart';
 import '../../services/medicine_storage_service.dart';
 import 'add_edit_dependent_screen.dart';
 
+/// Manage household members ("Family & caregivers" in Settings), or — when
+/// [isSelectionMode] is true — pick which one is currently active (the Today
+/// header's profile switcher pushes this and awaits the tapped profile).
+/// Either way the list always marks whichever profile
+/// [ActiveProfileService] currently has selected.
 class DependentListScreen extends StatefulWidget {
   final bool isSelectionMode;
 
@@ -28,6 +34,11 @@ class _DependentListScreenState extends State<DependentListScreen> {
     setState(() => _isLoading = true);
     try {
       final dependents = await MedicineCleanStorageService.getAllDependents();
+      // Self first, then alphabetical — self is always the anchor profile.
+      dependents.sort((a, b) {
+        if (a.isSelf != b.isSelf) return a.isSelf ? -1 : 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
       if (mounted) {
         setState(() {
           _dependents = dependents;
@@ -54,241 +65,235 @@ class _DependentListScreenState extends State<DependentListScreen> {
   }
 
   Future<void> _deleteDependent(DependentProfile dependent) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Profile'),
-        content: Text('Are you sure you want to delete ${dependent.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final ext = AppColorsExt.of(context);
+    final confirm = await AppBottomSheet.confirm(
+      context,
+      title: 'Delete ${dependent.name}?',
+      message:
+          'This removes their profile. Their medicines and history stay on '
+          'device but will no longer be attributed to them.',
+      confirmLabel: 'Delete',
+      danger: true,
+      icon: Symbols.delete_rounded,
     );
+    if (confirm != true) return;
 
-    if (confirm == true) {
-      await MedicineCleanStorageService.deleteDependent(dependent.id);
-      _loadDependents();
+    await MedicineCleanStorageService.deleteDependent(dependent.id);
+    // A deleted profile can't stay "active" — fall back to self so nothing
+    // points at a dangling id.
+    if (ActiveProfileService().activeDependentId == dependent.id) {
+      await ActiveProfileService().setActiveDependent(null);
     }
+    _loadDependents();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: ext.surfaceElevated,
+          content: Text('${dependent.name} removed',
+              style: TextStyle(color: ext.textPrimary)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _selectActive(DependentProfile dependent) async {
+    if (widget.isSelectionMode) {
+      Navigator.pop(context, dependent);
+      return;
+    }
+    await ActiveProfileService().setActiveDependent(
+        dependent.isSelf ? null : dependent.id);
+    if (mounted) setState(() {}); // refresh the "current" badge
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AppColors.isDark(context);
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
 
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
-      appBar: AppBar(
-        title: Text(widget.isSelectionMode ? 'Select Family Member' : 'Family Profiles'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
-        actions: [
-          if (!widget.isSelectionMode)
-            IconButton(
-              icon: const Icon(Symbols.add_rounded),
-              onPressed: () => _navigateToAddEdit(),
-            ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _dependents.isEmpty
-              ? _buildEmptyState(isDark)
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _dependents.length,
-                  itemBuilder: (context, index) {
-                    final dependent = _dependents[index];
-                    return _buildDependentCard(dependent, isDark);
-                  },
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppHeader(
+              title: widget.isSelectionMode
+                  ? 'Switch profile'
+                  : 'Family & caregivers',
+              icon: Symbols.group_rounded,
+              accent: med,
+              leading: IconButton(
+                icon: Icon(Symbols.arrow_back_rounded, color: ext.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              ),
+              // Always offered, even while switching — someone realizing they
+              // need to add a new family member shouldn't have to back out
+              // to Settings first to find the add flow.
+              actions: [
+                AppIconButton(
+                  icon: Symbols.person_add_rounded,
+                  accent: med,
+                  tooltip: 'Add family member',
+                  onPressed: () => _navigateToAddEdit(),
                 ),
-      floatingActionButton: widget.isSelectionMode
-          ? FloatingActionButton(
-              onPressed: () => _navigateToAddEdit(),
-              backgroundColor: AppColors.primary,
-              child: const Icon(Symbols.add_rounded, color: Colors.white),
-            )
-          : null,
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Symbols.people_rounded,
-            size: 64,
-            color: isDark ? Colors.white24 : AppColors.textLight,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No family profiles yet',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white70 : AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add family members to track their meds',
-            style: TextStyle(
-              color: isDark ? Colors.white38 : AppColors.textLight,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _navigateToAddEdit(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            icon: const Icon(Symbols.add_rounded, color: Colors.white),
-            label: const Text('Add Profile', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDependentCard(DependentProfile dependent, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.border.withOpacity(0.5),
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.isSelectionMode
-              ? () => Navigator.pop(context, dependent)
-              : () => _navigateToAddEdit(dependent: dependent),
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      dependent.relationship.icon,
-                      style: const TextStyle(fontSize: 24),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        dependent.name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              dependent.relationship.displayName,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ),
-                          if (dependent.displayAge.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '• ${dependent.displayAge}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.white38 : AppColors.textLight,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (!widget.isSelectionMode)
-                  PopupMenuButton<String>(
-                    icon: Icon(
-                      Symbols.more_vert_rounded,
-                      color: isDark ? Colors.white38 : AppColors.textLight,
-                    ),
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _navigateToAddEdit(dependent: dependent);
-                      } else if (value == 'delete') {
-                        _deleteDependent(dependent);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Symbols.edit_rounded, size: 20),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Symbols.delete_rounded, color: AppColors.error, size: 20),
-                            SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: AppColors.error)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
               ],
             ),
-          ),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListenableBuilder(
+                      listenable: ActiveProfileService(),
+                      builder: (context, _) => ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                            AppSpacing.sm, AppSpacing.gutter, AppSpacing.xxl),
+                        itemCount: _dependents.length,
+                        itemBuilder: (context, index) =>
+                            _buildDependentCard(ext, med, _dependents[index]),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDependentCard(
+      AppColorsExt ext, AccentSwatch med, DependentProfile dependent) {
+    final isActive = dependent.isSelf
+        ? ActiveProfileService().isSelfActive
+        : ActiveProfileService().activeDependentId == dependent.id;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppCard(
+        onTap: () => widget.isSelectionMode
+            ? _selectActive(dependent)
+            : _navigateToAddEdit(dependent: dependent),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(color: med.container, shape: BoxShape.circle),
+              child: Center(
+                child: Text(dependent.relationship.icon,
+                    style: const TextStyle(fontSize: 22)),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(dependent.name,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(color: ext.textPrimary),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      if (isActive) ...[
+                        const SizedBox(width: AppSpacing.xs),
+                        Icon(Symbols.check_circle_rounded, size: 18, color: med.strong),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      AppChip(
+                        label: dependent.relationship.displayName,
+                        accent: med,
+                      ),
+                      if (dependent.displayAge.isNotEmpty) ...[
+                        const SizedBox(width: AppSpacing.xs),
+                        Text('· ${dependent.displayAge}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: ext.textTertiary)),
+                      ],
+                    ],
+                  ),
+                  // A caregiver scanning this list (e.g. before giving an OTC
+                  // medicine outside the app's own add-medicine flow, where
+                  // the allergy check runs) previously had no way to see
+                  // recorded allergies without opening the edit form and
+                  // reading the raw comma-separated field.
+                  if (dependent.allergies != null &&
+                      dependent.allergies!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Symbols.warning_rounded,
+                            size: 14, color: ext.warning.strong),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Allergies: ${dependent.allergies!.join(', ')}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: ext.warning.strong),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (!widget.isSelectionMode)
+              PopupMenuButton<String>(
+                icon: Icon(Symbols.more_vert_rounded, color: ext.textTertiary),
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _navigateToAddEdit(dependent: dependent);
+                  } else if (value == 'delete') {
+                    _deleteDependent(dependent);
+                  } else if (value == 'switch') {
+                    _selectActive(dependent);
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (!isActive)
+                    const PopupMenuItem(
+                      value: 'switch',
+                      child: Row(children: [
+                        Icon(Symbols.swap_horiz_rounded, size: 20),
+                        SizedBox(width: 8),
+                        Text('Switch to this profile'),
+                      ]),
+                    ),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      Icon(Symbols.edit_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Edit'),
+                    ]),
+                  ),
+                  // Deleting "self" would remove the switcher's anchor entry
+                  // for no benefit — self can't be reassigned to anyone else.
+                  if (!dependent.isSelf)
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(children: [
+                        Icon(Symbols.delete_rounded, size: 20, color: ext.error.base),
+                        const SizedBox(width: 8),
+                        Text('Delete', style: TextStyle(color: ext.error.base)),
+                      ]),
+                    ),
+                ],
+              ),
+          ],
         ),
       ),
     );

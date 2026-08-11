@@ -10,12 +10,9 @@ class EnvConfig {
   // Secure Storage Keys
   static const String secureKeyStorageKey = 'hive_encryption_key';
   static const String userTokenKey = 'user_auth_token';
-  static const String llmApiKeyStorageKey = 'llm_api_key';
 
-  /// Managed AI proxy (Phase C). When set to your deployed Firebase Cloud
-  /// Function URL, the app calls the proxy (which holds the provider key
-  /// server-side + enforces auth/quota) instead of a direct provider key.
-  /// Override at build time: --dart-define=AI_PROXY_URL=https://…/aiProxy
-  static const String aiProxyUrl =
-      String.fromEnvironment('AI_PROXY_URL', defaultValue: '');
+  /// The user's own AI provider key (Groq / Gemini / custom), held in
+  /// flutter_secure_storage. The app never ships a key of its own — see
+  /// `lib/core/ai/AI_ENGINES.md`.
+  static const String llmApiKeyStorageKey = 'llm_api_key';
 }

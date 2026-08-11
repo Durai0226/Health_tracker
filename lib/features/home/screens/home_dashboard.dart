@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/auth_service.dart';
-import '../../../core/ai/ai_assistant.dart';
+import '../../medication/models/dependent_profile.dart';
+import '../../medication/screens/dependents/dependent_list_screen.dart';
+import '../../../core/health/coach_text.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/today_schedule_service.dart';
+import '../../medication/services/dose_undo.dart';
 import '../../medication/screens/nunito_take_medication_sheet.dart';
 import '../../medication/models/medicine_log.dart';
 import '../../water/services/water_service.dart';
@@ -17,7 +21,6 @@ import '../../sleep/services/sleep_service.dart';
 import '../../reminders/models/reminder_model.dart';
 import '../../reminders/screens/add_reminder_screen.dart';
 import '../../settings/screens/settings_screen.dart';
-import '../../insights/screens/assistant_screen.dart';
 import '../../insights/screens/proactive_nudge.dart';
 import '../widgets/log_something_sheet.dart';
 import '../../../widgets/smart_ad_widgets.dart';
@@ -49,8 +52,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   // Medicine data is async; memoize it against the service revision so it only
   // re-queries when medicine data actually changed (a dose logged, a medicine
-  // added/removed, …) rather than on every unrelated rebuild.
+  // added/removed, …) rather than on every unrelated rebuild. Also keyed on
+  // the active profile: getAllMedicines()/getDailySummaryAsync() are scoped to
+  // whichever profile is active, but switching profiles isn't itself a
+  // medicine mutation, so it never bumps `revision` — without this, switching
+  // from "Me" to "Kid A" via the header chip would leave this hero/streak
+  // showing Mom's data until an unrelated write happened to fire.
   int _medRev = -1;
+  String? _medProfile;
   Future<_MedicineHomeData>? _medFuture;
 
   // The daily-briefing sentence is loaded once (like the old AiInsightCard) and
@@ -59,8 +68,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
 
   Future<_MedicineHomeData> _medicineData(int rev) {
-    if (_medFuture == null || _medRev != rev) {
+    final profile = ActiveProfileService().activeDependentId;
+    if (_medFuture == null || _medRev != rev || _medProfile != profile) {
       _medRev = rev;
+      _medProfile = profile;
       _medFuture = _loadMedicineData();
     }
     return _medFuture!;
@@ -116,8 +127,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// Open the take-medication sheet for a dose. The sheet self-persists and
   /// bumps [MedicineCleanStorageService.revision], so the hero + cards + roll-up
   /// all refresh automatically (they listen to that notifier).
+  ///
+  /// The result is NOT discarded: this is the flagship 2-tap path, and it used
+  /// to be the one place a dose could be logged with no way back. [DoseUndo]
+  /// confirms it with an Undo that also reverses the stock decrement.
   Future<void> _openTakeSheet(ScheduledDose dose) async {
-    await showModalBottomSheet<Map<String, dynamic>>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -126,30 +141,38 @@ class _HomeDashboardState extends State<HomeDashboard> {
         scheduledTime: dose.scheduledTime,
       ),
     );
+    if (!mounted) return;
+    DoseUndo.confirmSheetResult(context, result, dose.medicine.name);
   }
 
   // ---- shared live wiring + pillar maths -----------------------------------
 
   /// Wraps [child] in the exact notifier nesting the dashboard uses to stay live
-  /// while Home is parked in the shell's IndexedStack: medicine revision → focus
-  /// → water. [child] receives the current medicine revision for the future.
+  /// while Home is parked in the shell's IndexedStack: active profile →
+  /// medicine revision → focus → water. [child] receives the current medicine
+  /// revision for the future. The active-profile layer is what makes
+  /// switching profiles actually re-render this subtree — nothing else here
+  /// changes when only the active profile does.
   Widget _liveBuilder(AppColorsExt ext, Widget Function(int rev) child) {
     final waterListenable = WaterService.listenToDailyData();
-    return ValueListenableBuilder<int>(
-      valueListenable: MedicineCleanStorageService.revision,
-      builder: (context, rev, _) {
-        return ListenableBuilder(
-          listenable: _focus,
-          builder: (context, __) {
-            Widget content() => child(rev);
-            if (waterListenable == null) return content();
-            return ValueListenableBuilder<Map<String, DailyWaterData>>(
-              valueListenable: waterListenable,
-              builder: (context, ___, ____) => content(),
-            );
-          },
-        );
-      },
+    return ListenableBuilder(
+      listenable: ActiveProfileService(),
+      builder: (context, _) => ValueListenableBuilder<int>(
+        valueListenable: MedicineCleanStorageService.revision,
+        builder: (context, rev, _) {
+          return ListenableBuilder(
+            listenable: _focus,
+            builder: (context, __) {
+              Widget content() => child(rev);
+              if (waterListenable == null) return content();
+              return ValueListenableBuilder<Map<String, DailyWaterData>>(
+                valueListenable: waterListenable,
+                builder: (context, ___, ____) => content(),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -398,18 +421,28 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   stroke: 10,
                   accent: ext.brand,
                   animate: !MediaQuery.of(context).disableAnimations,
-                  center: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('$done',
-                          style: tt.headlineLarge?.copyWith(
-                              color: ext.mark(ext.brand),
-                              fontWeight: FontWeight.w800,
-                              fontFeatures: kTabular)),
-                      Text('OF 4',
-                          style: tt.labelSmall?.copyWith(
-                              color: ext.textTertiary, letterSpacing: 0.5)),
-                    ],
+                  // The ring is a FIXED 104px circle, so its label has to shrink
+                  // to fit rather than push out of the stroke at large Dynamic
+                  // Type. scaleDown never enlarges → default rendering unchanged.
+                  center: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('$done',
+                            maxLines: 1,
+                            softWrap: false,
+                            style: tt.headlineLarge?.copyWith(
+                                color: ext.mark(ext.brand),
+                                fontWeight: FontWeight.w800,
+                                fontFeatures: kTabular)),
+                        Text('OF 4',
+                            maxLines: 1,
+                            softWrap: false,
+                            style: tt.labelSmall?.copyWith(
+                                color: ext.textTertiary, letterSpacing: 0.5)),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.lg),
@@ -423,11 +456,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
                               color: ext.textPrimary,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
+                      // No line clamp: the card grows vertically, so at large
+                      // Dynamic Type this wraps instead of truncating to
+                      // "Keep going — you're b…". Copy is short and static.
                       Text(_rollupLine(done),
                           style: tt.bodyMedium
-                              ?.copyWith(color: ext.textSecondary),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
+                              ?.copyWith(color: ext.textSecondary)),
                       const SizedBox(height: AppSpacing.md),
                       AppButton(
                         label: 'Log something',
@@ -558,6 +592,35 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
+  /// The active profile's display name — "Me" for self, else whichever
+  /// dependent [ActiveProfileService] currently has selected. This is
+  /// deliberately separate from [name] above (the signed-in account's own
+  /// name): one is "who's signed in," the other is "whose medicines am I
+  /// looking at right now."
+  Future<String> _activeProfileLabel() async {
+    final activeId = ActiveProfileService().activeDependentId;
+    if (activeId == null) return 'Me';
+    try {
+      final deps = await MedicineCleanStorageService.getAllDependents();
+      final match = deps.where((d) => d.id == activeId).firstOrNull;
+      return match?.name ?? 'Me';
+    } catch (_) {
+      return 'Me';
+    }
+  }
+
+  Future<void> _openProfileSwitcher() async {
+    final selected = await Navigator.push<DependentProfile>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const DependentListScreen(isSelectionMode: true)),
+    );
+    if (selected != null) {
+      await ActiveProfileService()
+          .setActiveDependent(selected.isSelf ? null : selected.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
@@ -574,6 +637,18 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 greeting: '$_greeting · $_dateLabel',
                 title: name.isNotEmpty ? name : 'Welcome back',
                 accent: ext.brand,
+                leading: ListenableBuilder(
+                  listenable: ActiveProfileService(),
+                  builder: (context, _) => FutureBuilder<String>(
+                    future: _activeProfileLabel(),
+                    builder: (context, snap) => AppChip(
+                      label: snap.data ?? 'Me',
+                      icon: Symbols.person_rounded,
+                      accent: ext.brand,
+                      onTap: _openProfileSwitcher,
+                    ),
+                  ),
+                ),
                 actions: [
                   // Medicine streak pill — live via the revision notifier, shown
                   // only when the streak is > 0.
@@ -660,8 +735,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
           final p = _pillarStats(snapshot.data?.summary);
           final cells = <Widget>[
             _StaggeredKpi(
-              progress: p.medTotal == 0 ? 1 : p.medTaken / p.medTotal,
-              value: p.medTotal == 0 ? '—' : '${p.medTaken}/${p.medTotal}',
+              // Clamped, and the numerator capped, so a stray duplicate log can
+              // never render "3/2". Water/Focus already clamped; Meds and
+              // Reminders didn't.
+              progress: p.medTotal == 0
+                  ? 1
+                  : (p.medTaken / p.medTotal).clamp(0.0, 1.0),
+              value: p.medTotal == 0
+                  ? '—'
+                  : '${p.medTaken.clamp(0, p.medTotal)}/${p.medTotal}',
               label: 'Meds',
               accent: ext.medicine,
               muted: p.medTotal == 0,
@@ -686,8 +768,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
               delay: const Duration(milliseconds: 120),
             ),
             _StaggeredKpi(
-              progress: p.remTotal == 0 ? 1 : p.remDone / p.remTotal,
-              value: p.remTotal == 0 ? '—' : '${p.remDone}/${p.remTotal}',
+              progress: p.remTotal == 0
+                  ? 1
+                  : (p.remDone / p.remTotal).clamp(0.0, 1.0),
+              value: p.remTotal == 0
+                  ? '—'
+                  : '${p.remDone.clamp(0, p.remTotal)}/${p.remTotal}',
               label: 'Reminders',
               accent: ext.reminders,
               muted: p.remTotal == 0,
@@ -714,15 +800,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   // ---- daily briefing strip ------------------------------------------------
 
-  /// The one AI touchpoint on Today — a flat, hairline-bounded whisper. The
-  /// output is DETERMINISTIC (rule engine), so it wears a time-of-day glyph, not
-  /// the AI sparkle. Loads through the same [_briefingData] + [AiAssistant]
-  /// path (and SafetyGuard) as before; no AiSeal / auto_awesome anywhere.
-  /// Opens the AI chat directly. The briefing sentence *is* the assistant
-  /// talking, so tapping it (or "Ask") should let the user ask follow-ups —
-  /// one tap, instead of hopping through the Insights hub first.
-  void _openAssistant() => Navigator.push(
-      context, MaterialPageRoute(builder: (_) => const AssistantScreen()));
+  /// One flat, hairline-bounded summary line for today, with a time-of-day
+  /// glyph. Deterministic — see [CoachText.dailyBriefing].
 
   Widget _buildBriefingStrip(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
@@ -749,46 +828,25 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 child: Icon(glyph, size: 16, color: ext.brand.onContainer),
               ),
               const SizedBox(width: AppSpacing.md),
+              // Plain, non-interactive summary. It used to be tappable (and to
+              // carry an "Ask →" chip) purely to open the chat; with no chat
+              // there is nowhere to go, so a tap target here would be a dead end.
               Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _openAssistant,
-                  child: FutureBuilder<String?>(
-                    future: _briefingSentence(),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const LoadingSkeleton.line(width: 220);
-                      }
-                      final t = snap.data?.trim();
-                      final text = (t == null || t.isEmpty)
-                          ? "Here's your day — one small step at a time."
-                          : t;
-                      return Text(text,
-                          style:
-                              tt.bodyMedium?.copyWith(color: ext.textSecondary),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              InkWell(
-                borderRadius: AppRadius.brFull,
-                onTap: _openAssistant,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 4, vertical: 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Ask',
-                          style: tt.labelMedium
-                              ?.copyWith(color: ext.mark(ext.brand))),
-                      Icon(Symbols.chevron_right_rounded,
-                          size: 16, color: ext.textTertiary),
-                    ],
-                  ),
+                child: FutureBuilder<String?>(
+                  future: _briefingSentence(),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const LoadingSkeleton.line(width: 220);
+                    }
+                    final t = snap.data?.trim();
+                    final text = (t == null || t.isEmpty)
+                        ? "Here's your day — one small step at a time."
+                        : t;
+                    return Text(text,
+                        style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis);
+                  },
                 ),
               ),
             ],
@@ -799,12 +857,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
-  /// Memoized daily-briefing loader: builds the numeric roll-up then runs the
-  /// deterministic assistant with its EXACT args (routes through SafetyGuard).
+  /// Builds the numeric roll-up, then the summary sentence. The sentence itself
+  /// is synchronous; only gathering the numbers is async.
   Future<String?> _briefingSentence() {
     return _briefingFuture ??= () async {
       final d = await _briefingData();
-      return AiAssistant().dailyBriefing(
+      return const CoachText().dailyBriefing(
         medsTaken: d.medsTaken,
         medsTotal: d.medsTotal,
         waterPct: d.waterPct,
@@ -1051,7 +1109,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               badge: streak > 0 ? _streakChip(ext.medicine, streak) : null,
               trailing: total > 0
                   ? ProgressRing(
-                      progress: taken / total,
+                      progress: (taken / total).clamp(0.0, 1.0),
                       size: 48,
                       stroke: 5,
                       accent: ext.medicine,

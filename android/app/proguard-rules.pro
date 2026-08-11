@@ -29,14 +29,6 @@
 -dontwarn com.google.android.play.core.**
 -keep interface com.google.android.play.core.** { *; }
 
-# flutter_gemma / MediaPipe GenAI (on-device LLM) references optional vision +
-# protobuf classes that aren't bundled (we use TEXT-only inference). Keep the
-# GenAI classes and suppress R8 warnings for the missing optional references.
--keep class com.google.mediapipe.** { *; }
--keep class com.google.protobuf.** { *; }
--dontwarn com.google.mediapipe.**
--dontwarn com.google.protobuf.**
-
 # ML Kit text recognition (OCR label scan) references optional script models —
 # Chinese / Devanagari / Japanese / Korean — that aren't bundled (we ship the
 # default Latin recognizer only). Keep the used MLKit classes and suppress R8

@@ -1,5 +1,12 @@
-# Uncomment this line to define a global platform for your project
-platform :ios, '13.0'
+# iOS 15.5 is the floor imposed by google_mlkit_commons 0.12.0 /
+# google_mlkit_text_recognition 0.16.0 (both declare `s.platform = :ios,
+# '15.5'`). Those versions are themselves required: the older 0.8.1/0.13.1
+# line pulled MLKitCommon 11.0, which needs GoogleUtilities/UserDefaults
+# < 8.0 and therefore could never coexist with Firebase App Check (~> 8.1)
+# or Google Sign-In/AppCheckCore (~> 8.0) — that conflict is what left the
+# iOS build unbuildable. Raising the floor costs no real reach: every device
+# that can run iOS 14 can run iOS 15.
+platform :ios, '15.5'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -57,7 +64,10 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      # Must match (or exceed) the platform above — forcing pod targets back
+      # down to 13.0 here would drop the ML Kit pods below their own declared
+      # 15.5 minimum and re-break resolution.
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'
       existing = config.build_settings['HEADER_SEARCH_PATHS']
       existing = existing.is_a?(Array) ? existing : [existing || '$(inherited)']
       config.build_settings['HEADER_SEARCH_PATHS'] = (existing + grpc_header_paths).uniq

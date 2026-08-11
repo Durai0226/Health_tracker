@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-launcher overrides for the Steps + Sleep widget. Accent uses
+         AppPalette.brandDark; everything else just re-tuned for contrast on
+         a dark card. See values/colors.xml for the light counterpart. -->
+    <color name="widget_background">#1E2A28</color>
+    <color name="widget_accent">#4DB6AC</color>
+    <color name="widget_progress_track">#2E3B39</color>
+    <color name="widget_text_primary">#FFFFFF</color>
+    <color name="widget_text_secondary">#B0BEC5</color>
+    <color name="widget_divider">#3A4A47</color>
+</resources>

@@ -7,10 +7,6 @@ import '../../../core/services/auth_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import 'notification_settings_screen.dart';
-import 'premium_screen.dart';
-import '../../../core/services/premium_service.dart';
-import '../../insights/screens/ai_assistant_screen.dart';
-import '../../insights/screens/assistant_screen.dart';
 import 'haptic_settings_screen.dart';
 import 'vitavibe_settings_screen.dart';
 import '../../../core/services/vitavibe_service.dart';
@@ -21,7 +17,10 @@ import '../../steps/screens/steps_goal_settings_screen.dart';
 import '../../water/screens/water_reminder_settings_screen.dart';
 import '../../period/screens/period_reminder_settings_screen.dart';
 import '../../medication/screens/vitals/vitals_reminder_settings_screen.dart';
+import '../../medication/screens/conditions/condition_library_screen.dart';
 import 'reminders_hub_screen.dart';
+import '../../medication/screens/dependents/dependent_list_screen.dart';
+import 'security_settings_screen.dart';
 import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
@@ -36,6 +35,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _authService = AuthService();
+  bool _cloudSyncEnabled = CleanStorageService.cloudSyncEnabled;
   final _hapticService = HapticService();
   final _vitaVibeService = VitaVibeService();
   final _localBackupService = local_backup.BackupService();
@@ -218,6 +218,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
 
+                  // ---- Family & caregivers ----
+                  _section(
+                    title: 'Family & caregivers',
+                    icon: Symbols.group_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Symbols.group_rounded,
+                        iconColor: ext.mark(ext.medicine),
+                        title: 'Family & caregivers',
+                        subtitle: 'Track medicines for the people you care for',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const DependentListScreen())),
+                      ),
+                    ],
+                  ),
+
                   // ---- Appearance (ONB-5: System / Light / Dark) ----
                   SectionHeader(
                     title: 'Appearance',
@@ -226,26 +244,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   _buildAppearanceCard(),
                   const SizedBox(height: AppSpacing.lg),
-
-                  // ---- DailyMinder Plus ----
-                  _section(
-                    title: 'Upgrade',
-                    icon: Symbols.workspace_premium_rounded,
-                    tiles: [
-                      AppListTile(
-                        icon: Symbols.workspace_premium_rounded,
-                        iconColor: ext.mark(ext.brand),
-                        title: 'DailyMinder Plus',
-                        subtitle: PremiumService.isActive
-                            ? 'Active ✓ — thanks for your support'
-                            : 'Unlimited meds, reports, caregiver sharing, ad-free',
-                        onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const PremiumScreen())),
-                      ),
-                    ],
-                  ),
 
                   // ---- General ----
                   _section(
@@ -336,43 +334,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: Symbols.favorite_rounded,
                         iconColor: ext.mark(ext.medicine),
                         title: 'Vitals reminders',
-                        subtitle: 'Blood pressure & blood sugar checks',
+                        subtitle: 'Blood pressure, blood sugar, weight & mood checks',
                         onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
                                 builder: (_) =>
                                     const VitalsReminderSettingsScreen())),
                       ),
-                    ],
-                  ),
-
-                  // ---- AI Assistant ----
-                  // Two clear entries: "Ask AI" opens the chat itself; "Assistant
-                  // settings" holds the explainer, Memory & Privacy (engine/model
-                  // are hidden developer controls unlocked there, tap version 7×).
-                  _section(
-                    title: 'Assistant',
-                    icon: Symbols.auto_awesome_rounded,
-                    tiles: [
                       AppListTile(
-                        icon: Symbols.chat_rounded,
-                        iconColor: ext.mark(ext.focus),
-                        title: 'Ask AI',
-                        subtitle: 'Chat about your health · private, on-device',
+                        icon: Symbols.menu_book_rounded,
+                        iconColor: ext.mark(ext.medicine),
+                        title: 'Condition library',
+                        subtitle: 'General reference for common conditions',
                         onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => const AssistantScreen())),
-                      ),
-                      AppListTile(
-                        icon: Symbols.tune_rounded,
-                        iconColor: ext.mark(ext.focus),
-                        title: 'Assistant settings',
-                        subtitle: 'What it remembers · privacy & data',
-                        onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const AiAssistantScreen())),
+                                builder: (_) => const ConditionLibraryScreen())),
                       ),
                     ],
                   ),
@@ -412,6 +389,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 builder: (_) => const BackupSettingsScreen()),
                           );
                         },
+                      ),
+                      // The single gate on health data leaving the device.
+                      // Default OFF: the app tells users their data stays on
+                      // their phone, so nothing uploads until they say so here.
+                      AppListTile(
+                        icon: Symbols.sync_rounded,
+                        iconColor: ext.mark(ext.info),
+                        title: 'Cloud sync',
+                        subtitle: _cloudSyncEnabled
+                            ? 'Medicines, water and health data sync to your account'
+                            : 'Off — your data stays on this device',
+                        trailing: AppSwitch(
+                          value: _cloudSyncEnabled,
+                          onChanged: (v) async {
+                            if (v && !_authService.isAuthenticated) {
+                              context.toastInfo(
+                                  'Sign in with Google to turn on cloud sync.');
+                              return;
+                            }
+                            await CleanStorageService.setCloudSyncEnabled(v);
+                            if (!mounted) return;
+                            setState(() => _cloudSyncEnabled = v);
+                            context.toastSuccess(v
+                                ? 'Cloud sync on'
+                                : 'Cloud sync off — data stays on this device');
+                          },
+                        ),
                       ),
                       AppListTile(
                         icon: Symbols.cloud_upload_rounded,
@@ -454,6 +458,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               )
                             : null,
+                      ),
+                    ],
+                  ),
+
+                  // ---- Security ----
+                  _section(
+                    title: 'Security',
+                    icon: Symbols.lock_rounded,
+                    tiles: [
+                      AppListTile(
+                        icon: Symbols.lock_rounded,
+                        iconColor: ext.mark(ext.brand),
+                        title: 'App lock',
+                        subtitle: 'PIN & biometric lock for DailyMinder',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SecuritySettingsScreen())),
                       ),
                     ],
                   ),

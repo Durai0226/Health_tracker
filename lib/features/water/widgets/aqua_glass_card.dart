@@ -154,32 +154,49 @@ class AquaSectionHeader extends StatelessWidget {
             ),
             const SizedBox(width: AquaTheme.spacingS),
           ],
-          Text(
-            title,
-            style: AquaTheme.heading3.copyWith(
-              color: AquaTheme.getTextPrimary(context),
+          // The title used to be unflexed next to a Spacer, so a long section
+          // name ("Today's Log", "More Features") plus the trailing action ran
+          // straight off the row on a 320pt phone — 48px over at default text
+          // size. Expanded takes the place of the Spacer: it still pins the
+          // action flush right, but now the title is the part that gives.
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AquaTheme.heading3.copyWith(
+                color: AquaTheme.getTextPrimary(context),
+              ),
             ),
           ),
-          const Spacer(),
           if (actionText != null && onAction != null)
             GestureDetector(
               onTap: onAction,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    actionText!,
-                    style: AquaTheme.labelMedium.copyWith(
-                      color: beverage.primary,
-                    ),
+              behavior: HitTestBehavior.opaque,
+              // A bare text+chevron link is only ~17pt tall — under even the
+              // WCAG 2.2 24pt floor, let alone Apple's 44pt. Reserve a 44pt
+              // hit box without moving the label.
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        actionText!,
+                        style: AquaTheme.labelMedium.copyWith(
+                          color: beverage.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Symbols.arrow_forward_ios_rounded,
+                        size: 12,
+                        color: beverage.primary,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Symbols.arrow_forward_ios_rounded,
-                    size: 12,
-                    color: beverage.primary,
-                  ),
-                ],
+                ),
               ),
             ),
         ],

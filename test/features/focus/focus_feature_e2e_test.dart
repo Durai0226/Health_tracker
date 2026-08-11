@@ -2,16 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/features/focus/screens/focus_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/relaxation_screen.dart';
-import 'package:tablet_remainder/features/focus/screens/relaxation_game_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/focus_garden_screen.dart';
-import 'package:tablet_remainder/features/focus/screens/detailed_stats_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/detailed_stats_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/custom_tags_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/app_allow_list_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/plant_real_trees_screen.dart';
 import 'package:tablet_remainder/features/focus/services/focus_service.dart';
 import 'package:tablet_remainder/features/focus/services/relaxation_service.dart';
-import 'package:tablet_remainder/features/focus/services/relaxation_game_service.dart';
 import 'package:tablet_remainder/features/focus/services/tag_service.dart';
 import 'package:tablet_remainder/features/focus/services/stats_service.dart';
 import 'package:tablet_remainder/features/focus/models/focus_plant.dart';
@@ -19,7 +16,6 @@ import 'package:tablet_remainder/features/focus/models/focus_session.dart';
 import 'package:tablet_remainder/features/focus/models/breathing_exercise.dart';
 import 'package:tablet_remainder/features/focus/models/ambient_sound.dart';
 import 'package:tablet_remainder/features/focus/models/relaxation_music.dart';
-import 'package:tablet_remainder/features/focus/widgets/breathing_widget.dart';
 
 void main() {
   group('Focus Feature E2E Tests', () {
@@ -572,16 +568,12 @@ void main() {
         expect(find.text('Relaxation'), findsOneWidget);
       });
 
-      testWidgets('RelaxationGameScreen builds without errors', (tester) async {
-        await tester.pumpWidget(
-          const MaterialApp(
-            home: RelaxationGameScreen(),
-          ),
-        );
-        await tester.pump();
-        
-        expect(find.text('Relaxation Experience'), findsOneWidget);
-      });
+      // RelaxationGameScreen's smoke test was removed alongside the screen
+      // itself: it and its whole subtree (ExperienceModeScreen, PlayModeScreen,
+      // the 15 experience/play modes and the 4 standalone games) were
+      // unreachable — nothing in lib/ ever pushed RelaxationGameScreen, so the
+      // test was exercising code no user could reach. The reachable relaxation
+      // screen is RelaxationScreen, covered by the test directly above.
 
       testWidgets('PlantRealTreesScreen builds without errors', (tester) async {
         await tester.pumpWidget(

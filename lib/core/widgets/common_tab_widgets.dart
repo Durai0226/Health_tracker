@@ -556,7 +556,10 @@ class TabScreen extends StatelessWidget {
                     delegate: StickyTabBarDelegate(
                       tabBar: TabBar(
                         labelColor: AppColors.primary,
-                        unselectedLabelColor: AppColors.textSecondary,
+                        // The const is light-mode-only; unselected tab labels
+                        // washed out against the dark tab bar.
+                        unselectedLabelColor:
+                            AppColors.getTextSecondary(context),
                         indicatorColor: AppColors.primary,
                         tabs: tabs.map((tab) => Tab(text: tab)).toList(),
                       ),

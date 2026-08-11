@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' as db;
-import 'package:tablet_remainder/core/ai/streak_engine.dart';
+import 'package:tablet_remainder/core/health/streak_engine.dart';
 import 'package:tablet_remainder/core/database/daos/steps_dao.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
@@ -442,23 +442,25 @@ class StepService {
     if (_liveBaseline == null || _liveDayKey != key) {
       _liveBaseline = event.steps;
       _liveDayKey = key;
-      _liveStartSteps = _dailyNotifier.value[key]?.sensorSteps ?? 0;
+      final existing = _dailyNotifier.value[key];
+      // Baseline against the RAW reading, not the stored combined total, or the
+      // day's manual adjustments would be counted again on every live tick.
+      _liveStartSteps = existing == null ? 0 : (_rawSensorSteps(existing) ?? 0);
       return;
     }
     final delta = event.steps - _liveBaseline!;
     if (delta <= 0) return;
 
-    final liveSteps = _liveStartSteps + delta;
+    final liveRawSteps = _liveStartSteps + delta;
     var day = _dailyNotifier.value[key] ?? _newDay(DateTime.now());
-    if (liveSteps <= (day.sensorSteps ?? 0)) return; // never regress
+    if (liveRawSteps <= (_rawSensorSteps(day) ?? 0)) return; // never regress
 
     day = day.copyWith(
-      sensorSteps: liveSteps,
       source: day.manualEntries.isNotEmpty
           ? StepSource.mixed
           : StepSource.pedometer,
     );
-    day = _recompute(day);
+    day = _recompute(day, rawSensorSteps: liveRawSteps);
     _dailyNotifier.value[key] = day;
     _notifyListeners();
     unawaited(_persistDay(day));
@@ -499,15 +501,18 @@ class StepService {
         final entries = existing?.manualEntries ?? const <StepManualEntry>[];
 
         var day = (existing ?? _newDay(date)).copyWith(
-          sensorSteps: steps,
-          distanceMeters: distance ?? _profile.deriveDistanceMeters(steps),
-          activeCalories: energy ?? _profile.deriveActiveCalories(steps),
+          // 0 → "not measured": _recompute derives it from the merged total
+          // (raw sensor + this day's manual adjustments) via the profile.
+          distanceMeters: distance ?? 0.0,
+          activeCalories: energy ?? 0.0,
           hourly: hourly.isNotEmpty ? hourly : (existing?.hourly ?? const []),
           source: entries.isNotEmpty ? StepSource.mixed : source,
           lastSyncedAt: now,
           manualEntries: entries,
         );
-        day = _recompute(day);
+        // `steps` is the RAW device reading; _recompute layers this day's manual
+        // entries on top of it so a hand-typed count is never overwritten.
+        day = _recompute(day, rawSensorSteps: steps);
 
         _dailyNotifier.value[key] = day;
         await _persistDay(day);
@@ -553,15 +558,55 @@ class StepService {
         createdAt: DateTime.now(),
       );
 
+  /// The day's *raw* device reading, backed out of the stored combined total —
+  /// see the invariant documented on [_recompute]. Null when the day has no
+  /// sensor reading at all (manual-only / Simulator).
+  static int? _rawSensorSteps(StepDailyData day) =>
+      day.sensorSteps == null ? null : day.sensorSteps! - day.manualSteps;
+
   /// Recompute totals, derived distance/calories, and goal state from the day's
   /// manual entries + sensor value. Health-provided distance/calories are kept
   /// when a sensor reading is present; otherwise both are derived from the
   /// profile's stride/weight.
-  static StepDailyData _recompute(StepDailyData day) {
+  ///
+  /// ## Merge rule (manual + sensor)
+  ///
+  /// Manual entries are *adjustments layered on top of* the device reading —
+  /// that is precisely what [addManualStepsForDate] exists for ("the
+  /// phone-on-the-charger day"), and why a day carrying both is tagged
+  /// [StepSource.mixed]. So the day's effective total is
+  /// `rawSensor + manualTotal`, **never the sensor alone**. Previously this
+  /// computed `day.sensorSteps ?? manualTotal`, which silently threw away every
+  /// step the user typed on any day the sensor also reported.
+  ///
+  /// A net-negative manual tally is a deliberate "trim" (see [addManualSteps]);
+  /// it lowers the total but can never take the day below zero steps.
+  ///
+  /// ## Storage invariant
+  ///
+  /// [StepDailyData.effectiveSteps] is `sensorSteps ?? manualSteps` (shared
+  /// model), so the merged figure has to live in `sensorSteps` for the UI,
+  /// insights and streaks to see it. This method therefore stores the combined
+  /// total there and maintains:
+  ///
+  ///     stored sensorSteps == rawSensor + stored manualSteps
+  ///
+  /// which keeps the raw reading recoverable ([_rawSensorSteps]) and makes
+  /// repeated recomputes idempotent. Callers holding a fresh device reading
+  /// pass it as [rawSensorSteps] rather than writing `sensorSteps` themselves.
+  static StepDailyData _recompute(StepDailyData day, {int? rawSensorSteps}) {
+    final int? raw = rawSensorSteps ?? _rawSensorSteps(day);
+
     final manualTotal = day.manualEntries.fold<int>(0, (s, e) => s + e.steps);
-    final clampedManual = manualTotal < 0 ? 0 : manualTotal;
-    final effective = day.sensorSteps ?? clampedManual;
-    final hasSensor = day.sensorSteps != null;
+    // Floor the adjustment so a day can never report negative steps: with no
+    // sensor there is nothing to trim from, with one we trim at most all of it.
+    final manual = raw == null
+        ? (manualTotal < 0 ? 0 : manualTotal)
+        : (manualTotal < -raw ? -raw : manualTotal);
+
+    final int? combined = raw == null ? null : raw + manual;
+    final effective = combined ?? manual;
+    final hasSensor = combined != null;
 
     final distance = hasSensor && day.distanceMeters > 0
         ? day.distanceMeters
@@ -575,13 +620,20 @@ class StepService {
         reached && !day.goalReached ? DateTime.now() : day.goalReachedAt;
 
     return day.copyWith(
-      manualSteps: clampedManual,
+      sensorSteps: combined,
+      manualSteps: manual,
       distanceMeters: distance,
       activeCalories: calories,
       goalReached: reached,
       goalReachedAt: reachedAt,
     );
   }
+
+  /// Test seam for the manual+sensor merge rule (see [_recompute]).
+  @visibleForTesting
+  static StepDailyData recomputeForTesting(StepDailyData day,
+          {int? rawSensorSteps}) =>
+      _recompute(day, rawSensorSteps: rawSensorSteps);
 
   static Future<void> _persistDay(StepDailyData d) async {
     try {

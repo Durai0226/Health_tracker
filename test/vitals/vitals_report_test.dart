@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tablet_remainder/core/ai/vitals_analyzer.dart';
+import 'package:tablet_remainder/core/health/vitals_analyzer.dart';
 import 'package:tablet_remainder/features/medication/models/blood_pressure_reading.dart';
 import 'package:tablet_remainder/features/medication/models/glucose_reading.dart';
 import 'package:tablet_remainder/features/medication/services/vitals_report_service.dart';

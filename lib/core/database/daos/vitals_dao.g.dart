@@ -7,6 +7,8 @@ mixin _$VitalsDaoMixin on DatabaseAccessor<AppDatabase> {
   $BloodPressureReadingsTable get bloodPressureReadings =>
       attachedDatabase.bloodPressureReadings;
   $GlucoseReadingsTable get glucoseReadings => attachedDatabase.glucoseReadings;
+  $WeightReadingsTable get weightReadings => attachedDatabase.weightReadings;
+  $MoodEntriesTable get moodEntries => attachedDatabase.moodEntries;
   VitalsDaoManager get managers => VitalsDaoManager(this);
 }
 
@@ -23,4 +25,11 @@ class VitalsDaoManager {
         _db.attachedDatabase,
         _db.glucoseReadings,
       );
+  $$WeightReadingsTableTableManager get weightReadings =>
+      $$WeightReadingsTableTableManager(
+        _db.attachedDatabase,
+        _db.weightReadings,
+      );
+  $$MoodEntriesTableTableManager get moodEntries =>
+      $$MoodEntriesTableTableManager(_db.attachedDatabase, _db.moodEntries);
 }

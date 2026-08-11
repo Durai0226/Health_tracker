@@ -187,14 +187,22 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildOverviewStat(
-              '${hours}h ${mins}m', 'Focus Time', Symbols.timer_rounded, heroFg),
+          // Equal shares: the 3-up hero row must not push past the card edge
+          // on a 320pt phone or at the 1.3x text-scale ceiling.
+          Expanded(
+            child: _buildOverviewStat('${hours}h ${mins}m', 'Focus Time',
+                Symbols.timer_rounded, heroFg),
+          ),
           Container(width: 1, height: 50, color: heroFg.withOpacity(0.24)),
-          _buildOverviewStat(
-              '$sessions', 'Sessions', Symbols.flag_rounded, heroFg),
+          Expanded(
+            child: _buildOverviewStat(
+                '$sessions', 'Sessions', Symbols.flag_rounded, heroFg),
+          ),
           Container(width: 1, height: 50, color: heroFg.withOpacity(0.24)),
-          _buildOverviewStat('${(completionRate * 100).toInt()}%', 'Completed',
-              Symbols.check_circle_rounded, heroFg),
+          Expanded(
+            child: _buildOverviewStat('${(completionRate * 100).toInt()}%',
+                'Completed', Symbols.check_circle_rounded, heroFg),
+          ),
         ],
       ),
     );
@@ -207,16 +215,28 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       children: [
         Icon(icon, color: fg.withOpacity(0.85), size: 24),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: tt.headlineSmall?.copyWith(
-            color: fg,
-            fontWeight: FontWeight.w800,
+        // scaleDown never enlarges, so default rendering is untouched; only
+        // values wider than their column shrink.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            softWrap: false,
+            style: tt.headlineSmall?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
-        Text(
-          label,
-          style: tt.bodySmall?.copyWith(color: fg.withOpacity(0.85)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            style: tt.bodySmall?.copyWith(color: fg.withOpacity(0.85)),
+          ),
         ),
       ],
     );

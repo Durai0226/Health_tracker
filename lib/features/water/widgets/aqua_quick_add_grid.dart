@@ -125,7 +125,9 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         ),
         const SizedBox(height: AquaTheme.spacingS),
         SizedBox(
-          height: 44,
+          // A horizontal list needs a bounded height, so grow it with Dynamic
+          // Type instead of clipping the chips. Never below the base 44.
+          height: MediaQuery.textScalerOf(context).scale(44).clamp(44.0, 96.0),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: containers.length + 1,
@@ -228,7 +230,9 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     final beverageList = WaterService.getAllBeverages();
 
     return SizedBox(
-      height: 50,
+      // Same as the cups strip: a bounded height that tracks Dynamic Type, so
+      // the selected beverage's name isn't clipped at large text sizes.
+      height: MediaQuery.textScalerOf(context).scale(50).clamp(50.0, 104.0),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: beverageList.length,
@@ -326,7 +330,9 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
       child: AnimatedContainer(
         duration: AquaTheme.animationFast,
         transform: Matrix4.identity()..scale(isPressed ? 0.95 : 1.0),
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        // Horizontal breathing room so a scaled-down amount never sits flush
+        // against the 1.5pt border of its cell.
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -356,20 +362,35 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
               style: const TextStyle(fontSize: 24),
             ),
             const SizedBox(height: 6),
-            ShaderMask(
-              shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
-              child: Text(
-                '+${option.amount}',
-                style: AquaTheme.labelLarge.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+            // Four of these share a row, so each cell is ~80pt wide. At large
+            // Dynamic Type sizes the amount wrapped mid-number ("+25" / "0")
+            // and shoved the unit out of the tile. A number must never break:
+            // shrink it to fit instead. scaleDown never enlarges, so the tile
+            // is unchanged at default text sizes.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: ShaderMask(
+                shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
+                child: Text(
+                  '+${option.amount}',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AquaTheme.labelLarge.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
-            Text(
-              'ml',
-              style: AquaTheme.caption.copyWith(
-                color: AquaTheme.getTextSecondary(context),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'ml',
+                maxLines: 1,
+                softWrap: false,
+                style: AquaTheme.caption.copyWith(
+                  color: AquaTheme.getTextSecondary(context),
+                ),
               ),
             ),
           ],
@@ -408,11 +429,20 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
           children: [
             const Icon(Symbols.add_circle_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 8),
-            Text(
-              'Custom Amount',
-              style: AquaTheme.labelLarge.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
+            // Bound the label to the row and shrink-to-fit rather than let it
+            // run off the CTA at large text sizes (scaleDown never enlarges).
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Custom Amount',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AquaTheme.labelLarge.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ],

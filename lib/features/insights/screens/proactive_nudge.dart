@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../core/ai/insight.dart';
-import '../../../core/ai/nudge_scheduler.dart';
+import '../../../core/health/insight.dart';
+import '../../../core/health/nudge_scheduler.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../services/insight_service.dart';
-import 'insights_hub_screen.dart';
+import 'trends_dashboard_screen.dart';
 
 /// A self-managing, frequency-capped proactive nudge for the Home screen. Loads
 /// the top actionable insight, shows it only if the frequency cap allows and it
@@ -86,7 +86,7 @@ class _ProactiveNudgeState extends State<ProactiveNudge> {
         insight: _insight!,
         onDismiss: _dismiss,
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const InsightsHubScreen())),
+            MaterialPageRoute(builder: (_) => const TrendsDashboardScreen())),
       ),
     );
   }

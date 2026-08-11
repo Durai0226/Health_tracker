@@ -5,22 +5,29 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Focus Reminders Settings Screen
+/// Focus reminder settings.
+///
+/// Rebuilt on the modern design system. The previous version pinned
+/// `Color(0xFFF5F5F5)` as the scaffold background and `Colors.white` on every
+/// card, so the whole screen stayed light regardless of theme — a blinding
+/// white sheet in dark mode. Settings now persist on change (matching the
+/// other settings screens) instead of requiring an explicit Save that silently
+/// discarded edits when the user backed out.
 class FocusRemindersSettingsScreen extends StatefulWidget {
   const FocusRemindersSettingsScreen({super.key});
 
   @override
-  State<FocusRemindersSettingsScreen> createState() => _FocusRemindersSettingsScreenState();
+  State<FocusRemindersSettingsScreen> createState() =>
+      _FocusRemindersSettingsScreenState();
 }
 
-class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScreen> {
+class _FocusRemindersSettingsScreenState
+    extends State<FocusRemindersSettingsScreen> {
   bool _dailyReminder = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
   bool _streakReminder = true;
   bool _breakReminder = true;
   bool _isLoading = true;
-
-  static const _primaryColor = Color(0xFF4CAF50);
 
   @override
   void initState() {
@@ -30,134 +37,131 @@ class _FocusRemindersSettingsScreenState extends State<FocusRemindersSettingsScr
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _dailyReminder = prefs.getBool('focus_daily_reminder') ?? true;
-        final timeStr = prefs.getString('focus_reminder_time') ?? '9:0';
-        final parts = timeStr.split(':');
-        _reminderTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-        _streakReminder = prefs.getBool('focus_streak_reminder') ?? true;
-        _breakReminder = prefs.getBool('focus_break_reminder') ?? true;
-        _isLoading = false;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _dailyReminder = prefs.getBool('focus_daily_reminder') ?? true;
+      final timeStr = prefs.getString('focus_reminder_time') ?? '9:0';
+      final parts = timeStr.split(':');
+      _reminderTime = TimeOfDay(
+        hour: int.tryParse(parts.first) ?? 9,
+        minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+      );
+      _streakReminder = prefs.getBool('focus_streak_reminder') ?? true;
+      _breakReminder = prefs.getBool('focus_break_reminder') ?? true;
+      _isLoading = false;
+    });
   }
 
-  Future<void> _saveSettings() async {
-    HapticFeedback.mediumImpact();
+  Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('focus_daily_reminder', _dailyReminder);
-    await prefs.setString('focus_reminder_time', '${_reminderTime.hour}:${_reminderTime.minute}');
+    await prefs.setString(
+      'focus_reminder_time',
+      '${_reminderTime.hour}:${_reminderTime.minute}',
+    );
     await prefs.setBool('focus_streak_reminder', _streakReminder);
     await prefs.setBool('focus_break_reminder', _breakReminder);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Reminders saved!'), backgroundColor: _primaryColor, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-      );
-      Navigator.pop(context);
-    }
+  }
+
+  void _update(VoidCallback change) {
+    HapticFeedback.lightImpact();
+    setState(change);
+    _persist();
   }
 
   Future<void> _selectTime() async {
-    final picked = await AppTimePicker.show(
-      context,
-      initial: _reminderTime,
-    );
+    final picked = await AppTimePicker.show(context, initial: _reminderTime);
     if (picked != null) {
-      HapticFeedback.lightImpact();
-      setState(() => _reminderTime = picked);
+      _update(() => _reminderTime = picked);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F5),
-        elevation: 0,
-        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
-        title: const Text('Focus Reminders', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: _primaryColor))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildDailyReminderCard(),
-                  const SizedBox(height: 12),
-                  _buildToggleCard(Symbols.local_fire_department_rounded, 'Streak Reminder', 'Alert when streak is at risk', _streakReminder, (v) => setState(() => _streakReminder = v)),
-                  const SizedBox(height: 12),
-                  _buildToggleCard(Symbols.coffee_rounded, 'Break Reminder', 'Remind to take breaks', _breakReminder, (v) => setState(() => _breakReminder = v)),
-                  const SizedBox(height: 32),
-                  _buildSaveButton(),
-                ],
+    final ext = AppColorsExt.of(context);
+    final accent = ext.focus;
+
+    return AccentScope(
+      feature: FeatureAccent.focus,
+      child: AppScaffold(
+        body: Column(
+          children: [
+            AppHeader(
+              title: 'Focus reminders',
+              icon: Symbols.notifications_rounded,
+              accent: accent,
+              leading: AppIconButton(
+                icon: Symbols.arrow_back_rounded,
+                filled: false,
+                onPressed: () => Navigator.pop(context),
               ),
             ),
-    );
-  }
-
-  Widget _buildDailyReminderCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(width: 44, height: 44, decoration: BoxDecoration(color: _dailyReminder ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(Symbols.notifications_rounded, color: _dailyReminder ? _primaryColor : Colors.grey)),
-              const SizedBox(width: 16),
-              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Daily Focus Reminder', style: TextStyle(fontWeight: FontWeight.w600)), Text('Get reminded to focus each day', style: TextStyle(color: Colors.grey, fontSize: 13))])),
-              AppSwitch(value: _dailyReminder, onChanged: (v) { HapticFeedback.lightImpact(); setState(() => _dailyReminder = v); }),
-            ],
-          ),
-          if (_dailyReminder) ...[
-            const Divider(height: 24),
-            GestureDetector(
-              onTap: _selectTime,
-              child: Row(
-                children: [
-                  Icon(Symbols.access_time_rounded, color: _primaryColor, size: 20),
-                  const SizedBox(width: 12),
-                  const Text('Reminder Time', style: TextStyle(color: Colors.grey)),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: _primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Text(_reminderTime.format(context), style: TextStyle(color: _primaryColor, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
+            Expanded(
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(color: ext.mark(accent)),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                        AppSpacing.lg,
+                        AppSpacing.xxl,
+                      ),
+                      children: [
+                        SettingsSection(
+                          title: 'Daily',
+                          footer: 'Changes are saved automatically.',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.notifications_rounded,
+                              title: 'Daily focus reminder',
+                              subtitle: 'Get reminded to focus each day',
+                              accent: accent,
+                              switchValue: _dailyReminder,
+                              onSwitchChanged: (v) =>
+                                  _update(() => _dailyReminder = v),
+                            ),
+                            if (_dailyReminder)
+                              SettingsTile(
+                                icon: Symbols.access_time_rounded,
+                                title: 'Reminder time',
+                                value: _reminderTime.format(context),
+                                accent: accent,
+                                onTap: _selectTime,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        SettingsSection(
+                          title: 'Nudges',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.local_fire_department_rounded,
+                              title: 'Streak reminder',
+                              subtitle: 'Alert when your streak is at risk',
+                              accent: accent,
+                              switchValue: _streakReminder,
+                              onSwitchChanged: (v) =>
+                                  _update(() => _streakReminder = v),
+                            ),
+                            SettingsTile(
+                              icon: Symbols.coffee_rounded,
+                              title: 'Break reminder',
+                              subtitle: 'Remind me to take breaks',
+                              accent: accent,
+                              switchValue: _breakReminder,
+                              onSwitchChanged: (v) =>
+                                  _update(() => _breakReminder = v),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
             ),
           ],
-        ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildToggleCard(IconData icon, String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          Container(width: 44, height: 44, decoration: BoxDecoration(color: value ? _primaryColor.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: value ? _primaryColor : Colors.grey)),
-          const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w600)), Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 13))])),
-          AppSwitch(value: value, onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(onPressed: _saveSettings, style: ElevatedButton.styleFrom(backgroundColor: _primaryColor, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('Save Reminders', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
     );
   }
 }

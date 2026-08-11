@@ -368,10 +368,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         children: [
           Icon(Symbols.lock_rounded, size: 15, color: ext.success.onContainer),
           const SizedBox(width: 6),
-          Text('Private · on-device · no account',
-              style: tt.labelMedium?.copyWith(
-                  color: ext.success.onContainer,
-                  fontWeight: FontWeight.w600)),
+          // This 31-character line is the widest single string in onboarding.
+          // Unflexed it overran the pill by 179px on a 320pt phone — at
+          // DEFAULT text size, on the first screen a new user ever sees.
+          // Flexible lets it wrap to a second line inside the pill instead.
+          Flexible(
+            child: Text('Private by default · cloud sync is optional',
+                style: tt.labelMedium?.copyWith(
+                    color: ext.success.onContainer,
+                    fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
@@ -396,7 +402,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         Symbols.shield_rounded,
         ext.success,
         'Private by design',
-        'Your health data stays on your phone. No account, works offline.'
+        'Your health data stays on your phone unless you turn on cloud sync. Works offline.'
       ),
     ];
     return LayoutBuilder(

@@ -20,7 +20,6 @@ import 'features/home/screens/home_dashboard.dart';
 import 'features/settings/screens/settings_screen.dart';
 import 'features/reminders/screens/add_reminder_screen.dart';
 import 'features/insights/screens/trends_dashboard_screen.dart';
-import 'features/insights/screens/assistant_screen.dart';
 import 'features/insights/services/trends_data_service.dart' show TrendRange;
 import 'features/sleep/screens/sleep_dashboard_screen.dart';
 import 'features/sleep/services/sleep_service.dart';
@@ -35,6 +34,51 @@ import 'features/period/screens/period_reminder_settings_screen.dart';
 import 'features/period/services/period_service.dart';
 import 'features/medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import 'features/settings/screens/reminders_hub_screen.dart';
+// --- Screens added for the full UI/UX audit sweep ---
+import 'features/medication/screens/vitals/blood_pressure_screen.dart';
+import 'features/medication/screens/vitals/blood_sugar_screen.dart';
+import 'features/medication/screens/vitals/weight_screen.dart';
+import 'features/medication/screens/vitals/mood_screen.dart';
+import 'features/medication/screens/nunito_medication_list_screen.dart';
+import 'features/medication/screens/refill_overview_screen.dart';
+import 'features/medication/screens/analytics/nunito_adherence_report_screen.dart';
+import 'features/medication/screens/appointments/nunito_appointment_list_screen.dart';
+import 'features/medication/screens/doctors/nunito_doctor_list_screen.dart';
+import 'features/medication/screens/clinics/nunito_clinic_list_screen.dart';
+import 'features/medication/screens/dependents/dependent_list_screen.dart';
+import 'features/medication/screens/conditions/condition_library_screen.dart';
+import 'features/diary/screens/diary_screen.dart';
+import 'features/water/screens/caffeine_insights_screen.dart';
+import 'features/water/screens/water_calendar_screen.dart';
+import 'features/water/screens/water_achievements_screen.dart';
+import 'features/water/screens/water_history_edit_screen.dart';
+import 'features/water/screens/water_reminder_settings_screen.dart';
+import 'features/focus/screens/focus_screen.dart';
+import 'features/focus/screens/relaxation_screen.dart';
+import 'features/focus/screens/focus_garden_screen.dart';
+import 'features/focus/screens/detailed_stats_screen.dart';
+import 'features/focus/screens/custom_tags_screen.dart';
+import 'features/focus/screens/app_allow_list_screen.dart';
+import 'features/focus/screens/plant_real_trees_screen.dart';
+import 'features/reminders/screens/reminders_screen.dart';
+import 'features/reminders/screens/category_management_screen.dart';
+import 'features/insights/screens/weekly_recap_screen.dart';
+import 'features/settings/screens/notification_settings_screen.dart';
+import 'features/settings/screens/haptic_settings_screen.dart';
+import 'features/settings/screens/vitavibe_settings_screen.dart';
+import 'features/focus/screens/settings/focus_reminders_settings_screen.dart';
+import 'features/settings/screens/security_settings_screen.dart';
+import 'features/settings/screens/early_access_screen.dart';
+import 'features/settings/screens/backup_screen.dart';
+import 'features/backup/presentation/screens/backup_settings_screen.dart';
+import 'features/sleep/screens/sleep_history_screen.dart';
+import 'features/sleep/screens/sleep_schedule_settings_screen.dart';
+import 'features/steps/screens/steps_history_screen.dart';
+import 'features/steps/screens/steps_goal_settings_screen.dart';
+import 'features/period/screens/period_calendar_screen.dart';
+import 'features/period/screens/cycle_history_screen.dart';
+import 'features/onboarding/screens/welcome_screen.dart';
+import 'features/home/screens/health_browse_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -123,8 +167,6 @@ class _QaApp extends StatelessWidget {
       'add_med' => const NunitoAddMedicationFlow(debugInitialStep: 2),
       // Step 1 (Basic info) to screenshot the name auto-suggestion chips.
       'add_med_step1' => const NunitoAddMedicationFlow(debugInitialStep: 0),
-      // The AI chat empty state (starters + "OR JUST LOG IT" + composer/mic).
-      'assistant' => const AssistantScreen(),
       // Health-feature screens (self-scaffolded).
       'water' => const AquaWaterDashboard(embedded: false),
       'hydration_profile' => const HydrationProfileScreen(),
@@ -134,6 +176,51 @@ class _QaApp extends StatelessWidget {
       'reminders_hub' => const RemindersHubScreen(),
       'period_reminders' => const PeriodReminderSettingsScreen(),
       'vitals_reminders' => const VitalsReminderSettingsScreen(),
+      // --- Full audit sweep: self-scaffolded screens render directly ---
+      'welcome' => const WelcomeScreen(),
+      'health_browse' => const HealthBrowseScreen(),
+      'bp' => const BloodPressureScreen(),
+      'glucose' => const BloodSugarScreen(),
+      'weight' => const WeightScreen(),
+      'mood' => const MoodScreen(),
+      'med_list' => const NunitoMedicationListScreen(),
+      'refill' => const RefillOverviewScreen(),
+      'adherence' => const NunitoAdherenceReportScreen(),
+      'appointments' => const NunitoAppointmentListScreen(),
+      'doctors' => const NunitoDoctorListScreen(),
+      'clinics' => const NunitoClinicListScreen(),
+      'dependents' => const DependentListScreen(),
+      'conditions' => const ConditionLibraryScreen(),
+      'diary' => const DiaryScreen(),
+      'caffeine' => const CaffeineInsightsScreen(),
+      'water_calendar' => const WaterCalendarScreen(),
+      'water_awards' => const WaterAchievementsScreen(),
+      'water_history' => WaterHistoryEditScreen(date: DateTime.now()),
+      'water_reminders' => const WaterReminderSettingsScreen(),
+      'focus' => const FocusScreen(),
+      'relaxation' => const RelaxationScreen(),
+      'focus_garden' => const FocusGardenScreen(),
+      'focus_stats' => const DetailedStatsScreen(),
+      'focus_tags' => const CustomTagsScreen(),
+      'focus_apps' => const AppAllowListScreen(),
+      'plant_trees' => const PlantRealTreesScreen(),
+      'reminders' => const RemindersScreen(),
+      'categories' => const CategoryManagementScreen(),
+      'weekly_recap' => const WeeklyRecapScreen(),
+      'notif_settings' => const NotificationSettingsScreen(),
+      'haptics' => const HapticSettingsScreen(),
+      'vitavibe' => const VitaVibeSettingsScreen(),
+      'focus_reminders' => const FocusRemindersSettingsScreen(),
+      'security' => const SecuritySettingsScreen(),
+      'early_access' => const EarlyAccessScreen(),
+      'backup_cloud' => const BackupScreen(),
+      'backup_local' => const BackupSettingsScreen(),
+      'sleep_history' => const SleepHistoryScreen(),
+      'sleep_schedule' => const SleepScheduleSettingsScreen(),
+      'steps_history' => const StepsHistoryScreen(),
+      'steps_goal' => const StepsGoalSettingsScreen(),
+      'period_calendar' => const PeriodCalendarScreen(),
+      'cycle_history' => const CycleHistoryScreen(),
       _ => _QaHub(screen: screen),
     };
     return MaterialApp(
@@ -141,6 +228,16 @@ class _QaApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+      // Mirror main.dart's clamp so QA screenshots reflect what ships.
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(maxScaleFactor: 2.0),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: home,
     );
   }

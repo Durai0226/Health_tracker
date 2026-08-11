@@ -11,8 +11,7 @@ import 'tables/vitals_tables.dart';
 import 'tables/period_tables.dart';
 import 'tables/steps_tables.dart';
 import 'tables/sleep_tables.dart';
-import 'tables/knowledge_tables.dart';
-import 'tables/memory_tables.dart';
+import 'tables/diary_tables.dart';
 
 import 'daos/core_dao.dart';
 import 'daos/medication_dao.dart';
@@ -22,7 +21,7 @@ import 'daos/vitals_dao.dart';
 import 'daos/period_dao.dart';
 import 'daos/steps_dao.dart';
 import 'daos/sleep_dao.dart';
-import 'daos/ai_dao.dart';
+import 'daos/diary_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -55,9 +54,11 @@ part 'app_database.g.dart';
     Reminders,
     ReminderCategories,
 
-    // Vitals tables (blood pressure + blood glucose)
+    // Vitals tables (blood pressure, blood glucose, weight, mood)
     BloodPressureReadings,
     GlucoseReadings,
+    WeightReadings,
+    MoodEntries,
 
     // Period / menstrual cycle tables
     MenstrualCycles,
@@ -72,9 +73,9 @@ part 'app_database.g.dart';
     // Sleep tables
     SleepSessions,
 
-    // AI: RAG knowledge base + user-curated memory
-    KnowledgeChunks,
-    AssistantMemories,
+    // Diary / journal
+    DiaryEntries,
+
   ],
   daos: [
     CoreDao,
@@ -85,7 +86,7 @@ part 'app_database.g.dart';
     PeriodDao,
     StepsDao,
     SleepDao,
-    AiDao,
+    DiaryDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -97,30 +98,8 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 11;
 
-  /// Creates the FTS5 virtual table backing the RAG knowledge base. Called from
-  /// both onCreate (fresh installs) and onUpgrade — Drift's DSL can't declare
-  /// FTS5, so it's raw SQL. sqlite3 ships FTS5 + bm25(). The `porter` tokenizer
-  /// stems words so "sleeping"/"slept"/"hydrate"/"hydration" all retrieve their
-  /// base-form chunks (v7).
-  Future<void> _createKnowledgeFts() async {
-    await customStatement(
-      'CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5('
-      "chunk_id UNINDEXED, title, body, topic, tokenize = 'porter unicode61')",
-    );
-  }
-
-  /// Rebuilds the FTS index with the current tokenizer from the persisted
-  /// `knowledge_chunks` rows (used when the tokenizer changes across versions).
-  Future<void> _rebuildKnowledgeFts() async {
-    await customStatement('DROP TABLE IF EXISTS knowledge_fts');
-    await _createKnowledgeFts();
-    await customStatement(
-      'INSERT INTO knowledge_fts(chunk_id, title, body, topic) '
-      'SELECT id, title, body, topic FROM knowledge_chunks',
-    );
-  }
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
   /// period-tracking features were removed. Kept-feature data is untouched.
@@ -146,7 +125,6 @@ class AppDatabase extends _$AppDatabase {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
-        await _createKnowledgeFts();
         debugPrint('✓ Drift database created');
       },
       onUpgrade: (Migrator m, int from, int to) async {
@@ -180,18 +158,63 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(sleepSessions);
           debugPrint('✓ Created period + steps + sleep tables');
         }
-        if (from < 6) {
-          // AI: RAG knowledge base (+ FTS5) + user-curated memory.
-          await m.createTable(knowledgeChunks);
-          await m.createTable(assistantMemories);
-          await _createKnowledgeFts();
-          debugPrint('✓ Created AI knowledge + memory tables');
+        // v6 created the RAG knowledge base + assistant-memory tables and v7
+        // rebuilt the FTS index. Both features were removed in v8, so those
+        // steps are intentionally gone: an install coming from <6 never needs
+        // tables that v8 immediately drops.
+        if (from < 9) {
+          // Remove dose-log rows that a pre-v9 bug could duplicate.
+          //
+          // `reconcileMissedDoses` used to write `<medId>_missed_<slot>` while
+          // take/skip write the canonical `<medId>_<slot>`. Different primary
+          // keys, so the upsert could not collapse them and a slot could end up
+          // with BOTH a missed row and a taken/skipped row. The read paths now
+          // rank by status so this is already harmless — this step is the
+          // tidy-up, and it deletes ONLY a `_missed_` row whose own slot also
+          // has a real user action. A missed row with no counterpart is real
+          // history and is kept.
+          final before = await customSelect(
+                  'SELECT COUNT(*) AS c FROM medicine_logs WHERE id LIKE ?',
+                  variables: [Variable.withString('%_missed_%')])
+              .getSingle();
+          await customStatement(
+            "DELETE FROM medicine_logs WHERE id LIKE '%\\_missed\\_%' ESCAPE '\\' "
+            'AND EXISTS (SELECT 1 FROM medicine_logs m2 '
+            '            WHERE m2.medicine_id = medicine_logs.medicine_id '
+            '              AND m2.scheduled_time = medicine_logs.scheduled_time '
+            '              AND m2.id <> medicine_logs.id '
+            '              AND (m2.is_taken = 1 OR m2.is_skipped = 1))',
+          );
+          final after = await customSelect(
+                  'SELECT COUNT(*) AS c FROM medicine_logs WHERE id LIKE ?',
+                  variables: [Variable.withString('%_missed_%')])
+              .getSingle();
+          debugPrint('✓ Superseded missed-dose rows: '
+              '${before.read<int>('c')} → ${after.read<int>('c')}');
         }
-        if (from < 7) {
-          // Upgrade the KB search index to the stemming (porter) tokenizer,
-          // rebuilding it from the persisted chunks (no re-seed needed).
-          await _rebuildKnowledgeFts();
-          debugPrint('✓ Rebuilt knowledge FTS with porter stemming');
+        if (from < 8) {
+          // Drop the removed AI feature's storage. `knowledge_fts` is a raw FTS5
+          // virtual table (created by customStatement, not the Drift DSL), so it
+          // needs a raw DROP; the other two are ordinary tables.
+          await customStatement('DROP TABLE IF EXISTS knowledge_fts');
+          await customStatement('DROP TABLE IF EXISTS knowledge_chunks');
+          await customStatement('DROP TABLE IF EXISTS assistant_memories');
+          debugPrint('✓ Dropped removed assistant knowledge + memory tables');
+        }
+        if (from < 10) {
+          // Weight + mood trackers.
+          await m.createTable(weightReadings);
+          await m.createTable(moodEntries);
+          debugPrint('✓ Created weight + mood tables');
+        }
+        if (from < 11) {
+          // Administration-route field on medicines.
+          await m.addColumn(enhancedMedicines, enhancedMedicines.routeIndex);
+          // Diary / journal entries.
+          await m.createTable(diaryEntries);
+          // Pre-logged (travel/pillbox) dose status.
+          await m.addColumn(medicineLogs, medicineLogs.isPreLogged);
+          debugPrint('✓ Added route field, diary table, and pre-logged dose status');
         }
       },
     );

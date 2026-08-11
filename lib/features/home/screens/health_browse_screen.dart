@@ -8,14 +8,25 @@ import '../../steps/screens/steps_dashboard_screen.dart';
 import '../../period/screens/period_dashboard.dart';
 import '../../medication/screens/vitals/blood_pressure_screen.dart';
 import '../../medication/screens/vitals/blood_sugar_screen.dart';
+import '../../medication/screens/vitals/weight_screen.dart';
+import '../../medication/screens/vitals/mood_screen.dart';
+import '../../medication/screens/conditions/condition_library_screen.dart';
+import '../../diary/screens/diary_screen.dart';
+import '../../../core/widgets/app/vitals_theme.dart';
 import '../../insights/screens/trends_dashboard_screen.dart';
+import '../../insights/screens/weekly_recap_screen.dart';
 
 /// The "Health" tab — one browse hub that surfaces EVERY tracker as an equal
 /// sibling. Fixes the old IA where Steps/Sleep/BP/Glucose were buried three taps
 /// deep inside the Medicine screen's "Quick Access" grid. Each row opens the
 /// tracker's full dashboard (wrapped in the right accent scope).
 class HealthBrowseScreen extends StatelessWidget {
-  const HealthBrowseScreen({super.key});
+  /// Switches the shell to the Trends tab. Passed in rather than pushing a second
+  /// TrendsDashboardScreen: two live copies disagreed about the persisted range.
+  /// Null (e.g. in a screenshot harness) falls back to pushing.
+  final VoidCallback? onOpenTrends;
+
+  const HealthBrowseScreen({super.key, this.onOpenTrends});
 
   @override
   Widget build(BuildContext context) {
@@ -47,8 +58,25 @@ class HealthBrowseScreen extends StatelessWidget {
           'Systolic / diastolic readings',
           () => open(const BloodPressureScreen(), FeatureAccent.medicine)),
       _tile(ext, Symbols.bloodtype_rounded, ext.medicine, 'Blood sugar',
-          'Glucose readings & context',
+          'Readings, trends & time in range',
           () => open(const BloodSugarScreen(), FeatureAccent.medicine)),
+      _tile(
+          ext,
+          Symbols.monitor_weight_rounded,
+          VitalsColors.weightAccent(ext.isDark),
+          'Weight',
+          'Readings & trend',
+          () => open(const WeightScreen(), FeatureAccent.medicine)),
+      _tile(
+          ext,
+          Symbols.mood_rounded,
+          VitalsColors.moodAccent(ext.isDark),
+          'Mood',
+          'Daily check-ins & trend',
+          () => open(const MoodScreen(), FeatureAccent.medicine)),
+      _tile(ext, Symbols.auto_stories_rounded, ext.brand, 'Diary',
+          'Your notes & reflections',
+          () => open(const DiaryScreen(), FeatureAccent.brand)),
     ];
 
     return AppScaffold(
@@ -66,6 +94,36 @@ class HealthBrowseScreen extends StatelessWidget {
                   AppSpacing.lg, AppSpacing.gutter, AppSpacing.huge),
               children: [
                 _trendsCard(context, ext, tt),
+                const SizedBox(height: AppSpacing.md),
+                // Re-homed here: the Insights hub was its only entry point.
+                AppCard(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Column(children: _withDividers(ext, [
+                    _tile(
+                        ext,
+                        Symbols.calendar_view_week_rounded,
+                        ext.brand,
+                        'Weekly recap',
+                        'Your last 7 days across every tracker',
+                        () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                  builder: (_) => const WeeklyRecapScreen()),
+                            )),
+                    _tile(
+                        ext,
+                        Symbols.menu_book_rounded,
+                        ext.brand,
+                        'Condition library',
+                        'General reference for common conditions',
+                        () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                  builder: (_) => const ConditionLibraryScreen()),
+                            )),
+                  ])),
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 Text('Your trackers',
                     style: tt.headlineSmall?.copyWith(color: ext.textPrimary)),
@@ -87,16 +145,21 @@ class HealthBrowseScreen extends StatelessWidget {
     );
   }
 
-  /// Prominent entry into the unified Trends dashboard, seated above the
-  /// per-tracker list so "chart everything in one place" is reachable here too.
+  /// Pointer to the Trends TAB (not a pushed copy).
+  ///
+  /// Trends became a bottom-nav destination, so pushing another instance created
+  /// two live copies: the pushed one wrote the persisted range while the root tab
+  /// kept its launch-time range, and the user's selection silently disagreed
+  /// between them. Switching tabs is also what the user actually wants here.
   Widget _trendsCard(BuildContext context, AppColorsExt ext, TextTheme tt) {
     return AppCard(
       color: ext.brand.container,
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-            builder: (_) => const TrendsDashboardScreen()),
-      ),
+      onTap: onOpenTrends ??
+          () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                    builder: (_) => const TrendsDashboardScreen()),
+              ),
       child: Row(
         children: [
           Container(

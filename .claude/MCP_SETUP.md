@@ -1,172 +1,107 @@
-# MCP Server Setup Guide
+# Claude Code setup for this project
 
-## ✅ What's Already Configured
+## What's active
 
-Your `.claude/settings.json` declares **2 MCP servers**:
-1. **GitHub** — Manage PRs, issues, branches, code reviews
-2. **Firebase** — Query Firestore, check auth, manage storage
+| File | Purpose |
+|:--|:--|
+| `CLAUDE.md` (repo root) | The only context file Claude Code auto-loads. Imports `AGENTS.md`. |
+| `AGENTS.md` (repo root) | Single source of truth for project context. Also read by Antigravity/Gemini. |
+| `.mcp.json` | Declares the **Dart & Flutter MCP server** at project scope. |
+| `.claude/settings.json` | Permission rules, plugin/marketplace declarations. |
 
-Your `.aiexclude` excludes **35K+ lines** of generated code and **5.7 GB** of build artifacts.
+On your first session after adding `.mcp.json`, Claude Code asks you to approve the `dart` server
+(unless `enabledMcpjsonServers` already lists it). Confirm with `/mcp` — it should read `connected`.
 
-Your `.claude/agents/AGENTS.md` provides **cached project context** (loaded once per session).
+## Dart & Flutter MCP server
 
----
+Already wired up in `.mcp.json`. Requires Dart 3.9+; this project runs Dart 3.12.2, and the server
+reports version 0.1.4. No install step — it ships inside the Dart SDK.
 
-## 🔧 Step 1: GitHub MCP (Optional but Recommended)
+It gives Claude `analyze_files`, `run_tests`, `dart_fix`, `dart_format`, `hot_reload`,
+`hot_restart`, `widget_inspector`, `get_runtime_errors`, `get_app_logs`, `pub`, `pub_dev_search`,
+and `launch_app` / `list_devices`.
 
-### Prerequisites
-- GitHub Personal Access Token (classic or fine-grained)
+**Why it matters here:** targeted analysis instead of a whole-project `flutter analyze`, whose output
+runs past 1300 lines. It also drives a running app directly, replacing the sim-screenshot workaround.
 
-### Setup
+The server is marked experimental upstream and evolves quickly.
 
-**Option A: Interactive Setup (Recommended)**
-```bash
-cd /Users/duraisingh/Downloads/Health_tracker
-# In Claude Code IDE, run:
-/mcp add github
-# Follow prompts to authenticate with your GitHub token
+## Optional: the dart-flutter plugin
+
+`.claude/settings.json` registers the `flutter/agent-plugins` marketplace, so the plugin is one
+command away:
+
+```
+/plugin install dart-flutter@dart-flutter
+/reload-plugins
 ```
 
-**Option B: Manual Setup**
-1. Generate a GitHub token at https://github.com/settings/tokens
-   - Scopes needed: `repo`, `read:org` (for PR/issue access)
-2. Export the token:
-   ```bash
-   export GITHUB_TOKEN="your_token_here"
-   ```
-3. Reload Claude Code
+It bundles Flutter skills (responsive layouts, declarative routing, JSON serialization), Dart skills
+(unit-test generation, dependency resolution, analysis fixes), **and its own copy of the Dart MCP
+server**.
 
-### Test
-Ask the agent: **"List recent PRs on Durai0226/Health_tracker"**
-- ✅ Success: Agent fetches PRs directly from GitHub API
-- ❌ Failure: Agent tries to guess or asks for copy-paste
+> If you install it, delete the `dart` entry from `.mcp.json`. Otherwise two identical Dart MCP
+> servers connect and their tool definitions cost context twice.
 
----
+## Optional: other plugins
 
-## 🔧 Step 2: Firebase MCP (Higher Priority)
+Declared in `settings.json` under `enabledPlugins`, so Claude Code prompts to install them when you
+trust the folder. To do it by hand:
 
-### Prerequisites
-- **Node.js 18+** installed
-- **Firebase CLI** installed (`npm install -g firebase-tools`)
-- **GOOGLE_APPLICATION_CREDENTIALS** set to a service account JSON
-
-### Setup
-
-**Option A: Use Existing Firebase Auth**
-If you're already authenticated to Firebase CLI:
-```bash
-firebase login
+```
+/plugin install security-guidance@claude-plugins-official   # reviews each change for vulnerabilities
+/plugin install commit-commands@claude-plugins-official      # commit / push / PR workflows
 ```
 
-**Option B: Service Account (Recommended for MCP)**
-1. Go to Firebase Console → Project Settings → Service Accounts
-2. Generate a new service account key (JSON)
-3. Save it to a secure location (e.g., `~/.firebase/remedly-86882-key.json`)
-4. Set the environment variable:
-   ```bash
-   export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.firebase/remedly-86882-key.json"
-   ```
+`security-guidance` earns its place here: this app stores medication, menstrual-cycle, and health
+data behind `firestore.rules` and `flutter_secure_storage`.
 
-**Option C: Manual Installation**
-```bash
-npm install -g @google/firebase-mcp
-```
-
-Then restart Claude Code.
-
-### Test
-Ask the agent: **"List all Firestore collections in remedly-86882"**
-- ✅ Success: Agent queries Firestore directly
-- ❌ Failure: Agent can't connect (auth issue)
-
----
-
-## 🔧 Step 3: Dart & Flutter MCP (Advanced)
-
-The Dart & Flutter MCP isn't yet officially available from Anthropic, but you can:
-
-1. **Use `flutter analyze` via Bash** (current workaround)
-   - Agent runs `flutter analyze` when you ask about errors
-   
-2. **Monitor** https://github.com/dart-lang/mcp for official Dart MCP release
-
-3. Once available, add to `.claude/settings.json`:
-   ```json
-   "dart-flutter": {
-     "type": "local",
-     "command": "dart",
-     "args": ["mcp-server"]
-   }
-   ```
-
----
-
-## 📊 Verify Setup
-
-Run this in your terminal:
+Not yet set up, each needing a CLI + login first:
 
 ```bash
-# Check .aiexclude is respected
-ls lib/core/database/ | grep -c "\.g\.dart"
-# Expected: 0 (no generated files shown to agent)
-
-# Check AGENTS.md is in place
-cat .claude/agents/AGENTS.md | head -5
-
-# Check settings.json syntax
-jq . .claude/settings.json
+npm i -g firebase-tools && firebase login    # then: /plugin install firebase@claude-plugins-official
+brew install gh && gh auth login             # then: /plugin install github@claude-plugins-official
 ```
 
----
+The Firebase plugin covers Firestore documents and queries, **security-rules validation**, Auth user
+inspection, and index management. Note that Crashlytics tools will return nothing — see below.
 
-## 🎯 Token Savings Checklist
+## Not applicable to this project
 
-After enabling MCP servers, your token usage should **drop 40-60%**:
+- **Sentry MCP** — no crash-reporting SDK here. `firebase_crashlytics` is absent from
+  `pubspec.yaml`; add it and use the Firebase plugin rather than onboarding a second vendor.
+- **Playwright / Chrome DevTools MCP** — browser automation; this is a mobile app.
+- **Context7** — the Dart MCP already resolves symbols and searches pub.dev.
 
-| Before | After |
-|:---|:---|
-| Agent scans 34K-line `app_database.g.dart` | Agent uses Dart MCP analyzer |
-| You copy-paste Firebase console data | Agent queries Firebase MCP directly |
-| You copy GitHub PR links | Agent uses GitHub MCP API |
-| Agent re-learns project structure each session | Agent loads `.claude/agents/AGENTS.md` once |
+## `.aiexclude` is not a Claude Code file
 
----
+`.aiexclude` is an Antigravity / Gemini / Firebase Studio convention. Claude Code ignores it. The
+equivalent lives in `permissions.deny` in `.claude/settings.json`, which uses gitignore-style
+patterns where a leading `/` anchors at the repo root:
 
-## 🚨 Troubleshooting
+```json
+"deny": ["Edit(/lib/**/*.g.dart)", "Read(/build/**)"]
+```
 
-### GitHub MCP not working
-- ✓ Token is valid: https://github.com/settings/tokens
-- ✓ Token has `repo` scope
-- ✓ Environment variable is set: `echo $GITHUB_TOKEN`
+A `Read` deny also blocks `Edit` on the same path, so generated Drift code is denied for editing but
+still greppable when you need to look up a generated symbol.
 
-### Firebase MCP not working
-- ✓ Service account JSON is valid: `jq . ~/.firebase/remedly-86882-key.json`
-- ✓ GOOGLE_APPLICATION_CREDENTIALS is set: `echo $GOOGLE_APPLICATION_CREDENTIALS`
-- ✓ Project ID matches: `remedly-86882` in settings.json
-- ✓ Service account has Firestore/Storage permissions
+## Corrections to the previous version of this doc
 
-### .aiexclude not working
-- ✓ File exists: `ls -la .aiexclude`
-- ✓ Format is correct (one glob per line)
-- ✓ Reload Claude Code after creating/modifying `.aiexclude`
+Recorded so the same mistakes don't get reintroduced:
 
----
+- `settings.json` has **no** `mcpServers`, `contextFiles`, or `excludePatterns` keys, and permissions
+  use `allow`/`deny`/`ask`, not `allowedTools`. Unknown keys are ignored silently.
+- MCP servers belong in `.mcp.json` (project) or `~/.claude.json` (user/local).
+- Claude Code reads `CLAUDE.md`, never `AGENTS.md` directly; `.claude/agents/` holds subagent
+  definitions, so a plain context file there loads nothing.
+- `@google/firebase-mcp` does not exist on npm. The real server is `npx -y firebase-tools@latest mcp`.
+- The GitHub MCP endpoint is `https://api.githubcopilot.com/mcp/`, not `https://api.github.com`.
+- The Dart & Flutter MCP server shipped and is used here.
 
-## 📚 Resources
+## Docs
 
-- [MCP Overview](https://modelcontextprotocol.io)
-- [GitHub MCP Docs](https://github.com/anthropics/mcp-servers/tree/main/src/github)
-- [Firebase MCP Docs](https://github.com/google/firebase-mcp)
-- [Dart MCP (Coming Soon)](https://github.com/dart-lang/mcp)
-
----
-
-## 🎓 When to Use Each MCP
-
-| Task | Use This MCP |
-|:---|:---|
-| "Fix this error" | Dart & Flutter MCP (when available) |
-| "Check Firestore schema" | Firebase MCP |
-| "Create a PR for this fix" | GitHub MCP |
-| "What does X package do?" | Context7 MCP (fetch live docs) |
-| "Explain this code" | (No MCP needed — agent reads files directly) |
+- <https://code.claude.com/docs/en/mcp>
+- <https://code.claude.com/docs/en/discover-plugins>
+- <https://code.claude.com/docs/en/settings>
+- <https://docs.flutter.dev/ai/mcp-server>

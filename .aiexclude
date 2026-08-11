@@ -1,3 +1,6 @@
+# Antigravity / Gemini / Firebase Studio only. Claude Code does NOT read this file —
+# its equivalent is `permissions.deny` in .claude/settings.json. See .claude/MCP_SETUP.md.
+
 # === Generated Code (35K+ lines of zero-value content) ===
 **/*.g.dart
 **/*.freezed.dart

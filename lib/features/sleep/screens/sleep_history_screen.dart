@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:tablet_remainder/core/ai/insight.dart' show InsightSeverity;
+import 'package:tablet_remainder/core/health/insight.dart' show InsightSeverity;
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/sleep_session.dart';
 import '../services/sleep_service.dart';

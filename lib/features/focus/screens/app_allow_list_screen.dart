@@ -42,7 +42,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -77,13 +77,13 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
   Widget _buildAppBar() {
     return SliverAppBar(
       pinned: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackground(context),
       leading: IconButton(
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.getCardBg(context),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Symbols.arrow_back_rounded, size: 20),
@@ -100,11 +100,11 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: AppColors.getCardShadow(context),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -133,7 +133,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               _saveData();
             },
           ),
-          const Divider(height: 24),
+          Divider(height: 24, color: AppColors.getDivider(context)),
           _buildSettingSwitch(
             'Block Notifications',
             'Silence notifications from non-allowed apps',
@@ -146,7 +146,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               _saveData();
             },
           ),
-          const Divider(height: 24),
+          Divider(height: 24, color: AppColors.getDivider(context)),
           _buildSettingSwitch(
             'Show Warning',
             'Display warning when opening blocked app',
@@ -159,7 +159,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               _saveData();
             },
           ),
-          const Divider(height: 24),
+          Divider(height: 24, color: AppColors.getDivider(context)),
           Row(
             children: [
               Container(
@@ -171,11 +171,11 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                 child: const Icon(Symbols.timer_rounded, color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 16),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Grace Period',
                       style: TextStyle(
                         fontSize: 14,
@@ -186,7 +186,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                       'Seconds before tree dies when leaving app',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: AppColors.getTextSecondary(context),
                       ),
                     ),
                   ],
@@ -195,13 +195,18 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: AppColors.getGrey200(context),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButton<int>(
                   value: _allowList.gracePeriodSeconds,
                   underline: const SizedBox(),
                   isDense: true,
+                  dropdownColor: AppColors.getCardBg(context),
+                  iconEnabledColor: AppColors.getTextSecondary(context),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.getTextPrimary(context),
+                      ),
                   items: [5, 10, 15, 30, 60].map((seconds) {
                     return DropdownMenuItem(
                       value: seconds,
@@ -256,9 +261,9 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               ),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: AppColors.getTextSecondary(context),
                 ),
               ),
             ],
@@ -306,9 +311,9 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.getCardBg(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: AppColors.getBorder(context)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -359,9 +364,9 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
             ),
             Text(
               '${_allowList.allowedApps.length} apps',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textSecondary,
+                color: AppColors.getTextSecondary(context),
               ),
             ),
           ],
@@ -371,28 +376,28 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.getCardBg(context),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Center(
+            child: Center(
               child: Column(
                 children: [
-                  Text('📱', style: TextStyle(fontSize: 48)),
-                  SizedBox(height: 12),
+                  const Text('📱', style: TextStyle(fontSize: 48)),
+                  const SizedBox(height: 12),
                   Text(
                     'No apps added yet',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: AppColors.getTextPrimary(context),
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     'Add apps that won\'t kill your tree during focus',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: AppColors.getTextSecondary(context),
                     ),
                   ),
                 ],
@@ -413,7 +418,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -491,9 +496,9 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           padding: EdgeInsets.fromLTRB(
             24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: AppColors.getCardBg(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -547,7 +552,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? category.color : Colors.grey.shade100,
+                        color: isSelected ? category.color : AppColors.getGrey200(context),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -559,7 +564,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                             category.name,
                             style: TextStyle(
                               fontSize: 12,
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
+                              color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
                             ),
                           ),
                         ],

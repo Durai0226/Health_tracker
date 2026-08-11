@@ -112,12 +112,22 @@ class AppButton extends StatelessWidget {
                 Icon(leadingIcon, size: 18, color: fg),
                 const SizedBox(width: 8),
               ],
+              // A button is a FIXED-HEIGHT container, so at large Dynamic Type
+              // a label that no longer fits its row must scale down rather than
+              // clip to "+ Log so…". scaleDown never enlarges, so a label that
+              // already fits renders exactly as before; the ellipsis stays as
+              // the last-resort guard for genuinely long labels.
               Flexible(
-                child: Text(label,
-                    overflow: TextOverflow.ellipsis,
-                    style: tt.labelLarge?.copyWith(
-                        color: fg,
-                        fontWeight: emph ? FontWeight.w700 : null)),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.labelLarge?.copyWith(
+                          color: fg,
+                          fontWeight: emph ? FontWeight.w700 : null)),
+                ),
               ),
               if (trailingIcon != null) ...[
                 const SizedBox(width: 8),

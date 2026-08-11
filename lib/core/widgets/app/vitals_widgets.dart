@@ -44,20 +44,33 @@ class VitalsStatusHero extends StatelessWidget {
             stroke: 10,
             fillColor: bandColor,
             trackColor: bandColor.withOpacity(0.14),
-            center: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  bigValue,
-                  style: tt.headlineSmall?.copyWith(
-                      color: ext.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5),
-                ),
-                if (unitLabel != null)
-                  Text(unitLabel!,
-                      style: tt.labelSmall?.copyWith(color: ext.textTertiary)),
-              ],
+            // The ring is a fixed 104pt circle, so its readout has to shrink to
+            // fit rather than reflow. At accessibility text sizes the column
+            // overflowed the ring by 71px and the unit line ("of 400 mg")
+            // escaped onto the card background; `softWrap: false` also keeps a
+            // reading like "150/95" from breaking mid-number. scaleDown never
+            // enlarges, so default text sizes render exactly as before.
+            center: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    bigValue,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: tt.headlineSmall?.copyWith(
+                        color: ext.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5),
+                  ),
+                  if (unitLabel != null)
+                    Text(unitLabel!,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: tt.labelSmall?.copyWith(color: ext.textTertiary)),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.lg),

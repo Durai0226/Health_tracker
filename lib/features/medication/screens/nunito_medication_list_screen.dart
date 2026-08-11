@@ -11,6 +11,8 @@ import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../services/adherence_report_service.dart';
+import '../services/vitals_storage_service.dart';
+import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/haptic_service.dart';
 import 'nunito_medication_detail_screen.dart';
 import 'nunito_add_medication_flow.dart';
@@ -223,21 +225,48 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     );
   }
 
-  /// Build a clinician-shareable adherence PDF over the last 30 days.
+  /// Build a clinician-shareable adherence PDF over the last 30 days. Also
+  /// folds in the same window's BP/glucose readings (if any were logged) so a
+  /// doctor gets adherence, symptoms AND vitals in one document instead of
+  /// three separate exports.
   Future<void> _exportAdherenceReport() async {
     _hapticService.medium();
     final entries = await _buildReportEntries();
     if (entries == null) return;
     try {
       final now = DateTime.now();
+      final from = now.subtract(const Duration(days: 30));
+      final bpReadings = await VitalsStorageService.getBpForRange(from, now);
+      final glucoseReadings =
+          await VitalsStorageService.getGlucoseForRange(from, now);
       final bytes = await AdherenceReportService.buildPdf(
         entries: entries,
-        from: now.subtract(const Duration(days: 30)),
+        from: from,
         to: now,
+        bpReadings: bpReadings,
+        glucoseReadings: glucoseReadings,
+        patientName: await _activePatientName(),
       );
       await Printing.sharePdf(bytes: bytes, filename: 'adherence-report.pdf');
     } catch (e) {
       _reportError();
+    }
+  }
+
+  /// The active dependent's name, or null for self — buildPdf's header omits
+  /// the "Patient:" line entirely when null, which is the right default for a
+  /// single-person household. Without this, two exported reports for two
+  /// different dependents were visually indistinguishable except by reading
+  /// every row's medicine names, an easy way to hand a doctor the wrong
+  /// child's report.
+  Future<String?> _activePatientName() async {
+    final id = ActiveProfileService().activeDependentId;
+    if (id == null) return null;
+    try {
+      final deps = await MedicineCleanStorageService.getAllDependents();
+      return deps.where((d) => d.id == id).firstOrNull?.name;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -395,15 +424,21 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
 
   Widget _buildEmptyState() {
     final ext = AppColorsExt.of(context);
-    return EmptyState(
-      icon: Symbols.medication_rounded,
-      accent: ext.medicine,
-      title: _selectedTab == 0
-          ? 'No active medications'
-          : _selectedTab == 1
-              ? 'No archived medications'
-              : 'No medications found',
-      message: 'Tap the + button to add a medication.',
+    // Hosted in a scroller: the Expanded above hands the empty state exactly
+    // the height the header leaves over, and at large Dynamic Type the
+    // circle + title + message need more than that (bottom overflow at 200%).
+    // See [_ScrollableFill] — unchanged whenever it fits.
+    return _ScrollableFill(
+      child: EmptyState(
+        icon: Symbols.medication_rounded,
+        accent: ext.medicine,
+        title: _selectedTab == 0
+            ? 'No active medications'
+            : _selectedTab == 1
+                ? 'No archived medications'
+                : 'No medications found',
+        message: 'Tap the + button to add a medication.',
+      ),
     );
   }
 
@@ -552,14 +587,45 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
         children: [
           Icon(icon, size: 14, color: swatch.onContainer),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: Theme.of(context)
-                .textTheme
-                .labelMedium
-                ?.copyWith(color: swatch.onContainer),
+          // Flexible + wrapping: the pill sits in a Wrap inside the card's
+          // text column, which on a 320pt phone is only ~170pt wide — narrower
+          // than "Low stock · 12" renders even at the DEFAULT text size, so an
+          // unflexed label overflowed the chip. Letting it take a second line
+          // grows the chip instead of slicing the stock count off.
+          Flexible(
+            child: Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(color: swatch.onContainer),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Gives its child the incoming viewport height as a MINIMUM instead of a
+/// fixed size, and lets it scroll past that.
+///
+/// Anything dropped into an [Expanded] gets a tight height, which is fine
+/// until Dynamic Type grows the content past it — then a centred column of
+/// text simply gets clipped ("BOTTOM OVERFLOWED"). Because the constraint is
+/// only a minimum, layout at default text sizes is byte-for-byte unchanged.
+class _ScrollableFill extends StatelessWidget {
+  final Widget child;
+  const _ScrollableFill({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: child,
+        ),
       ),
     );
   }

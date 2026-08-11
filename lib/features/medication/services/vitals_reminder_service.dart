@@ -42,6 +42,24 @@ class VitalsReminderService {
     defaultHour: 8,
   );
 
+  static const VitalsReminderSpec weight = VitalsReminderSpec(
+    id: 900022,
+    prefKey: 'vitals_weight_reminder',
+    title: 'Weight check-in',
+    body: 'Time to weigh in and log it.',
+    // Morning, before eating/drinking, is the standard advice for a
+    // comparable day-to-day weight reading.
+    defaultHour: 7,
+  );
+
+  static const VitalsReminderSpec mood = VitalsReminderSpec(
+    id: 900023,
+    prefKey: 'vitals_mood_reminder',
+    title: 'How are you feeling?',
+    body: 'Take a moment to log your mood today.',
+    defaultHour: 20,
+  );
+
   static bool isEnabled(VitalsReminderSpec s) =>
       CleanStorageService.getAppPreference('${s.prefKey}_on', false) == true;
 

@@ -96,8 +96,15 @@ class MedicationDao extends DatabaseAccessor<AppDatabase> with _$MedicationDaoMi
       .get();
   }
 
+  /// Record a dose outcome.
+  ///
+  /// Upsert, not insert: a log id is now deterministic per medicine + scheduled
+  /// slot (see `MedicineCleanStorageService.doseLogId`), and one slot has exactly
+  /// one outcome. Re-taking or re-skipping the same dose must therefore REPLACE
+  /// the previous row. With a plain `insert` it appended instead, so skipping a
+  /// dose twice counted as two skips and the Today hero could show "3/2".
   Future<void> addLog(MedicineLogsCompanion log) async {
-    await into(medicineLogs).insert(log);
+    await into(medicineLogs).insertOnConflictUpdate(log);
   }
 
   Future<void> updateLog(MedicineLogsCompanion log) async {

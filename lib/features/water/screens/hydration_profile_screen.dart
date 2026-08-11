@@ -158,6 +158,13 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     // Saturated teal that keeps white text readable in both themes.
     final heroBg = ext.isDark ? ext.water.container : ext.water.strong;
     return Container(
+      // The page Column uses CrossAxisAlignment.start, so every child is handed
+      // LOOSE width constraints. The sibling `_buildSection` cards are forced to
+      // full width by the Expanded in their title Row, but this card's only
+      // child is a Column, which shrink-wraps to its widest child — the hero
+      // rendered at ~59% of the content width, left-aligned, with a dead gutter
+      // down the right. Fill the content width like the cards below it.
+      width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -229,6 +236,11 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
       title: 'Personal Information',
       icon: Symbols.person_rounded,
       child: Column(
+        // Without this the Column centres its children, which pushed the Gender
+        // row off the left edge established by the Weight/Age fields above it
+        // (the fields only look aligned because their Row is stretched by its
+        // Expanded children).
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -262,12 +274,22 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
+          // Wrap, not Row: the label + both chips don't fit on one line on a
+          // 320pt phone, so they flow onto a second line instead of clipping.
+          // Every run starts at the card's left edge, so a wrapped second line
+          // still lines up with the fields above.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.start,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text('Gender:', style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary)),
-              const SizedBox(width: 16),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text('Gender:',
+                    style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary)),
+              ),
               _buildGenderChip('Male', true),
-              const SizedBox(width: 8),
               _buildGenderChip('Female', false),
             ],
           ),
@@ -450,11 +472,17 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                     style: const TextStyle(fontSize: 20),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    _getClimateLabel(climate),
-                    style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? waterMark : ext.textPrimary,
+                  // 'Very Hot (>35°C)' is wider than a 320pt card at large text
+                  // sizes; Flexible bounds the label so the chip can't overflow.
+                  Flexible(
+                    child: Text(
+                      _getClimateLabel(climate),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        color: isSelected ? waterMark : ext.textPrimary,
+                      ),
                     ),
                   ),
                 ],
@@ -678,15 +706,20 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(icon, color: ext.mark(ext.water)),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: ext.textPrimary,
+              // Long headings ("Personal Information") are wider than a 320pt
+              // card once Dynamic Type is scaled up; let them wrap.
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: ext.textPrimary,
+                  ),
                 ),
               ),
             ],

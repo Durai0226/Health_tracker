@@ -1,12 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_design.dart';
-import '../../../core/ai/ai_assistant.dart';
-import '../../../core/ai/insight_engine.dart';
-import '../../../core/ai/hydration_pacer.dart';
-import '../../../core/widgets/app/ai_insight_kit.dart';
-import '../../../core/widgets/app/ai_widgets.dart';
+import '../../../core/health/insight_engine.dart';
+import '../../../core/health/hydration_pacer.dart';
+import '../../../core/widgets/app/insight_kit.dart';
+import '../../../core/widgets/app/tip_card.dart';
 import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/water_hero_gauge.dart';
@@ -26,8 +27,8 @@ import 'water_reminder_settings_screen.dart';
 import 'water_history_edit_screen.dart';
 import 'water_achievements_screen.dart';
 import 'hydration_profile_screen.dart';
-import 'hydration_challenges_screen.dart';
 import 'caffeine_insights_screen.dart';
+import '../../../core/health/coach_text.dart';
 
 /// Modern Aqua Water Dashboard
 /// Features: Animated droplet, dynamic beverage gradients, glassmorphism
@@ -528,18 +529,13 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         const SizedBox(height: AquaTheme.spacingXL),
 
                         // AI hydration insight — self-loading Calm Clarity card.
-                        // Always available: backed by the free on-device rule
-                        // engine via AiAssistant, so the tip always renders.
-                        AiInsightCard(
+                        // Computed synchronously from today's numbers, so it
+                        // renders instantly with no spinner and cannot fail.
+                        TipCard(
                           title: 'Hydration tips',
                           icon: Symbols.water_drop_rounded,
                           accent: AppColorsExt.of(context).water,
-                          // Cache per data signature (100ml + 3h buckets, plus
-                          // streak — the tip text embeds it) so re-opening the
-                          // tab doesn't re-hit a cloud engine or show a stale tip.
-                          cacheKey:
-                              'hydration:${todayData.effectiveHydrationMl ~/ 100}:${todayData.dailyGoalMl}:${WaterService.getCurrentStreak()}:${DateTime.now().hour ~/ 3}',
-                          loader: () => AiAssistant().hydrationTip(
+                          text: const CoachText().hydrationTip(
                             intakeMl: todayData.effectiveHydrationMl,
                             goalMl: todayData.dailyGoalMl,
                             streakDays: WaterService.getCurrentStreak(),
@@ -618,10 +614,24 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   }
 
   Widget _buildSliverAppBar(BeverageThemeData beverage, int streak) {
-    final isDark = AquaTheme.isDark(context);
-    
+    final tt = Theme.of(context).textTheme;
+    final scaler = MediaQuery.textScalerOf(context);
+    // The expanded header is a fixed-height box holding a display-size title
+    // and a greeting line, so its height has to track Dynamic Type or the
+    // column is clipped (verified: 64px overflow at accessibility sizes).
+    // Measured off the real styles rather than a magic number: 56pt of
+    // clearance for the toolbar row, one title line, and up to two greeting
+    // lines. Never smaller than the original 170.
+    final titleLine = scaler.scale(tt.displayMedium?.fontSize ?? 28) * 1.25;
+    final greetingLine = scaler.scale(tt.bodyMedium?.fontSize ?? 14) * 1.45;
+    final expandedHeight =
+        (56 + titleLine + 4 + greetingLine * 2 + 8).clamp(170.0, 340.0);
+
     return SliverAppBar(
-      expandedHeight: 110,
+      // Tall enough for the toolbar row plus the title and greeting beneath
+      // it. At 110 the title+greeting overflowed by 4px once they were moved
+      // clear of the back button, and the greeting was clipped.
+      expandedHeight: expandedHeight,
       floating: false,
       pinned: true,
       backgroundColor: Colors.transparent,
@@ -678,30 +688,51 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             opacity: _headerOpacity,
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                // The toolbar row (leading back button + actions) paints on
+                // top of flexibleSpace, so the title has to start below it —
+                // at 16 the back button covered the "H" of "Hydration".
+                padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        ShaderMask(
-                          shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
-                          child: Text(
-                            'Hydration',
-                            style: Theme.of(context)
-                                .textTheme
-                                .displayMedium
-                                ?.copyWith(color: Colors.white),
+                        // "Hydration" is a single word, so it cannot reflow —
+                        // at large text sizes it simply ran past the streak
+                        // badge and off the row. Expanded (not Spacer) keeps
+                        // the badge pinned right exactly as before, while
+                        // scaleDown shrinks the title only when it no longer
+                        // fits; it never enlarges, so the default header is
+                        // pixel-identical.
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: ShaderMask(
+                              shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
+                              child: Text(
+                                'Hydration',
+                                maxLines: 1,
+                                softWrap: false,
+                                style: tt.displayMedium
+                                    ?.copyWith(color: Colors.white),
+                              ),
+                            ),
                           ),
                         ),
-                        const Spacer(),
-                        if (streak > 0) AquaStreakBadge(streak: streak),
+                        if (streak > 0) ...[
+                          const SizedBox(width: AquaTheme.spacingS),
+                          AquaStreakBadge(streak: streak),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       _getGreeting(),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      // Two lines is what `expandedHeight` above budgets for.
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodyMedium?.copyWith(
                             color: AquaTheme.getTextSecondary(context),
                           ),
                     ),
@@ -760,7 +791,6 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           Symbols.local_cafe_rounded, 'Cups', _openCupCreator),
       _FeatureEntry(
           Symbols.emoji_events_rounded, 'Awards', _navigateToAchievements),
-      _FeatureEntry(Symbols.flag_rounded, 'Challenges', _navigateToChallenges),
       _FeatureEntry(Symbols.coffee_rounded, 'Caffeine', _navigateToCaffeine),
       _FeatureEntry(
           Symbols.notifications_rounded, 'Reminders', _navigateToReminders),
@@ -777,25 +807,95 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           beverageId: 'water',
         ),
         const SizedBox(height: AquaTheme.spacingS),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 4,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.85,
-          children: [
-            for (final e in entries)
-              _buildFeatureCard(
-                icon: e.icon,
-                label: e.label,
-                water: water,
-                onTap: e.onTap,
+        // A hardcoded childAspectRatio clipped these tiles: at 320pt the cells
+        // are 61pt wide, so "Reminders"/"Calendar" wrap to two lines and the
+        // column needed 82pt inside a 72pt tile (10px bottom overflow, worse at
+        // large Dynamic Type). Measure the real label height at the real tile
+        // width instead and give the grid an explicit mainAxisExtent, floored at
+        // the original 0.85 ratio so nothing shrinks anywhere it already fit.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const crossAxisCount = 4;
+            const spacing = 12.0;
+            final tileWidth =
+                (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+                    crossAxisCount;
+            // `context` here (not the State's) is the one below the Scaffold's
+            // Material, so the DefaultTextStyle it sees is the one the tile
+            // labels actually inherit.
+            final extent = _featureTileExtent(context, entries, tileWidth);
+
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: entries.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                mainAxisSpacing: spacing,
+                crossAxisSpacing: spacing,
+                mainAxisExtent: extent,
               ),
-          ],
+              itemBuilder: (context, i) {
+                final e = entries[i];
+                return _buildFeatureCard(
+                  icon: e.icon,
+                  label: e.label,
+                  water: water,
+                  onTap: e.onTap,
+                );
+              },
+            );
+          },
         ),
       ],
     );
+  }
+
+  /// The exact style `_buildFeatureCard` renders its label with — shared so the
+  /// measurement in [_featureTileExtent] can never drift from what is painted.
+  TextStyle get _featureLabelStyle =>
+      AquaTheme.caption.copyWith(fontWeight: FontWeight.w600);
+
+  /// Height a "More Features" tile actually needs: the icon chip, the gap, and
+  /// however many lines the longest label takes at [tileWidth]. Measured rather
+  /// than assumed, so both a narrow phone and large Dynamic Type grow the tile
+  /// instead of clipping it. Floored at the original 0.85 aspect ratio so tiles
+  /// are never smaller than they were.
+  double _featureTileExtent(
+      BuildContext context, List<_FeatureEntry> entries, double tileWidth) {
+    const chipPadding = 10.0 * 2; // Container(padding: EdgeInsets.all(10))
+    const border = 2.0; // 1pt card border, top + bottom
+    const gap = 8.0; // SizedBox between chip and label
+    final scaler = MediaQuery.textScalerOf(context);
+    final glyph = (IconTheme.of(context).applyTextScaling ?? false)
+        ? scaler.scale(22)
+        : 22.0;
+
+    // Measure what Text actually paints: an inheriting style is merged onto the
+    // ambient DefaultTextStyle (font family, line height), and bold-text
+    // accessibility thickens it. Measuring the bare style instead reports one
+    // line where two get rendered.
+    var effective = DefaultTextStyle.of(context).style.merge(_featureLabelStyle);
+    if (MediaQuery.boldTextOf(context)) {
+      effective = effective.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+
+    var labelHeight = 0.0;
+    for (final e in entries) {
+      final painter = TextPainter(
+        text: TextSpan(text: e.label, style: effective),
+        textDirection: Directionality.of(context),
+        textAlign: TextAlign.center,
+        textScaler: scaler,
+      )..layout(maxWidth: math.max(0.0, tileWidth - border));
+      labelHeight = math.max(labelHeight, painter.height);
+      painter.dispose();
+    }
+
+    // +1 of slack so a sub-pixel rounding difference can't re-introduce a
+    // hairline overflow.
+    final needed = border + chipPadding + glyph + gap + labelHeight + 1;
+    return math.max(tileWidth / 0.85, needed);
   }
 
   Widget _buildFeatureCard({
@@ -839,10 +939,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             const SizedBox(height: 8),
             Text(
               label,
-              style: AquaTheme.caption.copyWith(
-                color: AquaTheme.getTextPrimary(context),
-                fontWeight: FontWeight.w600,
-              ),
+              style: _featureLabelStyle
+                  .copyWith(color: AquaTheme.getTextPrimary(context)),
               textAlign: TextAlign.center,
             ),
           ],
@@ -881,13 +979,6 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const WaterAchievementsScreen()),
-    );
-  }
-
-  void _navigateToChallenges() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const HydrationChallengesScreen()),
     );
   }
 

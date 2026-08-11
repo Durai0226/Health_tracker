@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import '../../../core/ai/vitals_analyzer.dart';
+import '../../../core/health/vitals_analyzer.dart';
 import '../models/blood_pressure_reading.dart';
 import '../models/glucose_reading.dart';
 

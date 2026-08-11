@@ -54,7 +54,6 @@ dependencies:
   firebase_auth: ^5.3.4
   cloud_firestore: ^5.0.0
   firebase_app_check: ^0.3.1
-  flutter_gemma: ^0.8.0
   firebase_storage: ^12.0.0
   shared_preferences: ^2.2.2
   file_picker: ^8.0.0+1
@@ -66,11 +65,14 @@ dependencies:
   flutter_math_fork: ^0.7.2
   image_picker: ^1.0.7
   # On-device (offline) OCR for scanning an Rx label into the add-medicine flow.
-  google_mlkit_text_recognition: ^0.13.0
+  google_mlkit_text_recognition: ^0.16.0
   pdf: ^3.10.4
   printing: ^5.11.1
   record: ^6.0.0
   local_auth: ^2.1.8
+  # Salted PIN hashing for the app-lock feature (was already a transitive
+  # dependency; declared explicitly since we now import it directly).
+  crypto: ^3.0.7
   cached_network_image: ^3.3.1
   flutter_staggered_grid_view: ^0.7.0
   share_plus: ^12.0.1
@@ -105,11 +107,6 @@ dependencies:
   material_symbols_icons: ^4.2951.0
 dependency_overrides:
   intl: ^0.19.0
-  # Android-only on-device AI: a vendored copy of flutter_gemma with its iOS +
-  # web plugin declarations stripped, so the iOS build never pulls its pod and
-  # the app keeps its iOS 13 minimum. Android registers the plugin normally.
-  flutter_gemma:
-    path: third_party/flutter_gemma
 
 dev_dependencies:
   flutter_test:
@@ -149,7 +146,7 @@ flutter:
   assets:
     - assets/images/
     - assets/sounds/
-    - assets/ai/
+    - assets/health/
     - assets/data/
 
 

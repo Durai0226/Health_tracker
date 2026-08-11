@@ -1,12 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
-import '../../../core/design/app_colors_ext.dart';
-import '../../../core/widgets/common_widgets.dart';
+
+import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/app/vitals_theme.dart';
+import '../../../core/widgets/app/vitals_widgets.dart';
+import '../../medication/screens/vitals/vitals_trend_chart.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
 
-/// Dedicated screen for caffeine tracking and insights
+/// How today's caffeine intake is classified against the FDA's 400 mg/day
+/// guidance for healthy adults. General reference only — never presented as
+/// personal medical advice (see the [SafetyDisclaimerBar] at the foot).
+enum _CaffeineBand { none, withinRange, approaching, over }
+
+/// Caffeine tracker — today's intake against a daily budget, a weekly trend,
+/// where it came from, and the drinks behind it.
+///
+/// Rebuilt on the app's current design system (AppScaffold/AppHeader/AppCard/
+/// AppSpacing + the AccentSwatch theming contract). The previous version was
+/// the last screen still on the original generation: raw Scaffold + AppBar,
+/// `CommonButton`, hand-rolled Container cards, ~25 hardcoded
+/// `Colors.brown/amber/orange` values that ignored dark mode, and emoji used
+/// as iconography.
 class CaffeineInsightsScreen extends StatefulWidget {
   const CaffeineInsightsScreen({super.key});
 
@@ -15,797 +31,465 @@ class CaffeineInsightsScreen extends StatefulWidget {
 }
 
 class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
+  /// FDA guidance for healthy adults.
+  static const int _dailyLimitMg = 400;
+
+  /// Where "approaching the limit" starts.
+  static const int _warningThresholdMg = 300;
+
   DailyWaterData? _todayData;
-  Map<String, dynamic> _weeklyStats = {};
-  List<DailyWaterData> _weeklyData = [];
+  List<DailyWaterData> _weeklyData = const [];
   bool _isLoading = true;
-  
-  // Recommended daily caffeine limits
-  static const int _recommendedMax = 400; // mg
-  static const int _warningThreshold = 300; // mg
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _load();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _load() async {
     try {
       await WaterService.init();
-      if (mounted) {
-        setState(() {
-          _todayData = WaterService.getTodayData();
-          _weeklyStats = WaterService.getWeeklyStats();
-          _weeklyData = _weeklyStats['dailyData'] as List<DailyWaterData>? ?? [];
-          _isLoading = false;
-        });
-      }
+      final stats = WaterService.getWeeklyStats();
+      if (!mounted) return;
+      setState(() {
+        _todayData = WaterService.getTodayData();
+        _weeklyData = stats['dailyData'] as List<DailyWaterData>? ?? const [];
+        _isLoading = false;
+      });
     } catch (e) {
-      debugPrint('Error loading caffeine data: $e');
+      debugPrint('⚠️ Loading caffeine data failed: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Color get _caffeineColor {
-    final ext = AppColorsExt.of(context);
-    final mg = _todayData?.totalCaffeineMg ?? 0;
-    if (mg >= _recommendedMax) return ext.error.base;
-    if (mg >= _warningThreshold) return Colors.orange;
-    return ext.isDark ? Colors.brown.shade300 : Colors.brown;
+  int get _todayMg => _todayData?.totalCaffeineMg ?? 0;
+
+  List<EnhancedWaterLog> get _todayCaffeineDrinks =>
+      (_todayData?.logs ?? const <EnhancedWaterLog>[])
+          .where((l) => l.caffeineAmount > 0)
+          .toList();
+
+  _CaffeineBand get _band {
+    if (_todayMg <= 0) return _CaffeineBand.none;
+    if (_todayMg >= _dailyLimitMg) return _CaffeineBand.over;
+    if (_todayMg >= _warningThresholdMg) return _CaffeineBand.approaching;
+    return _CaffeineBand.withinRange;
   }
 
-  /// Caffeine's brown identity kept readable as a mark on app surfaces in dark.
-  Color get _brownMark =>
-      AppColorsExt.of(context).isDark ? Colors.brown.shade200 : Colors.brown.shade700;
+  /// Band colour drawn from the shared 5-step vitals scale, so caffeine reads
+  /// with the same visual grammar as BP/glucose rather than its own palette.
+  Color _bandColor(AppColorsExt ext) {
+    switch (_band) {
+      case _CaffeineBand.none:
+      case _CaffeineBand.withinRange:
+        return VitalsColors.moodBand(ext.isDark, 0); // green
+      case _CaffeineBand.approaching:
+        return VitalsColors.moodBand(ext.isDark, 1); // amber
+      case _CaffeineBand.over:
+        return VitalsColors.moodBand(ext.isDark, 3); // red
+    }
+  }
 
-  /// Subtle brown tint for chips/badges that stays legible in dark mode.
-  Color _brownTint(AppColorsExt ext) =>
-      Colors.brown.withOpacity(ext.isDark ? 0.22 : 0.1);
+  IconData get _bandIcon {
+    switch (_band) {
+      case _CaffeineBand.none:
+      case _CaffeineBand.withinRange:
+        return Symbols.check_circle_rounded;
+      case _CaffeineBand.approaching:
+        return Symbols.trending_up_rounded;
+      case _CaffeineBand.over:
+        return Symbols.warning_amber_rounded;
+    }
+  }
 
-  String get _caffeineStatus {
-    final mg = _todayData?.totalCaffeineMg ?? 0;
-    if (mg >= _recommendedMax) return 'High - Consider reducing';
-    if (mg >= _warningThreshold) return 'Moderate - Approaching limit';
-    if (mg > 0) return 'Within healthy range';
-    return 'No caffeine today';
+  String get _bandLabel {
+    switch (_band) {
+      case _CaffeineBand.none:
+        return 'None today';
+      case _CaffeineBand.withinRange:
+        return 'Within range';
+      case _CaffeineBand.approaching:
+        return 'Approaching limit';
+      case _CaffeineBand.over:
+        return 'Over the guideline';
+    }
+  }
+
+  String get _bandMeaning {
+    switch (_band) {
+      case _CaffeineBand.none:
+        return "You haven't logged any caffeine today.";
+      case _CaffeineBand.withinRange:
+        return 'Comfortably inside the usual $_dailyLimitMg mg daily guidance.';
+      case _CaffeineBand.approaching:
+        return 'Getting close to the $_dailyLimitMg mg daily guidance — worth easing off.';
+      case _CaffeineBand.over:
+        return 'Above the $_dailyLimitMg mg daily guidance for healthy adults.';
+    }
+  }
+
+  /// How much effective hydration the day's caffeinated drinks gave up versus
+  /// their raw volume. Always ≤ 0, so it is rendered as an explicit offset
+  /// (e.g. "−45 ml") in the caffeine accent — never in the water accent, which
+  /// would read as hydration gained.
+  int get _hydrationOffsetMl {
+    var offset = 0;
+    for (final log in _todayData?.logs ?? const <EnhancedWaterLog>[]) {
+      if (log.caffeineAmount > 0) {
+        offset += log.effectiveHydrationMl - log.amountMl;
+      }
+    }
+    return offset;
+  }
+
+  /// The last 7 days' totals, oldest → newest, aligned to real calendar days
+  /// so a gap day reads as 0 rather than shifting the series.
+  List<double> get _weekSeries {
+    final today = DateTime.now();
+    return List<double>.generate(7, (i) {
+      final day = today.subtract(Duration(days: 6 - i));
+      final match = _weeklyData.where((d) =>
+          d.date.year == day.year &&
+          d.date.month == day.month &&
+          d.date.day == day.day);
+      return match.isEmpty ? 0.0 : match.first.totalCaffeineMg.toDouble();
+    });
+  }
+
+  int get _weeklyAverageMg {
+    if (_weeklyData.isEmpty) return 0;
+    final total = _weeklyData.fold<int>(0, (s, d) => s + d.totalCaffeineMg);
+    return (total / _weeklyData.length).round();
   }
 
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    return Scaffold(
-      backgroundColor: ext.background,
-      appBar: AppBar(
-        backgroundColor: Colors.brown.shade700,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+    final accent = VitalsColors.caffeineAccent(ext.isDark);
+
+    return AppScaffold(
+      safeTop: true,
+      body: Column(
+        children: [
+          AppHeader(
+            title: 'Caffeine',
+            icon: Symbols.coffee_rounded,
+            accent: accent,
+            leading: AppIconButton(
+              icon: Symbols.arrow_back_rounded,
+              filled: false,
+              accent: accent,
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? Center(
+                    child: CircularProgressIndicator(color: ext.mark(accent)))
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    color: ext.mark(accent),
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                          AppSpacing.sm, AppSpacing.gutter, AppSpacing.xl),
+                      children: _buildBody(ext, accent),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildBody(AppColorsExt ext, AccentSwatch accent) {
+    return [
+      VitalsStatusHero(
+        bigValue: '$_todayMg',
+        unitLabel: 'of $_dailyLimitMg mg',
+        // Fills as the daily budget is consumed — the natural reading for an
+        // allowance. (BP/glucose invert this because for them full = healthy.)
+        ringProgress: (_todayMg / _dailyLimitMg).clamp(0.0, 1.0),
+        bandColor: _bandColor(ext),
+        categoryIcon: _bandIcon,
+        categoryLabel: _bandLabel,
+        meaning: _bandMeaning,
+        subtitle: _todayCaffeineDrinks.isEmpty
+            ? null
+            : '${_todayCaffeineDrinks.length} '
+                'drink${_todayCaffeineDrinks.length == 1 ? '' : 's'} today',
+      ),
+      const SizedBox(height: AppSpacing.md),
+      StatTileRow(tiles: [
+        StatTile(
+          value: '${_todayCaffeineDrinks.length}',
+          label: 'Drinks',
+          icon: Symbols.coffee_rounded,
+          accent: accent,
         ),
-        title: const Text(
-          'Caffeine Tracker',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        StatTile(
+          value: '$_weeklyAverageMg mg',
+          label: '7-day avg',
+          icon: Symbols.timeline_rounded,
+          accent: accent,
+        ),
+        StatTile(
+          value: _hydrationOffsetMl == 0 ? '—' : '$_hydrationOffsetMl ml',
+          label: 'Hydration offset',
+          icon: Symbols.water_drop_rounded,
+          accent: accent,
+        ),
+      ]),
+      const SizedBox(height: AppSpacing.lg),
+      ..._buildWeeklyTrend(ext, accent),
+      ..._buildSources(ext, accent),
+      ..._buildTodayDrinks(ext, accent),
+      const SizedBox(height: AppSpacing.lg),
+      _buildTips(ext, accent),
+      const SizedBox(height: AppSpacing.xl),
+      const SafetyDisclaimerBar(),
+    ];
+  }
+
+  List<Widget> _buildWeeklyTrend(AppColorsExt ext, AccentSwatch accent) {
+    final series = _weekSeries;
+    if (series.every((v) => v == 0)) return const [];
+    final peak = series.reduce(math.max);
+    return [
+      SectionHeader(
+          title: 'This week', icon: Symbols.show_chart_rounded, accent: accent),
+      const SizedBox(height: 4),
+      Text('Shaded band is the $_dailyLimitMg mg daily guidance',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: ext.textTertiary)),
+      const SizedBox(height: AppSpacing.sm),
+      AppCard(
+        child: VitalsTrendChart(
+          series: [
+            VitalsSeries(
+                values: series, color: ext.mark(accent), label: 'Caffeine'),
+          ],
+          minY: 0,
+          // Headroom above the larger of the limit and the week's peak, so a
+          // heavy day is never drawn clipped against the top of the chart.
+          maxY: math.max(_dailyLimitMg.toDouble(), peak) * 1.15,
+          bandLow: 0,
+          bandHigh: _dailyLimitMg.toDouble(),
+          bandColor: VitalsColors.moodBand(ext.isDark, 0),
         ),
       ),
+      const SizedBox(height: AppSpacing.lg),
+    ];
+  }
 
-      body: _isLoading
-        ? const Center(child: CircularProgressIndicator(color: Colors.brown))
-        : _todayData == null
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Symbols.error_rounded, size: 64, color: ext.error.base),
-                const SizedBox(height: 16),
-                const Text('Failed to load caffeine data'),
-                const SizedBox(height: 16),
-                CommonButton(
-                  text: 'Retry',
-                  variant: ButtonVariant.primary,
-                  backgroundColor: Colors.brown,
-                  onPressed: _loadData,
+  List<Widget> _buildSources(AppColorsExt ext, AccentSwatch accent) {
+    final byBeverage = <String, int>{};
+    for (final log in _todayCaffeineDrinks) {
+      byBeverage[log.beverageId] =
+          (byBeverage[log.beverageId] ?? 0) + log.caffeineAmount;
+    }
+    if (byBeverage.isEmpty) return const [];
+
+    final sorted = byBeverage.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final tt = Theme.of(context).textTheme;
+
+    return [
+      SectionHeader(
+          title: 'Where it came from',
+          icon: Symbols.pie_chart_rounded,
+          accent: accent),
+      const SizedBox(height: AppSpacing.sm),
+      AppCard(
+        child: Column(
+          children: [
+            for (final entry in sorted)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            WaterService.getBeverage(entry.key)?.name ??
+                                entry.key,
+                            style: tt.bodyMedium?.copyWith(
+                                color: ext.textPrimary,
+                                fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: AppRadius.brSm,
+                            child: LinearProgressIndicator(
+                              value: _todayMg > 0 ? entry.value / _todayMg : 0,
+                              backgroundColor: ext.surfaceVariant,
+                              valueColor:
+                                  AlwaysStoppedAnimation(ext.mark(accent)),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Text('${entry.value} mg',
+                        style: tt.labelLarge?.copyWith(
+                            color: ext.mark(accent),
+                            fontWeight: FontWeight.w700)),
+                  ],
                 ),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+    ];
+  }
+
+  List<Widget> _buildTodayDrinks(AppColorsExt ext, AccentSwatch accent) {
+    final drinks = _todayCaffeineDrinks;
+    final tt = Theme.of(context).textTheme;
+
+    if (drinks.isEmpty) {
+      return [
+        SectionHeader(
+            title: "Today's drinks",
+            icon: Symbols.local_cafe_rounded,
+            accent: accent),
+        const SizedBox(height: AppSpacing.sm),
+        AppCard(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Column(
+              children: [
+                Icon(Symbols.coffee_rounded,
+                    size: 40, color: ext.textTertiary),
+                const SizedBox(height: AppSpacing.sm),
+                Text('No caffeinated drinks logged today',
+                    style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+                const SizedBox(height: 4),
+                Text('Log a coffee or tea from the Water tracker',
+                    textAlign: TextAlign.center,
+                    style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
               ],
             ),
-          )
-        : RefreshIndicator(
-        onRefresh: () async {
-          await _loadData();
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+          ),
+        ),
+      ];
+    }
+
+    return [
+      SectionHeader(
+          title: "Today's drinks",
+          icon: Symbols.local_cafe_rounded,
+          accent: accent),
+      const SizedBox(height: AppSpacing.sm),
+      AppCard(
+        child: Column(
+          children: [
+            for (final log in drinks.reversed)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: accent.container,
+                        borderRadius: AppRadius.brMd,
+                      ),
+                      child: Icon(Symbols.coffee_rounded,
+                          size: 22, color: accent.onContainer),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(log.beverageName,
+                              style: tt.bodyMedium?.copyWith(
+                                  color: ext.textPrimary,
+                                  fontWeight: FontWeight.w600)),
+                          Text(
+                            '${TimeOfDay.fromDateTime(log.time).format(context)}'
+                            ' · ${log.amountMl} ml',
+                            style: tt.bodySmall
+                                ?.copyWith(color: ext.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text('${log.caffeineAmount} mg',
+                        style: tt.labelLarge?.copyWith(
+                            color: ext.mark(accent),
+                            fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildTips(AppColorsExt ext, AccentSwatch accent) {
+    const tips = <(IconData, String)>[
+      (
+        Symbols.health_and_safety_rounded,
+        'The FDA suggests up to 400 mg a day for most healthy adults.'
+      ),
+      (
+        Symbols.bedtime_rounded,
+        'Caffeine can disrupt sleep up to 6 hours before bed.'
+      ),
+      (
+        Symbols.water_drop_rounded,
+        "It's a mild diuretic — pair it with extra water."
+      ),
+      (
+        Symbols.schedule_rounded,
+        'Effects usually peak 30–60 minutes after drinking.'
+      ),
+    ];
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+            title: 'Good to know',
+            icon: Symbols.lightbulb_rounded,
+            accent: accent),
+        const SizedBox(height: AppSpacing.sm),
+        AppCard(
           child: Column(
             children: [
-              _buildHeader(),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildTodaySummary(),
-                    const SizedBox(height: 20),
-                    _buildWeeklyChart(),
-                    const SizedBox(height: 20),
-                    _buildCaffeineSources(),
-                    const SizedBox(height: 20),
-                    _buildHealthInfo(),
-                    const SizedBox(height: 20),
-                    _buildTodayDrinks(),
-                    const SizedBox(height: 100),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    if (_todayData == null) {
-      return const SizedBox.shrink();
-    }
-    final ext = AppColorsExt.of(context);
-    final todayData = _todayData!;
-    final progress = (todayData.totalCaffeineMg / _recommendedMax).clamp(0.0, 1.0);
-    
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.brown.shade700, Colors.brown.shade600],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(32),
-          bottomRight: Radius.circular(32),
-        ),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 16),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 160,
-                height: 160,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 12,
-                  backgroundColor: Colors.white24,
-                  valueColor: AlwaysStoppedAnimation(
-                    progress >= 1 ? ext.error.base : Colors.white,
-                  ),
-                ),
-              ),
-              Column(
-                children: [
-                  const Text(
-                    '☕',
-                    style: TextStyle(fontSize: 36),
-                  ),
-                  Text(
-                    '${todayData.totalCaffeineMg}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'of ${_recommendedMax}mg',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              _caffeineStatus,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTodaySummary() {
-    if (_todayData == null) {
-      return const SizedBox.shrink();
-    }
-    final ext = AppColorsExt.of(context);
-    final todayData = _todayData!;
-    final caffeinedrinks = todayData.logs.where((l) => l.caffeineAmount > 0).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: ext.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Today\'s Summary',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _buildSummaryItem(
-                icon: Symbols.coffee_rounded,
-                value: '${caffeinedrinks.length}',
-                label: 'Drinks',
-                color: Colors.brown,
-              ),
-              const SizedBox(width: 16),
-              _buildSummaryItem(
-                icon: Symbols.speed_rounded,
-                value: '${todayData.totalCaffeineMg}mg',
-                label: 'Total',
-                color: _caffeineColor,
-              ),
-              const SizedBox(width: 16),
-              _buildSummaryItem(
-                icon: Symbols.water_drop_rounded,
-                value: '${_calculateHydrationImpact()}ml',
-                label: 'Hydration Impact',
-                color: ext.mark(ext.water),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryItem({
-    required IconData icon,
-    required String value,
-    required String label,
-    required Color color,
-  }) {
-    final ext = AppColorsExt.of(context);
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(ext.isDark ? 0.18 : 0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: ext.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  int _calculateHydrationImpact() {
-    if (_todayData == null) return 0;
-    
-    int impact = 0;
-    final logs = _todayData!.logs;
-    for (final log in logs) {
-      if (log.caffeineAmount > 0) {
-        impact += log.effectiveHydrationMl - log.amountMl;
-      }
-    }
-    return impact;
-  }
-
-  Widget _buildWeeklyChart() {
-    final ext = AppColorsExt.of(context);
-    if (_weeklyData.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: ext.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Center(
-          child: Text(
-            'No weekly data available',
-            style: TextStyle(color: ext.textSecondary),
-          ),
-        ),
-      );
-    }
-    
-    final maxCaffeine = math.max(
-      _weeklyData.map((d) => d.totalCaffeineMg).reduce(math.max).toDouble(),
-      _recommendedMax.toDouble(),
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: ext.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'This Week',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _brownTint(ext),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${_calculateWeeklyAverage()}mg avg',
-                  style: TextStyle(
-                    color: _brownMark,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 140,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(7, (index) {
-                final day = DateTime.now().subtract(Duration(days: 6 - index));
-                final dayData = _weeklyData.where((d) =>
-                    d.date.day == day.day && 
-                    d.date.month == day.month && 
-                    d.date.year == day.year).toList();
-                
-                final caffeine = dayData.isNotEmpty ? dayData.first.totalCaffeineMg : 0;
-                final height = maxCaffeine > 0 ? (caffeine / maxCaffeine) * 100 : 0.0;
-                final isToday = index == 6;
-                final dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-                Color barColor = Colors.brown.shade300;
-                if (caffeine >= _recommendedMax) {
-                  barColor = ext.error.base;
-                } else if (caffeine >= _warningThreshold) {
-                  barColor = Colors.orange;
-                } else if (isToday) {
-                  barColor = ext.isDark ? Colors.brown.shade400 : Colors.brown.shade600;
-                }
-
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      caffeine > 0 ? '${caffeine}mg' : '-',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: ext.textSecondary,
-                        fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+              for (final (icon, text) in tips)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(icon, size: 18, color: ext.mark(accent)),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(text,
+                            style: tt.bodyMedium?.copyWith(
+                                color: ext.textPrimary, height: 1.35)),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: 28,
-                      height: height.clamp(4, 100),
-                      decoration: BoxDecoration(
-                        color: barColor,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      dayNames[day.weekday - 1],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isToday ? _brownMark : ext.textSecondary,
-                        fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildLegendItem(Colors.brown.shade300, 'Normal'),
-              const SizedBox(width: 16),
-              _buildLegendItem(Colors.orange, 'Warning'),
-              const SizedBox(width: 16),
-              _buildLegendItem(ext.error.base, 'High'),
+                    ],
+                  ),
+                ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendItem(Color color, String label) {
-    final ext = AppColorsExt.of(context);
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, color: ext.textSecondary),
         ),
       ],
-    );
-  }
-
-  int _calculateWeeklyAverage() {
-    if (_weeklyData.isEmpty) return 0;
-    try {
-      final total = _weeklyData.fold(0, (sum, d) => sum + d.totalCaffeineMg);
-      return (total / _weeklyData.length).round();
-    } catch (e) {
-      debugPrint('Error calculating weekly average: $e');
-      return 0;
-    }
-  }
-
-  Widget _buildCaffeineSources() {
-    if (_todayData == null) {
-      return const SizedBox.shrink();
-    }
-    
-    final caffeineBreakdown = <String, int>{};
-    final logs = _todayData!.logs;
-    for (final log in logs) {
-      if (log.caffeineAmount > 0) {
-        caffeineBreakdown[log.beverageId] = 
-            (caffeineBreakdown[log.beverageId] ?? 0) + log.caffeineAmount;
-      }
-    }
-
-    if (caffeineBreakdown.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final ext = AppColorsExt.of(context);
-    final sortedEntries = caffeineBreakdown.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: ext.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Caffeine Sources Today',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
-          ),
-          const SizedBox(height: 16),
-          ...sortedEntries.map((entry) {
-            final beverage = WaterService.getBeverage(entry.key);
-            final totalCaffeine = _todayData?.totalCaffeineMg ?? 0;
-            final percent = totalCaffeine > 0
-                ? (entry.value / totalCaffeine * 100)
-                : 0.0;
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Text(
-                    beverage?.emoji ?? '☕',
-                    style: const TextStyle(fontSize: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          beverage?.name ?? entry.key,
-                          style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary),
-                        ),
-                        const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: percent / 100,
-                            backgroundColor: ext.surfaceVariant,
-                            valueColor: const AlwaysStoppedAnimation(Colors.brown),
-                            minHeight: 6,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '${entry.value}mg',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: _brownMark,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHealthInfo() {
-    final ext = AppColorsExt.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: ext.isDark
-              ? [ext.surfaceVariant, ext.surfaceVariant]
-              : [Colors.amber.shade100, Colors.orange.shade100],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Symbols.lightbulb_rounded,
-                  color: ext.isDark ? ext.mark(ext.warning) : Colors.orange.shade800),
-              const SizedBox(width: 8),
-              Text(
-                'Caffeine Tips',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: ext.isDark ? ext.textPrimary : Colors.brown.shade900),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildTip('💡', 'FDA recommends max 400mg caffeine daily for healthy adults'),
-          _buildTip('⏰', 'Avoid caffeine 6 hours before bedtime for better sleep'),
-          _buildTip('💧', 'Caffeine is a mild diuretic - drink extra water to compensate'),
-          _buildTip('📉', 'Caffeine effects peak 30-60 minutes after consumption'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTip(String emoji, String text) {
-    final ext = AppColorsExt.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                color: ext.isDark ? ext.textSecondary : Colors.brown.shade800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTodayDrinks() {
-    if (_todayData == null) {
-      return const SizedBox.shrink();
-    }
-    
-    final allLogs = _todayData!.logs;
-    final caffeineDrinks = allLogs.where((l) => l.caffeineAmount > 0).toList();
-    
-    final ext = AppColorsExt.of(context);
-    if (caffeineDrinks.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: ext.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-            const Text('☕', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 12),
-            Text(
-              'No caffeinated drinks today',
-              style: TextStyle(
-                color: ext.textSecondary,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: ext.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Today\'s Caffeine Drinks',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ext.textPrimary),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _brownTint(ext),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${caffeineDrinks.length} drinks',
-                  style: TextStyle(
-                    color: _brownMark,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...caffeineDrinks.reversed.map((log) => _buildDrinkItem(log)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrinkItem(EnhancedWaterLog log) {
-    final ext = AppColorsExt.of(context);
-    final time = '${log.time.hour.toString().padLeft(2, '0')}:${log.time.minute.toString().padLeft(2, '0')}';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: ext.surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: _brownTint(ext),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Text(log.beverageEmoji, style: const TextStyle(fontSize: 22)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  log.beverageName,
-                  style: TextStyle(fontWeight: FontWeight.w600, color: ext.textPrimary),
-                ),
-                Text(
-                  '$time • ${log.amountMl}ml',
-                  style: TextStyle(fontSize: 12, color: ext.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: _brownTint(ext),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${log.caffeineAmount}mg',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: _brownMark,
-              ),
-            ),
-          ),
-
-        ],
-      ),
     );
   }
 }

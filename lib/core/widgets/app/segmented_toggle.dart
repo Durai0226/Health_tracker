@@ -67,10 +67,17 @@ class SegmentedToggle extends StatelessWidget {
                                 i == index ? ext.mark(s) : ext.textSecondary),
                         const SizedBox(width: 8),
                       ],
-                      Text(
-                        items[i].label,
-                        style: tt.labelLarge?.copyWith(
-                          color: i == index ? ext.mark(s) : ext.textSecondary,
+                      // Flexible + ellipsis: segments split the width evenly,
+                      // so at 320px a 3-up toggle gives each label ~90px. An
+                      // unflexed Text overflowed the segment there.
+                      Flexible(
+                        child: Text(
+                          items[i].label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.labelLarge?.copyWith(
+                            color: i == index ? ext.mark(s) : ext.textSecondary,
+                          ),
                         ),
                       ),
                     ],

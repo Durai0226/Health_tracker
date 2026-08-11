@@ -4,7 +4,6 @@ import 'package:tablet_remainder/features/water/models/enhanced_water_log.dart';
 import 'package:tablet_remainder/features/water/models/water_container.dart';
 import 'package:tablet_remainder/features/water/models/water_achievement.dart';
 import 'package:tablet_remainder/features/water/models/hydration_profile.dart';
-import 'package:tablet_remainder/features/water/models/hydration_challenge.dart';
 
 void main() {
   group('BeverageType Tests', () {
@@ -335,85 +334,6 @@ void main() {
 
       expect(userAchievements.totalPoints, 100);
       expect(userAchievements.level, 2); // 100 points / 100 per level = level 2
-    });
-  });
-
-  group('HydrationChallenge Tests', () {
-    test('available challenges list is not empty', () {
-      expect(HydrationChallenge.availableChallenges, isNotEmpty);
-    });
-
-    test('challenge progress calculation is correct', () {
-      final challenge = HydrationChallenge(
-        id: 'test',
-        title: 'Test Challenge',
-        description: 'Test description',
-        emoji: '🏆',
-        targetValue: 10,
-        currentProgress: 5,
-      );
-
-      expect(challenge.progressPercent, 0.5);
-      expect(challenge.isCompleted, false);
-    });
-
-    test('days remaining calculation is correct', () {
-      final now = DateTime.now();
-      final challenge = HydrationChallenge(
-        id: 'test',
-        title: 'Test Challenge',
-        description: 'Test description',
-        emoji: '🏆',
-        targetValue: 7,
-        durationDays: 7,
-        startDate: now,
-        endDate: now.add(const Duration(days: 3)),
-      );
-
-      // endDate is ~3 days out; .inDays truncates the sub-second gap between
-      // the two now() reads, so the inclusive count lands at 3 or 4.
-      expect(challenge.daysRemaining, inInclusiveRange(3, 4));
-    });
-
-    test('expired challenge is detected', () {
-      final past = DateTime.now().subtract(const Duration(days: 2));
-      final challenge = HydrationChallenge(
-        id: 'test',
-        title: 'Test Challenge',
-        description: 'Test description',
-        emoji: '🏆',
-        targetValue: 7,
-        endDate: past,
-      );
-
-      expect(challenge.isExpired, true);
-    });
-
-    test('difficulty labels are correct', () {
-      final easyChallenge = HydrationChallenge(
-        id: 'test',
-        title: 'Easy Challenge',
-        description: 'Test',
-        emoji: '🏆',
-        difficulty: ChallengeDifficulty.easy,
-        targetValue: 3,
-      );
-
-      expect(easyChallenge.difficultyLabel, 'Easy');
-    });
-
-    test('challenge copyWith works correctly', () {
-      final challenge = HydrationChallenge.availableChallenges.first;
-      final started = challenge.copyWith(
-        isActive: true,
-        startDate: DateTime.now(),
-        currentProgress: 1,
-      );
-
-      expect(started.isActive, true);
-      expect(started.currentProgress, 1);
-      expect(started.id, challenge.id);
-      expect(started.title, challenge.title);
     });
   });
 

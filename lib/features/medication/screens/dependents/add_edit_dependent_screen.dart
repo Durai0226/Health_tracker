@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:tablet_remainder/core/widgets/app/app_pickers.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
-import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/dependent_profile.dart';
 import '../../services/medicine_storage_service.dart';
 
@@ -17,35 +16,47 @@ class AddEditDependentScreen extends StatefulWidget {
 
 class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   late TextEditingController _nameController;
   late TextEditingController _bloodTypeController;
+  late TextEditingController _allergiesController;
   late TextEditingController _notesController;
   late TextEditingController _emergencyContactController;
   late TextEditingController _emergencyPhoneController;
-  
+
   RelationshipType _relationship = RelationshipType.child;
   DateTime? _dateOfBirth;
   String? _gender; // "Male", "Female", "Other"
   bool _isSaving = false;
 
+  bool get _isEditing => widget.editDependent != null;
+
+  /// The self profile's relationship can't be reassigned to someone else —
+  /// it's the anchor `null`-`dependentId` maps to (see ActiveProfileService).
+  /// Everything else about it (name, allergies, ...) is editable like any
+  /// other profile.
+  bool get _isEditingSelf => widget.editDependent?.isSelf ?? false;
+
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.editDependent?.name);
-    _bloodTypeController = TextEditingController(text: widget.editDependent?.bloodType);
-    _notesController = TextEditingController(text: widget.editDependent?.notes);
-    _emergencyContactController = TextEditingController(text: widget.editDependent?.emergencyContact);
-    _emergencyPhoneController = TextEditingController(text: widget.editDependent?.emergencyPhone);
-    _relationship = widget.editDependent?.relationship ?? RelationshipType.child;
-    _dateOfBirth = widget.editDependent?.dateOfBirth;
-    _gender = widget.editDependent?.gender;
+    final d = widget.editDependent;
+    _nameController = TextEditingController(text: d?.name);
+    _bloodTypeController = TextEditingController(text: d?.bloodType);
+    _allergiesController = TextEditingController(text: d?.allergies?.join(', '));
+    _notesController = TextEditingController(text: d?.notes);
+    _emergencyContactController = TextEditingController(text: d?.emergencyContact);
+    _emergencyPhoneController = TextEditingController(text: d?.emergencyPhone);
+    _relationship = d?.relationship ?? RelationshipType.child;
+    _dateOfBirth = d?.dateOfBirth;
+    _gender = d?.gender;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _bloodTypeController.dispose();
+    _allergiesController.dispose();
     _notesController.dispose();
     _emergencyContactController.dispose();
     _emergencyPhoneController.dispose();
@@ -65,26 +76,58 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
     }
   }
 
+  List<String>? _parseAllergies() {
+    final raw = _allergiesController.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return raw.isEmpty ? null : raw;
+  }
+
   Future<void> _saveDependent() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
+    final ext = AppColorsExt.of(context);
 
     try {
+      // This form has no controls for weight/height/conditions/
+      // primaryDoctorId/insuranceInfo/avatarPath at all — carry them forward
+      // from the existing record on an edit, or every edit through this
+      // screen (even just correcting a name) silently wiped them to null,
+      // discarding data this screen simply doesn't expose a way to re-enter.
+      final existing = widget.editDependent;
       final dependent = DependentProfile(
-        id: widget.editDependent?.id ?? const Uuid().v4(),
+        id: existing?.id ?? const Uuid().v4(),
         name: _nameController.text.trim(),
         relationship: _relationship,
         dateOfBirth: _dateOfBirth,
-        bloodType: _bloodTypeController.text.trim().isEmpty ? null : _bloodTypeController.text.trim(),
+        bloodType: _bloodTypeController.text.trim().isEmpty
+            ? null
+            : _bloodTypeController.text.trim(),
         gender: _gender,
-        emergencyContact: _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
-        emergencyPhone: _emergencyPhoneController.text.trim().isEmpty ? null : _emergencyPhoneController.text.trim(),
-        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        isActive: widget.editDependent?.isActive ?? true,
+        weight: existing?.weight,
+        height: existing?.height,
+        allergies: _parseAllergies(),
+        conditions: existing?.conditions,
+        emergencyContact: _emergencyContactController.text.trim().isEmpty
+            ? null
+            : _emergencyContactController.text.trim(),
+        emergencyPhone: _emergencyPhoneController.text.trim().isEmpty
+            ? null
+            : _emergencyPhoneController.text.trim(),
+        primaryDoctorId: existing?.primaryDoctorId,
+        insuranceInfo: existing?.insuranceInfo,
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+        avatarPath: existing?.avatarPath,
+        isActive: existing?.isActive ?? true,
+        createdAt: existing?.createdAt,
       );
 
-      if (widget.editDependent != null) {
+      if (_isEditing) {
         await MedicineCleanStorageService.updateDependent(dependent);
       } else {
         await MedicineCleanStorageService.addDependent(dependent);
@@ -92,19 +135,14 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
 
       if (mounted) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.editDependent != null ? 'Profile updated' : 'Profile added'),
-            backgroundColor: AppColors.success,
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving profile: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: ext.error.base,
+            content: Text('Error saving profile: $e',
+                style: TextStyle(color: ext.error.on)),
           ),
         );
       }
@@ -115,268 +153,216 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AppColors.isDark(context);
-    
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
-      appBar: AppBar(
-        title: Text(widget.editDependent != null ? 'Edit Profile' : 'Add Family Member'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Avatar Placeholder
-              Center(
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.primary, width: 2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          _relationship.icon,
-                          style: const TextStyle(fontSize: 48),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Symbols.camera_alt_rounded, color: Colors.white, size: 16),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
 
-              _buildSectionTitle('Profile Info', isDark),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _nameController,
-                label: 'Full Name',
-                hint: 'Jane Doe',
-                icon: Symbols.person_rounded,
-                validator: (v) => v?.trim().isEmpty == true ? 'Name is required' : null,
-                isDark: isDark,
+    return AccentScope(
+      feature: FeatureAccent.medicine,
+      child: AppScaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppHeader(
+              title: _isEditing ? 'Edit profile' : 'Add family member',
+              icon: Symbols.person_add_rounded,
+              accent: med,
+              leading: IconButton(
+                icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
+                onPressed: () => Navigator.pop(context),
               ),
-              const SizedBox(height: 12),
-              
-              // Relationship Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isDark ? Colors.transparent : Colors.transparent),
+              actions: [
+                AppButton(
+                  label: 'Save',
+                  size: AppButtonSize.sm,
+                  accent: med,
+                  loading: _isSaving,
+                  onPressed: _saveDependent,
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButtonFormField<RelationshipType>(
-                    value: _relationship,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      prefixIcon: Icon(Symbols.people_rounded),
-                      labelText: 'Relationship',
-                    ),
-                    items: RelationshipType.values
-                        .where((r) => r != RelationshipType.self) // Exclude self if needed, or keep
-                        .map((r) => DropdownMenuItem(
-                              value: r,
-                              child: Text(r.displayName),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _relationship = val!),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 12),
-              
-              // Date of Birth
-              InkWell(
-                onTap: _selectDate,
-                borderRadius: BorderRadius.circular(12),
-                child: IgnorePointer(
-                  child: _buildTextField(
-                    controller: TextEditingController(
-                      text: _dateOfBirth != null
-                          ? '${_dateOfBirth!.year}-${_dateOfBirth!.month}-${_dateOfBirth!.day}'
-                          : '',
-                    ),
-                    label: 'Date of Birth',
-                    hint: 'YYYY-MM-DD',
-                    icon: Symbols.calendar_today_rounded,
-                    isDark: isDark,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              _buildSectionTitle('Medical Info', isDark),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _bloodTypeController,
-                      label: 'Blood Type',
-                      hint: 'O+',
-                      icon: Symbols.bloodtype_rounded,
-                      isDark: isDark,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButtonFormField<String>(
-                          value: _gender,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            labelText: 'Gender',
+              ],
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                    AppSpacing.sm, AppSpacing.gutter, AppSpacing.xxl),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            color: med.container,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: med.base, width: 2),
                           ),
-                          items: ['Male', 'Female', 'Other']
-                              .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                          child: Center(
+                            child: Text(_relationship.icon,
+                                style: const TextStyle(fontSize: 40)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      SectionHeader(
+                          title: 'Profile info',
+                          icon: Symbols.info_rounded,
+                          accent: med),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _nameController,
+                        label: 'Full name',
+                        hint: 'Jane Doe',
+                        prefixIcon: Symbols.person_rounded,
+                        accent: med,
+                        textCapitalization: TextCapitalization.words,
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Name is required'
+                            : null,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      if (!_isEditingSelf) ...[
+                        Text('Relationship',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(color: ext.textSecondary)),
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: RelationshipType.values
+                              .where((r) => r != RelationshipType.self)
+                              .map((r) => AppChip(
+                                    label: '${r.icon} ${r.displayName}',
+                                    selected: _relationship == r,
+                                    accent: med,
+                                    onTap: () =>
+                                        setState(() => _relationship = r),
+                                  ))
                               .toList(),
-                          onChanged: (val) => setState(() => _gender = val),
                         ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 24),
-              _buildSectionTitle('Emergency Contact', isDark),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _emergencyContactController,
-                label: 'Contact Name',
-                hint: 'Emergency Contact Person',
-                icon: Symbols.contact_emergency_rounded,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _emergencyPhoneController,
-                label: 'Phone Number',
-                hint: '+1 234 567 890',
-                icon: Symbols.phone_rounded,
-                keyboardType: TextInputType.phone,
-                isDark: isDark,
-              ),
-
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _saveDependent,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : Text(
-                          widget.editDependent != null ? 'Save Changes' : 'Add Profile',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      InkWell(
+                        onTap: _selectDate,
+                        borderRadius: AppRadius.brMd,
+                        child: IgnorePointer(
+                          child: AppTextField(
+                            controller: TextEditingController(
+                              text: _dateOfBirth != null
+                                  ? '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}'
+                                  : '',
+                            ),
+                            label: 'Date of birth',
+                            hint: 'YYYY-MM-DD',
+                            prefixIcon: Symbols.calendar_today_rounded,
+                            accent: med,
                           ),
                         ),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      SectionHeader(
+                          title: 'Medical info',
+                          icon: Symbols.medical_information_rounded,
+                          accent: med),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _bloodTypeController,
+                        label: 'Blood type',
+                        hint: 'O+',
+                        prefixIcon: Symbols.bloodtype_rounded,
+                        accent: med,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text('Gender',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(color: ext.textSecondary)),
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: ['Male', 'Female', 'Other']
+                            .map((g) => AppChip(
+                                  label: g,
+                                  selected: _gender == g,
+                                  accent: med,
+                                  onTap: () => setState(() => _gender = g),
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppTextField(
+                        controller: _allergiesController,
+                        label: 'Allergies',
+                        hint: 'Penicillin, Peanuts',
+                        helperText:
+                            'Comma-separated — checked when adding a medicine',
+                        prefixIcon: Symbols.warning_rounded,
+                        accent: med,
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      SectionHeader(
+                          title: 'Emergency contact',
+                          icon: Symbols.contact_emergency_rounded,
+                          accent: med),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _emergencyContactController,
+                        label: 'Contact name',
+                        hint: 'Emergency contact person',
+                        prefixIcon: Symbols.person_rounded,
+                        accent: med,
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppTextField(
+                        controller: _emergencyPhoneController,
+                        label: 'Phone number',
+                        hint: '+1 234 567 890',
+                        prefixIcon: Symbols.phone_rounded,
+                        accent: med,
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      SectionHeader(
+                          title: 'Notes',
+                          icon: Symbols.sticky_note_2_rounded,
+                          accent: med),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppTextField(
+                        controller: _notesController,
+                        hint: 'Any additional notes',
+                        accent: med,
+                        maxLines: 3,
+                        textCapitalization: TextCapitalization.sentences,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
+                      AppButton(
+                        label: _isEditing ? 'Save changes' : 'Add profile',
+                        accent: med,
+                        fullWidth: true,
+                        size: AppButtonSize.lg,
+                        loading: _isSaving,
+                        leadingIcon: Symbols.check_rounded,
+                        onPressed: _saveDependent,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 32),
-            ],
-          ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, bool isDark) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: isDark ? Colors.white : AppColors.textPrimary,
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    String? hint,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-    required bool isDark,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      validator: validator,
-      style: TextStyle(color: isDark ? Colors.white : AppColors.textPrimary),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, color: isDark ? Colors.white70 : AppColors.textSecondary),
-        filled: true,
-        fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-        ),
-        labelStyle: TextStyle(color: isDark ? Colors.white70 : AppColors.textSecondary),
-        hintStyle: TextStyle(color: isDark ? Colors.white30 : AppColors.textLight),
       ),
     );
   }

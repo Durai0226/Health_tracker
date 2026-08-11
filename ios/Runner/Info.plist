@@ -43,9 +43,9 @@
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>We need notification access to remind you about your medicines, health checks, and fitness activities on time.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>DailyMinder reads your steps and sleep from Apple Health to show your activity and rest trends. Your data stays on your device.</string>
+	<string>DailyMinder reads your steps and sleep from Apple Health to show your activity and rest trends. This data stays on your device unless you turn on cloud sync in Settings.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>DailyMinder can save manually logged steps and sleep back to Apple Health.</string>
+	<string>DailyMinder can save manually logged steps, sleep, blood pressure, blood glucose, and weight readings back to Apple Health.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>DailyMinder uses the motion sensor to count your steps live while the app is open.</string>
 	<key>NSUserTrackingUsageDescription</key>

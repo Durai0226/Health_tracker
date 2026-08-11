@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
-import '../../../../core/ai/vitals_analyzer.dart';
-import '../../../../core/ai/insight_engine.dart';
-import '../../../../core/ai/vitals_pattern_detector.dart';
+import '../../../../core/health/vitals_analyzer.dart';
+import '../../../../core/health/insight_engine.dart';
+import '../../../../core/health/vitals_pattern_detector.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
 import '../../../../core/widgets/app/vitals_widgets.dart';
@@ -19,6 +19,39 @@ import 'blood_pressure_report_screen.dart';
 /// Blood Pressure tracker — log, classify (AHA/ACC), trend, and act on readings.
 class BloodPressureScreen extends StatefulWidget {
   const BloodPressureScreen({super.key});
+
+  /// Top of the app's own [BpCategory.normal] range for the SYSTOLIC series,
+  /// read straight off `VitalsAnalyzer.classifyBp` (`systolic >= 120` is no
+  /// longer normal). The trend chart shades one band per series from these
+  /// two numbers instead of one shared band: systolic and diastolic have
+  /// different normal ranges, so a single 80–120 band — which is what the
+  /// chart used to draw across BOTH lines — painted a diastolic of 100 inside
+  /// a green "normal" band, even though this app's own classifier calls
+  /// 130/100 Stage 2 hypertension.
+  ///
+  /// These are not new medical thresholds; they are the existing
+  /// `classifyBp` boundaries, and a test pins them to it.
+  @visibleForTesting
+  static const int normalSystolicMax = 120;
+
+  /// Top of the app's own [BpCategory.normal] range for the DIASTOLIC series
+  /// (`diastolic >= 80` is no longer normal). See [normalSystolicMax].
+  @visibleForTesting
+  static const int normalDiastolicMax = 80;
+
+  /// How recent a crisis reading has to be for the emergency card to still be
+  /// describing something actionable. Kept identical to the blood-sugar
+  /// screen's window so both vitals emergencies expire on the same rule.
+  @visibleForTesting
+  static const Duration emergencyCardWindow = Duration(hours: 48);
+
+  /// True when [latest] is a hypertensive crisis that is still current.
+  /// Without the recency bound a single crisis reading from weeks ago
+  /// re-rendered a non-dismissible "Call emergency" banner on every visit,
+  /// long after it stopped being actionable.
+  @visibleForTesting
+  static bool showsCrisisEmergency(BloodPressureReading latest, DateTime now) =>
+      latest.isCrisis && now.difference(latest.takenAt) < emergencyCardWindow;
 
   @override
   State<BloodPressureScreen> createState() => _BloodPressureScreenState();
@@ -92,7 +125,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
       body: Column(
         children: [
           AppHeader(
-            title: 'Blood Pressure',
+            title: 'Blood pressure',
             icon: Symbols.favorite_rounded,
             accent: accent,
             leading: AppIconButton(
@@ -170,7 +203,8 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 120),
         children: [
-          if (latest.isCrisis) ...[
+          // Recency-bounded — see [BloodPressureScreen.showsCrisisEmergency].
+          if (BloodPressureScreen.showsCrisisEmergency(latest, now)) ...[
             VitalsEmergencyCard(
               title: 'Possible hypertensive crisis',
               message:
@@ -225,20 +259,34 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
           const SizedBox(height: AppSpacing.lg),
           SectionHeader(title: 'Trend', icon: Symbols.show_chart_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
+          // One chart per series. They used to share a chart AND a single
+          // 80–120 "normal" band, which is a systolic-shaped range: it shaded
+          // hypertensive diastolic values (80–120) green. Each series now
+          // carries its own band, taken from this app's own classifier.
           AppCard(
-            child: VitalsTrendChart(
-              series: [
-                VitalsSeries(values: sysSeries, color: ext.mark(accent), label: 'Systolic'),
-                VitalsSeries(
-                    values: diaSeries,
-                    color: ext.textSecondary,
-                    label: 'Diastolic'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _seriesChart(
+                  ext,
+                  title: 'Systolic',
+                  values: sysSeries,
+                  color: ext.mark(accent),
+                  minY: minY,
+                  maxY: maxY,
+                  normalMax: BloodPressureScreen.normalSystolicMax,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _seriesChart(
+                  ext,
+                  title: 'Diastolic',
+                  values: diaSeries,
+                  color: ext.textSecondary,
+                  minY: minY,
+                  maxY: maxY,
+                  normalMax: BloodPressureScreen.normalDiastolicMax,
+                ),
               ],
-              minY: minY,
-              maxY: maxY,
-              bandLow: 80,
-              bandHigh: 120,
-              bandColor: VitalsColors.bpBand(ext.isDark, BpCategory.normal),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -247,6 +295,49 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
           ..._readings.map((r) => _logRow(ext, r)),
         ],
       ),
+    );
+  }
+
+  /// One trend chart for one BP series, shaded with that series' own normal
+  /// range (`< [normalMax]`, per `VitalsAnalyzer.classifyBp`).
+  ///
+  /// Both charts are handed the SAME [minY]/[maxY] — computed over systolic
+  /// and diastolic together, exactly as before — so the two lines stay
+  /// directly comparable and a 2 mmHg diastolic wobble isn't auto-scaled into
+  /// a dramatic-looking swing.
+  Widget _seriesChart(
+    AppColorsExt ext, {
+    required String title,
+    required List<double> values,
+    required Color color,
+    required double minY,
+    required double maxY,
+    required int normalMax,
+  }) {
+    final tt = Theme.of(context).textTheme;
+    // The band has nothing to shade when every reading on screen sits above
+    // the normal ceiling; labelling an invisible band would just mislead.
+    final bandVisible = normalMax > minY;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: 6),
+        VitalsTrendChart(
+          series: [VitalsSeries(values: values, color: color, label: title)],
+          minY: minY,
+          maxY: maxY,
+          // Lower edge is the axis floor: `classifyBp` puts no lower bound on
+          // Normal, so inventing one here would contradict the category the
+          // hero card shows for the same reading.
+          bandLow: minY,
+          bandHigh: normalMax.toDouble(),
+          bandColor: VitalsColors.bpBand(ext.isDark, BpCategory.normal),
+          bandLabel: bandVisible
+              ? 'Shaded band = normal ${title.toLowerCase()} (under $normalMax mmHg)'
+              : null,
+        ),
+      ],
     );
   }
 
@@ -273,7 +364,9 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Row(
             children: [
-              Container(width: 10, height: 10, decoration: BoxDecoration(color: band, shape: BoxShape.circle)),
+              // Icon + label, never colour alone — the category has to survive
+              // colour-blindness (WCAG 1.4.1); the dot it replaced did not.
+              Icon(VitalsColors.bpIcon(cat), size: 20, color: band),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -414,6 +507,7 @@ class _BpLogFormState extends State<_BpLogForm> {
   BpPosition _position = BpPosition.sitting;
   late DateTime _takenAt;
   String? _error;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -446,6 +540,7 @@ class _BpLogFormState extends State<_BpLogForm> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final s = int.tryParse(_sys.text);
     final d = int.tryParse(_dia.text);
     if (s == null || d == null) {
@@ -456,16 +551,26 @@ class _BpLogFormState extends State<_BpLogForm> {
       setState(() => _error = 'Check the values — systolic must be higher than diastolic.');
       return;
     }
+    setState(() => _saving = true);
     HapticFeedback.mediumImpact();
     final e = widget.existing;
     final reading = BloodPressureReading(
       id: e?.id ?? 'bp_${DateTime.now().microsecondsSinceEpoch}',
+      // Not carried by any control on this form — explicitly preserved on
+      // edit rather than left to VitalsStorageService's active-profile
+      // fallback, which only happens to produce the right answer today
+      // because the sole caller already scopes its list to the active
+      // profile before this screen ever opens.
+      dependentId: e?.dependentId,
       systolic: s,
       diastolic: d,
       pulse: int.tryParse(_pulse.text),
       arm: BpArm.values[_arm],
       position: _position,
       takenAt: _takenAt,
+      // Tags have no control on this form either — every edit through this
+      // screen used to silently wipe them.
+      tags: e?.tags ?? const [],
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       createdAt: e?.createdAt ?? DateTime.now(),
     );
@@ -523,7 +628,7 @@ class _BpLogFormState extends State<_BpLogForm> {
             Expanded(
               child: AppTextField(
                 controller: _sys,
-                label: 'Systolic',
+                label: 'Systolic (mmHg)',
                 hint: '120',
                 keyboardType: TextInputType.number,
                 accent: widget.accent,
@@ -534,7 +639,7 @@ class _BpLogFormState extends State<_BpLogForm> {
             Expanded(
               child: AppTextField(
                 controller: _dia,
-                label: 'Diastolic',
+                label: 'Diastolic (mmHg)',
                 hint: '80',
                 keyboardType: TextInputType.number,
                 accent: widget.accent,
@@ -578,6 +683,12 @@ class _BpLogFormState extends State<_BpLogForm> {
           }).toList(),
         ),
         const SizedBox(height: AppSpacing.md),
+        _TakenAtField(
+          value: _takenAt,
+          accent: widget.accent,
+          onChanged: (v) => setState(() => _takenAt = v),
+        ),
+        const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _note,
           label: 'Note (optional)',
@@ -596,10 +707,134 @@ class _BpLogFormState extends State<_BpLogForm> {
           accent: widget.accent,
           fullWidth: true,
           size: AppButtonSize.lg,
+          loading: _saving,
           onPressed: _save,
         ),
         const SizedBox(height: AppSpacing.sm),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Optional "when" control for the log sheet.
+//
+// `_takenAt` already existed on this form but nothing ever wrote to it, so a
+// reading could not be back-dated and editing one silently kept the original
+// timestamp with no way to correct it. Defaults to now, so the common case
+// still costs zero taps.
+// ---------------------------------------------------------------------------
+class _TakenAtField extends StatelessWidget {
+  final DateTime value;
+  final AccentSwatch accent;
+  final ValueChanged<DateTime> onChanged;
+
+  const _TakenAtField({
+    required this.value,
+    required this.accent,
+    required this.onChanged,
+  });
+
+  Future<void> _pickDate(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await AppDatePicker.show(
+      context,
+      initial: value,
+      first: DateTime(now.year - 5),
+      // A reading can't have been taken in the future.
+      last: DateTime(now.year, now.month, now.day),
+      accent: accent,
+      title: 'Reading date',
+    );
+    if (picked == null) return;
+    onChanged(DateTime(
+        picked.year, picked.month, picked.day, value.hour, value.minute));
+  }
+
+  Future<void> _pickTime(BuildContext context) async {
+    final picked = await AppTimePicker.show(
+      context,
+      initial: TimeOfDay.fromDateTime(value),
+      accent: accent,
+      title: 'Reading time',
+    );
+    if (picked == null) return;
+    onChanged(DateTime(
+        value.year, value.month, value.day, picked.hour, picked.minute));
+  }
+
+  String _dateLabel() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(value.year, value.month, value.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    return DateFormat(day.year == today.year ? 'MMM d' : 'MMM d, yyyy')
+        .format(day);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Date & time',
+            style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _box(context, Symbols.calendar_today_rounded, _dateLabel(),
+                  () => _pickDate(context)),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _box(
+                  context,
+                  Symbols.schedule_rounded,
+                  TimeOfDay.fromDateTime(value).format(context),
+                  () => _pickTime(context)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _box(
+      BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.brMd,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: ext.surfaceVariant,
+          borderRadius: AppRadius.brMd,
+          border: Border.all(color: ext.outline),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: ext.textTertiary),
+            const SizedBox(width: AppSpacing.sm),
+            // scaleDown only: a long date shrinks to fit on a 320pt screen,
+            // nothing is ever enlarged and no font size is hardcoded.
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(label,
+                    style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

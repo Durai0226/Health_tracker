@@ -48,31 +48,46 @@ class StatTile extends StatelessWidget {
             child: Icon(icon, size: 18, color: s.onContainer),
           ),
         if (icon != null) const SizedBox(height: 10),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Flexible(
-              child: Text(value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign:
-                      compact ? TextAlign.center : TextAlign.start,
-                  style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-            ),
-            if (trend != null) ...[
-              const SizedBox(width: 6),
-              Icon(_trendIcon, size: 16, color: _trendColor(ext)),
+        // A 3-up row leaves each cell under ~100pt wide, so at large Dynamic
+        // Type sizes ellipsizing shredded both lines ("0 …", "7-da…",
+        // "Hydr…"). Shrink-to-fit instead: the value keeps its digits (a
+        // number must never break or truncate) and the label stays readable.
+        // scaleDown never enlarges, so default sizes are untouched.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: compact ? Alignment.center : Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: Text(value,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign:
+                        compact ? TextAlign.center : TextAlign.start,
+                    style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+              ),
+              if (trend != null) ...[
+                const SizedBox(width: 6),
+                Icon(_trendIcon, size: 16, color: _trendColor(ext)),
+              ],
             ],
-          ],
+          ),
         ),
         const SizedBox(height: 2),
-        Text(label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: compact ? TextAlign.center : TextAlign.start,
-            style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: compact ? Alignment.center : Alignment.centerLeft,
+          child: Text(label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              textAlign: compact ? TextAlign.center : TextAlign.start,
+              style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+        ),
       ],
     );
 

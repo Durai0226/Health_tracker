@@ -1,11 +1,12 @@
-import '../../../core/ai/insight.dart';
-import '../../../core/ai/insight_engine.dart';
-import '../../../core/ai/vitals_pattern_detector.dart';
-import '../../../core/ai/adherence_analyzer.dart';
-import '../../../core/ai/streak_engine.dart';
-import '../../../core/ai/refill_predictor.dart';
-import '../../../core/ai/hydration_pacer.dart';
-import '../../../core/ai/focus_insights.dart';
+import '../../../core/health/insight.dart';
+import '../../../core/health/insight_engine.dart';
+import '../../../core/health/vitals_pattern_detector.dart';
+import '../../../core/health/adherence_analyzer.dart';
+import '../../../core/health/streak_engine.dart';
+import '../../../core/health/refill_predictor.dart';
+import '../../../core/health/hydration_pacer.dart';
+import '../../../core/health/focus_insights.dart';
+import '../../../core/health/correlation_engine.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/vitals_storage_service.dart';
 import '../../water/services/water_service.dart';
@@ -76,19 +77,27 @@ class InsightService {
 
     // Medicine — adherence + streak (all logs) + lowest days-of-supply.
     try {
-      final logs = await MedicineCleanStorageService.getAllLogs();
+      // Deduped: a dose slot with more than one row (e.g. reconciled as
+      // missed, then actually taken) would otherwise be counted once per row
+      // instead of once per dose, skewing adherence/streak/miss-risk exactly
+      // the way dedupeByDose's own doc warns against — the RefillPredictor
+      // loop below already does this correctly; this earlier computation in
+      // the same method had not.
+      final logs = MedicineCleanStorageService.dedupeByDose(
+          await MedicineCleanStorageService.getAllLogs());
       final history = logs
-          .where((l) => l.isTaken || l.isMissed || l.isSkipped)
+          .where((l) => l.countsAsTaken || l.isMissed || l.isSkipped)
           .map((l) => DoseEvent(
                 l.scheduledTime,
-                l.isTaken
+                // A pre-logged dose was physically taken — same outcome as taken.
+                l.countsAsTaken
                     ? DoseOutcome.taken
                     : (l.isMissed ? DoseOutcome.missed : DoseOutcome.skipped),
               ))
           .toList();
       final adherence = history.isEmpty ? null : AdherenceAnalyzer.adherence(history);
       final takenDays = logs
-          .where((l) => l.isTaken)
+          .where((l) => l.countsAsTaken)
           .map((l) => DateTime(l.scheduledTime.year, l.scheduledTime.month, l.scheduledTime.day))
           .toSet();
       final streak = StreakEngine.compute(completedDays: takenDays, today: DateTime.now());
@@ -97,10 +106,12 @@ class InsightService {
       final meds = await MedicineCleanStorageService.getAllMedicines();
       for (final m in meds) {
         if (m.currentStock == null) continue;
-        final taken =
-            (await MedicineCleanStorageService.getLogsForMedicine(m.id))
-                .where((l) => l.isTaken)
-                .toList();
+        // Deduped per slot: a duplicated taken row would overstate the
+        // consumption rate and forecast an early run-out.
+        final taken = MedicineCleanStorageService.dedupeByDose(
+                await MedicineCleanStorageService.getLogsForMedicine(m.id))
+            .where((l) => l.countsAsTaken)
+            .toList();
         final pred = RefillPredictor.predict(
           currentStock: m.currentStock!,
           doseTimes: taken.map((l) => l.actionTime ?? l.scheduledTime).toList(),
@@ -260,6 +271,64 @@ class InsightService {
       }
     } catch (_) {}
 
+    // Cross-cutting — mood/BP vs same-day medication adherence. Both need a
+    // day-by-day adherent/non-adherent split, built once and reused.
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      const lookbackDays = 30;
+      final start = today.subtract(const Duration(days: lookbackDays - 1));
+
+      final adherentByDay = <String, bool>{};
+      for (var i = 0; i < lookbackDays; i++) {
+        final day = start.add(Duration(days: i));
+        final s = await MedicineCleanStorageService.getDailySummaryAsync(day);
+        if (s.totalScheduled == 0) continue; // nothing due that day — not comparable
+        adherentByDay[_dayKey(day)] = s.isComplete;
+      }
+
+      if (adherentByDay.isNotEmpty) {
+        try {
+          final moodByDay = <String, List<double>>{};
+          for (final m in await VitalsStorageService.getAllMood()) {
+            (moodByDay[_dayKey(m.takenAt)] ??= []).add(m.moodIndex.toDouble());
+          }
+          final moodDays = <DayMetric>[];
+          for (final entry in adherentByDay.entries) {
+            final vals = moodByDay[entry.key];
+            if (vals == null || vals.isEmpty) continue;
+            moodDays.add(DayMetric(
+              day: DateTime.parse(entry.key),
+              adherent: entry.value,
+              value: vals.reduce((a, b) => a + b) / vals.length,
+            ));
+          }
+          out.add(CorrelationEngine.moodVsAdherence(moodDays));
+        } catch (_) {}
+
+        try {
+          final bpByDay = <String, List<int>>{};
+          for (final r in await VitalsStorageService.getAllBp()) {
+            (bpByDay[_dayKey(r.takenAt)] ??= []).add(r.systolic);
+          }
+          final bpDays = <DayMetric>[];
+          for (final entry in adherentByDay.entries) {
+            final vals = bpByDay[entry.key];
+            if (vals == null || vals.isEmpty) continue;
+            bpDays.add(DayMetric(
+              day: DateTime.parse(entry.key),
+              adherent: entry.value,
+              value: vals.reduce((a, b) => a + b) / vals.length,
+            ));
+          }
+          out.add(CorrelationEngine.bloodPressureVsAdherence(bpDays));
+        } catch (_) {}
+      }
+    } catch (_) {}
+
     return InsightEngine.rankAll(out);
   }
+
+  static String _dayKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

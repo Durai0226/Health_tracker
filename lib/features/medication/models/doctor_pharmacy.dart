@@ -218,6 +218,11 @@ class Appointment {
     medicineIds: (json['medicineIds'] as List?)?.cast<String>(),
   );
 
+  /// [clearDependentId] explicitly clears ownership to self (null) — the
+  /// standard `dependentId ?? this.dependentId` pattern below can't express
+  /// that, since a caller can't pass null to mean "clear" vs "leave alone"
+  /// (see MedicineCleanStorageService.deleteDependent's other models for the
+  /// same sentinel).
   Appointment copyWith({
     String? id,
     String? doctorId,
@@ -230,6 +235,7 @@ class Appointment {
     int? reminderMinutesBefore,
     bool? isCompleted,
     String? dependentId,
+    bool clearDependentId = false,
     List<String>? medicineIds,
   }) {
     return Appointment(
@@ -243,7 +249,7 @@ class Appointment {
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderMinutesBefore: reminderMinutesBefore ?? this.reminderMinutesBefore,
       isCompleted: isCompleted ?? this.isCompleted,
-      dependentId: dependentId ?? this.dependentId,
+      dependentId: clearDependentId ? null : (dependentId ?? this.dependentId),
       medicineIds: medicineIds ?? this.medicineIds,
     );
   }

@@ -8,10 +8,8 @@ import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:tablet_remainder/core/widgets/app/personal_best_card.dart';
 import 'package:tablet_remainder/core/milestones/milestones_screen.dart';
 import 'package:tablet_remainder/core/milestones/milestones_service.dart';
-import 'package:tablet_remainder/core/ai/ai_assistant.dart';
-import 'package:tablet_remainder/core/ai/insight.dart';
-import 'package:tablet_remainder/core/ai/ai_types.dart';
-import 'package:tablet_remainder/core/ai/streak_engine.dart';
+import 'package:tablet_remainder/core/health/insight.dart';
+import 'package:tablet_remainder/core/health/streak_engine.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/home_widget_service.dart';
@@ -27,6 +25,7 @@ import '../widgets/step_manual_entry_sheet.dart';
 import '../widgets/steps_permission_card.dart';
 import 'steps_goal_settings_screen.dart';
 import 'steps_history_screen.dart';
+import '../../../core/health/coach_text.dart';
 
 /// Steps home: hero activity ring, key stats, streak, weekly + hourly charts,
 /// a deterministic insight, and a permission/manual-entry fallback. Works with
@@ -497,7 +496,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
           StepHourlyChart(hourly: today.hourly),
 
           const SizedBox(height: AppSpacing.lg),
-          _aiCoachCard(today, streak),
+          _coachCard(today, streak),
 
           const SizedBox(height: AppSpacing.lg),
           // Deterministic insight (dormant-engine surface / placeholder area).
@@ -554,16 +553,14 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     );
   }
 
-  /// Self-loading generative AI activity coach (on-device rule engine default).
-  Widget _aiCoachCard(StepDailyData today, int streak) {
+  /// Plain activity tip, computed from today's numbers.
+  Widget _coachCard(StepDailyData today, int streak) {
     final ext = AppColorsExt.of(context);
-    return AiInsightCard(
+    return TipCard(
       title: 'Activity coach',
-      icon: kAiSparkle,
+      icon: Symbols.directions_walk_rounded,
       accent: ext.steps,
-      cacheKey:
-          'steps:${today.effectiveSteps ~/ 500}:${today.goalSteps}:$streak:${DateTime.now().hour ~/ 3}',
-      loader: () => AiAssistant().stepsTip(
+      text: const CoachText().stepsTip(
         steps: today.effectiveSteps,
         goal: today.goalSteps,
         streakDays: streak,
@@ -616,7 +613,6 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
             'No steps logged yet today. A short walk — or a quick manual entry — starts your streak.',
         why: 'You have 0 effective steps recorded for today.',
         actionLabel: 'Add steps',
-        engine: AiEngineKind.ruleBased,
       );
     }
 
@@ -633,7 +629,6 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
         metric: pctText,
         why:
             'Effective steps (${_fmt(steps)}) reached or passed today\'s goal (${_fmt(goal)}).',
-        engine: AiEngineKind.ruleBased,
       );
     }
 
@@ -649,7 +644,6 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
       why:
           'Effective steps (${_fmt(steps)}) are below today\'s goal (${_fmt(goal)}).',
       actionLabel: 'Add steps',
-      engine: AiEngineKind.ruleBased,
     );
   }
 

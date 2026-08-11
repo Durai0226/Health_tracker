@@ -2185,6 +2185,17 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _routeIndexMeta = const VerificationMeta(
+    'routeIndex',
+  );
+  @override
+  late final GeneratedColumn<int> routeIndex = GeneratedColumn<int>(
+    'route_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _strengthMeta = const VerificationMeta(
     'strength',
   );
@@ -2574,6 +2585,7 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     genericName,
     brandName,
     dosageForm,
+    routeIndex,
     strength,
     strengthUnit,
     strengthText,
@@ -2655,6 +2667,12 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
       );
     } else if (isInserting) {
       context.missing(_dosageFormMeta);
+    }
+    if (data.containsKey('route_index')) {
+      context.handle(
+        _routeIndexMeta,
+        routeIndex.isAcceptableOrUnknown(data['route_index']!, _routeIndexMeta),
+      );
     }
     if (data.containsKey('strength')) {
       context.handle(
@@ -2945,6 +2963,10 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
         DriftSqlType.int,
         data['${effectivePrefix}dosage_form'],
       )!,
+      routeIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}route_index'],
+      ),
       strength: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}strength'],
@@ -3093,6 +3115,7 @@ class EnhancedMedicine extends DataClass
   final String? genericName;
   final String? brandName;
   final int dosageForm;
+  final int? routeIndex;
   final double strength;
   final String strengthUnit;
   final String? strengthText;
@@ -3132,6 +3155,7 @@ class EnhancedMedicine extends DataClass
     this.genericName,
     this.brandName,
     required this.dosageForm,
+    this.routeIndex,
     required this.strength,
     required this.strengthUnit,
     this.strengthText,
@@ -3178,6 +3202,9 @@ class EnhancedMedicine extends DataClass
       map['brand_name'] = Variable<String>(brandName);
     }
     map['dosage_form'] = Variable<int>(dosageForm);
+    if (!nullToAbsent || routeIndex != null) {
+      map['route_index'] = Variable<int>(routeIndex);
+    }
     map['strength'] = Variable<double>(strength);
     map['strength_unit'] = Variable<String>(strengthUnit);
     if (!nullToAbsent || strengthText != null) {
@@ -3265,6 +3292,9 @@ class EnhancedMedicine extends DataClass
           ? const Value.absent()
           : Value(brandName),
       dosageForm: Value(dosageForm),
+      routeIndex: routeIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(routeIndex),
       strength: Value(strength),
       strengthUnit: Value(strengthUnit),
       strengthText: strengthText == null && nullToAbsent
@@ -3350,6 +3380,7 @@ class EnhancedMedicine extends DataClass
       genericName: serializer.fromJson<String?>(json['genericName']),
       brandName: serializer.fromJson<String?>(json['brandName']),
       dosageForm: serializer.fromJson<int>(json['dosageForm']),
+      routeIndex: serializer.fromJson<int?>(json['routeIndex']),
       strength: serializer.fromJson<double>(json['strength']),
       strengthUnit: serializer.fromJson<String>(json['strengthUnit']),
       strengthText: serializer.fromJson<String?>(json['strengthText']),
@@ -3404,6 +3435,7 @@ class EnhancedMedicine extends DataClass
       'genericName': serializer.toJson<String?>(genericName),
       'brandName': serializer.toJson<String?>(brandName),
       'dosageForm': serializer.toJson<int>(dosageForm),
+      'routeIndex': serializer.toJson<int?>(routeIndex),
       'strength': serializer.toJson<double>(strength),
       'strengthUnit': serializer.toJson<String>(strengthUnit),
       'strengthText': serializer.toJson<String?>(strengthText),
@@ -3448,6 +3480,7 @@ class EnhancedMedicine extends DataClass
     Value<String?> genericName = const Value.absent(),
     Value<String?> brandName = const Value.absent(),
     int? dosageForm,
+    Value<int?> routeIndex = const Value.absent(),
     double? strength,
     String? strengthUnit,
     Value<String?> strengthText = const Value.absent(),
@@ -3487,6 +3520,7 @@ class EnhancedMedicine extends DataClass
     genericName: genericName.present ? genericName.value : this.genericName,
     brandName: brandName.present ? brandName.value : this.brandName,
     dosageForm: dosageForm ?? this.dosageForm,
+    routeIndex: routeIndex.present ? routeIndex.value : this.routeIndex,
     strength: strength ?? this.strength,
     strengthUnit: strengthUnit ?? this.strengthUnit,
     strengthText: strengthText.present ? strengthText.value : this.strengthText,
@@ -3547,6 +3581,9 @@ class EnhancedMedicine extends DataClass
       dosageForm: data.dosageForm.present
           ? data.dosageForm.value
           : this.dosageForm,
+      routeIndex: data.routeIndex.present
+          ? data.routeIndex.value
+          : this.routeIndex,
       strength: data.strength.present ? data.strength.value : this.strength,
       strengthUnit: data.strengthUnit.present
           ? data.strengthUnit.value
@@ -3637,6 +3674,7 @@ class EnhancedMedicine extends DataClass
           ..write('genericName: $genericName, ')
           ..write('brandName: $brandName, ')
           ..write('dosageForm: $dosageForm, ')
+          ..write('routeIndex: $routeIndex, ')
           ..write('strength: $strength, ')
           ..write('strengthUnit: $strengthUnit, ')
           ..write('strengthText: $strengthText, ')
@@ -3681,6 +3719,7 @@ class EnhancedMedicine extends DataClass
     genericName,
     brandName,
     dosageForm,
+    routeIndex,
     strength,
     strengthUnit,
     strengthText,
@@ -3724,6 +3763,7 @@ class EnhancedMedicine extends DataClass
           other.genericName == this.genericName &&
           other.brandName == this.brandName &&
           other.dosageForm == this.dosageForm &&
+          other.routeIndex == this.routeIndex &&
           other.strength == this.strength &&
           other.strengthUnit == this.strengthUnit &&
           other.strengthText == this.strengthText &&
@@ -3765,6 +3805,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
   final Value<String?> genericName;
   final Value<String?> brandName;
   final Value<int> dosageForm;
+  final Value<int?> routeIndex;
   final Value<double> strength;
   final Value<String> strengthUnit;
   final Value<String?> strengthText;
@@ -3805,6 +3846,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     this.genericName = const Value.absent(),
     this.brandName = const Value.absent(),
     this.dosageForm = const Value.absent(),
+    this.routeIndex = const Value.absent(),
     this.strength = const Value.absent(),
     this.strengthUnit = const Value.absent(),
     this.strengthText = const Value.absent(),
@@ -3846,6 +3888,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     this.genericName = const Value.absent(),
     this.brandName = const Value.absent(),
     required int dosageForm,
+    this.routeIndex = const Value.absent(),
     this.strength = const Value.absent(),
     this.strengthUnit = const Value.absent(),
     this.strengthText = const Value.absent(),
@@ -3893,6 +3936,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Expression<String>? genericName,
     Expression<String>? brandName,
     Expression<int>? dosageForm,
+    Expression<int>? routeIndex,
     Expression<double>? strength,
     Expression<String>? strengthUnit,
     Expression<String>? strengthText,
@@ -3934,6 +3978,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
       if (genericName != null) 'generic_name': genericName,
       if (brandName != null) 'brand_name': brandName,
       if (dosageForm != null) 'dosage_form': dosageForm,
+      if (routeIndex != null) 'route_index': routeIndex,
       if (strength != null) 'strength': strength,
       if (strengthUnit != null) 'strength_unit': strengthUnit,
       if (strengthText != null) 'strength_text': strengthText,
@@ -3981,6 +4026,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Value<String?>? genericName,
     Value<String?>? brandName,
     Value<int>? dosageForm,
+    Value<int?>? routeIndex,
     Value<double>? strength,
     Value<String>? strengthUnit,
     Value<String?>? strengthText,
@@ -4022,6 +4068,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
       genericName: genericName ?? this.genericName,
       brandName: brandName ?? this.brandName,
       dosageForm: dosageForm ?? this.dosageForm,
+      routeIndex: routeIndex ?? this.routeIndex,
       strength: strength ?? this.strength,
       strengthUnit: strengthUnit ?? this.strengthUnit,
       strengthText: strengthText ?? this.strengthText,
@@ -4078,6 +4125,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     }
     if (dosageForm.present) {
       map['dosage_form'] = Variable<int>(dosageForm.value);
+    }
+    if (routeIndex.present) {
+      map['route_index'] = Variable<int>(routeIndex.value);
     }
     if (strength.present) {
       map['strength'] = Variable<double>(strength.value);
@@ -4200,6 +4250,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
           ..write('genericName: $genericName, ')
           ..write('brandName: $brandName, ')
           ..write('dosageForm: $dosageForm, ')
+          ..write('routeIndex: $routeIndex, ')
           ..write('strength: $strength, ')
           ..write('strengthUnit: $strengthUnit, ')
           ..write('strengthText: $strengthText, ')
@@ -4333,6 +4384,21 @@ class $MedicineLogsTable extends MedicineLogs
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _isPreLoggedMeta = const VerificationMeta(
+    'isPreLogged',
+  );
+  @override
+  late final GeneratedColumn<bool> isPreLogged = GeneratedColumn<bool>(
+    'is_pre_logged',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_pre_logged" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _dosageTakenMeta = const VerificationMeta(
     'dosageTaken',
   );
@@ -4452,6 +4518,7 @@ class $MedicineLogsTable extends MedicineLogs
     isTaken,
     isSkipped,
     isMissed,
+    isPreLogged,
     dosageTaken,
     skipReason,
     skipNote,
@@ -4521,6 +4588,15 @@ class $MedicineLogsTable extends MedicineLogs
       context.handle(
         _isMissedMeta,
         isMissed.isAcceptableOrUnknown(data['is_missed']!, _isMissedMeta),
+      );
+    }
+    if (data.containsKey('is_pre_logged')) {
+      context.handle(
+        _isPreLoggedMeta,
+        isPreLogged.isAcceptableOrUnknown(
+          data['is_pre_logged']!,
+          _isPreLoggedMeta,
+        ),
       );
     }
     if (data.containsKey('dosage_taken')) {
@@ -4632,6 +4708,10 @@ class $MedicineLogsTable extends MedicineLogs
         DriftSqlType.bool,
         data['${effectivePrefix}is_missed'],
       )!,
+      isPreLogged: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_pre_logged'],
+      )!,
       dosageTaken: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}dosage_taken'],
@@ -4689,6 +4769,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
   final bool isTaken;
   final bool isSkipped;
   final bool isMissed;
+  final bool isPreLogged;
   final double dosageTaken;
   final int? skipReason;
   final String? skipNote;
@@ -4707,6 +4788,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
     required this.isTaken,
     required this.isSkipped,
     required this.isMissed,
+    required this.isPreLogged,
     required this.dosageTaken,
     this.skipReason,
     this.skipNote,
@@ -4730,6 +4812,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
     map['is_taken'] = Variable<bool>(isTaken);
     map['is_skipped'] = Variable<bool>(isSkipped);
     map['is_missed'] = Variable<bool>(isMissed);
+    map['is_pre_logged'] = Variable<bool>(isPreLogged);
     map['dosage_taken'] = Variable<double>(dosageTaken);
     if (!nullToAbsent || skipReason != null) {
       map['skip_reason'] = Variable<int>(skipReason);
@@ -4770,6 +4853,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
       isTaken: Value(isTaken),
       isSkipped: Value(isSkipped),
       isMissed: Value(isMissed),
+      isPreLogged: Value(isPreLogged),
       dosageTaken: Value(dosageTaken),
       skipReason: skipReason == null && nullToAbsent
           ? const Value.absent()
@@ -4812,6 +4896,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
       isTaken: serializer.fromJson<bool>(json['isTaken']),
       isSkipped: serializer.fromJson<bool>(json['isSkipped']),
       isMissed: serializer.fromJson<bool>(json['isMissed']),
+      isPreLogged: serializer.fromJson<bool>(json['isPreLogged']),
       dosageTaken: serializer.fromJson<double>(json['dosageTaken']),
       skipReason: serializer.fromJson<int?>(json['skipReason']),
       skipNote: serializer.fromJson<String?>(json['skipNote']),
@@ -4837,6 +4922,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
       'isTaken': serializer.toJson<bool>(isTaken),
       'isSkipped': serializer.toJson<bool>(isSkipped),
       'isMissed': serializer.toJson<bool>(isMissed),
+      'isPreLogged': serializer.toJson<bool>(isPreLogged),
       'dosageTaken': serializer.toJson<double>(dosageTaken),
       'skipReason': serializer.toJson<int?>(skipReason),
       'skipNote': serializer.toJson<String?>(skipNote),
@@ -4858,6 +4944,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
     bool? isTaken,
     bool? isSkipped,
     bool? isMissed,
+    bool? isPreLogged,
     double? dosageTaken,
     Value<int?> skipReason = const Value.absent(),
     Value<String?> skipNote = const Value.absent(),
@@ -4876,6 +4963,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
     isTaken: isTaken ?? this.isTaken,
     isSkipped: isSkipped ?? this.isSkipped,
     isMissed: isMissed ?? this.isMissed,
+    isPreLogged: isPreLogged ?? this.isPreLogged,
     dosageTaken: dosageTaken ?? this.dosageTaken,
     skipReason: skipReason.present ? skipReason.value : this.skipReason,
     skipNote: skipNote.present ? skipNote.value : this.skipNote,
@@ -4904,6 +4992,9 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
       isTaken: data.isTaken.present ? data.isTaken.value : this.isTaken,
       isSkipped: data.isSkipped.present ? data.isSkipped.value : this.isSkipped,
       isMissed: data.isMissed.present ? data.isMissed.value : this.isMissed,
+      isPreLogged: data.isPreLogged.present
+          ? data.isPreLogged.value
+          : this.isPreLogged,
       dosageTaken: data.dosageTaken.present
           ? data.dosageTaken.value
           : this.dosageTaken,
@@ -4941,6 +5032,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
           ..write('isTaken: $isTaken, ')
           ..write('isSkipped: $isSkipped, ')
           ..write('isMissed: $isMissed, ')
+          ..write('isPreLogged: $isPreLogged, ')
           ..write('dosageTaken: $dosageTaken, ')
           ..write('skipReason: $skipReason, ')
           ..write('skipNote: $skipNote, ')
@@ -4964,6 +5056,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
     isTaken,
     isSkipped,
     isMissed,
+    isPreLogged,
     dosageTaken,
     skipReason,
     skipNote,
@@ -4986,6 +5079,7 @@ class MedicineLog extends DataClass implements Insertable<MedicineLog> {
           other.isTaken == this.isTaken &&
           other.isSkipped == this.isSkipped &&
           other.isMissed == this.isMissed &&
+          other.isPreLogged == this.isPreLogged &&
           other.dosageTaken == this.dosageTaken &&
           other.skipReason == this.skipReason &&
           other.skipNote == this.skipNote &&
@@ -5006,6 +5100,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
   final Value<bool> isTaken;
   final Value<bool> isSkipped;
   final Value<bool> isMissed;
+  final Value<bool> isPreLogged;
   final Value<double> dosageTaken;
   final Value<int?> skipReason;
   final Value<String?> skipNote;
@@ -5025,6 +5120,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
     this.isTaken = const Value.absent(),
     this.isSkipped = const Value.absent(),
     this.isMissed = const Value.absent(),
+    this.isPreLogged = const Value.absent(),
     this.dosageTaken = const Value.absent(),
     this.skipReason = const Value.absent(),
     this.skipNote = const Value.absent(),
@@ -5045,6 +5141,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
     this.isTaken = const Value.absent(),
     this.isSkipped = const Value.absent(),
     this.isMissed = const Value.absent(),
+    this.isPreLogged = const Value.absent(),
     this.dosageTaken = const Value.absent(),
     this.skipReason = const Value.absent(),
     this.skipNote = const Value.absent(),
@@ -5067,6 +5164,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
     Expression<bool>? isTaken,
     Expression<bool>? isSkipped,
     Expression<bool>? isMissed,
+    Expression<bool>? isPreLogged,
     Expression<double>? dosageTaken,
     Expression<int>? skipReason,
     Expression<String>? skipNote,
@@ -5087,6 +5185,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
       if (isTaken != null) 'is_taken': isTaken,
       if (isSkipped != null) 'is_skipped': isSkipped,
       if (isMissed != null) 'is_missed': isMissed,
+      if (isPreLogged != null) 'is_pre_logged': isPreLogged,
       if (dosageTaken != null) 'dosage_taken': dosageTaken,
       if (skipReason != null) 'skip_reason': skipReason,
       if (skipNote != null) 'skip_note': skipNote,
@@ -5110,6 +5209,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
     Value<bool>? isTaken,
     Value<bool>? isSkipped,
     Value<bool>? isMissed,
+    Value<bool>? isPreLogged,
     Value<double>? dosageTaken,
     Value<int?>? skipReason,
     Value<String?>? skipNote,
@@ -5130,6 +5230,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
       isTaken: isTaken ?? this.isTaken,
       isSkipped: isSkipped ?? this.isSkipped,
       isMissed: isMissed ?? this.isMissed,
+      isPreLogged: isPreLogged ?? this.isPreLogged,
       dosageTaken: dosageTaken ?? this.dosageTaken,
       skipReason: skipReason ?? this.skipReason,
       skipNote: skipNote ?? this.skipNote,
@@ -5167,6 +5268,9 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
     }
     if (isMissed.present) {
       map['is_missed'] = Variable<bool>(isMissed.value);
+    }
+    if (isPreLogged.present) {
+      map['is_pre_logged'] = Variable<bool>(isPreLogged.value);
     }
     if (dosageTaken.present) {
       map['dosage_taken'] = Variable<double>(dosageTaken.value);
@@ -5214,6 +5318,7 @@ class MedicineLogsCompanion extends UpdateCompanion<MedicineLog> {
           ..write('isTaken: $isTaken, ')
           ..write('isSkipped: $isSkipped, ')
           ..write('isMissed: $isMissed, ')
+          ..write('isPreLogged: $isPreLogged, ')
           ..write('dosageTaken: $dosageTaken, ')
           ..write('skipReason: $skipReason, ')
           ..write('skipNote: $skipNote, ')
@@ -16455,6 +16560,989 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
   }
 }
 
+class $WeightReadingsTable extends WeightReadings
+    with TableInfo<$WeightReadingsTable, WeightReading> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WeightReadingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dependentIdMeta = const VerificationMeta(
+    'dependentId',
+  );
+  @override
+  late final GeneratedColumn<String> dependentId = GeneratedColumn<String>(
+    'dependent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _valueKgMeta = const VerificationMeta(
+    'valueKg',
+  );
+  @override
+  late final GeneratedColumn<double> valueKg = GeneratedColumn<double>(
+    'value_kg',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _takenAtMeta = const VerificationMeta(
+    'takenAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> takenAt = GeneratedColumn<DateTime>(
+    'taken_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
+    'tagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> tagsJson = GeneratedColumn<String>(
+    'tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dependentId,
+    valueKg,
+    takenAt,
+    tagsJson,
+    note,
+    createdAt,
+    synced,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'weight_readings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WeightReading> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('dependent_id')) {
+      context.handle(
+        _dependentIdMeta,
+        dependentId.isAcceptableOrUnknown(
+          data['dependent_id']!,
+          _dependentIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('value_kg')) {
+      context.handle(
+        _valueKgMeta,
+        valueKg.isAcceptableOrUnknown(data['value_kg']!, _valueKgMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueKgMeta);
+    }
+    if (data.containsKey('taken_at')) {
+      context.handle(
+        _takenAtMeta,
+        takenAt.isAcceptableOrUnknown(data['taken_at']!, _takenAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_takenAtMeta);
+    }
+    if (data.containsKey('tags_json')) {
+      context.handle(
+        _tagsJsonMeta,
+        tagsJson.isAcceptableOrUnknown(data['tags_json']!, _tagsJsonMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  WeightReading map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WeightReading(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dependentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dependent_id'],
+      ),
+      valueKg: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}value_kg'],
+      )!,
+      takenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}taken_at'],
+      )!,
+      tagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags_json'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+    );
+  }
+
+  @override
+  $WeightReadingsTable createAlias(String alias) {
+    return $WeightReadingsTable(attachedDatabase, alias);
+  }
+}
+
+class WeightReading extends DataClass implements Insertable<WeightReading> {
+  final String id;
+  final String? dependentId;
+  final double valueKg;
+  final DateTime takenAt;
+  final String? tagsJson;
+  final String? note;
+  final DateTime createdAt;
+  final bool synced;
+  const WeightReading({
+    required this.id,
+    this.dependentId,
+    required this.valueKg,
+    required this.takenAt,
+    this.tagsJson,
+    this.note,
+    required this.createdAt,
+    required this.synced,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || dependentId != null) {
+      map['dependent_id'] = Variable<String>(dependentId);
+    }
+    map['value_kg'] = Variable<double>(valueKg);
+    map['taken_at'] = Variable<DateTime>(takenAt);
+    if (!nullToAbsent || tagsJson != null) {
+      map['tags_json'] = Variable<String>(tagsJson);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['synced'] = Variable<bool>(synced);
+    return map;
+  }
+
+  WeightReadingsCompanion toCompanion(bool nullToAbsent) {
+    return WeightReadingsCompanion(
+      id: Value(id),
+      dependentId: dependentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dependentId),
+      valueKg: Value(valueKg),
+      takenAt: Value(takenAt),
+      tagsJson: tagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tagsJson),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      synced: Value(synced),
+    );
+  }
+
+  factory WeightReading.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WeightReading(
+      id: serializer.fromJson<String>(json['id']),
+      dependentId: serializer.fromJson<String?>(json['dependentId']),
+      valueKg: serializer.fromJson<double>(json['valueKg']),
+      takenAt: serializer.fromJson<DateTime>(json['takenAt']),
+      tagsJson: serializer.fromJson<String?>(json['tagsJson']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      synced: serializer.fromJson<bool>(json['synced']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dependentId': serializer.toJson<String?>(dependentId),
+      'valueKg': serializer.toJson<double>(valueKg),
+      'takenAt': serializer.toJson<DateTime>(takenAt),
+      'tagsJson': serializer.toJson<String?>(tagsJson),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'synced': serializer.toJson<bool>(synced),
+    };
+  }
+
+  WeightReading copyWith({
+    String? id,
+    Value<String?> dependentId = const Value.absent(),
+    double? valueKg,
+    DateTime? takenAt,
+    Value<String?> tagsJson = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+    bool? synced,
+  }) => WeightReading(
+    id: id ?? this.id,
+    dependentId: dependentId.present ? dependentId.value : this.dependentId,
+    valueKg: valueKg ?? this.valueKg,
+    takenAt: takenAt ?? this.takenAt,
+    tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+    synced: synced ?? this.synced,
+  );
+  WeightReading copyWithCompanion(WeightReadingsCompanion data) {
+    return WeightReading(
+      id: data.id.present ? data.id.value : this.id,
+      dependentId: data.dependentId.present
+          ? data.dependentId.value
+          : this.dependentId,
+      valueKg: data.valueKg.present ? data.valueKg.value : this.valueKg,
+      takenAt: data.takenAt.present ? data.takenAt.value : this.takenAt,
+      tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      synced: data.synced.present ? data.synced.value : this.synced,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WeightReading(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('valueKg: $valueKg, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    dependentId,
+    valueKg,
+    takenAt,
+    tagsJson,
+    note,
+    createdAt,
+    synced,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WeightReading &&
+          other.id == this.id &&
+          other.dependentId == this.dependentId &&
+          other.valueKg == this.valueKg &&
+          other.takenAt == this.takenAt &&
+          other.tagsJson == this.tagsJson &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.synced == this.synced);
+}
+
+class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
+  final Value<String> id;
+  final Value<String?> dependentId;
+  final Value<double> valueKg;
+  final Value<DateTime> takenAt;
+  final Value<String?> tagsJson;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<bool> synced;
+  final Value<int> rowid;
+  const WeightReadingsCompanion({
+    this.id = const Value.absent(),
+    this.dependentId = const Value.absent(),
+    this.valueKg = const Value.absent(),
+    this.takenAt = const Value.absent(),
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WeightReadingsCompanion.insert({
+    required String id,
+    this.dependentId = const Value.absent(),
+    required double valueKg,
+    required DateTime takenAt,
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    this.synced = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       valueKg = Value(valueKg),
+       takenAt = Value(takenAt),
+       createdAt = Value(createdAt);
+  static Insertable<WeightReading> custom({
+    Expression<String>? id,
+    Expression<String>? dependentId,
+    Expression<double>? valueKg,
+    Expression<DateTime>? takenAt,
+    Expression<String>? tagsJson,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<bool>? synced,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dependentId != null) 'dependent_id': dependentId,
+      if (valueKg != null) 'value_kg': valueKg,
+      if (takenAt != null) 'taken_at': takenAt,
+      if (tagsJson != null) 'tags_json': tagsJson,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (synced != null) 'synced': synced,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WeightReadingsCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? dependentId,
+    Value<double>? valueKg,
+    Value<DateTime>? takenAt,
+    Value<String?>? tagsJson,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+    Value<bool>? synced,
+    Value<int>? rowid,
+  }) {
+    return WeightReadingsCompanion(
+      id: id ?? this.id,
+      dependentId: dependentId ?? this.dependentId,
+      valueKg: valueKg ?? this.valueKg,
+      takenAt: takenAt ?? this.takenAt,
+      tagsJson: tagsJson ?? this.tagsJson,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      synced: synced ?? this.synced,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dependentId.present) {
+      map['dependent_id'] = Variable<String>(dependentId.value);
+    }
+    if (valueKg.present) {
+      map['value_kg'] = Variable<double>(valueKg.value);
+    }
+    if (takenAt.present) {
+      map['taken_at'] = Variable<DateTime>(takenAt.value);
+    }
+    if (tagsJson.present) {
+      map['tags_json'] = Variable<String>(tagsJson.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WeightReadingsCompanion(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('valueKg: $valueKg, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('synced: $synced, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MoodEntriesTable extends MoodEntries
+    with TableInfo<$MoodEntriesTable, MoodEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MoodEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dependentIdMeta = const VerificationMeta(
+    'dependentId',
+  );
+  @override
+  late final GeneratedColumn<String> dependentId = GeneratedColumn<String>(
+    'dependent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _moodIndexMeta = const VerificationMeta(
+    'moodIndex',
+  );
+  @override
+  late final GeneratedColumn<int> moodIndex = GeneratedColumn<int>(
+    'mood_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _takenAtMeta = const VerificationMeta(
+    'takenAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> takenAt = GeneratedColumn<DateTime>(
+    'taken_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
+    'tagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> tagsJson = GeneratedColumn<String>(
+    'tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dependentId,
+    moodIndex,
+    takenAt,
+    tagsJson,
+    note,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'mood_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MoodEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('dependent_id')) {
+      context.handle(
+        _dependentIdMeta,
+        dependentId.isAcceptableOrUnknown(
+          data['dependent_id']!,
+          _dependentIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('mood_index')) {
+      context.handle(
+        _moodIndexMeta,
+        moodIndex.isAcceptableOrUnknown(data['mood_index']!, _moodIndexMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_moodIndexMeta);
+    }
+    if (data.containsKey('taken_at')) {
+      context.handle(
+        _takenAtMeta,
+        takenAt.isAcceptableOrUnknown(data['taken_at']!, _takenAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_takenAtMeta);
+    }
+    if (data.containsKey('tags_json')) {
+      context.handle(
+        _tagsJsonMeta,
+        tagsJson.isAcceptableOrUnknown(data['tags_json']!, _tagsJsonMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MoodEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MoodEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dependentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dependent_id'],
+      ),
+      moodIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}mood_index'],
+      )!,
+      takenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}taken_at'],
+      )!,
+      tagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags_json'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $MoodEntriesTable createAlias(String alias) {
+    return $MoodEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class MoodEntry extends DataClass implements Insertable<MoodEntry> {
+  final String id;
+  final String? dependentId;
+  final int moodIndex;
+  final DateTime takenAt;
+  final String? tagsJson;
+  final String? note;
+  final DateTime createdAt;
+  const MoodEntry({
+    required this.id,
+    this.dependentId,
+    required this.moodIndex,
+    required this.takenAt,
+    this.tagsJson,
+    this.note,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || dependentId != null) {
+      map['dependent_id'] = Variable<String>(dependentId);
+    }
+    map['mood_index'] = Variable<int>(moodIndex);
+    map['taken_at'] = Variable<DateTime>(takenAt);
+    if (!nullToAbsent || tagsJson != null) {
+      map['tags_json'] = Variable<String>(tagsJson);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  MoodEntriesCompanion toCompanion(bool nullToAbsent) {
+    return MoodEntriesCompanion(
+      id: Value(id),
+      dependentId: dependentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dependentId),
+      moodIndex: Value(moodIndex),
+      takenAt: Value(takenAt),
+      tagsJson: tagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tagsJson),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory MoodEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MoodEntry(
+      id: serializer.fromJson<String>(json['id']),
+      dependentId: serializer.fromJson<String?>(json['dependentId']),
+      moodIndex: serializer.fromJson<int>(json['moodIndex']),
+      takenAt: serializer.fromJson<DateTime>(json['takenAt']),
+      tagsJson: serializer.fromJson<String?>(json['tagsJson']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dependentId': serializer.toJson<String?>(dependentId),
+      'moodIndex': serializer.toJson<int>(moodIndex),
+      'takenAt': serializer.toJson<DateTime>(takenAt),
+      'tagsJson': serializer.toJson<String?>(tagsJson),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  MoodEntry copyWith({
+    String? id,
+    Value<String?> dependentId = const Value.absent(),
+    int? moodIndex,
+    DateTime? takenAt,
+    Value<String?> tagsJson = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+  }) => MoodEntry(
+    id: id ?? this.id,
+    dependentId: dependentId.present ? dependentId.value : this.dependentId,
+    moodIndex: moodIndex ?? this.moodIndex,
+    takenAt: takenAt ?? this.takenAt,
+    tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  MoodEntry copyWithCompanion(MoodEntriesCompanion data) {
+    return MoodEntry(
+      id: data.id.present ? data.id.value : this.id,
+      dependentId: data.dependentId.present
+          ? data.dependentId.value
+          : this.dependentId,
+      moodIndex: data.moodIndex.present ? data.moodIndex.value : this.moodIndex,
+      takenAt: data.takenAt.present ? data.takenAt.value : this.takenAt,
+      tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MoodEntry(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('moodIndex: $moodIndex, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    dependentId,
+    moodIndex,
+    takenAt,
+    tagsJson,
+    note,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MoodEntry &&
+          other.id == this.id &&
+          other.dependentId == this.dependentId &&
+          other.moodIndex == this.moodIndex &&
+          other.takenAt == this.takenAt &&
+          other.tagsJson == this.tagsJson &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt);
+}
+
+class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
+  final Value<String> id;
+  final Value<String?> dependentId;
+  final Value<int> moodIndex;
+  final Value<DateTime> takenAt;
+  final Value<String?> tagsJson;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const MoodEntriesCompanion({
+    this.id = const Value.absent(),
+    this.dependentId = const Value.absent(),
+    this.moodIndex = const Value.absent(),
+    this.takenAt = const Value.absent(),
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MoodEntriesCompanion.insert({
+    required String id,
+    this.dependentId = const Value.absent(),
+    required int moodIndex,
+    required DateTime takenAt,
+    this.tagsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       moodIndex = Value(moodIndex),
+       takenAt = Value(takenAt),
+       createdAt = Value(createdAt);
+  static Insertable<MoodEntry> custom({
+    Expression<String>? id,
+    Expression<String>? dependentId,
+    Expression<int>? moodIndex,
+    Expression<DateTime>? takenAt,
+    Expression<String>? tagsJson,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dependentId != null) 'dependent_id': dependentId,
+      if (moodIndex != null) 'mood_index': moodIndex,
+      if (takenAt != null) 'taken_at': takenAt,
+      if (tagsJson != null) 'tags_json': tagsJson,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MoodEntriesCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? dependentId,
+    Value<int>? moodIndex,
+    Value<DateTime>? takenAt,
+    Value<String?>? tagsJson,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return MoodEntriesCompanion(
+      id: id ?? this.id,
+      dependentId: dependentId ?? this.dependentId,
+      moodIndex: moodIndex ?? this.moodIndex,
+      takenAt: takenAt ?? this.takenAt,
+      tagsJson: tagsJson ?? this.tagsJson,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dependentId.present) {
+      map['dependent_id'] = Variable<String>(dependentId.value);
+    }
+    if (moodIndex.present) {
+      map['mood_index'] = Variable<int>(moodIndex.value);
+    }
+    if (takenAt.present) {
+      map['taken_at'] = Variable<DateTime>(takenAt.value);
+    }
+    if (tagsJson.present) {
+      map['tags_json'] = Variable<String>(tagsJson.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MoodEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('moodIndex: $moodIndex, ')
+          ..write('takenAt: $takenAt, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $MenstrualCyclesTable extends MenstrualCycles
     with TableInfo<$MenstrualCyclesTable, MenstrualCycleRow> {
   @override
@@ -22650,12 +23738,12 @@ class SleepSessionsCompanion extends UpdateCompanion<SleepSessionRow> {
   }
 }
 
-class $KnowledgeChunksTable extends KnowledgeChunks
-    with TableInfo<$KnowledgeChunksTable, KnowledgeChunkRow> {
+class $DiaryEntriesTable extends DiaryEntries
+    with TableInfo<$DiaryEntriesTable, DiaryEntry> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $KnowledgeChunksTable(this.attachedDatabase, [this._alias]);
+  $DiaryEntriesTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -22665,23 +23753,25 @@ class $KnowledgeChunksTable extends KnowledgeChunks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _topicMeta = const VerificationMeta('topic');
+  static const VerificationMeta _dependentIdMeta = const VerificationMeta(
+    'dependentId',
+  );
   @override
-  late final GeneratedColumn<String> topic = GeneratedColumn<String>(
-    'topic',
+  late final GeneratedColumn<String> dependentId = GeneratedColumn<String>(
+    'dependent_id',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
     'title',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _bodyMeta = const VerificationMeta('body');
   @override
@@ -22692,26 +23782,16 @@ class $KnowledgeChunksTable extends KnowledgeChunks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
-  @override
-  late final GeneratedColumn<String> source = GeneratedColumn<String>(
-    'source',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _kbVersionMeta = const VerificationMeta(
-    'kbVersion',
+  static const VerificationMeta _entryAtMeta = const VerificationMeta(
+    'entryAt',
   );
   @override
-  late final GeneratedColumn<int> kbVersion = GeneratedColumn<int>(
-    'kb_version',
+  late final GeneratedColumn<DateTime> entryAt = GeneratedColumn<DateTime>(
+    'entry_at',
     aliasedName,
     false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(1),
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
@@ -22727,21 +23807,20 @@ class $KnowledgeChunksTable extends KnowledgeChunks
   @override
   List<GeneratedColumn> get $columns => [
     id,
-    topic,
+    dependentId,
     title,
     body,
-    source,
-    kbVersion,
+    entryAt,
     createdAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'knowledge_chunks';
+  static const String $name = 'diary_entries';
   @override
   VerificationContext validateIntegrity(
-    Insertable<KnowledgeChunkRow> instance, {
+    Insertable<DiaryEntry> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -22751,21 +23830,20 @@ class $KnowledgeChunksTable extends KnowledgeChunks
     } else if (isInserting) {
       context.missing(_idMeta);
     }
-    if (data.containsKey('topic')) {
+    if (data.containsKey('dependent_id')) {
       context.handle(
-        _topicMeta,
-        topic.isAcceptableOrUnknown(data['topic']!, _topicMeta),
+        _dependentIdMeta,
+        dependentId.isAcceptableOrUnknown(
+          data['dependent_id']!,
+          _dependentIdMeta,
+        ),
       );
-    } else if (isInserting) {
-      context.missing(_topicMeta);
     }
     if (data.containsKey('title')) {
       context.handle(
         _titleMeta,
         title.isAcceptableOrUnknown(data['title']!, _titleMeta),
       );
-    } else if (isInserting) {
-      context.missing(_titleMeta);
     }
     if (data.containsKey('body')) {
       context.handle(
@@ -22775,17 +23853,13 @@ class $KnowledgeChunksTable extends KnowledgeChunks
     } else if (isInserting) {
       context.missing(_bodyMeta);
     }
-    if (data.containsKey('source')) {
+    if (data.containsKey('entry_at')) {
       context.handle(
-        _sourceMeta,
-        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+        _entryAtMeta,
+        entryAt.isAcceptableOrUnknown(data['entry_at']!, _entryAtMeta),
       );
-    }
-    if (data.containsKey('kb_version')) {
-      context.handle(
-        _kbVersionMeta,
-        kbVersion.isAcceptableOrUnknown(data['kb_version']!, _kbVersionMeta),
-      );
+    } else if (isInserting) {
+      context.missing(_entryAtMeta);
     }
     if (data.containsKey('created_at')) {
       context.handle(
@@ -22801,32 +23875,28 @@ class $KnowledgeChunksTable extends KnowledgeChunks
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  KnowledgeChunkRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+  DiaryEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return KnowledgeChunkRow(
+    return DiaryEntry(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
-      topic: attachedDatabase.typeMapping.read(
+      dependentId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}topic'],
-      )!,
+        data['${effectivePrefix}dependent_id'],
+      ),
       title: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}title'],
-      )!,
+      ),
       body: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}body'],
       )!,
-      source: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}source'],
-      ),
-      kbVersion: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}kb_version'],
+      entryAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}entry_at'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -22836,70 +23906,68 @@ class $KnowledgeChunksTable extends KnowledgeChunks
   }
 
   @override
-  $KnowledgeChunksTable createAlias(String alias) {
-    return $KnowledgeChunksTable(attachedDatabase, alias);
+  $DiaryEntriesTable createAlias(String alias) {
+    return $DiaryEntriesTable(attachedDatabase, alias);
   }
 }
 
-class KnowledgeChunkRow extends DataClass
-    implements Insertable<KnowledgeChunkRow> {
+class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
   final String id;
-  final String topic;
-  final String title;
+  final String? dependentId;
+  final String? title;
   final String body;
-  final String? source;
-  final int kbVersion;
+  final DateTime entryAt;
   final DateTime createdAt;
-  const KnowledgeChunkRow({
+  const DiaryEntry({
     required this.id,
-    required this.topic,
-    required this.title,
+    this.dependentId,
+    this.title,
     required this.body,
-    this.source,
-    required this.kbVersion,
+    required this.entryAt,
     required this.createdAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    map['topic'] = Variable<String>(topic);
-    map['title'] = Variable<String>(title);
-    map['body'] = Variable<String>(body);
-    if (!nullToAbsent || source != null) {
-      map['source'] = Variable<String>(source);
+    if (!nullToAbsent || dependentId != null) {
+      map['dependent_id'] = Variable<String>(dependentId);
     }
-    map['kb_version'] = Variable<int>(kbVersion);
+    if (!nullToAbsent || title != null) {
+      map['title'] = Variable<String>(title);
+    }
+    map['body'] = Variable<String>(body);
+    map['entry_at'] = Variable<DateTime>(entryAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
 
-  KnowledgeChunksCompanion toCompanion(bool nullToAbsent) {
-    return KnowledgeChunksCompanion(
+  DiaryEntriesCompanion toCompanion(bool nullToAbsent) {
+    return DiaryEntriesCompanion(
       id: Value(id),
-      topic: Value(topic),
-      title: Value(title),
-      body: Value(body),
-      source: source == null && nullToAbsent
+      dependentId: dependentId == null && nullToAbsent
           ? const Value.absent()
-          : Value(source),
-      kbVersion: Value(kbVersion),
+          : Value(dependentId),
+      title: title == null && nullToAbsent
+          ? const Value.absent()
+          : Value(title),
+      body: Value(body),
+      entryAt: Value(entryAt),
       createdAt: Value(createdAt),
     );
   }
 
-  factory KnowledgeChunkRow.fromJson(
+  factory DiaryEntry.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return KnowledgeChunkRow(
+    return DiaryEntry(
       id: serializer.fromJson<String>(json['id']),
-      topic: serializer.fromJson<String>(json['topic']),
-      title: serializer.fromJson<String>(json['title']),
+      dependentId: serializer.fromJson<String?>(json['dependentId']),
+      title: serializer.fromJson<String?>(json['title']),
       body: serializer.fromJson<String>(json['body']),
-      source: serializer.fromJson<String?>(json['source']),
-      kbVersion: serializer.fromJson<int>(json['kbVersion']),
+      entryAt: serializer.fromJson<DateTime>(json['entryAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -22908,53 +23976,50 @@ class KnowledgeChunkRow extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'topic': serializer.toJson<String>(topic),
-      'title': serializer.toJson<String>(title),
+      'dependentId': serializer.toJson<String?>(dependentId),
+      'title': serializer.toJson<String?>(title),
       'body': serializer.toJson<String>(body),
-      'source': serializer.toJson<String?>(source),
-      'kbVersion': serializer.toJson<int>(kbVersion),
+      'entryAt': serializer.toJson<DateTime>(entryAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
 
-  KnowledgeChunkRow copyWith({
+  DiaryEntry copyWith({
     String? id,
-    String? topic,
-    String? title,
+    Value<String?> dependentId = const Value.absent(),
+    Value<String?> title = const Value.absent(),
     String? body,
-    Value<String?> source = const Value.absent(),
-    int? kbVersion,
+    DateTime? entryAt,
     DateTime? createdAt,
-  }) => KnowledgeChunkRow(
+  }) => DiaryEntry(
     id: id ?? this.id,
-    topic: topic ?? this.topic,
-    title: title ?? this.title,
+    dependentId: dependentId.present ? dependentId.value : this.dependentId,
+    title: title.present ? title.value : this.title,
     body: body ?? this.body,
-    source: source.present ? source.value : this.source,
-    kbVersion: kbVersion ?? this.kbVersion,
+    entryAt: entryAt ?? this.entryAt,
     createdAt: createdAt ?? this.createdAt,
   );
-  KnowledgeChunkRow copyWithCompanion(KnowledgeChunksCompanion data) {
-    return KnowledgeChunkRow(
+  DiaryEntry copyWithCompanion(DiaryEntriesCompanion data) {
+    return DiaryEntry(
       id: data.id.present ? data.id.value : this.id,
-      topic: data.topic.present ? data.topic.value : this.topic,
+      dependentId: data.dependentId.present
+          ? data.dependentId.value
+          : this.dependentId,
       title: data.title.present ? data.title.value : this.title,
       body: data.body.present ? data.body.value : this.body,
-      source: data.source.present ? data.source.value : this.source,
-      kbVersion: data.kbVersion.present ? data.kbVersion.value : this.kbVersion,
+      entryAt: data.entryAt.present ? data.entryAt.value : this.entryAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('KnowledgeChunkRow(')
+    return (StringBuffer('DiaryEntry(')
           ..write('id: $id, ')
-          ..write('topic: $topic, ')
+          ..write('dependentId: $dependentId, ')
           ..write('title: $title, ')
           ..write('body: $body, ')
-          ..write('source: $source, ')
-          ..write('kbVersion: $kbVersion, ')
+          ..write('entryAt: $entryAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -22962,92 +24027,83 @@ class KnowledgeChunkRow extends DataClass
 
   @override
   int get hashCode =>
-      Object.hash(id, topic, title, body, source, kbVersion, createdAt);
+      Object.hash(id, dependentId, title, body, entryAt, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is KnowledgeChunkRow &&
+      (other is DiaryEntry &&
           other.id == this.id &&
-          other.topic == this.topic &&
+          other.dependentId == this.dependentId &&
           other.title == this.title &&
           other.body == this.body &&
-          other.source == this.source &&
-          other.kbVersion == this.kbVersion &&
+          other.entryAt == this.entryAt &&
           other.createdAt == this.createdAt);
 }
 
-class KnowledgeChunksCompanion extends UpdateCompanion<KnowledgeChunkRow> {
+class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
   final Value<String> id;
-  final Value<String> topic;
-  final Value<String> title;
+  final Value<String?> dependentId;
+  final Value<String?> title;
   final Value<String> body;
-  final Value<String?> source;
-  final Value<int> kbVersion;
+  final Value<DateTime> entryAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
-  const KnowledgeChunksCompanion({
+  const DiaryEntriesCompanion({
     this.id = const Value.absent(),
-    this.topic = const Value.absent(),
+    this.dependentId = const Value.absent(),
     this.title = const Value.absent(),
     this.body = const Value.absent(),
-    this.source = const Value.absent(),
-    this.kbVersion = const Value.absent(),
+    this.entryAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  KnowledgeChunksCompanion.insert({
+  DiaryEntriesCompanion.insert({
     required String id,
-    required String topic,
-    required String title,
+    this.dependentId = const Value.absent(),
+    this.title = const Value.absent(),
     required String body,
-    this.source = const Value.absent(),
-    this.kbVersion = const Value.absent(),
+    required DateTime entryAt,
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       topic = Value(topic),
-       title = Value(title),
        body = Value(body),
+       entryAt = Value(entryAt),
        createdAt = Value(createdAt);
-  static Insertable<KnowledgeChunkRow> custom({
+  static Insertable<DiaryEntry> custom({
     Expression<String>? id,
-    Expression<String>? topic,
+    Expression<String>? dependentId,
     Expression<String>? title,
     Expression<String>? body,
-    Expression<String>? source,
-    Expression<int>? kbVersion,
+    Expression<DateTime>? entryAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (topic != null) 'topic': topic,
+      if (dependentId != null) 'dependent_id': dependentId,
       if (title != null) 'title': title,
       if (body != null) 'body': body,
-      if (source != null) 'source': source,
-      if (kbVersion != null) 'kb_version': kbVersion,
+      if (entryAt != null) 'entry_at': entryAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  KnowledgeChunksCompanion copyWith({
+  DiaryEntriesCompanion copyWith({
     Value<String>? id,
-    Value<String>? topic,
-    Value<String>? title,
+    Value<String?>? dependentId,
+    Value<String?>? title,
     Value<String>? body,
-    Value<String?>? source,
-    Value<int>? kbVersion,
+    Value<DateTime>? entryAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
-    return KnowledgeChunksCompanion(
+    return DiaryEntriesCompanion(
       id: id ?? this.id,
-      topic: topic ?? this.topic,
+      dependentId: dependentId ?? this.dependentId,
       title: title ?? this.title,
       body: body ?? this.body,
-      source: source ?? this.source,
-      kbVersion: kbVersion ?? this.kbVersion,
+      entryAt: entryAt ?? this.entryAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -23059,8 +24115,8 @@ class KnowledgeChunksCompanion extends UpdateCompanion<KnowledgeChunkRow> {
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
-    if (topic.present) {
-      map['topic'] = Variable<String>(topic.value);
+    if (dependentId.present) {
+      map['dependent_id'] = Variable<String>(dependentId.value);
     }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
@@ -23068,11 +24124,8 @@ class KnowledgeChunksCompanion extends UpdateCompanion<KnowledgeChunkRow> {
     if (body.present) {
       map['body'] = Variable<String>(body.value);
     }
-    if (source.present) {
-      map['source'] = Variable<String>(source.value);
-    }
-    if (kbVersion.present) {
-      map['kb_version'] = Variable<int>(kbVersion.value);
+    if (entryAt.present) {
+      map['entry_at'] = Variable<DateTime>(entryAt.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -23085,463 +24138,13 @@ class KnowledgeChunksCompanion extends UpdateCompanion<KnowledgeChunkRow> {
 
   @override
   String toString() {
-    return (StringBuffer('KnowledgeChunksCompanion(')
+    return (StringBuffer('DiaryEntriesCompanion(')
           ..write('id: $id, ')
-          ..write('topic: $topic, ')
+          ..write('dependentId: $dependentId, ')
           ..write('title: $title, ')
           ..write('body: $body, ')
-          ..write('source: $source, ')
-          ..write('kbVersion: $kbVersion, ')
+          ..write('entryAt: $entryAt, ')
           ..write('createdAt: $createdAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $AssistantMemoriesTable extends AssistantMemories
-    with TableInfo<$AssistantMemoriesTable, AssistantMemoryRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $AssistantMemoriesTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _contentMeta = const VerificationMeta(
-    'content',
-  );
-  @override
-  late final GeneratedColumn<String> content = GeneratedColumn<String>(
-    'content',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
-  @override
-  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
-    'kind',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('fact'),
-  );
-  static const VerificationMeta _activeMeta = const VerificationMeta('active');
-  @override
-  late final GeneratedColumn<bool> active = GeneratedColumn<bool>(
-    'active',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("active" IN (0, 1))',
-    ),
-    defaultValue: const Constant(true),
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
-  @override
-  late final GeneratedColumn<String> source = GeneratedColumn<String>(
-    'source',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('user'),
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    content,
-    kind,
-    active,
-    createdAt,
-    updatedAt,
-    source,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'assistant_memories';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<AssistantMemoryRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('content')) {
-      context.handle(
-        _contentMeta,
-        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_contentMeta);
-    }
-    if (data.containsKey('kind')) {
-      context.handle(
-        _kindMeta,
-        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
-      );
-    }
-    if (data.containsKey('active')) {
-      context.handle(
-        _activeMeta,
-        active.isAcceptableOrUnknown(data['active']!, _activeMeta),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtMeta);
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_updatedAtMeta);
-    }
-    if (data.containsKey('source')) {
-      context.handle(
-        _sourceMeta,
-        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  AssistantMemoryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return AssistantMemoryRow(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      content: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}content'],
-      )!,
-      kind: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}kind'],
-      )!,
-      active: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}active'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
-      source: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}source'],
-      )!,
-    );
-  }
-
-  @override
-  $AssistantMemoriesTable createAlias(String alias) {
-    return $AssistantMemoriesTable(attachedDatabase, alias);
-  }
-}
-
-class AssistantMemoryRow extends DataClass
-    implements Insertable<AssistantMemoryRow> {
-  final String id;
-  final String content;
-  final String kind;
-  final bool active;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final String source;
-  const AssistantMemoryRow({
-    required this.id,
-    required this.content,
-    required this.kind,
-    required this.active,
-    required this.createdAt,
-    required this.updatedAt,
-    required this.source,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['content'] = Variable<String>(content);
-    map['kind'] = Variable<String>(kind);
-    map['active'] = Variable<bool>(active);
-    map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
-    map['source'] = Variable<String>(source);
-    return map;
-  }
-
-  AssistantMemoriesCompanion toCompanion(bool nullToAbsent) {
-    return AssistantMemoriesCompanion(
-      id: Value(id),
-      content: Value(content),
-      kind: Value(kind),
-      active: Value(active),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-      source: Value(source),
-    );
-  }
-
-  factory AssistantMemoryRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return AssistantMemoryRow(
-      id: serializer.fromJson<String>(json['id']),
-      content: serializer.fromJson<String>(json['content']),
-      kind: serializer.fromJson<String>(json['kind']),
-      active: serializer.fromJson<bool>(json['active']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-      source: serializer.fromJson<String>(json['source']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'content': serializer.toJson<String>(content),
-      'kind': serializer.toJson<String>(kind),
-      'active': serializer.toJson<bool>(active),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
-      'source': serializer.toJson<String>(source),
-    };
-  }
-
-  AssistantMemoryRow copyWith({
-    String? id,
-    String? content,
-    String? kind,
-    bool? active,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-    String? source,
-  }) => AssistantMemoryRow(
-    id: id ?? this.id,
-    content: content ?? this.content,
-    kind: kind ?? this.kind,
-    active: active ?? this.active,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-    source: source ?? this.source,
-  );
-  AssistantMemoryRow copyWithCompanion(AssistantMemoriesCompanion data) {
-    return AssistantMemoryRow(
-      id: data.id.present ? data.id.value : this.id,
-      content: data.content.present ? data.content.value : this.content,
-      kind: data.kind.present ? data.kind.value : this.kind,
-      active: data.active.present ? data.active.value : this.active,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-      source: data.source.present ? data.source.value : this.source,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('AssistantMemoryRow(')
-          ..write('id: $id, ')
-          ..write('content: $content, ')
-          ..write('kind: $kind, ')
-          ..write('active: $active, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('source: $source')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(id, content, kind, active, createdAt, updatedAt, source);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is AssistantMemoryRow &&
-          other.id == this.id &&
-          other.content == this.content &&
-          other.kind == this.kind &&
-          other.active == this.active &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt &&
-          other.source == this.source);
-}
-
-class AssistantMemoriesCompanion extends UpdateCompanion<AssistantMemoryRow> {
-  final Value<String> id;
-  final Value<String> content;
-  final Value<String> kind;
-  final Value<bool> active;
-  final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  final Value<String> source;
-  final Value<int> rowid;
-  const AssistantMemoriesCompanion({
-    this.id = const Value.absent(),
-    this.content = const Value.absent(),
-    this.kind = const Value.absent(),
-    this.active = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.source = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  AssistantMemoriesCompanion.insert({
-    required String id,
-    required String content,
-    this.kind = const Value.absent(),
-    this.active = const Value.absent(),
-    required DateTime createdAt,
-    required DateTime updatedAt,
-    this.source = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       content = Value(content),
-       createdAt = Value(createdAt),
-       updatedAt = Value(updatedAt);
-  static Insertable<AssistantMemoryRow> custom({
-    Expression<String>? id,
-    Expression<String>? content,
-    Expression<String>? kind,
-    Expression<bool>? active,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<String>? source,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (content != null) 'content': content,
-      if (kind != null) 'kind': kind,
-      if (active != null) 'active': active,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (source != null) 'source': source,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  AssistantMemoriesCompanion copyWith({
-    Value<String>? id,
-    Value<String>? content,
-    Value<String>? kind,
-    Value<bool>? active,
-    Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
-    Value<String>? source,
-    Value<int>? rowid,
-  }) {
-    return AssistantMemoriesCompanion(
-      id: id ?? this.id,
-      content: content ?? this.content,
-      kind: kind ?? this.kind,
-      active: active ?? this.active,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      source: source ?? this.source,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (content.present) {
-      map['content'] = Variable<String>(content.value);
-    }
-    if (kind.present) {
-      map['kind'] = Variable<String>(kind.value);
-    }
-    if (active.present) {
-      map['active'] = Variable<bool>(active.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (source.present) {
-      map['source'] = Variable<String>(source.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('AssistantMemoriesCompanion(')
-          ..write('id: $id, ')
-          ..write('content: $content, ')
-          ..write('kind: $kind, ')
-          ..write('active: $active, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('source: $source, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -23588,6 +24191,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $GlucoseReadingsTable glucoseReadings = $GlucoseReadingsTable(
     this,
   );
+  late final $WeightReadingsTable weightReadings = $WeightReadingsTable(this);
+  late final $MoodEntriesTable moodEntries = $MoodEntriesTable(this);
   late final $MenstrualCyclesTable menstrualCycles = $MenstrualCyclesTable(
     this,
   );
@@ -23599,11 +24204,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $StepManualEntriesTable(this);
   late final $HealthProfilesTable healthProfiles = $HealthProfilesTable(this);
   late final $SleepSessionsTable sleepSessions = $SleepSessionsTable(this);
-  late final $KnowledgeChunksTable knowledgeChunks = $KnowledgeChunksTable(
-    this,
-  );
-  late final $AssistantMemoriesTable assistantMemories =
-      $AssistantMemoriesTable(this);
+  late final $DiaryEntriesTable diaryEntries = $DiaryEntriesTable(this);
   late final CoreDao coreDao = CoreDao(this as AppDatabase);
   late final MedicationDao medicationDao = MedicationDao(this as AppDatabase);
   late final WaterDao waterDao = WaterDao(this as AppDatabase);
@@ -23612,7 +24213,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final PeriodDao periodDao = PeriodDao(this as AppDatabase);
   late final StepsDao stepsDao = StepsDao(this as AppDatabase);
   late final SleepDao sleepDao = SleepDao(this as AppDatabase);
-  late final AiDao aiDao = AiDao(this as AppDatabase);
+  late final DiaryDao diaryDao = DiaryDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -23639,6 +24240,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     reminderCategories,
     bloodPressureReadings,
     glucoseReadings,
+    weightReadings,
+    moodEntries,
     menstrualCycles,
     periodDays,
     periodSettingsTable,
@@ -23646,8 +24249,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     stepManualEntries,
     healthProfiles,
     sleepSessions,
-    knowledgeChunks,
-    assistantMemories,
+    diaryEntries,
   ];
 }
 
@@ -24656,6 +25258,7 @@ typedef $$EnhancedMedicinesTableCreateCompanionBuilder =
       Value<String?> genericName,
       Value<String?> brandName,
       required int dosageForm,
+      Value<int?> routeIndex,
       Value<double> strength,
       Value<String> strengthUnit,
       Value<String?> strengthText,
@@ -24698,6 +25301,7 @@ typedef $$EnhancedMedicinesTableUpdateCompanionBuilder =
       Value<String?> genericName,
       Value<String?> brandName,
       Value<int> dosageForm,
+      Value<int?> routeIndex,
       Value<double> strength,
       Value<String> strengthUnit,
       Value<String?> strengthText,
@@ -24765,6 +25369,11 @@ class $$EnhancedMedicinesTableFilterComposer
 
   ColumnFilters<int> get dosageForm => $composableBuilder(
     column: $table.dosageForm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get routeIndex => $composableBuilder(
+    column: $table.routeIndex,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -24968,6 +25577,11 @@ class $$EnhancedMedicinesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get routeIndex => $composableBuilder(
+    column: $table.routeIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get strength => $composableBuilder(
     column: $table.strength,
     builder: (column) => ColumnOrderings(column),
@@ -25162,6 +25776,11 @@ class $$EnhancedMedicinesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get routeIndex => $composableBuilder(
+    column: $table.routeIndex,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get strength =>
       $composableBuilder(column: $table.strength, builder: (column) => column);
 
@@ -25353,6 +25972,7 @@ class $$EnhancedMedicinesTableTableManager
                 Value<String?> genericName = const Value.absent(),
                 Value<String?> brandName = const Value.absent(),
                 Value<int> dosageForm = const Value.absent(),
+                Value<int?> routeIndex = const Value.absent(),
                 Value<double> strength = const Value.absent(),
                 Value<String> strengthUnit = const Value.absent(),
                 Value<String?> strengthText = const Value.absent(),
@@ -25393,6 +26013,7 @@ class $$EnhancedMedicinesTableTableManager
                 genericName: genericName,
                 brandName: brandName,
                 dosageForm: dosageForm,
+                routeIndex: routeIndex,
                 strength: strength,
                 strengthUnit: strengthUnit,
                 strengthText: strengthText,
@@ -25435,6 +26056,7 @@ class $$EnhancedMedicinesTableTableManager
                 Value<String?> genericName = const Value.absent(),
                 Value<String?> brandName = const Value.absent(),
                 required int dosageForm,
+                Value<int?> routeIndex = const Value.absent(),
                 Value<double> strength = const Value.absent(),
                 Value<String> strengthUnit = const Value.absent(),
                 Value<String?> strengthText = const Value.absent(),
@@ -25475,6 +26097,7 @@ class $$EnhancedMedicinesTableTableManager
                 genericName: genericName,
                 brandName: brandName,
                 dosageForm: dosageForm,
+                routeIndex: routeIndex,
                 strength: strength,
                 strengthUnit: strengthUnit,
                 strengthText: strengthText,
@@ -25548,6 +26171,7 @@ typedef $$MedicineLogsTableCreateCompanionBuilder =
       Value<bool> isTaken,
       Value<bool> isSkipped,
       Value<bool> isMissed,
+      Value<bool> isPreLogged,
       Value<double> dosageTaken,
       Value<int?> skipReason,
       Value<String?> skipNote,
@@ -25569,6 +26193,7 @@ typedef $$MedicineLogsTableUpdateCompanionBuilder =
       Value<bool> isTaken,
       Value<bool> isSkipped,
       Value<bool> isMissed,
+      Value<bool> isPreLogged,
       Value<double> dosageTaken,
       Value<int?> skipReason,
       Value<String?> skipNote,
@@ -25623,6 +26248,11 @@ class $$MedicineLogsTableFilterComposer
 
   ColumnFilters<bool> get isMissed => $composableBuilder(
     column: $table.isMissed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPreLogged => $composableBuilder(
+    column: $table.isPreLogged,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -25721,6 +26351,11 @@ class $$MedicineLogsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isPreLogged => $composableBuilder(
+    column: $table.isPreLogged,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get dosageTaken => $composableBuilder(
     column: $table.dosageTaken,
     builder: (column) => ColumnOrderings(column),
@@ -25808,6 +26443,11 @@ class $$MedicineLogsTableAnnotationComposer
   GeneratedColumn<bool> get isMissed =>
       $composableBuilder(column: $table.isMissed, builder: (column) => column);
 
+  GeneratedColumn<bool> get isPreLogged => $composableBuilder(
+    column: $table.isPreLogged,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get dosageTaken => $composableBuilder(
     column: $table.dosageTaken,
     builder: (column) => column,
@@ -25891,6 +26531,7 @@ class $$MedicineLogsTableTableManager
                 Value<bool> isTaken = const Value.absent(),
                 Value<bool> isSkipped = const Value.absent(),
                 Value<bool> isMissed = const Value.absent(),
+                Value<bool> isPreLogged = const Value.absent(),
                 Value<double> dosageTaken = const Value.absent(),
                 Value<int?> skipReason = const Value.absent(),
                 Value<String?> skipNote = const Value.absent(),
@@ -25910,6 +26551,7 @@ class $$MedicineLogsTableTableManager
                 isTaken: isTaken,
                 isSkipped: isSkipped,
                 isMissed: isMissed,
+                isPreLogged: isPreLogged,
                 dosageTaken: dosageTaken,
                 skipReason: skipReason,
                 skipNote: skipNote,
@@ -25931,6 +26573,7 @@ class $$MedicineLogsTableTableManager
                 Value<bool> isTaken = const Value.absent(),
                 Value<bool> isSkipped = const Value.absent(),
                 Value<bool> isMissed = const Value.absent(),
+                Value<bool> isPreLogged = const Value.absent(),
                 Value<double> dosageTaken = const Value.absent(),
                 Value<int?> skipReason = const Value.absent(),
                 Value<String?> skipNote = const Value.absent(),
@@ -25950,6 +26593,7 @@ class $$MedicineLogsTableTableManager
                 isTaken: isTaken,
                 isSkipped: isSkipped,
                 isMissed: isMissed,
+                isPreLogged: isPreLogged,
                 dosageTaken: dosageTaken,
                 skipReason: skipReason,
                 skipNote: skipNote,
@@ -31421,6 +32065,504 @@ typedef $$GlucoseReadingsTableProcessedTableManager =
       GlucoseReading,
       PrefetchHooks Function()
     >;
+typedef $$WeightReadingsTableCreateCompanionBuilder =
+    WeightReadingsCompanion Function({
+      required String id,
+      Value<String?> dependentId,
+      required double valueKg,
+      required DateTime takenAt,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      required DateTime createdAt,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+typedef $$WeightReadingsTableUpdateCompanionBuilder =
+    WeightReadingsCompanion Function({
+      Value<String> id,
+      Value<String?> dependentId,
+      Value<double> valueKg,
+      Value<DateTime> takenAt,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+      Value<bool> synced,
+      Value<int> rowid,
+    });
+
+class $$WeightReadingsTableFilterComposer
+    extends Composer<_$AppDatabase, $WeightReadingsTable> {
+  $$WeightReadingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get valueKg => $composableBuilder(
+    column: $table.valueKg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$WeightReadingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $WeightReadingsTable> {
+  $$WeightReadingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get valueKg => $composableBuilder(
+    column: $table.valueKg,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$WeightReadingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WeightReadingsTable> {
+  $$WeightReadingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get valueKg =>
+      $composableBuilder(column: $table.valueKg, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get takenAt =>
+      $composableBuilder(column: $table.takenAt, builder: (column) => column);
+
+  GeneratedColumn<String> get tagsJson =>
+      $composableBuilder(column: $table.tagsJson, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+}
+
+class $$WeightReadingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WeightReadingsTable,
+          WeightReading,
+          $$WeightReadingsTableFilterComposer,
+          $$WeightReadingsTableOrderingComposer,
+          $$WeightReadingsTableAnnotationComposer,
+          $$WeightReadingsTableCreateCompanionBuilder,
+          $$WeightReadingsTableUpdateCompanionBuilder,
+          (
+            WeightReading,
+            BaseReferences<_$AppDatabase, $WeightReadingsTable, WeightReading>,
+          ),
+          WeightReading,
+          PrefetchHooks Function()
+        > {
+  $$WeightReadingsTableTableManager(
+    _$AppDatabase db,
+    $WeightReadingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WeightReadingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WeightReadingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WeightReadingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> dependentId = const Value.absent(),
+                Value<double> valueKg = const Value.absent(),
+                Value<DateTime> takenAt = const Value.absent(),
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WeightReadingsCompanion(
+                id: id,
+                dependentId: dependentId,
+                valueKg: valueKg,
+                takenAt: takenAt,
+                tagsJson: tagsJson,
+                note: note,
+                createdAt: createdAt,
+                synced: synced,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> dependentId = const Value.absent(),
+                required double valueKg,
+                required DateTime takenAt,
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                required DateTime createdAt,
+                Value<bool> synced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WeightReadingsCompanion.insert(
+                id: id,
+                dependentId: dependentId,
+                valueKg: valueKg,
+                takenAt: takenAt,
+                tagsJson: tagsJson,
+                note: note,
+                createdAt: createdAt,
+                synced: synced,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$WeightReadingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WeightReadingsTable,
+      WeightReading,
+      $$WeightReadingsTableFilterComposer,
+      $$WeightReadingsTableOrderingComposer,
+      $$WeightReadingsTableAnnotationComposer,
+      $$WeightReadingsTableCreateCompanionBuilder,
+      $$WeightReadingsTableUpdateCompanionBuilder,
+      (
+        WeightReading,
+        BaseReferences<_$AppDatabase, $WeightReadingsTable, WeightReading>,
+      ),
+      WeightReading,
+      PrefetchHooks Function()
+    >;
+typedef $$MoodEntriesTableCreateCompanionBuilder =
+    MoodEntriesCompanion Function({
+      required String id,
+      Value<String?> dependentId,
+      required int moodIndex,
+      required DateTime takenAt,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$MoodEntriesTableUpdateCompanionBuilder =
+    MoodEntriesCompanion Function({
+      Value<String> id,
+      Value<String?> dependentId,
+      Value<int> moodIndex,
+      Value<DateTime> takenAt,
+      Value<String?> tagsJson,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$MoodEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $MoodEntriesTable> {
+  $$MoodEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get moodIndex => $composableBuilder(
+    column: $table.moodIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MoodEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MoodEntriesTable> {
+  $$MoodEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get moodIndex => $composableBuilder(
+    column: $table.moodIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get takenAt => $composableBuilder(
+    column: $table.takenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MoodEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MoodEntriesTable> {
+  $$MoodEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get moodIndex =>
+      $composableBuilder(column: $table.moodIndex, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get takenAt =>
+      $composableBuilder(column: $table.takenAt, builder: (column) => column);
+
+  GeneratedColumn<String> get tagsJson =>
+      $composableBuilder(column: $table.tagsJson, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$MoodEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MoodEntriesTable,
+          MoodEntry,
+          $$MoodEntriesTableFilterComposer,
+          $$MoodEntriesTableOrderingComposer,
+          $$MoodEntriesTableAnnotationComposer,
+          $$MoodEntriesTableCreateCompanionBuilder,
+          $$MoodEntriesTableUpdateCompanionBuilder,
+          (
+            MoodEntry,
+            BaseReferences<_$AppDatabase, $MoodEntriesTable, MoodEntry>,
+          ),
+          MoodEntry,
+          PrefetchHooks Function()
+        > {
+  $$MoodEntriesTableTableManager(_$AppDatabase db, $MoodEntriesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MoodEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MoodEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MoodEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> dependentId = const Value.absent(),
+                Value<int> moodIndex = const Value.absent(),
+                Value<DateTime> takenAt = const Value.absent(),
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MoodEntriesCompanion(
+                id: id,
+                dependentId: dependentId,
+                moodIndex: moodIndex,
+                takenAt: takenAt,
+                tagsJson: tagsJson,
+                note: note,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> dependentId = const Value.absent(),
+                required int moodIndex,
+                required DateTime takenAt,
+                Value<String?> tagsJson = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => MoodEntriesCompanion.insert(
+                id: id,
+                dependentId: dependentId,
+                moodIndex: moodIndex,
+                takenAt: takenAt,
+                tagsJson: tagsJson,
+                note: note,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MoodEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MoodEntriesTable,
+      MoodEntry,
+      $$MoodEntriesTableFilterComposer,
+      $$MoodEntriesTableOrderingComposer,
+      $$MoodEntriesTableAnnotationComposer,
+      $$MoodEntriesTableCreateCompanionBuilder,
+      $$MoodEntriesTableUpdateCompanionBuilder,
+      (MoodEntry, BaseReferences<_$AppDatabase, $MoodEntriesTable, MoodEntry>),
+      MoodEntry,
+      PrefetchHooks Function()
+    >;
 typedef $$MenstrualCyclesTableCreateCompanionBuilder =
     MenstrualCyclesCompanion Function({
       required String id,
@@ -34310,32 +35452,30 @@ typedef $$SleepSessionsTableProcessedTableManager =
       SleepSessionRow,
       PrefetchHooks Function()
     >;
-typedef $$KnowledgeChunksTableCreateCompanionBuilder =
-    KnowledgeChunksCompanion Function({
+typedef $$DiaryEntriesTableCreateCompanionBuilder =
+    DiaryEntriesCompanion Function({
       required String id,
-      required String topic,
-      required String title,
+      Value<String?> dependentId,
+      Value<String?> title,
       required String body,
-      Value<String?> source,
-      Value<int> kbVersion,
+      required DateTime entryAt,
       required DateTime createdAt,
       Value<int> rowid,
     });
-typedef $$KnowledgeChunksTableUpdateCompanionBuilder =
-    KnowledgeChunksCompanion Function({
+typedef $$DiaryEntriesTableUpdateCompanionBuilder =
+    DiaryEntriesCompanion Function({
       Value<String> id,
-      Value<String> topic,
-      Value<String> title,
+      Value<String?> dependentId,
+      Value<String?> title,
       Value<String> body,
-      Value<String?> source,
-      Value<int> kbVersion,
+      Value<DateTime> entryAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
 
-class $$KnowledgeChunksTableFilterComposer
-    extends Composer<_$AppDatabase, $KnowledgeChunksTable> {
-  $$KnowledgeChunksTableFilterComposer({
+class $$DiaryEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $DiaryEntriesTable> {
+  $$DiaryEntriesTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -34347,8 +35487,8 @@ class $$KnowledgeChunksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get topic => $composableBuilder(
-    column: $table.topic,
+  ColumnFilters<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -34362,13 +35502,8 @@ class $$KnowledgeChunksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get source => $composableBuilder(
-    column: $table.source,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get kbVersion => $composableBuilder(
-    column: $table.kbVersion,
+  ColumnFilters<DateTime> get entryAt => $composableBuilder(
+    column: $table.entryAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -34378,9 +35513,9 @@ class $$KnowledgeChunksTableFilterComposer
   );
 }
 
-class $$KnowledgeChunksTableOrderingComposer
-    extends Composer<_$AppDatabase, $KnowledgeChunksTable> {
-  $$KnowledgeChunksTableOrderingComposer({
+class $$DiaryEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $DiaryEntriesTable> {
+  $$DiaryEntriesTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -34392,8 +35527,8 @@ class $$KnowledgeChunksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get topic => $composableBuilder(
-    column: $table.topic,
+  ColumnOrderings<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -34407,13 +35542,8 @@ class $$KnowledgeChunksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get source => $composableBuilder(
-    column: $table.source,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get kbVersion => $composableBuilder(
-    column: $table.kbVersion,
+  ColumnOrderings<DateTime> get entryAt => $composableBuilder(
+    column: $table.entryAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -34423,9 +35553,9 @@ class $$KnowledgeChunksTableOrderingComposer
   );
 }
 
-class $$KnowledgeChunksTableAnnotationComposer
-    extends Composer<_$AppDatabase, $KnowledgeChunksTable> {
-  $$KnowledgeChunksTableAnnotationComposer({
+class $$DiaryEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DiaryEntriesTable> {
+  $$DiaryEntriesTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -34435,8 +35565,10 @@ class $$KnowledgeChunksTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get topic =>
-      $composableBuilder(column: $table.topic, builder: (column) => column);
+  GeneratedColumn<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
@@ -34444,88 +35576,75 @@ class $$KnowledgeChunksTableAnnotationComposer
   GeneratedColumn<String> get body =>
       $composableBuilder(column: $table.body, builder: (column) => column);
 
-  GeneratedColumn<String> get source =>
-      $composableBuilder(column: $table.source, builder: (column) => column);
-
-  GeneratedColumn<int> get kbVersion =>
-      $composableBuilder(column: $table.kbVersion, builder: (column) => column);
+  GeneratedColumn<DateTime> get entryAt =>
+      $composableBuilder(column: $table.entryAt, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
 
-class $$KnowledgeChunksTableTableManager
+class $$DiaryEntriesTableTableManager
     extends
         RootTableManager<
           _$AppDatabase,
-          $KnowledgeChunksTable,
-          KnowledgeChunkRow,
-          $$KnowledgeChunksTableFilterComposer,
-          $$KnowledgeChunksTableOrderingComposer,
-          $$KnowledgeChunksTableAnnotationComposer,
-          $$KnowledgeChunksTableCreateCompanionBuilder,
-          $$KnowledgeChunksTableUpdateCompanionBuilder,
+          $DiaryEntriesTable,
+          DiaryEntry,
+          $$DiaryEntriesTableFilterComposer,
+          $$DiaryEntriesTableOrderingComposer,
+          $$DiaryEntriesTableAnnotationComposer,
+          $$DiaryEntriesTableCreateCompanionBuilder,
+          $$DiaryEntriesTableUpdateCompanionBuilder,
           (
-            KnowledgeChunkRow,
-            BaseReferences<
-              _$AppDatabase,
-              $KnowledgeChunksTable,
-              KnowledgeChunkRow
-            >,
+            DiaryEntry,
+            BaseReferences<_$AppDatabase, $DiaryEntriesTable, DiaryEntry>,
           ),
-          KnowledgeChunkRow,
+          DiaryEntry,
           PrefetchHooks Function()
         > {
-  $$KnowledgeChunksTableTableManager(
-    _$AppDatabase db,
-    $KnowledgeChunksTable table,
-  ) : super(
+  $$DiaryEntriesTableTableManager(_$AppDatabase db, $DiaryEntriesTable table)
+    : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$KnowledgeChunksTableFilterComposer($db: db, $table: table),
+              $$DiaryEntriesTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$KnowledgeChunksTableOrderingComposer($db: db, $table: table),
+              $$DiaryEntriesTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$KnowledgeChunksTableAnnotationComposer($db: db, $table: table),
+              $$DiaryEntriesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
-                Value<String> topic = const Value.absent(),
-                Value<String> title = const Value.absent(),
+                Value<String?> dependentId = const Value.absent(),
+                Value<String?> title = const Value.absent(),
                 Value<String> body = const Value.absent(),
-                Value<String?> source = const Value.absent(),
-                Value<int> kbVersion = const Value.absent(),
+                Value<DateTime> entryAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => KnowledgeChunksCompanion(
+              }) => DiaryEntriesCompanion(
                 id: id,
-                topic: topic,
+                dependentId: dependentId,
                 title: title,
                 body: body,
-                source: source,
-                kbVersion: kbVersion,
+                entryAt: entryAt,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String id,
-                required String topic,
-                required String title,
+                Value<String?> dependentId = const Value.absent(),
+                Value<String?> title = const Value.absent(),
                 required String body,
-                Value<String?> source = const Value.absent(),
-                Value<int> kbVersion = const Value.absent(),
+                required DateTime entryAt,
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
-              }) => KnowledgeChunksCompanion.insert(
+              }) => DiaryEntriesCompanion.insert(
                 id: id,
-                topic: topic,
+                dependentId: dependentId,
                 title: title,
                 body: body,
-                source: source,
-                kbVersion: kbVersion,
+                entryAt: entryAt,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -34537,272 +35656,21 @@ class $$KnowledgeChunksTableTableManager
       );
 }
 
-typedef $$KnowledgeChunksTableProcessedTableManager =
+typedef $$DiaryEntriesTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $KnowledgeChunksTable,
-      KnowledgeChunkRow,
-      $$KnowledgeChunksTableFilterComposer,
-      $$KnowledgeChunksTableOrderingComposer,
-      $$KnowledgeChunksTableAnnotationComposer,
-      $$KnowledgeChunksTableCreateCompanionBuilder,
-      $$KnowledgeChunksTableUpdateCompanionBuilder,
+      $DiaryEntriesTable,
+      DiaryEntry,
+      $$DiaryEntriesTableFilterComposer,
+      $$DiaryEntriesTableOrderingComposer,
+      $$DiaryEntriesTableAnnotationComposer,
+      $$DiaryEntriesTableCreateCompanionBuilder,
+      $$DiaryEntriesTableUpdateCompanionBuilder,
       (
-        KnowledgeChunkRow,
-        BaseReferences<_$AppDatabase, $KnowledgeChunksTable, KnowledgeChunkRow>,
+        DiaryEntry,
+        BaseReferences<_$AppDatabase, $DiaryEntriesTable, DiaryEntry>,
       ),
-      KnowledgeChunkRow,
-      PrefetchHooks Function()
-    >;
-typedef $$AssistantMemoriesTableCreateCompanionBuilder =
-    AssistantMemoriesCompanion Function({
-      required String id,
-      required String content,
-      Value<String> kind,
-      Value<bool> active,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<String> source,
-      Value<int> rowid,
-    });
-typedef $$AssistantMemoriesTableUpdateCompanionBuilder =
-    AssistantMemoriesCompanion Function({
-      Value<String> id,
-      Value<String> content,
-      Value<String> kind,
-      Value<bool> active,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<String> source,
-      Value<int> rowid,
-    });
-
-class $$AssistantMemoriesTableFilterComposer
-    extends Composer<_$AppDatabase, $AssistantMemoriesTable> {
-  $$AssistantMemoriesTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get content => $composableBuilder(
-    column: $table.content,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get kind => $composableBuilder(
-    column: $table.kind,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get active => $composableBuilder(
-    column: $table.active,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get source => $composableBuilder(
-    column: $table.source,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$AssistantMemoriesTableOrderingComposer
-    extends Composer<_$AppDatabase, $AssistantMemoriesTable> {
-  $$AssistantMemoriesTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get content => $composableBuilder(
-    column: $table.content,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get kind => $composableBuilder(
-    column: $table.kind,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get active => $composableBuilder(
-    column: $table.active,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get source => $composableBuilder(
-    column: $table.source,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$AssistantMemoriesTableAnnotationComposer
-    extends Composer<_$AppDatabase, $AssistantMemoriesTable> {
-  $$AssistantMemoriesTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get content =>
-      $composableBuilder(column: $table.content, builder: (column) => column);
-
-  GeneratedColumn<String> get kind =>
-      $composableBuilder(column: $table.kind, builder: (column) => column);
-
-  GeneratedColumn<bool> get active =>
-      $composableBuilder(column: $table.active, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
-
-  GeneratedColumn<String> get source =>
-      $composableBuilder(column: $table.source, builder: (column) => column);
-}
-
-class $$AssistantMemoriesTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $AssistantMemoriesTable,
-          AssistantMemoryRow,
-          $$AssistantMemoriesTableFilterComposer,
-          $$AssistantMemoriesTableOrderingComposer,
-          $$AssistantMemoriesTableAnnotationComposer,
-          $$AssistantMemoriesTableCreateCompanionBuilder,
-          $$AssistantMemoriesTableUpdateCompanionBuilder,
-          (
-            AssistantMemoryRow,
-            BaseReferences<
-              _$AppDatabase,
-              $AssistantMemoriesTable,
-              AssistantMemoryRow
-            >,
-          ),
-          AssistantMemoryRow,
-          PrefetchHooks Function()
-        > {
-  $$AssistantMemoriesTableTableManager(
-    _$AppDatabase db,
-    $AssistantMemoriesTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$AssistantMemoriesTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$AssistantMemoriesTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$AssistantMemoriesTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> content = const Value.absent(),
-                Value<String> kind = const Value.absent(),
-                Value<bool> active = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<DateTime> updatedAt = const Value.absent(),
-                Value<String> source = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => AssistantMemoriesCompanion(
-                id: id,
-                content: content,
-                kind: kind,
-                active: active,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                source: source,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String content,
-                Value<String> kind = const Value.absent(),
-                Value<bool> active = const Value.absent(),
-                required DateTime createdAt,
-                required DateTime updatedAt,
-                Value<String> source = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => AssistantMemoriesCompanion.insert(
-                id: id,
-                content: content,
-                kind: kind,
-                active: active,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                source: source,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$AssistantMemoriesTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $AssistantMemoriesTable,
-      AssistantMemoryRow,
-      $$AssistantMemoriesTableFilterComposer,
-      $$AssistantMemoriesTableOrderingComposer,
-      $$AssistantMemoriesTableAnnotationComposer,
-      $$AssistantMemoriesTableCreateCompanionBuilder,
-      $$AssistantMemoriesTableUpdateCompanionBuilder,
-      (
-        AssistantMemoryRow,
-        BaseReferences<
-          _$AppDatabase,
-          $AssistantMemoriesTable,
-          AssistantMemoryRow
-        >,
-      ),
-      AssistantMemoryRow,
+      DiaryEntry,
       PrefetchHooks Function()
     >;
 
@@ -34851,6 +35719,10 @@ class $AppDatabaseManager {
       $$BloodPressureReadingsTableTableManager(_db, _db.bloodPressureReadings);
   $$GlucoseReadingsTableTableManager get glucoseReadings =>
       $$GlucoseReadingsTableTableManager(_db, _db.glucoseReadings);
+  $$WeightReadingsTableTableManager get weightReadings =>
+      $$WeightReadingsTableTableManager(_db, _db.weightReadings);
+  $$MoodEntriesTableTableManager get moodEntries =>
+      $$MoodEntriesTableTableManager(_db, _db.moodEntries);
   $$MenstrualCyclesTableTableManager get menstrualCycles =>
       $$MenstrualCyclesTableTableManager(_db, _db.menstrualCycles);
   $$PeriodDaysTableTableManager get periodDays =>
@@ -34865,8 +35737,6 @@ class $AppDatabaseManager {
       $$HealthProfilesTableTableManager(_db, _db.healthProfiles);
   $$SleepSessionsTableTableManager get sleepSessions =>
       $$SleepSessionsTableTableManager(_db, _db.sleepSessions);
-  $$KnowledgeChunksTableTableManager get knowledgeChunks =>
-      $$KnowledgeChunksTableTableManager(_db, _db.knowledgeChunks);
-  $$AssistantMemoriesTableTableManager get assistantMemories =>
-      $$AssistantMemoriesTableTableManager(_db, _db.assistantMemories);
+  $$DiaryEntriesTableTableManager get diaryEntries =>
+      $$DiaryEntriesTableTableManager(_db, _db.diaryEntries);
 }

@@ -156,11 +156,18 @@ class AppChip extends StatelessWidget {
                 Icon(icon, size: 16, color: fgIcon),
                 const SizedBox(width: 7),
               ],
-              Text(label,
-                  style: tt.labelMedium?.copyWith(
-                      color: fgText,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w600)),
+              // Flexible + ellipsis so a chip in a bounded Row degrades
+              // gracefully at large text sizes instead of overflowing — the
+              // focus "0 coins" chip used to clip mid-word to "0 coi".
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelMedium?.copyWith(
+                        color: fgText,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w600)),
+              ),
             ],
           ),
         ),

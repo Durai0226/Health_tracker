@@ -26,6 +26,9 @@ class RemindersHubScreen extends StatelessWidget {
     final bpOn = VitalsReminderService.isEnabled(VitalsReminderService.bp);
     final sugarOn =
         VitalsReminderService.isEnabled(VitalsReminderService.glucose);
+    final weightOn =
+        VitalsReminderService.isEnabled(VitalsReminderService.weight);
+    final moodOn = VitalsReminderService.isEnabled(VitalsReminderService.mood);
 
     void go(Widget dest) =>
         Navigator.push(context, MaterialPageRoute(builder: (_) => dest));
@@ -95,6 +98,22 @@ class RemindersHubScreen extends StatelessWidget {
                       title: 'Blood sugar',
                       subtitle: 'A daily nudge to measure & log',
                       value: sugarOn ? 'On' : 'Off',
+                      onTap: () => go(const VitalsReminderSettingsScreen()),
+                    ),
+                    SettingsTile(
+                      icon: Symbols.monitor_weight_rounded,
+                      accent: ext.medicine,
+                      title: 'Weight',
+                      subtitle: 'A daily nudge to weigh in & log',
+                      value: weightOn ? 'On' : 'Off',
+                      onTap: () => go(const VitalsReminderSettingsScreen()),
+                    ),
+                    SettingsTile(
+                      icon: Symbols.mood_rounded,
+                      accent: ext.medicine,
+                      title: 'Mood',
+                      subtitle: 'A daily nudge to check in',
+                      value: moodOn ? 'On' : 'Off',
                       onTap: () => go(const VitalsReminderSettingsScreen()),
                     ),
                     SettingsTile(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../design/app_design.dart';
 
 /// Calm Clarity theme — one token-driven [ThemeData] pair.
@@ -121,6 +122,15 @@ class AppTheme {
         iconTheme: IconThemeData(color: ext.textPrimary),
         actionsIconTheme: IconThemeData(color: ext.textPrimary),
         titleTextStyle: textTheme.headlineSmall,
+        // Pin the status-bar glyphs to the THEME's brightness. Without this
+        // Flutter derives them from the AppBar's backgroundColor via
+        // estimateBrightnessForColor — and three water screens override that
+        // to Colors.transparent, whose luminance is 0, so it was read as a
+        // dark bar and forced WHITE glyphs over a light scaffold. The clock,
+        // wifi and battery were effectively invisible.
+        systemOverlayStyle: b == Brightness.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
       ),
       dividerTheme: DividerThemeData(color: ext.outline, thickness: 1, space: 1),
       dialogTheme: DialogThemeData(

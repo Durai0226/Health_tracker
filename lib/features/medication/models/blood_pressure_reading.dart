@@ -1,4 +1,4 @@
-import '../../../core/ai/vitals_analyzer.dart';
+import '../../../core/health/vitals_analyzer.dart';
 
 /// Which arm the cuff was on.
 enum BpArm { left, right }
@@ -42,6 +42,10 @@ class BloodPressureReading {
   bool get isMorning => takenAt.hour < 12;
 
   BloodPressureReading copyWith({
+    String? dependentId,
+    // See EnhancedMedicine.copyWith's clearDependentId doc — same reason:
+    // reassigning a reading back to self needs a real clear, not a no-op.
+    bool clearDependentId = false,
     int? systolic,
     int? diastolic,
     int? pulse,
@@ -53,7 +57,7 @@ class BloodPressureReading {
   }) {
     return BloodPressureReading(
       id: id,
-      dependentId: dependentId,
+      dependentId: clearDependentId ? null : (dependentId ?? this.dependentId),
       systolic: systolic ?? this.systolic,
       diastolic: diastolic ?? this.diastolic,
       pulse: pulse ?? this.pulse,

@@ -132,7 +132,27 @@ class SettingsTile extends StatelessWidget {
       trailingWidget = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value!, style: tt.bodyLarge?.copyWith(color: ext.textSecondary)),
+          // Flexible + ellipsis: at accessibility text sizes an unconstrained
+          // value took whatever width it wanted and squeezed the title column
+          // down to one character per line.
+          // `maxLines: 2` here was a mistake: in a starved slot Flutter broke
+          // the value mid-word ("Medicin" / "e time") on every row, which reads
+          // as a rendering fault. A trailing value must stay on ONE line and
+          // shrink to fit — scaleDown never enlarges, so rows with room look
+          // exactly as before.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                value!,
+                style: tt.bodyLarge?.copyWith(color: ext.textSecondary),
+                maxLines: 1,
+                softWrap: false,
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ),
           const SizedBox(width: 4),
           Icon(Symbols.chevron_right_rounded, size: 22, color: ext.textTertiary),
         ],
@@ -163,6 +183,7 @@ class SettingsTile extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Expanded(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -179,7 +200,7 @@ class SettingsTile extends StatelessWidget {
               ),
               if (trailingWidget != null) ...[
                 const SizedBox(width: 12),
-                trailingWidget,
+                Flexible(flex: 2, child: trailingWidget),
               ],
             ],
           ),

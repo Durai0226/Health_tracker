@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
+import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
@@ -12,10 +13,13 @@ import '../services/medicine_storage_service.dart';
 import '../services/today_schedule_service.dart';
 import '../services/drug_interaction_service.dart';
 import '../../../core/services/rating_prompt_service.dart';
+import '../../../core/services/clean_storage_service.dart';
+import '../../../core/health/streak_milestones.dart';
 import 'nunito_medication_list_screen.dart';
 import 'refill_overview_screen.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
+import 'appointments/nunito_appointment_list_screen.dart';
 import 'doctors/nunito_doctor_list_screen.dart';
 import 'clinics/nunito_clinic_list_screen.dart';
 import 'analytics/nunito_adherence_report_screen.dart';
@@ -37,14 +41,23 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   final Map<String, bool> _takenStatus = {};
   bool _isLoading = true;
   bool _ratingChecked = false; // one-shot rating prompt per screen lifetime
+  bool _milestoneChecked = false; // one-shot celebration per screen lifetime
   int _streak = 0;
   double _adherenceRate = 0.0;
+  /// Doses scheduled in the adherence window. When this is 0 the service
+  /// returns adherenceRate = 100 for a degenerate "nothing scheduled" case,
+  /// which rendered a fabricated "100% adherence" next to "0 Medicines".
+  /// A health app must not invent a clinical figure — gate the display on this.
+  int _adherenceScheduled = 0;
   // Log ids applied this load from queued notification actions (for Undo).
   List<String> _drainedLogIds = const [];
   DateTime _selectedDate = DateTime.now();
   // Guards against overlapping / re-entrant loads (see _loadData).
   bool _loadInFlight = false;
   bool _reloadQueued = false;
+  // Timeline vs. pillbox-tray layout for today's schedule; persisted so the
+  // choice survives an app restart (see _loadViewModePreference).
+  _MedicationViewMode _viewMode = _MedicationViewMode.timeline;
 
   final DrugInteractionService _interactionService = DrugInteractionService();
   List<DrugInteraction> _interactions = [];
@@ -67,12 +80,19 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       parent: _fadeController,
       curve: AppMotion.standard,
     );
+    _viewMode = _loadViewModePreference();
     _loadData();
     // Live refresh: any dose taken/edited/deleted — here, from a notification,
     // the medicine detail screen, or another tab — bumps this revision. Kept
     // alive in the Health hub's IndexedStack, this screen would otherwise go
     // stale until a tab remount, so subscribe and refresh in place.
     MedicineCleanStorageService.revision.addListener(_onMedicineRevision);
+    // Same reasoning for switching profiles: getAllMedicines() etc. are
+    // scoped to whichever profile is active, but that scope changing isn't a
+    // medicine mutation, so it never bumps `revision` on its own — without
+    // this listener, switching from "Me" to "Kid A" here would keep showing
+    // Mom's medicines until an unrelated write happened to fire.
+    ActiveProfileService().addListener(_onMedicineRevision);
   }
 
   void _onMedicineRevision() {
@@ -82,6 +102,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   @override
   void dispose() {
     MedicineCleanStorageService.revision.removeListener(_onMedicineRevision);
+    ActiveProfileService().removeListener(_onMedicineRevision);
     _fadeController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -122,6 +143,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       _streak = await MedicineCleanStorageService.getCurrentStreak();
       final stats = await MedicineCleanStorageService.getAdherenceStats();
       _adherenceRate = (stats['adherenceRate'] as int) / 100.0;
+      _adherenceScheduled = (stats['scheduled'] as int?) ?? 0;
 
       await _buildTodaySchedule();
       _fadeController.forward();
@@ -144,7 +166,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
               // Reverse the stock decrement for taken doses before deleting,
               // otherwise Undo silently loses inventory.
               final log = await MedicineCleanStorageService.getLog(id);
-              if (log != null && log.isTaken) {
+              if (log != null && log.countsAsTaken) {
                 await MedicineCleanStorageService.restoreStock(
                     log.medicineId, log.dosageTaken);
               }
@@ -161,6 +183,62 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       _ratingChecked = true;
       RatingPromptService.maybePrompt(context, streak: _streak);
     }
+    if (!_milestoneChecked && mounted) {
+      _milestoneChecked = true;
+      await _maybeCelebrateMilestone();
+    }
+  }
+
+  static const String _lastCelebratedMilestoneKey =
+      'medicineStreakLastCelebratedMilestone';
+
+  /// Shows a one-time celebration the first time the streak crosses a new
+  /// threshold (7/14/30/60/100/180/365 days) — persisted so it's shown once
+  /// per milestone ever reached, not once per app open.
+  Future<void> _maybeCelebrateMilestone() async {
+    final last = CleanStorageService.getAppPreference(
+        _lastCelebratedMilestoneKey) as int?;
+    if (!isNewMilestone(_streak, last)) return;
+    final reached = highestMilestoneReached(_streak);
+    if (reached == null) return;
+    await CleanStorageService.setAppPreference(
+        _lastCelebratedMilestoneKey, reached);
+    if (!mounted) return;
+    _hapticService.medium();
+    final ext = AppColorsExt.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: ext.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
+        title: Row(
+          children: [
+            Icon(Symbols.emoji_events_rounded, color: ext.warning.base),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text('${milestoneLabel(reached)} streak!',
+                  style: Theme.of(dialogContext)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(color: ext.textPrimary)),
+            ),
+          ],
+        ),
+        content: Text(
+          "You've taken your medicine on schedule for $reached days straight. Keep it up!",
+          style: Theme.of(dialogContext)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: ext.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('Nice!', style: TextStyle(color: ext.mark(ext.medicine))),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Scan the user's active medicines for drug-drug interactions using the
@@ -204,13 +282,38 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         timeIndex: d.timeIndex,
         log: d.log,
       ));
-      _takenStatus[d.key] = d.isTaken;
+      _takenStatus[d.key] = d.isTaken || d.isPreLogged;
     }
   }
 
   void _onDateChanged(DateTime date) {
     setState(() => _selectedDate = date);
     _buildTodaySchedule().then((_) => setState(() {}));
+  }
+
+  static const String _viewModeKey = 'medicationViewMode';
+
+  /// Restores the last-chosen schedule layout (timeline vs. pillbox), falling
+  /// back to timeline for a first run or a stored value that's out of range
+  /// (e.g. an older/newer enum ordering).
+  _MedicationViewMode _loadViewModePreference() {
+    final stored = CleanStorageService.getAppPreference(
+        _viewModeKey, _MedicationViewMode.timeline.index);
+    final idx = (stored is int &&
+            stored >= 0 &&
+            stored < _MedicationViewMode.values.length)
+        ? stored
+        : _MedicationViewMode.timeline.index;
+    return _MedicationViewMode.values[idx];
+  }
+
+  void _toggleViewMode() {
+    _hapticService.light();
+    final next = _viewMode == _MedicationViewMode.timeline
+        ? _MedicationViewMode.pillbox
+        : _MedicationViewMode.timeline;
+    setState(() => _viewMode = next);
+    CleanStorageService.setAppPreference(_viewModeKey, next.index);
   }
 
   Future<void> _onTakeMedication(_ScheduledDose dose) async {
@@ -260,7 +363,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         timeIndex: _todaysDoses[i].timeIndex,
         log: log,
       );
-      _takenStatus['${dose.medicine.id}_${dose.timeIndex}'] = log.isTaken;
+      _takenStatus['${dose.medicine.id}_${dose.timeIndex}'] = log.countsAsTaken;
     });
   }
 
@@ -273,7 +376,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         label: 'Undo',
         onPressed: () async {
           // Reverse the stock decrement first, or Undo silently loses inventory.
-          if (log.isTaken) {
+          if (log.countsAsTaken) {
             await MedicineCleanStorageService.restoreStock(
                 log.medicineId, log.dosageTaken);
           }
@@ -316,6 +419,14 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const NunitoClinicListScreen()),
+    );
+  }
+
+  void _navigateToAppointments() {
+    _hapticService.light();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NunitoAppointmentListScreen()),
     );
   }
 
@@ -362,7 +473,9 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 ),
                 _todaysDoses.isEmpty
                     ? SliverToBoxAdapter(child: _buildEmptySchedule())
-                    : _buildTimelineList(),
+                    : (_viewMode == _MedicationViewMode.pillbox
+                        ? SliverToBoxAdapter(child: _buildPillboxGrid())
+                        : _buildTimelineList()),
                 SliverToBoxAdapter(child: _buildQuickActions()),
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
@@ -425,6 +538,16 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       icon: Symbols.medication_rounded,
       accent: ext.medicine,
       actions: [
+        AppIconButton(
+          icon: _viewMode == _MedicationViewMode.timeline
+              ? Symbols.grid_view_rounded
+              : Symbols.view_list_rounded,
+          accent: ext.medicine,
+          tooltip: _viewMode == _MedicationViewMode.timeline
+              ? 'Pillbox view'
+              : 'Timeline view',
+          onPressed: _toggleViewMode,
+        ),
         AppIconButton(
           icon: Symbols.bar_chart_rounded,
           accent: ext.medicine,
@@ -643,44 +766,96 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   Widget _buildSummaryCard() {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
+    final milestone = highestMilestoneReached(_streak);
+    final hasAdherence = _adherenceScheduled > 0;
+
+    final streakBlock = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: ext.warning.container,
+            borderRadius: AppRadius.brMd,
+          ),
+          child: Icon(Symbols.local_fire_department_rounded,
+              color: ext.warning.onContainer, size: 22),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text('$_streak day streak',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  if (milestone != null) ...[
+                    const SizedBox(width: 6),
+                    Icon(Symbols.emoji_events_rounded,
+                        size: 16, color: ext.warning.base),
+                  ],
+                ],
+              ),
+              Text(
+                milestone != null
+                    ? '${milestoneLabel(milestone)} milestone'
+                    : 'Keep it going',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final adherenceBlock = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(hasAdherence ? '${(_adherenceRate * 100).round()}%' : '--',
+            maxLines: 1,
+            softWrap: false,
+            style: tt.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: hasAdherence
+                    ? ext.mark(ext.medicine)
+                    : ext.textTertiary)),
+        // Name what the number measures and over what window. A bare
+        // percentage is uninterpretable — users read it as "today". No
+        // maxLines: on its own run at 200% this caption needs three lines,
+        // and a clinical caption must wrap rather than ellipsize.
+        Text(hasAdherence ? 'doses taken · 30 days' : 'no doses scheduled yet',
+            textAlign: TextAlign.end,
+            style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+      ],
+    );
+
     return AppCard(
       margin: const EdgeInsets.fromLTRB(
           AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: ext.warning.container,
-              borderRadius: AppRadius.brMd,
-            ),
-            child: Icon(Symbols.local_fire_department_rounded,
-                color: ext.warning.onContainer, size: 22),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('$_streak day streak',
-                  style: tt.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700)),
-              Text('Keep it going',
-                  style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
-            ],
-          ),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('${(_adherenceRate * 100).round()}%',
-                  style: tt.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: ext.mark(ext.medicine))),
-              Text('adherence',
-                  style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
-            ],
-          ),
-        ],
+      // Wrap, not Row: both blocks are text-sized, and as a Row they demanded
+      // ~334pt side by side — more than a 320/360/375pt phone has even at the
+      // DEFAULT text size, which is why the caption ("no doses scheduled yet")
+      // used to be sliced off the card and the streak squeezed to zero width.
+      // Wrap keeps them on one line, streak left / adherence flush right,
+      // exactly as before whenever they fit, and drops the adherence stat onto
+      // its own line — full size, nothing truncated — when they don't.
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.sm,
+        children: [streakBlock, adherenceBlock],
       ),
     );
   }
@@ -739,72 +914,94 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     final now = DateTime.now();
     final dates = List.generate(7, (i) => now.add(Duration(days: i - 3)));
 
+    // The strip used to be a fixed `height: 80` Container around a horizontal
+    // ListView. That height was the viewport, so every one of the seven chips
+    // was laid out with a TIGHT 80px height — at large Dynamic Type each chip's
+    // column needed more and every one of them printed its own "BOTTOM
+    // OVERFLOWED" stripe with the date number sliced off. A min-height box
+    // around an intrinsically-sized Row keeps the 80px look by default and
+    // simply grows when the text does. IntrinsicHeight + stretch preserves the
+    // uniform chip height the fixed viewport used to give for free.
     return Container(
-      height: 80,
+      constraints: const BoxConstraints(minHeight: 80),
       margin: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: ListView.builder(
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-        itemCount: dates.length,
-        itemBuilder: (context, index) {
-          final date = dates[index];
-          final isSelected = _isSameDay(date, _selectedDate);
-          final isToday = _isSameDay(date, now);
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: dates.map((date) {
+              final isSelected = _isSameDay(date, _selectedDate);
+              final isToday = _isSameDay(date, now);
 
-          return GestureDetector(
-            onTap: () => _onDateChanged(date),
-            child: AnimatedContainer(
-              duration: AppMotion.fast,
-              curve: AppMotion.standard,
-              width: 56,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: isSelected ? ext.fillBg(ext.medicine) : ext.surface,
-                borderRadius: AppRadius.brLg,
-                border: isSelected
-                    ? null
-                    : Border.all(color: ext.outline),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    DateFormat('EEE').format(date).toUpperCase(),
-                    style: tt.labelSmall?.copyWith(
-                      color: isSelected
-                          ? ext.fillFg(ext.medicine).withOpacity(0.8)
-                          : ext.textTertiary,
-                      fontSize: 10,
-                    ),
+              return GestureDetector(
+                onTap: () => _onDateChanged(date),
+                child: AnimatedContainer(
+                  duration: AppMotion.fast,
+                  curve: AppMotion.standard,
+                  width: 56,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: isSelected ? ext.fillBg(ext.medicine) : ext.surface,
+                    borderRadius: AppRadius.brLg,
+                    border: isSelected ? null : Border.all(color: ext.outline),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('d').format(date),
-                    style: tt.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: isSelected
-                          ? ext.fillFg(ext.medicine)
-                          : ext.textPrimary,
-                    ),
-                  ),
-                  if (isToday) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? ext.fillFg(ext.medicine)
-                            : ext.mark(ext.medicine),
-                        shape: BoxShape.circle,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // The chip is a FIXED 56px wide — without scaleDown the
+                      // selected day wrapped to "MO / N".
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          DateFormat('EEE').format(date).toUpperCase(),
+                          maxLines: 1,
+                          softWrap: false,
+                          style: tt.labelSmall?.copyWith(
+                            color: isSelected
+                                ? ext.fillFg(ext.medicine).withOpacity(0.8)
+                                : ext.textTertiary,
+                            fontSize: 10,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        },
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          DateFormat('d').format(date),
+                          maxLines: 1,
+                          softWrap: false,
+                          style: tt.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? ext.fillFg(ext.medicine)
+                                : ext.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (isToday) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? ext.fillFg(ext.medicine)
+                                : ext.mark(ext.medicine),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }
@@ -836,7 +1033,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     bool isHandled(_ScheduledDose d) =>
         (_takenStatus['${d.medicine.id}_${d.timeIndex}'] ?? false) ||
         d.log?.isSkipped == true ||
-        d.log?.isMissed == true;
+        d.log?.isMissed == true ||
+        d.log?.isPreLogged == true;
     // "Next" = the earliest still-open dose that is due today (overdue OR
     // upcoming) — never a future-day dose, never one already taken/skipped/
     // missed. This keeps the emphasis on the overdue dose, not a later one.
@@ -871,23 +1069,58 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     // + double stock decrement); a future dose could be "taken" early.
     final isSkipped = dose.log?.isSkipped == true;
     final isMissed = dose.log?.isMissed == true;
+    final isPreLogged = dose.log?.isPreLogged == true;
     final isTerminal = isTaken || isSkipped || isMissed;
     final now = DateTime.now();
     final isFuture = DateTime(dose.scheduledTime.year, dose.scheduledTime.month,
             dose.scheduledTime.day)
         .isAfter(DateTime(now.year, now.month, now.day));
     final actionable = !isTerminal && !isFuture;
-    final closed = isTerminal; // taken/skipped/missed all read as "done"
+    final closed = isTerminal; // taken/skipped/missed/pre-logged all read as "done"
 
-    final dotColor = isTaken
-        ? ext.success.base
-        : (isNext ? ext.mark(ext.medicine) : ext.textTertiary.withOpacity(0.5));
-    final cardColor = isTaken
-        ? ext.success.container
-        : (isSkipped || isMissed ? ext.surfaceVariant : ext.surface);
-    final nameColor = isTaken
-        ? ext.success.onContainer
-        : (isSkipped || isMissed ? ext.textTertiary : ext.textPrimary);
+    // Pre-logged gets its own distinct treatment (ext.info) — it read as
+    // "taken" via isTaken above (countsAsTaken already folded it into
+    // _takenStatus), but a row that's actually a pre-log must stay visually
+    // distinguishable from one confirmed at the real scheduled time,
+    // including on a future day this dose hasn't reached yet.
+    final dotColor = isPreLogged
+        ? ext.info.base
+        : (isTaken
+            ? ext.success.base
+            : (isNext ? ext.mark(ext.medicine) : ext.textTertiary.withOpacity(0.5)));
+    final cardColor = isPreLogged
+        ? ext.info.container
+        : (isTaken
+            ? ext.success.container
+            : (isSkipped || isMissed ? ext.surfaceVariant : ext.surface));
+    final nameColor = isPreLogged
+        ? ext.info.onContainer
+        : (isTaken
+            ? ext.success.onContainer
+            : (isSkipped || isMissed ? ext.textTertiary : ext.textPrimary));
+
+    // Pill + name + action share one line only while the action still leaves a
+    // readable name column. A "Take Now" button is 40pt of fixed padding plus
+    // a label that grows with Dynamic Type, so on a 320pt phone the three
+    // stopped fitting at 130% and overflowed by 121pt at 200% — the medicine
+    // name was squeezed to nothing on the way there. Below the threshold the
+    // action moves to its own line under the dose instead.
+    //
+    // Measured off MediaQuery, NOT a LayoutBuilder: this subtree sits inside
+    // the timeline's [IntrinsicHeight], and a LayoutBuilder there throws
+    // "does not support returning intrinsic dimensions". The card's content
+    // width is a fixed inset from the screen: the row gutter on both sides,
+    // the 56pt timeline rail, and the card's own AppSpacing.gutter padding.
+    final cardWidth = MediaQuery.sizeOf(context).width -
+        AppSpacing.gutter * 4 -
+        _timelineRailWidth;
+    final free = cardWidth -
+        _doseTileSize -
+        AppSpacing.md -
+        _doseTrailingWidth(
+            isTaken, isSkipped, isMissed, isPreLogged, isNext, actionable);
+    // Floor scales with the text: at 200% a 64pt column shows nothing either.
+    final stackAction = free < MediaQuery.textScalerOf(context).scale(64);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
@@ -896,7 +1129,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           children: [
             // Timeline column
             SizedBox(
-              width: 56,
+              width: _timelineRailWidth,
               child: Column(
                 children: [
                   if (!isFirst)
@@ -904,7 +1137,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                       child: Container(
                         width: 2,
                         color: isTaken
-                            ? ext.success.base.withOpacity(0.3)
+                            ? (isPreLogged ? ext.info.base : ext.success.base)
+                                .withOpacity(0.3)
                             : ext.outline,
                       ),
                     ),
@@ -921,7 +1155,12 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                           : null,
                     ),
                     child: isTaken
-                        ? Icon(Symbols.check_rounded, color: ext.success.on, size: 8)
+                        ? Icon(
+                            isPreLogged
+                                ? Symbols.schedule_rounded
+                                : Symbols.check_rounded,
+                            color: isPreLogged ? ext.info.on : ext.success.on,
+                            size: 8)
                         : null,
                   ),
                   if (!isLast)
@@ -941,44 +1180,61 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                   child: AppCard(
                   color: cardColor,
                   onTap: actionable ? () => _onTakeMedication(dose) : null,
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      NunitoPillIndicator(
-                        color: dose.medicine.color,
-                        shape: dose.medicine.shape,
-                        size: 44,
+                      Row(
+                        children: [
+                          NunitoPillIndicator(
+                            color: dose.medicine.color,
+                            shape: dose.medicine.shape,
+                            size: _doseTileSize,
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  dose.medicine.name,
+                                  style: tt.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: nameColor,
+                                    decoration: closed
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${dose.medicine.displayDosage} • $timeStr',
+                                  style: tt.bodySmall?.copyWith(
+                                    color: isPreLogged
+                                        ? ext.info.onContainer
+                                        : (isTaken
+                                            ? ext.success.onContainer
+                                            : (isSkipped || isMissed
+                                                ? ext.textTertiary
+                                                : ext.textSecondary)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (!stackAction)
+                            _buildDoseTrailing(isTaken, isSkipped, isMissed,
+                                isPreLogged, isNext, actionable, dose),
+                        ],
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              dose.medicine.name,
-                              style: tt.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: nameColor,
-                                decoration: closed
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${dose.medicine.displayDosage} • $timeStr',
-                              style: tt.bodySmall?.copyWith(
-                                color: isTaken
-                                    ? ext.success.onContainer
-                                    : (isSkipped || isMissed
-                                        ? ext.textTertiary
-                                        : ext.textSecondary),
-                              ),
-                            ),
-                          ],
+                      if (stackAction) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: _buildDoseTrailing(isTaken, isSkipped,
+                              isMissed, isPreLogged, isNext, actionable, dose),
                         ),
-                      ),
-                      _buildDoseTrailing(
-                          isTaken, isSkipped, isMissed, isNext, actionable, dose),
+                      ],
                     ],
                   ),
                 ),
@@ -992,12 +1248,15 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     );
   }
 
-  /// Trailing control for a timeline dose: a completed check, a Skipped/Missed
-  /// badge (non-actionable), a Take button (only for a due, unhandled dose), or
-  /// a view-only clock for a future-day dose.
+  /// Trailing control for a timeline dose: a completed check, a Pre-logged
+  /// badge (checked BEFORE the future-day fallback below — a pre-log is
+  /// already resolved even on a day this dose hasn't reached yet), a
+  /// Skipped/Missed badge (non-actionable), a Take button (only for a due,
+  /// unhandled dose), or a view-only clock for a future-day dose.
   Widget _buildDoseTrailing(bool isTaken, bool isSkipped, bool isMissed,
-      bool isNext, bool actionable, _ScheduledDose dose) {
+      bool isPreLogged, bool isNext, bool actionable, _ScheduledDose dose) {
     final ext = AppColorsExt.of(context);
+    if (isPreLogged) return _doseBadge('Pre-logged', ext.info.base);
     if (isTaken) {
       return Icon(Symbols.check_circle_rounded,
           color: ext.success.base, size: 28);
@@ -1017,6 +1276,46 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     return Icon(Symbols.schedule_rounded, color: ext.textTertiary, size: 22);
   }
 
+  /// Fixed geometry of a timeline row, shared by the layout and by the
+  /// one-line-vs-stacked measurement in [_buildTimelineItem].
+  static const double _timelineRailWidth = 56;
+  static const double _doseTileSize = 44;
+
+  /// What [_buildDoseTrailing] will actually measure at the current text size:
+  /// an [AppButton] is its label plus 40pt of fixed horizontal padding, a
+  /// badge its label plus 20pt, and the check / clock fallbacks are fixed
+  /// glyphs. Measured rather than assumed so the row's one-line-vs-stacked
+  /// decision tracks Dynamic Type and the real font metrics.
+  double _doseTrailingWidth(bool isTaken, bool isSkipped, bool isMissed,
+      bool isPreLogged, bool isNext, bool actionable) {
+    final tt = Theme.of(context).textTheme;
+    if (isPreLogged) return _measureLabel('Pre-logged', tt.labelMedium) + 20;
+    if (isTaken) return 28;
+    if (isSkipped) return _measureLabel('Skipped', tt.labelMedium) + 20;
+    if (isMissed) return _measureLabel('Missed', tt.labelMedium) + 20;
+    if (actionable) {
+      return _measureLabel(isNext ? 'Take Now' : 'Take', tt.labelLarge) + 40;
+    }
+    return 22;
+  }
+
+  /// One-line painted width of [text] in [style], with the ambient
+  /// [DefaultTextStyle] merged in (font family / height) and the live text
+  /// scaler applied — the same measuring approach the water dashboard uses to
+  /// size its feature tiles.
+  double _measureLabel(String text, TextStyle? style) {
+    final effective = DefaultTextStyle.of(context).style.merge(style);
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: effective),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
   Widget _doseBadge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1032,6 +1331,225 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     );
   }
 
+  /// Alternate layout for today's schedule: a physical-pillbox-style tray,
+  /// one compartment row per time-of-day slot, one pill icon per medicine due
+  /// in that slot. Reuses the exact same `_todaysDoses`/`_takenStatus`/
+  /// `_onTakeMedication` the timeline view is built from — nothing here is
+  /// re-derived from storage.
+  Widget _buildPillboxGrid() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+
+    final Map<String, List<_ScheduledDose>> groups = {};
+    for (final dose in _todaysDoses) {
+      groups.putIfAbsent(_pillboxSlotLabel(dose), () => []).add(dose);
+    }
+    // _todaysDoses is already chronological (see _buildTodaySchedule), so the
+    // first dose appended to each group is that slot's earliest — order the
+    // rows by it, top-to-bottom like a real tray (morning first).
+    final slotLabels = groups.keys.toList()
+      ..sort((a, b) =>
+          groups[a]!.first.scheduledTime.compareTo(groups[b]!.first.scheduledTime));
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 0),
+      child: Column(
+        children: [
+          for (final slot in slotLabels)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(_pillboxSlotIcon(slot),
+                            size: 18, color: ext.mark(ext.medicine)),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          slot,
+                          style: tt.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: ext.textPrimary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        for (final dose in groups[slot]!) _buildPillboxCell(dose),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The time-of-day bucket for one dose: the matching `ScheduledTime`'s own
+  /// `label` when the schedule set one (honoring a weekend override), else an
+  /// hour-range fallback — needed for schedules that never set a label (e.g.
+  /// "every X hours", whose slots are synthesized with no `ScheduledTime`).
+  String _pillboxSlotLabel(_ScheduledDose dose) {
+    final schedule = dose.medicine.schedule;
+    final isWeekend = dose.scheduledTime.weekday == DateTime.saturday ||
+        dose.scheduledTime.weekday == DateTime.sunday;
+    final times = (isWeekend && schedule.hasWeekendOverride)
+        ? schedule.weekendTimes!
+        : schedule.times;
+    for (final t in times) {
+      if (t.hour == dose.scheduledTime.hour &&
+          t.minute == dose.scheduledTime.minute) {
+        final label = t.label?.trim();
+        if (label != null && label.isNotEmpty) return label;
+        break;
+      }
+    }
+    final hour = dose.scheduledTime.hour;
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    if (hour < 21) return 'Evening';
+    return 'Bedtime';
+  }
+
+  IconData _pillboxSlotIcon(String slotLabel) {
+    switch (slotLabel.toLowerCase()) {
+      case 'morning':
+        return Symbols.wb_twilight_rounded;
+      case 'afternoon':
+        return Symbols.wb_sunny_rounded;
+      case 'evening':
+        return Symbols.wb_cloudy_rounded;
+      case 'bedtime':
+      case 'night':
+        return Symbols.bedtime_rounded;
+      default:
+        return Symbols.schedule_rounded;
+    }
+  }
+
+  /// One pillbox compartment: the medicine's pill icon plus a status overlay,
+  /// mirroring the SAME taken/skipped/missed/pre-logged/future rules
+  /// `_buildTimelineItem` uses. Tapping an actionable (not yet resolved, not a
+  /// future day) dose opens the same take-medication sheet as the timeline.
+  Widget _buildPillboxCell(_ScheduledDose dose) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final isTaken =
+        _takenStatus['${dose.medicine.id}_${dose.timeIndex}'] ?? false;
+    final isSkipped = dose.log?.isSkipped == true;
+    final isMissed = dose.log?.isMissed == true;
+    final isPreLogged = dose.log?.isPreLogged == true;
+    final isTerminal = isTaken || isSkipped || isMissed;
+    final now = DateTime.now();
+    final isFuture = DateTime(dose.scheduledTime.year, dose.scheduledTime.month,
+            dose.scheduledTime.day)
+        .isAfter(DateTime(now.year, now.month, now.day));
+    final actionable = !isTerminal && !isFuture;
+
+    final cellColor = isPreLogged
+        ? ext.info.container
+        : (isTaken
+            ? ext.success.container
+            : (isSkipped || isMissed ? ext.surfaceVariant : ext.surface));
+
+    Widget? badge;
+    if (isPreLogged) {
+      badge = _pillboxBadge(Symbols.schedule_rounded, ext.info.base, ext.info.on);
+    } else if (isTaken) {
+      badge = _pillboxBadge(
+          Symbols.check_rounded, ext.success.base, ext.success.on);
+    } else if (isSkipped) {
+      badge = _pillboxBadge(
+          Symbols.close_rounded, ext.textTertiary, ext.surface);
+    } else if (isMissed) {
+      badge = _pillboxBadge(
+          Symbols.priority_high_rounded, ext.warning.base, ext.warning.on);
+    }
+
+    final statusSuffix = isPreLogged
+        ? ', pre-logged'
+        : (isTaken
+            ? ', taken'
+            : (isSkipped ? ', skipped' : (isMissed ? ', missed' : '')));
+
+    return MergeSemantics(
+      child: Semantics(
+        button: actionable,
+        label: '${dose.medicine.name}, '
+            '${DateFormat('h:mm a').format(dose.scheduledTime)}$statusSuffix',
+        child: SizedBox(
+          width: 88,
+          child: AppCard(
+            padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.sm, horizontal: 6),
+            color: cellColor,
+            onTap: actionable ? () => _onTakeMedication(dose) : null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Opacity(
+                      opacity: (isSkipped || isMissed) ? 0.5 : 1,
+                      child: NunitoPillIndicator(
+                        color: dose.medicine.color,
+                        shape: dose.medicine.shape,
+                        size: 36,
+                      ),
+                    ),
+                    if (badge != null)
+                      Positioned(right: -4, top: -4, child: badge),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  dose.medicine.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: tt.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: (isSkipped || isMissed)
+                        ? ext.textTertiary
+                        : ext.textPrimary,
+                    decoration: isTerminal ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                Text(
+                  DateFormat('h:mm a').format(dose.scheduledTime),
+                  style: tt.labelSmall
+                      ?.copyWith(color: ext.textTertiary, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pillboxBadge(IconData icon, Color bg, Color fg) {
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: bg,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColorsExt.of(context).surface, width: 2),
+      ),
+      child: Icon(icon, size: 11, color: fg),
+    );
+  }
+
   Widget _buildQuickActions() {
     final ext = AppColorsExt.of(context);
     // Health trackers (Steps/Sleep/BP/Glucose) now live in the Health tab, so
@@ -1040,6 +1558,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       _QuickTile('Doctors', Symbols.person_rounded, ext.info, _navigateToDoctors),
       _QuickTile('Clinics', Symbols.local_hospital_rounded, ext.medicine,
           _navigateToClinics),
+      _QuickTile('Appointments', Symbols.event_rounded, ext.warning,
+          _navigateToAppointments),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -1127,6 +1647,10 @@ class _QuickTile {
   final VoidCallback onTap;
   const _QuickTile(this.label, this.icon, this.accent, this.onTap);
 }
+
+/// Layout for today's schedule: the default vertical timeline, or the
+/// pillbox-tray grid (one row per time-of-day slot).
+enum _MedicationViewMode { timeline, pillbox }
 
 class _ScheduledDose {
   final EnhancedMedicine medicine;

@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
+
+    <!-- Steps + Sleep home-screen widget. Brand teal matches
+         AppPalette.brand / brandDark in lib/core/design/app_palette.dart.
+         Overridden for dark launcher themes in values-night/colors.xml. -->
+    <color name="widget_background">#FFFFFF</color>
+    <color name="widget_accent">#00897B</color>
+    <color name="widget_progress_track">#B2DFDB</color>
+    <color name="widget_text_primary">#1B1B1B</color>
+    <color name="widget_text_secondary">#5F6368</color>
+    <color name="widget_divider">#E0E0E0</color>
 </resources>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Metadata for the Steps + Sleep home-screen widget.
+  minWidth/minHeight follow Android's documented cell formula
+  (70dp * cells - 30dp) for a ~2x1 cell: width for 2 columns, height for 1 row.
+  updatePeriodMillis is a periodic backstop only — Android enforces a floor of
+  ~30 minutes on this regardless of the value requested, so it is set to that
+  floor. The real refresh path is Dart-side HomeWidgetService.pushSnapshot()
+  calling HomeWidget.updateWidget() directly whenever the relevant dashboard
+  screen is opened.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/steps_sleep_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen">
+</appwidget-provider>

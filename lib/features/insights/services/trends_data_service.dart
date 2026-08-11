@@ -209,6 +209,7 @@ class TrendsBundle {
   final TrendSeries bloodPressure; // value = systolic, value2 = diastolic (mmHg)
   final TrendSeries glucose; // value = mg/dL (daily mean)
   final GlucoseTir glucoseTir; // whole-window low/in/high breakdown
+  final TrendSeries weight; // value = kg (daily mean)
   final TrendSeries period; // value = flow index 1..4 (bleeding days only)
   final CycleRingInfo? cycle; // current cycle position, if placeable
 
@@ -222,6 +223,7 @@ class TrendsBundle {
     required this.bloodPressure,
     required this.glucose,
     required this.glucoseTir,
+    required this.weight,
     required this.period,
     required this.cycle,
   });
@@ -255,9 +257,11 @@ class TrendsDataService {
     final adherenceF = _adherence(days);
     final bpF = _bloodPressure(days, start, today);
     final glucoseF = _glucose(days, start, today);
+    final weightF = _weight(days, start, today);
     final adherence = await adherenceF;
     final bloodPressure = await bpF;
     final (glucose, glucoseTir) = await glucoseF;
+    final weight = await weightF;
 
     return TrendsBundle(
       range: range,
@@ -265,6 +269,7 @@ class TrendsDataService {
       bloodPressure: bloodPressure,
       glucose: glucose,
       glucoseTir: glucoseTir,
+      weight: weight,
       water: _water(days),
       steps: _steps(days, start, today),
       sleep: _sleep(days),
@@ -405,6 +410,23 @@ class TrendsDataService {
     );
   }
 
+  // ------------------------------------------------------------------- WEIGHT
+
+  static Future<TrendSeries> _weight(
+      List<DateTime> days, DateTime start, DateTime today) async {
+    final to = today.add(const Duration(days: 1));
+    final readings = await VitalsStorageService.getWeightForRange(start, to);
+    final byDay = <String, List<double>>{};
+    for (final r in readings) {
+      (byDay[_ymd(r.takenAt)] ??= []).add(r.valueKg);
+    }
+    final points = days.map((d) {
+      final v = byDay[_ymd(d)];
+      return TrendPoint(d, (v == null || v.isEmpty) ? null : _avgD(v));
+    }).toList();
+    return TrendSeries(points);
+  }
+
   // ------------------------------------------------------------------- PERIOD
 
   static TrendSeries _period(List<DateTime> days) {
@@ -436,6 +458,9 @@ class TrendsDataService {
   // ------------------------------------------------------------------ HELPERS
 
   static double _avg(List<int> v) =>
+      v.reduce((a, b) => a + b) / v.length;
+
+  static double _avgD(List<double> v) =>
       v.reduce((a, b) => a + b) / v.length;
 
   static String _ymd(DateTime d) =>

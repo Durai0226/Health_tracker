@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tablet_remainder/core/ai/vitals_analyzer.dart';
+import 'package:tablet_remainder/core/health/vitals_analyzer.dart';
 
 void main() {
   group('classifyBp (AHA/ACC cascade)', () {

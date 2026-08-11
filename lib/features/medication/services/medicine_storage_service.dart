@@ -11,9 +11,13 @@ import '../models/doctor_pharmacy.dart';
 import '../models/dependent_profile.dart';
 import '../models/medicine_enums.dart';
 import '../models/clinic.dart';
-import '../../../core/ai/streak_engine.dart';
+import '../../../core/health/streak_engine.dart';
+import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/dose_action_queue.dart';
 import '../../../core/services/notification_service.dart';
+import 'appointment_reminder_service.dart';
+import 'reminder_window_nudges.dart';
+import 'vitals_storage_service.dart';
 
 /// Enhanced Medicine Storage Service with all premium features
 /// Migrated to Drift (SQLite) storage
@@ -53,6 +57,9 @@ class MedicineCleanStorageService {
       genericName: data.genericName,
       brandName: data.brandName,
       dosageForm: DosageForm.values[data.dosageForm],
+      route: data.routeIndex != null
+          ? AdministrationRoute.values[data.routeIndex!]
+          : null,
       dosageAmount: data.strength, // Using strength column as dosage amount storage if needed
       dosageUnit: data.strengthUnit,
       strength: data.strengthText, // The real user-entered strength (nullable)
@@ -95,6 +102,7 @@ class MedicineCleanStorageService {
       genericName: drift.Value(medicine.genericName),
       brandName: drift.Value(medicine.brandName),
       dosageForm: drift.Value(medicine.dosageForm.index),
+      routeIndex: drift.Value(medicine.route?.index),
       strength: drift.Value(medicine.dosageAmount), // Map dosageAmount to strength column
       strengthUnit: drift.Value(medicine.dosageUnit ?? 'mg'),
       strengthText: drift.Value(medicine.strength), // The real strength string
@@ -139,9 +147,13 @@ class MedicineCleanStorageService {
       medicineId: data.medicineId,
       scheduledTime: data.scheduledTime,
       actionTime: data.actualTime,
-      status: data.isTaken ? MedicineStatus.taken 
-          : data.isSkipped ? MedicineStatus.skipped 
-          : data.isMissed ? MedicineStatus.missed 
+      // isPreLogged checked BEFORE isTaken: a pre-logged row derived from an
+      // older schema doesn't exist, but as a defensive ordering choice this
+      // stays correct regardless of which flags a future write sets.
+      status: data.isPreLogged ? MedicineStatus.preLogged
+          : data.isTaken ? MedicineStatus.taken
+          : data.isSkipped ? MedicineStatus.skipped
+          : data.isMissed ? MedicineStatus.missed
           : MedicineStatus.pending,
       dosageTaken: data.dosageTaken,
       skipReason: data.skipReason != null ? SkipReason.values[data.skipReason!] : null,
@@ -164,6 +176,7 @@ class MedicineCleanStorageService {
       isTaken: drift.Value(log.status == MedicineStatus.taken),
       isSkipped: drift.Value(log.status == MedicineStatus.skipped),
       isMissed: drift.Value(log.status == MedicineStatus.missed),
+      isPreLogged: drift.Value(log.status == MedicineStatus.preLogged),
       dosageTaken: drift.Value(log.dosageTaken),
       skipReason: drift.Value(log.skipReason?.index),
       skipNote: drift.Value(log.skipNote),
@@ -179,20 +192,44 @@ class MedicineCleanStorageService {
 
   // ============ ENHANCED MEDICINE METHODS ============
 
-  static Future<List<EnhancedMedicine>> getAllMedicines({bool includeArchived = false}) async {
+  /// Whether [dependentId] belongs to the currently active profile
+  /// ([ActiveProfileService]). Active == self (`null`) matches only records
+  /// that ALSO carry a null `dependentId` — the read-side half of the
+  /// "null means self" contract documented on [ActiveProfileService].
+  static bool _inActiveProfile(String? dependentId) {
+    final active = ActiveProfileService().activeDependentId;
+    return active == null ? dependentId == null : dependentId == active;
+  }
+
+  /// [scopeToActiveProfile] defaults to true (every screen that lists "my
+  /// medicines" wants only the active profile's) but MUST be passed false
+  /// for global maintenance sweeps that have to see every profile regardless
+  /// of which one is active — reminder (re)scheduling and missed-dose
+  /// reconciliation both need this, since a caregiver's dependent's alarms
+  /// must keep firing even while a different profile happens to be selected
+  /// in the UI.
+  static Future<List<EnhancedMedicine>> getAllMedicines({
+    bool includeArchived = false,
+    bool scopeToActiveProfile = true,
+  }) async {
     final meds = await _dao.getAllMedicines(includeArchived: includeArchived);
-    return meds.map(_mapToDomainMedicine).toList();
+    final domain = meds.map(_mapToDomainMedicine).toList();
+    return scopeToActiveProfile
+        ? domain.where((m) => _inActiveProfile(m.dependentId)).toList()
+        : domain;
   }
 
+  /// Every medicine belonging to [dependentId], regardless of which profile
+  /// is currently active — this is an explicit cross-profile lookup (e.g. the
+  /// dependent list previewing each member's medicine count), not a "my
+  /// medicines" view, so it bypasses active-profile scoping entirely.
   static Future<List<EnhancedMedicine>> getMedicinesForDependent(String dependentId) async {
-    final meds = await getAllMedicines(includeArchived: true);
+    final meds = await getAllMedicines(includeArchived: true, scopeToActiveProfile: false);
     return meds.where((m) => m.dependentId == dependentId).toList();
   }
 
-  static Future<List<EnhancedMedicine>> getMedicinesForDependentAsync(String dependentId) async {
-    final meds = await getAllMedicines(includeArchived: true);
-    return meds.where((m) => m.dependentId == dependentId).toList();
-  }
+  static Future<List<EnhancedMedicine>> getMedicinesForDependentAsync(String dependentId) =>
+      getMedicinesForDependent(dependentId);
 
   static Future<List<EnhancedMedicine>> getActiveMedicinesForTodayAsync() async {
     final today = DateTime.now();
@@ -214,17 +251,17 @@ class MedicineCleanStorageService {
     return [];
   }
 
-  static Future<List<EnhancedMedicine>> getExpiringMedicinesAsync({int daysAhead = 30}) async {
+  static Future<List<EnhancedMedicine>> getExpiringMedicinesAsync({
+    int daysAhead = 30,
+    bool scopeToActiveProfile = true,
+  }) async {
     final cutoff = DateTime.now().add(Duration(days: daysAhead));
-    final meds = await getAllMedicines();
+    final meds =
+        await getAllMedicines(scopeToActiveProfile: scopeToActiveProfile);
     return meds.where((m) {
       if (m.expiryDate == null) return false;
       return m.expiryDate!.isBefore(cutoff);
     }).toList();
-  }
-  
-  static List<EnhancedMedicine> getExpiringMedicines({int daysAhead = 30}) {
-    return [];
   }
 
   static Future<EnhancedMedicine?> getMedicine(String id) async {
@@ -232,18 +269,44 @@ class MedicineCleanStorageService {
     return med != null ? _mapToDomainMedicine(med) : null;
   }
 
-  static Future<void> saveMedicine(EnhancedMedicine medicine) async {
+  /// [stampActiveProfile] must be false when restoring a backup: an imported
+  /// medicine's `dependentId` is already authoritative (it came from the
+  /// backup file itself, including a legitimate null for a self-owned
+  /// medicine), and stamping it here would misattribute a self-owned
+  /// medicine to whichever profile merely happens to be active during the
+  /// restore. See [importMedicinesJson].
+  static Future<void> saveMedicine(
+    EnhancedMedicine medicine, {
+    bool stampActiveProfile = true,
+  }) async {
     final existing = await getMedicine(medicine.id);
     if (existing != null) {
       await updateMedicine(medicine);
     } else {
-      await addMedicine(medicine);
+      await addMedicine(medicine, stampActiveProfile: stampActiveProfile);
     }
   }
 
-  static Future<void> addMedicine(EnhancedMedicine medicine) async {
-    await _dao.addMedicine(_mapToMedicineCompanion(medicine));
+  static Future<void> addMedicine(
+    EnhancedMedicine medicine, {
+    bool stampActiveProfile = true,
+  }) async {
+    final toSave =
+        stampActiveProfile ? _stampActiveProfile(medicine) : medicine;
+    await _dao.addMedicine(_mapToMedicineCompanion(toSave));
     _bumpRevision();
+  }
+
+  /// A brand-new medicine with no explicit owner is created for whoever is
+  /// currently active. Self stays null (nothing to stamp — see
+  /// [ActiveProfileService]'s "null means self" contract); a medicine that
+  /// already carries a `dependentId` (e.g. an edit) is left untouched so
+  /// switching profiles can never silently reassign an existing medicine's
+  /// owner.
+  static EnhancedMedicine _stampActiveProfile(EnhancedMedicine medicine) {
+    if (medicine.dependentId != null) return medicine;
+    final active = ActiveProfileService().activeDependentId;
+    return active == null ? medicine : medicine.copyWith(dependentId: active);
   }
 
   static Future<void> updateMedicine(EnhancedMedicine medicine) async {
@@ -299,9 +362,12 @@ class MedicineCleanStorageService {
 
   // ============ MEDICINE LOG METHODS ============
 
-  static Future<List<MedicineLog>> getAllLogs() async {
+  static Future<List<MedicineLog>> getAllLogs({bool scopeToActiveProfile = true}) async {
     final logs = await _dao.getAllLogs();
-    return logs.map(_mapToDomainLog).toList();
+    final domain = logs.map(_mapToDomainLog).toList();
+    return scopeToActiveProfile
+        ? domain.where((l) => _inActiveProfile(l.dependentId)).toList()
+        : domain;
   }
 
   /// Single log by id (for Undo, which must know the medicine + dose amount to
@@ -311,19 +377,47 @@ class MedicineCleanStorageService {
     return row == null ? null : _mapToDomainLog(row);
   }
 
-  static Future<List<MedicineLog>> getLogsForMedicine(String medicineId) async {
+  /// [scopeToActiveProfile] only matters when this medicine's OWNER differs
+  /// from the currently active profile — true by default, matching every
+  /// other MedicineLog read path (getAllLogs, getLogsForDate,
+  /// getLogsForDateRange). Callers that intentionally process medicines
+  /// across every profile at once (e.g. MedicationReminderService's
+  /// _adaptiveSuggestionMinutes, recomputing reminders for the full
+  /// cross-profile medicine list) MUST pass false, or every log for a
+  /// non-active profile's medicine is silently filtered out — exactly the
+  /// bug that forced that specific call site to override the default.
+  static Future<List<MedicineLog>> getLogsForMedicine(
+    String medicineId, {
+    bool scopeToActiveProfile = true,
+  }) async {
     final logs = await _dao.getLogsForMedicine(medicineId);
-    return logs.map(_mapToDomainLog).toList();
+    final domain = logs.map(_mapToDomainLog).toList();
+    return scopeToActiveProfile
+        ? domain.where((l) => _inActiveProfile(l.dependentId)).toList()
+        : domain;
   }
 
-  static Future<List<MedicineLog>> getLogsForDate(DateTime date) async {
+  static Future<List<MedicineLog>> getLogsForDate(
+    DateTime date, {
+    bool scopeToActiveProfile = true,
+  }) async {
     final logs = await _dao.getLogsForDate(date);
-    return logs.map(_mapToDomainLog).toList();
+    final domain = logs.map(_mapToDomainLog).toList();
+    return scopeToActiveProfile
+        ? domain.where((l) => _inActiveProfile(l.dependentId)).toList()
+        : domain;
   }
 
-  static Future<List<MedicineLog>> getLogsForDateRange(DateTime start, DateTime end) async {
+  static Future<List<MedicineLog>> getLogsForDateRange(
+    DateTime start,
+    DateTime end, {
+    bool scopeToActiveProfile = true,
+  }) async {
     final logs = await _dao.getLogsForDateRange(start, end);
-    return logs.map(_mapToDomainLog).toList();
+    final domain = logs.map(_mapToDomainLog).toList();
+    return scopeToActiveProfile
+        ? domain.where((l) => _inActiveProfile(l.dependentId)).toList()
+        : domain;
   }
 
   static Future<void> addLog(MedicineLog log) async {
@@ -341,6 +435,23 @@ class MedicineCleanStorageService {
     _bumpRevision();
   }
 
+  /// The canonical log id for one scheduled dose.
+  ///
+  /// A slot has exactly ONE outcome — taken, skipped, or missed — so the id is
+  /// derived from (medicine, slot) and never from `DateTime.now()`. That makes
+  /// `addLog` idempotent per slot: re-skipping a dose, or taking one that was
+  /// previously skipped, replaces the row instead of adding another.
+  ///
+  /// Both id schemes used to be timestamp-based, so every tap appended a row.
+  /// `getDailySummaryAsync` counts rows, so two skips of one dose read as two
+  /// skipped doses; the Today hero computes `taken + skipped + missed` against
+  /// the scheduled total and could exceed it, showing e.g. "3/2".
+  ///
+  /// PRN ("as needed") doses are unaffected: they pass a distinct
+  /// `scheduledTime` for each intake, so their ids stay unique.
+  static String doseLogId(String medicineId, DateTime scheduledTime) =>
+      '${medicineId}_${scheduledTime.millisecondsSinceEpoch}';
+
   static Future<MedicineLog> markMedicineTaken({
     required String medicineId,
     required DateTime scheduledTime,
@@ -351,8 +462,13 @@ class MedicineCleanStorageService {
     int? effectivenessRating,
     Map<String, dynamic>? vitals,
   }) async {
+    // A log inherits its medicine's owner — not necessarily whatever profile
+    // happens to be active right now — so it stays correctly scoped even if
+    // this fires from a background path (e.g. a notification "Take all")
+    // while a different profile is open in the UI.
+    final medicine = await getMedicine(medicineId);
     final log = MedicineLog.taken(
-      id: '${medicineId}_${DateTime.now().millisecondsSinceEpoch}',
+      id: doseLogId(medicineId, scheduledTime),
       medicineId: medicineId,
       scheduledTime: scheduledTime,
       dosageTaken: dosageTaken,
@@ -360,14 +476,71 @@ class MedicineCleanStorageService {
       sideEffects: sideEffects,
       moodRating: moodRating,
       effectivenessRating: effectivenessRating,
+      dependentId: medicine?.dependentId,
       vitals: vitals,
     );
     await addLog(log);
-    
+    await _markDoseResolved(medicineId, scheduledTime);
+
     // Update stock if tracked
     await reduceStock(medicineId, dosageTaken);
-    
+
     return log;
+  }
+
+  /// Logs a dose taken NOW, ahead of its real future [scheduledTime] slot —
+  /// travel/timezone, or a pre-filled pillbox. Mirrors [markMedicineTaken]
+  /// exactly (same stock decrement, same resolved-flag, same owner
+  /// inheritance) except the persisted status and that [scheduledTime] is
+  /// expected to be in the future rather than defaulted to "now".
+  static Future<MedicineLog> markMedicinePreLogged({
+    required String medicineId,
+    required DateTime scheduledTime,
+    double dosageTaken = 1,
+    String? notes,
+    String? sideEffects,
+    int? moodRating,
+    int? effectivenessRating,
+    Map<String, dynamic>? vitals,
+  }) async {
+    final medicine = await getMedicine(medicineId);
+    final log = MedicineLog.preLogged(
+      id: doseLogId(medicineId, scheduledTime),
+      medicineId: medicineId,
+      scheduledTime: scheduledTime,
+      dosageTaken: dosageTaken,
+      notes: notes,
+      sideEffects: sideEffects,
+      moodRating: moodRating,
+      effectivenessRating: effectivenessRating,
+      dependentId: medicine?.dependentId,
+      vitals: vitals,
+    );
+    await addLog(log);
+    // Suppresses follow-up window nudges for this slot. The PRIMARY alarm at
+    // the original scheduled time is NOT suppressed by this flag (no gate
+    // exists for it today — a pre-existing gap shared with "took it early",
+    // not something this feature introduces or can fix here).
+    await _markDoseResolved(medicineId, scheduledTime);
+
+    await reduceStock(medicineId, dosageTaken);
+
+    return log;
+  }
+
+  /// Marks (medicineId, scheduledTime) as resolved for Phase 4's reminder
+  /// windows — checked by every nudge in that window before firing, so
+  /// taking or skipping a dose (via ANY path: in-app, a notification action,
+  /// or a "Take all") stops the rest of that window's nudges. A no-op,
+  /// never-read flag for a medicine that was never windowed.
+  static Future<void> _markDoseResolved(
+      String medicineId, DateTime scheduledTime) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(nudgeResolvedKey(medicineId, scheduledTime), true);
+    } catch (e) {
+      debugPrint('⚠️ Failed to mark dose resolved: $e');
+    }
   }
 
   /// Reconcile missed doses by writing a `missed` MedicineLog for every past
@@ -383,6 +556,11 @@ class MedicineCleanStorageService {
   /// - Slots that fall before the medicine was created are ignored.
   /// - Idempotent: a slot that already has ANY log (taken/skipped/missed) is left
   ///   alone, so repeated calls never double-insert.
+  ///
+  /// A global sweep, deliberately unscoped: every profile's missed doses get
+  /// reconciled every time this runs, regardless of which one is active, so
+  /// switching profiles later immediately shows correct historical data
+  /// instead of only whatever was active at the moment a dose went missed.
   static Future<void> reconcileMissedDoses({int lookbackDays = 14}) async {
     const graceHours = 3;
     final now = DateTime.now();
@@ -391,10 +569,11 @@ class MedicineCleanStorageService {
     final startDay = DateTime(startDate.year, startDate.month, startDate.day);
     final today = DateTime(now.year, now.month, now.day);
 
-    final medicines = await getAllMedicines();
+    final medicines = await getAllMedicines(scopeToActiveProfile: false);
     // Fetch from the midnight of the first day so every slot we iterate over is
     // covered by the idempotency check below (slots can precede `startDate`).
-    final existingLogs = await getLogsForDateRange(startDay, now);
+    final existingLogs =
+        await getLogsForDateRange(startDay, now, scopeToActiveProfile: false);
 
     final toInsert = <MedicineLog>[];
 
@@ -418,12 +597,15 @@ class MedicineCleanStorageService {
           if (!slot.isBefore(graceCutoff)) continue;
           // Ignore slots that predate the medicine's creation.
           if (slot.isBefore(med.createdAt)) continue;
-          // Idempotency: skip only if a TERMINAL log (taken/skipped/missed)
-          // already exists for this exact slot. A non-terminal (pending) log
-          // must not suppress the missed insert, or a deferred-then-forgotten
-          // dose would never be counted as missed.
+          // Idempotency: skip only if a TERMINAL log (taken/skipped/missed/
+          // preLogged) already exists for this exact slot. A non-terminal
+          // (pending) log must not suppress the missed insert, or a
+          // deferred-then-forgotten dose would never be counted as missed.
+          // preLogged MUST be included here: addLog upserts on doseLogId, so
+          // without this a pre-logged future slot that ages past the grace
+          // window would get a `missed` row silently written over it.
           final exists = medLogs.any((l) =>
-              (l.isTaken || l.isSkipped || l.isMissed) &&
+              (l.isTaken || l.isSkipped || l.isMissed || l.isPreLogged) &&
               l.scheduledTime.year == slot.year &&
               l.scheduledTime.month == slot.month &&
               l.scheduledTime.day == slot.day &&
@@ -431,8 +613,15 @@ class MedicineCleanStorageService {
               l.scheduledTime.minute == slot.minute);
           if (exists) continue;
 
+          // Must use the canonical [doseLogId] — the SAME id the take/skip paths
+          // use. It previously carried a `_missed_` infix, which gave a missed
+          // row a different primary key from a later taken row for the same
+          // slot. `addLog` upserts on the primary key, so it could not collapse
+          // them: the slot ended up with two rows, `getTodaysDoses` picked the
+          // older `missed` one, and Home showed a dose you had just taken as
+          // "OVERDUE" — while re-decrementing stock on every further tap.
           toInsert.add(MedicineLog.missed(
-            id: '${med.id}_missed_${slot.millisecondsSinceEpoch}',
+            id: doseLogId(med.id, slot),
             medicineId: med.id,
             scheduledTime: slot,
             dependentId: med.dependentId,
@@ -444,6 +633,133 @@ class MedicineCleanStorageService {
     for (final log in toInsert) {
       await addLog(log);
     }
+
+    await _alertCaregiversOfMissedDoses(toInsert, now);
+    await _alertExpiringMedicines(now);
+    await _pruneStaleResolvedFlags(now);
+    await _pruneStaleExpiryFlags(now);
+  }
+
+  /// Fires a one-time "expiring soon"/"expired" notification per medicine,
+  /// piggybacking on this sweep the same way [_alertCaregiversOfMissedDoses]
+  /// does. Deduped like [reduceStock]'s low-stock alert (fire once when a
+  /// threshold is crossed, not on every sweep) — but since a medicine has no
+  /// wasLow-style prior-state to compare against here, the "already alerted"
+  /// flag is a SharedPreferences entry instead, keyed by expiryDate so
+  /// changing it (e.g. after a refill) naturally re-arms the alert.
+  /// Best-effort — a notification failure must never surface as a
+  /// reconciliation failure.
+  static Future<void> _alertExpiringMedicines(DateTime now) async {
+    try {
+      // Unscoped, matching reconcileMissedDoses' own contract — a caregiver's
+      // dependent must keep getting expiry alerts while a different profile
+      // is active, exactly like _alertCaregiversOfMissedDoses above.
+      final expiring =
+          await getExpiringMedicinesAsync(scopeToActiveProfile: false);
+      if (expiring.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
+      for (final med in expiring) {
+        final expiry = med.expiryDate!;
+        final key = 'expiry_notified_${med.id}_${expiry.millisecondsSinceEpoch}';
+        if (prefs.getBool(key) ?? false) continue;
+
+        final daysLeft = expiry.difference(now).inDays;
+        final body = med.isExpired
+            ? '${med.name} has expired — check before your next dose.'
+            : '${med.name} expires in $daysLeft day${daysLeft == 1 ? '' : 's'}.';
+        final ok = await NotificationService().showImmediateNotification(
+          title: med.isExpired ? 'Medicine expired' : 'Medicine expiring soon',
+          body: body,
+          channelId: 'medicine_channel',
+        );
+        if (ok) await prefs.setBool(key, true);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Expiry alert failed: $e');
+    }
+  }
+
+  /// Removes `expiry_notified_` flags whose embedded expiry date is more than
+  /// 90 days in the past — a medicine still tracked that long past its
+  /// stated expiry is unlikely to need the SAME alert again, and this stops
+  /// one key accumulating forever per medicine per expiry-date change (a
+  /// refill mints a new key; the old one otherwise never gets removed). Piggy
+  /// backs on this sweep like [_pruneStaleResolvedFlags].
+  static Future<void> _pruneStaleExpiryFlags(DateTime now) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cutoff = now.subtract(const Duration(days: 90)).millisecondsSinceEpoch;
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith('expiry_notified_')) continue;
+        final millisStr = key.split('_').last;
+        final millis = int.tryParse(millisStr);
+        if (millis != null && millis < cutoff) {
+          await prefs.remove(key);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Pruning stale expiry flags failed: $e');
+    }
+  }
+
+  /// Removes `nudge_resolved_` flags (Phase 4's reminder windows) more than
+  /// 48h old. Each flag is a one-off, per-dose SharedPreferences entry (see
+  /// `_markDoseResolved`) that's never explicitly deleted when written —
+  /// without this, they'd accumulate forever, one per dose ever taken/
+  /// skipped. Piggybacks on this existing periodic sweep rather than
+  /// inventing a new one; best-effort like the rest of reconciliation.
+  static Future<void> _pruneStaleResolvedFlags(DateTime now) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cutoff = now.subtract(const Duration(hours: 48)).millisecondsSinceEpoch;
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith('nudge_resolved_')) continue;
+        final millisStr = key.split('_').last;
+        final millis = int.tryParse(millisStr);
+        if (millis != null && millis < cutoff) {
+          await prefs.remove(key);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Pruning stale resolved flags failed: $e');
+    }
+  }
+
+  /// One local notification per non-self dependent with a RECENT newly-missed
+  /// dose — matching Medisafe's "even know when they miss a dose." Self never
+  /// alerts (there's no one else to notify). Deliberately scoped to the last
+  /// 24h, not the full lookback window: a first-ever reconciliation (or one
+  /// after days offline) can backfill many old misses at once, and alerting
+  /// on all of them would read as spam rather than a timely heads-up.
+  /// Best-effort — a notification failure must never surface as a
+  /// reconciliation failure.
+  static Future<void> _alertCaregiversOfMissedDoses(
+      List<MedicineLog> newlyMissed, DateTime now) async {
+    try {
+      final recentCutoff = now.subtract(const Duration(hours: 24));
+      final recent = newlyMissed
+          .where((l) => l.scheduledTime.isAfter(recentCutoff))
+          .toList();
+      final dependentIds = recent.map((l) => l.dependentId).whereType<String>().toSet();
+      if (dependentIds.isEmpty) return;
+
+      final dependents = await getAllDependents();
+      for (final id in dependentIds) {
+        final profile = dependents.where((d) => d.id == id).firstOrNull;
+        if (profile == null) continue;
+        final count = recent.where((l) => l.dependentId == id).length;
+        await NotificationService().showCaregiverAlert(
+          title: 'Missed dose',
+          body: '${profile.name} missed $count dose${count == 1 ? '' : 's'}.',
+          // Varies per dependent — the title above doesn't, so keying the
+          // notification id on it would collide and silently overwrite one
+          // dependent's alert with another's in the same sweep.
+          dedupeKey: id,
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ Caregiver missed-dose alert failed: $e');
+    }
   }
 
   static Future<MedicineLog> markMedicineSkipped({
@@ -452,14 +768,18 @@ class MedicineCleanStorageService {
     required SkipReason reason,
     String? skipNote,
   }) async {
+    // See markMedicineTaken — a log inherits its medicine's owner.
+    final medicine = await getMedicine(medicineId);
     final log = MedicineLog.skipped(
-      id: '${medicineId}_skip_${DateTime.now().millisecondsSinceEpoch}',
+      id: doseLogId(medicineId, scheduledTime),
       medicineId: medicineId,
       scheduledTime: scheduledTime,
       reason: reason,
       skipNote: skipNote,
+      dependentId: medicine?.dependentId,
     );
     await addLog(log);
+    await _markDoseResolved(medicineId, scheduledTime);
     return log;
   }
 
@@ -475,7 +795,17 @@ class MedicineCleanStorageService {
       try {
         final log = a.isTake
             ? await markMedicineTaken(
-                medicineId: a.medicineId, scheduledTime: a.scheduledTime)
+                medicineId: a.medicineId,
+                scheduledTime: a.scheduledTime,
+                // The queue carries no dose amount (it's written from the alarm
+                // isolate, which can't read Drift), so resolve it here exactly
+                // the way the in-app take path does — including titration.
+                // Defaulting to 1 under-decremented stock for every medicine
+                // whose dose isn't a single unit (e.g. "2 tablets"), which
+                // drifts refill predictions and runs the patient out early.
+                dosageTaken: med.schedule
+                    .effectiveDosageAmount(a.scheduledTime, med.dosageAmount),
+              )
             : await markMedicineSkipped(
                 medicineId: a.medicineId,
                 scheduledTime: a.scheduledTime,
@@ -686,9 +1016,24 @@ class MedicineCleanStorageService {
 
   // ============ APPOINTMENT METHODS ============
 
-  static Future<List<Appointment>> getAllAppointments() async {
+  static Future<List<Appointment>> getAllAppointments({
+    bool scopeToActiveProfile = true,
+  }) async {
     final apps = await _dao.getAllAppointments();
-    return apps.map(_mapToDomainAppointment).toList();
+    final domain = apps.map(_mapToDomainAppointment).toList();
+    return scopeToActiveProfile
+        ? domain.where((a) => _inActiveProfile(a.dependentId)).toList()
+        : domain;
+  }
+
+  static Future<List<Appointment>> getUpcomingAppointments({
+    bool scopeToActiveProfile = true,
+  }) async {
+    final apps = await _dao.getUpcomingAppointments();
+    final domain = apps.map(_mapToDomainAppointment).toList();
+    return scopeToActiveProfile
+        ? domain.where((a) => _inActiveProfile(a.dependentId)).toList()
+        : domain;
   }
 
   static Appointment _mapToDomainAppointment(db.Appointment a) {
@@ -707,8 +1052,8 @@ class MedicineCleanStorageService {
     );
   }
 
-  static Future<void> addAppointment(Appointment appointment) async {
-    await _dao.addAppointment(db.AppointmentsCompanion(
+  static db.AppointmentsCompanion _appointmentToCompanion(Appointment appointment) {
+    return db.AppointmentsCompanion(
       id: drift.Value(appointment.id),
       doctorId: drift.Value(appointment.doctorId),
       title: drift.Value(appointment.doctorName),
@@ -721,11 +1066,35 @@ class MedicineCleanStorageService {
       dependentId: drift.Value(appointment.dependentId),
       medicineIdsJson: drift.Value(appointment.medicineIds != null ? jsonEncode(appointment.medicineIds) : null),
       createdAt: drift.Value(DateTime.now()),
-    ));
+    );
   }
-  
+
+  /// A brand-new appointment with no explicit owner is created for whoever is
+  /// currently active — see [_stampActiveProfile]'s doc (same "null means
+  /// self, never overwrite an existing owner" contract as medicines).
+  /// [stampActiveProfile] must be false when restoring a backup — see
+  /// [saveMedicine]'s doc for why.
+  static Future<void> addAppointment(
+    Appointment appointment, {
+    bool stampActiveProfile = true,
+  }) async {
+    Appointment toSave = appointment;
+    if (stampActiveProfile && appointment.dependentId == null) {
+      final active = ActiveProfileService().activeDependentId;
+      if (active != null) toSave = appointment.copyWith(dependentId: active);
+    }
+    await _dao.addAppointment(_appointmentToCompanion(toSave));
+    await AppointmentReminderService.schedule(toSave);
+  }
+
+  static Future<void> updateAppointment(Appointment appointment) async {
+    await _dao.updateAppointment(_appointmentToCompanion(appointment));
+    await AppointmentReminderService.schedule(appointment);
+  }
+
   static Future<void> deleteAppointment(String id) async {
     await _dao.deleteAppointment(id);
+    await AppointmentReminderService.cancelById(id);
   }
 
   // ============ DEPENDENT PROFILE METHODS ============
@@ -804,30 +1173,141 @@ class MedicineCleanStorageService {
     ));
   }
 
+  /// Deletes a dependent's PROFILE row, but reassigns everything they owned
+  /// back to self first — deleting a profile must not orphan its medicines,
+  /// logs or vitals under an id that can never be selected again. This is
+  /// what the delete confirmation's "their medicines and history stay on
+  /// device" promise actually depends on.
   static Future<void> deleteDependent(String id) async {
+    final medicines = await getMedicinesForDependent(id);
+    for (final m in medicines) {
+      await updateMedicine(m.copyWith(clearDependentId: true));
+    }
+
+    final logs = (await getAllLogs(scopeToActiveProfile: false))
+        .where((l) => l.dependentId == id);
+    for (final l in logs) {
+      await updateLog(l.copyWith(clearDependentId: true));
+    }
+
+    // syncToHealthConnect: false for the same reason importJson uses it — a
+    // dependent can accumulate readings from before sync was enabled (or
+    // while write permission was denied), all with unset synced flags;
+    // without this guard, reassigning them here would bulk-push that
+    // dependent's entire unsynced history to Health Connect/HealthKit as a
+    // side effect of deleting their profile.
+    final bpReadings = (await VitalsStorageService.getAllBp(scopeToActiveProfile: false))
+        .where((r) => r.dependentId == id);
+    for (final r in bpReadings) {
+      await VitalsStorageService.saveBp(r.copyWith(clearDependentId: true),
+          stampActiveProfile: false, syncToHealthConnect: false);
+    }
+    final glucoseReadings =
+        (await VitalsStorageService.getAllGlucose(scopeToActiveProfile: false))
+            .where((r) => r.dependentId == id);
+    for (final r in glucoseReadings) {
+      await VitalsStorageService.saveGlucose(r.copyWith(clearDependentId: true),
+          stampActiveProfile: false, syncToHealthConnect: false);
+    }
+
+    final appointments = (await getAllAppointments(scopeToActiveProfile: false))
+        .where((a) => a.dependentId == id);
+    for (final a in appointments) {
+      await updateAppointment(a.copyWith(clearDependentId: true));
+    }
+
     await _dao.deleteDependent(id);
   }
 
   // ============ BACKUP HELPERS ============
 
+  /// Key under which a medicine's dose history (its MedicineLogs rows) rides
+  /// along inside that medicine's own exported JSON map.
+  ///
+  /// MedicineLogs were in NO backup and NO cloud sync, so a restore brought
+  /// back every medicine but ZERO adherence history — every dose ever taken,
+  /// skipped or missed was gone, and with it every streak, adherence
+  /// percentage and doctor-facing report. Carrying the logs inside the
+  /// medicines section (rather than as a new top-level section) keeps the
+  /// backup format compatible in BOTH directions: an older app reading a new
+  /// backup ignores the extra key, and a newer app reading an old backup just
+  /// finds no history to restore.
+  static const String doseLogsBackupKey = 'doseLogs';
+
+  /// Every dose log across every profile, as JSON. Unscoped for the same
+  /// reason as [exportMedicinesJson].
+  static Future<List<Map<String, dynamic>>> exportDoseLogsJson() async {
+    final logs = await getAllLogs(scopeToActiveProfile: false);
+    return logs.map((l) => l.toJson()).toList();
+  }
+
+  /// Restore dose logs. Non-destructive and idempotent: [addLog] upserts on
+  /// the log's own id (see [doseLogId]), so restoring the same backup twice
+  /// can never duplicate a dose, and a malformed entry is skipped instead of
+  /// failing the whole restore.
+  ///
+  /// Merge semantics match [importMedicinesJson]'s: where a slot exists both
+  /// locally and in the backup, the BACKUP's row wins.
+  static Future<void> importDoseLogsJson(List<dynamic> data) async {
+    for (final raw in data) {
+      try {
+        final log =
+            MedicineLog.fromJson(Map<String, dynamic>.from(raw as Map));
+        if (log.id.isEmpty || log.medicineId.isEmpty) continue;
+        await addLog(log);
+      } catch (e) {
+        debugPrint('Import dose log failed: $e');
+      }
+    }
+  }
+
   /// Export all medicines (domain models) as JSON for inclusion in the full
   /// app backup. Uses the DOMAIN [EnhancedMedicine] (with toJson) this service
   /// imports, so it avoids the generated-Drift naming clash in clean_storage.
+  ///
+  /// Each medicine carries its own dose history under [doseLogsBackupKey] —
+  /// see that constant for why the logs live here instead of in a new
+  /// top-level section. Logs are grouped by `medicineId`; `deleteMedicine`
+  /// cascade-deletes a medicine's logs, so an orphaned log (one whose medicine
+  /// no longer exists) is not a state the app can normally reach.
+  ///
+  /// Unscoped (`scopeToActiveProfile: false`): a backup taken while, say,
+  /// "Kid A" is the active profile must still capture every OTHER profile's
+  /// medicines too, or restoring it would silently lose them.
   static Future<List<Map<String, dynamic>>> exportMedicinesJson() async {
-    final medicines = await getAllMedicines(includeArchived: true);
-    return medicines.map((m) => m.toJson()).toList();
+    final medicines =
+        await getAllMedicines(includeArchived: true, scopeToActiveProfile: false);
+    final logsByMedicine = <String, List<Map<String, dynamic>>>{};
+    for (final log in await exportDoseLogsJson()) {
+      final medicineId = log['medicineId']?.toString();
+      if (medicineId == null || medicineId.isEmpty) continue;
+      (logsByMedicine[medicineId] ??= <Map<String, dynamic>>[]).add(log);
+    }
+    return medicines.map((m) {
+      final json = m.toJson();
+      final logs = logsByMedicine[m.id];
+      if (logs != null && logs.isNotEmpty) json[doseLogsBackupKey] = logs;
+      return json;
+    }).toList();
   }
 
   /// Restore medicines from a full-app backup. Non-destructive: each medicine
   /// is upserted by id via [saveMedicine], so restoring over existing data
   /// merges rather than duplicating or clobbering. Malformed entries are
   /// skipped so a single bad record can't fail the whole restore.
+  ///
+  /// The medicine's dose history ([doseLogsBackupKey]) is restored right after
+  /// the medicine itself, so the logs never reference a medicine that hasn't
+  /// been written yet. An old backup without that key restores the medicine
+  /// exactly as before.
   static Future<void> importMedicinesJson(List<dynamic> data) async {
     for (final raw in data) {
       try {
-        final medicine =
-            EnhancedMedicine.fromJson(Map<String, dynamic>.from(raw as Map));
-        await saveMedicine(medicine);
+        final json = Map<String, dynamic>.from(raw as Map);
+        final medicine = EnhancedMedicine.fromJson(json);
+        await saveMedicine(medicine, stampActiveProfile: false);
+        final logs = json[doseLogsBackupKey];
+        if (logs is List) await importDoseLogsJson(logs);
       } catch (e) {
         debugPrint('Import medicine failed: $e');
       }
@@ -837,11 +1317,14 @@ class MedicineCleanStorageService {
   // ============ EXPORT METHODS ============
 
   static Future<Map<String, dynamic>> exportAllMedicineData() async {
-    final medicines = await getAllMedicines(includeArchived: true);
-    final logs = await getAllLogs();
+    // Unscoped — a full-data export must cover every profile, not just
+    // whichever one happens to be active (see exportMedicinesJson).
+    final medicines =
+        await getAllMedicines(includeArchived: true, scopeToActiveProfile: false);
+    final logs = await getAllLogs(scopeToActiveProfile: false);
     final doctors = await getAllDoctors();
     final pharmacies = await getAllPharmacies();
-    final appointments = await getAllAppointments();
+    final appointments = await getAllAppointments(scopeToActiveProfile: false);
     final dependents = await getAllDependents();
     
     return {
@@ -895,8 +1378,17 @@ class MedicineCleanStorageService {
         .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
         .map((m) => m.id)
         .toSet();
-    final scopedLogs = logs.where((l) => eligibleIds.contains(l.medicineId));
-    final taken = scopedLogs.where((l) => l.isTaken).length;
+    // ONE outcome per slot. Deterministic log ids (see [doseLogId]) keep this
+    // true for anything written from now on, but installs created before that
+    // fix can already hold several rows for the same dose — and these counts feed
+    // the Today hero's `taken + skipped + missed` against `scheduled`, so a
+    // duplicate showed up as "3/2 taken". Collapsing at read time heals that
+    // existing data without a migration.
+    final scopedLogs =
+        dedupeByDose(logs.where((l) => eligibleIds.contains(l.medicineId)));
+    // countsAsTaken folds in preLogged — a pre-logged dose was physically
+    // taken, just ahead of its scheduled slot.
+    final taken = scopedLogs.where((l) => l.countsAsTaken).length;
     final skipped = scopedLogs.where((l) => l.isSkipped).length;
     final missed = scopedLogs.where((l) => l.isMissed).length;
 
@@ -907,14 +1399,59 @@ class MedicineCleanStorageService {
       skipped: skipped,
       missed: missed,
       adherenceRate: scheduled > 0 ? (taken / scheduled).clamp(0.0, 1.0) : 1.0,
-      medicinesTaken:
-          scopedLogs.where((l) => l.isTaken).map((l) => l.medicineId).toList(),
+      medicinesTaken: scopedLogs
+          .where((l) => l.countsAsTaken)
+          .map((l) => l.medicineId)
+          .toList(),
       medicinesMissed:
           scopedLogs.where((l) => l.isMissed).map((l) => l.medicineId).toList(),
     );
   }
 
+  /// Collapse [logs] to one entry per (medicine, scheduled slot).
+  ///
+  /// When a slot has several rows, the winner is the one that reflects what the
+  /// user actually did: an explicit **taken** beats an explicit **skipped**,
+  /// and both beat **missed** — which is written automatically by the
+  /// missed-dose reconciler and must never override a real action.
+  ///
+  /// Pure, and part of the public surface: every path that derives counts from
+  /// logs must go through this, or a slot with more than one row is counted
+  /// twice. Mirrors the ranking in `TodayScheduleService.mostAuthoritative` so
+  /// the schedule view and the adherence numbers agree.
+  static List<MedicineLog> dedupeByDose(Iterable<MedicineLog> logs) {
+    int rank(MedicineLog l) {
+      if (l.isTaken) return 4;
+      if (l.isPreLogged) return 3;
+      if (l.isSkipped) return 2;
+      if (l.isMissed) return 1;
+      return 0;
+    }
+
+    final best = <String, MedicineLog>{};
+    for (final l in logs) {
+      final key = doseLogId(l.medicineId, l.scheduledTime);
+      final current = best[key];
+      if (current == null || rank(l) > rank(current)) best[key] = l;
+    }
+    return best.values.toList();
+  }
+
   // ============ ANALYTICS METHODS ============
+
+  /// Identity of ONE medicine's dose slot, at minute granularity.
+  ///
+  /// The medicine id is part of the key: several medicines routinely share the
+  /// same minute (see `groupRemindersBySlot`), so a time-only key makes one
+  /// medicine's "taken" satisfy every other medicine due at that minute.
+  ///
+  /// Deliberately minute-granular rather than [doseLogId]'s exact epoch
+  /// millis: a log's `scheduledTime` can carry seconds when it came from a
+  /// path that falls back to `DateTime.now()` (e.g. the alarm screen), while a
+  /// slot from `getScheduledTimesForDate` never does, and an exact-millis
+  /// comparison would then read a genuinely taken dose as untaken.
+  static String _slotKey(String medicineId, DateTime slot) =>
+      '$medicineId@${slot.year}-${slot.month}-${slot.day}-${slot.hour}-${slot.minute}';
 
   /// Forgiving adherence streak via the shared [StreakEngine].
   ///
@@ -947,11 +1484,24 @@ class MedicineCleanStorageService {
     if (earliest.isBefore(floor)) earliest = floor;
 
     // Keys of slots that were actually taken.
+    //
+    // The key MUST carry the medicine id. Keyed on clock time alone, two
+    // medicines sharing an 08:00 slot (the normal case — `groupRemindersBySlot`
+    // exists precisely to collapse same-minute medicines into one reminder)
+    // both resolved as taken when only ONE was, so the day counted as complete
+    // and the patient was shown a perfect streak while never taking the second
+    // drug.
+    //
+    // The log set is scoped to the same eligible population as the `due`
+    // denominator below (active, non-archived, non-PRN) — see
+    // [getAdherenceStats], which already does this. Without it a PRN or
+    // ARCHIVED medicine logged at 08:00 marked the 08:00 statin as taken.
+    final eligibleIds = active.map((m) => m.id).toSet();
     final logs = await getLogsForDateRange(earliest, now);
     final takenKeys = <String>{};
-    for (final l in logs.where((l) => l.isTaken)) {
-      final t = l.scheduledTime;
-      takenKeys.add('${t.year}-${t.month}-${t.day}-${t.hour}-${t.minute}');
+    for (final l in logs.where(
+        (l) => l.countsAsTaken && eligibleIds.contains(l.medicineId))) {
+      takenKeys.add(_slotKey(l.medicineId, l.scheduledTime));
     }
 
     final completed = <DateTime>{};
@@ -968,9 +1518,7 @@ class MedicineCleanStorageService {
           if (slot.isBefore(m.createdAt)) continue;
           if (slot.isAfter(now)) continue; // today's upcoming doses aren't due yet
           due++;
-          final k =
-              '${slot.year}-${slot.month}-${slot.day}-${slot.hour}-${slot.minute}';
-          if (takenKeys.contains(k)) taken++;
+          if (takenKeys.contains(_slotKey(m.id, slot))) taken++;
         }
       }
       if (due == 0 || taken == due) completed.add(day);
@@ -1002,8 +1550,13 @@ class MedicineCleanStorageService {
         .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
         .map((m) => m.id)
         .toSet();
-    final scoped = logs.where((l) => eligibleIds.contains(l.medicineId));
-    final taken = scoped.where((l) => l.isTaken).length;
+    // Collapse to one row per slot first. Installs written before the
+    // missed-dose id fix can hold both a `missed` and a `taken` row for the
+    // same slot, which double-counted here and could push `total` past the
+    // scheduled denominator.
+    final scoped =
+        dedupeByDose(logs.where((l) => eligibleIds.contains(l.medicineId)));
+    final taken = scoped.where((l) => l.countsAsTaken).length;
     final skipped = scoped.where((l) => l.isSkipped).length;
     final missed = scoped.where((l) => l.isMissed).length;
     final total = taken + skipped + missed;
@@ -1059,13 +1612,12 @@ class MedicineCleanStorageService {
     final startDate = now.subtract(Duration(days: days));
     final medicine = await getMedicine(medicineId);
 
-    final logs = (await getLogsForMedicine(medicineId))
-        .where((l) =>
-            !l.scheduledTime.isBefore(startDate) &&
-            !l.scheduledTime.isAfter(now))
-        .toList();
+    // Deduped per slot — see getAdherenceStats.
+    final logs = dedupeByDose((await getLogsForMedicine(medicineId)).where((l) =>
+        !l.scheduledTime.isBefore(startDate) &&
+        !l.scheduledTime.isAfter(now)));
 
-    final taken = logs.where((l) => l.isTaken).length;
+    final taken = logs.where((l) => l.countsAsTaken).length;
     final skipped = logs.where((l) => l.isSkipped).length;
     final missed = logs.where((l) => l.isMissed).length;
     final total = taken + skipped + missed;

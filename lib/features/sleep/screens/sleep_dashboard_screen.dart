@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:tablet_remainder/core/ai/insight.dart';
+import 'package:tablet_remainder/core/health/insight.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
 import 'package:tablet_remainder/core/services/home_widget_service.dart';
@@ -12,7 +12,6 @@ import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:tablet_remainder/core/widgets/app/personal_best_card.dart';
 import 'package:tablet_remainder/core/milestones/milestones_screen.dart';
 import 'package:tablet_remainder/core/milestones/milestones_service.dart';
-import 'package:tablet_remainder/core/ai/ai_assistant.dart';
 import '../models/sleep_schedule.dart';
 import '../models/sleep_session.dart';
 import '../models/sleep_consistency.dart';
@@ -25,6 +24,7 @@ import '../widgets/sleep_stage_timeline.dart';
 import '../widgets/sleep_weekly_trend.dart';
 import 'sleep_history_screen.dart';
 import 'sleep_schedule_settings_screen.dart';
+import '../../../core/health/coach_text.dart';
 
 /// The Sleep home: last-night summary (score ring + duration/efficiency),
 /// an honest stage timeline, the 7-night trend vs target with a regularity
@@ -353,7 +353,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         ))
         ..add(_buildBestNight(context))
         ..add(const SizedBox(height: AppSpacing.lg))
-        ..add(_aiCoachCard(context, lastNight, debt, regularity, schedule))
+        ..add(_coachCard(context, lastNight, debt, regularity, schedule))
         ..add(const SizedBox(height: AppSpacing.lg))
         ..add(SectionHeader(
           title: 'Insights',
@@ -431,20 +431,21 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
   }
 
   /// Self-loading generative AI sleep coach (on-device rule engine default).
-  Widget _aiCoachCard(BuildContext context, SleepSession last, int debt,
+  Widget _coachCard(BuildContext context, SleepSession last, int debt,
       double regularity, SleepSchedule schedule) {
     final ext = AppColorsExt.of(context);
-    return AiInsightCard(
+    return TipCard(
       title: 'Sleep coach',
-      icon: kAiSparkle,
+      icon: Symbols.bedtime_rounded,
       accent: ext.sleep,
-      cacheKey:
-          'sleep:${last.dateKey}:${last.asleepMinutes ~/ 15}:${schedule.targetMinutes}:${debt ~/ 30}',
-      loader: () => AiAssistant().sleepTip(
+      text: const CoachText().sleepTip(
         lastNightMinutes: last.asleepMinutes,
         targetMinutes: schedule.targetMinutes,
         debtMinutes: debt,
         regularity: regularity,
+        // Suppresses the debt line on a partly-logged week — otherwise unlogged
+        // nights read as sleep the user didn't get.
+        loggedNights: SleepService.regularitySampleSize(),
       ),
     );
   }

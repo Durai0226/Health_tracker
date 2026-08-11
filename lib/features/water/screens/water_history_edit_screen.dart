@@ -31,7 +31,11 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
     setState(() => _isLoading = true);
     await WaterService.init();
     final dateKey = '${widget.date.year}-${widget.date.month.toString().padLeft(2, '0')}-${widget.date.day.toString().padLeft(2, '0')}';
-    _dayData = WaterService.getDataForDate(widget.date) ?? DailyWaterData(
+    // Load from storage, not just the service's warm in-memory cache: this
+    // screen opens on an arbitrary date, and a stored day older than that cache
+    // would otherwise render as empty — hiding real history and inviting an
+    // edit that writes the blank back over it.
+    _dayData = await WaterService.loadDataForDate(widget.date) ?? DailyWaterData(
       id: dateKey,
       date: widget.date,
       dailyGoalMl: WaterService.getDailyGoal(),

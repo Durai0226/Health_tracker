@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/reminder_reschedule_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../sleep/services/sleep_service.dart';
 import '../models/water_reminder_config.dart';
 import '../services/water_service.dart';
 
@@ -24,6 +25,7 @@ class _WaterReminderSettingsScreenState
   String _sound = 'default';
   bool _pauseWhenGoalReached = true;
   bool _respectQuietHours = true;
+  bool _useSleepSchedule = false;
   bool _isSaving = false;
 
   @override
@@ -44,6 +46,7 @@ class _WaterReminderSettingsScreenState
       _sound = existing.sound;
       _pauseWhenGoalReached = existing.pauseWhenGoalReached;
       _respectQuietHours = existing.respectQuietHours;
+      _useSleepSchedule = existing.useSleepSchedule;
       _reminderTimes = existing.reminderMinutes
           .map((m) => TimeOfDay(hour: m ~/ 60, minute: m % 60))
           .toList()
@@ -119,6 +122,7 @@ class _WaterReminderSettingsScreenState
       sound: _sound,
       pauseWhenGoalReached: _pauseWhenGoalReached,
       respectQuietHours: _respectQuietHours,
+      useSleepSchedule: _useSleepSchedule,
     );
 
     // Persist first so the reschedule pass reads the fresh config.
@@ -374,10 +378,64 @@ class _WaterReminderSettingsScreenState
     );
   }
 
-  Widget _buildAdaptiveCard(AppColorsExt ext) {
+  /// The wake/bed window actually driving quiet hours right now, plus where
+  /// it came from. Mirrors `ReminderRescheduleService.rescheduleWaterReminders`'s
+  /// fallback order: a real sleep average (enough nights) → the stated sleep
+  /// schedule → the hydration profile's fixed hours.
+  ({int wakeHour, int wakeMinute, int bedHour, int bedMinute, String source})
+      _resolvedQuietWindow() {
+    if (_useSleepSchedule) {
+      final avg = SleepService.averageActualSchedule();
+      if (avg != null) {
+        return (
+          wakeHour: avg.wakeHour,
+          wakeMinute: avg.wakeMinute,
+          bedHour: avg.bedHour,
+          bedMinute: avg.bedMinute,
+          source: 'nights',
+        );
+      }
+      final schedule = SleepService.getSchedule();
+      return (
+        wakeHour: schedule.wakeHour,
+        wakeMinute: schedule.wakeMinute,
+        bedHour: schedule.bedtimeHour,
+        bedMinute: schedule.bedtimeMinute,
+        source: 'schedule',
+      );
+    }
     final profile = WaterService.getProfile();
-    final wake = profile.wakeUpHour ?? 7;
-    final bed = profile.bedtimeHour ?? 22;
+    return (
+      wakeHour: profile.wakeUpHour ?? 7,
+      wakeMinute: 0,
+      bedHour: profile.bedtimeHour ?? 22,
+      bedMinute: 0,
+      source: 'static',
+    );
+  }
+
+  Widget _buildAdaptiveCard(AppColorsExt ext) {
+    final window = _resolvedQuietWindow();
+    final rangeLabel =
+        '${_formatTime(window.wakeHour, window.wakeMinute)}–${_formatTime(window.bedHour, window.bedMinute)}';
+
+    // Same wording regardless of source — the "where the window came from"
+    // detail belongs to the sleep-schedule toggle's own subtitle below.
+    final quietSubtitle = 'Skip reminders outside $rangeLabel';
+
+    String sleepSubtitle;
+    switch (window.source) {
+      case 'nights':
+        sleepSubtitle =
+            'Based on your last ${SleepService.regularitySampleSize()} nights ($rangeLabel)';
+        break;
+      case 'schedule':
+        sleepSubtitle = 'Based on your sleep schedule ($rangeLabel)';
+        break;
+      default:
+        sleepSubtitle = 'Uses your fixed hours ($rangeLabel) when off';
+    }
+
     return AppCard(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Column(
@@ -395,18 +453,26 @@ class _WaterReminderSettingsScreenState
             ext,
             icon: Symbols.bedtime_rounded,
             title: 'Respect quiet hours',
-            subtitle:
-                'Skip reminders outside ${_formatHour(wake)}–${_formatHour(bed)}',
+            subtitle: quietSubtitle,
             value: _respectQuietHours,
             onChanged: (v) => setState(() => _respectQuietHours = v),
+          ),
+          Divider(height: 1, color: ext.outline),
+          _buildToggleRow(
+            ext,
+            icon: Symbols.nights_stay_rounded,
+            title: 'Use my sleep schedule',
+            subtitle: sleepSubtitle,
+            value: _useSleepSchedule,
+            onChanged: (v) => setState(() => _useSleepSchedule = v),
           ),
         ],
       ),
     );
   }
 
-  String _formatHour(int hour24) {
-    return TimeOfDay(hour: hour24, minute: 0).format(context);
+  String _formatTime(int hour24, int minute) {
+    return TimeOfDay(hour: hour24, minute: minute).format(context);
   }
 
   Widget _buildToggleRow(

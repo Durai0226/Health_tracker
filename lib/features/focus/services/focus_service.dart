@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import '../../../core/health/streak_engine.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/audio_service.dart';
@@ -775,39 +776,45 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     _updateAchievement(AchievementType.soundExplorer, _usedSounds.length);
   }
 
-  Future<void> _checkAndUpdateStreak() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    
-    if (_stats.lastSessionDate != null) {
-      final lastDate = DateTime(
-        _stats.lastSessionDate!.year,
-        _stats.lastSessionDate!.month,
-        _stats.lastSessionDate!.day,
-      );
-      
-      final difference = today.difference(lastDate).inDays;
-      
-      if (difference == 0) {
-        // Same day, no change
-      } else if (difference == 1) {
-        // Consecutive day
-        final newStreak = _stats.currentStreak + 1;
-        _stats = _stats.copyWith(
-          currentStreak: newStreak,
-          longestStreak: max(_stats.longestStreak, newStreak),
-        );
-        _updateAchievement(AchievementType.firstStreak, newStreak);
-        _updateAchievement(AchievementType.weekStreak, newStreak);
-        _updateAchievement(AchievementType.monthStreak, newStreak);
-      } else {
-        // Streak broken
-        _stats = _stats.copyWith(currentStreak: 1);
-      }
-    } else {
-      _stats = _stats.copyWith(currentStreak: 1);
+  /// Days with at least one completed focus session — the input to the shared,
+  /// forgiving [StreakEngine].
+  Set<DateTime> _completedSessionDays() {
+    final days = <DateTime>{};
+    for (final s in _sessions) {
+      if (!s.wasCompleted) continue;
+      days.add(DateTime(s.startedAt.year, s.startedAt.month, s.startedAt.day));
     }
-    
+    return days;
+  }
+
+  /// Recompute the focus streak from session history via the shared
+  /// [StreakEngine] — the same engine, and the same one-grace-day-per-rolling-
+  /// week, that medicine, steps and water use. The old logic hard-reset the
+  /// streak to 1 on any gap larger than a day and inferred it from
+  /// `lastSessionDate` alone, so one missed day wiped a long run. Deriving it
+  /// from the actual sessions also makes it idempotent — running this on every
+  /// init and every completion can no longer double-count.
+  Future<void> _checkAndUpdateStreak() async {
+    final result = StreakEngine.compute(
+      completedDays: _completedSessionDays(),
+      today: DateTime.now(),
+      graceDaysPerWeek: 1,
+    );
+    final newStreak = result.current;
+
+    _stats = _stats.copyWith(
+      currentStreak: newStreak,
+      // Persisted history is trimmed to the last 100 sessions, so never let a
+      // recompute shrink a longest streak the user already earned.
+      longestStreak: max(_stats.longestStreak, max(result.longest, newStreak)),
+    );
+
+    if (newStreak > 0) {
+      _updateAchievement(AchievementType.firstStreak, newStreak);
+      _updateAchievement(AchievementType.weekStreak, newStreak);
+      _updateAchievement(AchievementType.monthStreak, newStreak);
+    }
+
     await _saveData();
   }
 

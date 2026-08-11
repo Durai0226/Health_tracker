@@ -88,4 +88,35 @@ void main() {
       }
     });
   });
+
+  group('vitals write types (Phase 5)', () {
+    test('BP + glucose are supported on both platforms, unlike sleep/distance',
+        () {
+      for (final type in HealthDataService.vitalsWriteTypes) {
+        expect(dataTypeKeysAndroid, contains(type),
+            reason: 'Health Connect would reject the whole write/permission '
+                'request for an unmapped type: ${type.name}');
+        expect(dataTypeKeysIOS, contains(type),
+            reason: 'HealthKit would silently reject the write for an '
+                'unmapped type: ${type.name}');
+      }
+    });
+
+    test('BP is written as one combined record, never split', () {
+      expect(HealthDataService.vitalsWriteTypes,
+          contains(HealthDataType.BLOOD_PRESSURE_SYSTOLIC));
+      expect(HealthDataService.vitalsWriteTypes,
+          contains(HealthDataType.BLOOD_PRESSURE_DIASTOLIC));
+      expect(HealthDataService.vitalsWriteTypes,
+          contains(HealthDataType.BLOOD_GLUCOSE));
+    });
+
+    test('weight was added for Tier 1 write-back alongside BP/glucose', () {
+      expect(
+          HealthDataService.vitalsWriteTypes, contains(HealthDataType.WEIGHT));
+      // 2 BP components + glucose + weight — pinned so a future addition is a
+      // deliberate edit here, not a silent drift.
+      expect(HealthDataService.vitalsWriteTypes.length, 4);
+    });
+  });
 }

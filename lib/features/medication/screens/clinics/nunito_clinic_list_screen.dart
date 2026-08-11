@@ -144,11 +144,17 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
               child: _isLoading
                   ? Center(child: CircularProgressIndicator(color: ext.mark(med)))
                   : _clinics.isEmpty
-                      ? EmptyState(
-                          icon: Symbols.local_hospital_rounded,
-                          title: 'No clinics added',
-                          message: 'Add clinics and hospitals you visit',
-                          accent: med,
+                      // Hosted in a scroller: the Expanded hands the empty
+                      // state exactly the height the header leaves over, and
+                      // at large Dynamic Type the circle + title + message
+                      // need more than that (bottom overflow at 200%).
+                      ? _ScrollableFill(
+                          child: EmptyState(
+                            icon: Symbols.local_hospital_rounded,
+                            title: 'No clinics added',
+                            message: 'Add clinics and hospitals you visit',
+                            accent: med,
+                          ),
                         )
                       : _buildClinicList(ext, med),
             ),
@@ -341,5 +347,29 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
       default:
         return Symbols.local_hospital_rounded;
     }
+  }
+}
+
+/// Gives its child the incoming viewport height as a MINIMUM instead of a
+/// fixed size, and lets it scroll past that.
+///
+/// Anything dropped into an [Expanded] gets a tight height, which is fine
+/// until Dynamic Type grows the content past it — then a centred column of
+/// text simply gets clipped ("BOTTOM OVERFLOWED"). Because the constraint is
+/// only a minimum, layout at default text sizes is byte-for-byte unchanged.
+class _ScrollableFill extends StatelessWidget {
+  final Widget child;
+  const _ScrollableFill({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: child,
+        ),
+      ),
+    );
   }
 }

@@ -4,9 +4,12 @@ import 'package:intl/intl.dart';
 
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../medication/services/today_schedule_service.dart';
+import '../../medication/services/dose_undo.dart';
 import '../../medication/screens/nunito_take_medication_sheet.dart';
 import '../../medication/screens/vitals/blood_pressure_screen.dart';
 import '../../medication/screens/vitals/blood_sugar_screen.dart';
+import '../../medication/screens/vitals/weight_screen.dart';
+import '../../medication/screens/vitals/mood_screen.dart';
 import '../../water/services/water_service.dart';
 import '../../water/models/beverage_type.dart';
 import '../../steps/services/step_service.dart';
@@ -47,6 +50,10 @@ class LogSomethingSheet {
             _tile(ext, Symbols.bloodtype_rounded, ext.medicine, 'Blood sugar',
                 'Log a glucose reading',
                 () => run(() => logBloodSugar(context))),
+            _tile(ext, Symbols.monitor_weight_rounded, ext.medicine, 'Weight',
+                'Log a reading', () => run(() => logWeight(context))),
+            _tile(ext, Symbols.mood_rounded, ext.medicine, 'Mood',
+                'Log how you feel', () => run(() => logMood(context))),
             _tile(ext, Symbols.directions_walk_rounded, ext.steps, 'Steps',
                 'Add steps', () => run(() => logSteps(context))),
             _tile(ext, Symbols.bedtime_rounded, ext.sleep, 'Sleep',
@@ -76,7 +83,9 @@ class LogSomethingSheet {
   static Future<void> logDose(BuildContext context) async {
     final now = DateTime.now();
     final doses = await TodayScheduleService.getTodaysDoses(now);
-    final pending = doses.where((d) => !d.isTaken && !d.isSkipped).toList()
+    final pending = doses
+        .where((d) => !d.isTaken && !d.isSkipped && !d.isPreLogged)
+        .toList()
       ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     if (!context.mounted) return;
     if (pending.isEmpty) {
@@ -113,8 +122,12 @@ class LogSomethingSheet {
     );
   }
 
-  static Future<void> _openTake(BuildContext context, ScheduledDose dose) {
-    return showModalBottomSheet<Map<String, dynamic>>(
+  /// Show the take sheet and confirm whatever it wrote with an Undo — quick-log
+  /// is the fastest way into a dose, so it's the one that most needs a way back
+  /// out. [DoseUndo] also reverses the stock decrement, which deleting the log
+  /// alone would not.
+  static Future<void> _openTake(BuildContext context, ScheduledDose dose) async {
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -123,15 +136,31 @@ class LogSomethingSheet {
         scheduledTime: dose.scheduledTime,
       ),
     );
+    if (!context.mounted) return;
+    DoseUndo.confirmSheetResult(context, result, dose.medicine.name);
   }
 
   static Future<void> logWater(BuildContext context) async {
     final beverage =
         WaterService.getBeverage('water') ?? BeverageType.defaultBeverages.first;
-    await WaterService.addWaterLog(amountMl: 250, beverage: beverage);
-    if (context.mounted) {
-      context.toastSuccess('Added 250 ml of water');
-    }
+    // addWaterLog returns the updated day whose last log is the one just added —
+    // capture its id so this one-tap write can be taken back (mirrors the water
+    // dashboard's own quick-add Undo).
+    final updated =
+        await WaterService.addWaterLog(amountMl: 250, beverage: beverage);
+    final addedLogId = updated.logs.isNotEmpty ? updated.logs.last.id : null;
+    if (!context.mounted) return;
+    context.toastSuccess(
+      'Added 250 ml of water',
+      action: addedLogId == null
+          ? null
+          : AppToastAction(
+              label: 'Undo',
+              onPressed: () async {
+                await WaterService.removeWaterLog(addedLogId);
+              },
+            ),
+    );
   }
 
   static Future<void> logBloodPressure(BuildContext context) =>
@@ -141,6 +170,12 @@ class LogSomethingSheet {
   static Future<void> logBloodSugar(BuildContext context) =>
       Navigator.push(context,
           MaterialPageRoute(builder: (_) => const BloodSugarScreen()));
+
+  static Future<void> logWeight(BuildContext context) => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => const WeightScreen()));
+
+  static Future<void> logMood(BuildContext context) => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => const MoodScreen()));
 
   static Future<void> logSteps(BuildContext context) => StepManualEntrySheet.show(
         context,

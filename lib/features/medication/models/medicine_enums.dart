@@ -127,6 +127,64 @@ enum DosageForm {
   }
 }
 
+/// How a medicine is administered. Distinct from [DosageForm]: most forms
+/// already imply a route (tablet→oral, cream→topical), but a few are
+/// genuinely ambiguous — an injection could be IM/SC/IV, drops could be for
+/// eyes/ears/nose. This field disambiguates those cases; it is optional and
+/// defaults to unset for medicines added before it existed.
+enum AdministrationRoute {
+  oral,
+  sublingual,
+  buccal,
+  topical,
+  transdermal,
+  inhaled,
+  nasal,
+  ophthalmic,
+  otic,
+  rectal,
+  vaginal,
+  subcutaneousInjection,
+  intramuscularInjection,
+  intravenousInjection,
+  other;
+
+  String get displayName {
+    switch (this) {
+      case AdministrationRoute.oral:
+        return 'Oral (by mouth)';
+      case AdministrationRoute.sublingual:
+        return 'Sublingual (under tongue)';
+      case AdministrationRoute.buccal:
+        return 'Buccal (cheek)';
+      case AdministrationRoute.topical:
+        return 'Topical (on skin)';
+      case AdministrationRoute.transdermal:
+        return 'Transdermal (patch)';
+      case AdministrationRoute.inhaled:
+        return 'Inhaled';
+      case AdministrationRoute.nasal:
+        return 'Nasal';
+      case AdministrationRoute.ophthalmic:
+        return 'Eye';
+      case AdministrationRoute.otic:
+        return 'Ear';
+      case AdministrationRoute.rectal:
+        return 'Rectal';
+      case AdministrationRoute.vaginal:
+        return 'Vaginal';
+      case AdministrationRoute.subcutaneousInjection:
+        return 'Subcutaneous injection';
+      case AdministrationRoute.intramuscularInjection:
+        return 'Intramuscular injection';
+      case AdministrationRoute.intravenousInjection:
+        return 'Intravenous injection';
+      case AdministrationRoute.other:
+        return 'Other';
+    }
+  }
+}
+
 /// Frequency types for medication scheduling
 enum FrequencyType {
   onceDaily,
@@ -218,7 +276,11 @@ enum MedicineStatus {
   skipped,
   missed,
   snoozed,
-  pending;
+  pending,
+  // Appended at the END, not inserted mid-enum: MedicineLog.toJson/fromJson
+  // serialize this by `.index`, so inserting earlier would corrupt any
+  // stored data that round-trips through it.
+  preLogged;
 
   String get displayName {
     switch (this) {
@@ -232,6 +294,8 @@ enum MedicineStatus {
         return 'Snoozed';
       case MedicineStatus.pending:
         return 'Pending';
+      case MedicineStatus.preLogged:
+        return 'Pre-logged';
     }
   }
 }

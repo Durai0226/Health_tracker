@@ -8,18 +8,20 @@ import '../models/medicine_log.dart';
 import '../models/drug_interaction.dart';
 import '../models/medicine_enums.dart';
 import '../services/medicine_storage_service.dart';
+import '../services/dose_undo.dart';
 import '../services/medication_reminder_service.dart';
 import '../services/drug_interaction_service.dart';
 import '../services/drug_name_catalog.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/ai/ai_assistant.dart';
-import '../../../core/ai/refill_predictor.dart';
-import '../../../core/ai/med_safety_checker.dart';
-import '../../../core/ai/insight.dart';
-import '../../../core/ai/insight_engine.dart';
-import '../../../core/ai/adherence_analyzer.dart';
-import '../../../core/ai/streak_engine.dart';
-import '../../../core/ai/adaptive_timing.dart';
+import '../../../core/health/coach_text.dart';
+import '../../../core/health/drug_info_catalog.dart';
+import '../../../core/health/refill_predictor.dart';
+import '../../../core/health/med_safety_checker.dart';
+import '../../../core/health/insight.dart';
+import '../../../core/health/insight_engine.dart';
+import '../../../core/health/adherence_analyzer.dart';
+import '../../../core/health/streak_engine.dart';
+import '../../../core/health/adaptive_timing.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
 
@@ -106,21 +108,27 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       _computeInteractions(medicines);
 
       // Load recent logs
-      _recentLogs = await MedicineCleanStorageService.getLogsForMedicine(_medicine.id);
+      // Deduped per slot so one dose can't appear twice in the history list.
+      _recentLogs = MedicineCleanStorageService.dedupeByDose(
+          await MedicineCleanStorageService.getLogsForMedicine(_medicine.id));
       _recentLogs.sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
       if (_recentLogs.length > 10) {
         _recentLogs = _recentLogs.sublist(0, 10);
       }
 
       // Calculate stats
-      final allLogs = await MedicineCleanStorageService.getLogsForMedicine(_medicine.id);
-      final taken = allLogs.where((l) => l.isTaken).length;
-      final total = allLogs.length;
-      _stats = {
-        'taken': taken,
-        'total': total,
-        'adherence': total > 0 ? (taken / total * 100).toInt() : 0,
-      };
+      final allLogs = MedicineCleanStorageService.dedupeByDose(
+          await MedicineCleanStorageService.getLogsForMedicine(_medicine.id));
+      // Adherence = taken / SCHEDULED doses, never taken / number-of-log-rows:
+      // log rows are outcomes, not the doses that were due, so the old ratio
+      // read 0% for a brand-new medicine with no logs and was meaningless in
+      // general. getAdherenceStatsForMedicine owns the scheduled-slot rule
+      // (due-only, from the medicine's creation, PRN/archived excluded) and is
+      // the same source the dashboard's headline adherence uses.
+      _stats = await MedicineCleanStorageService.getAdherenceStatsForMedicine(
+        _medicine.id,
+        days: _lifetimeWindowDays,
+      );
 
       _computeRefill(allLogs);
       await _computeSafety(medicines);
@@ -131,6 +139,22 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       debugPrint('Error loading data: $e');
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  /// Trailing-window length that covers this medicine's whole life, so the
+  /// stats row stays all-time (matching the Taken tile's existing meaning)
+  /// rather than silently becoming a 30-day figure. Slots before `createdAt`
+  /// are skipped by the service anyway, so over-reaching is harmless — hence
+  /// the +2 slack, which also absorbs the DST hour that can make a whole-day
+  /// `difference().inDays` come back one short.
+  int get _lifetimeWindowDays {
+    final now = DateTime.now();
+    final created = _medicine.createdAt;
+    final days = DateTime(now.year, now.month, now.day)
+            .difference(DateTime(created.year, created.month, created.day))
+            .inDays +
+        2;
+    return days < 1 ? 1 : days;
   }
 
   /// This medicine's representative name for interaction lookups
@@ -168,7 +192,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       _refill = null;
       return;
     }
-    final taken = allLogs.where((l) => l.isTaken).toList();
+    final taken = allLogs.where((l) => l.countsAsTaken).toList();
     _refill = RefillPredictor.predict(
       currentStock: _medicine.currentStock!,
       doseTimes: taken.map((l) => l.actionTime ?? l.scheduledTime).toList(),
@@ -217,17 +241,17 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
 
     // Adherence % + dose streak from the log history.
     final history = allLogs
-        .where((l) => l.isTaken || l.isMissed || l.isSkipped)
+        .where((l) => l.countsAsTaken || l.isMissed || l.isSkipped)
         .map((l) => DoseEvent(
               l.scheduledTime,
-              l.isTaken
+              l.countsAsTaken
                   ? DoseOutcome.taken
                   : (l.isMissed ? DoseOutcome.missed : DoseOutcome.skipped),
             ))
         .toList();
     final adherence = history.isEmpty ? null : AdherenceAnalyzer.adherence(history);
     final takenDays = allLogs
-        .where((l) => l.isTaken)
+        .where((l) => l.countsAsTaken)
         .map((l) => DateTime(l.scheduledTime.year, l.scheduledTime.month, l.scheduledTime.day))
         .toSet();
     final streak = StreakEngine.compute(completedDays: takenDays, today: DateTime.now());
@@ -243,6 +267,9 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     final times = _medicine.schedule.times;
     if (times.isNotEmpty) {
       final scheduledMin = times.first.hour * 60 + times.first.minute;
+      // Deliberately l.isTaken, NOT countsAsTaken: a pre-log's actionTime is
+      // an artificial early timestamp, not a real "when do I actually take
+      // this dose" data point — folding it in would corrupt the suggestion.
       final actualMins = allLogs
           .where((l) => l.isTaken && l.actionTime != null)
           .map((l) => l.actionTime!.hour * 60 + l.actionTime!.minute)
@@ -290,12 +317,12 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       return '${_medicine.name} + $other (${i.severity.displayName}): ${i.description}.$rec';
     }).toList();
 
-    final result = await AiAssistant().explainInteractions(descriptions);
+    final result = const CoachText().explainInteractions(descriptions);
 
     if (!mounted) return;
     setState(() {
       _interactionExplanation = result;
-      _interactionExplainFailed = result == null;
+      _interactionExplainFailed = false; // deterministic: cannot fail
       _explainingInteractions = false;
     });
   }
@@ -312,25 +339,69 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     }
   }
 
-  /// Open the shared Ask-AI sheet scoped to this medicine. Always available
-  /// (free on-device engine); the sheet also self-guards.
-  void _askAi() {
+  /// Show the curated offline monograph for this medicine as a plain reference
+  /// section — what it's for, common side effects, whether to take it with food,
+  /// and precautions. No question to phrase, no generation: it's a bundled
+  /// lookup by active ingredient. Absent from the catalogue → say so plainly.
+  Future<void> _showAbout() async {
     _hapticService.light();
-    final name = _medicine.name;
-    final dose = _medicine.displayDosage;
-    AiAskSheet.show(
+    await DrugInfoCatalog.ensureLoaded();
+    if (!mounted) return;
+
+    // Try the stored generic, then the display name, then resolve a BRAND name
+    // to its generic. Without the last hop a medicine entered as "Glucophage"
+    // found no monograph even though the app can map it to metformin.
+    final info = DrugInfoCatalog.find(
+          generic: _medicine.genericName,
+          displayName: _medicine.name,
+        ) ??
+        DrugInfoCatalog.find(
+          generic: DrugNameCatalog.genericFor(_medicine.name),
+        );
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+
+    Widget para(String heading, String body) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(heading.toUpperCase(),
+                  style: tt.labelSmall?.copyWith(
+                      color: ext.textSecondary, letterSpacing: 0.5)),
+              const SizedBox(height: 4),
+              Text(body,
+                  style: tt.bodyMedium
+                      ?.copyWith(color: ext.textPrimary, height: 1.45)),
+            ],
+          ),
+        );
+
+    await AppBottomSheet.show(
       context,
-      title: 'Ask about $name',
-      accent: AppColorsExt.of(context).medicine,
-      hint: 'e.g. Should I take this with food?',
-      disclaimer:
-          'AI info — not medical advice. Consult your doctor/pharmacist.',
-      onAsk: (q) => AiAssistant().medicineAnswer(
-        name: name,
-        dose: dose,
-        generic: _medicine.genericName,
-        question: q,
-        instructions: _medicine.instructions,
+      title: 'About ${_medicine.name}',
+      icon: Symbols.info_rounded,
+      accent: ext.medicine,
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: info == null
+            ? [
+                Text(
+                  'We don\'t have reference information for this medicine. '
+                  'Your pharmacist or the leaflet in the box is the best source.',
+                  style: tt.bodyMedium
+                      ?.copyWith(color: ext.textSecondary, height: 1.45),
+                ),
+              ]
+            : [
+                if (info.klass.isNotEmpty) para('Type', info.klass),
+                para('What it\'s for', info.uses),
+                para('Common side effects', info.sideEffects),
+                para('With food?', info.food),
+                para('Good to know', info.precautions),
+                const SafetyDisclaimerBar(),
+              ],
       ),
     );
   }
@@ -434,9 +505,9 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       ),
       actions: [
         IconButton(
-          icon: Icon(Symbols.auto_awesome_rounded, color: onHeader),
-          tooltip: 'Ask AI about this medicine',
-          onPressed: _askAi,
+          icon: Icon(Symbols.info_rounded, color: onHeader),
+          tooltip: 'About this medicine',
+          onPressed: _showAbout,
         ),
         IconButton(
           icon: Icon(Symbols.edit_rounded, color: onHeader),
@@ -551,28 +622,51 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
 
   Widget _buildStatsSection() {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final scheduled = (_stats['scheduled'] as int?) ?? 0;
+    // Nothing was ever due (brand-new medicine, PRN, or archived) → adherence
+    // is undefined. Show the same honest no-data state the dashboard shows
+    // ("--" plus "no doses scheduled yet") instead of fabricating a percentage.
+    final hasAdherence = scheduled > 0;
+
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.gutter),
-      child: StatTileRow(
-        tiles: [
-          StatTile(
-            label: 'Adherence',
-            value: '${_stats['adherence'] ?? 0}%',
-            icon: Symbols.trending_up_rounded,
-            accent: ext.success,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          StatTileRow(
+            tiles: [
+              StatTile(
+                label: 'Adherence',
+                value: hasAdherence ? '${_stats['adherenceRate'] ?? 0}%' : '--',
+                icon: Symbols.trending_up_rounded,
+                accent: ext.success,
+              ),
+              StatTile(
+                label: 'Taken',
+                value: '${_stats['taken'] ?? 0}',
+                icon: Symbols.check_circle_rounded,
+                accent: ext.info,
+              ),
+              // Scheduled, not "total log rows": it is the denominator of the
+              // adherence tile beside it, so the row now reads consistently.
+              StatTile(
+                label: 'Scheduled',
+                value: '$scheduled',
+                icon: Symbols.event_repeat_rounded,
+                accent: ext.medicine,
+              ),
+            ],
           ),
-          StatTile(
-            label: 'Taken',
-            value: '${_stats['taken'] ?? 0}',
-            icon: Symbols.check_circle_rounded,
-            accent: ext.info,
-          ),
-          StatTile(
-            label: 'Total',
-            value: '${_stats['total'] ?? 0}',
-            icon: Symbols.history_rounded,
-            accent: ext.medicine,
-          ),
+          if (!hasAdherence) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              _medicine.schedule.isPRN
+                  ? 'taken as needed — no fixed schedule'
+                  : 'no doses scheduled yet',
+              style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+            ),
+          ],
         ],
       ),
     );
@@ -684,6 +778,10 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             ),
             const SizedBox(height: AppSpacing.md),
             _buildDetailRow('Form', _medicine.dosageForm.displayName),
+            if (_medicine.route != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow('Route', _medicine.route!.displayName),
+            ],
             if (_medicine.strength != null) ...[
               const SizedBox(height: AppSpacing.sm),
               _buildDetailRow('Strength', _medicine.strength!),
@@ -1010,7 +1108,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        'AI info — not medical advice. Consult your doctor/pharmacist.',
+                        'General information — not medical advice. '
+                        'Consult your doctor or pharmacist.',
                         style: tt.bodySmall?.copyWith(
                             color: ext.medicine.onContainer.withOpacity(0.75)),
                       ),
@@ -1214,10 +1313,22 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   Widget _buildLogItem(MedicineLog log) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    final status = log.isTaken ? 'Taken' : (log.isSkipped ? 'Skipped' : 'Missed');
+    final status = log.isTaken
+        ? 'Taken'
+        : (log.isPreLogged
+            ? 'Pre-logged'
+            : (log.isSkipped ? 'Skipped' : 'Missed'));
+    // Status colours must match the medication dashboard exactly: Skipped reads
+    // as neutral grey, Missed as amber. They used to be swapped between the two
+    // surfaces (amber = "Missed" on the dashboard, amber = "Skipped" here),
+    // which is the sharpest comprehension failure for adherence data. A null
+    // swatch means "no accent" — the neutral grey used for Skipped.
     final swatch = log.isTaken
         ? ext.success
-        : (log.isSkipped ? ext.warning : ext.error);
+        : (log.isPreLogged ? ext.info : (log.isSkipped ? null : ext.warning));
+    final statusDot = swatch?.base ?? ext.textTertiary;
+    final statusBg = swatch?.container ?? ext.textTertiary.withOpacity(0.12);
+    final statusFg = swatch?.onContainer ?? ext.textTertiary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -1229,7 +1340,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: swatch.base,
+                color: statusDot,
                 shape: BoxShape.circle,
               ),
             ),
@@ -1252,13 +1363,13 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: swatch.container,
+                color: statusBg,
                 borderRadius: AppRadius.brMd,
               ),
               child: Text(
                 status,
                 style: tt.labelMedium?.copyWith(
-                    color: swatch.onContainer, fontWeight: FontWeight.w600),
+                    color: statusFg, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -1272,7 +1383,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   /// but never recorded as taken.
   Future<void> _logDose() async {
     _hapticService.medium();
-    await showModalBottomSheet<Map<String, dynamic>>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1282,7 +1393,10 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       ),
     );
     // The write already bumped `revision`, which refreshed this screen — no
-    // second full-loader reload.
+    // second full-loader reload. Undo's writes bump it again, so the confirm
+    // needs no `afterUndo` callback either.
+    if (!mounted) return;
+    DoseUndo.confirmSheetResult(context, result, _medicine.name);
   }
 
   Widget _buildActionsSection() {

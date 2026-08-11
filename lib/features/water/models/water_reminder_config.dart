@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/quiet_hours.dart';
 
 /// Persisted configuration for interval-based water reminders.
 ///
@@ -27,6 +28,13 @@ class WaterReminderConfig {
   /// wake → bedtime window.
   final bool respectQuietHours;
 
+  /// Opt-in: derive the [respectQuietHours] window from the Sleep feature's
+  /// real data instead of the hydration profile's fixed wake/bed hours.
+  /// Resolution falls back silently — a real sleep average (when there's
+  /// enough history) → the stated sleep schedule → the hydration profile's
+  /// hours — see `ReminderRescheduleService.rescheduleWaterReminders`.
+  final bool useSleepSchedule;
+
   const WaterReminderConfig({
     this.enabled = false,
     this.startHour = 8,
@@ -38,26 +46,33 @@ class WaterReminderConfig {
     this.sound = 'default',
     this.pauseWhenGoalReached = true,
     this.respectQuietHours = true,
+    this.useSleepSchedule = false,
   });
 
   TimeOfDay get startTime => TimeOfDay(hour: startHour, minute: startMinute);
   TimeOfDay get endTime => TimeOfDay(hour: endHour, minute: endMinute);
 
   /// Reminder times to actually schedule, filtered by the quiet-hours window
-  /// when [respectQuietHours] is on. [wakeHour]/[bedHour] come from the
-  /// hydration profile.
-  List<int> effectiveReminderMinutes({int wakeHour = 7, int bedHour = 22}) {
-    final sorted = [...reminderMinutes]..sort();
-    if (!respectQuietHours) return sorted;
-    final lo = wakeHour * 60;
-    final hi = bedHour * 60;
-    if (lo <= hi) {
-      return sorted.where((m) => m >= lo && m <= hi).toList();
-    }
-    // Overnight awake window (e.g. a night-shift profile: wake 22:00, bed 06:00)
-    // wraps past midnight, so a single lo..hi range would filter out everything.
-    return sorted.where((m) => m >= lo || m <= hi).toList();
-  }
+  /// when [respectQuietHours] is on. [wakeHour]/[bedHour] (and the optional
+  /// [wakeMinute]/[bedMinute], default 0) come from the hydration profile or,
+  /// when [useSleepSchedule] is on, a sleep-derived window resolved by the
+  /// caller. Delegates to the shared [QuietHours] primitive so this filter
+  /// isn't water's own private copy — see its doc for why no other reminder
+  /// type in this app applies it today.
+  List<int> effectiveReminderMinutes({
+    int wakeHour = 7,
+    int wakeMinute = 0,
+    int bedHour = 22,
+    int bedMinute = 0,
+  }) =>
+      QuietHours.filterMinutes(
+        reminderMinutes,
+        respectQuietHours: respectQuietHours,
+        wakeHour: wakeHour,
+        bedHour: bedHour,
+        wakeMinute: wakeMinute,
+        bedMinute: bedMinute,
+      );
 
   WaterReminderConfig copyWith({
     bool? enabled,
@@ -70,6 +85,7 @@ class WaterReminderConfig {
     String? sound,
     bool? pauseWhenGoalReached,
     bool? respectQuietHours,
+    bool? useSleepSchedule,
   }) {
     return WaterReminderConfig(
       enabled: enabled ?? this.enabled,
@@ -82,6 +98,7 @@ class WaterReminderConfig {
       sound: sound ?? this.sound,
       pauseWhenGoalReached: pauseWhenGoalReached ?? this.pauseWhenGoalReached,
       respectQuietHours: respectQuietHours ?? this.respectQuietHours,
+      useSleepSchedule: useSleepSchedule ?? this.useSleepSchedule,
     );
   }
 
@@ -96,6 +113,7 @@ class WaterReminderConfig {
         'sound': sound,
         'pauseWhenGoalReached': pauseWhenGoalReached,
         'respectQuietHours': respectQuietHours,
+        'useSleepSchedule': useSleepSchedule,
       };
 
   factory WaterReminderConfig.fromJson(Map<String, dynamic> json) {
@@ -113,6 +131,7 @@ class WaterReminderConfig {
       sound: json['sound'] as String? ?? 'default',
       pauseWhenGoalReached: json['pauseWhenGoalReached'] as bool? ?? true,
       respectQuietHours: json['respectQuietHours'] as bool? ?? true,
+      useSleepSchedule: json['useSleepSchedule'] as bool? ?? false,
     );
   }
 }

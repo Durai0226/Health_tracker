@@ -62,7 +62,7 @@ class CyclePredictor {
         continue;
       }
       final last = runs.last.last;
-      final gap = d.difference(last).inDays;
+      final gap = _daysBetween(last, d);
       if (gap == 0) continue; // duplicate day
       if (gap <= 2) {
         runs.last.add(d);
@@ -75,13 +75,13 @@ class CyclePredictor {
     for (var i = 0; i < runs.length; i++) {
       final start = runs[i].first;
       final periodEnd = runs[i].last;
-      final periodLen = periodEnd.difference(start).inDays + 1;
+      final periodLen = _daysBetween(start, periodEnd) + 1;
       if (i < runs.length - 1) {
         final nextStart = runs[i + 1].first;
-        final cycleLen = nextStart.difference(start).inDays;
+        final cycleLen = _daysBetween(start, nextStart);
         cycles.add(DerivedCycle(
           start: start,
-          end: nextStart.subtract(const Duration(days: 1)),
+          end: _addDays(nextStart, -1),
           cycleLengthDays: cycleLen,
           periodLengthDays: periodLen,
         ));
@@ -149,7 +149,7 @@ class CyclePredictor {
     if (pregnancyMode) {
       final start =
           pregnancyStartDate == null ? null : _dayOnly(pregnancyStartDate);
-      final gestDays = start == null ? null : today.difference(start).inDays;
+      final gestDays = start == null ? null : _daysBetween(start, today);
       return CyclePrediction(
         state: CycleState.pregnancy,
         confidence: PredictionConfidence.low,
@@ -169,16 +169,16 @@ class CyclePredictor {
         _learnedCycleLength(stats, typicalCycleLength, completedCount);
     final periodLen = stats.medianPeriodLength ?? typicalPeriodLength;
 
-    final predictedStart = lastStart.add(Duration(days: learnedCycle));
+    final predictedStart = _addDays(lastStart, learnedCycle);
     final half = _windowHalfWidth(stats.cycleLengthStd);
-    final windowStart = predictedStart.subtract(Duration(days: half));
-    final windowEnd = predictedStart.add(Duration(days: half));
-    final ovulation = predictedStart.subtract(Duration(days: lutealPhaseLength));
-    final fertileStart = ovulation.subtract(const Duration(days: 5));
-    final fertileEnd = ovulation.add(const Duration(days: 1));
+    final windowStart = _addDays(predictedStart, -half);
+    final windowEnd = _addDays(predictedStart, half);
+    final ovulation = _addDays(predictedStart, -lutealPhaseLength);
+    final fertileStart = _addDays(ovulation, -5);
+    final fertileEnd = _addDays(ovulation, 1);
 
-    final dayOfCycle = today.difference(lastStart).inDays + 1;
-    final daysUntil = predictedStart.difference(today).inDays;
+    final dayOfCycle = _daysBetween(lastStart, today) + 1;
+    final daysUntil = _daysBetween(today, predictedStart);
     final phase = phaseOn(
       today,
       lastStart: lastStart,
@@ -228,7 +228,7 @@ class CyclePredictor {
     required int lutealLength,
   }) {
     final len = cycleLength <= 0 ? 28 : cycleLength;
-    final offset = _dayOnly(date).difference(_dayOnly(lastStart)).inDays;
+    final offset = _daysBetween(lastStart, date);
     var cd = offset % len;
     if (cd < 0) cd += len;
 
@@ -322,6 +322,25 @@ class CyclePredictor {
   }
 
   static DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Whole CALENDAR days from [from] to [to], time-of-day ignored.
+  ///
+  /// Never `to.difference(from).inDays` on local DateTimes: a local day is 23
+  /// or 25 hours across a DST transition, so an elapsed-time diff drifts by a
+  /// full day for any span containing one — and a menstrual cycle is ~28 days,
+  /// so most spans do. Anchoring both ends at UTC midnight keeps the civil
+  /// date but removes DST from the arithmetic.
+  static int _daysBetween(DateTime from, DateTime to) =>
+      DateTime.utc(to.year, to.month, to.day)
+          .difference(DateTime.utc(from.year, from.month, from.day))
+          .inDays;
+
+  /// [d] shifted by [days] calendar days, normalized to date-only. The
+  /// DateTime constructor normalizes an out-of-range `day` field against the
+  /// local calendar, so this is DST-safe where `add(Duration(days: n))` is not
+  /// (that would land the predicted date on the wrong calendar day).
+  static DateTime _addDays(DateTime d, int days) =>
+      DateTime(d.year, d.month, d.day + days);
 
   static double _mean(List<int> xs) =>
       xs.isEmpty ? 0 : xs.reduce((a, b) => a + b) / xs.length;

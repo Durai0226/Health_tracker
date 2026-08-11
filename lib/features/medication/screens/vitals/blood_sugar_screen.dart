@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
-import '../../../../core/ai/vitals_analyzer.dart';
-import '../../../../core/ai/insight_engine.dart';
-import '../../../../core/ai/vitals_pattern_detector.dart';
+import '../../../../core/health/vitals_analyzer.dart';
+import '../../../../core/health/insight_engine.dart';
+import '../../../../core/health/vitals_pattern_detector.dart';
 import '../../../../core/services/clean_storage_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
@@ -20,6 +20,26 @@ import 'blood_sugar_report_screen.dart';
 /// Blood Sugar tracker — log, classify per-context (ADA), estimated A1C, trend.
 class BloodSugarScreen extends StatefulWidget {
   const BloodSugarScreen({super.key});
+
+  /// How recent a severe-low reading has to be for the emergency treatment
+  /// card to still be describing something actionable. Identical to the
+  /// blood-pressure screen's crisis-card window, so both vitals emergencies
+  /// expire on the same rule.
+  @visibleForTesting
+  static const Duration emergencyCardWindow = Duration(hours: 48);
+
+  /// True when [latest] is a severe low that is still current.
+  ///
+  /// The card fires a real medical emergency — "take 15 g of fast-acting
+  /// carbs… use glucagon and get help now". Unbounded, a severe low logged
+  /// days ago re-fired it on every visit, so the screen asserted an emergency
+  /// that had long since passed. The classification itself is untouched: a
+  /// stale severe low is still labelled Severe Low everywhere on the screen,
+  /// it just no longer claims to be happening now.
+  @visibleForTesting
+  static bool showsSevereLowEmergency(GlucoseReading latest, DateTime now) =>
+      latest.isEmergencyLow &&
+      now.difference(latest.takenAt) < emergencyCardWindow;
 
   @override
   State<BloodSugarScreen> createState() => _BloodSugarScreenState();
@@ -110,7 +130,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
       body: Column(
         children: [
           AppHeader(
-            title: 'Blood Sugar',
+            title: 'Blood sugar',
             icon: Symbols.water_drop_rounded,
             accent: accent,
             leading: AppIconButton(
@@ -119,6 +139,10 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
               accent: accent,
               onPressed: () => Navigator.pop(context),
             ),
+            // NB: no manual spacers between these — AppHeader already inserts
+            // an 8pt gap before every action. The explicit SizedBox that used
+            // to sit here was itself treated as an action, so it cost
+            // 8 + 8 + 8 = 24pt and pushed the header off a 320pt screen.
             actions: [
               AppChip(
                 label: _unitLabel,
@@ -126,7 +150,6 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
                 selected: true,
                 onTap: _toggleUnit,
               ),
-              const SizedBox(width: AppSpacing.sm),
               VitalsReminderButton(
                 id: 900021,
                 prefKey: 'vitals_glucose_reminder',
@@ -191,7 +214,9 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 120),
         children: [
-          if (latest.isEmergencyLow) ...[
+          // Recency-bounded — see [BloodSugarScreen.showsSevereLowEmergency].
+          if (BloodSugarScreen.showsSevereLowEmergency(
+              latest, DateTime.now())) ...[
             VitalsEmergencyCard(
               title: 'Severe low blood sugar',
               message:
@@ -255,7 +280,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
           AppCard(
             child: VitalsTrendChart(
               series: [
-                VitalsSeries(values: series, color: ext.mark(accent), label: 'Glucose'),
+                VitalsSeries(values: series, color: ext.mark(accent), label: 'Blood sugar'),
               ],
               minY: minY,
               maxY: maxY,
@@ -296,7 +321,9 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Row(
             children: [
-              Container(width: 10, height: 10, decoration: BoxDecoration(color: band, shape: BoxShape.circle)),
+              // Icon + label, never colour alone — the class has to survive
+              // colour-blindness (WCAG 1.4.1); the dot it replaced did not.
+              Icon(VitalsColors.glucoseIcon(cls), size: 20, color: band),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -442,6 +469,7 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
   GlucoseContext _context = GlucoseContext.fasting;
   late DateTime _takenAt;
   String? _error;
+  bool _saving = false;
 
   bool get _isMmol => widget.unit == GlucoseUnit.mmoll;
   String get _unitLabel => _isMmol ? 'mmol/L' : 'mg/dL';
@@ -487,19 +515,30 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final v = _mgdl;
     if (v == null || !VitalsAnalyzer.isValidGlucoseMgdl(v)) {
       setState(() => _error = 'Enter a valid glucose value.');
       return;
     }
+    setState(() => _saving = true);
     HapticFeedback.mediumImpact();
     final e = widget.existing;
     final reading = GlucoseReading(
       id: e?.id ?? 'gl_${DateTime.now().microsecondsSinceEpoch}',
+      // See blood_pressure_screen.dart's identical fix for why this is
+      // explicitly preserved rather than left to the active-profile fallback.
+      dependentId: e?.dependentId,
       valueMgdl: v,
       context: _context,
       takenAt: _takenAt,
       carbs: int.tryParse(_carbs.text),
+      // insulinUnits/medNote/tags have no control on this form — every edit
+      // through this screen used to silently wipe a diabetic user's insulin
+      // dose and medication-note history.
+      insulinUnits: e?.insulinUnits,
+      medNote: e?.medNote,
+      tags: e?.tags ?? const [],
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       createdAt: e?.createdAt ?? DateTime.now(),
     );
@@ -553,7 +592,7 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _value,
-          label: 'Glucose ($_unitLabel)',
+          label: 'Blood sugar ($_unitLabel)',
           hint: _isMmol ? '5.5' : '100',
           keyboardType: TextInputType.numberWithOptions(decimal: _isMmol),
           accent: widget.accent,
@@ -583,6 +622,12 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
           accent: widget.accent,
         ),
         const SizedBox(height: AppSpacing.md),
+        _TakenAtField(
+          value: _takenAt,
+          accent: widget.accent,
+          onChanged: (v) => setState(() => _takenAt = v),
+        ),
+        const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _note,
           label: 'Note (optional)',
@@ -601,10 +646,134 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
           accent: widget.accent,
           fullWidth: true,
           size: AppButtonSize.lg,
+          loading: _saving,
           onPressed: _save,
         ),
         const SizedBox(height: AppSpacing.sm),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Optional "when" control for the log sheet.
+//
+// `_takenAt` already existed on this form but nothing ever wrote to it, so a
+// reading could not be back-dated and editing one silently kept the original
+// timestamp with no way to correct it. Defaults to now, so the common case
+// still costs zero taps.
+// ---------------------------------------------------------------------------
+class _TakenAtField extends StatelessWidget {
+  final DateTime value;
+  final AccentSwatch accent;
+  final ValueChanged<DateTime> onChanged;
+
+  const _TakenAtField({
+    required this.value,
+    required this.accent,
+    required this.onChanged,
+  });
+
+  Future<void> _pickDate(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await AppDatePicker.show(
+      context,
+      initial: value,
+      first: DateTime(now.year - 5),
+      // A reading can't have been taken in the future.
+      last: DateTime(now.year, now.month, now.day),
+      accent: accent,
+      title: 'Reading date',
+    );
+    if (picked == null) return;
+    onChanged(DateTime(
+        picked.year, picked.month, picked.day, value.hour, value.minute));
+  }
+
+  Future<void> _pickTime(BuildContext context) async {
+    final picked = await AppTimePicker.show(
+      context,
+      initial: TimeOfDay.fromDateTime(value),
+      accent: accent,
+      title: 'Reading time',
+    );
+    if (picked == null) return;
+    onChanged(DateTime(
+        value.year, value.month, value.day, picked.hour, picked.minute));
+  }
+
+  String _dateLabel() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(value.year, value.month, value.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    return DateFormat(day.year == today.year ? 'MMM d' : 'MMM d, yyyy')
+        .format(day);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Date & time',
+            style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _box(context, Symbols.calendar_today_rounded, _dateLabel(),
+                  () => _pickDate(context)),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _box(
+                  context,
+                  Symbols.schedule_rounded,
+                  TimeOfDay.fromDateTime(value).format(context),
+                  () => _pickTime(context)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _box(
+      BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.brMd,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: ext.surfaceVariant,
+          borderRadius: AppRadius.brMd,
+          border: Border.all(color: ext.outline),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: ext.textTertiary),
+            const SizedBox(width: AppSpacing.sm),
+            // scaleDown only: a long date shrinks to fit on a 320pt screen,
+            // nothing is ever enlarged and no font size is hardcoded.
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(label,
+                    style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

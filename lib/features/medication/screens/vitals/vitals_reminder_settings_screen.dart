@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../../core/services/health_data_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../services/vitals_reminder_service.dart';
+import '../../services/vitals_storage_service.dart';
 
 /// A clear, labeled home for the blood-pressure & blood-sugar "time to measure"
 /// reminders — the same daily nudges the vitals screens' header button sets,
@@ -18,6 +21,65 @@ class VitalsReminderSettingsScreen extends StatefulWidget {
 
 class _VitalsReminderSettingsScreenState
     extends State<VitalsReminderSettingsScreen> {
+  bool _syncEnabled = false;
+  bool _syncLoaded = false;
+  bool _syncToggleBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSyncPref();
+  }
+
+  Future<void> _loadSyncPref() async {
+    try {
+      var enabled = await VitalsStorageService.isHealthConnectSyncEnabled();
+      // Re-validate against the real OS grant, not just the persisted flag —
+      // it can drift true if the user revoked access from the OS's own
+      // Health Connect/Health app settings since last enabling sync here.
+      if (enabled && !await HealthDataService.instance.hasVitalsWritePermission()) {
+        enabled = false;
+        await VitalsStorageService.setHealthConnectSyncEnabled(false);
+      }
+      if (mounted) setState(() {
+        _syncEnabled = enabled;
+        _syncLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('⚠️ Failed to load Health Connect sync preference: $e');
+      if (mounted) setState(() => _syncLoaded = true);
+    }
+  }
+
+  String get _healthAppName => Platform.isIOS ? 'Apple Health' : 'Health Connect';
+
+  Future<void> _toggleSync(bool v) async {
+    if (_syncToggleBusy) return;
+    setState(() => _syncToggleBusy = true);
+    try {
+      if (v) {
+        await HealthDataService.instance.requestVitalsWritePermission();
+        // Re-check real grant state rather than trust requestAuthorization's
+        // bool: on iOS it reports success once the consent sheet completed
+        // without error, regardless of whether the user actually allowed
+        // access — hasVitalsWritePermission queries WRITE status directly,
+        // which iOS does disclose (unlike READ/READ_WRITE).
+        final granted = await HealthDataService.instance.hasVitalsWritePermission();
+        if (!granted) {
+          if (mounted) {
+            context.toastError(
+                'Permission to write to $_healthAppName was not granted.');
+          }
+          return;
+        }
+      }
+      await VitalsStorageService.setHealthConnectSyncEnabled(v);
+      if (mounted) setState(() => _syncEnabled = v);
+    } finally {
+      if (mounted) setState(() => _syncToggleBusy = false);
+    }
+  }
+
   Future<void> _toggle(VitalsReminderSpec s, bool v) async {
     await VitalsReminderService.apply(s, enabled: v);
     if (mounted) setState(() {});
@@ -100,8 +162,33 @@ class _VitalsReminderSettingsScreenState
                         icon: Symbols.bloodtype_rounded,
                         title: 'Blood sugar',
                         acc: acc),
+                    ..._rows(VitalsReminderService.weight,
+                        icon: Symbols.monitor_weight_rounded,
+                        title: 'Weight',
+                        acc: acc),
+                    ..._rows(VitalsReminderService.mood,
+                        icon: Symbols.mood_rounded,
+                        title: 'Mood',
+                        acc: acc),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.md),
+                if (_syncLoaded)
+                  SettingsSection(
+                    title: 'Sync',
+                    footer:
+                        'New blood pressure, blood sugar and weight readings you log are shared with $_healthAppName. Mood has no equivalent in $_healthAppName, so it never syncs. Off by default; existing readings are not synced retroactively.',
+                    children: [
+                      SettingsTile(
+                        icon: Symbols.sync_rounded,
+                        accent: acc,
+                        title: 'Share with $_healthAppName',
+                        subtitle: 'Sync new vitals readings automatically',
+                        switchValue: _syncEnabled,
+                        onSwitchChanged: _syncToggleBusy ? null : _toggleSync,
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),

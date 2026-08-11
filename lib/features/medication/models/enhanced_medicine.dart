@@ -10,6 +10,7 @@ class EnhancedMedicine {
   final String? genericName;
   final String? brandName;
   final DosageForm dosageForm;
+  final AdministrationRoute? route;
   final double dosageAmount;
   final String? dosageUnit; // mg, ml, mcg, etc.
   final String? strength; // e.g., "500mg", "10mg/5ml"
@@ -67,6 +68,7 @@ class EnhancedMedicine {
     this.genericName,
     this.brandName,
     required this.dosageForm,
+    this.route,
     required this.dosageAmount,
     this.dosageUnit,
     this.strength,
@@ -184,6 +186,7 @@ class EnhancedMedicine {
     'genericName': genericName,
     'brandName': brandName,
     'dosageForm': dosageForm.index,
+    'route': route?.index,
     'dosageAmount': dosageAmount,
     'dosageUnit': dosageUnit,
     'strength': strength,
@@ -233,6 +236,7 @@ class EnhancedMedicine {
     genericName: json['genericName'],
     brandName: json['brandName'],
     dosageForm: DosageForm.values[json['dosageForm'] ?? 0],
+    route: json['route'] != null ? AdministrationRoute.values[json['route']] : null,
     dosageAmount: (json['dosageAmount'] ?? 1).toDouble(),
     dosageUnit: json['dosageUnit'],
     strength: json['strength'],
@@ -282,6 +286,10 @@ class EnhancedMedicine {
     String? genericName,
     String? brandName,
     DosageForm? dosageForm,
+    AdministrationRoute? route,
+    // See clearDependentId's doc below — same reason: clearing an
+    // already-set route back to "unset" needs a real clear, not a no-op.
+    bool clearRoute = false,
     double? dosageAmount,
     String? dosageUnit,
     String? strength,
@@ -312,6 +320,11 @@ class EnhancedMedicine {
     List<String>? warnings,
     List<String>? sideEffects,
     String? dependentId,
+    // The ordinary `dependentId` param above can only ever SET a non-null
+    // owner (copyWith's usual `param ?? this.field` can't distinguish "not
+    // passed" from "explicitly clear to null"). Reassigning a medicine back
+    // to self after its dependent profile is deleted needs a real clear.
+    bool clearDependentId = false,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isActive,
@@ -330,6 +343,7 @@ class EnhancedMedicine {
       genericName: genericName ?? this.genericName,
       brandName: brandName ?? this.brandName,
       dosageForm: dosageForm ?? this.dosageForm,
+      route: clearRoute ? null : (route ?? this.route),
       dosageAmount: dosageAmount ?? this.dosageAmount,
       dosageUnit: dosageUnit ?? this.dosageUnit,
       strength: strength ?? this.strength,
@@ -359,7 +373,7 @@ class EnhancedMedicine {
       drugInfo: drugInfo ?? this.drugInfo,
       warnings: warnings ?? this.warnings,
       sideEffects: sideEffects ?? this.sideEffects,
-      dependentId: dependentId ?? this.dependentId,
+      dependentId: clearDependentId ? null : (dependentId ?? this.dependentId),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
       isActive: isActive ?? this.isActive,

@@ -20,6 +20,15 @@ class VitalsTrendChart extends StatelessWidget {
   final double? bandLow;
   final double? bandHigh;
   final Color bandColor;
+
+  /// What the shaded band *means*, e.g. "Shaded band is the normal range
+  /// (90–120 mmHg)". A band with no explanation is unreadable — the reader has
+  /// no way to tell a target range from a danger zone. When supplied (and a
+  /// band is actually drawn) it renders as a legend line directly under the
+  /// chart, with a swatch matching the band fill. Omit it and the chart renders
+  /// exactly as before.
+  final String? bandLabel;
+
   final double height;
 
   const VitalsTrendChart({
@@ -30,6 +39,7 @@ class VitalsTrendChart extends StatelessWidget {
     this.bandLow,
     this.bandHigh,
     required this.bandColor,
+    this.bandLabel,
     this.height = 180,
   });
 
@@ -83,6 +93,35 @@ class VitalsTrendChart extends StatelessWidget {
                       ],
                     ))
                 .toList(),
+          ),
+        ],
+        // Explains the shaded band. Only rendered when a caller supplies a
+        // label AND a band is actually drawn, so charts that omit it are
+        // pixel-identical to before. Laid out as its own full-width row (not a
+        // Wrap chip) so a long sentence wraps onto more lines instead of
+        // overflowing.
+        if (bandLabel != null && bandLow != null && bandHigh != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 16,
+                height: 10,
+                margin: const EdgeInsets.only(top: 3),
+                decoration: BoxDecoration(
+                  color: bandColor.withOpacity(0.12),
+                  borderRadius: const BorderRadius.all(Radius.circular(3)),
+                  border: Border.all(
+                      color: bandColor.withOpacity(0.45), width: 0.8),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(bandLabel!,
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+              ),
+            ],
           ),
         ],
       ],

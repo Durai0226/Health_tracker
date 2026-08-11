@@ -64,7 +64,8 @@ class SleepService {
       final map = <String, SleepSession>{};
       for (final r in rows) {
         final s = SleepSession.fromRow(r);
-        map.putIfAbsent(s.dateKey, () => s);
+        final current = map[s.dateKey];
+        if (current == null || _winsOver(s, current)) map[s.dateKey] = s;
       }
       _sessionsNotifier.value = map;
       debugPrint('✓ SleepService loaded ${map.length} nights from Drift');
@@ -84,6 +85,25 @@ class SleepService {
 
   static void _notify() {
     _sessionsNotifier.value = Map.from(_sessionsNotifier.value);
+  }
+
+  /// Which of two rows stored for the SAME night the app should show.
+  ///
+  /// A night can legitimately hold more than one row: a hand-logged session
+  /// (random uuid) and an imported one (`hk_<dateKey>`). Loading used to keep
+  /// whichever came first in the wake-time-descending scan, so an imported
+  /// night with a later wake time shadowed the user's own entry — and because
+  /// [syncFromHealth]'s "never clobber a manual night" guard reads this very
+  /// map, the shadowed manual night then stayed buried on every later sync.
+  ///
+  /// Rule: a hand-logged session always beats an imported one (user-entered
+  /// data is never displaced by an automatic import); between two of the same
+  /// kind, the most recently updated wins.
+  static bool _winsOver(SleepSession candidate, SleepSession current) {
+    final candidateManual = candidate.source == SleepSource.manual;
+    final currentManual = current.source == SleepSource.manual;
+    if (candidateManual != currentManual) return candidateManual;
+    return candidate.updatedAt.isAfter(current.updatedAt);
   }
 
   static String _dateKey(DateTime date) =>
@@ -183,6 +203,44 @@ class SleepService {
   /// Below 3 the index is a neutral placeholder — surface a "building" state
   /// rather than a real consistency reading.
   static int regularitySampleSize() => getAllSessions().take(14).length;
+
+  /// Average bedtime/wake time from real logged nights (most recent [nights],
+  /// default 14 — same window [regularityIndex] uses), for callers that want
+  /// the ACTUAL sleep pattern rather than the stated [getSchedule] target.
+  /// Returns null below [minNights] (default 3) — too few nights for a
+  /// trustworthy average — so the caller falls back to [getSchedule].
+  static ({int wakeHour, int wakeMinute, int bedHour, int bedMinute})?
+      averageActualSchedule({int nights = 14, int minNights = 3}) {
+    final sessions = getAllSessions().take(nights).toList();
+    if (sessions.length < minNights) return null;
+
+    // Bedtime: shift pre-noon (after-midnight) times by +24h so late-evening
+    // and early-morning bedtimes cluster instead of splitting across the
+    // 0/1440 boundary — the same technique [regularityIndex] uses.
+    final bedPoints = sessions.map((s) {
+      var m = s.bedtime.hour * 60 + s.bedtime.minute;
+      if (m < 12 * 60) m += 24 * 60;
+      return m;
+    }).toList();
+    final bedMeanRaw =
+        bedPoints.reduce((a, b) => a + b) / bedPoints.length;
+    final bedOfDay = bedMeanRaw.round() % (24 * 60);
+
+    // Wake times don't need the shift — they cluster in the morning, well
+    // away from the midnight boundary.
+    final wakePoints =
+        sessions.map((s) => s.wakeTime.hour * 60 + s.wakeTime.minute).toList();
+    final wakeMeanRaw =
+        wakePoints.reduce((a, b) => a + b) / wakePoints.length;
+    final wakeOfDay = wakeMeanRaw.round() % (24 * 60);
+
+    return (
+      wakeHour: wakeOfDay ~/ 60,
+      wakeMinute: wakeOfDay % 60,
+      bedHour: bedOfDay ~/ 60,
+      bedMinute: bedOfDay % 60,
+    );
+  }
 
   /// Cumulative sleep debt over the last 7 nights, in minutes
   /// (target×7 − asleep). Positive → under-slept; negative → surplus.
@@ -331,6 +389,18 @@ class SleepService {
 
     final source =
         Platform.isIOS ? SleepSource.healthKit : SleepSource.healthConnect;
+
+    // Nights whose IMPORTED row the user deleted. Without this the very next
+    // sync re-created `hk_<dateKey>` and the deleted night came straight back.
+    // Keyed by row id, so deleting a hand-logged night does not also block the
+    // device import for that date.
+    Set<String> deletedIds = const {};
+    try {
+      deletedIds = await _dao.deletedIdsInRange(from, now);
+    } catch (e) {
+      debugPrint('⚠️ SleepService tombstone lookup failed: $e');
+    }
+
     var changed = false;
     var count = 0;
 
@@ -338,6 +408,8 @@ class SleepService {
       // Never clobber a night the user entered by hand.
       final existing = _sessionsNotifier.value[entry.key];
       if (existing != null && existing.source == SleepSource.manual) continue;
+      // …nor resurrect an imported night they deleted.
+      if (deletedIds.contains('hk_${entry.key}')) continue;
 
       final session = _aggregate(entry.key, entry.value, source);
       if (session == null) continue;

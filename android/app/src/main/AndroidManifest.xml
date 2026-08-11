@@ -7,7 +7,17 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- Removed USE_EXACT_ALARM: Play Console's acceptable-use-case policy for
+         this auto-granted, non-revocable permission is limited to alarm/timer
+         apps and calendar apps — a medication reminder app doesn't qualify and
+         risks a Play review rejection. Verified safe to drop: every exact-timed
+         alarm in this app (grep for `alarmClock:` in background_alarm_service.dart)
+         is scheduled via AndroidAlarmManager's alarmClock:true (setAlarmClock()),
+         which Android does not gate behind EITHER exact-alarm permission —
+         SCHEDULE_EXACT_ALARM above is kept declared (harmless, user-grantable,
+         not policy-restricted) for any future setExact() use, but neither
+         permission is actually read by the current alarm-scheduling code. -->
+
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
@@ -27,6 +37,17 @@
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+
+    <!-- Vitals: opt-in write-back of BP/glucose/weight readings the user
+         already logged locally (Settings toggle, off by default). READ is
+         requested alongside WRITE only because the plugin has no
+         write-only request. -->
+    <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE"/>
+    <uses-permission android:name="android.permission.health.WRITE_BLOOD_PRESSURE"/>
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE"/>
+    <uses-permission android:name="android.permission.health.WRITE_BLOOD_GLUCOSE"/>
+    <uses-permission android:name="android.permission.health.READ_WEIGHT"/>
+    <uses-permission android:name="android.permission.health.WRITE_WEIGHT"/>
 
     <application
         android:label="Dlyminder"
@@ -118,6 +139,19 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
             </intent-filter>
+        </receiver>
+
+        <!-- Steps + Sleep home-screen widget (native half of home_widget feature).
+             Dart side: lib/core/services/home_widget_service.dart -->
+        <receiver
+            android:name=".StepsSleepWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/steps_sleep_widget_info"/>
         </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
