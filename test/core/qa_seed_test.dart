@@ -57,6 +57,58 @@ void main() {
         reason: 'mood left empty');
     expect(await DiaryStorageService.getAll(), isNotEmpty,
         reason: 'diary left empty');
+
+    // Reminders and Focus are two of the FOUR Today pulse-row pillars, and the
+    // seeder planted neither — so every reminders screen, the Focus stats, and
+    // the Today row itself were being measured, rated and screenshotted in
+    // their empty state while the other five features had a month of history.
+    final reminders = await CleanStorageService.getAllReminders();
+    expect(reminders.length, greaterThanOrEqualTo(3),
+        reason: 'reminders left empty — a Today pillar with no data');
+    expect(
+      reminders.where((r) => r.scheduledTime.isBefore(DateTime.now())),
+      isNotEmpty,
+      reason: 'at least one reminder must be OVERDUE: that is the state with '
+          'the most UI (highlight, relative time, an action) and the one an '
+          'empty-state screenshot never shows',
+    );
+
+    final focus = CleanStorageService.getAppPreference('focusSessions', null);
+    expect(focus, isA<List<dynamic>>(),
+        reason: 'focus sessions left empty — Focus persists through app '
+            'preferences, not Drift, so it is easy to forget');
+    expect((focus as List).length, greaterThan(10),
+        reason: 'focus history must be deep enough for streaks and the hourly '
+            'energy curve to be non-trivial; got ${focus.length}');
+  });
+
+  test('the seed guard key does not collide with main_qa.dart', () async {
+    await seedQaData(force: true);
+
+    // main_qa.dart writes `qa_seeded` for its own three-table seed. Sharing the
+    // key means the same data container, so whichever ran first blocked the
+    // other and a measurement could silently be taken against 9 days of steps
+    // and nothing else.
+    expect(
+      CleanStorageService.getAppPreference('qa_seeded', false),
+      isNot(true),
+      reason: 'seedQaData must not write the key main_qa.dart owns',
+    );
+    expect(CleanStorageService.getAppPreference('qa_seed_v2', false), isTrue,
+        reason: 'the versioned guard must be set so relaunches skip re-seeding');
+  });
+
+  test('the guard actually prevents a second seed', () async {
+    await seedQaData(force: true);
+    final first = (await MedicineCleanStorageService.getAllLogs()).length;
+
+    await seedQaData(); // no force — the guard should short-circuit
+    final second = (await MedicineCleanStorageService.getAllLogs()).length;
+
+    expect(second, first,
+        reason: 'A guard whose read key differs from its write key never '
+            'fires, so every launch re-seeds and doubles the data. Counts: '
+            '$first then $second.');
   });
 
   test('adherence is realistic, not a flat 100%', () async {

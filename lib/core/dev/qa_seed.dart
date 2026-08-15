@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../services/clean_storage_service.dart';
 import '../../features/diary/models/diary_entry.dart';
 import '../../features/diary/services/diary_storage_service.dart';
+import '../../features/focus/models/focus_plant.dart';
+import '../../features/focus/models/focus_session.dart';
 import '../../features/medication/models/enhanced_medicine.dart';
 import '../../features/medication/models/medicine_enums.dart';
 import '../../features/medication/models/medicine_log.dart';
@@ -14,6 +16,7 @@ import '../../features/medication/models/weight_reading.dart';
 import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/medication/services/vitals_storage_service.dart';
 import '../../features/period/models/flow_intensity.dart';
+import '../../features/reminders/models/reminder_model.dart';
 import '../../features/period/services/period_service.dart';
 import '../../features/sleep/services/sleep_service.dart';
 import '../../features/steps/services/step_service.dart';
@@ -52,7 +55,7 @@ Future<void> seedQaData({
   bool force = false,
 }) async {
   if (!force &&
-      CleanStorageService.getAppPreference('qa_seeded', false) == true) {
+      CleanStorageService.getAppPreference(_seedGuardKey, false) == true) {
     return;
   }
 
@@ -66,9 +69,20 @@ Future<void> seedQaData({
   await _seedVitals(now, days);
   await _seedPeriod(now, days);
   await _seedDiary(now, days);
+  await _seedReminders(now);
+  await _seedFocus(now, days);
 
-  await CleanStorageService.setAppPreference('qa_seeded', true);
+  await CleanStorageService.setAppPreference(_seedGuardKey, true);
 }
+
+/// Versioned and profile-scoped.
+///
+/// It used to be the bare string `qa_seeded` — the SAME key `main_qa.dart`
+/// writes for its own three-table seed. Same bundle id means the same data
+/// container, so whichever ran first blocked the other, and a measurement could
+/// silently be taken against 9 days of steps and nothing else. Bumping the
+/// version also re-seeds devices that carry the old flag.
+const String _seedGuardKey = 'qa_seed_v2';
 
 // ---------------------------------------------------------------------------
 
@@ -269,6 +283,80 @@ Future<void> _seedPeriod(DateTime now, int days) async {
     }
   } catch (e) {
     debugPrint('seed period failed: $e');
+  }
+}
+
+Future<void> _seedReminders(DateTime now) async {
+  // Reminders are one of the four Today pillars and the seeder planted none,
+  // so every reminders screen and the Today pulse row were measured, rated and
+  // screenshotted in their empty state.
+  //
+  // Three deliberate shapes: one overdue (the state with the most UI —
+  // highlight, relative time, an action), one later today, one repeating in the
+  // future. Category ids are the defaults created by CleanStorageService.
+  const specs = [
+    ('seed-rem-0', 'Call the pharmacy', 'Refill is ready for collection',
+        'health', -3, RepeatType.none, ReminderPriority.high),
+    ('seed-rem-1', 'Evening walk', '20 minutes around the block', 'personal', 4,
+        RepeatType.daily, ReminderPriority.medium),
+    ('seed-rem-2', 'Blood test appointment', 'Fasting from midnight', 'health',
+        26, RepeatType.none, ReminderPriority.high),
+    ('seed-rem-3', 'Weekly report', 'Send before standup', 'work', 50,
+        RepeatType.weekly, ReminderPriority.low),
+  ];
+
+  try {
+    for (final (id, title, body, category, hourOffset, repeat, priority)
+        in specs) {
+      await CleanStorageService.saveReminder(Reminder(
+        id: id,
+        title: title,
+        body: body,
+        scheduledTime: now.add(Duration(hours: hourOffset)),
+        repeatType: repeat,
+        priority: priority,
+        categoryId: category,
+        createdAt: now.subtract(const Duration(days: 2)),
+      ));
+    }
+  } catch (e) {
+    debugPrint('seed reminders failed: $e');
+  }
+}
+
+Future<void> _seedFocus(DateTime now, int days) async {
+  // Focus has no Drift table — it persists through app preferences, the same
+  // channel `FocusService._saveData` writes. Writing the preference directly is
+  // therefore the supported path, not a back door; `FocusService._loadData`
+  // reads it on first access, which happens when FocusScreen mounts, well after
+  // seeding.
+  //
+  // Skips every 5th day so the streak has a real gap: a seed where the streak
+  // is unbroken cannot exercise the "at risk" and grace-day branches of
+  // StreakEngine, which is most of its logic.
+  try {
+    final sessions = <Map<String, dynamic>>[];
+    final span = days > 60 ? 60 : days; // 100-entry persistence cap
+    for (var d = 0; d < span; d++) {
+      if (d % 5 == 4) continue;
+      final day = now.subtract(Duration(days: d));
+      final target = 25 + (d % 3) * 10; // 25 / 35 / 45
+      final started = DateTime(day.year, day.month, day.day, 9 + (d % 6), 15);
+      sessions.add(FocusSession(
+        id: 'seed-focus-$d',
+        startedAt: started,
+        completedAt: started.add(Duration(minutes: target)),
+        targetMinutes: target,
+        actualMinutes: target,
+        wasCompleted: true,
+        activityType:
+            FocusActivityType.values[d % FocusActivityType.values.length],
+        plantType: PlantType.values[d % PlantType.values.length],
+      ).toJson());
+    }
+    await CleanStorageService.setAppPreference('focusSessions', sessions);
+  } catch (e) {
+    debugPrint('seed focus failed: $e');
   }
 }
 
