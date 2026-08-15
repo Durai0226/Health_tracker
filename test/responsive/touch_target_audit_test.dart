@@ -15,6 +15,8 @@ library;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/perf_rating.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
@@ -172,6 +174,21 @@ void main() {
     // px as a hard minimum, so anything below it is a conformance failure, not
     // a note. (The Apple 44pt list stays advisory: it is a comfort guideline,
     // and gating on it would fail the app today.)
+    for (final e in belowWcag.entries) {
+      emitFinding(Finding(
+          feature: e.key.split('/').first, screen: e.key,
+          dimension: 'touch-target-wcag', sev: Sev.p0,
+          detail: '${e.value.length} target(s): ${e.value.take(3).join('; ')}',
+          source: 'WCAG 2.2 SC 2.5.8 — 24x24 CSS px minimum'));
+    }
+    for (final e in small.entries) {
+      emitFinding(Finding(
+          feature: e.key.split('/').first, screen: e.key,
+          dimension: 'touch-target-comfort', sev: Sev.p2,
+          detail: '${e.value.length} target(s): ${e.value.take(3).join('; ')}',
+          source: 'Apple HIG 44pt — advisory, not conformance'));
+    }
+
     expect(belowWcag, isEmpty,
         reason: 'Tappable targets below the WCAG 2.2 SC 2.5.8 minimum of 24pt '
             '— see the BELOW WCAG section above.');

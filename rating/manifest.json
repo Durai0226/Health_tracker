@@ -1,0 +1,55 @@
+{
+  "_comment": [
+    "The contract between the harnesses and the score.",
+    "",
+    "Every dimension that contributes to the rating is listed here, with the",
+    "harness responsible for it. `tool/rate.dart` REFUSES to print a score if a",
+    "listed dimension never reported — because the alternative is what this repo",
+    "did before: a harness that did not run and a harness that found nothing",
+    "printed the identical result, and 'no findings' was indistinguishable from",
+    "'no measurement'. That is the whole reason the number moved between runs.",
+    "",
+    "Severity is priced in test/support/perf_rating.dart: P0 -40, P1 -15, P2 -5.",
+    "4.5/5 == score 90 == zero P0, zero P1, at most two P2, across the whole app."
+  ],
+
+  "dimensions": [
+    { "id": "build-error",          "harness": "screen_build_cost",     "sev": "p0", "device": false,
+      "source": "binary: the screen threw while building" },
+    { "id": "never-settles",        "harness": "screen_build_cost",     "sev": "p1", "device": false,
+      "source": "binary: a perpetual animation costs battery unobserved" },
+    { "id": "element-budget",       "harness": "screen_build_cost",     "sev": "p2", "device": false,
+      "source": "measured baseline + ~15% (rating/element_budget notes in-file)" },
+    { "id": "tree-size",            "harness": "screen_build_cost",     "sev": "p1", "device": false,
+      "source": "within-run ratio to the median (machine-independent)" },
+
+    { "id": "unrenderable",         "harness": "responsive_overflow",   "sev": "p0", "device": false,
+      "source": "binary: the screen threw while building" },
+    { "id": "overflow",             "harness": "responsive_overflow",   "sev": "p1", "device": false,
+      "source": "RenderFlex overflow at a supported width/text scale" },
+    { "id": "renders-blank",        "harness": "responsive_overflow",   "sev": "p1", "device": false,
+      "source": "binary: a screen with no text is not a screen" },
+    { "id": "wrapped-header-text",  "harness": "responsive_overflow",   "sev": "p2", "device": false,
+      "source": "header chrome must be one line at every supported size" },
+
+    { "id": "touch-target-wcag",    "harness": "touch_target_audit",    "sev": "p0", "device": false,
+      "source": "WCAG 2.2 SC 2.5.8 — 24x24 CSS px minimum" },
+    { "id": "touch-target-comfort", "harness": "touch_target_audit",    "sev": "p2", "device": false,
+      "source": "Apple HIG 44pt — advisory, not conformance" }
+  ],
+
+  "excluded": [
+    {
+      "id": "memory-growth",
+      "why": "ProcessInfo.currentRss inside flutter test is dominated by the harness itself and differs every run. Adding it would reintroduce exactly the non-determinism this file exists to remove. Its deterministic proxy is disposal-leak, which is not yet wired."
+    },
+    {
+      "id": "frame-build-p90 / frame-raster-p90 / dropped-frames",
+      "why": "Measured on device by integration_test/z01_perf_e2e_test.dart and REPORTED, never scored. An emulator's GPU is the host's, and the build-cost harness observed an ~8x wall-clock swing between two runs of an identical screen. Every scored dimension here is a count, a boolean, or a within-run ratio, on purpose."
+    },
+    {
+      "id": "a11y-contrast",
+      "why": "meetsGuideline(textContrastGuideline) over-reports on this app's gradient theme. Needs a scoped run before it can be trusted enough to price."
+    }
+  ]
+}

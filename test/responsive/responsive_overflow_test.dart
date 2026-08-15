@@ -4,6 +4,10 @@ library;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/perf_rating.dart';
+
+
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
@@ -74,6 +78,25 @@ import 'package:tablet_remainder/features/onboarding/screens/welcome_screen.dart
 import 'package:tablet_remainder/features/settings/screens/backup_screen.dart';
 import 'package:tablet_remainder/features/reminders/screens/alarm_screen.dart';
 import 'package:tablet_remainder/features/insights/screens/trends_dashboard_screen.dart';
+
+/// Surfaces that render nothing ON PURPOSE, with the reason.
+///
+/// `renders-blank` is a good dimension and a bad one to apply blindly: a
+/// conditional banner and a broken screen look identical from the outside.
+/// Pricing the two the same is how a rating stops being believed, which is the
+/// failure mode this whole exercise exists to fix. Every entry needs a reason.
+const Map<String, String> _blankAllowlist = {
+  'proactive_nudge':
+      'Not a screen — a frequency-capped banner. `if (_insight == null) return '
+          'const SizedBox.shrink()` (proactive_nudge.dart). On the empty '
+          'database this sweep uses there is no insight to show, so rendering '
+          'nothing is the correct behaviour.',
+  'backup':
+      'Caught in its loading state: the body is `_isLoading ? _buildLoading() '
+          ': _buildContent()` (backup_screen.dart) and the skeleton carries no '
+          'text. A harness artifact, not a defect — the cloud lookup never '
+          'resolves headlessly.',
+};
 
 /// Phone sizes this app must support, in LOGICAL pixels (portrait).
 /// 320x568 is the floor (iPhone SE 1st gen / small Android); 428x926 the
@@ -457,6 +480,46 @@ void main() {
     // combinations, NO OVERFLOWS". These three assertions are what make it a
     // test. Verify with a deliberate `SizedBox(width: 9999)` on any screen:
     // if that does not turn this file red, nothing here is protecting anything.
+    // Emit BEFORE asserting: `expect` throws, and a harness that dies before
+    // reporting contributes nothing to the score. That asymmetry is how three
+    // instruments could fail the build while leaving the rating at 100.
+    for (final e in unrenderable.entries) {
+      emitFinding(Finding(
+          feature: e.key.split('/').first, screen: e.key,
+          dimension: 'unrenderable', sev: Sev.p0,
+          detail: e.value, source: 'binary: the screen threw while building'));
+    }
+    for (final e in overflows.entries) {
+      emitFinding(Finding(
+          feature: e.key.split('/').first, screen: e.key,
+          dimension: 'overflow', sev: Sev.p1,
+          detail: '${e.value.length} combination(s): ${e.value.take(3).join('; ')}',
+          source: 'RenderFlex overflow at a supported width/text scale'));
+    }
+    for (final e in wraps.entries) {
+      emitFinding(Finding(
+          feature: e.key.split('/').first, screen: e.key,
+          dimension: 'wrapped-header-text', sev: Sev.p2,
+          detail: '${e.value.length} combination(s): ${e.value.take(3).join('; ')}',
+          source: 'header chrome must be one line at every supported size'));
+    }
+    // Grouped per surface: 4 devices x 3 scales means one blank screen would
+    // otherwise emit twelve findings and cost 12 x P1, which prices a single
+    // defect at more than the whole app is worth.
+    final blankBySurface = <String, List<String>>{};
+    for (final entry in blank) {
+      final name = entry.split(' @ ').first;
+      if (_blankAllowlist.containsKey(name)) continue;
+      blankBySurface.putIfAbsent(name, () => []).add(entry);
+    }
+    for (final e in blankBySurface.entries) {
+      emitFinding(Finding(
+          feature: e.key.split('/').first, screen: e.key,
+          dimension: 'renders-blank', sev: Sev.p1,
+          detail: 'no text rendered in ${e.value.length} combination(s)',
+          source: 'binary: a screen with no text is not a screen'));
+    }
+
     expect(overflows, isEmpty,
         reason: 'Screens overflowed — see the OVERFLOWS section above.');
     expect(wraps, isEmpty,
@@ -465,5 +528,10 @@ void main() {
             'width and text scale.');
     expect(unrenderable, isEmpty,
         reason: 'Screens could not be constructed at all — see above.');
+    // `blank` was collected at :298 and printed, but never asserted — so a
+    // screen that rendered NOTHING passed this harness silently.
+    expect(blank, isEmpty,
+        reason: 'Screens rendered no text at all. A blank screen is the most '
+            'visible defect there is and this harness was not gating on it.');
   });
 }
