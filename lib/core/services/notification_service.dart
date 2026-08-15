@@ -2395,28 +2395,6 @@ class NotificationService {
     return allGood;
   }
 
-  // Helper methods for Priority mapping
-  Importance _getImportance(ReminderPriority priority) {
-    switch (priority) {
-      case ReminderPriority.high:
-        return Importance.max;
-      case ReminderPriority.medium:
-        return Importance.defaultImportance;
-      case ReminderPriority.low:
-        return Importance.low;
-    }
-  }
-
-  Priority _getPriority(ReminderPriority priority) {
-    switch (priority) {
-      case ReminderPriority.high:
-        return Priority.max;
-      case ReminderPriority.medium:
-        return Priority.high;
-      case ReminderPriority.low:
-        return Priority.low;
-    }
-  }
 
   InterruptionLevel _getIOSInterruptionLevel(ReminderPriority priority) {
     switch (priority) {

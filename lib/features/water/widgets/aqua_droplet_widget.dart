@@ -217,7 +217,6 @@ class _AquaDropletWidgetState extends State<AquaDropletWidget>
 
   Widget _buildProgressInfo(BeverageThemeData beverage, double progress, bool isDark) {
     final isComplete = progress >= 1.0;
-    final textColor = progress > 0.5 ? Colors.white : AquaTheme.getTextPrimary(context);
     
     return Positioned(
       top: widget.size * 0.25,
@@ -361,7 +360,6 @@ class _DropletPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
     final dropletPath = _createDropletPath(size);
     
     // Draw droplet background

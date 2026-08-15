@@ -1,6 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import '../models/intake_streak.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
@@ -10,30 +8,6 @@ import 'medicine_storage_service.dart';
 /// Intake tracking service using Drift storage via MedicineCleanStorageService
 class IntakeTrackingService {
   static bool _isInitialized = false;
-
-  static String? get _currentUserId {
-    final user = firebase_auth.FirebaseAuth.instance.currentUser;
-    if (user != null && !user.isAnonymous) {
-      return user.uid;
-    }
-    return null;
-  }
-
-  static Future<void> _syncToCloud(String collection, String docId, Map<String, dynamic> data) async {
-    final userId = _currentUserId;
-    if (userId == null) return;
-    
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection(collection)
-          .doc(docId)
-          .set(data);
-    } catch (e) {
-      debugPrint('Error syncing to cloud: $e');
-    }
-  }
 
   static Future<void> init() async {
     if (_isInitialized) return;

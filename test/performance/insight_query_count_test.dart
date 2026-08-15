@@ -13,7 +13,6 @@ library;
 ///
 /// This counts real statements against an in-memory Drift database, so it fails
 /// if anyone reintroduces a per-day query.
-import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

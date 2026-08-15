@@ -23,7 +23,6 @@ class RelaxationGameService extends ChangeNotifier {
   OrbElement _currentElement = OrbElement.water;
   
   bool _isSessionActive = false;
-  DateTime? _sessionStartTime;
   Timer? _sessionTimer;
   Timer? _hapticPatternTimer;
   int _sessionSeconds = 0;
@@ -226,7 +225,6 @@ class RelaxationGameService extends ChangeNotifier {
     if (_isSessionActive) return;
     
     _isSessionActive = true;
-    _sessionStartTime = DateTime.now();
     _sessionSeconds = 0;
     
     _sessionTimer = Timer.periodic(const Duration(seconds: 1), (timer) {

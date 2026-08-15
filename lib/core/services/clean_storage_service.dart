@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:drift/drift.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'background_alarm_service.dart' show kShowOnLockScreenPref;
@@ -10,10 +9,8 @@ import '../database/daos/medication_dao.dart';
 import '../database/daos/water_dao.dart';
 import '../database/daos/reminders_dao.dart';
 import '../models/user_settings.dart';
-import '../config/env_config.dart';
 import '../../features/reminders/models/reminder_model.dart' as ReminderModel;
 import '../../features/reminders/models/reminder_category_model.dart' as ReminderCategoryModel;
-import 'package:uuid/uuid.dart';
 import '../../features/medication/models/medicine.dart';
 import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/medication/services/vitals_storage_service.dart';

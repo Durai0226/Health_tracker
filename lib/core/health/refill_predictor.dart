@@ -65,7 +65,6 @@ class RefillPredictor {
 
     // Sum units consumed within the window.
     double consumed = 0;
-    int firstIdx = 0;
     DateTime? earliestInWindow;
     for (var i = 0; i < doseTimes.length; i++) {
       final t = doseTimes[i];
@@ -75,7 +74,6 @@ class RefillPredictor {
           : 1.0;
       consumed += amt;
       earliestInWindow ??= t;
-      firstIdx++;
     }
 
     // Average over the ACTUAL observed span (min 1 day), not the full window, so

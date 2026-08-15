@@ -16,7 +16,6 @@ library;
 /// `medicines`. An earlier version of this file matched `from "medicines"`,
 /// matched nothing, and therefore passed with the bug deliberately restored.
 /// The thresholds below are measured numbers, not guesses, for that reason.
-import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

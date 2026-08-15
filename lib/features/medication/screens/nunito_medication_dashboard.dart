@@ -636,7 +636,6 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   }
 
   Widget _buildInteractionBanner() {
-    final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     // Interactions are pre-sorted most-severe first, so the first drives accent.
     final topSeverity = _interactions.first.severity;

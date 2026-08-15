@@ -143,8 +143,6 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   final _purposeController = TextEditingController();
   bool _reminderEnabled = true;
 
-  late AnimationController _progressController;
-  late Animation<double> _progressAnimation;
 
   final HapticService _hapticService = HapticService();
   final MedicationReminderService _reminderService = MedicationReminderService();
@@ -158,21 +156,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     super.initState();
     _currentStep = widget.debugInitialStep ?? 0;
     _pageController = PageController(initialPage: _currentStep);
-    _progressController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _progressController, curve: Curves.easeOut),
-    );
-
     if (_isEditing) {
       _loadExistingMedicine();
     }
     // Offline drug-name typeahead (privacy-first, bundled asset).
     DrugNameCatalog.ensureLoaded();
     _nameController.addListener(_onNameChanged);
-    _updateProgress();
   }
 
   void _onNameChanged() {
@@ -259,7 +248,6 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   @override
   void dispose() {
-    _progressController.dispose();
     _pageController.dispose();
     _nameController.removeListener(_onNameChanged);
     _nameController.dispose();
@@ -279,10 +267,6 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     super.dispose();
   }
 
-  void _updateProgress() {
-    _progressController.animateTo((_currentStep + 1) / _totalSteps);
-  }
-
   void _nextStep() {
     if (!_validateCurrentStep()) return;
 
@@ -293,7 +277,6 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         duration: AppMotion.base,
         curve: Curves.easeOutCubic,
       );
-      _updateProgress();
     } else {
       _saveMedicine();
     }
@@ -328,7 +311,6 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       duration: AppMotion.base,
       curve: Curves.easeOutCubic,
     );
-    _updateProgress();
   }
 
   void _previousStep() {
@@ -339,7 +321,6 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         duration: AppMotion.base,
         curve: Curves.easeOutCubic,
       );
-      _updateProgress();
     } else {
       Navigator.pop(context);
     }

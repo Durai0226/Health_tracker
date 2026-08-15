@@ -167,8 +167,8 @@ class VitaVibeService extends ChangeNotifier {
   Future<void> playPattern(VibePattern pattern) async {
     if (!_isEnabled) return;
     
-    final hasVibrator = await Vibration.hasVibrator() ?? false;
-    final hasAmplitude = await Vibration.hasAmplitudeControl() ?? false;
+    final hasVibrator = await Vibration.hasVibrator();
+    final hasAmplitude = await Vibration.hasAmplitudeControl();
 
     if (!hasVibrator) return;
     
