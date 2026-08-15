@@ -114,6 +114,23 @@ class AppTheme {
           textStyle: textTheme.labelLarge,
         ).copyWith(overlayColor: noOverlay),
       ),
+      // Every raw Material IconButton, at Apple's 44pt comfort minimum.
+      //
+      // The default lands at 40x40 (24pt icon + 8pt padding), which is above
+      // WCAG's 24pt floor but below the size at which people reliably hit a
+      // target one-handed. It showed up on the month-navigation chevrons of
+      // both calendars and on the water dashboard's header actions — small
+      // icon-only controls, which are the worst case for a near-miss.
+      //
+      // Theme-level so it holds for IconButtons added later, rather than
+      // needing to be remembered at each of the ~40 call sites. AppIconButton
+      // already defaults to 44 and is unaffected.
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(44, 44),
+          tapTargetSize: MaterialTapTargetSize.padded,
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: ext.surfaceVariant,

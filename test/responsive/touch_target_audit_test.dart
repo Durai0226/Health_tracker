@@ -90,6 +90,18 @@ String? _labelUnder(Element e) {
       found = w.data!.trim();
       return;
     }
+    // Fall back to a Semantics label, then an icon codepoint. Icon-only
+    // controls are exactly the ones most likely to be undersized, and
+    // "GestureDetector 48x40" with no further information is a finding nobody
+    // can act on.
+    if (w is Semantics && (w.properties.label?.trim().isNotEmpty ?? false)) {
+      found = w.properties.label!.trim();
+      return;
+    }
+    if (w is Icon && w.icon != null) {
+      found = 'icon:0x${w.icon!.codePoint.toRadixString(16)}';
+      return;
+    }
     child.visitChildren(visit);
   }
   e.visitChildren(visit);

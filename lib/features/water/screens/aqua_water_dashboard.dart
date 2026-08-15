@@ -771,6 +771,11 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
         child: GestureDetector(
           onTap: onTap,
           child: Container(
+            // 44pt floor: a 20pt icon with 10pt padding is 40x40. These are the
+            // dashboard's header actions — icon-only, in the top corner, and
+            // the hardest kind of target to hit one-handed.
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            alignment: Alignment.center,
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
