@@ -56,6 +56,46 @@ final Map<String, Widget Function()> _screens = {
   'water_calendar': () => const WaterCalendarScreen(),
 };
 
+/// True when this widget can actually receive a tap.
+///
+/// `Switch`/`Checkbox`/`Radio` with a null `onChanged` are disabled, and a
+/// disabled control is not a touch-target failure either.
+bool _isInteractive(Widget w) {
+  if (w is InkWell) {
+    return w.onTap != null ||
+        w.onDoubleTap != null ||
+        w.onLongPress != null ||
+        w.onTapDown != null;
+  }
+  if (w is GestureDetector) {
+    return w.onTap != null ||
+        w.onDoubleTap != null ||
+        w.onLongPress != null ||
+        w.onTapDown != null;
+  }
+  if (w is IconButton) return w.onPressed != null;
+  if (w is Switch) return w.onChanged != null;
+  if (w is Checkbox) return w.onChanged != null;
+  if (w is Radio) return w.onChanged != null;
+  return true;
+}
+
+/// The first text found inside [e], for identifying an offending target.
+String? _labelUnder(Element e) {
+  String? found;
+  void visit(Element child) {
+    if (found != null) return;
+    final w = child.widget;
+    if (w is Text && (w.data?.trim().isNotEmpty ?? false)) {
+      found = w.data!.trim();
+      return;
+    }
+    child.visitChildren(visit);
+  }
+  e.visitChildren(visit);
+  return found == null || found!.length <= 24 ? found : '${found!.substring(0, 24)}…';
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late AppDatabase db;
@@ -109,18 +149,38 @@ void main() {
         Radio,
       ]) {
         for (final e in find.byType(type).evaluate()) {
+          // Only things that actually RESPOND to a tap.
+          //
+          // `InkWell(onTap: null)` and `GestureDetector(onTap: null)` are inert
+          // — they are in the tree for layout or decoration, and no user can
+          // hit them. Counting them made the audit report display-only chips as
+          // undersized touch targets: `AppChip` already applies
+          // `minHeight: onTap != null ? 44 : 0` (primitives.dart), so the very
+          // chips it correctly leaves at 32pt BECAUSE they are not tappable
+          // were the ones being flagged.
+          //
+          // Four findings, two whole surfaces, all measuring the wrong thing.
+          // An audit that reports non-targets as targets gets its real findings
+          // ignored along with the noise.
+          if (!_isInteractive(e.widget)) continue;
           final ro = e.renderObject;
           if (ro is! RenderBox || !ro.hasSize) continue;
           final s = ro.size;
           if (s.isEmpty) continue;
           measured++;
           final shortest = s.width < s.height ? s.width : s.height;
+          // Label the target with the text inside it. "InkWell 101x32" is a
+          // measurement nobody can act on; "InkWell 101x32 'Gentle'" is a
+          // widget you can go and find. A report that cannot be acted on gets
+          // read once and ignored.
+          final label = _labelUnder(e);
+          final desc = '$type ${s.width.toStringAsFixed(0)}'
+              'x${s.height.toStringAsFixed(0)}'
+              '${label == null ? '' : " '$label'"}';
           if (shortest < _wcagMin) {
-            belowWcag.putIfAbsent(entry.key, () => []).add(
-                '$type ${s.width.toStringAsFixed(0)}x${s.height.toStringAsFixed(0)}');
+            belowWcag.putIfAbsent(entry.key, () => []).add(desc);
           } else if (shortest < _appleMin) {
-            small.putIfAbsent(entry.key, () => []).add(
-                '$type ${s.width.toStringAsFixed(0)}x${s.height.toStringAsFixed(0)}');
+            small.putIfAbsent(entry.key, () => []).add(desc);
           }
         }
       }

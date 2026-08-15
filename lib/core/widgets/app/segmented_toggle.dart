@@ -58,6 +58,16 @@ class SegmentedToggle extends StatelessWidget {
                 // the same frame as the tap. The haptic below and the instant
                 // colour change are the feedback.
                 child: Container(
+                  // 44pt floor, not fixed padding. `vertical: 11` around an
+                  // ~18pt line lands at exactly 40 — under Apple's 44pt comfort
+                  // minimum on every screen that uses this control (Settings'
+                  // theme picker, Focus's mode switch, Trends' range switch...).
+                  // A minHeight only grows the small case: at large Dynamic
+                  // Type the content already exceeds 44 and this changes
+                  // nothing, where bumping the padding would push it further
+                  // and risk an overflow.
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(vertical: 11),
                   decoration: BoxDecoration(
                     color: i == index ? ext.surface : Colors.transparent,

@@ -530,8 +530,19 @@ void main() {
         reason: 'Screens could not be constructed at all — see above.');
     // `blank` was collected at :298 and printed, but never asserted — so a
     // screen that rendered NOTHING passed this harness silently.
-    expect(blank, isEmpty,
-        reason: 'Screens rendered no text at all. A blank screen is the most '
-            'visible defect there is and this harness was not gating on it.');
+    // Same allowlist as the findings above — a surface that renders nothing on
+    // purpose must not fail the gate either. Filtering one and not the other
+    // is how I first made this red for two surfaces that are behaving
+    // correctly.
+    expect(
+      blank
+          .where((e) => !_blankAllowlist.containsKey(e.split(' @ ').first))
+          .toList(),
+      isEmpty,
+      reason: 'Screens rendered no text at all. A blank screen is the most '
+          'visible defect there is and this harness was not gating on it. If a '
+          'surface renders nothing deliberately, add it to _blankAllowlist '
+          'WITH A REASON.',
+    );
   });
 }

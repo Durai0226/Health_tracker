@@ -252,6 +252,12 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
             },
             child: AnimatedContainer(
               duration: AquaTheme.animationFast,
+              // 44pt floor: `vertical: 10` around the emoji lands at exactly
+              // 40. These sit in a horizontally scrolling strip, where an
+              // undersized target is easiest to miss — a near-miss scrolls the
+              // strip instead of selecting the beverage.
+              constraints: const BoxConstraints(minHeight: 44),
+              alignment: Alignment.center,
               margin: EdgeInsets.only(
                 right: AquaTheme.spacingS,
                 left: index == 0 ? 0 : 0,

@@ -92,6 +92,16 @@ class SectionHeader extends StatelessWidget {
           if (actionLabel != null && onAction != null)
             TextButton(
               onPressed: onAction,
+              // Explicit 44pt floor. The app theme trims TextButton's tap
+              // target, so every section action ("Customize", "Edit", "See
+              // all"...) rendered 40pt tall — under Apple's comfort minimum, on
+              // a control that sits at the top-right of a scrolling list where
+              // a missed tap is most annoying. Shared widget, so this is one
+              // change for every section header in the app.
+              style: TextButton.styleFrom(
+                minimumSize: const Size(48, 44),
+                tapTargetSize: MaterialTapTargetSize.padded,
+              ),
               child: Text(actionLabel!,
                   style: tt.labelLarge?.copyWith(color: ext.mark(s))),
             ),
