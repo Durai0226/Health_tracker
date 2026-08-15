@@ -58,11 +58,12 @@ class AppBottomSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(message,
-                style: Theme.of(ctx)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: ext.textSecondary)),
+            Text(
+              message,
+              style: Theme.of(
+                ctx,
+              ).textTheme.bodyMedium?.copyWith(color: ext.textSecondary),
+            ),
             const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
@@ -77,7 +78,9 @@ class AppBottomSheet extends StatelessWidget {
                 Expanded(
                   child: AppButton(
                     label: confirmLabel,
-                    variant: danger ? AppButtonVariant.danger : AppButtonVariant.primary,
+                    variant: danger
+                        ? AppButtonVariant.danger
+                        : AppButtonVariant.primary,
                     onPressed: () => Navigator.pop(ctx, true),
                   ),
                 ),
@@ -102,52 +105,78 @@ class AppBottomSheet extends StatelessWidget {
         color: ext.surfaceElevated,
         borderRadius: AppRadius.topSheet,
       ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 12),
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: ext.outlineStrong,
-                      borderRadius: AppRadius.brFull,
+      // A Material INSIDE the decoration, so ink paints on top of it.
+      //
+      // Without this the sheet's opaque Container sits between every tappable
+      // row and the nearest Material ancestor, and `ListTile`/`InkWell` paint
+      // their splash onto that ancestor — i.e. underneath the sheet, where it
+      // is invisible. Flutter says so itself, once per affected row:
+      //   "ListTile background color or ink splashes may be invisible ...
+      //    this DecoratedBox will hide those effects."
+      //
+      // Nobody saw it because `main.dart` was overwriting FlutterError.onError,
+      // so the assertion was logged and discarded. The user-visible symptom is
+      // that every row in every sheet — Customize Today, the water quick
+      // actions, the take-medication sheet — taps with no feedback at all.
+      //
+      // `transparency` keeps the Container's own colour and radius intact.
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: ext.outlineStrong,
+                        borderRadius: AppRadius.brFull,
+                      ),
                     ),
                   ),
-                ),
-                if (title != null) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.gutter, AppSpacing.lg, AppSpacing.gutter, AppSpacing.md),
-                    child: Row(
-                      children: [
-                        if (icon != null) ...[
-                          Container(
-                            padding: const EdgeInsets.all(9),
-                            decoration: BoxDecoration(
-                                color: s.container, borderRadius: AppRadius.brMd),
-                            child: Icon(icon, size: 20, color: s.onContainer),
+                  if (title != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.gutter,
+                        AppSpacing.lg,
+                        AppSpacing.gutter,
+                        AppSpacing.md,
+                      ),
+                      child: Row(
+                        children: [
+                          if (icon != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(9),
+                              decoration: BoxDecoration(
+                                color: s.container,
+                                borderRadius: AppRadius.brMd,
+                              ),
+                              child: Icon(icon, size: 20, color: s.onContainer),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: Text(title!, style: tt.headlineSmall),
                           ),
-                          const SizedBox(width: 12),
                         ],
-                        Expanded(child: Text(title!, style: tt.headlineSmall)),
-                      ],
+                      ),
                     ),
+                    Divider(height: 1, color: ext.outline),
+                  ],
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.gutter),
+                    child: child,
                   ),
-                  Divider(height: 1, color: ext.outline),
                 ],
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.gutter),
-                  child: child,
-                ),
-              ],
+              ),
             ),
           ),
         ),

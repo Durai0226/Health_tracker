@@ -280,6 +280,18 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
             title: 'Sleep',
             icon: Symbols.bedtime_rounded,
             accent: AppColorsExt.of(context).sleep,
+            // Also on the loading state, or the way back appears only once the
+            // data arrives — worst exactly when a slow load makes leaving most
+            // likely.
+            leading: Navigator.of(context).canPop()
+                ? AppIconButton(
+                    icon: Symbols.arrow_back_rounded,
+                    filled: false,
+                    tooltip: 'Back',
+                    accent: AppColorsExt.of(context).sleep,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  )
+                : null,
           ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
@@ -396,6 +408,20 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
             greeting: _greeting(),
             icon: Symbols.bedtime_rounded,
             accent: ext.sleep,
+            // Sleep was the only pushed tracker with NO back affordance. Water
+            // and Steps both carry one; this screen had three `actions` and no
+            // `leading`, so opening it from the Health hub or the Log sheet
+            // left the on-screen chrome with no way out — the user had to fall
+            // back to the platform gesture.
+            leading: Navigator.of(context).canPop()
+                ? AppIconButton(
+                    icon: Symbols.arrow_back_rounded,
+                    filled: false,
+                    tooltip: 'Back',
+                    accent: ext.sleep,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  )
+                : null,
             actions: [
               AppIconButton(
                 icon: Symbols.military_tech_rounded,

@@ -32,8 +32,13 @@ const kTodayNoMedicines = 'No medicines yet'; // home_dashboard.dart:1108
 const kTodayCustomize = 'Customize'; // home_dashboard.dart:735
 const kHeroNothingLeft = 'Nothing left to take today'; // home_dashboard.dart:412
 
-// Today pulse-row KPI labels. 'Meds' collides with the nav label, so every
-// assertion on these must be scoped — see a02.
+// Today pulse-row KPI labels.
+//
+// Two traps. 'Meds'/'Water'/'Focus' also appear in the nav bar and the Health
+// hub, and the shell keeps every tab alive, so assertions must be SCOPED to
+// HomeDashboard. And KpiCell renders `label.toUpperCase()` (insight_kit.dart),
+// so the text on screen is MEDS — assert with `.toUpperCase()`. The constants
+// stay in their source casing because the registry test greps lib/ for them.
 const kKpiMeds = 'Meds'; // home_dashboard.dart:779
 const kKpiWater = 'Water'; // home_dashboard.dart:789
 const kKpiFocus = 'Focus'; // home_dashboard.dart:799
@@ -64,3 +69,12 @@ const kMedsCareTeam = 'Care team'; // nunito_medication_dashboard.dart:1579
 const kTrends7 = '7 days'; // trends_data_service.dart:43
 const kTrends14 = '14 days'; // trends_data_service.dart:45
 const kTrends30 = '30 days'; // trends_data_service.dart:47
+
+// ── Diary ─────────────────────────────────────────────────────────────────
+const kDiaryTile = 'Diary'; // health_browse_screen.dart:77
+const kDiaryNewEntry = 'New entry'; // diary_screen.dart:76
+const kDiaryEditEntry = 'Edit entry'; // diary_entry_screen.dart:72
+const kDiaryEntryDeleted = 'Entry deleted'; // diary_screen.dart:54
+
+// ── shared ────────────────────────────────────────────────────────────────
+const kUndo = 'Undo'; // diary_screen.dart:57, app_shell.dart:99, and others

@@ -212,8 +212,17 @@ class E2E {
   }
 
   static Future<void> _pumpUntilShell(WidgetTester t) async {
-    const rounds = 40;
+    // 90s, not 10. Cold start on an emulator legitimately costs tens of
+    // seconds: Firebase, App Check and Auth each carry a 3s network ceiling,
+    // then seven service inits, then — under `--dart-define=E2E_SEED` — roughly
+    // five hundred individually-awaited writes before the first frame.
+    //
+    // The budget only exists to turn a hang into a diagnosis, so it should be
+    // generously above the real cost. Too tight and it reports "app never
+    // started" for an app that was starting fine.
+    const rounds = 360;
     const perRound = Duration(milliseconds: 250);
+    final sw = Stopwatch()..start();
     for (var i = 0; i < rounds; i++) {
       if (find.byType(AppNavBar).evaluate().isNotEmpty) {
         await settle(t);
@@ -222,7 +231,8 @@ class E2E {
       await t.pump(perRound);
     }
     throw StateError(
-      'App never reached the shell in ${(rounds * perRound.inMilliseconds) / 1000}s.\n'
+      'App never reached the shell in ${sw.elapsed.inSeconds}s '
+      '(budget ${(rounds * perRound.inMilliseconds) ~/ 1000}s).\n'
       'Visible text was: ${_visibleText().take(12).toList()}\n'
       'Did you pass --dart-define=E2E_TEST=true? Without it main.dart routes '
       'first-run users to /welcome instead of /home.\n'
@@ -236,6 +246,20 @@ class E2E {
       .map((e) => (e.widget as Text).data)
       .whereType<String>();
 
+  /// A short sample of what is actually on screen.
+  ///
+  /// Every "expected X, found 0" failure has the same first question — *so what
+  /// WAS on screen?* — and answering it used to cost a whole re-run with print
+  /// statements. Note the shell keeps all four tabs alive in an `IndexedStack`,
+  /// so this includes offstage tabs; it is a diagnostic, not an assertion.
+  static String screenSummary({int take = 14}) {
+    final texts = _visibleText().where((s) => s.trim().isNotEmpty).toList();
+    final shown = texts.take(take).join(' | ');
+    return texts.length > take
+        ? '$shown  …(+${texts.length - take} more)'
+        : shown;
+  }
+
   /// Asserts we are where we think we are.
   ///
   /// Replaces the `if (found) { expect(found) }` idiom, which is a tautology:
@@ -248,7 +272,8 @@ class E2E {
       findsWidgets,
       reason: 'Expected to be on "$where", but its marker was not on screen. '
           'Navigation failed; every assertion after this point would have been '
-          'evaluated against the wrong screen.',
+          'evaluated against the wrong screen.\n'
+          'On screen instead: ${screenSummary()}',
     );
   }
 
@@ -294,6 +319,28 @@ class E2E {
       findsNothing,
       reason: '$journey — a subtree failed to build and rendered ErrorWidget.',
     );
+  }
+
+  /// Asserts the toast auto-dismisses instead of sitting on the UI forever.
+  ///
+  /// This SDK pins a `SnackBar` that carries an action OPEN INDEFINITELY unless
+  /// `persist: false` is passed — so an Undo toast can permanently cover the
+  /// FAB and the last row of any list. It is a one-word omission at each call
+  /// site, invisible in review, and invisible to a headless test that never
+  /// waits.
+  static Future<void> assertToastGone(
+    WidgetTester t, {
+    Duration within = const Duration(seconds: 12),
+  }) async {
+    final deadline = within.inMilliseconds ~/ 250;
+    for (var i = 0; i < deadline; i++) {
+      if (find.byType(SnackBar).evaluate().isEmpty) return;
+      await t.pump(const Duration(milliseconds: 250));
+    }
+    fail('A SnackBar was still on screen after ${within.inSeconds}s. In this '
+        'SDK a SnackBar with an action never auto-dismisses unless '
+        '`persist: false` is set, so it covers the FAB and the bottom of the '
+        'list until the user swipes it away.');
   }
 
   /// Asserts a widget is not merely present but actually TAPPABLE.

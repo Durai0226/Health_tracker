@@ -29,13 +29,16 @@ void main() {
     await E2E.launch(t);
     E2E.at(find.byType(HomeDashboard), where: kTodayHeader);
 
+    // KpiCell uppercases its label (insight_kit.dart), so the rendered text is
+    // MEDS, not Meds. The constants keep the source casing so the registry can
+    // still grep lib/ for them.
     for (final label in const [
       kKpiMeds,
       kKpiWater,
       kKpiFocus,
       kKpiReminders,
     ]) {
-      expect(inToday(find.text(label)), findsWidgets,
+      expect(inToday(find.text(label.toUpperCase())), findsWidgets,
           reason: 'pulse-row pillar "$label"');
     }
 
@@ -90,16 +93,22 @@ void main() {
 
     expect(find.text(kTodayCustomizeSheet), findsOneWidget,
         reason: 'Customize must open the card-visibility sheet');
-    expect(find.byType(SwitchListTile), findsWidgets,
+    // AppSwitch inside a plain ListTile — NOT SwitchListTile, which this app
+    // does not use anywhere.
+    expect(find.byType(AppSwitch), findsWidgets,
         reason: 'the sheet must list card toggles');
 
     // Toggle the first card off, then prove it SURVIVES leaving and returning.
     // A round-trip through another tab is the cheap proof that the choice was
     // persisted rather than held in the widget's own State.
-    final firstSwitch = find.byType(SwitchListTile).first;
-    final before = t.widget<SwitchListTile>(firstSwitch);
-    final label = (before.title as Text?)?.data ?? '<unnamed>';
-    await t.tap(firstSwitch);
+    final firstRow = find.byType(ListTile).first;
+    final label =
+        (t.widget<ListTile>(firstRow).title as Text?)?.data ?? '<unnamed>';
+    final before = t
+        .widget<AppSwitch>(
+            find.descendant(of: firstRow, matching: find.byType(AppSwitch)))
+        .value;
+    await t.tap(find.descendant(of: firstRow, matching: find.byType(AppSwitch)));
     await settle(t);
 
     Navigator.of(t.element(find.byType(AppBottomSheet))).pop();
@@ -114,17 +123,21 @@ void main() {
     await E2E.tapWhenHittable(
         t, inToday(find.text(kTodayCustomize)), 'Customize action');
 
-    final after = t.widget<SwitchListTile>(find.byType(SwitchListTile).first);
+    final after = t
+        .widget<AppSwitch>(find.descendant(
+            of: find.byType(ListTile).first, matching: find.byType(AppSwitch)))
+        .value;
     expect(
-      after.value,
-      isNot(before.value),
+      after,
+      isNot(before),
       reason: 'Toggling "$label" off did not survive a tab switch, so the '
           'choice lives in widget State rather than storage. The user makes '
           'this change once and expects it to stick.',
     );
 
     // Put it back so the next test in this isolate starts from the same place.
-    await t.tap(find.byType(SwitchListTile).first);
+    await t.tap(find.descendant(
+        of: find.byType(ListTile).first, matching: find.byType(AppSwitch)));
     await settle(t);
     Navigator.of(t.element(find.byType(AppBottomSheet))).pop();
     await settle(t);

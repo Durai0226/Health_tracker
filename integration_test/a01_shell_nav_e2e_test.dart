@@ -141,8 +141,12 @@ void main() {
           reason: '"$tracker" should push a screen with a back affordance');
       await E2E.tapWhenHittable(t, back, 'back from $tracker');
 
-      expect(find.text(kHealthTrackers), findsOneWidget,
-          reason: 'returned to the Health hub after "$tracker"');
+      // By TYPE, not by the 'Your trackers' heading: scrolling a tile into
+      // view leaves the hub scrolled, and a heading that has scrolled out of
+      // the viewport's cache extent is no longer in the tree. "Where am I" is
+      // a question about the screen, so ask the screen.
+      E2E.at(NavTab.health.marker,
+          where: 'the Health hub after returning from "$tracker"');
     }
 
     E2E.assertClean('open and return from each Health tracker');

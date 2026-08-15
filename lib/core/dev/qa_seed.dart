@@ -53,6 +53,30 @@ enum SeedProfile {
 Future<void> seedQaData({
   SeedProfile profile = SeedProfile.typical,
   bool force = false,
+}) {
+  // Re-entrancy guard, separate from the persisted one below.
+  //
+  // Integration tests call `app.main()` once per TEST, in the same isolate and
+  // against the same database. So a second launch can begin while the first
+  // seed is still in flight — and it did: a test that timed out mid-seed was
+  // followed by another launch, the two raced, and the second died on
+  // `UNIQUE constraint failed: enhanced_medicines.id` (MedicationDao.addMedicine
+  // is a plain insert, not an upsert). The persisted `_seedGuardKey` cannot
+  // help, because it is only written once the first seed FINISHES.
+  //
+  // Sharing the in-flight future makes the second caller await the first
+  // instead of racing it.
+  return _inFlight ??=
+      _seedQaData(profile: profile, force: force).whenComplete(() {
+    _inFlight = null;
+  });
+}
+
+Future<void>? _inFlight;
+
+Future<void> _seedQaData({
+  required SeedProfile profile,
+  required bool force,
 }) async {
   if (!force &&
       CleanStorageService.getAppPreference(_seedGuardKey, false) == true) {

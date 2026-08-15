@@ -166,6 +166,21 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
       padding: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm),
       child: Row(
         children: [
+          // A pushed screen must offer a way back. The Health hub and the Log
+          // sheet both push this one, and its header carried only a
+          // notifications action — so the on-screen chrome was a dead end and
+          // the only way out was the platform gesture. Water and Steps already
+          // did this; Sleep and Period did not.
+          if (Navigator.of(context).canPop()) ...[
+            AppIconButton(
+              icon: Symbols.arrow_back_rounded,
+              filled: false,
+              tooltip: 'Back',
+              accent: ext.period,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+          ],
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
