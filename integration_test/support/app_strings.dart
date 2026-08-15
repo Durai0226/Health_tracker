@@ -87,3 +87,22 @@ const kMedsTakeNow = 'Take Now'; // nunito_medication_dashboard.dart:1276
 const kMedsTake = 'Take'; // nunito_medication_dashboard.dart:1276
 const kMedsTakeMedication = 'Take Medication'; // nunito_take_medication_sheet.dart:784
 const kMedsSkip = 'Skip'; // nunito_take_medication_sheet.dart:809
+
+// ── Vitals: blood pressure ────────────────────────────────────────────────
+const kBpLogFab = 'Log'; // blood_pressure_screen.dart:121
+const kBpSystolic = 'Systolic (mmHg)'; // blood_pressure_screen.dart:631
+const kBpDiastolic = 'Diastolic (mmHg)'; // blood_pressure_screen.dart:642
+const kBpSaveReading = 'Save reading'; // blood_pressure_screen.dart:705
+const kBpCrisisTitle = 'Possible hypertensive crisis'; // blood_pressure_screen.dart:209
+const kBpCallEmergency = 'Call emergency'; // blood_pressure_screen.dart:214
+const kBpReMeasure = 'Re-measure'; // blood_pressure_screen.dart:216
+const kBpReadingDeleted = 'Reading deleted'; // blood_pressure_screen.dart:99
+
+// ── Reminders / Smart Add ─────────────────────────────────────────────────
+const kRemindersCard = 'Reminders'; // home_dashboard.dart:1458 (Today card)
+const kSmartAddTitle = 'Smart Add'; // reminders_screen.dart:139
+const kSmartAddCreate = 'Create'; // reminders_screen.dart:203
+const kSmartAddUnparsed =
+    "Couldn't parse — fill it in manually"; // reminders_screen.dart:165
+const kReminderTitleField = 'Title'; // add_reminder_screen.dart:392
+const kRepeatEveryDay = 'Every Day'; // add_reminder_screen.dart:466
