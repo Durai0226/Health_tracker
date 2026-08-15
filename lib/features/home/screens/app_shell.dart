@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -22,7 +21,12 @@ import '../widgets/log_something_sheet.dart';
 class AppShell extends StatefulWidget {
   final int initialIndex;
 
-  const AppShell({super.key, this.initialIndex = 0});
+  const AppShell({super.key, this.initialIndex = 0})
+      : assert(initialIndex >= 0 && initialIndex <= 4,
+            'initialIndex must be a nav slot 0-4'),
+        assert(initialIndex != 2,
+            'slot 2 is the Log action, not a destination — it never becomes '
+            'the selection, so it cannot be an initial tab');
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -113,7 +117,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   // Slots {0,1,3,4} → stack children {0,1,2,3}.
-  int get _stackIndex => _slot < 2 ? _slot : _slot - 1;
+  static int _stackIndexOf(int slot) => slot < 2 ? slot : slot - 1;
+  int get _stackIndex => _stackIndexOf(_slot);
 
   /// Stack indices that have ever been selected.
   ///
@@ -127,7 +132,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   /// Deferring FIRST MOUNT only. Once a tab has been opened it stays alive for
   /// the session, which is what the per-tab `PrimaryScrollController` design
   /// depends on, so scroll positions and state behave exactly as before.
-  final Set<int> _mounted = {0};
+  ///
+  /// Seeded from [AppShell.initialIndex], NOT hardcoded to Today. It was `{0}`,
+  /// which shipped a blank first screen to every brand-new user: onboarding
+  /// finishes into `AppShell(initialIndex: 1)`, whose `_stackIndex` is 1, and
+  /// the `IndexedStack` below renders `SizedBox.shrink()` for any index this
+  /// set does not contain. The lazy-mount optimisation and a non-zero initial
+  /// tab were each correct alone and silently cancelled each other out.
+  late final Set<int> _mounted = {_stackIndexOf(widget.initialIndex)};
 
   void _onTap(int slot) {
     if (slot == 2) {

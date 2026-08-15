@@ -26,11 +26,9 @@ import 'core/services/notification_service.dart';
 import 'core/services/reminder_reschedule_service.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/background_alarm_service.dart';
-import 'core/services/focus_mode_service.dart';
 import 'core/services/feature_flag_service.dart';
 import 'core/services/feature_manager.dart';
 import 'core/services/simple_ad_service.dart';
-import 'features/focus/services/focus_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/screens/welcome_screen.dart';
 import 'features/home/screens/app_shell.dart';
@@ -110,8 +108,6 @@ void _syncSnoozeSettings() {
 void _initDeferredServices() {
   Future(() async {
     try {
-      final featureManager = FeatureManager();
-      
       // Initialize non-critical services in background
       await Future.wait([
         // Skip ads/ATT under E2E or screenshot mode — its native permission
@@ -191,8 +187,23 @@ Map<String, dynamic> parseAlarmPayload(String payload, int? notifId) {
 }
 
 void main() async {
+  // Whatever the host installed before us. Under `flutter test` /
+  // `integration_test` that is the binding's reporter, which turns a framework
+  // error into a FAILING TEST.
+  final FlutterExceptionHandler? hostOnError = FlutterError.onError;
+
   // Catch all Flutter framework errors
   FlutterError.onError = (FlutterErrorDetails details) {
+    // Overwriting the host handler unconditionally is why every integration
+    // suite could walk a visibly broken app and still report green: from this
+    // line on, every RenderFlex overflow, every `setState() after dispose()`,
+    // and every exception thrown inside a builder was printed and discarded.
+    // Under E2E we hand the error back to the harness instead. Production is
+    // unaffected — `kE2ETest` is a compile-time false there.
+    if (kE2ETest) {
+      hostOnError?.call(details);
+      return;
+    }
     debugPrint('Flutter Error: ${details.exception}');
     debugPrint('Stack trace: ${details.stack}');
     // Don't crash the app, just log the error
@@ -327,6 +338,19 @@ void main() async {
 
     runApp(MyApp(initialRoute: initialRoute, alarmPayload: alarmPayload));
   }, (error, stackTrace) {
+    // The async half of the same problem. A `runZonedGuarded` handler that
+    // only logs makes every escaping async error invisible to the harness, and
+    // unlike `FlutterError.onError` a test cannot reclaim it from outside the
+    // zone. Route it back through FlutterError under E2E so the collector in
+    // `integration_test/support/e2e.dart` sees it.
+    if (kE2ETest) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'app root zone',
+      ));
+      return;
+    }
     debugPrint('Uncaught Error: $error');
     debugPrint('Stack trace: $stackTrace');
     // Log but don't crash the app
