@@ -63,11 +63,11 @@ void main() {
       for (var i = 0; i < lines.length; i++) {
         final code = codeOf(lines[i]);
         if (!re.hasMatch(code)) continue;
-        final prev = i > 0 ? lines[i - 1] : '';
-        if (optOut != null &&
-            (lines[i].contains(optOut) || prev.contains(optOut))) {
-          continue;
-        }
+        // Look back a few lines, not one: an opt-out worth writing usually
+        // needs a sentence, and a two-line comment would otherwise fall
+        // outside the window and be silently ignored.
+        final window = lines.sublist((i - 3).clamp(0, i), i + 1);
+        if (optOut != null && window.any((l) => l.contains(optOut))) continue;
         hits.add('${rel(f)}:${i + 1}  ${lines[i].trim()}');
       }
     }

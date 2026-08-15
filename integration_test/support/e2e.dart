@@ -124,11 +124,22 @@ class E2E {
   }
 
   /// True when a tap at the widget's centre would actually reach it.
+  ///
+  /// Defensive by necessity: the tree can rebuild between polls — a toast
+  /// auto-dismisses, a list reorders, a FutureBuilder resolves — and then the
+  /// finder that matched a moment ago matches nothing. `renderObject` throws
+  /// `Bad state: No element` in that case, which surfaces as a stack trace with
+  /// no hint of what was being tapped.
   static bool _receivesTap(WidgetTester t, Finder one) {
-    final target = t.renderObject(one);
-    final result = HitTestResult();
-    t.binding.hitTestInView(result, t.getCenter(one), t.view.viewId);
-    return result.path.map((e) => e.target).contains(target);
+    if (one.evaluate().isEmpty) return false; // e2e-conditional-ok: liveness probe inside the tap helper, not an assertion
+    try {
+      final target = t.renderObject(one);
+      final result = HitTestResult();
+      t.binding.hitTestInView(result, t.getCenter(one), t.view.viewId);
+      return result.path.map((e) => e.target).contains(target);
+    } catch (_) {
+      return false; // rebuilt underneath us; the caller keeps polling
+    }
   }
 
   /// Taps a widget once it genuinely receives hit tests.
@@ -149,7 +160,9 @@ class E2E {
     String what, {
     int maxPumps = 30,
   }) async {
-    expect(f, findsWidgets, reason: '"$what" is not on screen at all');
+    expect(f, findsWidgets,
+        reason: '"$what" is not on screen at all.\n'
+            'On screen instead: ${screenSummary()}');
     final one = f.first;
 
     // Scroll it into the viewport first, the way a user would.

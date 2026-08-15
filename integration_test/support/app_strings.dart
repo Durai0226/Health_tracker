@@ -78,3 +78,12 @@ const kDiaryEntryDeleted = 'Entry deleted'; // diary_screen.dart:54
 
 // ── shared ────────────────────────────────────────────────────────────────
 const kUndo = 'Undo'; // diary_screen.dart:57, app_shell.dart:99, and others
+
+// ── Water ─────────────────────────────────────────────────────────────────
+const kWaterTodayLog = "Today's Log"; // aqua_water_dashboard.dart:563
+
+// ── Medication: dose actions ──────────────────────────────────────────────
+const kMedsTakeNow = 'Take Now'; // nunito_medication_dashboard.dart:1276
+const kMedsTake = 'Take'; // nunito_medication_dashboard.dart:1276
+const kMedsTakeMedication = 'Take Medication'; // nunito_take_medication_sheet.dart:784
+const kMedsSkip = 'Skip'; // nunito_take_medication_sheet.dart:809
