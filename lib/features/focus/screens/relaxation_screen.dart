@@ -196,8 +196,6 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
             _relaxationService.setCategory(category);
           },
           borderRadius: BorderRadius.circular(20),
-          splashColor: category.color.withOpacity(0.3),
-          highlightColor: category.color.withOpacity(0.15),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             width: 130,
@@ -325,8 +323,6 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                     _relaxationService.setMusic(track);
                   },
                   borderRadius: BorderRadius.circular(16),
-                  splashColor: track.color.withOpacity(0.2),
-                  highlightColor: track.color.withOpacity(0.1),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.all(16),
@@ -444,8 +440,6 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                   _relaxationService.setDuration(mins);
                 },
                 borderRadius: BorderRadius.circular(16),
-                splashColor: color.withOpacity(0.3),
-                highlightColor: color.withOpacity(0.15),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -501,8 +495,6 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                 _relaxationService.startSession();
               },
               borderRadius: BorderRadius.circular(24),
-              splashColor: Colors.white.withOpacity(0.3),
-              highlightColor: Colors.white.withOpacity(0.1),
               child: Ink(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
@@ -789,13 +781,20 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                         style: const TextStyle(fontSize: 40),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        _relaxationService.formattedTime,
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: category.color,
-                          letterSpacing: 2,
+                      // Only the clock reacts to the per-second tick. The
+                      // outer ListenableBuilder now fires only on real state
+                      // transitions, so a running session no longer rebuilds
+                      // this whole screen 60 times a minute.
+                      ValueListenableBuilder<int>(
+                        valueListenable: _relaxationService.tick,
+                        builder: (context, _, __) => Text(
+                          _relaxationService.formattedTime,
+                          style: TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                            color: category.color,
+                            letterSpacing: 2,
+                          ),
                         ),
                       ),
                     ],

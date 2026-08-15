@@ -114,6 +114,14 @@ void main() {
     await pumpDashboard(tester);
     await switchToPillboxView(tester);
 
+    // The Meds header carries a greeting, so it now uses the stacked
+    // (Material 3 large-title) layout and is ~50pt taller. That costs nothing
+    // on a real phone — the dashboard scrolls — but flutter_test's default
+    // viewport is only 800x600, so the pill lands just below the fold and
+    // tap() misses it. Scroll it into view rather than tapping blind.
+    await tester.ensureVisible(find.text('Metformin'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Metformin'));
     await tester.pumpAndSettle();
 

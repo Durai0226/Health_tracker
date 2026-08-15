@@ -48,9 +48,16 @@ class SegmentedToggle extends StatelessWidget {
                     onChanged(i);
                   }
                 },
-                child: AnimatedContainer(
-                  duration: AppMotion.base,
-                  curve: AppMotion.emphasized,
+                // Container, not AnimatedContainer.
+                //
+                // This used to lerp both the fill AND `AppShadows.resting` over
+                // 260ms, which meant that on every switch a blurred shadow was
+                // animating OUT on the old segment while another animated IN on
+                // the new one — two shadows re-rasterizing every frame for a
+                // quarter of a second, on 12+ screens. Selection now changes on
+                // the same frame as the tap. The haptic below and the instant
+                // colour change are the feedback.
+                child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 11),
                   decoration: BoxDecoration(
                     color: i == index ? ext.surface : Colors.transparent,

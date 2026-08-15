@@ -282,11 +282,22 @@ class TrendsDataService {
   // --------------------------------------------------------------- ADHERENCE
 
   static Future<TrendSeries> _adherence(List<DateTime> days) async {
-    final summaries = await Future.wait(
-        days.map((d) => MedicineCleanStorageService.getDailySummaryAsync(d)));
+    if (days.isEmpty) return const TrendSeries([]);
+    // Two queries for the whole range, not two per day. `Future.wait` made
+    // these concurrent rather than serialized, but it still issued 2N reads —
+    // and N is 365 in Year mode, each re-decoding every medicine's schedule
+    // JSON. The batch path buckets one range read instead.
+    final byDay =
+        await MedicineCleanStorageService.getDailySummariesForRange(
+            days.first, days.last);
     final points = <TrendPoint>[];
     for (var i = 0; i < days.length; i++) {
-      final s = summaries[i];
+      final d = days[i];
+      final s = byDay[DateTime(d.year, d.month, d.day)];
+      if (s == null) {
+        points.add(TrendPoint(days[i], null));
+        continue;
+      }
       // A day with no scheduled (non-PRN) doses is a gap, not 100%.
       final v = s.totalScheduled > 0
           ? (s.adherenceRate * 100).clamp(0, 100).toDouble()

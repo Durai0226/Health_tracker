@@ -181,16 +181,54 @@ class RelaxationService extends ChangeNotifier {
     }
   }
 
+  /// Fires once a second while a session runs — and nothing else.
+  ///
+  /// Same defect `FocusService.tick` was introduced to fix. The countdown
+  /// arrived via `notifyListeners()`, and `RelaxationScreen.build` wraps the
+  /// ENTIRE 1078-line screen in one `ListenableBuilder` on this service — so a
+  /// running relaxation session rebuilt all of it 60 times a minute, including
+  /// a `shrinkWrap: true` ListView that eagerly builds every track.
+  ///
+  /// Only the clock changes per second. It listens here; everything else keeps
+  /// listening to the ChangeNotifier, which now fires only on real state
+  /// transitions (start, pause, resume, complete).
+  final ValueNotifier<int> tick = ValueNotifier<int>(0);
+
   void _startTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingSeconds > 0 && !_isPaused) {
-        _remainingSeconds--;
-        notifyListeners();
-      } else if (_remainingSeconds <= 0) {
-        _completeSession();
-      }
-    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) => applyTick());
+  }
+
+  /// One second of countdown. Extracted so a test drives the real path — the
+  /// property that matters (a tick does NOT fire notifyListeners) is only
+  /// meaningful when asserted against this, not against the notifier alone.
+  /// Puts the service into a running state without touching audio or storage,
+  /// so a test can drive [applyTick] down the real countdown path.
+  ///
+  /// Needed because `applyTick` correctly no-ops when nothing is running —
+  /// which meant a test that only called it measured nothing and passed with
+  /// the bug restored.
+  @visibleForTesting
+  void primeForTest({int seconds = 60}) {
+    _isRunning = true;
+    _isPaused = false;
+    _remainingSeconds = seconds;
+  }
+
+  @visibleForTesting
+  void applyTick() {
+    // A tick with no session running must do nothing. Without this guard the
+    // `_remainingSeconds <= 0` branch below ran `_completeSession()` against a
+    // null session and threw — a stray timer callback after a session ended
+    // would have crashed the isolate.
+    if (!_isRunning) return;
+    if (_remainingSeconds > 0 && !_isPaused) {
+      _remainingSeconds--;
+      // Deliberately NOT notifyListeners(): see [tick].
+      tick.value = _remainingSeconds;
+    } else if (_remainingSeconds <= 0) {
+      _completeSession();
+    }
   }
 
   void pauseSession() {

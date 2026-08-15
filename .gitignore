@@ -51,3 +51,8 @@ local.properties
 **/*.jks
 **/*.keystore
 
+
+# Added by the security pass: *.env misses .env.local/.env.production,
+# and Xcode user state leaks the developer username + local UI state.
+.env*
+**/xcuserdata/

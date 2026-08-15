@@ -73,6 +73,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Tap and pump a bounded number of frames instead of settling. The save
+  /// path puts a spinner on the button and then talks to the notification
+  /// plugin, which never answers under `flutter test` — so the tree never goes
+  /// idle. The medicine row is written before any of that.
+  Future<void> tapAndPump(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+
   /// The wizard's own primary button — `find.text` alone is ambiguous, since
   /// the header title reads "Add Medication" as well.
   Finder button(String label) => find.widgetWithText(AppButton, label);
@@ -112,8 +125,7 @@ void main() {
 
     testWidgets('saves normally once the step is valid', (tester) async {
       await toScheduleStep(tester);
-      await tapVisible(tester, button('Add Medication'));
-      await tester.pumpAndSettle();
+      await tapAndPump(tester, button('Add Medication'));
 
       expect(await savedCount(), 1);
     });
@@ -169,8 +181,7 @@ void main() {
       await tapVisible(tester, button('Continue'));
       expect(find.text('When do you take it?'), findsOneWidget);
 
-      await tapVisible(tester, button('Add Medication'));
-      await tester.pumpAndSettle();
+      await tapAndPump(tester, button('Add Medication'));
 
       final saved = await MedicineCleanStorageService.getAllMedicines();
       expect(saved, hasLength(1));

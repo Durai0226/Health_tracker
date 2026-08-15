@@ -96,6 +96,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Destructive "Delete all data": confirmation-guarded wipe of the four core
   /// features. Deletes the kept Drift rows and focus preferences, then routes
   /// the UI back to a clean state.
+  /// Deletes the cloud account AND everything on this device.
+  ///
+  /// Distinct from [_deleteAllData], which only ever wiped local Drift rows —
+  /// it left `users/{uid}`, the backups subcollection (each holding a full
+  /// health export) and the Firebase Auth account itself alive. Google Play
+  /// has required a real in-app deletion path since 2024.
+  Future<void> _deleteAccountAndData() async {
+    final confirm = await ConfirmationBottomSheet.show(
+      context: context,
+      title: 'Delete your account?',
+      message:
+          'This deletes your account and every copy of your health data — on '
+          'this device and in the cloud, including any backups. It cannot be '
+          'undone and it cannot be recovered by support. Export a copy first '
+          'if you want to keep your records.',
+      confirmText: 'Delete my account',
+      icon: Symbols.person_remove_rounded,
+      isDangerous: true,
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _isClearing = true);
+    try {
+      // Cloud first: if the local wipe ran first and the cloud step then
+      // failed, the user would be left believing everything was gone while a
+      // full copy of their health record survived on Google's servers.
+      final error = await AuthService().deleteAccount();
+      if (error != null) {
+        if (mounted) _showResultSnack(error, isError: true);
+        return;
+      }
+      await CleanStorageService.clearAllData();
+      await CleanStorageService.clearAllPersistentData();
+      if (!mounted) return;
+      _showResultSnack('Account and all data deleted.', isError: false);
+    } catch (e) {
+      if (mounted) _showResultSnack('Delete failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isClearing = false);
+    }
+  }
+
   Future<void> _deleteAllData() async {
     final confirm = await ConfirmationBottomSheet.show(
       context: context,
@@ -441,6 +483,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             : Icon(Symbols.lock_rounded,
                                 color: ext.textTertiary),
                       ),
+                      // Play requires an in-app account-deletion path, and
+                      // "Delete all data" is not one — it only ever wiped local
+                      // rows, leaving the cloud copy and the Auth account.
+                      if (_authService.isAuthenticated)
+                        AppListTile(
+                          icon: Symbols.person_remove_rounded,
+                          iconColor: ext.mark(ext.error),
+                          title: 'Delete account',
+                          subtitle:
+                              'Erase your account and all cloud copies, including backups',
+                          onTap: _isClearing ? null : _deleteAccountAndData,
+                        ),
                       AppListTile(
                         icon: Symbols.delete_forever_rounded,
                         iconColor: ext.mark(ext.error),

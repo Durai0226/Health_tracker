@@ -49,6 +49,26 @@ class WaterDao extends DatabaseAccessor<AppDatabase> with _$WaterDaoMixin {
       .get();
   }
 
+  /// Logs for MANY days in one query, bucketed by day id.
+  ///
+  /// [getLogsForDay] was called in a loop over the warm-cache window — 90 days
+  /// — during `WaterService.init()`, which runs BEFORE `runApp()`. That is up
+  /// to 91 serialized round trips standing between app launch and the first
+  /// frame, and it grows with how long someone has used the app.
+  Future<Map<String, List<EnhancedWaterLog>>> getLogsForDays(
+      List<String> dailyDataIds) async {
+    if (dailyDataIds.isEmpty) return {};
+    final rows = await (select(enhancedWaterLogs)
+          ..where((t) => t.dailyDataId.isIn(dailyDataIds))
+          ..orderBy([(t) => OrderingTerm.asc(t.time)]))
+        .get();
+    final out = <String, List<EnhancedWaterLog>>{};
+    for (final r in rows) {
+      out.putIfAbsent(r.dailyDataId, () => []).add(r);
+    }
+    return out;
+  }
+
   Future<void> addWaterLog(EnhancedWaterLogsCompanion log) async {
     await into(enhancedWaterLogs).insert(log);
   }

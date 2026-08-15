@@ -60,7 +60,15 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
 
   // Scroll controller
   final _scrollController = ScrollController();
-  double _headerOpacity = 1.0;
+  /// Header fade, driven by scroll offset.
+  ///
+  /// This used to be a plain field mutated inside `setState`, which rebuilt the
+  /// ENTIRE screen (~1379 widgets — the largest tree in the water feature) on
+  /// every scroll notification. The value is read in exactly one place, and it
+  /// stops changing once the offset passes 150, so most of those rebuilds
+  /// produced an identical frame. A ValueNotifier + ValueListenableBuilder
+  /// scopes the rebuild to the header alone.
+  final ValueNotifier<double> _headerOpacity = ValueNotifier<double>(1.0);
 
   @override
   void initState() {
@@ -97,10 +105,12 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   }
 
   void _onScroll() {
-    final offset = _scrollController.offset;
-    setState(() {
-      _headerOpacity = (1 - (offset / 150)).clamp(0.0, 1.0);
-    });
+    final next = (1 - (_scrollController.offset / 150)).clamp(0.0, 1.0);
+    // Assign only on a real change: past 150px of scroll this clamps to 0.0 and
+    // stays there, so the rest of the gesture costs nothing. (ValueNotifier
+    // already suppresses identical assignments, but the explicit guard makes
+    // the intent obvious.)
+    if (next != _headerOpacity.value) _headerOpacity.value = next;
   }
 
   /// [showLoading] gates the full-screen shimmer skeleton. Only the first load
@@ -428,6 +438,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     _fadeController.dispose();
     _headerController.dispose();
     _scrollController.dispose();
+    _headerOpacity.dispose();
     super.dispose();
   }
 
@@ -684,8 +695,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       flexibleSpace: FlexibleSpaceBar(
         background: SlideTransition(
           position: _headerSlideAnimation,
-          child: Opacity(
-            opacity: _headerOpacity,
+          child: ValueListenableBuilder<double>(
+            valueListenable: _headerOpacity,
+            builder: (context, opacity, child) =>
+                Opacity(opacity: opacity, child: child),
             child: SafeArea(
               child: Padding(
                 // The toolbar row (leading back button + actions) paints on

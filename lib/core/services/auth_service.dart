@@ -1,10 +1,12 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'cloud_sync_service.dart';
+import 'app_lock_service.dart';
 import 'clean_storage_service.dart';
 import '../config/env_config.dart';
 import '../utils/validators.dart';
@@ -38,7 +40,12 @@ class UserModel {
 
   factory UserModel.fromFirebaseUser(firebase_auth.User user) => UserModel(
         id: user.uid,
-        name: user.isAnonymous ? 'Guest' : (user.displayName ?? 'User'),
+        // An account with no display name (email sign-up before the
+        // updateDisplayName write lands, or an account created outside the
+        // app) gets an EMPTY name, not the placeholder literal 'User'. 'User'
+        // is not a name — it rendered as the Home screen's title. Call sites
+        // decide their own honest fallback for an empty name.
+        name: user.isAnonymous ? 'Guest' : (user.displayName ?? ''),
         email: user.isAnonymous ? '' : (user.email ?? ''),
         photoUrl: user.photoURL,
       );
@@ -72,16 +79,6 @@ class AuthService extends ChangeNotifier {
 
   static const String _userPrefKey = 'current_user_data';
 
-  // Mock sign-in method for testing/development
-  Future<bool> mockSignIn(String email, String password) async {
-    try {
-      final result = await signInWithEmailPassword(email, password);
-      return result == null; // null means success
-    } catch (e) {
-      debugPrint('Mock sign-in error: $e');
-      return false;
-    }
-  }
 
   Future<void> init() async {
     try {
@@ -435,6 +432,20 @@ class AuthService extends ChangeNotifier {
     // to a user handing their phone to someone else.
     await CleanStorageService.setCloudSyncEnabled(false);
 
+    // Local health data deliberately STAYS on the device.
+    //
+    // This is a local-first app, so signing out of the cloud must not destroy
+    // records the user may have no other copy of. But "Sign out" reads to most
+    // people as "my data is gone", and it is not — so if a PIN exists, re-arm
+    // the app lock on the way out. That is the difference between handing
+    // someone your phone and handing them your medication history.
+    try {
+      if (AppLockService().hasPinSet) {
+        await CleanStorageService.setAppPreference(
+            AppLockService.keyLockEnabled, true);
+      }
+    } catch (_) {}
+
     // Deliberately NOT re-signing in anonymously here.
     //
     // This used to call signInAnonymously(), so there was no path in the whole
@@ -443,6 +454,84 @@ class AuthService extends ChangeNotifier {
     // means local-only. An anonymous identity is created on demand if and when
     // something actually needs one.
     _enableOfflineGuestMode();
+  }
+
+  /// Permanently deletes the account: cloud documents, the Firebase Auth
+  /// user, and then everything on this device.
+  ///
+  /// Google Play has required an in-app account-deletion path since 2024, and
+  /// there was none — "Delete all data" in Settings wiped local Drift rows
+  /// only. It left `users/{uid}` in Firestore, the whole backups subcollection,
+  /// and the Auth account itself untouched, so a user who deleted their data
+  /// still had a live cloud copy of it.
+  ///
+  /// Returns `null` on success, or a message to show the user.
+  ///
+  /// NOTE on completeness: a client cannot reliably delete subcollections —
+  /// Firestore has no recursive delete from the SDK. This removes the
+  /// documents the app itself writes (including `backups`, which is the one
+  /// holding a full health export). A Cloud Function using the Admin SDK's
+  /// recursive delete is the correct belt-and-braces follow-up, and is called
+  /// out in docs/app-rating.md.
+  Future<String?> deleteAccount() async {
+    final user = _firebaseAuth?.currentUser;
+    if (user == null) {
+      // Local-only / guest: there is no cloud account to delete. The caller
+      // still wipes local data, which is the whole of "delete" for them.
+      return null;
+    }
+
+    try {
+      final uid = user.uid;
+      final db = FirebaseFirestore.instance;
+
+      // Backups first — each document holds a complete health export, so it is
+      // the most sensitive thing to leave behind if a later step fails.
+      for (final sub in const [
+        'backups',
+        'medicines',
+        'reminders',
+        'reminderCategories',
+        'water',
+        'vitals',
+        'diary',
+        'cycles',
+        'steps',
+        'sleep',
+      ]) {
+        try {
+          final docs =
+              await db.collection('users').doc(uid).collection(sub).get();
+          for (final d in docs.docs) {
+            await d.reference.delete();
+          }
+        } catch (e) {
+          debugPrint('Account delete: subcollection $sub failed: $e');
+        }
+      }
+      try {
+        await db.collection('users').doc(uid).delete();
+      } catch (e) {
+        debugPrint('Account delete: user doc failed: $e');
+      }
+
+      await user.delete();
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        // Firebase refuses deletion on a stale session. This is correct
+        // behaviour, not a bug — surface it so the user can re-authenticate.
+        return 'For your security, please sign in again and then delete your '
+            'account.';
+      }
+      return e.message ?? 'Could not delete the account.';
+    } catch (e) {
+      return 'Could not delete the account: $e';
+    }
+
+    await _clearSavedUser();
+    await CleanStorageService.setCloudSyncEnabled(false);
+    _enableOfflineGuestMode();
+    return null;
   }
 
   /// Send password reset email
@@ -475,17 +564,18 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Check if an email is already registered
-  Future<bool> checkEmailExists(String email) async {
-    if (_firebaseAuth == null) return false;
-    try {
-      final list = await _firebaseAuth!.fetchSignInMethodsForEmail(email.trim());
-      return list.isNotEmpty;
-    } catch (e) {
-      debugPrint("Error checking email: $e");
-      return false; // Assume new if error, or handle better
-    }
-  }
+  // REMOVED: checkEmailExists / fetchSignInMethodsForEmail.
+  //
+  // It had zero callers, and it was an account-enumeration oracle: anyone with
+  // the (public, extractable-from-any-APK) Firebase API key could test whether
+  // an address had an account. For a medication tracker that discloses "this
+  // person uses a medication app", which is a health inference.
+  //
+  // Firebase deprecated the API for exactly this reason. Also switch on
+  // Authentication → Settings → **Email Enumeration Protection** in the
+  // console — that is an owner action and cannot be done from the codebase.
+  // Any future "does this email exist" flow should attempt the sign-in and
+  // branch on the generic `invalid-credential` error instead.
 
   /// Sign up with email and password (restored for smart flow)
   Future<String?> signUpWithEmailPassword(String name, String email, String password) async {

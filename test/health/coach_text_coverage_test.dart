@@ -55,7 +55,14 @@ void main() {
       final t = e.cycleInsight(pregnancy: true);
       expect(t.toLowerCase(), contains('paused'));
     });
-    test('dailyBriefing includes steps + sleep when present', () {
+    // This test used to assert the opposite: that dailyBriefing recited
+    // "meds 1/2 · water 50% · steps 50% · sleep 7h 0m · focus 25m". That recap
+    // was removed deliberately. It made the string ~150 characters before the
+    // advice clause, and the strip that renders it is clamped to two lines —
+    // so on a phone the recap was itself truncated AND it truncated the one
+    // sentence that told the user what to do. Home already renders those
+    // numbers as a four-up pulse row immediately below the strip.
+    test('dailyBriefing returns advice, not a recap of the pulse row', () {
       final t = e.dailyBriefing(
         medsTaken: 1,
         medsTotal: 2,
@@ -67,8 +74,13 @@ void main() {
         stepGoal: 8000,
         sleepMinutes: 420,
       );
-      expect(t, contains('steps'));
-      expect(t, contains('sleep'));
+      expect(t, isNotEmpty);
+      expect(t, isNot(contains('Today so far')));
+      expect(t, isNot(contains('steps 50%')));
+      expect(t, isNot(contains('sleep 7h')));
+      expect(t.length, lessThanOrEqualTo(140),
+          reason: 'Two lines of bodyMedium in ~290pt holds roughly 140 '
+              'characters. Got: "$t"');
     });
   });
 }

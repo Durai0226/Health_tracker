@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -121,8 +122,58 @@ class AppLockService with WidgetsBindingObserver {
     return base64UrlEncode(bytes);
   }
 
+  /// Iteration count for [_hashPin].
+  ///
+  /// A single SHA-256 round over a 4-digit PIN is 10,000 hashes to exhaust —
+  /// microseconds. Stretching turns an offline guess of the whole keyspace
+  /// from instant into seconds-to-minutes, which is the difference between
+  /// "trivial" and "not worth it" for a device thief. 120k is chosen to stay
+  /// under ~150ms on a low-end phone, since it runs on the unlock path.
+  static const int kPinHashRounds = 120000;
+
+  /// Salted, stretched hash. Not raw SHA-256 — see [kPinHashRounds].
+  ///
+  /// Iterated SHA-256 rather than PBKDF2-HMAC because `crypto` is already a
+  /// dependency and this needs no new package; the security property that
+  /// matters here (cost per guess) is the same.
   String _hashPin(String pin, String salt) {
-    return sha256.convert(utf8.encode('$salt:$pin')).toString();
+    var digest = sha256.convert(utf8.encode('$salt:$pin'));
+    for (var i = 1; i < kPinHashRounds; i++) {
+      digest = sha256.convert(digest.bytes);
+    }
+    return digest.toString();
+  }
+
+  /// Legacy single-round hash, kept ONLY so existing installs can still unlock
+  /// and be transparently upgraded on their next successful entry.
+  String _legacyHashPin(String pin, String salt) =>
+      sha256.convert(utf8.encode('$salt:$pin')).toString();
+
+  // ---- brute-force throttling ----------------------------------------------
+  //
+  // There was none: `_submitUnlock` called `verifyPin` with no counter, no
+  // lockout and no backoff, so an attacker holding the device could try all
+  // 10,000 PINs by hand or by automation with nothing stopping them.
+
+  static const String keyFailedAttempts = 'securityPinFailedAttempts';
+  static const String keyLockedUntil = 'securityPinLockedUntilMs';
+
+  /// How long unlocking stays blocked after [failures] consecutive misses.
+  /// Nothing for the first 4 (fat fingers), then escalating.
+  static Duration lockoutFor(int failures) {
+    if (failures < 5) return Duration.zero;
+    if (failures < 8) return const Duration(seconds: 30);
+    if (failures < 11) return const Duration(minutes: 5);
+    return const Duration(minutes: 30);
+  }
+
+  /// Remaining lockout, or [Duration.zero] when entry is allowed.
+  Duration get remainingLockout {
+    final until =
+        (CleanStorageService.getAppPreference(keyLockedUntil) as num?)?.toInt();
+    if (until == null) return Duration.zero;
+    final ms = until - DateTime.now().millisecondsSinceEpoch;
+    return ms > 0 ? Duration(milliseconds: ms) : Duration.zero;
   }
 
   /// Hashes and persists a new PIN (salted SHA-256 — never the raw digits)
@@ -138,10 +189,47 @@ class AppLockService with WidgetsBindingObserver {
   /// Constant-shape comparison against the stored salted hash. Returns
   /// `false` (never throws) when no PIN has been set yet.
   bool verifyPin(String pin) {
+    // Refuse outright while locked out, so a caller that forgets to check
+    // [remainingLockout] still cannot be used as a guessing oracle.
+    if (remainingLockout > Duration.zero) return false;
+
     final salt = CleanStorageService.getAppPreference(keyPinSalt) as String?;
     final hash = CleanStorageService.getAppPreference(keyPinHash) as String?;
     if (salt == null || hash == null) return false;
-    return _hashPin(pin, salt) == hash;
+
+    var ok = _hashPin(pin, salt) == hash;
+
+    // Transparent upgrade: an install created before stretching still holds a
+    // single-round hash. Accept it once, then immediately re-hash at the new
+    // cost so the weak form is gone after the next unlock.
+    if (!ok && _legacyHashPin(pin, salt) == hash) {
+      ok = true;
+      unawaited(setPin(pin));
+    }
+
+    unawaited(_recordAttempt(success: ok));
+    return ok;
+  }
+
+  Future<void> _recordAttempt({required bool success}) async {
+    if (success) {
+      await CleanStorageService.setAppPreference(keyFailedAttempts, 0);
+      await CleanStorageService.setAppPreference(keyLockedUntil, 0);
+      return;
+    }
+    final failures =
+        ((CleanStorageService.getAppPreference(keyFailedAttempts) as num?)
+                    ?.toInt() ??
+                0) +
+            1;
+    await CleanStorageService.setAppPreference(keyFailedAttempts, failures);
+    final lockout = lockoutFor(failures);
+    if (lockout > Duration.zero) {
+      await CleanStorageService.setAppPreference(
+        keyLockedUntil,
+        DateTime.now().add(lockout).millisecondsSinceEpoch,
+      );
+    }
   }
 
   /// Turns app lock off. The caller is responsible for verifying the current

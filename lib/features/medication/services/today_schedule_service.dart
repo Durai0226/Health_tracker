@@ -40,8 +40,23 @@ class TodayScheduleService {
 
   static Future<List<ScheduledDose>> getTodaysDoses(DateTime date) async {
     final medicines = await MedicineCleanStorageService.getAllMedicines();
-    final active = medicines.where((m) => m.isActive && !m.isArchived);
     final logs = await MedicineCleanStorageService.getLogsForDate(date);
+    return dosesFrom(date, medicines: medicines, logs: logs);
+  }
+
+  /// The same computation over ALREADY-FETCHED rows.
+  ///
+  /// [getTodaysDoses] re-reads both tables every call. Home needs the doses,
+  /// the daily summary AND the streak on one load, and each of those fetched
+  /// its own copy — three `getAllMedicines()` (which re-maps and re-decodes
+  /// every medicine's schedule JSON) and two `getLogsForDate()`, all awaited in
+  /// series. Callers that already hold the rows should compute from them.
+  static List<ScheduledDose> dosesFrom(
+    DateTime date, {
+    required List<EnhancedMedicine> medicines,
+    required List<MedicineLog> logs,
+  }) {
+    final active = medicines.where((m) => m.isActive && !m.isArchived);
 
     final doses = <ScheduledDose>[];
     for (final medicine in active) {

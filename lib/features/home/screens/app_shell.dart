@@ -115,6 +115,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // Slots {0,1,3,4} → stack children {0,1,2,3}.
   int get _stackIndex => _slot < 2 ? _slot : _slot - 1;
 
+  /// Stack indices that have ever been selected.
+  ///
+  /// `IndexedStack` BUILDS AND KEEPS ALIVE every child — it only controls which
+  /// one paints. So landing on Today also ran the Medication dashboard's full
+  /// load (which additionally WRITES: it drains queued dose actions and
+  /// reconciles missed doses), the Trends bundle (which awaits four service
+  /// inits then four range queries), and the Health hub's tree — none of it
+  /// visible, all of it on the critical path to first interaction.
+  ///
+  /// Deferring FIRST MOUNT only. Once a tab has been opened it stays alive for
+  /// the session, which is what the per-tab `PrimaryScrollController` design
+  /// depends on, so scroll positions and state behave exactly as before.
+  final Set<int> _mounted = {0};
+
   void _onTap(int slot) {
     if (slot == 2) {
       LogSomethingSheet.show(context);
@@ -123,6 +137,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() {
       if (slot == 0 && _slot != 0) _homeTick++;
       _slot = slot;
+      _mounted.add(slot < 2 ? slot : slot - 1);
     });
   }
 
@@ -131,7 +146,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   /// meds → Meds tab; water → Health tab; focus/reminders → pushed screens.
   void _legacyNavigate(int index, {int? healthTab}) {
     if (index == 1) {
-      setState(() => _slot = (healthTab == 1) ? 3 : 1);
+      setState(() {
+        _slot = (healthTab == 1) ? 3 : 1;
+        _mounted.add(_slot < 2 ? _slot : _slot - 1);
+      });
     } else if (index == 2) {
       Navigator.push(
         context,
@@ -171,10 +189,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         index: _stackIndex,
         children: [
           for (var i = 0; i < screens.length; i++)
-            PrimaryScrollController(
-              controller: _tabScrollControllers[i],
-              child: screens[i],
-            ),
+            if (_mounted.contains(i))
+              PrimaryScrollController(
+                controller: _tabScrollControllers[i],
+                child: screens[i],
+              )
+            else
+              const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: AppNavBar(

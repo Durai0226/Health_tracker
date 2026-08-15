@@ -98,7 +98,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -215,6 +215,21 @@ class AppDatabase extends _$AppDatabase {
           // Pre-logged (travel/pillbox) dose status.
           await m.addColumn(medicineLogs, medicineLogs.isPreLogged);
           debugPrint('✓ Added route field, diary table, and pre-logged dose status');
+        }
+        if (from < 12) {
+          // The schema had NO indexes at all — every table declared only a
+          // primary key. MedicineLogs is queried by medicineId and by
+          // scheduledTime constantly (adherence, streaks, per-medicine history,
+          // exports) and grows forever with no pruning, so those were full
+          // scans that degrade linearly with use. Same for the vitals tables,
+          // which are always ordered by takenAt, and enhancedWaterLogs, which
+          // is looked up per day by dailyDataId.
+          //
+          // Drift emits the CREATE INDEX statements from the @TableIndex
+          // annotations; createAll() is safe on an existing DB because every
+          // generated statement is IF NOT EXISTS.
+          await m.createAll();
+          debugPrint('✓ Created query indexes (v12)');
         }
       },
     );

@@ -11,6 +11,7 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'clean_storage_service.dart';
+import 'dose_action_queue.dart';
 import '../../features/medication/models/enhanced_medicine.dart';
 import '../../features/medication/models/medicine_schedule.dart' show ScheduledTime;
 import '../../features/medication/services/reminder_slot_grouping.dart';
@@ -20,10 +21,29 @@ import 'background_alarm_service.dart';
 import '../../main.dart';
 import '../widgets/toast/toast.dart';
 
-// Top-level function for background notification handling
+/// Top-level background handler for notification ACTION taps.
+///
+/// This and `background_alarm_service.dart`'s `_backgroundNotificationCallback`
+/// are rivals, not partners: flutter_local_notifications stores exactly ONE
+/// app-wide background callback handle (`IsolatePreferences.saveCallbackKeys`,
+/// written on every `initialize()` that passes
+/// `onDidReceiveBackgroundNotificationResponse`), and Android's
+/// `ActionBroadcastReceiver` spins up a fresh isolate that runs whichever
+/// handle was written LAST.
+///
+/// The alarm isolate registers its handler when a medicine alarm fires; the
+/// main isolate registers THIS one on every cold start. So the moment the user
+/// opened the app after a reminder was posted, "✓ Take" was routed here — and
+/// this handler used to ignore `take`/`skip` completely. Nothing was queued,
+/// nothing was logged, stock was never decremented, and adherence silently
+/// under-counted with no error anywhere. Both handlers must therefore cover
+/// the same action set; the dose work itself is delegated to the one shared
+/// implementation so they can never drift apart again.
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
   debugPrint('🔔 Background notification action: ${response.actionId}');
+  // Any action means the user engaged — silence a ringing full-screen alarm.
+  stopRingingAlarmScreen(response.id);
   if (response.actionId == 'snooze') {
     _handleBackgroundSnoozeAction(response.id ?? 0, response.payload);
   } else if (response.actionId == 'dismiss') {
@@ -31,6 +51,10 @@ void notificationTapBackground(NotificationResponse response) {
     final notifications = FlutterLocalNotificationsPlugin();
     notifications.cancel(response.id ?? 0);
     debugPrint('✓ Background notification dismissed: ${response.id}');
+  } else if (response.actionId == 'take') {
+    handleDoseNotificationAction(response.payload, DoseActionQueue.actionTake);
+  } else if (response.actionId == 'skip') {
+    handleDoseNotificationAction(response.payload, DoseActionQueue.actionSkip);
   }
 }
 
@@ -55,7 +79,10 @@ Future<void> _handleBackgroundSnoozeAction(int notificationId, String? payload) 
     // Calculate snooze time
     final now = tz.TZDateTime.now(tz.local);
     final snoozeTime = now.add(Duration(minutes: snoozeMinutes));
-    final snoozeId = notificationId + 100000;
+    // Same clamp snoozeReminder applies, so both snooze paths land on the SAME
+    // id for the same notification — otherwise one path's reschedule could not
+    // be cancelled by the other's, leaving two copies of one reminder.
+    final snoozeId = (notificationId + 100000) & 0x7FFFFFFF;
 
     // Parse the rich `alarm:{json}` payload for a clean title/body — otherwise
     // the raw JSON would be shown as the notification body.
@@ -668,6 +695,18 @@ class NotificationService {
     } else if (response.actionId == 'dismiss') {
        _notifications.cancel(response.id ?? 0);
        debugPrint('✓ Notification dismissed via tap: ${response.id}');
+    } else if (response.actionId == 'take' || response.actionId == 'skip') {
+      // Android routes every `showsUserInterface: false` action through
+      // ActionBroadcastReceiver's background isolate, so this arm is the
+      // iOS/foreground path — but it must exist, or a dose acted on from a
+      // notification that DOES reach the foreground handler is lost. Queued
+      // (not written straight to Drift) so there is exactly one code path
+      // applying these, with its single "Logged N doses · Undo" confirmation.
+      handleDoseNotificationAction(
+          response.payload,
+          response.actionId == 'take'
+              ? DoseActionQueue.actionTake
+              : DoseActionQueue.actionSkip);
     } else {
       // Normal body-tap → open the full-screen alarm when this is an alarm
       // payload. This makes the redesigned AlarmScreen reachable while the app
@@ -2074,14 +2113,51 @@ class NotificationService {
 
   /// Base notification id for interval water reminders. Each computed time uses
   /// [waterReminderBaseId] + index, capped at [maxWaterReminders] slots.
-  static const int waterReminderBaseId = 900000;
+  ///
+  /// MOVED off 900000 (see [legacyWaterReminderBaseId]): that block was not
+  /// actually exclusive. Four vitals reminders (BP 900020, blood sugar 900021,
+  /// weight 900022, mood 900023 — `VitalsReminderService`) and onboarding's
+  /// daily check-in (900001 — `welcome_screen.dart`) sit inside it, and a
+  /// notification id is last-write-wins: a user with 21+ interval water
+  /// reminders (every 40 min across a normal waking day) silently REPLACED
+  /// their blood-pressure and blood-sugar reminders, and every
+  /// `cancelAllWaterReminders()` sweep deleted them outright. 960000 is clear
+  /// of every reserved block in the app: medicine slots (100000-101439) and
+  /// their +100000 snooze twins, water/bedtime/step/wake (900000-910002),
+  /// caregiver alerts (920000-920999), window nudges (930000 + 72 per
+  /// medicine) and period reminders (990001-990004).
+  static const int waterReminderBaseId = 960000;
   static const int maxWaterReminders = 100;
 
-  /// Cancel every interval water reminder in the reserved id range.
+  /// The pre-move base id. Water reminders scheduled by an older build still
+  /// live here, so the sweep below clears them too — otherwise they would fire
+  /// forever with nothing left able to cancel them.
+  static const int legacyWaterReminderBaseId = 900000;
+
+  /// Ids inside the legacy water block that belong to OTHER features and must
+  /// never be cancelled by a water sweep. Kept explicit (rather than relying on
+  /// the other services' constants) so this file has no dependency on them —
+  /// but they must stay in sync with `VitalsReminderService` /
+  /// `welcome_screen.dart` for as long as those ids exist.
+  static const Set<int> _foreignIdsInLegacyWaterBlock = {
+    900001, // onboarding "Daily check-in"
+    900020, // vitals: blood pressure
+    900021, // vitals: blood sugar
+    900022, // vitals: weight
+    900023, // vitals: mood
+  };
+
+  /// Cancel every interval water reminder in the reserved id range — plus any
+  /// left over in the legacy range, minus the ids other features own there.
   Future<void> cancelAllWaterReminders() async {
     await cancelWaterReminders(
       List.generate(maxWaterReminders, (i) => waterReminderBaseId + i),
     );
+    await cancelWaterReminders([
+      for (int i = 0; i < maxWaterReminders; i++)
+        if (!_foreignIdsInLegacyWaterBlock.contains(legacyWaterReminderBaseId + i))
+          legacyWaterReminderBaseId + i,
+    ]);
   }
 
   /// Schedule a set of daily-repeating water reminders at the given
@@ -2211,6 +2287,18 @@ class NotificationService {
     }
   }
   
+  /// `true` when reminders are currently being registered INEXACTLY because
+  /// Android refuses exact alarms for this app.
+  ///
+  /// Worth surfacing (e.g. next to `NotificationPermissionBanner`): the alarms
+  /// still fire, but within the OS's batching window rather than to the
+  /// minute. Before this existed, a revoked SCHEDULE_EXACT_ALARM made
+  /// android_alarm_manager_plus drop every medicine alarm while still
+  /// reporting success — the patient believed reminders were set and got none.
+  /// [requestExactAlarmPermission] is the fix to offer alongside it.
+  Future<bool> remindersDowngradedToInexact() =>
+      BackgroundAlarmService().exactAlarmsDowngraded();
+
   /// Request exact alarm permission (Android 12+)
   Future<bool> requestExactAlarmPermission() async {
     try {

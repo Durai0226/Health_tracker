@@ -40,6 +40,21 @@ class AppTheme {
 
     final textTheme = AppType.textTheme(ext.textPrimary, ext.textSecondary);
 
+    // Pressed/hovered paint nothing; FOCUSED still paints a ring.
+    //
+    // This distinction is load-bearing. InkResponse resolves
+    //   overlayColor?.resolve(focused) ?? focusColor ?? theme.focusColor
+    // so a flat `WidgetStatePropertyAll(Colors.transparent)` short-circuits
+    // focusColor and silently removes the keyboard/switch-control focus
+    // indicator from every button and every InkWell in the app — WCAG 2.4.7
+    // Focus Visible. Stripping tap feedback is a design choice; stripping the
+    // focus ring is a conformance failure, so the two are separated here.
+    final noOverlay = WidgetStateProperty.resolveWith<Color?>(
+      (states) => states.contains(WidgetState.focused)
+          ? ext.brand.base.withOpacity(0.12)
+          : Colors.transparent,
+    );
+
     return ThemeData(
       useMaterial3: true,
       brightness: b,
@@ -48,35 +63,56 @@ class AppTheme {
       canvasColor: ext.surface,
       cardColor: ext.surface,
       dividerColor: ext.outline,
-      splashColor: ext.brand.base.withOpacity(0.08),
-      highlightColor: ext.brand.base.withOpacity(0.04),
+      // NO INK. Every tap responds by changing state immediately rather than
+      // by animating a ripple outward.
+      //
+      // Three separate mechanisms have to be defeated, which is why this is not
+      // just `splashColor: transparent`:
+      //   * `splashFactory` builds the expanding circle,
+      //   * `highlightColor` is the separate flat wash that stays for as long as
+      //     the finger is down (NoSplash does not remove it),
+      //   * M3 buttons and TabBar ignore both of the above and use a
+      //     `WidgetStateProperty overlayColor` instead — handled per-theme below.
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: Colors.transparent,
       extensions: [ext],
       textTheme: textTheme,
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
+          // M3 buttons ignore the top-level splash/highlight and use these.
+          splashFactory: NoSplash.splashFactory,
+
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
           backgroundColor: ext.brandPressed,
           foregroundColor: Colors.white,
           elevation: 0,
           textStyle: textTheme.labelLarge,
-        ),
+        ).copyWith(overlayColor: noOverlay),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
+          // M3 buttons ignore the top-level splash/highlight and use these.
+          splashFactory: NoSplash.splashFactory,
+
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
           side: BorderSide(color: ext.outlineStrong),
           foregroundColor: ext.textPrimary,
           textStyle: textTheme.labelLarge,
-        ),
+        ).copyWith(overlayColor: noOverlay),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
+          // M3 buttons ignore the top-level splash/highlight and use these.
+          splashFactory: NoSplash.splashFactory,
+
           foregroundColor: ext.brandText,
           textStyle: textTheme.labelLarge,
-        ),
+        ).copyWith(overlayColor: noOverlay),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -191,6 +227,10 @@ class AppTheme {
         dividerColor: ext.outline,
         labelStyle: textTheme.labelLarge,
         unselectedLabelStyle: textTheme.labelLarge,
+        // TabBar draws its own ink and reads `overlayColor`, not the
+        // top-level splash/highlight — both are needed to silence it.
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: noOverlay,
       ),
       listTileTheme: ListTileThemeData(
         iconColor: ext.textSecondary,

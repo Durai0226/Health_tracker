@@ -1,11 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
-    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Removed USE_FINGERPRINT: deprecated at API 28 and superseded by
+         USE_BIOMETRIC above; minSdk is 26 so it bought two API levels of
+         nothing. -->
+    <!-- Removed RECORD_AUDIO: its only consumer was VoiceInputService, which
+         was left behind when the generative-AI feature was deleted and has no
+         callers. A microphone permission on a health app is a Play review
+         question you do not want to have to answer for dead code. -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <!-- Removed WRITE_EXTERNAL_STORAGE entirely (a no-op from API 29, and this
+         app never writes to external storage — every export goes to
+         getTemporaryDirectory()/getApplicationDocumentsDirectory() and out via
+         a scoped FileProvider share). READ is capped at the last API where it
+         meant anything, for file_picker on older devices. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- Removed USE_EXACT_ALARM: Play Console's acceptable-use-case policy for
          this auto-granted, non-revocable permission is limited to alarm/timer
@@ -64,10 +74,15 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:showOnLockScreen="true">
+            android:windowSoftInputMode="adjustResize">
+            <!-- showWhenLocked / turnScreenOn / showOnLockScreen were declared
+                 here. This is the app's ONLY activity — /alarm is a Flutter
+                 route inside it — so those attributes made the ENTIRE app
+                 visible over the device lock screen, permanently. After an
+                 alarm fired, anyone could dismiss it and browse medicines,
+                 vitals, diary and period data without entering the device PIN.
+                 They are now set at runtime, only while an alarm is on screen.
+                 See MainActivity.applyLockScreenFlags. -->
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user
                  while the Flutter UI initializes. After that, this theme continues
@@ -108,7 +123,7 @@
              app ID (safe for development only). -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="${admobAppId}"/>
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>

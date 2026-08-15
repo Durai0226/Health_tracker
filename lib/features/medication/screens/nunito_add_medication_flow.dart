@@ -1005,10 +1005,17 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   children: [
                     Text(form.icon, style: const TextStyle(fontSize: 18)),
                     const SizedBox(width: 8),
-                    Text(
-                      form.displayName,
-                      style: tt.labelMedium?.copyWith(
-                        color: isSelected ? med.onContainer : ext.textPrimary,
+                    // Flexible + ellipsis: at 2.0x Dynamic Type on a 320pt
+                    // screen the emoji and the form name together overflowed
+                    // this chip by 16px.
+                    Flexible(
+                      child: Text(
+                        form.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelMedium?.copyWith(
+                          color: isSelected ? med.onContainer : ext.textPrimary,
+                        ),
                       ),
                     ),
                   ],

@@ -147,16 +147,34 @@ class DrugInteractionService {
     return info?.foodInteractions ?? [];
   }
 
+  /// Memo caches for the two pure string transforms below.
+  ///
+  /// `_namesMatch` normalised AND tokenised both of its arguments on every
+  /// call, and `checkAllInteractions` calls it twice per (pair × database
+  /// entry). With 12 medicines that is 66 pairs × 47 entries × 2 = **6,204**
+  /// normalise+tokenise round trips — synchronously, on the UI isolate, every
+  /// time any dose is logged anywhere in the app (the medication dashboard
+  /// recomputes interactions on every `revision` bump).
+  ///
+  /// The inputs are a tiny closed set: 47 database entries plus the user's own
+  /// medicine names. Caching leaves behaviour identical and makes each of
+  /// those 6,204 iterations a map lookup.
+  static final Map<String, String> _normalizedCache = {};
+  static final Map<String, Set<String>> _tokenCache = {};
+
   String _normalizeDrugName(String name) {
-    return name.toLowerCase().trim().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return _normalizedCache.putIfAbsent(name,
+        () => name.toLowerCase().trim().replaceAll(RegExp(r'[^a-z0-9]'), ''));
   }
 
   /// Tokens of a name — split on non-alphanumerics, lowercased, non-empty.
-  Set<String> _drugTokens(String s) => s
-      .toLowerCase()
-      .split(RegExp(r'[^a-z0-9]+'))
-      .where((t) => t.isNotEmpty)
-      .toSet();
+  Set<String> _drugTokens(String s) => _tokenCache.putIfAbsent(
+      s,
+      () => s
+          .toLowerCase()
+          .split(RegExp(r'[^a-z0-9]+'))
+          .where((t) => t.isNotEmpty)
+          .toSet());
 
   /// Generic pharmacy filler words — dosage forms, marketing suffixes, and
   /// common complaint words — that appear in countless UNRELATED product

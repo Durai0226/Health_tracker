@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
@@ -726,7 +726,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               const SizedBox(height: AppSpacing.sm),
               _buildDetailRow(
                 'Next Dose',
-                DateFormat('EEE, MMM d at h:mm a').format(nextTime),
+                DateFormats.weekdayDayMonthTime.format(nextTime),
                 highlight: true,
               ),
             ],
@@ -1350,11 +1350,11 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    DateFormat('EEE, MMM d').format(log.scheduledTime),
+                    DateFormats.weekdayDayMonthShort.format(log.scheduledTime),
                     style: tt.labelLarge?.copyWith(color: ext.textPrimary),
                   ),
                   Text(
-                    DateFormat('h:mm a').format(log.scheduledTime),
+                    DateFormats.time.format(log.scheduledTime),
                     style: tt.bodySmall?.copyWith(color: ext.textTertiary),
                   ),
                 ],

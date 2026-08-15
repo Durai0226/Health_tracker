@@ -718,23 +718,16 @@ class CoachText {
     int stepGoal = 0,
     int sleepMinutes = 0,
   }) {
-    final greeting = hour < 12
-        ? 'Good morning'
-        : (hour < 17 ? 'Good afternoon' : 'Good evening');
-    final parts = <String>[];
-    if (medsTotal > 0) parts.add('meds $medsTaken/$medsTotal');
-    parts.add('water $waterPct%');
-    if (stepGoal > 0 && steps > 0) {
-      parts.add('steps ${(steps / stepGoal * 100).round()}%');
-    }
-    if (sleepMinutes > 0) {
-      parts.add('sleep ${sleepMinutes ~/ 60}h ${sleepMinutes % 60}m');
-    }
-    if (focusMinutes > 0) parts.add('focus ${focusMinutes}m');
-    if (remindersLeft > 0) {
-      parts.add('$remindersLeft reminder${remindersLeft == 1 ? '' : 's'} left');
-    }
-    final nudge = _crossSignal(
+    // Deliberately NOT prefixed with a greeting or a stats recap.
+    //
+    // This strip used to return
+    //   '$greeting! Today so far: meds 1/2 · water 40%. $nudge'
+    // which, clamped to two lines on a phone, reliably truncated the nudge —
+    // the one clause that tells the user what to DO — in order to spend its
+    // budget on a greeting the header already showed and a set of numbers the
+    // pulse row renders directly beneath it. The nudge alone fits with room to
+    // spare and is the only part that isn't already on screen.
+    return _crossSignal(
       medsLeft: medsTotal - medsTaken,
       medsTotal: medsTotal,
       waterPct: waterPct,
@@ -742,7 +735,6 @@ class CoachText {
       remindersLeft: remindersLeft,
       hour: hour,
     );
-    return '$greeting! Today so far: ${parts.join(' · ')}. $nudge';
   }
 
   /// The single most useful CROSS-FEATURE suggestion — reasoning across meds,

@@ -1,3 +1,6 @@
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
@@ -143,6 +146,27 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
         ],
       ),
     );
+  }
+
+  /// Writes [csv] to app-internal temp storage and hands it to the OS share
+  /// sheet.
+  ///
+  /// This used to be `debugPrint(csv)` with a toast saying "check console" —
+  /// so the feature did nothing for the user AND wrote their entire
+  /// drink-by-drink health log to logcat, where it is readable by `adb logcat`
+  /// and captured in bug reports.
+  Future<void> _shareCsv(String csv, String filename, String subject) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$filename');
+      await file.writeAsString(csv);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: subject,
+      );
+    } catch (e) {
+      if (mounted) context.toastError('Could not export: $e');
+    }
   }
 
   Widget _buildOverviewCards() {
@@ -665,12 +689,19 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
             children: [
               Icon(Symbols.lightbulb_rounded, color: ext.mark(ext.warning)),
               const SizedBox(width: 8),
-              Text(
-                'Insights',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: ext.textPrimary,
+              // Flexible, not bare: at 2.0x Dynamic Type on a 320pt screen the
+              // icon and this label together exceed the card's 248pt of content
+              // width and the Row overflowed by 40px.
+              Flexible(
+                child: Text(
+                  'Insights',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: ext.textPrimary,
+                  ),
                 ),
               ),
             ],
@@ -746,11 +777,11 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
               ),
               title: const Text('Summary CSV'),
               subtitle: const Text('Daily totals'),
-              onTap: () {
+              onTap: () async {
                 final csv = WaterService.exportToCsv();
-                debugPrint(csv);
                 Navigator.pop(context);
-                context.toastSuccess('Summary exported (check console)');
+                await _shareCsv(
+                    csv, 'water-summary.csv', 'Water summary (daily totals)');
               },
             ),
             ListTile(
@@ -764,11 +795,11 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
               ),
               title: const Text('Detailed CSV'),
               subtitle: const Text('All drink logs'),
-              onTap: () {
+              onTap: () async {
                 final csv = WaterService.exportDetailedCsv();
-                debugPrint(csv);
                 Navigator.pop(context);
-                context.toastSuccess('Detailed log exported (check console)');
+                await _shareCsv(
+                    csv, 'water-detailed.csv', 'Water log (all drinks)');
               },
             ),
             SizedBox(height: MediaQuery.of(context).padding.bottom + 16),

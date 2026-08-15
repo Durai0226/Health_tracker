@@ -51,6 +51,8 @@ class EnhancedMedicines extends Table {
 }
 
 /// Medicine Logs Table
+@TableIndex(name: 'idx_medicine_logs_medicine', columns: {#medicineId})
+@TableIndex(name: 'idx_medicine_logs_time', columns: {#scheduledTime})
 class MedicineLogs extends Table {
   TextColumn get id => text()();
   TextColumn get medicineId => text()();

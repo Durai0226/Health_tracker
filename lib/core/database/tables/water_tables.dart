@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 /// Daily Water Data Table
+@TableIndex(name: 'idx_water_day_date', columns: {#date})
 class DailyWaterDataTable extends Table {
   @override
   String get tableName => 'daily_water_data';
@@ -20,6 +21,7 @@ class DailyWaterDataTable extends Table {
 }
 
 /// Enhanced Water Logs Table
+@TableIndex(name: 'idx_water_logs_daily', columns: {#dailyDataId})
 class EnhancedWaterLogs extends Table {
   TextColumn get id => text()();
   TextColumn get dailyDataId => text()(); // Foreign key to DailyWaterData

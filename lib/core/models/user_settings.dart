@@ -45,7 +45,10 @@ class UserSettings {
     this.maxSnoozeCount = 3,
     this.notificationSound = 'default',
     this.persistentNotification = true,
-    this.showOnLockScreen = true,
+    // Default OFF for a medication app: the notification body is
+    // "Time to take <medicine name>", and a drug name on a locked screen is
+    // readable by anyone who glances at the phone.
+    this.showOnLockScreen = false,
     this.fullScreenNotification = true,
     this.isAdsDisabled = false,
     this.themeModePreference = 'system',

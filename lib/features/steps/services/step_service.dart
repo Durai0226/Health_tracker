@@ -71,9 +71,13 @@ class StepService {
         now.subtract(const Duration(days: 35)),
         now.add(const Duration(days: 1)),
       );
+      // One query, not one per day — same pre-runApp cost as the water
+      // service's loop (35 days here).
+      final byDay =
+          await _dao.getManualEntriesForDays(rows.map((r) => r.id).toList());
       final map = <String, StepDailyData>{};
       for (final r in rows) {
-        final entryRows = await _dao.getManualEntriesForDay(r.id);
+        final entryRows = byDay[r.id] ?? [];
         map[r.id] = StepDailyData.fromRow(
           r,
           manualEntries: entryRows.map(StepManualEntry.fromRow).toList(),

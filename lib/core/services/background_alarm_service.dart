@@ -675,7 +675,21 @@ Future<void> alarmCallback(int alarmId) async {
       ledOffMs: 500,
       fullScreenIntent: true,
       category: AndroidNotificationCategory.alarm,
-      visibility: NotificationVisibility.public,
+      // Honour the user's "Show on lock screen" choice.
+      //
+      // This was hardcoded `public`, and because ALL Android medicine
+      // reminders route through this service, the settings-driven branch in
+      // NotificationService was only ever reached on the iOS fallback — so the
+      // toggle did nothing on the platform this app primarily ships to. The
+      // body here is "Time to take <medicine name>", so a locked phone on a
+      // desk announced the user's prescription to the room.
+      //
+      // Read from SharedPreferences rather than the DB: this runs in the alarm
+      // isolate, which has no Drift connection. Default is PRIVATE — for a
+      // medication app the safe default is not showing the drug name.
+      visibility: (prefs.getBool(kShowOnLockScreenPref) ?? false)
+          ? NotificationVisibility.public
+          : NotificationVisibility.private,
       showWhen: true,
       autoCancel: false,
       channelShowBadge: true,
@@ -1013,16 +1027,27 @@ Future<void> _handleWindowNudge(
     debugPrint('⏭️ Window nudge $alarmId: dose already resolved — suppressing');
   }
 
-  // Chain the NEXT nudge (only if this dose is still unresolved and there is
-  // a next one in the sequence).
-  if (!alreadyResolved && nudgeIndex < nudgeMinutes.length - 1) {
+  // Has this dose's window already closed? A nudge delivered long after its
+  // own time (the boot catch-up: a phone that was off all night receives
+  // yesterday's start nudge the moment it powers on) has nothing left to nudge
+  // toward — chaining then would fire the remaining nudges seconds apart. The
+  // small in-window drift an inexact alarm normally has is still chained
+  // immediately, below.
+  final startMinuteOfDay = hour * 60 + minute;
+  final windowClosed = nudgeMinutes.isNotEmpty &&
+      now.isAfter(scheduledTime
+          .add(Duration(minutes: nudgeMinutes.last - startMinuteOfDay)));
+
+  // Chain the NEXT nudge (only if this dose is still unresolved, its window is
+  // still open, and there is a next one in the sequence).
+  if (!alreadyResolved && !windowClosed && nudgeIndex < nudgeMinutes.length - 1) {
     final nextMinute = nudgeMinutes[nudgeIndex + 1];
     // Offset from the DOSE's own start instant, not from "today" — a window
     // that runs past midnight (start 23:00, nudgeMinutes up to 1500) has
     // later nudges on the following calendar day, and anchoring them to the
     // current day would jump them a further 24h each time.
     var nextTime =
-        scheduledTime.add(Duration(minutes: nextMinute - (hour * 60 + minute)));
+        scheduledTime.add(Duration(minutes: nextMinute - startMinuteOfDay));
     if (nextTime.isBefore(now)) {
       // A delayed/batched fire (inexact alarms can drift) pushed us past the
       // next nudge's instant — fire it almost immediately rather than lose it.
@@ -1080,6 +1105,13 @@ Future<void> _attemptRescheduleOnError(int alarmId) async {
 }
 
 /// Background Alarm Service - schedules alarms that work when app is closed
+/// Mirror of `UserSettings.showOnLockScreen` in SharedPreferences.
+///
+/// The alarm fires in a background isolate with no Drift connection, so it
+/// cannot call `CleanStorageService.getUserSettings()`. The main isolate
+/// mirrors the flag here whenever settings are saved.
+const String kShowOnLockScreenPref = 'notif_show_on_lock_screen';
+
 class BackgroundAlarmService {
   static final BackgroundAlarmService _instance = BackgroundAlarmService._internal();
   

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
@@ -684,8 +684,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
     final overdue = r.scheduledTime.isBefore(DateTime.now()) && !r.isCompleted;
     final isToday = DateUtils.isSameDay(r.scheduledTime, DateTime.now());
     final when = isToday
-        ? DateFormat('h:mm a').format(r.scheduledTime)
-        : DateFormat('MMM d · h:mm a').format(r.scheduledTime);
+        ? DateFormats.time.format(r.scheduledTime)
+        : DateFormats.dayMonthDotTime.format(r.scheduledTime);
 
     return Dismissible(
       key: Key(r.id),

@@ -7,7 +7,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formats.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../core/design/app_colors_ext.dart';
@@ -26,6 +26,28 @@ import '../../medication/services/medicine_storage_service.dart';
 /// Accessible: a dedicated contrast scrim keeps text AA-legible over the moving
 /// light; reduced-motion freezes all ambient animation; high-contrast /
 /// reduce-transparency swaps the frost for solid fills; targets are ≥56px.
+
+/// Makes the app window visible over the device lock screen, for as long as an
+/// alarm is actually showing.
+///
+/// These flags used to be manifest attributes on MainActivity — the app's only
+/// activity — so the WHOLE app sat over the keyguard permanently, and a user
+/// who dismissed an alarm could browse medicines, vitals, diary and period data
+/// without ever entering the device PIN. Scoping them to the alarm's lifetime
+/// keeps the alarm answerable while putting everything else back behind the
+/// keyguard.
+const MethodChannel _lockScreenChannel = MethodChannel('dlyminder/lockscreen');
+
+Future<void> _setShowWhenLocked(bool enabled) async {
+  try {
+    await _lockScreenChannel
+        .invokeMethod('setShowWhenLocked', {'enabled': enabled});
+  } catch (_) {
+    // Not Android, or the channel isn't attached (widget tests). The alarm
+    // still works; it just won't wake a locked screen.
+  }
+}
+
 class AlarmScreen extends StatefulWidget {
   final Map<String, dynamic> payload;
 
@@ -54,6 +76,8 @@ class _AlarmScreenState extends State<AlarmScreen>
 
   @override
   void initState() {
+    // Only now — not for the whole app, forever. See [_setShowWhenLocked].
+    _setShowWhenLocked(true);
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
@@ -151,6 +175,8 @@ class _AlarmScreenState extends State<AlarmScreen>
 
   @override
   void dispose() {
+    // Put the keyguard back in front of the rest of the app.
+    _setShowWhenLocked(false);
     IsolateNameServer.removePortNameMapping(_kAlarmStopPort);
     _stopPort?.close();
     _timer?.cancel();
@@ -420,7 +446,7 @@ class _AlarmScreenState extends State<AlarmScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  DateFormat('h:mm').format(_now),
+                  DateFormats.timeNoMeridiem.format(_now),
                   maxLines: 1,
                   softWrap: false,
                   style: TextStyle(
@@ -435,7 +461,7 @@ class _AlarmScreenState extends State<AlarmScreen>
                 const SizedBox(width: 6),
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(DateFormat('a').format(_now),
+                  child: Text(DateFormats.meridiem.format(_now),
                       maxLines: 1,
                       softWrap: false,
                       style: tt.labelMedium?.copyWith(
@@ -447,7 +473,7 @@ class _AlarmScreenState extends State<AlarmScreen>
             ),
           ),
           const SizedBox(height: 2),
-          Text(DateFormat('EEEE, MMMM d').format(_now),
+          Text(DateFormats.weekdayDayMonthLong.format(_now),
               style: tt.bodySmall?.copyWith(
                   color: ext.textSecondary, letterSpacing: 1)),
         ],

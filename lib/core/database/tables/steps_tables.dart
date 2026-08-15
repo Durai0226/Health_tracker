@@ -9,6 +9,7 @@ import 'package:drift/drift.dart';
 /// Connect/pedometer; `manualSteps` from the user; `effectiveSteps` =
 /// sensorSteps ?? manualSteps (computed in the model).
 @DataClassName('StepDayRow')
+@TableIndex(name: 'idx_steps_date', columns: {#date})
 class StepDailyData extends Table {
   TextColumn get id => text()(); // yyyy-MM-dd
   DateTimeColumn get date => dateTime()();

@@ -28,6 +28,25 @@ class StepsDao extends DatabaseAccessor<AppDatabase> with _$StepsDaoMixin {
       (delete(stepDailyData)..where((t) => t.id.equals(id))).go();
 
   // ============ MANUAL ENTRIES ============
+  /// Manual entries for MANY days in one query, bucketed by day id.
+  ///
+  /// Same defect as the water DAO: the per-day variant was called in a loop
+  /// over a 35-day window inside `StepService.init()`, before `runApp()`.
+  Future<Map<String, List<StepManualEntryRow>>> getManualEntriesForDays(
+      List<String> dailyDataIds) async {
+    if (dailyDataIds.isEmpty) return {};
+    final rows = await (select(stepManualEntries)
+          ..where((t) =>
+              t.dailyDataId.isIn(dailyDataIds) & t.deletedAt.isNull())
+          ..orderBy([(t) => OrderingTerm.desc(t.time)]))
+        .get();
+    final out = <String, List<StepManualEntryRow>>{};
+    for (final r in rows) {
+      out.putIfAbsent(r.dailyDataId, () => []).add(r);
+    }
+    return out;
+  }
+
   Future<List<StepManualEntryRow>> getManualEntriesForDay(String dailyDataId) {
     return (select(stepManualEntries)
           ..where((t) =>

@@ -67,9 +67,12 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
     try {
       // One row per slot: a pre-fix install can hold both a `missed` and a
       // `taken` row for one dose, which would inflate `due`.
+      // Ranged query, not a full-table scan filtered in Dart. This screen
+      // only ever looks at 7 days, but it was reading every log ever written —
+      // and `medicine_logs` grows forever with no pruning.
       final logs = MedicineCleanStorageService.dedupeByDose(
-          (await MedicineCleanStorageService.getAllLogs())
-              .where((l) => l.scheduledTime.isAfter(from)));
+          await MedicineCleanStorageService.getLogsForDateRange(
+              from, DateTime.now()));
       final due =
           logs.where((l) => l.countsAsTaken || l.isMissed || l.isSkipped).length;
       final taken = logs.where((l) => l.countsAsTaken).length;
@@ -99,6 +102,9 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
     String? bpAvg;
     int? glucoseAvg;
     try {
+      // Bounded in Dart rather than SQL for now — `getAllBp` has no ranged
+      // variant — but at least fetched ONCE. gatherAll() below reads the same
+      // table again; that duplicate is what the shared fetch there removed.
       final bp = (await VitalsStorageService.getAllBp())
           .where((r) => r.takenAt.isAfter(from))
           .toList();

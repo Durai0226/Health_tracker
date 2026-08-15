@@ -25,6 +25,21 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   bool _isRunning = false;
   bool _isPaused = false;
   int _remainingSeconds = 0;
+
+  /// Fires once a second while a session runs — and NOTHING else.
+  ///
+  /// The countdown used to arrive via `notifyListeners()`, which the Focus
+  /// screen listens to around its entire body. That body is **2322 widgets**
+  /// (the largest tree in the app by a factor of ~3, because it is a
+  /// `SingleChildScrollView` over thirteen configuration sections), so a
+  /// running timer rebuilt all of it 60 times a minute — and Home listens to
+  /// this service too, so it rebuilt at 1 Hz as well.
+  ///
+  /// Only the clock readout and the progress ring actually change per second.
+  /// They listen here; everything else keeps listening to the ChangeNotifier,
+  /// which now fires only on real state changes (start, pause, phase change,
+  /// completion) — all user-driven and rare.
+  final ValueNotifier<int> tick = ValueNotifier<int>(0);
   int _selectedMinutes = 25;
   DateTime? _startTime;
   DateTime? _endTime;
@@ -469,20 +484,32 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_isRunning && !_isPaused && _endTime != null) {
         final now = DateTime.now();
-        final remaining = _endTime!.difference(now).inSeconds;
-        
-        if (remaining <= 0) {
-          _remainingSeconds = 0;
-          _onIntervalComplete();
-        } else {
-          // Only update UI if second actually changed to avoid jitter
-          if (_remainingSeconds != remaining) {
-            _remainingSeconds = remaining;
-            notifyListeners();
-          }
-        }
+        applyTick(_endTime!.difference(now).inSeconds);
       }
     });
+  }
+
+  /// One second of countdown.
+  ///
+  /// Extracted from the `Timer.periodic` callback so a test can drive the real
+  /// path without starting a session (which needs storage and audio). The
+  /// important property — that a tick does NOT fire `notifyListeners()` — is
+  /// only meaningful if it is asserted against this code rather than against
+  /// the notifier in isolation.
+  @visibleForTesting
+  void applyTick(int remaining) {
+    if (remaining <= 0) {
+      _remainingSeconds = 0;
+      _onIntervalComplete();
+      return;
+    }
+    // Only update the UI if the second actually changed, to avoid jitter.
+    if (_remainingSeconds != remaining) {
+      _remainingSeconds = remaining;
+      // Deliberately NOT notifyListeners(): see [tick]. This is the only
+      // per-second signal, and it must not rebuild the whole screen.
+      tick.value = remaining;
+    }
   }
 
   void pauseSession() {
@@ -892,6 +919,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _audioService.stop();
+    tick.dispose();
     super.dispose();
   }
 }

@@ -23,8 +23,32 @@ import '../../sleep/services/sleep_service.dart';
 class InsightService {
   const InsightService._();
 
+  /// Best-effort table read: one failing table must not take the whole
+  /// insight set down with it.
+  static Future<List<T>> _tryList<T>(Future<List<T>> Function() read) async {
+    try {
+      return await read();
+    } catch (_) {
+      return <T>[];
+    }
+  }
+
   static Future<List<Insight>> gatherAll() async {
     final out = <Insight?>[];
+
+    // Fetch the shared tables ONCE, up front.
+    //
+    // This method runs from `ProactiveNudge.initState`, i.e. on the first
+    // frame of the tab the user lands on. It used to read `vitals_bp` TWICE
+    // (once for the pattern engine, once again for the correlation engine) and
+    // issue one `getLogsForMedicine` per medicine on top of a full
+    // `getAllLogs()` — so the cost grew with both row count and medicine
+    // count, on the UI isolate, before anything was on screen.
+    //
+    // Reads are best-effort: a failure in one table must not take the whole
+    // insight set down, which is why each is caught independently.
+    final allBp = await _tryList(VitalsStorageService.getAllBp);
+    final allLogsRaw = await _tryList(MedicineCleanStorageService.getAllLogs);
 
     // Water — today's intake vs goal + pace + streak.
     try {
@@ -63,7 +87,7 @@ class InsightService {
 
     // Vitals — BP + glucose pattern detection.
     try {
-      final bp = await VitalsStorageService.getAllBp();
+      final bp = allBp;
       out.add(InsightEngine.bloodPressure(bp
           .map((r) => BpPoint(at: r.takenAt, systolic: r.systolic, diastolic: r.diastolic))
           .toList()));
@@ -83,8 +107,7 @@ class InsightService {
       // the way dedupeByDose's own doc warns against — the RefillPredictor
       // loop below already does this correctly; this earlier computation in
       // the same method had not.
-      final logs = MedicineCleanStorageService.dedupeByDose(
-          await MedicineCleanStorageService.getAllLogs());
+      final logs = MedicineCleanStorageService.dedupeByDose(allLogsRaw);
       final history = logs
           .where((l) => l.countsAsTaken || l.isMissed || l.isSkipped)
           .map((l) => DoseEvent(
@@ -108,8 +131,10 @@ class InsightService {
         if (m.currentStock == null) continue;
         // Deduped per slot: a duplicated taken row would overstate the
         // consumption rate and forecast an early run-out.
+        // Filter the logs already in hand rather than issuing a query per
+        // medicine — this loop was the N+1 in this method.
         final taken = MedicineCleanStorageService.dedupeByDose(
-                await MedicineCleanStorageService.getLogsForMedicine(m.id))
+                allLogsRaw.where((l) => l.medicineId == m.id))
             .where((l) => l.countsAsTaken)
             .toList();
         final pred = RefillPredictor.predict(
@@ -279,12 +304,18 @@ class InsightService {
       const lookbackDays = 30;
       final start = today.subtract(const Duration(days: lookbackDays - 1));
 
+      // ONE pair of queries for the whole window. This used to await
+      // getDailySummaryAsync per day — 30 iterations x 2 round trips (logs +
+      // a full getAllMedicines() that re-decodes every schedule JSON) = ~60
+      // serialized queries on the UI isolate, paid on every weekly-recap open
+      // even for a user with almost no data.
       final adherentByDay = <String, bool>{};
-      for (var i = 0; i < lookbackDays; i++) {
-        final day = start.add(Duration(days: i));
-        final s = await MedicineCleanStorageService.getDailySummaryAsync(day);
-        if (s.totalScheduled == 0) continue; // nothing due that day — not comparable
-        adherentByDay[_dayKey(day)] = s.isComplete;
+      final summaries = await MedicineCleanStorageService
+          .getDailySummariesForRange(start, today);
+      for (final entry in summaries.entries) {
+        // nothing due that day — not comparable
+        if (entry.value.totalScheduled == 0) continue;
+        adherentByDay[_dayKey(entry.key)] = entry.value.isComplete;
       }
 
       if (adherentByDay.isNotEmpty) {
@@ -308,7 +339,7 @@ class InsightService {
 
         try {
           final bpByDay = <String, List<int>>{};
-          for (final r in await VitalsStorageService.getAllBp()) {
+          for (final r in allBp) {
             (bpByDay[_dayKey(r.takenAt)] ??= []).add(r.systolic);
           }
           final bpDays = <DayMetric>[];

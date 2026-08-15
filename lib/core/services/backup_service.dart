@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'auth_service.dart';
 import 'clean_storage_service.dart';
 
 class BackupService {
@@ -16,7 +17,29 @@ class BackupService {
 
   String? get _userId => _auth.currentUser?.uid;
 
+  /// Uploads a full health export to Firestore.
+  ///
+  /// Both guards below are mandatory and neither existed. `_userId` is
+  /// satisfied by the **anonymous** Firebase account that `AuthService.init()`
+  /// creates silently on first launch, so a user who chose "Continue as guest"
+  /// — and was told *"Private · on-device · no account"* — pushed every
+  /// medicine, vitals reading, diary entry and period record to Google's
+  /// servers by tapping Create backup.
+  ///
+  /// `lib/main.dart` already applies exactly this pair to `CloudSyncService`;
+  /// it was simply never applied here.
   Future<void> createBackup() async {
+    if (!AuthService().isAuthenticated) {
+      throw StateError(
+          'Cloud backup requires a real signed-in account. Guests and '
+          'anonymous sessions stay on-device.');
+    }
+    if (!CleanStorageService.cloudSyncEnabled) {
+      throw StateError(
+          'Cloud sync is off. Enable it in Settings before backing up health '
+          'data to the cloud.');
+    }
+
     final userId = _userId;
     if (userId == null) throw Exception('User not logged in');
 

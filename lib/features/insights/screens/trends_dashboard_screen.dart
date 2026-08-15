@@ -50,6 +50,17 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
   late TrendRange _range;
   late Future<TrendsBundle> _future;
 
+  /// The last bundle that loaded successfully.
+  ///
+  /// Switching range assigns a fresh [_future], and the [FutureBuilder] below
+  /// used to fall straight back to [_loading] — four solid grey blocks — while
+  /// it resolved. So every tap on Week/Month/Year wiped the whole dashboard to
+  /// placeholders and re-mounted every chart, each of which then re-animated
+  /// from zero. That full-screen flash is the most visible thing that happens
+  /// on a switch in this app. Keeping the previous bundle on screen makes the
+  /// range change look like a data update instead of a screen teardown.
+  TrendsBundle? _lastGood;
+
   @override
   void initState() {
     super.initState();
@@ -142,8 +153,13 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
             child: FutureBuilder<TrendsBundle>(
               future: _future,
               builder: (context, snap) {
+                if (snap.hasData) _lastGood = snap.data;
                 if (snap.connectionState != ConnectionState.done) {
-                  return _loading(ext);
+                  // Stale-while-revalidate: only the genuinely-empty first
+                  // load gets skeletons. An error still surfaces below.
+                  return _lastGood != null
+                      ? _dashboard(ext, _lastGood!)
+                      : _loading(ext);
                 }
                 if (snap.hasError || !snap.hasData) {
                   return _error(ext);

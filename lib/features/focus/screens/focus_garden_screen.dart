@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formats.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
@@ -207,7 +207,7 @@ class FocusGardenScreen extends StatelessWidget {
     } else if (isYesterday) {
       dateLabel = 'Yesterday';
     } else {
-      dateLabel = DateFormat('EEEE, MMMM d').format(date);
+      dateLabel = DateFormats.weekdayDayMonthLong.format(date);
     }
     
     final totalMinutes = plants.fold(0, (sum, p) => sum + p.durationMinutes);
@@ -302,7 +302,7 @@ class FocusGardenScreen extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              DateFormat('h:mm a').format(plant.plantedAt),
+              DateFormats.time.format(plant.plantedAt),
               maxLines: 1,
               softWrap: false,
               style: TextStyle(

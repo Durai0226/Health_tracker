@@ -51,9 +51,14 @@ class WaterService {
         now.subtract(warmCacheWindow),
         now.add(const Duration(days: 1)),
       );
+      // ONE query for every day's logs, not one per day. This runs before
+      // runApp(), and warmCacheWindow is 90 days — the old loop meant up to 91
+      // serialized round trips between launching the app and seeing a frame,
+      // growing with how long the person has used it.
+      final byDay = await _dao.getLogsForDays(rows.map((r) => r.id).toList());
       final map = <String, DailyWaterData>{};
       for (final row in rows) {
-        final logRows = await _dao.getLogsForDay(row.id);
+        final logRows = byDay[row.id] ?? const [];
         map[row.id] = _dailyFromRow(row, logRows.map(_logFromRow).toList());
       }
       _dailyWaterNotifier.value = map;

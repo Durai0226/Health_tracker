@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/active_profile_service.dart';
-import '../../../core/services/auth_service.dart';
 import '../../medication/models/dependent_profile.dart';
 import '../../medication/screens/dependents/dependent_list_screen.dart';
 import '../../../core/health/coach_text.dart';
@@ -47,7 +46,6 @@ class HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<HomeDashboard> {
-  final AuthService _authService = AuthService();
   final FocusService _focus = FocusService();
 
   // Medicine data is async; memoize it against the service revision so it only
@@ -66,6 +64,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
   // reset on pull-to-refresh, so it doesn't re-run on every unrelated rebuild.
   Future<String?>? _briefingFuture;
 
+  // The header's profile-chip label, cached exactly like _medicineData above:
+  // rebuilt only when the active dependent actually changes. It used to be
+  // constructed inline in build(), so it re-hit the database and flashed 'Me'
+  // on every frame — and Home rebuilds once a second while a Focus timer runs.
+  String? _profileKey;
+  Future<String>? _profileFuture;
+
+  Future<String> _profileLabelFor(String? activeId) {
+    if (_profileFuture == null || _profileKey != activeId) {
+      _profileKey = activeId;
+      _profileFuture = _activeProfileLabel();
+    }
+    return _profileFuture!;
+  }
+
 
   Future<_MedicineHomeData> _medicineData(int rev) {
     final profile = ActiveProfileService().activeDependentId;
@@ -77,14 +90,31 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return _medFuture!;
   }
 
+  /// Everything the Today surface needs from the medicine tables, in the
+  /// fewest reads.
+  ///
+  /// This used to await four service calls in series — `getDailySummaryAsync`,
+  /// `getAllMedicines`, `getCurrentStreak`, `getTodaysDoses` — which between
+  /// them issued **`getAllMedicines()` three times and `getLogsForDate()`
+  /// twice**, because each one re-fetched what it needed. `getAllMedicines()`
+  /// re-maps every row and re-decodes every schedule JSON, so those were CPU
+  /// costs as well as round trips, paid on the UI isolate on every Home load.
+  ///
+  /// Now each table is read once, the two independent reads run concurrently,
+  /// and the summary and dose list are computed from the rows already in hand.
   Future<_MedicineHomeData> _loadMedicineData() async {
     final now = DateTime.now();
-    final summary = await MedicineCleanStorageService.getDailySummaryAsync(now);
-    final meds = await MedicineCleanStorageService.getAllMedicines();
-    final streak = await MedicineCleanStorageService.getCurrentStreak();
-    final doses = await TodayScheduleService.getTodaysDoses(now);
+    final (meds, logs, streak) = await (
+      MedicineCleanStorageService.getAllMedicines(),
+      MedicineCleanStorageService.getLogsForDate(now),
+      MedicineCleanStorageService.getCurrentStreak(),
+    ).wait;
+
+    final doses =
+        TodayScheduleService.dosesFrom(now, medicines: meds, logs: logs);
     return _MedicineHomeData(
-      summary: summary,
+      summary: MedicineCleanStorageService.summaryFrom(now,
+          logs: logs, medicines: meds, now: now),
       hasMedicines: meds.isNotEmpty,
       streak: streak,
       nextDose: TodayScheduleService.nextDose(doses, now),
@@ -107,15 +137,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
     });
     await Future.delayed(const Duration(milliseconds: 300));
   }
-
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
-  String get _dateLabel => DateFormat('EEEE, MMM d').format(DateTime.now());
 
   void _openSettings() {
     Navigator.push(
@@ -269,7 +290,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
           if (hasMeds && dose != null) {
             final overdue = dose.scheduledTime.isBefore(DateTime.now());
             final accent = overdue ? ext.error : ext.medicine;
-            final timeLabel = DateFormat('h:mm a').format(dose.scheduledTime);
+            final timeLabel = DateFormats.time.format(dose.scheduledTime);
             final med = dose.medicine;
             return _heroShell(
               ext,
@@ -624,7 +645,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final name = _authService.currentUser?.name ?? '';
     final hidden = _hiddenTodayCards();
     return AppScaffold(
       body: RefreshIndicator(
@@ -634,13 +654,18 @@ class _HomeDashboardState extends State<HomeDashboard> {
           slivers: [
             SliverToBoxAdapter(
               child: AppHeader(
-                greeting: '$_greeting · $_dateLabel',
-                title: name.isNotEmpty ? name : 'Welcome back',
+                // No greeting and no date. The status bar already shows the
+                // date, the briefing strip below already opens with a greeting,
+                // and a title has to describe the view — so this is "Today",
+                // matching the bottom-nav tab the user tapped to get here.
+                title: 'Today',
+                layout: HeaderLayout.stacked,
                 accent: ext.brand,
                 leading: ListenableBuilder(
                   listenable: ActiveProfileService(),
                   builder: (context, _) => FutureBuilder<String>(
-                    future: _activeProfileLabel(),
+                    future: _profileLabelFor(
+                        ActiveProfileService().activeDependentId),
                     builder: (context, snap) => AppChip(
                       label: snap.data ?? 'Me',
                       icon: Symbols.person_rounded,
@@ -682,14 +707,17 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   AppSpacing.gutter, AppSpacing.xs, AppSpacing.gutter, 120),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  // 2 — flat AI whisper (deterministic → time-of-day glyph).
-                  _buildBriefingStrip(ext),
-                  const SizedBox(height: AppSpacing.lg),
-                  // 3 — self-gating attention/urgent nudge, above the hero.
+                  // 2 — self-gating attention/urgent nudge. Stays on top: it
+                  // is absent unless something genuinely needs attention.
                   const ProactiveNudge(),
                   const SizedBox(height: AppSpacing.md),
-                  // 4 — the single elevated focal card.
+                  // 3 — the single elevated focal card. Promoted above the
+                  // briefing so the FIRST thing under the title is the next
+                  // action, not an ambient sentence about it.
                   _buildNextDoseHero(ext),
+                  const SizedBox(height: AppSpacing.lg),
+                  // 4 — flat AI whisper (deterministic → time-of-day glyph).
+                  _buildBriefingStrip(ext),
                   const SizedBox(height: AppSpacing.xl),
                   // 5 — 4-up pulse row (Meds · Water · Focus · Reminders).
                   _buildPulseRow(ext),
@@ -700,7 +728,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   // four features). Quick logging still lives on "+ Log" and the
                   // feed cards.
                   SectionHeader(
-                      title: 'Today',
+                      // Not "Today" — the page itself is now titled Today, and
+                      // a section repeating its parent's name is noise.
+                      title: 'Your day',
                       accent: ext.brand,
                       actionLabel: 'Customize',
                       onAction: _openCustomizeToday),
@@ -1220,7 +1250,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
         7, (i) => DateTime(now.year, now.month, now.day)
             .subtract(Duration(days: 6 - i)));
     final labels =
-        days.map((d) => DateFormat('E').format(d).substring(0, 1)).toList();
+        days.map((d) => DateFormats.weekdayNarrow.format(d).substring(0, 1)).toList();
 
     // Water: fraction of each day's goal reached (capped at 1.0).
     final waterValues = days.map((d) {
@@ -1522,6 +1552,18 @@ class _PulseDotState extends State<_PulseDot>
   }
 
   @override
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Drive the controller from a lifecycle hook rather than from build().
+    final reduce = MediaQuery.of(context).disableAnimations;
+    if (reduce) {
+      if (_c.isAnimating) _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat(reverse: true);
+    }
+  }
+
   Widget build(BuildContext context) {
     final reduce = MediaQuery.of(context).disableAnimations;
     Widget dot(double opacity) => Container(
@@ -1535,7 +1577,11 @@ class _PulseDotState extends State<_PulseDot>
       if (_c.isAnimating) _c.stop();
       return dot(1.0);
     }
-    if (!_c.isAnimating) _c.repeat(reverse: true);
+    // NOTE: the controller is started in didChangeDependencies, not here.
+    // Calling `repeat()` from build() mutates an animation controller during
+    // the build phase, and it also meant `Home` never reported as settled
+    // whenever a dose was overdue — which the build-cost harness flags as a
+    // perpetual animation.
     return AnimatedBuilder(
       animation: _c,
       builder: (context, _) => dot(0.5 + 0.5 * _c.value),

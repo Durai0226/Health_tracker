@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:drift/drift.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'background_alarm_service.dart' show kShowOnLockScreenPref;
 import '../database/app_database.dart';
 import '../database/daos/core_dao.dart';
 import '../database/daos/medication_dao.dart';
@@ -557,6 +559,14 @@ class CleanStorageService {
     await setAppPreference('themeMode', settings.themeModePreference);
     // Persist the notification 'Display' + alarm settings so they survive reopen.
     await setAppPreference('showOnLockScreen', settings.showOnLockScreen);
+    // Mirror into SharedPreferences as well: the alarm fires in a background
+    // isolate with no Drift connection, so that is the only place it can read
+    // this from. Without the mirror the toggle silently did nothing on
+    // Android, which is where every medicine reminder actually goes.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(kShowOnLockScreenPref, settings.showOnLockScreen);
+    } catch (_) {}
     await setAppPreference('persistentNotification', settings.persistentNotification);
     await setAppPreference('fullScreenNotification', settings.fullScreenNotification);
     await setAppPreference('alarmRingDuration', settings.alarmRingDurationSeconds);
@@ -585,9 +595,37 @@ class CleanStorageService {
       'water': water.map((d) => d.toJson()).toList(),
       'vitals': await VitalsStorageService.exportJson(),
       'diary': await DiaryStorageService.exportJson(),
-      'preferences': Map<String, dynamic>.from(_appPreferencesCache),
+      'preferences': Map<String, dynamic>.fromEntries(
+        _appPreferencesCache.entries
+            .where((e) => !kNeverLeaveTheDevice.contains(e.key)),
+      ),
     };
   }
+
+  /// Preference keys that must never enter a backup, in either direction.
+  ///
+  /// **Export.** `AppLockService` stores the app-lock PIN as
+  /// `securityPinSalt` + `securityPinHash` via [setAppPreference], so they sat
+  /// in `_appPreferencesCache` and were serialized straight into
+  /// `exportAllData()`. That JSON goes two places — a ZIP handed to the OS
+  /// share sheet, and a Firestore upload — so every backup a user emailed or
+  /// put in Drive carried their PIN. A 4-digit PIN with a known salt is ~10,000
+  /// SHA-256 operations to recover, i.e. instant, and people reuse it as their
+  /// device PIN.
+  ///
+  /// **Import.** The restore path looped over `data['preferences']` and wrote
+  /// every key back unfiltered, so a crafted `dlyminder_data.json` could set
+  /// `securityLockEnabled: false` to switch off the app lock, overwrite the
+  /// PIN with the attacker's own, or flip `cloudSyncEnabled: true` to turn on
+  /// the upload the user had explicitly opted out of. Security state and
+  /// consent state are device decisions; they are never restored from a file.
+  static const Set<String> kNeverLeaveTheDevice = {
+    'securityPinSalt',
+    'securityPinHash',
+    'securityLockEnabled',
+    'securityBiometricPreferred',
+    'cloudSyncEnabled',
+  };
 
   static Future<void> clearAllData() async {
     _medicinesCache.clear();
@@ -832,7 +870,15 @@ class CleanStorageService {
       }
       if (data['preferences'] is Map) {
         for (final e in (data['preferences'] as Map).entries) {
-          await setAppPreference(e.key.toString(), e.value);
+          final key = e.key.toString();
+          // Never let a restore file decide security or consent state — see
+          // [kNeverLeaveTheDevice]. A crafted backup could otherwise disable
+          // the app lock, replace the PIN, or enable cloud upload.
+          if (kNeverLeaveTheDevice.contains(key)) {
+            debugPrint('↩︎ Skipped restoring protected preference: $key');
+            continue;
+          }
+          await setAppPreference(key, e.value);
         }
       }
       // Refresh sync caches so the UI reflects the restore immediately.

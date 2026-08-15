@@ -1,6 +1,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -188,6 +189,22 @@ void main() async {
   // Catch all async errors that escape the Flutter framework
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+
+    // SILENCE LOGGING IN RELEASE BUILDS.
+    //
+    // `debugPrint` is not compiled out of release builds — it writes to
+    // logcat. This app has ~692 print sites, and they emit real PII: the
+    // signed-in user's email address, Firebase UIDs across the sync services,
+    // medicine names from the alarm isolate, and (until this pass) an entire
+    // drink-by-drink health CSV.
+    //
+    // Android has restricted cross-app logcat reads since 4.1, so this is not
+    // remotely exploitable — but it lands in bug reports, in `adb logcat` on
+    // any connected machine, and in whatever crash-reporting SDK gets added
+    // next. One line removes the whole class.
+    if (kReleaseMode) {
+      debugPrint = (String? message, {int? wrapWidth}) {};
+    }
     
     try {
       await Firebase.initializeApp(
@@ -199,7 +216,16 @@ void main() async {
       // scripted anonymous writes). It is also the ONLY credential behind the
       // Smart answers tier, so AppCheckService can explain a failure rather than
       // leaving the AI silently unavailable. Non-fatal on failure.
-      await AppCheckService.activate();
+      // Bounded: App Check is a Play Integrity / App Attest attestation, i.e.
+      // a network round trip, and it sat on the critical path BEFORE the first
+      // frame with no timeout. On a flaky connection or behind a captive
+      // portal the user stared at the system splash until Firebase's own
+      // internal timeout expired. Attestation failing is already non-fatal —
+      // it should also be non-blocking.
+      await AppCheckService.activate()
+          .timeout(const Duration(seconds: 3), onTimeout: () {
+        debugPrint('⚠️ App Check attestation timed out — continuing');
+      });
 
       // Enable Firestore persistence with reasonable cache size for faster startup
       FirebaseFirestore.instance.settings = const Settings(
@@ -241,7 +267,17 @@ void main() async {
     await Future.wait([
       if (!kSkipNotifInit)
         _initService('NotificationService', () => NotificationService().init()),
-      _initService('AuthService', () => AuthService().init()),
+      // Bounded for the same reason as App Check above: AuthService.init()
+      // awaits `authStateChanges().first` and then `signInAnonymously()` —
+      // both network round trips, both previously untimed, both ahead of the
+      // first frame. Nothing painted at startup needs a uid.
+      _initService(
+          'AuthService',
+          () => AuthService().init().timeout(
+                const Duration(seconds: 3),
+                onTimeout: () =>
+                    debugPrint('⚠️ Auth init timed out — continuing offline'),
+              )),
       _initService('HapticService', () => HapticService().init()),
       _initService('FeatureManager', () => FeatureManager().init()),
       _initService('ActiveProfileService', () => ActiveProfileService().init()),

@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 /// period_tables.dart). Stage minutes are nullable — present only when measured
 /// by HealthKit/Health Connect; manual logs record duration + a quality index.
 @DataClassName('SleepSessionRow')
+@TableIndex(name: 'idx_sleep_wake', columns: {#wakeTime})
 class SleepSessions extends Table {
   TextColumn get id => text()();
   TextColumn get dateKey => text()(); // the night's wake-up date, yyyy-MM-dd

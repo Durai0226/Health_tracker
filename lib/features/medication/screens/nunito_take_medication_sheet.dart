@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
@@ -346,8 +346,8 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
             AppListTile(
               icon: Symbols.schedule_rounded,
               iconColor: ext.mark(ext.medicine),
-              title: DateFormat('EEE, MMM d').format(slot),
-              subtitle: DateFormat('h:mm a').format(slot),
+              title: DateFormats.weekdayDayMonthShort.format(slot),
+              subtitle: DateFormats.time.format(slot),
               onTap: () => Navigator.pop(sheetContext, slot),
             ),
           const SizedBox(height: AppSpacing.sm),
@@ -371,7 +371,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
       _hapticService.medicineTaken();
       if (mounted) {
         context.toastSuccess(
-            'Pre-logged for ${DateFormat('MMM d, h:mm a').format(chosen)}');
+            'Pre-logged for ${DateFormats.dayMonthTime.format(chosen)}');
         Navigator.pop(context, {'preLoggedOther': true});
       }
       return;

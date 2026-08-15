@@ -31,15 +31,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>We need camera access to let you take photos and add them to your notes.</string>
+	<string>Camera access lets you scan a prescription label so medicine details can be filled in for you.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>We need FaceID access to secure your private notes.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>We need microphone access to let you record audio notes and speak to the AI assistant.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>We use speech recognition to turn your voice into text when you talk to the AI assistant.</string>
+	<string>Face ID unlocks the app so your medicines and health records stay private on a shared device.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need access to your photo library to let you attach images to your notes.</string>
+	<string>Photo library access lets you attach an image of a prescription or label to a medicine.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>We need notification access to remind you about your medicines, health checks, and fitness activities on time.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -125,8 +121,6 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
-		<string>fetch</string>
-		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

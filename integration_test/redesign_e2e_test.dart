@@ -3,57 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:tablet_remainder/main.dart' as app;
 
+import 'support/e2e_helpers.dart';
+
 /// Redesign E2E — drives the real app on a device/simulator, feature by feature,
 /// against the new "Today-first, 5-target" navigation. Uses fixed-duration pumps
 /// (not pumpAndSettle) so continuous animations (nav orb, ads) can't hang it.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<void> settle(WidgetTester t,
-      [Duration d = const Duration(milliseconds: 250), int frames = 12]) async {
-    for (var i = 0; i < frames; i++) {
-      await t.pump(d);
-    }
-  }
 
   /// Get past the first-run welcome/onboarding to the app shell, if shown.
   /// Robust against the multi-step onboarding + nondeterministic container wipe:
   /// returns immediately if already at the shell, else advances via non-
   /// permission buttons ("Skip for now"/"Continue"/…) — NEVER tapping a button
   /// that would raise a native permission dialog the test can't dismiss.
-  Future<void> reachHome(WidgetTester t) async {
-    // Let async init + first frame settle.
-    for (var i = 0; i < 14; i++) {
-      await t.pump(const Duration(milliseconds: 300));
-    }
-    const advances = [
-      'Skip for now',
-      'Continue',
-      'Get Started',
-      'Get started',
-      'Next',
-      'Done',
-      'Finish',
-      "Let's go",
-      'Start tracking',
-    ];
-    for (var i = 0; i < 24; i++) {
-      if (find.text('Today').evaluate().isNotEmpty &&
-          find.text('Health').evaluate().isNotEmpty) {
-        return; // shell reached
-      }
-      for (final label in advances) {
-        final f = find.text(label);
-        if (f.evaluate().isNotEmpty) {
-          await t.tap(f.last, warnIfMissed: false);
-          break;
-        }
-      }
-      for (var j = 0; j < 6; j++) {
-        await t.pump(const Duration(milliseconds: 300));
-      }
-    }
-  }
 
   group('Redesign nav E2E', () {
     testWidgets('5 slots reachable + center Log sheet + Health trackers',
@@ -66,7 +29,7 @@ void main() {
       expect(find.text('Meds'), findsWidgets, reason: 'Meds tab');
       expect(find.text('Log'), findsWidgets, reason: 'Log action');
       expect(find.text('Health'), findsWidgets, reason: 'Health tab');
-      expect(find.text('Insights'), findsWidgets, reason: 'Insights tab');
+      expect(find.text('Trends'), findsWidgets, reason: 'Insights tab');
 
       // Meds tab.
       await tester.tap(find.text('Meds').last);
@@ -83,7 +46,7 @@ void main() {
       }
 
       // Insights tab.
-      await tester.tap(find.text('Insights').last);
+      await tester.tap(find.text('Trends').last);
       await settle(tester);
 
       // Center Log action → unified sheet.

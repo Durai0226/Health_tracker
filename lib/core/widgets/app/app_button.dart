@@ -109,7 +109,13 @@ class AppButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (leadingIcon != null) ...[
-                Icon(leadingIcon, size: 18, color: fg),
+                // applyTextScaling: false — a button is a FIXED-HEIGHT
+                // container and this glyph is chrome sized to the button, not
+                // body text. Left scaling, at 2.0x Dynamic Type it doubled to
+                // 36pt and pushed the row past the button's width (measured:
+                // +4.4px on the add-medicine flow at 320pt).
+                Icon(leadingIcon,
+                    size: 18, color: fg, applyTextScaling: false),
                 const SizedBox(width: 8),
               ],
               // A button is a FIXED-HEIGHT container, so at large Dynamic Type
@@ -193,7 +199,15 @@ class AppButton extends StatelessWidget {
                 onTap: tap,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Center(child: child),
+                  // scaleDown on the WHOLE row, not just the label. The row
+                  // is mainAxisSize.min inside a Center, so it sizes to its
+                  // children's intrinsic widths and can exceed the button even
+                  // though the label itself is already Flexible + FittedBox —
+                  // measured at +4.4px on the add-medicine flow at 320pt/2.0x.
+                  // scaleDown never enlarges, so buttons that already fit are
+                  // pixel-identical.
+                  child: Center(
+                      child: FittedBox(fit: BoxFit.scaleDown, child: child)),
                 ),
               ),
             ),
@@ -221,7 +235,8 @@ class AppButton extends StatelessWidget {
                 },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Center(child: child),
+            child: Center(
+                child: FittedBox(fit: BoxFit.scaleDown, child: child)),
           ),
         ),
       ),

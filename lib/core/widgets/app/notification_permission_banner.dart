@@ -40,6 +40,12 @@ class _NotificationPermissionBannerState
     extends State<NotificationPermissionBanner> {
   /// null = still checking; true/false = known state.
   bool? _enabled;
+  /// Notifications are ON but exact alarms were REFUSED, so every medicine
+  /// alarm was silently downgraded to an inexact one. Without surfacing this
+  /// the user sees a permission they granted and reminders that arrive late
+  /// (previously: never — the plugin logged an error and returned without
+  /// scheduling, while reporting success).
+  bool _downgraded = false;
   bool _working = false;
 
   @override
@@ -50,8 +56,13 @@ class _NotificationPermissionBannerState
 
   Future<void> _refresh() async {
     final enabled = await NotificationService().areNotificationsEnabled();
+    final downgraded =
+        enabled ? await NotificationService().remindersDowngradedToInexact() : false;
     if (!mounted) return;
-    setState(() => _enabled = enabled);
+    setState(() {
+      _enabled = enabled;
+      _downgraded = downgraded;
+    });
     widget.onStatusChanged?.call(enabled);
   }
 
@@ -78,10 +89,23 @@ class _NotificationPermissionBannerState
     }
   }
 
+  Future<void> _enableExact() async {
+    if (_working) return;
+    setState(() => _working = true);
+    try {
+      await NotificationService().requestExactAlarmPermission();
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Hide while loading and whenever notifications are enabled.
-    if (_enabled != false) return const SizedBox.shrink();
+    // Hide only when notifications are on AND exact alarms were not downgraded.
+    if (_enabled == null) return const SizedBox.shrink();
+    if (_enabled == true && !_downgraded) return const SizedBox.shrink();
+    final downgradedOnly = _enabled == true && _downgraded;
 
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
@@ -98,7 +122,9 @@ class _NotificationPermissionBannerState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                Symbols.notifications_off_rounded,
+                downgradedOnly
+                    ? Symbols.alarm_off_rounded
+                    : Symbols.notifications_off_rounded,
                 color: warning.onContainer,
                 size: 22,
               ),
@@ -108,7 +134,9 @@ class _NotificationPermissionBannerState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Notifications are turned off',
+                      downgradedOnly
+                          ? 'Reminders may arrive late'
+                          : 'Notifications are turned off',
                       style: tt.titleSmall?.copyWith(
                         color: warning.onContainer,
                         fontWeight: FontWeight.w600,
@@ -116,8 +144,12 @@ class _NotificationPermissionBannerState
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Medicine and reminder alerts will not appear until you '
-                      'enable notifications for DailyMinder.',
+                      downgradedOnly
+                          ? 'Exact alarms are not allowed, so medicine reminders '
+                              'are scheduled inexactly and can be delayed. Allow '
+                              'exact alarms for on-time doses.'
+                          : 'Medicine and reminder alerts will not appear until you '
+                              'enable notifications for DailyMinder.',
                       style: tt.bodySmall?.copyWith(color: warning.onContainer),
                     ),
                   ],
@@ -129,12 +161,16 @@ class _NotificationPermissionBannerState
           Align(
             alignment: Alignment.centerLeft,
             child: AppButton(
-              label: 'Enable notifications',
-              leadingIcon: Symbols.notifications_active_rounded,
+              label: downgradedOnly
+                  ? 'Allow exact alarms'
+                  : 'Enable notifications',
+              leadingIcon: downgradedOnly
+                  ? Symbols.alarm_on_rounded
+                  : Symbols.notifications_active_rounded,
               size: AppButtonSize.sm,
               accent: warning,
               loading: _working,
-              onPressed: _enable,
+              onPressed: downgradedOnly ? _enableExact : _enable,
             ),
           ),
         ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:intl/intl.dart';
+import '../../../core/utils/date_formats.dart';
 import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -141,7 +141,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       _medicines = await MedicineCleanStorageService.getAllMedicines();
       _computeInteractions();
       _streak = await MedicineCleanStorageService.getCurrentStreak();
-      final stats = await MedicineCleanStorageService.getAdherenceStats();
+      final stats = await MedicineCleanStorageService.getAdherenceStats(
+          medicines: _medicines);
       _adherenceRate = (stats['adherenceRate'] as int) / 100.0;
       _adherenceScheduled = (stats['scheduled'] as int?) ?? 0;
 
@@ -269,7 +270,15 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   Future<void> _buildTodaySchedule() async {
     // Single source of truth (shared with the Today hub's next-dose hero).
     final requestDate = _selectedDate;
-    final doses = await TodayScheduleService.getTodaysDoses(requestDate);
+    // Compute from the medicines this screen already loaded rather than having
+    // getTodaysDoses re-read the table. Measured, this screen read
+    // `enhanced_medicines` SIX times for one open — and getAllMedicines()
+    // re-maps every row and re-decodes every schedule JSON on each call.
+    final doses = TodayScheduleService.dosesFrom(
+      requestDate,
+      medicines: _medicines,
+      logs: await MedicineCleanStorageService.getLogsForDate(requestDate),
+    );
     // Discard stale results if the user changed the date during the await —
     // otherwise two rapid taps could interleave and merge both days' doses.
     if (requestDate != _selectedDate) return;
@@ -956,7 +965,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          DateFormat('EEE').format(date).toUpperCase(),
+                          DateFormats.weekdayShort.format(date).toUpperCase(),
                           maxLines: 1,
                           softWrap: false,
                           style: tt.labelSmall?.copyWith(
@@ -971,7 +980,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          DateFormat('d').format(date),
+                          DateFormats.dayOfMonth.format(date),
                           maxLines: 1,
                           softWrap: false,
                           style: tt.titleLarge?.copyWith(
@@ -1061,7 +1070,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   Widget _buildTimelineItem(_ScheduledDose dose, bool isTaken, bool isPast, bool isNext, bool isFirst, bool isLast) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    final timeStr = DateFormat('h:mm a').format(dose.scheduledTime);
+    final timeStr = DateFormats.time.format(dose.scheduledTime);
 
     // A dose can be taken / skipped / missed (terminal) — or, on a future day,
     // view-only. Previously only "taken" was tracked, so a skipped or missed
@@ -1484,7 +1493,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       child: Semantics(
         button: actionable,
         label: '${dose.medicine.name}, '
-            '${DateFormat('h:mm a').format(dose.scheduledTime)}$statusSuffix',
+            '${DateFormats.time.format(dose.scheduledTime)}$statusSuffix',
         child: SizedBox(
           width: 88,
           child: AppCard(
@@ -1525,7 +1534,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                   ),
                 ),
                 Text(
-                  DateFormat('h:mm a').format(dose.scheduledTime),
+                  DateFormats.time.format(dose.scheduledTime),
                   style: tt.labelSmall
                       ?.copyWith(color: ext.textTertiary, fontSize: 10),
                 ),

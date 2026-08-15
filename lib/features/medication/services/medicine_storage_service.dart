@@ -1355,7 +1355,75 @@ class MedicineCleanStorageService {
   static Future<DailyMedicineSummary> getDailySummaryAsync(DateTime date) async {
     final logs = await getLogsForDate(date);
     final medicines = await getAllMedicines();
+    return _summaryFor(date, logs, medicines, DateTime.now());
+  }
+
+  /// The same summary over ALREADY-FETCHED rows.
+  ///
+  /// Home loads the summary, today's doses and the streak together. Each of
+  /// those fetched its own copy of the medicines table, so one dashboard build
+  /// paid for `getAllMedicines()` three times — and that call re-maps every row
+  /// and re-decodes every schedule JSON, so it is CPU work, not just I/O.
+  static DailyMedicineSummary summaryFrom(
+    DateTime date, {
+    required List<MedicineLog> logs,
+    required List<EnhancedMedicine> medicines,
+    DateTime? now,
+  }) =>
+      _summaryFor(date, logs, medicines, now ?? DateTime.now());
+
+  /// Daily summaries for a whole date range in **two** queries.
+  ///
+  /// [getDailySummaryAsync] costs two round trips per day — one for the logs and
+  /// one `getAllMedicines()` that re-decodes every schedule JSON. Callers that
+  /// wanted a month of history looped it and paid ~60 serialized queries on the
+  /// UI isolate (`InsightService.gatherAll` did exactly this for 30 days, on
+  /// every weekly-recap open, unconditionally).
+  ///
+  /// Both bounds are inclusive and normalised to date-only. The per-day maths is
+  /// shared with [getDailySummaryAsync] via [_summaryFor], deliberately: the
+  /// streak bug this codebase already had came from three call sites
+  /// reimplementing the same counting rule and drifting apart.
+  static Future<Map<DateTime, DailyMedicineSummary>> getDailySummariesForRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final from = DateTime(start.year, start.month, start.day);
+    final to = DateTime(end.year, end.month, end.day);
+    if (to.isBefore(from)) return {};
+
+    final logs = await getLogsForDateRange(
+      from,
+      DateTime(to.year, to.month, to.day, 23, 59, 59, 999),
+    );
+    final medicines = await getAllMedicines();
     final now = DateTime.now();
+
+    // Bucket once, then reuse — avoids rescanning the whole log list per day.
+    final byDay = <String, List<MedicineLog>>{};
+    for (final l in logs) {
+      final t = l.scheduledTime;
+      (byDay['${t.year}-${t.month}-${t.day}'] ??= []).add(l);
+    }
+
+    final out = <DateTime, DailyMedicineSummary>{};
+    for (var d = from;
+        !d.isAfter(to);
+        d = DateTime(d.year, d.month, d.day + 1)) {
+      final key = '${d.year}-${d.month}-${d.day}';
+      out[d] = _summaryFor(d, byDay[key] ?? const [], medicines, now);
+    }
+    return out;
+  }
+
+  /// The single definition of "what happened on this day". Pure — no I/O — so
+  /// both the single-day and range paths cannot diverge.
+  static DailyMedicineSummary _summaryFor(
+    DateTime date,
+    List<MedicineLog> logs,
+    List<EnhancedMedicine> medicines,
+    DateTime now,
+  ) {
 
     // Denominator = scheduled (non-PRN) slots for this date that are already
     // due (past slots for prior days, or up to now for today). Future slots are
@@ -1536,11 +1604,21 @@ class MedicineCleanStorageService {
   static Future<int> getCurrentStreak() async =>
       (await getStreakResult()).current;
 
-  static Future<Map<String, dynamic>> getAdherenceStats({int days = 30}) async {
+  /// Adherence over the last [days].
+  ///
+  /// Pass [medicines] when the caller already holds them — the medication
+  /// dashboard loads the list, then called this, `getCurrentStreak` and the
+  /// schedule builder, each of which re-read the same table. Measured, that
+  /// screen read `enhanced_medicines` six times for one open, and every call
+  /// re-maps each row and re-decodes its schedule JSON.
+  static Future<Map<String, dynamic>> getAdherenceStats({
+    int days = 30,
+    List<EnhancedMedicine>? medicines,
+  }) async {
     final now = DateTime.now();
     final startDate = now.subtract(Duration(days: days));
     final logs = await getLogsForDateRange(startDate, now);
-    final medicines = await getAllMedicines();
+    medicines ??= await getAllMedicines();
 
     // Scope the numerator to the same population as the scheduled denominator
     // (active, non-archived, non-PRN). Counting taken logs from archived / PRN /
@@ -1604,16 +1682,28 @@ class MedicineCleanStorageService {
   /// single medicine. Returns taken/skipped/missed/total/scheduled/adherenceRate
   /// (adherenceRate as a 0-100 int). PRN or archived/inactive medicines yield an
   /// adherenceRate of 100 (nothing was due to miss).
+  /// Per-medicine adherence.
+  ///
+  /// Pass [medicine] and [allLogs] when the caller already holds them. Without
+  /// them this costs TWO reads per medicine, and the adherence report called it
+  /// in a serial loop over every active medicine — so a 5-medicine user paid
+  /// roughly 17 SELECTs to open one screen, growing by 2 for each medicine
+  /// added.
   static Future<Map<String, dynamic>> getAdherenceStatsForMedicine(
     String medicineId, {
     int days = 30,
+    EnhancedMedicine? medicine,
+    List<MedicineLog>? allLogs,
   }) async {
     final now = DateTime.now();
     final startDate = now.subtract(Duration(days: days));
-    final medicine = await getMedicine(medicineId);
+    medicine ??= await getMedicine(medicineId);
 
     // Deduped per slot — see getAdherenceStats.
-    final logs = dedupeByDose((await getLogsForMedicine(medicineId)).where((l) =>
+    final source =
+        allLogs?.where((l) => l.medicineId == medicineId) ??
+            await getLogsForMedicine(medicineId);
+    final logs = dedupeByDose(source.where((l) =>
         !l.scheduledTime.isBefore(startDate) &&
         !l.scheduledTime.isAfter(now)));
 

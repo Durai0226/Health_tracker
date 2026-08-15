@@ -228,6 +228,7 @@ class SimpleAdService {
     if (unit == null) return;
     _bannerAd?.dispose();
     _bannerLoaded = false;
+    bannerReady.value = false;
     _bannerAd = BannerAd(
       adUnitId: unit,
       size: AdSize.banner,
@@ -236,12 +237,14 @@ class SimpleAdService {
         onAdLoaded: (_) {
           debugPrint('✓ Banner ad loaded');
           _bannerLoaded = true;
+          bannerReady.value = true;
         },
         onAdFailedToLoad: (ad, error) {
           debugPrint('❌ Banner ad failed: $error');
           _bannerLoaded = false;
           ad.dispose();
           _bannerAd = null;
+          bannerReady.value = false;
         },
       ),
     );
@@ -255,6 +258,17 @@ class SimpleAdService {
   /// red error box — the tab-switch glitch. UI must gate on this.
   bool _bannerLoaded = false;
   bool get bannerLoaded => _bannerLoaded;
+
+  /// Fires when [bannerLoaded] changes.
+  ///
+  /// Without this the banner was a silent state change: `SmartDashboardBanner`
+  /// is a StatelessWidget that reads `bannerLoaded` directly, so it stayed a
+  /// zero-height SizedBox until some UNRELATED rebuild happened to run — and
+  /// on this app that is a tab switch. The result was ~84pt of content
+  /// appearing under the user's thumb as they changed tabs, shoving everything
+  /// below it down. Listening here decouples the insertion from navigation: it
+  /// now appears when the ad actually loads.
+  final ValueNotifier<bool> bannerReady = ValueNotifier<bool>(false);
 
   Future<void> _preloadInterstitial() async {
     final unit = AdConfig.interstitialUnitId;

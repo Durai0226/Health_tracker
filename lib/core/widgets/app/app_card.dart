@@ -37,11 +37,8 @@ class _AppCardState extends State<AppCard> {
     final ext = AppColorsExt.of(context);
     final br = BorderRadius.circular(widget.radius);
 
-    Widget card = AnimatedScale(
-      scale: _pressed && widget.pressEffect ? 0.98 : 1.0,
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
-      child: Container(
+    // The inner container, built once and shared by both branches below.
+    final inner = Container(
         padding: widget.padding,
         decoration: BoxDecoration(
           color: widget.color ?? ext.surface,
@@ -50,8 +47,21 @@ class _AppCardState extends State<AppCard> {
           boxShadow: widget.shadow ?? AppShadows.card(context),
         ),
         child: widget.child,
-      ),
     );
+
+    // Only pay for the implicit animation when the press effect is actually
+    // wanted. `AnimatedScale` is a StatefulWidget with its own controller and
+    // Ticker — roughly five elements each — and it was built unconditionally
+    // across 169 AppCard call sites, including the ones that explicitly turn
+    // the press effect off.
+    final Widget card = widget.pressEffect
+        ? AnimatedScale(
+            scale: _pressed ? 0.98 : 1.0,
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
+            child: inner,
+          )
+        : inner;
 
     if (widget.onTap == null) return Padding(
       padding: widget.margin ?? EdgeInsets.zero,

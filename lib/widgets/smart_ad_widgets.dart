@@ -11,23 +11,33 @@ class SmartDashboardBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final adService = SimpleAdService();
-    final bannerAd = adService.bannerAd;
 
-    // Only insert the AdWidget once the ad has actually loaded — inserting it
-    // before load() completes throws and paints a red error box (the glitch
-    // seen when switching to a tab that hosts the banner).
-    if (!adService.shouldShowDashboardBanner ||
-        bannerAd == null ||
-        !adService.bannerLoaded) {
-      return const SizedBox.shrink();
-    }
+    // Rebuild when the ad's load state CHANGES, not when something unrelated
+    // happens to rebuild this subtree.
+    //
+    // This widget reads `bannerLoaded` directly and nothing notified on it, so
+    // it stayed a zero-height SizedBox until an unrelated rebuild ran — and on
+    // this app that is a tab switch. ~84pt of content therefore appeared while
+    // the user was navigating, shoving the dashboard down under their thumb.
+    return ValueListenableBuilder<bool>(
+      valueListenable: adService.bannerReady,
+      builder: (context, ready, _) {
+        final bannerAd = adService.bannerAd;
 
-    return Container(
-      width: double.infinity,
-      height: 60,
-      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      alignment: Alignment.center,
-      child: AdWidget(ad: bannerAd),
+        // Only insert the AdWidget once the ad has actually loaded — inserting
+        // it before load() completes throws and paints a red error box.
+        if (!adService.shouldShowDashboardBanner || bannerAd == null || !ready) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          width: double.infinity,
+          height: 60,
+          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          alignment: Alignment.center,
+          child: AdWidget(ad: bannerAd),
+        );
+      },
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/utils/date_formats.dart';
 import '../../models/enhanced_medicine.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
@@ -63,16 +64,35 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     setState(() => _isLoading = true);
 
     try {
+      // Read each table ONCE for the whole screen.
+      //
+      // This used to fetch the medicine list, then call getAdherenceStats
+      // (which re-read it), then getCurrentStreak (which read medicines AND
+      // logs again), then loop getAdherenceStatsForMedicine over every active
+      // medicine — two more reads each. Measured, a 5-medicine user paid ~17
+      // SELECTs to open this screen, and it grew by 2 per medicine added.
+      final now = DateTime.now();
       _medicines = await MedicineCleanStorageService.getAllMedicines();
+      final windowLogs = await MedicineCleanStorageService.getLogsForDateRange(
+        now.subtract(Duration(days: _periodDays)),
+        now,
+      );
+
       _summary = _AdherenceSummary.fromMap(
-        await MedicineCleanStorageService.getAdherenceStats(days: _periodDays),
+        await MedicineCleanStorageService.getAdherenceStats(
+            days: _periodDays, medicines: _medicines),
       );
       _streak = await MedicineCleanStorageService.getCurrentStreak();
 
       _medStats.clear();
       for (final m in _medicines.where((m) => m.isActive && !m.isArchived)) {
-        _medStats[m.id] = await MedicineCleanStorageService
-            .getAdherenceStatsForMedicine(m.id, days: _periodDays);
+        _medStats[m.id] =
+            await MedicineCleanStorageService.getAdherenceStatsForMedicine(
+          m.id,
+          days: _periodDays,
+          medicine: m,
+          allLogs: windowLogs,
+        );
       }
 
       await _calculateDailyStats();
@@ -97,7 +117,8 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     final startDay = DateTime(startDate.year, startDate.month, startDate.day);
     final today = DateTime(now.year, now.month, now.day);
 
-    final medicines = (await MedicineCleanStorageService.getAllMedicines())
+    // Reuse the list already loaded by _load() rather than re-reading it.
+    final medicines = _medicines
         .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
         .toList();
     // The numerator MUST be drawn from the same population the denominator is
@@ -461,7 +482,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     if (_selectedPeriod == 0) {
       return _dailyStats
           .map((d) => _ChartBar(
-                label: DateFormat('E').format(d.date),
+                label: DateFormats.weekdayNarrow.format(d.date),
                 adherence: d.adherence,
                 hasData: d.hasData,
               ))
@@ -474,7 +495,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       for (var i = 0; i < _dailyStats.length; i += 7) {
         final chunk = _dailyStats.sublist(
             i, (i + 7 > _dailyStats.length) ? _dailyStats.length : i + 7);
-        bars.add(_aggregate(chunk, DateFormat('M/d').format(chunk.first.date)));
+        bars.add(_aggregate(chunk, DateFormats.numericShort.format(chunk.first.date)));
       }
       return bars;
     }

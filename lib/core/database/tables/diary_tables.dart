@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 /// deliberately does not share their table/DAO/service apparatus with: those
 /// are all built around a classifiable numeric "reading", which a diary
 /// entry has no equivalent of.
+@TableIndex(name: 'idx_diary_entry_at', columns: {#entryAt})
 class DiaryEntries extends Table {
   TextColumn get id => text()();
   TextColumn get dependentId => text().nullable()();

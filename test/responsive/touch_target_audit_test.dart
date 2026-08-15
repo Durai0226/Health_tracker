@@ -166,5 +166,14 @@ void main() {
     }
     // ignore: avoid_print
     print('=============================================\n');
+
+    // THE GATE. Like the overflow harness, this file had no `expect()` at all —
+    // it printed a report and always passed. WCAG 2.2 SC 2.5.8 sets 24x24 CSS
+    // px as a hard minimum, so anything below it is a conformance failure, not
+    // a note. (The Apple 44pt list stays advisory: it is a comfort guideline,
+    // and gating on it would fail the app today.)
+    expect(belowWcag, isEmpty,
+        reason: 'Tappable targets below the WCAG 2.2 SC 2.5.8 minimum of 24pt '
+            '— see the BELOW WCAG section above.');
   });
 }

@@ -86,59 +86,89 @@ class _FocusScreenState extends State<FocusScreen> {
                 children: [
                   _buildHeader(ext),
                   Expanded(
+                    // Lazy list, not SingleChildScrollView + Column.
+                    //
+                    // Every section used to be constructed AND inflated on
+                    // every build regardless of whether it was on screen —
+                    // 2321 elements, ~4x the app median, for a screen where
+                    // roughly two sections are visible at a time. The coach
+                    // card alone maps every focus session and runs the insight
+                    // engine synchronously, four screenfuls down.
+                    //
+                    // Each child is wrapped in `Center` deliberately: a Column
+                    // (default crossAxisAlignment.center) hands children LOOSE
+                    // width and centres them, while a sliver hands them TIGHT
+                    // full width. `Center` reproduces the Column contract
+                    // exactly — loose width, centred, intrinsic height — so
+                    // this is layout-preserving by construction rather than by
+                    // inspection, which matters because it cannot be eyeballed
+                    // on a device from here.
+                    //
+                    // The whole-screen entrance fade was also removed. An
+                    // `Opacity` between 0 and 1 forces a `saveLayer` over the
+                    // full viewport every frame, and it was wrapping the
+                    // largest tree in the app at the exact moment that tree
+                    // was being built. The slide survives — `Transform` needs
+                    // no layer.
                     child: TweenAnimationBuilder<double>(
                       tween: Tween(begin: 0, end: 1),
                       duration: AppMotion.slow,
                       curve: AppMotion.standard,
-                      builder: (context, t, child) => Opacity(
-                        opacity: t,
-                        child: Transform.translate(
-                          offset: Offset(0, (1 - t) * 12),
-                          child: child,
-                        ),
+                      builder: (context, t, child) => Transform.translate(
+                        offset: Offset(0, (1 - t) * 12),
+                        child: child,
                       ),
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: AppSpacing.xs),
-                            _buildTimerSection(ext),
+                      child: Builder(builder: (context) {
+                        final idle = !_focusService.isRunning;
+                        final sections = <Widget>[
+                          const SizedBox(height: AppSpacing.xs),
+                          // Only the clock and the ring change per second.
+                          ValueListenableBuilder<int>(
+                            valueListenable: _focusService.tick,
+                            builder: (context, _, __) =>
+                                _buildTimerSection(ext),
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
+                          if (idle) ...[
+                            _buildModeToggle(ext),
                             const SizedBox(height: AppSpacing.xl),
-                            if (!_focusService.isRunning) ...[
-                              _buildModeToggle(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                              if (_focusService.mode == FocusMode.single)
-                                _buildDurationSelector(ext)
-                              else
-                                _buildPomodoroConfig(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                              _buildFocusCoachCard(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                              _buildActivitySelector(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                              _buildTagSelector(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                              _buildPlantSelector(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                            ] else ...[
-                              _buildActiveSessionCard(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                            ],
-                            _buildSoundSelector(ext),
+                            if (_focusService.mode == FocusMode.single)
+                              _buildDurationSelector(ext)
+                            else
+                              _buildPomodoroConfig(ext),
                             const SizedBox(height: AppSpacing.xl),
-                            if (!_focusService.isRunning) ...[
-                              _buildBreathingSection(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                              _buildRelaxationCard(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                              _buildFeaturesGrid(ext),
-                              const SizedBox(height: AppSpacing.xl),
-                            ],
-                            _buildQuickStats(ext),
-                            const SizedBox(height: 120),
+                            _buildFocusCoachCard(ext),
+                            const SizedBox(height: AppSpacing.xl),
+                            _buildActivitySelector(ext),
+                            const SizedBox(height: AppSpacing.xl),
+                            _buildTagSelector(ext),
+                            const SizedBox(height: AppSpacing.xl),
+                            _buildPlantSelector(ext),
+                            const SizedBox(height: AppSpacing.xl),
+                          ] else ...[
+                            _buildActiveSessionCard(ext),
+                            const SizedBox(height: AppSpacing.xl),
                           ],
-                        ),
-                      ),
+                          _buildSoundSelector(ext),
+                          const SizedBox(height: AppSpacing.xl),
+                          if (idle) ...[
+                            _buildBreathingSection(ext),
+                            const SizedBox(height: AppSpacing.xl),
+                            _buildRelaxationCard(ext),
+                            const SizedBox(height: AppSpacing.xl),
+                            _buildFeaturesGrid(ext),
+                            const SizedBox(height: AppSpacing.xl),
+                          ],
+                          _buildQuickStats(ext),
+                          const SizedBox(height: 120),
+                        ];
+                        return ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: sections.length,
+                          itemBuilder: (context, i) =>
+                              Center(child: sections[i]),
+                        );
+                      }),
                     ),
                   ),
                 ],

@@ -26,7 +26,13 @@ class _ProactiveNudgeState extends State<ProactiveNudge> {
   @override
   void initState() {
     super.initState();
-    _maybeLoad();
+    // Off the first frame. `_maybeLoad` reaches InsightService.gatherAll(),
+    // which reads several tables; running it during initState put that work
+    // between the user and the first paint of the tab they land on. The nudge
+    // is ambient — it can arrive a frame later.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeLoad();
+    });
   }
 
   Future<void> _maybeLoad() async {

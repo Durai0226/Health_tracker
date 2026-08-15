@@ -116,7 +116,6 @@ void main() {
       // Or simply find the Text and tap slightly to the left?
       // Better: In `_buildReminderCard`, the checkbox is the first child of the Row.
       
-      final reminderCard = find.ancestor(of: find.text(testTitle), matching: find.byType(Dismissible));
       
       // Tap the checkbox (assumed to be visible)
       // We can iterate over widgets or just tap the card to edit, but we want to complete it.
@@ -129,7 +128,6 @@ void main() {
       // Let's try to tap the center-left of the card.
       
       final cardCenter = tester.getCenter(find.text(testTitle));
-      final checkboxOffset = Offset(cardCenter.dx - 150, cardCenter.dy); // Rough guess
       // This is flaky.
       
       // ALTERNATIVE: Mark as completed via Edit screen if we add that feature?

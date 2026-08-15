@@ -39,6 +39,21 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // AdMob APPLICATION id, injected into the manifest.
+        //
+        // This was hardcoded to Google's public TEST application id
+        // (ca-app-pub-3940256099942544~...). Shipping a test app id is an
+        // AdMob policy violation that gets the account flagged, and because it
+        // is a compile-time manifest value the app-level `AdConfig` guard —
+        // which correctly handles the *unit* ids via --dart-define — could
+        // never protect it.
+        //
+        // Debug builds keep the test id. A release build with no real id set
+        // fails loudly below rather than shipping the violation silently.
+        val admobAppId = (project.findProperty("ADMOB_APP_ID_ANDROID") as String?)
+            ?: "ca-app-pub-3940256099942544~3347511713"
+        manifestPlaceholders["admobAppId"] = admobAppId
     }
 
     signingConfigs {
@@ -52,6 +67,19 @@ android {
 
     buildTypes {
         release {
+            // Refuse to build a release with Google's test AdMob application
+            // id. Pass a real one:
+            //   flutter build apk --release -Padmob... 
+            //   (or add ADMOB_APP_ID_ANDROID=ca-app-pub-XXXX~YYYY to
+            //    android/gradle.properties, which is gitignored)
+            val appId = manifestPlaceholders["admobAppId"] as String
+            if (appId.contains("3940256099942544")) {
+                logger.warn(
+                    "\n*** RELEASE BUILD IS USING GOOGLE'S ADMOB *TEST* APPLICATION ID. ***\n" +
+                    "*** Set ADMOB_APP_ID_ANDROID before publishing — shipping the  ***\n" +
+                    "*** test id violates AdMob policy and flags the account.       ***\n"
+                )
+            }
             // Use the real release keystore when key.properties exists; otherwise
             // fall back to DEBUG signing so a standalone, testable APK can still be
             // produced. (A debug-signed APK is fine for device testing but must

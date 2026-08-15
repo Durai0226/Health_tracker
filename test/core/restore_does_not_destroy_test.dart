@@ -1,7 +1,9 @@
+import 'package:drift/drift.dart' show InsertMode, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
+import 'package:tablet_remainder/core/database/app_database.dart'
+    show AppDatabase, DiaryEntriesCompanion, MedicineLogsCompanion;
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 
@@ -40,7 +42,7 @@ void main() {
             id: 'log-1',
             medicineId: 'med-1',
             scheduledTime: DateTime(2026, 3, 1, 8),
-            status: 'taken',
+            isTaken: const Value(true),
           ),
           mode: InsertMode.insertOrReplace,
         );
@@ -81,10 +83,10 @@ void main() {
     await db.into(db.diaryEntries).insert(
           DiaryEntriesCompanion.insert(
             id: 'entry-1',
-            title: 'x',
+            title: const Value('x'),
             body: 'y',
+            entryAt: DateTime(2026, 3, 1),
             createdAt: DateTime(2026, 3, 1),
-            updatedAt: DateTime(2026, 3, 1),
           ),
           mode: InsertMode.insertOrReplace,
         );

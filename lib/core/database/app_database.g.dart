@@ -24205,6 +24205,54 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $HealthProfilesTable healthProfiles = $HealthProfilesTable(this);
   late final $SleepSessionsTable sleepSessions = $SleepSessionsTable(this);
   late final $DiaryEntriesTable diaryEntries = $DiaryEntriesTable(this);
+  late final Index idxMedicineLogsMedicine = Index(
+    'idx_medicine_logs_medicine',
+    'CREATE INDEX idx_medicine_logs_medicine ON medicine_logs (medicine_id)',
+  );
+  late final Index idxMedicineLogsTime = Index(
+    'idx_medicine_logs_time',
+    'CREATE INDEX idx_medicine_logs_time ON medicine_logs (scheduled_time)',
+  );
+  late final Index idxWaterDayDate = Index(
+    'idx_water_day_date',
+    'CREATE INDEX idx_water_day_date ON daily_water_data (date)',
+  );
+  late final Index idxWaterLogsDaily = Index(
+    'idx_water_logs_daily',
+    'CREATE INDEX idx_water_logs_daily ON enhanced_water_logs (daily_data_id)',
+  );
+  late final Index idxBpTakenAt = Index(
+    'idx_bp_taken_at',
+    'CREATE INDEX idx_bp_taken_at ON blood_pressure_readings (taken_at)',
+  );
+  late final Index idxGlucoseTakenAt = Index(
+    'idx_glucose_taken_at',
+    'CREATE INDEX idx_glucose_taken_at ON glucose_readings (taken_at)',
+  );
+  late final Index idxWeightTakenAt = Index(
+    'idx_weight_taken_at',
+    'CREATE INDEX idx_weight_taken_at ON weight_readings (taken_at)',
+  );
+  late final Index idxMoodTakenAt = Index(
+    'idx_mood_taken_at',
+    'CREATE INDEX idx_mood_taken_at ON mood_entries (taken_at)',
+  );
+  late final Index idxPeriodDaysDate = Index(
+    'idx_period_days_date',
+    'CREATE INDEX idx_period_days_date ON period_days (date)',
+  );
+  late final Index idxStepsDate = Index(
+    'idx_steps_date',
+    'CREATE INDEX idx_steps_date ON step_daily_data (date)',
+  );
+  late final Index idxSleepWake = Index(
+    'idx_sleep_wake',
+    'CREATE INDEX idx_sleep_wake ON sleep_sessions (wake_time)',
+  );
+  late final Index idxDiaryEntryAt = Index(
+    'idx_diary_entry_at',
+    'CREATE INDEX idx_diary_entry_at ON diary_entries (entry_at)',
+  );
   late final CoreDao coreDao = CoreDao(this as AppDatabase);
   late final MedicationDao medicationDao = MedicationDao(this as AppDatabase);
   late final WaterDao waterDao = WaterDao(this as AppDatabase);
@@ -24250,6 +24298,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     healthProfiles,
     sleepSessions,
     diaryEntries,
+    idxMedicineLogsMedicine,
+    idxMedicineLogsTime,
+    idxWaterDayDate,
+    idxWaterLogsDaily,
+    idxBpTakenAt,
+    idxGlucoseTakenAt,
+    idxWeightTakenAt,
+    idxMoodTakenAt,
+    idxPeriodDaysDate,
+    idxStepsDate,
+    idxSleepWake,
+    idxDiaryEntryAt,
   ];
 }
 

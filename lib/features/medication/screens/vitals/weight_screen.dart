@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import '../../../../core/utils/date_formats.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/services/clean_storage_service.dart';
@@ -329,7 +329,7 @@ class _WeightScreenState extends State<WeightScreen> {
                         style: tt.titleMedium?.copyWith(
                             color: ext.textPrimary, fontWeight: FontWeight.w700)),
                     Text(
-                      DateFormat('MMM d, h:mm a').format(r.takenAt),
+                      DateFormats.dayMonthTime.format(r.takenAt),
                       style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                     ),
                   ],
@@ -355,7 +355,7 @@ class _WeightScreenState extends State<WeightScreen> {
     if (d.inMinutes < 60) return '${d.inMinutes}m ago';
     if (d.inHours < 24) return '${d.inHours}h ago';
     if (d.inDays < 7) return '${d.inDays}d ago';
-    return DateFormat('MMM d').format(t);
+    return DateFormats.dayMonth.format(t);
   }
 }
 
@@ -647,8 +647,7 @@ class _TakenAtField extends StatelessWidget {
     final diff = today.difference(day).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
-    return DateFormat(day.year == today.year ? 'MMM d' : 'MMM d, yyyy')
-        .format(day);
+    return DateFormats.dayLabel(day, reference: today);
   }
 
   @override

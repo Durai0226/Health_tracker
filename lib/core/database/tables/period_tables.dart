@@ -33,6 +33,7 @@ class MenstrualCycles extends Table {
 /// ids in `symptomIdsJson` (single-user tracker → no cross-symptom queries
 /// needed beyond per-day aggregation).
 @DataClassName('PeriodDayRow')
+@TableIndex(name: 'idx_period_days_date', columns: {#date})
 class PeriodDays extends Table {
   TextColumn get id => text()(); // yyyy-MM-dd
   DateTimeColumn get date => dateTime()();
