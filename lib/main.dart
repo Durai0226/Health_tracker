@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
+import 'core/dev/qa_seed.dart';
 import 'core/services/active_profile_service.dart';
 import 'core/services/app_lock_service.dart';
 import 'core/services/clean_storage_service.dart';
@@ -45,6 +46,17 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 /// init, whose native permission dialog a widget-test can't dismiss. Defaults to
 /// false, so production builds are completely unaffected.
 const bool kE2ETest = bool.fromEnvironment('E2E_TEST');
+
+/// Test-only: plant sample data before the first frame.
+///
+///   --dart-define=E2E_SEED=true        ~30 days, 4 medicines
+///   --dart-define=E2E_SEED=heavy       ~365 days, 8 medicines (load test)
+///
+/// `String.fromEnvironment` with no define is a compile-time constant empty
+/// string, so the AOT compiler eliminates the branch below and tree-shakes
+/// `seedQaData` — and every screen it reaches — out of the release binary.
+/// Same argument that already justifies [kE2ETest].
+const String kE2ESeed = String.fromEnvironment('E2E_SEED');
 
 /// Debug-only: skip NotificationService.init() so the iOS-simulator plugin
 /// permission prompt doesn't block screenshots of the welcome flow. Defaults
@@ -304,6 +316,13 @@ void main() async {
         alarmPayload = parseAlarmPayload(
             payload, notificationAppLaunchDetails?.notificationResponse?.id);
       }
+    }
+
+    if (kE2ESeed.isNotEmpty) {
+      await seedQaData(
+        profile:
+            kE2ESeed == 'heavy' ? SeedProfile.heavy : SeedProfile.typical,
+      );
     }
 
     runApp(MyApp(initialRoute: initialRoute, alarmPayload: alarmPayload));

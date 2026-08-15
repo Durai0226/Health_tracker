@@ -1348,8 +1348,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
     required IconData icon,
     required String title,
     required String value,
-    required String sub,
     required VoidCallback onTap,
+    /// Third line. Omit it when it would only restate the two lines above.
+    ///
+    /// This card is ~94pt wide in the 2-up row on a 320pt screen, so a
+    /// sentence here does not fit and ellipsizes mid-word. It rendered
+    /// "Start / Focus / Ready to foc…" — the same idea three times, the third
+    /// one visibly cut off. A line that carries no information is not worth
+    /// truncating; only pass [sub] when it adds something the value and title
+    /// do not already say.
+    String? sub,
     Widget? badge,
   }) {
     final ext = AppColorsExt.of(context);
@@ -1379,11 +1387,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
               style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           Text(title, style: tt.titleMedium),
-          const SizedBox(height: 2),
-          Text(sub,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+          if (sub != null && sub.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(sub,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+          ],
         ],
       ),
     );
@@ -1400,7 +1410,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
           icon: Symbols.self_improvement_rounded,
           title: 'Focus',
           value: mins > 0 ? '$mins min' : 'Start',
-          sub: streak > 0 ? '$streak-day streak' : 'Ready to focus?',
+          // No third line when idle: "Start" + "Focus" already says it.
+          sub: streak > 0 ? '$streak-day streak' : null,
           onTap: () => widget.onNavigate(2),
           badge: streak > 0
               ? Icon(Symbols.local_fire_department_rounded,
@@ -1433,7 +1444,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
         accent: ext.reminders,
         icon: Symbols.notifications_rounded,
         title: 'No reminders',
-        ctaLabel: 'Add reminder',
+        // Just "Add" — the title above already says "No reminders", and the
+        // label had ~70pt beside the + icon, so "Add reminder" rendered as
+        // "Add remi…".
+        ctaLabel: 'Add',
         onCta: _addReminder,
       );
     }

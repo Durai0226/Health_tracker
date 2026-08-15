@@ -28,12 +28,11 @@ feature        score  grade   findings
 That is **not** "the app is 5/5". It is "nothing fires on the dimensions
 currently wired into the rating". Two limits apply, and both are real:
 
-1. **No device.** Frame build time, raster time, jank rate and cold-start-to-
-   interactive are unmeasured. Device dimensions can only ever *add*
-   deductions, so every headless score is a strict **upper bound** — printed as
-   `≤ A`, never `A`. Host wall-clock is never substituted for device raster
-   time; the build-cost harness disclaims that it can represent it, and it is
-   right to.
+1. **Device half: RUN.** Frame timings were captured on an Android 14 emulator
+   in profile mode — see §3. The **build/UI thread half is now measured and
+   clean**; the **raster half is still not trustworthy**, because an emulator
+   rasterises in software (swiftshader), so those figures describe the host CPU
+   rather than a GPU. Build-side scores are real; raster-side stays `≤`.
 2. **Coverage is now broad, not complete.** The responsive sweep grew from 47
    to **60 screens / 720 combinations**, taking in every medication add/edit
    form, both vitals report screens, the diary write path, milestones, the
@@ -169,7 +168,105 @@ session running called `_completeSession()` against a null and threw.
 
 ---
 
-## 3. On testing — five worthless tests caught
+## 3. Device frame timings — measured
+
+Android 14 emulator (arm64, API 34), **profile mode**, seeded data:
+
+```
+scenario                 build p90  raster p90  raster p99  worst rast  frames  missed
+home.scroll                   1.28       15.81       18.77       25.03     369       0
+meds.open_scroll              1.09       16.82       25.22      105.59     234       0
+health.open_scroll            0.75       17.03       35.10       40.35     232       0
+trends.open_scroll            0.95       16.61       18.67       25.25     234       0
+trends.range_switching        1.70        5.14        9.49        9.49      38       0
+```
+
+**The build/UI thread is excellent and this is the number that validates the
+work.** p90 build time is **0.75-1.70 ms against a 16.7 ms budget** — roughly a
+tenth of it — and `missed_frame_build_budget_count` is **0 in every scenario**,
+across 1,107 frames. That is the dimension the tree-size, rebuild-scope and
+query-count work actually targets, and it is comprehensively clean.
+
+`trends.range_switching` deserves a note: 1.70 ms build p90 and 5.14 ms raster
+p90, the lightest scenario in the run. That is the interaction that used to
+blank the whole dashboard to skeletons and re-mount every chart.
+
+**The raster column is NOT a verdict.** The emulator was launched with
+`-gpu swiftshader_indirect`, i.e. software rasterisation on the host CPU — the
+emulator's own `EGL_emulation app_time_stats` lines report ~266 ms averages,
+which is nothing like hardware. Raster p90 sitting at 15-17 ms is an artifact of
+that, not evidence about a phone. **Re-run on physical hardware to score the
+raster dimension**; the command is below and takes one minute.
+
+### Under load: a full year of data
+
+Re-run with `--dart-define=E2E_SEED=heavy` — 365 days, 8 medicines, ~4,400 dose
+logs, ~2,200 water logs — against the same scenarios:
+
+```
+scenario                 build p90  build p99  worst bld  frames  missed
+home.scroll                   1.65       2.43       3.00     369       0
+meds.open_scroll              1.65       4.09       8.27     234       0
+health.open_scroll            1.40       2.23      11.83     234       0
+trends.open_scroll            1.80       4.18       8.71     234       0
+trends.range_switching        3.69       7.47       7.47      38       0
+```
+
+**A year of data costs roughly 1.3-2x the build time of a month, and still uses
+under a quarter of the 16.7 ms budget.** `missed_frame_build_budget_count`
+remains **0 in every scenario**. The worst single build frame across the whole
+run is 11.8 ms — inside budget.
+
+`trends.range_switching` is the largest relative jump (1.70 → 3.69 ms p90),
+which is the honest signature of a chart redrawing over 12x the points. It is
+still a fifth of the frame budget.
+
+### Load scaling, measured headlessly
+
+`test/performance/load_scaling_test.dart` compares 30 days/4 medicines against
+365 days/8 medicines and **gates on it**:
+
+```
+screen            elems T  elems H  reads T  reads H   verdict
+home                  913      913       11       11   flat
+med_dashboard        1206     1171       16       16   flat
+adherence             848      940        6        6   flat
+weekly_recap          253      754        8       10   grew 3.0x (empty→populated, within ceiling)
+```
+
+**Read counts are flat under 12x the data** — that is the N+1 work holding.
+Mutation-verified: restoring the adherence report's per-medicine query loop
+turns `6 → 6` into `14 → 22` and fires the gate.
+
+The `weekly_recap` growth is empty-state→populated-state, not row scaling: at 30
+days its insight block is empty and the section is skipped; at 365 it renders,
+capped at `.take(4)`. The gate therefore checks an **absolute ceiling** rather
+than a growth ratio — a ratio cannot tell a real leak from a screen whose empty
+state is simply small, and treating them alike would either miss leaks or cry
+wolf forever.
+
+### Getting this to run at all — two traps
+
+Both cost real time and are worth recording:
+
+1. **`flutter test` cannot do this.** It rejects `--profile` outright, and it
+   discards `binding.reportData`. Only `flutter drive` with a `test_driver/`
+   runner both builds in profile and writes the JSON.
+2. **DDS silently breaks `watchPerformance`.** It connects to the VM Service to
+   read the timeline; DDS holds that port, the connection is refused, and the
+   failure surfaces only as `reportData` staying `null` while every test still
+   reports **passed**. `--no-dds` is mandatory. A run that "passes" with no
+   numbers is the failure mode to watch for.
+
+```bash
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/perf_e2e_test.dart \
+  -d <device-id> --profile --no-dds --dart-define=E2E_TEST=true
+```
+
+Output: `build/integration_response_data.json`.
+
+## 4. On testing — five worthless tests caught
 
 Every fix here is mutation-verified: the fix is reverted one line at a time and
 the test must fail with a message naming the real defect. That is not ceremony.
@@ -191,7 +288,7 @@ The corrected versions fail loudly: `enhanced_medicines was read 6 times`,
 
 ---
 
-## 4. Coverage holes — what the rating cannot see
+## 5. Coverage holes — what the rating cannot see
 
 **13 of the 17 are now registered.** The "zero-argument constructor" limit
 cited in the registries was never real — they already passed arguments
@@ -249,7 +346,7 @@ a guard against.
 
 ---
 
-## 5. Gate
+## 6. Gate
 
 ```
 flutter analyze     0 errors, 23 warnings (unchanged baseline)
@@ -271,7 +368,7 @@ are fiction.
 
 ---
 
-## 6. What would actually move the rating next
+## 7. What would actually move the rating next
 
 In order of what it buys:
 

@@ -681,10 +681,16 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         severity: InsightSeverity.info,
         title: 'A little behind on rest',
         detail:
-            'You\'re about ${SleepSession.formatMinutes(debt)} under your target across the last 7 nights. An earlier night or two helps you get ahead.',
+            'You\'re about ${SleepSession.formatMinutes(debt)} under your '
+            'target across the $loggedNights night${loggedNights == 1 ? '' : 's'} '
+            'you logged. An earlier night or two helps you get ahead.',
         metric: '${SleepSession.formatMinutes(debt)} under',
-        why:
-            'Your ${schedule.targetLabel} nightly target × 7, minus what you actually slept.',
+        // "× 7" was a lie whenever fewer than seven nights were logged, and
+        // the maths behind it was the bug: un-logged nights counted as zero
+        // sleep, so each one added a whole night of phantom debt.
+        why: 'Your ${schedule.targetLabel} nightly target × $loggedNights '
+            'logged night${loggedNights == 1 ? '' : 's'}, minus what you '
+            'actually slept. Nights you did not log are not counted.',
         rank: 34,
       );
     }
@@ -695,7 +701,9 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         severity: InsightSeverity.good,
         title: 'Rest in credit',
         detail:
-            'You\'re about ${SleepSession.formatMinutes(-debt)} over your target this week — nicely rested.',
+            'You\'re about ${SleepSession.formatMinutes(-debt)} over your '
+            'target across the $loggedNights night${loggedNights == 1 ? '' : 's'} '
+            'you logged — nicely rested.',
         metric: '${SleepSession.formatMinutes(-debt)} ahead',
         why:
             'What you slept over the last 7 nights vs your ${schedule.targetLabel} nightly target × 7.',

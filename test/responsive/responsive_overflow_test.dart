@@ -213,6 +213,7 @@ void main() {
   // screen -> list of "device @scale: detail"
   final overflows = <String, List<String>>{};
   final wraps = <String, List<String>>{};
+  final truncations = <String, List<String>>{};
   // A blank screen never overflows, so the overflow check alone would pass it.
   // Track text count per screen to catch "renders nothing" regressions.
   final blank = <String>[];
@@ -307,6 +308,16 @@ void main() {
                 collectWrappedText(tester, find.byType(AppHeader));
             for (final w in wrapped) {
               wraps.putIfAbsent(name, () => []).add('${dev.key} @${scale}x  $w');
+            }
+
+            // Text cut off with an ellipsis, ANYWHERE on the screen. Reported
+            // rather than gated: a long user-entered name legitimately
+            // ellipsizes, so this needs a human read. A developer-authored
+            // string in the list is a layout bug.
+            if (scale == 1.0) {
+              for (final t in collectTruncatedText(tester, find.byType(MaterialApp))) {
+                truncations.putIfAbsent(name, () => []).add('${dev.key}  $t');
+              }
             }
           } catch (e) {
             unrenderable.putIfAbsent(name, () => e.toString().split('\n').first);
@@ -403,6 +414,39 @@ void main() {
     }
     // ignore: avoid_print
     print('======================================\n');
+
+    if (truncations.isNotEmpty) {
+      // ignore: avoid_print
+      print('\n-- TRUNCATED TEXT at 1.0x --');
+      // ignore: avoid_print
+      print('   READ THIS BEFORE ACTING ON THE LIST:');
+      // ignore: avoid_print
+      print('   * flutter_test renders in a square-em fallback font where each');
+      // ignore: avoid_print
+      print('     glyph is as wide as the font size — roughly 2x the shipped');
+      // ignore: avoid_print
+      print('     Inter/Plus Jakarta. Most entries here fit fine on a device.');
+      // ignore: avoid_print
+      print('   * An ellipsis on USER-ENTERED data is correct behaviour.');
+      // ignore: avoid_print
+      print('   * A DEVELOPER-AUTHORED string that never fits is the bug —');
+      // ignore: avoid_print
+      print('     e.g. "Ready to focus?" as "Ready to foc…". Fix the copy or');
+      // ignore: avoid_print
+      print('     the slot, never the font size.');
+      // ignore: avoid_print
+      print('   Reported, not gated, for exactly this reason.');
+      final sorted = truncations.entries.toList()
+        ..sort((a, b) => b.value.length.compareTo(a.value.length));
+      for (final e in sorted.take(12)) {
+        // ignore: avoid_print
+        print('\n${e.key}');
+        for (final d in e.value.toSet().take(6)) {
+          // ignore: avoid_print
+          print('    $d');
+        }
+      }
+    }
 
     // THE GATE.
     //

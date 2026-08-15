@@ -97,11 +97,21 @@ class KpiCell extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        Text(
-          label.toUpperCase(),
-          textAlign: TextAlign.center,
-          style: tt.labelSmall
-              ?.copyWith(color: ext.textSecondary, letterSpacing: 0.5),
+        // Shrink-to-fit, never wrap. These sit in a 4-up row, so on a 320pt
+        // screen each cell is ~70pt — and unclamped, "REMINDERS" broke across
+        // two lines as "REMINDE / RS", which is worse than any amount of
+        // shrinking. scaleDown never enlarges, so the wider labels (MEDS,
+        // WATER, FOCUS) render exactly as before.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label.toUpperCase(),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            softWrap: false,
+            style: tt.labelSmall
+                ?.copyWith(color: ext.textSecondary, letterSpacing: 0.5),
+          ),
         ),
       ],
     );
@@ -194,7 +204,11 @@ class WhyThisChip extends StatelessWidget {
           title: Row(children: [
             Icon(Symbols.info_rounded, size: 20, color: ext.textSecondary),
             const SizedBox(width: AppSpacing.sm),
-            const Text('Why you\'re seeing this'),
+            // Flexible so the title wraps instead of overflowing. Unflexed, an
+            // AlertDialog on a narrow screen (or at larger Dynamic Type) had
+            // nowhere to put it and painted the 24px overflow stripe over the
+            // dialog edge.
+            const Flexible(child: Text('Why you\'re seeing this')),
           ]),
           content: Text(why,
               style: Theme.of(ctx)

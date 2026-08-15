@@ -118,3 +118,33 @@ void expectSingleLine(
         'physically larger than the title beneath it.',
   );
 }
+
+
+/// Every `Text` under [scope] that was CUT OFF with an ellipsis.
+///
+/// Different signal from [collectWrappedText]. Wrapping is text with no
+/// `maxLines` running onto extra lines; truncation is text that hit its
+/// `maxLines` and got clipped — and for that case `didExceedMaxLines` IS the
+/// right answer, because `maxLines` is non-null by definition.
+///
+/// Truncation is not always a defect: a user's own medicine name can be
+/// arbitrarily long and an ellipsis is the correct handling. What is a defect
+/// is a **developer-authored string** that never fits — "Ready to focus?"
+/// rendering as "Ready to foc…", or "Add reminder" as "Add remi…". Those are
+/// layout bugs wearing an ellipsis, and the fix is shorter copy or a wider
+/// slot, never a narrower font.
+///
+/// Returns descriptions so a sweep can collect across screens and report once.
+List<String> collectTruncatedText(WidgetTester tester, Finder scope) {
+  final out = <String>[];
+  for (final element
+      in find.descendant(of: scope, matching: find.byType(RichText)).evaluate()) {
+    final p = element.renderObject;
+    if (p is! RenderParagraph || !p.hasSize || p.size.isEmpty) continue;
+    if (!p.didExceedMaxLines) continue;
+    final raw = p.text.toPlainText();
+    out.add('"$raw" truncated at ${p.size.width.toStringAsFixed(0)}pt '
+        '(maxLines ${p.maxLines})');
+  }
+  return out;
+}

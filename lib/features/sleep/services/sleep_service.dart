@@ -244,10 +244,29 @@ class SleepService {
 
   /// Cumulative sleep debt over the last 7 nights, in minutes
   /// (target×7 − asleep). Positive → under-slept; negative → surplus.
+  /// Shortfall against target across the nights that were ACTUALLY LOGGED.
+  ///
+  /// This used to be `targetMinutes * 7 - slept`, summing over all seven days
+  /// of the trend. A night with no session contributes `asleepMinutes == 0`, so
+  /// every un-logged night silently added a full night's target to the
+  /// "debt" — someone who logged three nights and slept perfectly well was told
+  /// they were 32 hours behind. That is a fabricated health figure, the same
+  /// class of defect as reporting 100% adherence against zero doses.
+  ///
+  /// Dividing by logged nights makes the claim true: "across the N nights you
+  /// logged, you are X under". [loggedNightsThisWeek] lets the UI say N.
   static int sleepDebtMinutes() {
-    final slept = getWeeklyTrend().fold<int>(0, (a, d) => a + d.asleepMinutes);
-    return _schedule.targetMinutes * 7 - slept;
+    final logged = getWeeklyTrend().where((d) => d.hasData).toList();
+    if (logged.isEmpty) return 0;
+    final slept = logged.fold<int>(0, (a, d) => a + d.asleepMinutes);
+    return _schedule.targetMinutes * logged.length - slept;
   }
+
+  /// How many of the last seven nights have a session. The denominator behind
+  /// [sleepDebtMinutes], so any copy quoting a debt can quote this too rather
+  /// than claiming "the last 7 nights".
+  static int loggedNightsThisWeek() =>
+      getWeeklyTrend().where((d) => d.hasData).length;
 
   /// A gentle suggested bedtime to hit the wake goal: wake − (target + a short
   /// fall-asleep buffer), as minutes-of-day (0..1439). Never a hard prescription

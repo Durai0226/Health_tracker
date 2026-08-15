@@ -72,8 +72,11 @@ android {
             //   flutter build apk --release -Padmob... 
             //   (or add ADMOB_APP_ID_ANDROID=ca-app-pub-XXXX~YYYY to
             //    android/gradle.properties, which is gitignored)
-            val appId = manifestPlaceholders["admobAppId"] as String
-            if (appId.contains("3940256099942544")) {
+            // Read the project property directly. `manifestPlaceholders` here
+            // is the buildType's own map, NOT defaultConfig's, so it is empty
+            // and casting it to String threw on every build.
+            val appId = (project.findProperty("ADMOB_APP_ID_ANDROID") as String?) ?: ""
+            if (appId.isEmpty() || appId.contains("3940256099942544")) {
                 logger.warn(
                     "\n*** RELEASE BUILD IS USING GOOGLE'S ADMOB *TEST* APPLICATION ID. ***\n" +
                     "*** Set ADMOB_APP_ID_ANDROID before publishing — shipping the  ***\n" +

@@ -18,15 +18,25 @@ import 'support/e2e_helpers.dart';
 /// ## Run it
 ///
 /// ```
-/// flutter test integration_test/perf_e2e_test.dart \
-///   -d <android-device-id> --profile \
+/// flutter drive --driver=test_driver/integration_test.dart \
+///   --target=integration_test/perf_e2e_test.dart \
+///   -d <android-device-id> --profile --no-dds \
 ///   --dart-define=E2E_TEST=true
 /// ```
 ///
-/// Three parts of that are not optional:
+/// Four parts of that are not optional — all four verified the hard way:
 ///
-///  * **A PHYSICAL Android device.** An iOS simulator has no real GPU
-///    pipeline, so its raster numbers are fiction.
+///  * **`flutter drive`, not `flutter test`.** `flutter test` rejects
+///    `--profile` outright, and it discards `binding.reportData`, so the
+///    numbers reach neither a real frame budget nor a file.
+///  * **`--no-dds`.** `watchPerformance` connects to the VM Service to read the
+///    timeline; DDS holds that port and the connection is refused, so
+///    `reportData` stays null and every scenario silently reports nothing.
+///
+///  * **A PHYSICAL Android device for RASTER numbers.** An emulator renders
+///    through swiftshader (software), so its rasterizer figures describe the
+///    host CPU, not a GPU. Build times are still meaningful on an emulator;
+///    raster times are not.
 ///  * **`--profile`.** Debug builds are 2-10x pessimistic; the numbers are not
 ///    a frame budget and `watchPerformance` itself warns when it sees debug.
 ///  * **`--dart-define=E2E_TEST=true`.** Skips onboarding (`main.dart:321`)
