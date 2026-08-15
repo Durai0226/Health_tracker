@@ -112,6 +112,19 @@ final _screens = <List<dynamic>>[
 ///
 /// Numbers below are MEASURED, not guessed. Re-baseline deliberately in a
 /// commit of its own when a screen legitimately grows.
+///
+/// **Re-baselined for the seeder gaining reminders and focus sessions.**
+/// `qa_seed.dart` previously planted neither, so three screens were budgeted
+/// against their EMPTY state while every other feature had a month of history:
+///
+///   Reminders/list   392 -> 1354   (measured 1177; the list had zero rows)
+///   Focus/stats      924 -> 1148   (measured  998; no sessions to chart)
+///   Insights/trends  824 ->  988   (measured  859; two more series with data)
+///
+/// Reminders is the big one and the number is honest: four seeded reminders at
+/// ~196 elements per row is a Dismissible + card + category chip + relative
+/// time + priority marker each. Budgeting a list at its zero-row size is the
+/// same defect this file's header warns about, one level up.
 const Map<String, int> _elementBudget = {
   'Water/calendar': 2081,
   'Water/dashboard': 2018,
@@ -126,17 +139,17 @@ const Map<String, int> _elementBudget = {
   'Medication/adherence_report': 975,
   'Settings/root': 959,
   'Vitals/blood_sugar': 940,
-  'Focus/stats': 924,
+  'Focus/stats': 1148,
   'Insights/weekly_recap': 856,
   'Vitals/blood_pressure': 854,
-  'Insights/trends': 824,
+  'Insights/trends': 988,
   'Period/dashboard': 819,
   'Medication/list': 780,
   'Water/caffeine': 731,
   'Diary/list': 714,
   'Medication/refill': 687,
   'Steps/dashboard': 394,
-  'Reminders/list': 392,
+  'Reminders/list': 1354,
   'Sleep/dashboard': 365,
 };
 
