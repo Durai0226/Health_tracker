@@ -131,8 +131,12 @@ class E2E {
   /// `Bad state: No element` in that case, which surfaces as a stack trace with
   /// no hint of what was being tapped.
   static bool _receivesTap(WidgetTester t, Finder one) {
-    if (one.evaluate().isEmpty) return false; // e2e-conditional-ok: liveness probe inside the tap helper, not an assertion
+    // Everything inside the try, including the liveness probe. `.first` on a
+    // finder that currently matches nothing THROWS from `evaluate()` itself
+    // (`_FirstFinderMixin.filter` calls `Iterable.first`), so a guard placed
+    // outside is exactly as fragile as no guard.
     try {
+      if (one.evaluate().isEmpty) return false;
       final target = t.renderObject(one);
       final result = HitTestResult();
       t.binding.hitTestInView(result, t.getCenter(one), t.view.viewId);
@@ -163,8 +167,6 @@ class E2E {
     expect(f, findsWidgets,
         reason: '"$what" is not on screen at all.\n'
             'On screen instead: ${screenSummary()}');
-    final one = f.first;
-
     // Scroll it into the viewport first, the way a user would.
     //
     // A `Viewport` keeps children alive slightly beyond what it paints (its
@@ -174,15 +176,15 @@ class E2E {
     // edge case — and without this the failure reads as "occluded", which
     // sends you looking for an overlay that does not exist.
     try {
-      await t.ensureVisible(one);
+      await t.ensureVisible(f.first);
       await settle(t, const Duration(milliseconds: 100), 6);
     } catch (_) {
-      // No Scrollable ancestor — nothing to scroll, carry on to the poll.
+      // No Scrollable ancestor, or it rebuilt — carry on to the poll.
     }
 
     for (var i = 0; i < maxPumps; i++) {
-      if (_receivesTap(t, one)) {
-        await t.tap(one);
+      if (_receivesTap(t, f.first)) {
+        await t.tap(f.first);
         await settle(t);
         return;
       }
@@ -190,6 +192,10 @@ class E2E {
     }
 
     // 3s is far longer than any transition in this app, so this is occlusion.
+    expect(f, findsWidgets,
+        reason: '"$what" disappeared while waiting for it to become tappable. '
+            'On screen now: ${screenSummary()}');
+    final one = f.first;
     final centre = t.getCenter(one);
     final result = HitTestResult();
     t.binding.hitTestInView(result, centre, t.view.viewId);
@@ -332,6 +338,36 @@ class E2E {
       findsNothing,
       reason: '$journey — a subtree failed to build and rendered ErrorWidget.',
     );
+  }
+
+  /// Scrolls until [f] is in the tree, then stops.
+  ///
+  /// Flutter's own `scrollUntilVisible` cannot express this. It rejects a
+  /// finder matching MANY widgets (`dragUntilVisible` calls `controller
+  /// .element`, which demands exactly one), and passing `.first` to make it
+  /// unique instead throws `Bad state: No element` from `evaluate()` on every
+  /// step where nothing matches yet — which is every step before the target
+  /// scrolls in. Both failure modes hit this app immediately: several doses
+  /// show a Take button, and none of them are built until you scroll.
+  ///
+  /// A `Viewport` only builds a little beyond what it paints, so "not found"
+  /// usually means "below the fold", not "absent".
+  static Future<void> scrollUntilPresent(
+    WidgetTester t,
+    Finder f,
+    String what, {
+    Finder? scrollable,
+    int maxScrolls = 30,
+    double delta = 250,
+  }) async {
+    final list = scrollable ?? find.byType(Scrollable).first;
+    for (var i = 0; i < maxScrolls; i++) {
+      if (f.evaluate().isNotEmpty) return; // e2e-conditional-ok: scroll termination, not an assertion
+      await t.drag(list, Offset(0, -delta));
+      await settle(t, const Duration(milliseconds: 80), 4);
+    }
+    fail('"$what" never appeared after $maxScrolls scrolls.\n'
+        'On screen: ${screenSummary()}');
   }
 
   /// Asserts the toast auto-dismisses instead of sitting on the UI forever.

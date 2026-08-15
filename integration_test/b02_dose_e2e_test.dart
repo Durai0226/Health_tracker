@@ -1,6 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:tablet_remainder/features/medication/models/enhanced_medicine.dart';
 import 'package:tablet_remainder/features/medication/services/medicine_storage_service.dart';
 
 import 'support/app_strings.dart';
@@ -25,75 +25,96 @@ import 'support/e2e.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<EnhancedMedicine?> firstSeeded() async {
+  /// id -> stock, for every medicine.
+  Future<Map<String, int?>> stockById() async {
     final meds = await MedicineCleanStorageService.getAllMedicines();
-    return meds.isEmpty ? null : meds.first;
+    return {for (final m in meds) m.id: m.currentStock};
   }
+
+  Future<Set<String>> logIds() async =>
+      (await MedicineCleanStorageService.getAllLogs()).map((l) => l.id).toSet();
 
   testWidgets('taking a dose decrements stock, and Undo restores it',
       (t) async {
     await E2E.launch(t);
     await E2E.goTab(t, NavTab.meds);
 
-    final seeded = await firstSeeded();
-    expect(seeded, isNotNull,
+    // Snapshot EVERY medicine, not one guessed in advance. Which dose scrolls
+    // into view depends on the time of day and on which slots have already
+    // reconciled to Missed, so pinning the medicine up front would assert
+    // against the wrong row and report a defect that is not there.
+    final stockBefore = await stockById();
+    final logsBefore = await logIds();
+    expect(stockBefore, isNotEmpty,
         reason: 'no seeded medicines — run with --dart-define=E2E_SEED=true');
-    final id = seeded!.id;
-    // currentStock is nullable on the model; the seeder always sets it, and a
-    // null here would make every comparison below vacuous, so pin it.
-    final stockBefore = seeded.currentStock;
-    expect(stockBefore, isNotNull, reason: 'seeded medicine has no stock set');
-    final stock = stockBefore!;
-    final logsBefore = (await MedicineCleanStorageService.getAllLogs()).length;
 
-    expect(stock, greaterThan(0),
-        reason: 'the seeded medicine must have stock for this test to mean '
-            'anything');
+    // 'Take Now' on the next dose, 'Take' on the others — one code path
+    // (_onTakeMedication), two labels.
+    //
+    // EXACT match on either, not `textContaining('Take')`: that also matches
+    // the "Taken" stat tile at the top of the screen, so the scroll below
+    // stopped immediately and the tap landed on a statistic.
+    final takeButton = find.byWidgetPredicate(
+      (w) => w is Text && (w.data == kMedsTake || w.data == kMedsTakeNow),
+      description: 'a Take / Take Now dose action',
+    );
 
-    // 'Take Now' on the next dose, 'Take' on the others — either is the same
-    // code path (_onTakeMedication).
-    // e2e-conditional-ok: one action, two labels — choosing which exists is
-    // not an assertion, and tapWhenHittable below still asserts presence.
-    final takeButton = find.text(kMedsTakeNow).evaluate().isNotEmpty
-        ? find.text(kMedsTakeNow)
-        : find.text(kMedsTake);
+    // The dose list is below the fold: at 411x731 the Meds screen opens on its
+    // header, streak and adherence stats, so the rows are not built yet.
+    // Today's 08:00 doses have already reconciled to "Missed" by the time this
+    // runs, so the actionable ones are the evening slots further down.
+    await E2E.scrollUntilPresent(t, takeButton, 'an actionable dose');
     await E2E.tapWhenHittable(t, takeButton, 'Take action on a scheduled dose');
 
-    // The take sheet.
-    expect(find.text(kMedsTakeMedication), findsOneWidget,
-        reason: 'the Take action must open the confirmation sheet');
+    E2E.at(find.text(kMedsTakeMedication),
+        where: 'the take-medication confirmation sheet');
     await E2E.tapWhenHittable(
         t, find.text(kMedsTakeMedication), 'Take Medication');
 
-    // ---- the decrement -----------------------------------------------------
-    final afterTake = await MedicineCleanStorageService.getMedicine(id);
+    // ---- what actually got written -----------------------------------------
+    final newLogs =
+        (await MedicineCleanStorageService.getAllLogs())
+            .where((l) => !logsBefore.contains(l.id))
+            .toList();
+    expect(newLogs, hasLength(1),
+        reason: 'taking a dose must write exactly one log');
+    final log = newLogs.single;
+
+    // ---- the decrement, against the medicine the dose ACTUALLY belonged to --
+    final stockAfter = await stockById();
+    final was = stockBefore[log.medicineId];
+    final now = stockAfter[log.medicineId];
     expect(
-      afterTake!.currentStock,
-      lessThan(stock),
-      reason: 'Taking a dose must consume stock. It was $stock before '
-          'and ${afterTake.currentStock} after — the refill predictor and the '
-          'low-stock reminder both read this number.',
+      now,
+      lessThan(was!),
+      reason: 'Taking a dose must consume stock for medicine '
+          '${log.medicineId}: it was $was before and $now after. The refill '
+          'predictor and the low-stock reminder both read this number, so a '
+          'dose that does not decrement it makes both of them wrong.',
     );
-    expect(
-      (await MedicineCleanStorageService.getAllLogs()).length,
-      logsBefore + 1,
-      reason: 'taking a dose must write a log',
-    );
+
+    // Nothing else moved.
+    for (final id in stockBefore.keys.where((k) => k != log.medicineId)) {
+      expect(stockAfter[id], stockBefore[id],
+          reason: 'taking one dose changed the stock of a different medicine '
+              '($id)');
+    }
 
     // ---- Undo, the half that is easy to get wrong --------------------------
     await E2E.tapWhenHittable(t, find.text(kUndo), 'Undo');
 
-    final afterUndo = await MedicineCleanStorageService.getMedicine(id);
+    final stockUndone = await stockById();
     expect(
-      afterUndo!.currentStock,
-      stock,
-      reason: 'Undo did not put the units back. Stock went $stock -> '
-          '${afterTake.currentStock} -> ${afterUndo.currentStock}. Every '
-          'mis-tapped dose would silently cost the user inventory, and nothing '
-          'on screen would say so.',
+      stockUndone[log.medicineId],
+      was,
+      reason: 'Undo did not put the units back. Stock went $was -> $now -> '
+          '${stockUndone[log.medicineId]}. Every mis-tapped dose would '
+          'silently cost the user inventory, and nothing on screen would say '
+          'so. The app\'s own comment at this handler says: "Reverse the '
+          'stock decrement first, or Undo silently loses inventory."',
     );
     expect(
-      (await MedicineCleanStorageService.getAllLogs()).length,
+      await logIds(),
       logsBefore,
       reason: 'Undo restored the stock but left the log, so adherence still '
           'counts a dose the user did not take',

@@ -200,6 +200,28 @@ what is above the fold, and every overflow are functions of this.
 
 ---
 
+## Verified sound (worth recording, because the test first said otherwise)
+
+**The dose stock invariant holds.** Taking a dose decrements that medicine's
+stock and no other's, writes exactly one log, and Undo restores both. The
+invariant the app's own comment names — *"Reverse the stock decrement first, or
+Undo silently loses inventory"* — is correctly implemented.
+
+An earlier version of `b02_dose_e2e_test.dart` reported it broken (`40 before,
+40 after`). That was the TEST, not the app: it snapshotted `meds.first` while
+tapping whichever dose happened to scroll into view, so it was asserting against
+a different medicine. Which dose is actionable depends on the time of day and on
+which slots have already reconciled to Missed, so pinning one in advance is
+never safe here.
+
+The suite now snapshots every medicine's stock, reads back the log that was
+actually written, and asserts against *that* log's medicine — plus that no other
+medicine moved. Under-specified assertions do not just miss defects; they invent
+them, and an invented defect costs more than a missed one because someone goes
+looking for it in working code.
+
+---
+
 ## Test-side lessons worth keeping
 
 Three of the first failures were my assertions, not the app. They are recorded
@@ -212,6 +234,17 @@ because each is a trap the next person will hit:
    `Meds`. The registry keeps the source casing (it greps `lib/`); the test
    applies `.toUpperCase()`.
 3. **This app has no `SwitchListTile`** — it is `ListTile` + `AppSwitch`.
+
+4. **Neither of Flutter's scroll helpers fits this app.** `scrollUntilVisible`
+   rejects a finder matching many widgets (`dragUntilVisible` calls
+   `controller.element`, which demands exactly one), and passing `.first` to
+   make it unique throws `Bad state: No element` from `evaluate()` on every
+   step before the target scrolls in. Several doses show a Take button and none
+   are built until you scroll, so both failure modes hit at once.
+   `E2E.scrollUntilPresent` handles it.
+5. **`find.textContaining('Take')` matches `'Taken'`** — a stat tile at the top
+   of the Meds screen. The scroll stopped instantly and the tap landed on a
+   statistic. Prefix matching on short verbs is a trap; match exactly.
 
 And one harness bug worth naming: a `FlutterError.onError` collector must
 **forward** to the handler it replaced. One that merely records leaves the
