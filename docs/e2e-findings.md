@@ -255,6 +255,30 @@ looking for it in working code.
 
 ---
 
+## Verified sound: the add-medication wizard and its safety dialogs
+
+The 3,248-line wizard — the screen `docs/ui-audit.md` calls *"Worst. 5 overflow
+stripes"* — now has a device suite driving the real flow, and all three tests
+pass:
+
+1. **A medicine added through the wizard is stored under the name typed.**
+2. **A known interacting pair raises the warning, and Cancel does not save.**
+   `Atorvastatin` (seeded) + `Clarithromycin` is `int_005` in the curated table
+   — severe, statin metabolism inhibition. The dialog appears with both *Save
+   anyway* and *Cancel*, and Cancel genuinely aborts: the medicine count is
+   unchanged. A dialog that warns and saves anyway would be worse than none,
+   because the user believes they declined.
+3. **A medicine with no known interaction saves with no warning.** The negative
+   half. Without it, a dialog firing on EVERY save would pass test 2 — and a
+   warning that always fires is one users learn to dismiss unread, which is how
+   the real one gets missed.
+
+Note on scope: `_confirmAllergySafety` deliberately skips the self profile
+(`DependentProfile.allergies` is dependent-only data, and the method says so).
+That is design, not a defect.
+
+---
+
 ## Test-side lessons worth keeping
 
 Three of the first failures were my assertions, not the app. They are recorded
@@ -278,6 +302,18 @@ because each is a trap the next person will hit:
 5. **`find.textContaining('Take')` matches `'Taken'`** — a stat tile at the top
    of the Meds screen. The scroll stopped instantly and the tap landed on a
    statistic. Prefix matching on short verbs is a trap; match exactly.
+
+6. **The same finder trap, three times.** `find.textContaining('Take')` matched
+   the `'Taken'` stat tile; `find.byType(AppTextField).first` matched the
+   Reminders SEARCH box instead of the Smart Add input; `find.text('Add
+   Medication').first` matched the wizard's screen TITLE instead of its save
+   button — the wizard then sat there looking exactly like a rejected save, and
+   I spent three device runs reading validation code that was working fine.
+   Scope finders to the widget you mean (`widgetWithText(AppButton, …)`,
+   `descendant(of: …)`), always.
+7. **A fixed settle is not a wait.** `settle()` pumps a set number of frames,
+   which suits animation and not work: saving a medicine also schedules its
+   notifications and background alarms. `E2E.waitUntilGone` polls with a bound.
 
 And one harness bug worth naming: a `FlutterError.onError` collector must
 **forward** to the handler it replaced. One that merely records leaves the

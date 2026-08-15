@@ -106,3 +106,15 @@ const kSmartAddUnparsed =
     "Couldn't parse — fill it in manually"; // reminders_screen.dart:165
 const kReminderTitleField = 'Title'; // add_reminder_screen.dart:392
 const kRepeatEveryDay = 'Every Day'; // add_reminder_screen.dart:466
+
+// ── Add-medication wizard ─────────────────────────────────────────────────
+const kWizStep1 =
+    'What medication are you adding?'; // nunito_add_medication_flow.dart:904
+const kWizNameField = 'Medication Name'; // :910
+const kWizStep2 = 'How much do you take?'; // :1419
+const kWizStep3 = 'When do you take it?'; // :1748
+const kWizContinue = 'Continue'; // :3180
+const kWizAddMedication = 'Add Medication'; // :3179
+const kWizInteraction = 'Possible drug interaction'; // :550
+const kWizSaveAnyway = 'Save anyway'; // :568
+const kWizCancel = 'Cancel'; // :563

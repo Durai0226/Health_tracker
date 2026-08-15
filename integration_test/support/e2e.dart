@@ -370,6 +370,29 @@ class E2E {
         'On screen: ${screenSummary()}');
   }
 
+  /// Waits, bounded, for [f] to leave the tree.
+  ///
+  /// `settle()` pumps a FIXED number of frames, which is right for animation
+  /// but wrong for work: saving a medicine writes to the database and then
+  /// schedules its notifications and background alarms, and that has been
+  /// observed taking several seconds on the emulator. A fixed 3s settle
+  /// reported the save as REJECTED when it was merely still running — an
+  /// invented defect, which costs more than a missed one.
+  static Future<void> waitUntilGone(
+    WidgetTester t,
+    Finder f,
+    String what, {
+    Duration within = const Duration(seconds: 25),
+  }) async {
+    final rounds = within.inMilliseconds ~/ 250;
+    for (var i = 0; i < rounds; i++) {
+      if (f.evaluate().isEmpty) return; // e2e-conditional-ok: wait termination, asserted below
+      await t.pump(const Duration(milliseconds: 250));
+    }
+    fail('"$what" was still on screen after ${within.inSeconds}s.\n'
+        'On screen: ${screenSummary()}');
+  }
+
   /// Asserts the toast auto-dismisses instead of sitting on the UI forever.
   ///
   /// This SDK pins a `SnackBar` that carries an action OPEN INDEFINITELY unless
