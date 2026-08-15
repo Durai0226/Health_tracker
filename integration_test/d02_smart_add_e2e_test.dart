@@ -43,8 +43,16 @@ void main() {
   testWidgets('parsed fields reach the form, not just the parser', (t) async {
     await openSmartAdd(t);
 
+    // Scoped to the sheet. An unscoped `.first` matches the Reminders SEARCH
+    // box, which sits above it in the tree — typing there filters the list to
+    // nothing and leaves the sheet untouched, so Create does nothing and the
+    // failure points at navigation instead of at the finder.
     await t.enterText(
-        find.byType(AppTextField).first, 'take vitamin D every morning at 8am');
+        find.descendant(
+          of: find.byType(AppBottomSheet),
+          matching: find.byType(AppTextField),
+        ),
+        'take vitamin D every morning at 8am');
     await settle(t);
     await E2E.tapWhenHittable(t, find.text(kSmartAddCreate), 'Create');
 
@@ -52,8 +60,8 @@ void main() {
 
     // The title must arrive. A blank title here means the parse succeeded and
     // the handoff dropped it — the user's exact words, typed and lost.
-    final titleField =
-        t.widget<AppTextField>(find.byType(AppTextField).first);
+    final titleField = t.widget<AppTextField>(
+        find.widgetWithText(AppTextField, kReminderTitleField).first);
     expect(
       titleField.controller?.text.toLowerCase(),
       contains('vitamin'),
@@ -83,7 +91,12 @@ void main() {
     // Deliberately meaningless. The contract is that Smart Add degrades to the
     // manual form rather than swallowing the tap — a dead Create button would
     // look identical to a slow one.
-    await t.enterText(find.byType(AppTextField).first, 'zzzz');
+    await t.enterText(
+        find.descendant(
+          of: find.byType(AppBottomSheet),
+          matching: find.byType(AppTextField),
+        ),
+        'zzzz');
     await settle(t);
     await E2E.tapWhenHittable(t, find.text(kSmartAddCreate), 'Create');
 

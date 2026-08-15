@@ -125,94 +125,66 @@ class _RemindersScreenState extends State<RemindersScreen> {
     _loadCategories();
   }
 
-  /// AI "Smart Add": type a reminder in plain English; AI fills the form for
-  /// review. Always available — the free on-device rule engine parses offline,
-  /// and the manual + FAB flow stays intact as a fallback.
+  /// "Smart Add": type a reminder in plain English and the on-device parser
+  /// fills the form for review. Deterministic and offline — see
+  /// [CoachText.parseReminder]. The manual + FAB flow stays intact as fallback.
   void _openSmartAdd() {
-    final ext = AppColorsExt.of(context);
-    final rem = ext.reminders;
-    final controller = TextEditingController();
-    var submitting = false;
-
+    final rem = AppColorsExt.of(context).reminders;
     AppBottomSheet.show<void>(
       context,
       title: 'Smart Add',
       icon: Symbols.auto_awesome_rounded,
       accent: rem,
-      builder: (sheetCtx) {
-        return StatefulBuilder(
-          builder: (sheetCtx, setSheetState) {
-            Future<void> submit() async {
-              final text = controller.text.trim();
-              if (text.isEmpty || submitting) return;
+      builder: (sheetCtx) => _SmartAddSheet(
+        accent: rem,
+        onSubmit: (text) => _handleSmartAdd(sheetCtx, text),
+      ),
+    );
+  }
 
-              setSheetState(() => submitting = true);
-              final result = await _parseSmartReminder(text);
-              if (!mounted) return;
-              Navigator.pop(sheetCtx); // close the sheet
+  /// Parses [text], closes the sheet, then opens the reminder form — prefilled
+  /// when the parse succeeded, blank with an explanation when it did not.
+  Future<void> _handleSmartAdd(BuildContext sheetCtx, String text) async {
+    // Resolve the sheet's Navigator BEFORE the await. Afterwards `sheetCtx`
+    // may already be deactivated, and looking up an ancestor through a
+    // deactivated element is exactly the unsafe access this whole fix is
+    // about — a `mounted` check on the State does not vouch for the sheet's
+    // own context.
+    final sheetNavigator = Navigator.of(sheetCtx);
+    final result = await _parseSmartReminder(text);
+    if (!mounted) return;
+    sheetNavigator.pop(); // close the sheet
 
-              if (result == null) {
-                // Couldn't parse — open a blank form so the user can fill it.
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const AddReminderScreen()),
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content:
-                            Text("Couldn't parse — fill it in manually")),
-                  );
-                }
-              } else {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AddReminderScreen(
-                      initialTitle: result.title,
-                      initialTime: result.time,
-                      initialRepeat: result.repeat,
-                      initialCategoryId: result.categoryId,
-                      initialPriority: result.priority,
-                      initialCustomDays: result.customDays,
-                    ),
-                  ),
-                );
-              }
-              if (!mounted) return;
-              _load();
-              _loadCategories();
-            }
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AppTextField(
-                  controller: controller,
-                  hint: 'e.g. Take vitamin D every morning at 8am',
-                  accent: rem,
-                  maxLines: 2,
-                  textCapitalization: TextCapitalization.sentences,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => submit(),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                AppButton(
-                  label: 'Create',
-                  accent: rem,
-                  fullWidth: true,
-                  loading: submitting,
-                  leadingIcon: Symbols.auto_awesome_rounded,
-                  onPressed: submit,
-                ),
-              ],
-            );
-          },
+    if (result == null) {
+      // Couldn't parse — open a blank form so the user can fill it.
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AddReminderScreen()),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Couldn't parse — fill it in manually")),
         );
-      },
-    ).whenComplete(controller.dispose);
+      }
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddReminderScreen(
+            initialTitle: result.title,
+            initialTime: result.time,
+            initialRepeat: result.repeat,
+            initialCategoryId: result.categoryId,
+            initialPriority: result.priority,
+            initialCustomDays: result.customDays,
+          ),
+        ),
+      );
+    }
+    if (!mounted) return;
+    _load();
+    _loadCategories();
   }
 
   /// Extracts structured reminder fields from free text. Deterministic and
@@ -829,4 +801,78 @@ class _SmartReminder {
     this.categoryId,
     this.customDays,
   });
+}
+
+/// The Smart Add sheet body, owning its own [TextEditingController].
+///
+/// The controller used to live in `_openSmartAdd` and be released with
+/// `AppBottomSheet.show(...).whenComplete(controller.dispose)`. That future
+/// completes when `Navigator.pop` is CALLED, not when the sheet has finished
+/// animating out — so the controller was disposed while the sheet was still
+/// being rebuilt with it, and Flutter threw
+///
+///   A TextEditingController was used after being disposed.
+///
+/// on every use of Smart Add, followed by a `_dependents.isEmpty` assertion and
+/// "Looking up a deactivated widget's ancestor is unsafe". None of it was ever
+/// seen, because `main.dart` was overwriting `FlutterError.onError`.
+///
+/// A `State` disposes at unmount, which is after the transition. Owning the
+/// controller here is not a style preference — it is the fix.
+class _SmartAddSheet extends StatefulWidget {
+  final AccentSwatch accent;
+  final Future<void> Function(String text) onSubmit;
+
+  const _SmartAddSheet({required this.accent, required this.onSubmit});
+
+  @override
+  State<_SmartAddSheet> createState() => _SmartAddSheetState();
+}
+
+class _SmartAddSheetState extends State<_SmartAddSheet> {
+  final _controller = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _submitting) return;
+    setState(() => _submitting = true);
+    await widget.onSubmit(text);
+    // The sheet is normally gone by now; guard for the parse-failure path.
+    if (mounted) setState(() => _submitting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTextField(
+          controller: _controller,
+          hint: 'e.g. Take vitamin D every morning at 8am',
+          accent: widget.accent,
+          maxLines: 2,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          label: 'Create',
+          accent: widget.accent,
+          fullWidth: true,
+          loading: _submitting,
+          leadingIcon: Symbols.auto_awesome_rounded,
+          onPressed: _submit,
+        ),
+      ],
+    );
+  }
 }

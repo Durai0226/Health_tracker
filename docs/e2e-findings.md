@@ -200,6 +200,39 @@ what is above the fold, and every overflow are functions of this.
 
 ---
 
+## P1 · Smart Add threw a use-after-dispose on every single use
+
+**Where:** `lib/features/reminders/screens/reminders_screen.dart`.
+
+The sheet's `TextEditingController` was released like this:
+
+```dart
+).whenComplete(controller.dispose);
+```
+
+`showModalBottomSheet`'s future completes when `Navigator.pop` is **called**,
+not when the sheet has finished animating out. So the controller was disposed
+while the sheet was still being rebuilt with it, and every use of Smart Add
+produced three framework errors in a row:
+
+```
+A TextEditingController was used after being disposed.
+'_dependents.isEmpty': is not true.
+Looking up a deactivated widget's ancestor is unsafe.
+```
+
+Every one of them was reported by Flutter, and every one was discarded — this
+is the single clearest example of what `main.dart` overwriting
+`FlutterError.onError` was costing.
+
+**Fix:** the sheet body is now a `StatefulWidget` that owns the controller and
+disposes it in `dispose()`, which runs at unmount — after the transition. Not a
+style preference; it is the fix. The sheet's `Navigator` is also resolved
+*before* the `await`, since a `mounted` check on the enclosing `State` says
+nothing about whether the sheet's own context is still valid.
+
+---
+
 ## Verified sound (worth recording, because the test first said otherwise)
 
 **The dose stock invariant holds.** Taking a dose decrements that medicine's
