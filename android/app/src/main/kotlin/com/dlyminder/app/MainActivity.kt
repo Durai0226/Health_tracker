@@ -1,5 +1,6 @@
 package com.dlyminder.app
 
+import android.content.Intent
 import android.os.Build
 import androidx.annotation.NonNull
 // FlutterFragmentActivity (not FlutterActivity) is required by the `health`
@@ -31,6 +32,22 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
 
     private val channelName = "dlyminder/lockscreen"
+    private val healthChannelName = "dlyminder/health_privacy"
+
+    private var healthChannel: MethodChannel? = null
+
+    /**
+     * Set when Health Connect launches us to show the rationale, cleared when
+     * Dart takes it.
+     *
+     * Buffered rather than pushed straight to Dart because of the cold-start
+     * case: the manifest routes these intents at this activity, so on a cold
+     * start the intent is already in hand before Flutter has attached a handler
+     * — an invokeMethod at that point goes nowhere. Dart pulls this on its
+     * first frame; the warm case (activity already alive) is pushed directly
+     * from onNewIntent.
+     */
+    private var pendingHealthAction: String? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -46,6 +63,73 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        healthChannel =
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, healthChannelName)
+                .apply {
+                    setMethodCallHandler { call, result ->
+                        when (call.method) {
+                            "consumePendingRationale" -> {
+                                result.success(pendingHealthAction)
+                                pendingHealthAction = null
+                            }
+                            else -> result.notImplemented()
+                        }
+                    }
+                }
+
+        // Cold start: the launching intent is already available here.
+        captureHealthIntent(intent)
+    }
+
+    /**
+     * Warm delivery. launchMode is singleTop and this is the app's only
+     * activity, so Health Connect re-entering the app lands here rather than in
+     * onCreate.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (captureHealthIntent(intent)) {
+            // Flutter is already running, so hand it over immediately; the
+            // buffer is only the cold-start fallback.
+            healthChannel?.invokeMethod("showHealthPrivacy", pendingHealthAction)
+            pendingHealthAction = null
+        }
+    }
+
+    /**
+     * Both filters are declared in AndroidManifest.xml and, until now, went
+     * nowhere: tapping "privacy policy" in the Health Connect consent sheet
+     * simply brought the app forward on whatever route it happened to be on.
+     * Google reviews that flow when health permissions are declared.
+     *
+     * - ACTION_SHOW_PERMISSIONS_RATIONALE — from the Health Connect consent
+     *   sheet, on the activity itself.
+     * - ACTION_VIEW_PERMISSION_USAGE — Android 14+ permission-usage screen, via
+     *   the ViewPermissionUsageActivity alias.
+     *
+     * @return true when this intent was one of ours.
+     */
+    private fun captureHealthIntent(intent: Intent?): Boolean {
+        val action = intent?.action ?: return false
+        val isHealthRationale = action == ACTION_SHOW_PERMISSIONS_RATIONALE ||
+            action == ACTION_VIEW_PERMISSION_USAGE
+        if (isHealthRationale) pendingHealthAction = action
+        return isHealthRationale
+    }
+
+    companion object {
+        /**
+         * Spelled out rather than referenced from androidx.health / Intent so
+         * these stay readable next to the identical strings in
+         * AndroidManifest.xml — and so ACTION_VIEW_PERMISSION_USAGE (API 29+)
+         * needs no API-level guard on a minSdk-26 build.
+         */
+        private const val ACTION_SHOW_PERMISSIONS_RATIONALE =
+            "androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"
+        private const val ACTION_VIEW_PERMISSION_USAGE =
+            "android.intent.action.VIEW_PERMISSION_USAGE"
     }
 
     /**

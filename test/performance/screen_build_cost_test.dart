@@ -52,6 +52,7 @@ import 'package:tablet_remainder/features/insights/screens/weekly_recap_screen.d
 import 'package:tablet_remainder/features/reminders/screens/reminders_screen.dart';
 import 'package:tablet_remainder/features/diary/screens/diary_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/settings_screen.dart';
+import 'package:tablet_remainder/features/settings/screens/health_privacy_screen.dart';
 import 'package:tablet_remainder/features/home/screens/health_browse_screen.dart';
 
 class _Cost {
@@ -94,6 +95,7 @@ final _screens = <List<dynamic>>[
   ['Reminders', 'list', () => const RemindersScreen()],
   ['Diary', 'list', () => const DiaryScreen()],
   ['Settings', 'root', () => const SettingsScreen()],
+  ['Settings', 'health_privacy', () => const HealthPrivacyScreen()],
 ];
 
 
@@ -138,6 +140,7 @@ const Map<String, int> _elementBudget = {
   'Vitals/mood': 1074,
   'Medication/adherence_report': 975,
   'Settings/root': 959,
+  'Settings/health_privacy': 640,
   'Vitals/blood_sugar': 940,
   'Focus/stats': 1148,
   'Insights/weekly_recap': 856,

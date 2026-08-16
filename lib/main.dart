@@ -35,6 +35,7 @@ import 'features/home/screens/app_shell.dart';
 import 'features/reminders/screens/alarm_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'core/services/app_check_service.dart';
+import 'core/services/health_rationale_channel.dart';
 import 'features/settings/screens/app_lock_gate.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -336,6 +337,11 @@ void main() async {
       );
     }
 
+    // Attach BEFORE runApp so a Health Connect rationale intent that arrives
+    // during startup is deferred rather than dropped. The matching pull for
+    // the cold-start case happens on the first frame, in _MyAppState.
+    HealthRationaleChannel.instance.attach();
+
     runApp(MyApp(initialRoute: initialRoute, alarmPayload: alarmPayload));
   }, (error, stackTrace) {
     // The async half of the same problem. A `runZonedGuarded` handler that
@@ -376,6 +382,11 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _loadThemePreference();
+    // Health Connect may have launched us straight into its rationale deep
+    // link. Kotlin buffers that until a navigator exists, which is only true
+    // after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => HealthRationaleChannel.instance.drainPending());
   }
 
   void _loadThemePreference() {

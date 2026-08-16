@@ -59,6 +59,7 @@ import 'package:tablet_remainder/features/settings/screens/settings_screen.dart'
 import 'package:tablet_remainder/features/settings/screens/haptic_settings_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/vitavibe_settings_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/security_settings_screen.dart';
+import 'package:tablet_remainder/features/settings/screens/health_privacy_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/early_access_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/reminders_hub_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_dashboard_screen.dart';
@@ -165,6 +166,7 @@ final Map<String, ScreenBuilder> _screens = {
   'haptics': () => const HapticSettingsScreen(),
   'vitavibe': () => const VitaVibeSettingsScreen(),
   'security': () => const SecuritySettingsScreen(),
+  'health_privacy': () => const HealthPrivacyScreen(),
   'early_access': () => const EarlyAccessScreen(),
   'reminders_hub': () => const RemindersHubScreen(),
   'sleep': () => const SleepDashboardScreen(),

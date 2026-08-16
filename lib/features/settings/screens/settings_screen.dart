@@ -21,6 +21,7 @@ import '../../medication/screens/conditions/condition_library_screen.dart';
 import 'reminders_hub_screen.dart';
 import '../../medication/screens/dependents/dependent_list_screen.dart';
 import 'security_settings_screen.dart';
+import 'health_privacy_screen.dart';
 import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
@@ -539,6 +540,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'About',
                     icon: Symbols.info_rounded,
                     tiles: [
+                      // Play requires a reachable in-app health disclosure, and
+                      // this is also where the Health Connect rationale deep
+                      // link lands. See HealthPrivacyScreen.
+                      AppListTile(
+                        icon: Symbols.health_and_safety_rounded,
+                        iconColor: ext.mark(ext.brand),
+                        title: 'Health data & privacy',
+                        subtitle: 'What we read, where it goes, how to revoke',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const HealthPrivacyScreen())),
+                      ),
                       AppListTile(
                         icon: Symbols.info_rounded,
                         iconColor: ext.mark(ext.brand),
