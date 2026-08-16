@@ -55,11 +55,15 @@ dependencies:
   cloud_firestore: ^5.0.0
   firebase_app_check: ^0.3.1
   shared_preferences: ^2.2.2
-  file_picker: ^8.0.0+1
+  # 12.x drops the win32 dependency entirely. 8.x pinned win32 ^5, which
+  # conflicted with health 13.3.2 → device_info_plus ^13.2.0 → win32 ^6.
+  file_picker: ^12.0.0
   just_audio: ^0.9.37
   audio_session: ^0.1.25
   flutter_secure_storage: ^10.0.0
-  vibration: ^2.0.0
+  # 3.x for vibration_platform_interface 0.1.2, which lifts the
+  # device_info_plus <13 cap that blocks health 13.3.2.
+  vibration: ^3.2.0
   image_picker: ^1.0.7
   # On-device (offline) OCR for scanning an Rx label into the add-medicine flow.
   google_mlkit_text_recognition: ^0.16.0
@@ -70,13 +74,16 @@ dependencies:
   # dependency; declared explicitly since we now import it directly).
   crypto: ^3.0.7
   flutter_staggered_grid_view: ^0.7.0
-  share_plus: ^12.0.1
+  # 13.x only to satisfy health 13.3.2's device_info_plus ^13.2.0 → win32 ^6
+  # (share_plus 12.x pins win32 ^5.5.3). No API change: 13.0.0 is a dependency
+  # and min-SDK bump only, and `Share.shareXFiles` stays deprecated-but-working.
+  share_plus: ^13.3.0
   archive: ^4.0.7
   fl_chart: ^0.69.0
   # Device health data: steps + sleep from Apple HealthKit / Android Health
   # Connect, and a live step stream. Both are best-effort (manual fallback).
   # NOTE: adding/updating these requires `pod install` on iOS (CocoaPods).
-  health: ^11.1.1
+  health: ^13.3.2
   pedometer: ^4.0.2
   home_widget: ^0.7.0
   google_mobile_ads: ^5.1.0
@@ -86,8 +93,6 @@ dependencies:
   url_launcher: ^6.2.5
   # Premium Bottom Navigation Packages
   material_symbols_icons: ^4.2951.0
-dependency_overrides:
-  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:

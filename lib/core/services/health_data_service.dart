@@ -151,11 +151,20 @@ class HealthDataService {
   // flow into the local Weight tracker. It reuses this same READ_WRITE grant
   // rather than requesting a standalone read scope.
   //
-  // `package:health` v11.1.1 has no clientRecordId/upsert support anywhere in
-  // its write path (Dart or native) — every write always creates a brand-new
-  // record. Duplicate-write avoidance is therefore handled entirely at the
-  // Dart level by the caller (see VitalsStorageService's synced-flag), not by
-  // this service or the platform.
+  // Duplicate-write avoidance is handled at the Dart level by the caller (see
+  // VitalsStorageService's per-id synced flag), NOT by the platform.
+  //
+  // Since v13 the plugin does expose `clientRecordId`/`clientRecordVersion` on
+  // the write path plus `deleteByUUID`, `deleteByClientRecordId` and `delete()`
+  // — the older "the plugin cannot upsert or delete" claim is no longer true.
+  // The Dart flag is kept anyway, deliberately, for two reasons:
+  //   1. clientRecordId is a Health Connect concept. The iOS/darwin side of the
+  //      plugin ignores the argument entirely, so it cannot be the sole
+  //      dedup mechanism for a cross-platform app.
+  //   2. Records this app already wrote carry no clientRecordId, and ownership
+  //      cannot be claimed retroactively — so a migration would have to treat
+  //      every pre-existing write as unowned regardless.
+  // Revisiting this is a named follow-up, not a limitation.
   static const List<HealthDataType> vitalsWriteTypes = [
     HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
     HealthDataType.BLOOD_PRESSURE_DIASTOLIC,

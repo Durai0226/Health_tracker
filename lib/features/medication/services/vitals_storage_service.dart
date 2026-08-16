@@ -46,11 +46,11 @@ class VitalsStorageService {
 
   // ============ HEALTH CONNECT / HEALTHKIT SYNC (opt-in) ============
   //
-  // `package:health` has no clientRecordId/upsert support (see
-  // HealthDataService.vitalsWriteTypes' doc), so duplicate-write avoidance is
-  // a Dart-level flag per reading id, set only after a write actually
-  // succeeds — a failed write leaves the flag unset so the next save/retry
-  // tries again.
+  // Duplicate-write avoidance is a Dart-level flag per reading id, set only
+  // after a write actually succeeds — a failed write leaves the flag unset so
+  // the next save/retry tries again. The plugin's own clientRecordId/delete
+  // APIs (v13+) are deliberately not used here; see
+  // HealthDataService.vitalsWriteTypes' doc for why.
 
   static const String _syncEnabledKey = 'health_connect_vitals_sync_enabled';
 
@@ -147,9 +147,10 @@ class VitalsStorageService {
   /// every reading to Health Connect on first launch on a new device.
   ///
   /// Sync is once-per-id: a later edit to an already-synced reading does NOT
-  /// push the correction, since the plugin gives us no way to update or
-  /// delete a specific prior write (see HealthDataService.vitalsWriteTypes'
-  /// doc) — re-syncing on every edit would instead pile up duplicates.
+  /// push the correction, because this app does not track the platform record
+  /// it wrote (see HealthDataService.vitalsWriteTypes' doc for why the plugin's
+  /// v13 clientRecordId/delete APIs are not used) — re-syncing on every edit
+  /// would instead pile up duplicates.
   static Future<void> saveBp(
     BloodPressureReading r, {
     bool stampActiveProfile = true,
@@ -168,8 +169,9 @@ class VitalsStorageService {
   /// worse bug: the delete-confirmation SnackBar's Undo action re-saves the
   /// SAME id, which — with the flag cleared — passed the "already synced"
   /// check and pushed a brand-new, duplicate write to Health Connect/HealthKit
-  /// for data that was already there (the plugin has no delete/update API, so
-  /// the original write is never actually removed by a local delete anyway).
+  /// for data that was already there (a local delete never removes the platform
+  /// record: this app does not retain the uuid/clientRecordId that the plugin's
+  /// v13 delete APIs would need, so the original write survives regardless).
   /// The flag answers "has Health Connect already seen this id's data",
   /// which stays true regardless of whether the LOCAL row currently exists —
   /// a stale flag for a genuinely-deleted (never restored) reading is a

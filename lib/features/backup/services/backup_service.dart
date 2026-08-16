@@ -54,17 +54,19 @@ class BackupService {
   /// is rethrown so the caller can surface a clear error message — it is NOT
   /// swallowed as `false`, which previously made restore failures invisible.
   Future<bool> restoreBackup() async {
-    // 1. Pick file — a null/empty result means the user canceled.
-    final result = await FilePicker.platform.pickFiles(
+    // 1. Pick file — a null result means the user canceled. `path` is null for
+    // a non-`file:` URI (web), which this app never hits but must not crash on.
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['zip'],
     );
 
-    if (result == null || result.files.single.path == null) {
+    final pickedPath = picked?.path;
+    if (pickedPath == null) {
       return false; // User canceled — not an error.
     }
 
-    final file = File(result.files.single.path!);
+    final file = File(pickedPath);
 
     // 2. Read and Unzip. Any failure here throws to the caller.
     final bytes = await file.readAsBytes();

@@ -166,8 +166,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   /// Let the user pick a sound from their device's audio files.
   Future<void> _pickCustomSound() async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-      final path = result?.files.single.path;
+      final picked = await FilePicker.pickFile(type: FileType.audio);
+      final path = picked?.path;
       if (path != null && mounted) {
         setState(() => _sound = path);
         _previewSound(); // instant confirmation it plays
