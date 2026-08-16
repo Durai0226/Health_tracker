@@ -15161,6 +15161,40 @@ class $BloodPressureReadingsTable extends BloodPressureReadings
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
   @override
   late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
@@ -15173,6 +15207,17 @@ class $BloodPressureReadingsTable extends BloodPressureReadings
       'CHECK ("synced" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   @override
   List<GeneratedColumn> get $columns => [
@@ -15188,7 +15233,11 @@ class $BloodPressureReadingsTable extends BloodPressureReadings
     note,
     categoryIndex,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
     synced,
+    dataJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -15290,10 +15339,36 @@ class $BloodPressureReadingsTable extends BloodPressureReadings
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
     if (data.containsKey('synced')) {
       context.handle(
         _syncedMeta,
         synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
       );
     }
     return context;
@@ -15353,10 +15428,26 @@ class $BloodPressureReadingsTable extends BloodPressureReadings
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
       synced: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}synced'],
       )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
     );
   }
 
@@ -15380,7 +15471,11 @@ class BloodPressureReading extends DataClass
   final String? note;
   final int categoryIndex;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
   final bool synced;
+  final String? dataJson;
   const BloodPressureReading({
     required this.id,
     this.dependentId,
@@ -15394,7 +15489,11 @@ class BloodPressureReading extends DataClass
     this.note,
     required this.categoryIndex,
     required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
     required this.synced,
+    this.dataJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -15423,7 +15522,15 @@ class BloodPressureReading extends DataClass
     }
     map['category_index'] = Variable<int>(categoryIndex);
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
     map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
     return map;
   }
 
@@ -15451,7 +15558,15 @@ class BloodPressureReading extends DataClass
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       categoryIndex: Value(categoryIndex),
       createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
       synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
     );
   }
 
@@ -15473,7 +15588,11 @@ class BloodPressureReading extends DataClass
       note: serializer.fromJson<String?>(json['note']),
       categoryIndex: serializer.fromJson<int>(json['categoryIndex']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
       synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
     );
   }
   @override
@@ -15492,7 +15611,11 @@ class BloodPressureReading extends DataClass
       'note': serializer.toJson<String?>(note),
       'categoryIndex': serializer.toJson<int>(categoryIndex),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
       'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
     };
   }
 
@@ -15509,7 +15632,11 @@ class BloodPressureReading extends DataClass
     Value<String?> note = const Value.absent(),
     int? categoryIndex,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
     bool? synced,
+    Value<String?> dataJson = const Value.absent(),
   }) => BloodPressureReading(
     id: id ?? this.id,
     dependentId: dependentId.present ? dependentId.value : this.dependentId,
@@ -15525,7 +15652,11 @@ class BloodPressureReading extends DataClass
     note: note.present ? note.value : this.note,
     categoryIndex: categoryIndex ?? this.categoryIndex,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
     synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
   );
   BloodPressureReading copyWithCompanion(BloodPressureReadingsCompanion data) {
     return BloodPressureReading(
@@ -15547,7 +15678,11 @@ class BloodPressureReading extends DataClass
           ? data.categoryIndex.value
           : this.categoryIndex,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
       synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
     );
   }
 
@@ -15566,7 +15701,11 @@ class BloodPressureReading extends DataClass
           ..write('note: $note, ')
           ..write('categoryIndex: $categoryIndex, ')
           ..write('createdAt: $createdAt, ')
-          ..write('synced: $synced')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
           ..write(')'))
         .toString();
   }
@@ -15585,7 +15724,11 @@ class BloodPressureReading extends DataClass
     note,
     categoryIndex,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
     synced,
+    dataJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -15603,7 +15746,11 @@ class BloodPressureReading extends DataClass
           other.note == this.note &&
           other.categoryIndex == this.categoryIndex &&
           other.createdAt == this.createdAt &&
-          other.synced == this.synced);
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
 }
 
 class BloodPressureReadingsCompanion
@@ -15620,7 +15767,11 @@ class BloodPressureReadingsCompanion
   final Value<String?> note;
   final Value<int> categoryIndex;
   final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
   final Value<bool> synced;
+  final Value<String?> dataJson;
   final Value<int> rowid;
   const BloodPressureReadingsCompanion({
     this.id = const Value.absent(),
@@ -15635,7 +15786,11 @@ class BloodPressureReadingsCompanion
     this.note = const Value.absent(),
     this.categoryIndex = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
     this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   BloodPressureReadingsCompanion.insert({
@@ -15651,13 +15806,18 @@ class BloodPressureReadingsCompanion
     this.note = const Value.absent(),
     this.categoryIndex = const Value.absent(),
     required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
     this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        systolic = Value(systolic),
        diastolic = Value(diastolic),
        takenAt = Value(takenAt),
-       createdAt = Value(createdAt);
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<BloodPressureReading> custom({
     Expression<String>? id,
     Expression<String>? dependentId,
@@ -15671,7 +15831,11 @@ class BloodPressureReadingsCompanion
     Expression<String>? note,
     Expression<int>? categoryIndex,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
     Expression<bool>? synced,
+    Expression<String>? dataJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -15687,7 +15851,11 @@ class BloodPressureReadingsCompanion
       if (note != null) 'note': note,
       if (categoryIndex != null) 'category_index': categoryIndex,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
       if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -15705,7 +15873,11 @@ class BloodPressureReadingsCompanion
     Value<String?>? note,
     Value<int>? categoryIndex,
     Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
     Value<bool>? synced,
+    Value<String?>? dataJson,
     Value<int>? rowid,
   }) {
     return BloodPressureReadingsCompanion(
@@ -15721,7 +15893,11 @@ class BloodPressureReadingsCompanion
       note: note ?? this.note,
       categoryIndex: categoryIndex ?? this.categoryIndex,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
       synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -15765,8 +15941,20 @@ class BloodPressureReadingsCompanion
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
     if (synced.present) {
       map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -15789,7 +15977,11 @@ class BloodPressureReadingsCompanion
           ..write('note: $note, ')
           ..write('categoryIndex: $categoryIndex, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
           ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -15930,6 +16122,40 @@ class $GlucoseReadingsTable extends GlucoseReadings
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
   @override
   late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
@@ -15942,6 +16168,17 @@ class $GlucoseReadingsTable extends GlucoseReadings
       'CHECK ("synced" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   @override
   List<GeneratedColumn> get $columns => [
@@ -15957,7 +16194,11 @@ class $GlucoseReadingsTable extends GlucoseReadings
     note,
     classIndex,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
     synced,
+    dataJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -16057,10 +16298,36 @@ class $GlucoseReadingsTable extends GlucoseReadings
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
     if (data.containsKey('synced')) {
       context.handle(
         _syncedMeta,
         synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
       );
     }
     return context;
@@ -16120,10 +16387,26 @@ class $GlucoseReadingsTable extends GlucoseReadings
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
       synced: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}synced'],
       )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
     );
   }
 
@@ -16146,7 +16429,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
   final String? note;
   final int classIndex;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
   final bool synced;
+  final String? dataJson;
   const GlucoseReading({
     required this.id,
     this.dependentId,
@@ -16160,7 +16447,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
     this.note,
     required this.classIndex,
     required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
     required this.synced,
+    this.dataJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -16189,7 +16480,15 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
     }
     map['class_index'] = Variable<int>(classIndex);
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
     map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
     return map;
   }
 
@@ -16217,7 +16516,15 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       classIndex: Value(classIndex),
       createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
       synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
     );
   }
 
@@ -16239,7 +16546,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
       note: serializer.fromJson<String?>(json['note']),
       classIndex: serializer.fromJson<int>(json['classIndex']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
       synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
     );
   }
   @override
@@ -16258,7 +16569,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
       'note': serializer.toJson<String?>(note),
       'classIndex': serializer.toJson<int>(classIndex),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
       'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
     };
   }
 
@@ -16275,7 +16590,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
     Value<String?> note = const Value.absent(),
     int? classIndex,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
     bool? synced,
+    Value<String?> dataJson = const Value.absent(),
   }) => GlucoseReading(
     id: id ?? this.id,
     dependentId: dependentId.present ? dependentId.value : this.dependentId,
@@ -16289,7 +16608,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
     note: note.present ? note.value : this.note,
     classIndex: classIndex ?? this.classIndex,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
     synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
   );
   GlucoseReading copyWithCompanion(GlucoseReadingsCompanion data) {
     return GlucoseReading(
@@ -16313,7 +16636,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
           ? data.classIndex.value
           : this.classIndex,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
       synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
     );
   }
 
@@ -16332,7 +16659,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
           ..write('note: $note, ')
           ..write('classIndex: $classIndex, ')
           ..write('createdAt: $createdAt, ')
-          ..write('synced: $synced')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
           ..write(')'))
         .toString();
   }
@@ -16351,7 +16682,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
     note,
     classIndex,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
     synced,
+    dataJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -16369,7 +16704,11 @@ class GlucoseReading extends DataClass implements Insertable<GlucoseReading> {
           other.note == this.note &&
           other.classIndex == this.classIndex &&
           other.createdAt == this.createdAt &&
-          other.synced == this.synced);
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
 }
 
 class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
@@ -16385,7 +16724,11 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
   final Value<String?> note;
   final Value<int> classIndex;
   final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
   final Value<bool> synced;
+  final Value<String?> dataJson;
   final Value<int> rowid;
   const GlucoseReadingsCompanion({
     this.id = const Value.absent(),
@@ -16400,7 +16743,11 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
     this.note = const Value.absent(),
     this.classIndex = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
     this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   GlucoseReadingsCompanion.insert({
@@ -16416,12 +16763,17 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
     this.note = const Value.absent(),
     this.classIndex = const Value.absent(),
     required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
     this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        valueMgdl = Value(valueMgdl),
        takenAt = Value(takenAt),
-       createdAt = Value(createdAt);
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<GlucoseReading> custom({
     Expression<String>? id,
     Expression<String>? dependentId,
@@ -16435,7 +16787,11 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
     Expression<String>? note,
     Expression<int>? classIndex,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
     Expression<bool>? synced,
+    Expression<String>? dataJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -16451,7 +16807,11 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
       if (note != null) 'note': note,
       if (classIndex != null) 'class_index': classIndex,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
       if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -16469,7 +16829,11 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
     Value<String?>? note,
     Value<int>? classIndex,
     Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
     Value<bool>? synced,
+    Value<String?>? dataJson,
     Value<int>? rowid,
   }) {
     return GlucoseReadingsCompanion(
@@ -16485,7 +16849,11 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
       note: note ?? this.note,
       classIndex: classIndex ?? this.classIndex,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
       synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -16529,8 +16897,20 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
     if (synced.present) {
       map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -16553,7 +16933,11 @@ class GlucoseReadingsCompanion extends UpdateCompanion<GlucoseReading> {
           ..write('note: $note, ')
           ..write('classIndex: $classIndex, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
           ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -16639,6 +17023,40 @@ class $WeightReadingsTable extends WeightReadings
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
   @override
   late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
@@ -16652,6 +17070,17 @@ class $WeightReadingsTable extends WeightReadings
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -16661,7 +17090,11 @@ class $WeightReadingsTable extends WeightReadings
     tagsJson,
     note,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
     synced,
+    dataJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -16725,10 +17158,36 @@ class $WeightReadingsTable extends WeightReadings
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
     if (data.containsKey('synced')) {
       context.handle(
         _syncedMeta,
         synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
       );
     }
     return context;
@@ -16768,10 +17227,26 @@ class $WeightReadingsTable extends WeightReadings
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
       synced: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}synced'],
       )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
     );
   }
 
@@ -16789,7 +17264,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
   final String? tagsJson;
   final String? note;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
   final bool synced;
+  final String? dataJson;
   const WeightReading({
     required this.id,
     this.dependentId,
@@ -16798,7 +17277,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
     this.tagsJson,
     this.note,
     required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
     required this.synced,
+    this.dataJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -16816,7 +17299,15 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
       map['note'] = Variable<String>(note);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
     map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
     return map;
   }
 
@@ -16833,7 +17324,15 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
           : Value(tagsJson),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
       synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
     );
   }
 
@@ -16850,7 +17349,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
       tagsJson: serializer.fromJson<String?>(json['tagsJson']),
       note: serializer.fromJson<String?>(json['note']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
       synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
     );
   }
   @override
@@ -16864,7 +17367,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
       'tagsJson': serializer.toJson<String?>(tagsJson),
       'note': serializer.toJson<String?>(note),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
       'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
     };
   }
 
@@ -16876,7 +17383,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
     Value<String?> tagsJson = const Value.absent(),
     Value<String?> note = const Value.absent(),
     DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
     bool? synced,
+    Value<String?> dataJson = const Value.absent(),
   }) => WeightReading(
     id: id ?? this.id,
     dependentId: dependentId.present ? dependentId.value : this.dependentId,
@@ -16885,7 +17396,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
     tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
     note: note.present ? note.value : this.note,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
     synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
   );
   WeightReading copyWithCompanion(WeightReadingsCompanion data) {
     return WeightReading(
@@ -16898,7 +17413,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
       tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
       note: data.note.present ? data.note.value : this.note,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
       synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
     );
   }
 
@@ -16912,7 +17431,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
           ..write('tagsJson: $tagsJson, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
-          ..write('synced: $synced')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
           ..write(')'))
         .toString();
   }
@@ -16926,7 +17449,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
     tagsJson,
     note,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
     synced,
+    dataJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -16939,7 +17466,11 @@ class WeightReading extends DataClass implements Insertable<WeightReading> {
           other.tagsJson == this.tagsJson &&
           other.note == this.note &&
           other.createdAt == this.createdAt &&
-          other.synced == this.synced);
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
 }
 
 class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
@@ -16950,7 +17481,11 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
   final Value<String?> tagsJson;
   final Value<String?> note;
   final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
   final Value<bool> synced;
+  final Value<String?> dataJson;
   final Value<int> rowid;
   const WeightReadingsCompanion({
     this.id = const Value.absent(),
@@ -16960,7 +17495,11 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
     this.tagsJson = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
     this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   WeightReadingsCompanion.insert({
@@ -16971,12 +17510,17 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
     this.tagsJson = const Value.absent(),
     this.note = const Value.absent(),
     required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
     this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        valueKg = Value(valueKg),
        takenAt = Value(takenAt),
-       createdAt = Value(createdAt);
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<WeightReading> custom({
     Expression<String>? id,
     Expression<String>? dependentId,
@@ -16985,7 +17529,11 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
     Expression<String>? tagsJson,
     Expression<String>? note,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
     Expression<bool>? synced,
+    Expression<String>? dataJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -16996,7 +17544,11 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
       if (tagsJson != null) 'tags_json': tagsJson,
       if (note != null) 'note': note,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
       if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -17009,7 +17561,11 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
     Value<String?>? tagsJson,
     Value<String?>? note,
     Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
     Value<bool>? synced,
+    Value<String?>? dataJson,
     Value<int>? rowid,
   }) {
     return WeightReadingsCompanion(
@@ -17020,7 +17576,11 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
       tagsJson: tagsJson ?? this.tagsJson,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
       synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -17049,8 +17609,20 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
     if (synced.present) {
       map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -17068,7 +17640,11 @@ class WeightReadingsCompanion extends UpdateCompanion<WeightReading> {
           ..write('tagsJson: $tagsJson, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
           ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -17154,6 +17730,64 @@ class $MoodEntriesTable extends MoodEntries
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -17163,6 +17797,11 @@ class $MoodEntriesTable extends MoodEntries
     tagsJson,
     note,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -17226,6 +17865,38 @@ class $MoodEntriesTable extends MoodEntries
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
     return context;
   }
 
@@ -17263,6 +17934,26 @@ class $MoodEntriesTable extends MoodEntries
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
     );
   }
 
@@ -17280,6 +17971,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
   final String? tagsJson;
   final String? note;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
   const MoodEntry({
     required this.id,
     this.dependentId,
@@ -17288,6 +17984,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
     this.tagsJson,
     this.note,
     required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -17305,6 +18006,15 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
       map['note'] = Variable<String>(note);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
     return map;
   }
 
@@ -17321,6 +18031,15 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
           : Value(tagsJson),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
     );
   }
 
@@ -17337,6 +18056,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
       tagsJson: serializer.fromJson<String?>(json['tagsJson']),
       note: serializer.fromJson<String?>(json['note']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
     );
   }
   @override
@@ -17350,6 +18074,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
       'tagsJson': serializer.toJson<String?>(tagsJson),
       'note': serializer.toJson<String?>(note),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
     };
   }
 
@@ -17361,6 +18090,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
     Value<String?> tagsJson = const Value.absent(),
     Value<String?> note = const Value.absent(),
     DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
   }) => MoodEntry(
     id: id ?? this.id,
     dependentId: dependentId.present ? dependentId.value : this.dependentId,
@@ -17369,6 +18103,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
     tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
     note: note.present ? note.value : this.note,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
   );
   MoodEntry copyWithCompanion(MoodEntriesCompanion data) {
     return MoodEntry(
@@ -17381,6 +18120,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
       tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
       note: data.note.present ? data.note.value : this.note,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
     );
   }
 
@@ -17393,7 +18137,12 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
           ..write('takenAt: $takenAt, ')
           ..write('tagsJson: $tagsJson, ')
           ..write('note: $note, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
           ..write(')'))
         .toString();
   }
@@ -17407,6 +18156,11 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
     tagsJson,
     note,
     createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -17418,7 +18172,12 @@ class MoodEntry extends DataClass implements Insertable<MoodEntry> {
           other.takenAt == this.takenAt &&
           other.tagsJson == this.tagsJson &&
           other.note == this.note &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
 }
 
 class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
@@ -17429,6 +18188,11 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
   final Value<String?> tagsJson;
   final Value<String?> note;
   final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
   final Value<int> rowid;
   const MoodEntriesCompanion({
     this.id = const Value.absent(),
@@ -17438,6 +18202,11 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
     this.tagsJson = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   MoodEntriesCompanion.insert({
@@ -17448,11 +18217,17 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
     this.tagsJson = const Value.absent(),
     this.note = const Value.absent(),
     required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        moodIndex = Value(moodIndex),
        takenAt = Value(takenAt),
-       createdAt = Value(createdAt);
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<MoodEntry> custom({
     Expression<String>? id,
     Expression<String>? dependentId,
@@ -17461,6 +18236,11 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
     Expression<String>? tagsJson,
     Expression<String>? note,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -17471,6 +18251,11 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
       if (tagsJson != null) 'tags_json': tagsJson,
       if (note != null) 'note': note,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -17483,6 +18268,11 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
     Value<String?>? tagsJson,
     Value<String?>? note,
     Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
     Value<int>? rowid,
   }) {
     return MoodEntriesCompanion(
@@ -17493,6 +18283,11 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
       tagsJson: tagsJson ?? this.tagsJson,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -17521,6 +18316,21 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -17537,6 +18347,11 @@ class MoodEntriesCompanion extends UpdateCompanion<MoodEntry> {
           ..write('tagsJson: $tagsJson, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -31396,7 +32211,11 @@ typedef $$BloodPressureReadingsTableCreateCompanionBuilder =
       Value<String?> note,
       Value<int> categoryIndex,
       required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
       Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 typedef $$BloodPressureReadingsTableUpdateCompanionBuilder =
@@ -31413,7 +32232,11 @@ typedef $$BloodPressureReadingsTableUpdateCompanionBuilder =
       Value<String?> note,
       Value<int> categoryIndex,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
       Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 
@@ -31486,8 +32309,28 @@ class $$BloodPressureReadingsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get synced => $composableBuilder(
     column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -31561,8 +32404,28 @@ class $$BloodPressureReadingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get synced => $composableBuilder(
     column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -31618,8 +32481,20 @@ class $$BloodPressureReadingsTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
   GeneratedColumn<bool> get synced =>
       $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
 }
 
 class $$BloodPressureReadingsTableTableManager
@@ -31680,7 +32555,11 @@ class $$BloodPressureReadingsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<int> categoryIndex = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BloodPressureReadingsCompanion(
                 id: id,
@@ -31695,7 +32574,11 @@ class $$BloodPressureReadingsTableTableManager
                 note: note,
                 categoryIndex: categoryIndex,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
                 synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -31712,7 +32595,11 @@ class $$BloodPressureReadingsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<int> categoryIndex = const Value.absent(),
                 required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BloodPressureReadingsCompanion.insert(
                 id: id,
@@ -31727,7 +32614,11 @@ class $$BloodPressureReadingsTableTableManager
                 note: note,
                 categoryIndex: categoryIndex,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
                 synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -31773,7 +32664,11 @@ typedef $$GlucoseReadingsTableCreateCompanionBuilder =
       Value<String?> note,
       Value<int> classIndex,
       required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
       Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 typedef $$GlucoseReadingsTableUpdateCompanionBuilder =
@@ -31790,7 +32685,11 @@ typedef $$GlucoseReadingsTableUpdateCompanionBuilder =
       Value<String?> note,
       Value<int> classIndex,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
       Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 
@@ -31863,8 +32762,28 @@ class $$GlucoseReadingsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get synced => $composableBuilder(
     column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -31938,8 +32857,28 @@ class $$GlucoseReadingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get synced => $composableBuilder(
     column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -31997,8 +32936,20 @@ class $$GlucoseReadingsTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
   GeneratedColumn<bool> get synced =>
       $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
 }
 
 class $$GlucoseReadingsTableTableManager
@@ -32050,7 +33001,11 @@ class $$GlucoseReadingsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<int> classIndex = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GlucoseReadingsCompanion(
                 id: id,
@@ -32065,7 +33020,11 @@ class $$GlucoseReadingsTableTableManager
                 note: note,
                 classIndex: classIndex,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
                 synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -32082,7 +33041,11 @@ class $$GlucoseReadingsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<int> classIndex = const Value.absent(),
                 required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GlucoseReadingsCompanion.insert(
                 id: id,
@@ -32097,7 +33060,11 @@ class $$GlucoseReadingsTableTableManager
                 note: note,
                 classIndex: classIndex,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
                 synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -32134,7 +33101,11 @@ typedef $$WeightReadingsTableCreateCompanionBuilder =
       Value<String?> tagsJson,
       Value<String?> note,
       required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
       Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 typedef $$WeightReadingsTableUpdateCompanionBuilder =
@@ -32146,7 +33117,11 @@ typedef $$WeightReadingsTableUpdateCompanionBuilder =
       Value<String?> tagsJson,
       Value<String?> note,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
       Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 
@@ -32194,8 +33169,28 @@ class $$WeightReadingsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get synced => $composableBuilder(
     column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -32244,8 +33239,28 @@ class $$WeightReadingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get synced => $composableBuilder(
     column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -32282,8 +33297,20 @@ class $$WeightReadingsTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
   GeneratedColumn<bool> get synced =>
       $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
 }
 
 class $$WeightReadingsTableTableManager
@@ -32326,7 +33353,11 @@ class $$WeightReadingsTableTableManager
                 Value<String?> tagsJson = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WeightReadingsCompanion(
                 id: id,
@@ -32336,7 +33367,11 @@ class $$WeightReadingsTableTableManager
                 tagsJson: tagsJson,
                 note: note,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
                 synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -32348,7 +33383,11 @@ class $$WeightReadingsTableTableManager
                 Value<String?> tagsJson = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WeightReadingsCompanion.insert(
                 id: id,
@@ -32358,7 +33397,11 @@ class $$WeightReadingsTableTableManager
                 tagsJson: tagsJson,
                 note: note,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
                 synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -32395,6 +33438,11 @@ typedef $$MoodEntriesTableCreateCompanionBuilder =
       Value<String?> tagsJson,
       Value<String?> note,
       required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 typedef $$MoodEntriesTableUpdateCompanionBuilder =
@@ -32406,6 +33454,11 @@ typedef $$MoodEntriesTableUpdateCompanionBuilder =
       Value<String?> tagsJson,
       Value<String?> note,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
       Value<int> rowid,
     });
 
@@ -32450,6 +33503,31 @@ class $$MoodEntriesTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -32497,6 +33575,31 @@ class $$MoodEntriesTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$MoodEntriesTableAnnotationComposer
@@ -32530,6 +33633,21 @@ class $$MoodEntriesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
 }
 
 class $$MoodEntriesTableTableManager
@@ -32570,6 +33688,11 @@ class $$MoodEntriesTableTableManager
                 Value<String?> tagsJson = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MoodEntriesCompanion(
                 id: id,
@@ -32579,6 +33702,11 @@ class $$MoodEntriesTableTableManager
                 tagsJson: tagsJson,
                 note: note,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -32590,6 +33718,11 @@ class $$MoodEntriesTableTableManager
                 Value<String?> tagsJson = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MoodEntriesCompanion.insert(
                 id: id,
@@ -32599,6 +33732,11 @@ class $$MoodEntriesTableTableManager
                 tagsJson: tagsJson,
                 note: note,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -474,6 +474,17 @@ class VitalsStorageService {
       categoryIndex: drift.Value(
           VitalsAnalyzer.classifyBp(r.systolic, r.diastolic).index),
       createdAt: drift.Value(r.createdAt),
+      // ---- sync columns (schema v13) ----
+      //
+      // `deletedAt: null` is load-bearing, not tidiness. Deletes are tombstones
+      // now and saves are insertOnConflictUpdate, so re-saving a previously
+      // deleted id would otherwise leave the tombstone standing and the row
+      // invisible forever. The delete-confirmation SnackBar's Undo re-saves the
+      // SAME id (see deleteBp's doc), so that is the normal path here, not an
+      // edge case. Same three lines on all four mappers below.
+      updatedAt: drift.Value(DateTime.now()),
+      deletedAt: const drift.Value(null),
+      synced: const drift.Value(false),
     );
   }
 
@@ -508,6 +519,9 @@ class VitalsStorageService {
       classIndex: drift.Value(
           VitalsAnalyzer.classifyGlucose(r.valueMgdl, r.context).index),
       createdAt: drift.Value(r.createdAt),
+      updatedAt: drift.Value(DateTime.now()),
+      deletedAt: const drift.Value(null), // clears a tombstone on Undo
+      synced: const drift.Value(false),
     );
   }
 
@@ -532,6 +546,9 @@ class VitalsStorageService {
       tagsJson: drift.Value(r.tags.isEmpty ? null : jsonEncode(r.tags)),
       note: drift.Value(r.note),
       createdAt: drift.Value(r.createdAt),
+      updatedAt: drift.Value(DateTime.now()),
+      deletedAt: const drift.Value(null), // clears a tombstone on Undo
+      synced: const drift.Value(false),
     );
   }
 
@@ -556,6 +573,9 @@ class VitalsStorageService {
       tagsJson: drift.Value(r.tags.isEmpty ? null : jsonEncode(r.tags)),
       note: drift.Value(r.note),
       createdAt: drift.Value(r.createdAt),
+      updatedAt: drift.Value(DateTime.now()),
+      deletedAt: const drift.Value(null), // clears a tombstone on Undo
+      synced: const drift.Value(false),
     );
   }
 

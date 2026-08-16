@@ -1,5 +1,19 @@
 import 'package:drift/drift.dart';
 
+/// ## The universal sync fields on these four tables (schema v13)
+///
+/// `createdAt` + `synced` shipped originally; `updatedAt`, `deletedAt`,
+/// `schemaVer` and `dataJson` were retrofitted later. Their absence was the
+/// whole reason blood pressure, glucose, weight and mood were the only
+/// trackers `HealthCloudSyncService` could not carry: its reconciler compares
+/// `updatedAt` for last-write-wins and needs a tombstone to distinguish "the
+/// user deleted this" from "this device has not synced yet". Without them a
+/// deleted reading came straight back on the next sync.
+///
+/// `deletedAt` means every read path here MUST filter `deletedAt.isNull()`,
+/// and every companion mapper MUST write `deletedAt: Value(null)` — see the
+/// note on `VitalsStorageService.deleteBp` about Undo re-saving the same id.
+
 /// Blood-pressure readings (mm Hg). `categoryIndex` stores the denormalized
 /// AHA/ACC category (BpCategory.index) for fast filtering; it is recomputed on
 /// write from the systolic/diastolic values.
@@ -19,7 +33,11 @@ class BloodPressureReadings extends Table {
   IntColumn get categoryIndex =>
       integer().withDefault(const Constant(0))(); // BpCategory.index
   DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get schemaVer => integer().withDefault(const Constant(1))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
+  TextColumn get dataJson => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -45,7 +63,11 @@ class GlucoseReadings extends Table {
   IntColumn get classIndex =>
       integer().withDefault(const Constant(2))(); // GlucoseClass.index (inRange)
   DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get schemaVer => integer().withDefault(const Constant(1))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
+  TextColumn get dataJson => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -63,7 +85,11 @@ class WeightReadings extends Table {
   TextColumn get tagsJson => text().nullable()(); // JSON string[]
   TextColumn get note => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get schemaVer => integer().withDefault(const Constant(1))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
+  TextColumn get dataJson => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -81,6 +107,12 @@ class MoodEntries extends Table {
   TextColumn get tagsJson => text().nullable()(); // JSON string[]
   TextColumn get note => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get schemaVer => integer().withDefault(const Constant(1))();
+  // Mood alone shipped without even `synced` — it was never syncable at all.
+  BoolColumn get synced => boolean().withDefault(const Constant(false))();
+  TextColumn get dataJson => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};

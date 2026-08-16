@@ -98,7 +98,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -230,6 +230,85 @@ class AppDatabase extends _$AppDatabase {
           // generated statement is IF NOT EXISTS.
           await m.createAll();
           debugPrint('✓ Created query indexes (v12)');
+        }
+        if (from < 13) {
+          // Universal sync fields on the four vitals tables. They shipped with
+          // only `synced` (mood not even that) — no `updatedAt`, no
+          // `deletedAt` — which is exactly why they are absent from
+          // HealthCloudSyncService and why docs/bug-hunt.md lists this as
+          // Outstanding.
+          //
+          // `addColumn` cannot add `updatedAt`: SQLite rejects
+          // ADD COLUMN NOT NULL without a CONSTANT default, and
+          // CURRENT_TIMESTAMP is explicitly disallowed. `alterTable` recreates
+          // the table from the current Dart schema and copies the rows across.
+          //
+          // EVERY newly added column must be listed in `newColumns`, not just
+          // the non-defaulted one. Drift copies unlisted columns by name from
+          // the old table; a column that does not exist there yet comes across
+          // as NULL and trips the generated CHECK (`synced IN (0, 1)`) — which
+          // is exactly what mood_entries did, since it shipped without even a
+          // `synced` column.
+          //
+          // `columnTransformer` then back-fills `updatedAt` from `createdAt`.
+          // That is the truthful value — nothing has been edited since it was
+          // written — and it matters: stamping DateTime.now() would tell the
+          // LWW reconciler that every historical reading changed at migration
+          // time.
+          await m.alterTable(TableMigration(
+            bloodPressureReadings,
+            newColumns: [
+              bloodPressureReadings.updatedAt,
+              bloodPressureReadings.deletedAt,
+              bloodPressureReadings.schemaVer,
+              bloodPressureReadings.dataJson,
+            ],
+            columnTransformer: {
+              bloodPressureReadings.updatedAt: bloodPressureReadings.createdAt,
+            },
+          ));
+          await m.alterTable(TableMigration(
+            glucoseReadings,
+            newColumns: [
+              glucoseReadings.updatedAt,
+              glucoseReadings.deletedAt,
+              glucoseReadings.schemaVer,
+              glucoseReadings.dataJson,
+            ],
+            columnTransformer: {
+              glucoseReadings.updatedAt: glucoseReadings.createdAt,
+            },
+          ));
+          await m.alterTable(TableMigration(
+            weightReadings,
+            newColumns: [
+              weightReadings.updatedAt,
+              weightReadings.deletedAt,
+              weightReadings.schemaVer,
+              weightReadings.dataJson,
+            ],
+            columnTransformer: {
+              weightReadings.updatedAt: weightReadings.createdAt,
+            },
+          ));
+          await m.alterTable(TableMigration(
+            moodEntries,
+            newColumns: [
+              moodEntries.updatedAt,
+              moodEntries.deletedAt,
+              moodEntries.schemaVer,
+              moodEntries.dataJson,
+              moodEntries.synced, // mood never had this column at all
+            ],
+            columnTransformer: {moodEntries.updatedAt: moodEntries.createdAt},
+          ));
+          // Recreating a table drops its indexes. Same trick v12 used: Drift
+          // emits every @TableIndex as CREATE INDEX IF NOT EXISTS, so
+          // createAll() is safe on an existing DB and restores
+          // idx_bp_taken_at / idx_glucose_taken_at / idx_weight_taken_at /
+          // idx_mood_taken_at.
+          await m.createAll();
+          debugPrint('✓ Retrofitted sync fields onto vitals tables (v13)');
         }
       },
     );
