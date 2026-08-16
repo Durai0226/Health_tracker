@@ -20,6 +20,7 @@ import '../../features/water/services/water_service.dart';
 import '../../features/period/services/period_service.dart';
 import '../../features/steps/services/step_service.dart';
 import '../../features/sleep/services/sleep_service.dart';
+import '../../features/biometrics/services/biometrics_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/water/models/water_reminder_config.dart';
 
@@ -702,6 +703,9 @@ class CleanStorageService {
       await db.delete(db.stepDailyData).go();
       await db.delete(db.stepManualEntries).go();
       await db.delete(db.sleepSessions).go();
+      await db.delete(db.biometricDailyData).go();
+      await db.delete(db.workoutSessions).go();
+      await db.delete(db.healthSources).go();
       await db.delete(db.healthProfiles).go();
       // Vitals — these were previously left behind entirely, so "Delete all
       // data" silently kept every blood-pressure and blood-sugar reading.
@@ -747,6 +751,7 @@ class CleanStorageService {
       PeriodService.clearInMemory();
       StepService.clearInMemory();
       SleepService.clearInMemory();
+      BiometricsService.clearInMemory();
 
       debugPrint('✓ All persistent data cleared');
     } catch (e) {

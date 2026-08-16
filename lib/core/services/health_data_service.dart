@@ -135,6 +135,164 @@ class HealthDataService {
   static List<HealthDataAccess> _readAccessFor(List<HealthDataType> types) =>
       types.map((_) => HealthDataAccess.READ).toList();
 
+  // ---- wearable biometrics (READ-ONLY) --------------------------------------
+  //
+  // A THIRD tier, deliberately NOT folded into [readTypesFor].
+  //
+  // Health Connect is all-or-nothing per request and throttles re-prompting, so
+  // adding eight scopes to the first-run steps+sleep sheet would make the whole
+  // grant likelier to be refused — breaking the two features that already work
+  // — and would burn the user's limited re-prompt budget. It also collides with
+  // `requestPermissions`' fallback, which retries with `essentialTypes` only.
+  // Play's minimum-permission rule points the same way: ask when the user opens
+  // the feature, not at first launch.
+  //
+  // This app never WRITES any of these.
+
+  /// HealthKit exposes HRV as SDNN; Health Connect exposes RMSSD. Neither
+  /// platform has the other's type, and they are different statistics over
+  /// different ranges — see [HrvMetric]. Getting this backwards is the
+  /// `DISTANCE_WALKING_RUNNING` bug again.
+  static const HealthDataType hrvTypeAndroid =
+      HealthDataType.HEART_RATE_VARIABILITY_RMSSD;
+  static const HealthDataType hrvTypeIOS =
+      HealthDataType.HEART_RATE_VARIABILITY_SDNN;
+
+  static HealthDataType get hrvType =>
+      Platform.isAndroid ? hrvTypeAndroid : hrvTypeIOS;
+
+  /// Android reports a DELTA from the wearer's baseline; Apple's sleeping wrist
+  /// temperature is ABSOLUTE °C. Same non-comparability problem as HRV.
+  ///
+  /// Both types arrived in `health` 13.x — neither existed in 11.1.1.
+  static const HealthDataType skinTempTypeAndroid =
+      HealthDataType.SKIN_TEMPERATURE;
+  static const HealthDataType skinTempTypeIOS =
+      HealthDataType.SLEEP_WRIST_TEMPERATURE;
+
+  static HealthDataType get skinTempType =>
+      Platform.isAndroid ? skinTempTypeAndroid : skinTempTypeIOS;
+
+  /// Everything the biometrics feature reads, in one separate consent sheet.
+  ///
+  /// VO2 max is deliberately absent: `package:health` 13.3.2 declares no
+  /// VO2MAX type on either platform, even though HealthKit and Health Connect
+  /// both store one. `health_data_types_test.dart` fails when that changes.
+  static List<HealthDataType> biometricTypesFor(bool android) => [
+        HealthDataType.HEART_RATE,
+        HealthDataType.RESTING_HEART_RATE,
+        android ? hrvTypeAndroid : hrvTypeIOS,
+        HealthDataType.BLOOD_OXYGEN,
+        HealthDataType.RESPIRATORY_RATE,
+        HealthDataType.BODY_TEMPERATURE,
+        android ? skinTempTypeAndroid : skinTempTypeIOS,
+        HealthDataType.WORKOUT,
+      ];
+
+  static List<HealthDataType> get biometricTypes =>
+      biometricTypesFor(Platform.isAndroid);
+
+  /// Every type the app can ever read — for the conformance tests, which assert
+  /// both platform lists against the plugin's own `dataTypeKeys*`.
+  static List<HealthDataType> allReadTypesFor(bool android) => [
+        ...readTypesFor(android),
+        ...biometricTypesFor(android),
+      ];
+
+  static const String _biometricsPrefKey = 'health_biometrics_connected';
+  bool? _biometricsCache;
+
+  /// Whether the biometric read scope is granted.
+  ///
+  /// Android answers truthfully. iOS never discloses READ authorization, so
+  /// [hasPermissions] returns null there and we fall back to the persisted
+  /// flag — the same split [availability] already makes for the base grant.
+  Future<bool> hasBiometricPermission() async {
+    try {
+      await _ensureConfigured();
+      final types = biometricTypes;
+      final has = await _health.hasPermissions(types,
+          permissions: _readAccessFor(types));
+      if (has != null) return has;
+      _biometricsCache ??= await _readFlag(_biometricsPrefKey);
+      return _biometricsCache ?? false;
+    } catch (e) {
+      debugPrint('HealthDataService.hasBiometricPermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Ask for the biometric read scope. Call this from the biometrics screens,
+  /// never at first launch — see the tier note above.
+  ///
+  /// Skin temperature is dropped from the request when the installed Health
+  /// Connect is too old to know the type: an unsupported type makes Android
+  /// bail with `success(false)` before the sheet is even shown, which would
+  /// take the other seven scopes down with it.
+  Future<bool> requestBiometricPermission() async {
+    try {
+      await _ensureConfigured();
+      final types = List<HealthDataType>.from(biometricTypes);
+      if (!await isSkinTemperatureSupported()) {
+        types.remove(skinTempType);
+      }
+      final granted = await _health.requestAuthorization(types,
+          permissions: _readAccessFor(types));
+      // iOS returns true whenever the sheet closed without error, so re-check
+      // where the platform will actually tell us.
+      final ok = granted == true;
+      await _setBiometricsFlag(ok);
+      return ok;
+    } catch (e) {
+      debugPrint('HealthDataService.requestBiometricPermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Health Connect feature-gates `SkinTemperatureRecord`; older installs do
+  /// not have it. Always false on iOS-with-no-support and on any throw.
+  Future<bool> isSkinTemperatureSupported() async {
+    try {
+      await _ensureConfigured();
+      return await _health.isSkinTemperatureAvailable();
+    } catch (e) {
+      debugPrint('HealthDataService.isSkinTemperatureSupported failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> _setBiometricsFlag(bool value) async {
+    _biometricsCache = value;
+    await _writeFlag(_biometricsPrefKey, value);
+  }
+
+  /// Raw samples of ONE biometric type. One type per call by design — see
+  /// [_readPoints].
+  Future<List<HealthDataPoint>> readBiometricSamples(
+      HealthDataType type, DateTime from, DateTime to) async {
+    try {
+      await _ensureConfigured();
+      return await _readPoints([type], from, to);
+    } catch (e) {
+      debugPrint('HealthDataService.readBiometricSamples(${type.name}) '
+          'failed: $e');
+      return [];
+    }
+  }
+
+  /// Exercise sessions in [from]..[to]. Each point's value is a
+  /// [WorkoutHealthValue]; heart rate is NOT included and must be intersected
+  /// from the same day's HR samples.
+  Future<List<HealthDataPoint>> readWorkouts(DateTime from, DateTime to) async {
+    try {
+      await _ensureConfigured();
+      return await _readPoints([HealthDataType.WORKOUT], from, to);
+    } catch (e) {
+      debugPrint('HealthDataService.readWorkouts failed: $e');
+      return [];
+    }
+  }
+
   // ---- vitals write (BP / glucose / weight) ---------------------------------
   //
   // Opt-in and, for BP/glucose, one-directional: this app never reads BP or

@@ -12,6 +12,7 @@ import 'tables/period_tables.dart';
 import 'tables/steps_tables.dart';
 import 'tables/sleep_tables.dart';
 import 'tables/diary_tables.dart';
+import 'tables/biometrics_tables.dart';
 
 import 'daos/core_dao.dart';
 import 'daos/medication_dao.dart';
@@ -22,6 +23,7 @@ import 'daos/period_dao.dart';
 import 'daos/steps_dao.dart';
 import 'daos/sleep_dao.dart';
 import 'daos/diary_dao.dart';
+import 'daos/biometrics_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -76,6 +78,12 @@ part 'app_database.g.dart';
     // Diary / journal
     DiaryEntries,
 
+    // Wearable biometrics (daily aggregates), workouts, and the registry of
+    // apps/devices actually contributing data.
+    BiometricDailyData,
+    WorkoutSessions,
+    HealthSources,
+
   ],
   daos: [
     CoreDao,
@@ -87,6 +95,7 @@ part 'app_database.g.dart';
     StepsDao,
     SleepDao,
     DiaryDao,
+    BiometricsDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -98,7 +107,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -309,6 +318,16 @@ class AppDatabase extends _$AppDatabase {
           // idx_mood_taken_at.
           await m.createAll();
           debugPrint('✓ Retrofitted sync fields onto vitals tables (v13)');
+        }
+        if (from < 14) {
+          // Wearable biometrics: one aggregated row per day, event-keyed
+          // workouts, and the registry of apps/devices behind the
+          // Connected-devices screen. Pure additions — nothing existing is
+          // touched, so no table rebuild here.
+          await m.createTable(biometricDailyData);
+          await m.createTable(workoutSessions);
+          await m.createTable(healthSources);
+          debugPrint('✓ Created biometrics + workout + source tables (v14)');
         }
       },
     );

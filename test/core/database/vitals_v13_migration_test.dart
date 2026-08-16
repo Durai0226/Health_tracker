@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:tablet_remainder/core/database/app_database.dart';
 
-/// v12 → v13 on a database that already holds readings.
+/// v12 → current schema on a database that already holds readings.
 ///
 /// Every other DB test builds a fresh database, so `onCreate` runs and
 /// `onUpgrade` never does — the migration path had **no coverage at all**. The
@@ -123,10 +123,12 @@ void main() {
 
   tearDown(() async => db.close());
 
-  test('the migration actually ran', () async {
-    final row =
-        await db.customSelect('PRAGMA user_version').getSingle();
-    expect(row.data.values.first, 13);
+  test('the migration actually ran, all the way to the current version', () async {
+    final row = await db.customSelect('PRAGMA user_version').getSingle();
+    // Compared against the database's OWN schemaVersion rather than a literal,
+    // so adding v15 does not make this test fail for the wrong reason. A v12
+    // install upgrades straight through every intervening step.
+    expect(row.data.values.first, db.schemaVersion);
   });
 
   test('existing readings survive the table rebuild intact', () async {
@@ -208,6 +210,13 @@ void main() {
         .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
         .get();
     final names = rows.map((r) => r.read<String>('name')).toSet();
-    expect(names, containsAll(<String>['step_daily_data', 'sleep_sessions']));
+    expect(names, containsAll(<String>[
+      'step_daily_data',
+      'sleep_sessions',
+      // v14 — a v12 install must land with these too, not just a fresh one.
+      'biometric_daily_data',
+      'workout_sessions',
+      'health_sources',
+    ]));
   });
 }

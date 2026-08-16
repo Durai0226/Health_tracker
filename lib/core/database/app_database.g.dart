@@ -24966,6 +24966,3918 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
   }
 }
 
+class $BiometricDailyDataTable extends BiometricDailyData
+    with TableInfo<$BiometricDailyDataTable, BiometricDayRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BiometricDailyDataTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _restingHrMeta = const VerificationMeta(
+    'restingHr',
+  );
+  @override
+  late final GeneratedColumn<int> restingHr = GeneratedColumn<int>(
+    'resting_hr',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _restingHrDerivedMeta = const VerificationMeta(
+    'restingHrDerived',
+  );
+  @override
+  late final GeneratedColumn<bool> restingHrDerived = GeneratedColumn<bool>(
+    'resting_hr_derived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("resting_hr_derived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _hrMinMeta = const VerificationMeta('hrMin');
+  @override
+  late final GeneratedColumn<int> hrMin = GeneratedColumn<int>(
+    'hr_min',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hrAvgMeta = const VerificationMeta('hrAvg');
+  @override
+  late final GeneratedColumn<int> hrAvg = GeneratedColumn<int>(
+    'hr_avg',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hrMaxMeta = const VerificationMeta('hrMax');
+  @override
+  late final GeneratedColumn<int> hrMax = GeneratedColumn<int>(
+    'hr_max',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hrSampleCountMeta = const VerificationMeta(
+    'hrSampleCount',
+  );
+  @override
+  late final GeneratedColumn<int> hrSampleCount = GeneratedColumn<int>(
+    'hr_sample_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _hourlyHrJsonMeta = const VerificationMeta(
+    'hourlyHrJson',
+  );
+  @override
+  late final GeneratedColumn<String> hourlyHrJson = GeneratedColumn<String>(
+    'hourly_hr_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hrvNightlyMsMeta = const VerificationMeta(
+    'hrvNightlyMs',
+  );
+  @override
+  late final GeneratedColumn<double> hrvNightlyMs = GeneratedColumn<double>(
+    'hrv_nightly_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hrvMetricIndexMeta = const VerificationMeta(
+    'hrvMetricIndex',
+  );
+  @override
+  late final GeneratedColumn<int> hrvMetricIndex = GeneratedColumn<int>(
+    'hrv_metric_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hrvSampleCountMeta = const VerificationMeta(
+    'hrvSampleCount',
+  );
+  @override
+  late final GeneratedColumn<int> hrvSampleCount = GeneratedColumn<int>(
+    'hrv_sample_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _spo2MinMeta = const VerificationMeta(
+    'spo2Min',
+  );
+  @override
+  late final GeneratedColumn<double> spo2Min = GeneratedColumn<double>(
+    'spo2_min',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _spo2AvgMeta = const VerificationMeta(
+    'spo2Avg',
+  );
+  @override
+  late final GeneratedColumn<double> spo2Avg = GeneratedColumn<double>(
+    'spo2_avg',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _spo2SampleCountMeta = const VerificationMeta(
+    'spo2SampleCount',
+  );
+  @override
+  late final GeneratedColumn<int> spo2SampleCount = GeneratedColumn<int>(
+    'spo2_sample_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _respiratoryRateMinMeta =
+      const VerificationMeta('respiratoryRateMin');
+  @override
+  late final GeneratedColumn<double> respiratoryRateMin =
+      GeneratedColumn<double>(
+        'respiratory_rate_min',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _respiratoryRateAvgMeta =
+      const VerificationMeta('respiratoryRateAvg');
+  @override
+  late final GeneratedColumn<double> respiratoryRateAvg =
+      GeneratedColumn<double>(
+        'respiratory_rate_avg',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _respiratoryRateMaxMeta =
+      const VerificationMeta('respiratoryRateMax');
+  @override
+  late final GeneratedColumn<double> respiratoryRateMax =
+      GeneratedColumn<double>(
+        'respiratory_rate_max',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _respiratoryRateSampleCountMeta =
+      const VerificationMeta('respiratoryRateSampleCount');
+  @override
+  late final GeneratedColumn<int> respiratoryRateSampleCount =
+      GeneratedColumn<int>(
+        'respiratory_rate_sample_count',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _bodyTempAvgCMeta = const VerificationMeta(
+    'bodyTempAvgC',
+  );
+  @override
+  late final GeneratedColumn<double> bodyTempAvgC = GeneratedColumn<double>(
+    'body_temp_avg_c',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _skinTempCMeta = const VerificationMeta(
+    'skinTempC',
+  );
+  @override
+  late final GeneratedColumn<double> skinTempC = GeneratedColumn<double>(
+    'skin_temp_c',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _skinTempMetricIndexMeta =
+      const VerificationMeta('skinTempMetricIndex');
+  @override
+  late final GeneratedColumn<int> skinTempMetricIndex = GeneratedColumn<int>(
+    'skin_temp_metric_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _vo2MaxMeta = const VerificationMeta('vo2Max');
+  @override
+  late final GeneratedColumn<double> vo2Max = GeneratedColumn<double>(
+    'vo2_max',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _primarySourceIdMeta = const VerificationMeta(
+    'primarySourceId',
+  );
+  @override
+  late final GeneratedColumn<String> primarySourceId = GeneratedColumn<String>(
+    'primary_source_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceByMetricJsonMeta =
+      const VerificationMeta('sourceByMetricJson');
+  @override
+  late final GeneratedColumn<String> sourceByMetricJson =
+      GeneratedColumn<String>(
+        'source_by_metric_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sourceIndexMeta = const VerificationMeta(
+    'sourceIndex',
+  );
+  @override
+  late final GeneratedColumn<int> sourceIndex = GeneratedColumn<int>(
+    'source_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(2),
+  );
+  static const VerificationMeta _lastSyncedAtMeta = const VerificationMeta(
+    'lastSyncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncedAt = GeneratedColumn<DateTime>(
+    'last_synced_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    date,
+    restingHr,
+    restingHrDerived,
+    hrMin,
+    hrAvg,
+    hrMax,
+    hrSampleCount,
+    hourlyHrJson,
+    hrvNightlyMs,
+    hrvMetricIndex,
+    hrvSampleCount,
+    spo2Min,
+    spo2Avg,
+    spo2SampleCount,
+    respiratoryRateMin,
+    respiratoryRateAvg,
+    respiratoryRateMax,
+    respiratoryRateSampleCount,
+    bodyTempAvgC,
+    skinTempC,
+    skinTempMetricIndex,
+    vo2Max,
+    primarySourceId,
+    sourceByMetricJson,
+    sourceIndex,
+    lastSyncedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'biometric_daily_data';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BiometricDayRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('resting_hr')) {
+      context.handle(
+        _restingHrMeta,
+        restingHr.isAcceptableOrUnknown(data['resting_hr']!, _restingHrMeta),
+      );
+    }
+    if (data.containsKey('resting_hr_derived')) {
+      context.handle(
+        _restingHrDerivedMeta,
+        restingHrDerived.isAcceptableOrUnknown(
+          data['resting_hr_derived']!,
+          _restingHrDerivedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hr_min')) {
+      context.handle(
+        _hrMinMeta,
+        hrMin.isAcceptableOrUnknown(data['hr_min']!, _hrMinMeta),
+      );
+    }
+    if (data.containsKey('hr_avg')) {
+      context.handle(
+        _hrAvgMeta,
+        hrAvg.isAcceptableOrUnknown(data['hr_avg']!, _hrAvgMeta),
+      );
+    }
+    if (data.containsKey('hr_max')) {
+      context.handle(
+        _hrMaxMeta,
+        hrMax.isAcceptableOrUnknown(data['hr_max']!, _hrMaxMeta),
+      );
+    }
+    if (data.containsKey('hr_sample_count')) {
+      context.handle(
+        _hrSampleCountMeta,
+        hrSampleCount.isAcceptableOrUnknown(
+          data['hr_sample_count']!,
+          _hrSampleCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hourly_hr_json')) {
+      context.handle(
+        _hourlyHrJsonMeta,
+        hourlyHrJson.isAcceptableOrUnknown(
+          data['hourly_hr_json']!,
+          _hourlyHrJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hrv_nightly_ms')) {
+      context.handle(
+        _hrvNightlyMsMeta,
+        hrvNightlyMs.isAcceptableOrUnknown(
+          data['hrv_nightly_ms']!,
+          _hrvNightlyMsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hrv_metric_index')) {
+      context.handle(
+        _hrvMetricIndexMeta,
+        hrvMetricIndex.isAcceptableOrUnknown(
+          data['hrv_metric_index']!,
+          _hrvMetricIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hrv_sample_count')) {
+      context.handle(
+        _hrvSampleCountMeta,
+        hrvSampleCount.isAcceptableOrUnknown(
+          data['hrv_sample_count']!,
+          _hrvSampleCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('spo2_min')) {
+      context.handle(
+        _spo2MinMeta,
+        spo2Min.isAcceptableOrUnknown(data['spo2_min']!, _spo2MinMeta),
+      );
+    }
+    if (data.containsKey('spo2_avg')) {
+      context.handle(
+        _spo2AvgMeta,
+        spo2Avg.isAcceptableOrUnknown(data['spo2_avg']!, _spo2AvgMeta),
+      );
+    }
+    if (data.containsKey('spo2_sample_count')) {
+      context.handle(
+        _spo2SampleCountMeta,
+        spo2SampleCount.isAcceptableOrUnknown(
+          data['spo2_sample_count']!,
+          _spo2SampleCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('respiratory_rate_min')) {
+      context.handle(
+        _respiratoryRateMinMeta,
+        respiratoryRateMin.isAcceptableOrUnknown(
+          data['respiratory_rate_min']!,
+          _respiratoryRateMinMeta,
+        ),
+      );
+    }
+    if (data.containsKey('respiratory_rate_avg')) {
+      context.handle(
+        _respiratoryRateAvgMeta,
+        respiratoryRateAvg.isAcceptableOrUnknown(
+          data['respiratory_rate_avg']!,
+          _respiratoryRateAvgMeta,
+        ),
+      );
+    }
+    if (data.containsKey('respiratory_rate_max')) {
+      context.handle(
+        _respiratoryRateMaxMeta,
+        respiratoryRateMax.isAcceptableOrUnknown(
+          data['respiratory_rate_max']!,
+          _respiratoryRateMaxMeta,
+        ),
+      );
+    }
+    if (data.containsKey('respiratory_rate_sample_count')) {
+      context.handle(
+        _respiratoryRateSampleCountMeta,
+        respiratoryRateSampleCount.isAcceptableOrUnknown(
+          data['respiratory_rate_sample_count']!,
+          _respiratoryRateSampleCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('body_temp_avg_c')) {
+      context.handle(
+        _bodyTempAvgCMeta,
+        bodyTempAvgC.isAcceptableOrUnknown(
+          data['body_temp_avg_c']!,
+          _bodyTempAvgCMeta,
+        ),
+      );
+    }
+    if (data.containsKey('skin_temp_c')) {
+      context.handle(
+        _skinTempCMeta,
+        skinTempC.isAcceptableOrUnknown(data['skin_temp_c']!, _skinTempCMeta),
+      );
+    }
+    if (data.containsKey('skin_temp_metric_index')) {
+      context.handle(
+        _skinTempMetricIndexMeta,
+        skinTempMetricIndex.isAcceptableOrUnknown(
+          data['skin_temp_metric_index']!,
+          _skinTempMetricIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('vo2_max')) {
+      context.handle(
+        _vo2MaxMeta,
+        vo2Max.isAcceptableOrUnknown(data['vo2_max']!, _vo2MaxMeta),
+      );
+    }
+    if (data.containsKey('primary_source_id')) {
+      context.handle(
+        _primarySourceIdMeta,
+        primarySourceId.isAcceptableOrUnknown(
+          data['primary_source_id']!,
+          _primarySourceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_by_metric_json')) {
+      context.handle(
+        _sourceByMetricJsonMeta,
+        sourceByMetricJson.isAcceptableOrUnknown(
+          data['source_by_metric_json']!,
+          _sourceByMetricJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_index')) {
+      context.handle(
+        _sourceIndexMeta,
+        sourceIndex.isAcceptableOrUnknown(
+          data['source_index']!,
+          _sourceIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_synced_at')) {
+      context.handle(
+        _lastSyncedAtMeta,
+        lastSyncedAt.isAcceptableOrUnknown(
+          data['last_synced_at']!,
+          _lastSyncedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BiometricDayRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BiometricDayRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      restingHr: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}resting_hr'],
+      ),
+      restingHrDerived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}resting_hr_derived'],
+      )!,
+      hrMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hr_min'],
+      ),
+      hrAvg: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hr_avg'],
+      ),
+      hrMax: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hr_max'],
+      ),
+      hrSampleCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hr_sample_count'],
+      )!,
+      hourlyHrJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hourly_hr_json'],
+      ),
+      hrvNightlyMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}hrv_nightly_ms'],
+      ),
+      hrvMetricIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hrv_metric_index'],
+      ),
+      hrvSampleCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hrv_sample_count'],
+      )!,
+      spo2Min: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}spo2_min'],
+      ),
+      spo2Avg: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}spo2_avg'],
+      ),
+      spo2SampleCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}spo2_sample_count'],
+      )!,
+      respiratoryRateMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}respiratory_rate_min'],
+      ),
+      respiratoryRateAvg: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}respiratory_rate_avg'],
+      ),
+      respiratoryRateMax: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}respiratory_rate_max'],
+      ),
+      respiratoryRateSampleCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}respiratory_rate_sample_count'],
+      )!,
+      bodyTempAvgC: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}body_temp_avg_c'],
+      ),
+      skinTempC: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}skin_temp_c'],
+      ),
+      skinTempMetricIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}skin_temp_metric_index'],
+      ),
+      vo2Max: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}vo2_max'],
+      ),
+      primarySourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}primary_source_id'],
+      ),
+      sourceByMetricJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_by_metric_json'],
+      ),
+      sourceIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_index'],
+      )!,
+      lastSyncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_synced_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $BiometricDailyDataTable createAlias(String alias) {
+    return $BiometricDailyDataTable(attachedDatabase, alias);
+  }
+}
+
+class BiometricDayRow extends DataClass implements Insertable<BiometricDayRow> {
+  final String id;
+  final DateTime date;
+  final int? restingHr;
+
+  /// True when [restingHr] was DERIVED (the 5th percentile of night-window
+  /// heart rate) rather than read from a RESTING_HEART_RATE record. The UI must
+  /// label it "estimated" — the same honesty rule the sleep and steps screens
+  /// already follow for inferred figures.
+  final bool restingHrDerived;
+  final int? hrMin;
+  final int? hrAvg;
+  final int? hrMax;
+  final int hrSampleCount;
+
+  /// JSON `List<int?>` of length 24 — hourly mean bpm, null for an hour with no
+  /// sample. A null COLUMN means "never aggregated"; a zero-filled array would
+  /// claim a measured zero, which is the fabricated-chart-data defect.
+  final String? hourlyHrJson;
+  final double? hrvNightlyMs;
+
+  /// `HrvMetric.index` — 0 = rmssd (Health Connect), 1 = sdnn (HealthKit).
+  final int? hrvMetricIndex;
+  final int hrvSampleCount;
+  final double? spo2Min;
+  final double? spo2Avg;
+  final int spo2SampleCount;
+  final double? respiratoryRateMin;
+  final double? respiratoryRateAvg;
+  final double? respiratoryRateMax;
+  final int respiratoryRateSampleCount;
+
+  /// BODY_TEMPERATURE — absolute, and the same type on both platforms.
+  final double? bodyTempAvgC;
+
+  /// SKIN_TEMPERATURE (Android) / SLEEP_WRIST_TEMPERATURE (iOS), night window.
+  final double? skinTempC;
+
+  /// `SkinTempMetric.index` — 0 = deltaFromBaseline (Android), 1 = absolute
+  /// (iOS). Without this the two platforms' numbers are not comparable.
+  final int? skinTempMetricIndex;
+
+  /// `package:health` 13.3.2 exposes NO VO2MAX type on either platform —
+  /// verified against its `dataTypeKeysAndroid` / `dataTypeKeysIOS` — even
+  /// though HealthKit and Health Connect both store one. Reserved as a nullable
+  /// column so a future plugin bump needs no migration. **No importer writes
+  /// it today**; `health_data_types_test.dart` fails when that changes.
+  final double? vo2Max;
+
+  /// The source that won most of this day's metrics (→ `HealthSources.id`).
+  /// Lets the UI say "from Galaxy Watch5" in one line.
+  final String? primarySourceId;
+
+  /// JSON `{metricKey: sourceId}` — the per-metric winner. A day can legitimately
+  /// draw heart rate from a watch and SpO2 from a ring.
+  final String? sourceByMetricJson;
+  final int sourceIndex;
+  final DateTime? lastSyncedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const BiometricDayRow({
+    required this.id,
+    required this.date,
+    this.restingHr,
+    required this.restingHrDerived,
+    this.hrMin,
+    this.hrAvg,
+    this.hrMax,
+    required this.hrSampleCount,
+    this.hourlyHrJson,
+    this.hrvNightlyMs,
+    this.hrvMetricIndex,
+    required this.hrvSampleCount,
+    this.spo2Min,
+    this.spo2Avg,
+    required this.spo2SampleCount,
+    this.respiratoryRateMin,
+    this.respiratoryRateAvg,
+    this.respiratoryRateMax,
+    required this.respiratoryRateSampleCount,
+    this.bodyTempAvgC,
+    this.skinTempC,
+    this.skinTempMetricIndex,
+    this.vo2Max,
+    this.primarySourceId,
+    this.sourceByMetricJson,
+    required this.sourceIndex,
+    this.lastSyncedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['date'] = Variable<DateTime>(date);
+    if (!nullToAbsent || restingHr != null) {
+      map['resting_hr'] = Variable<int>(restingHr);
+    }
+    map['resting_hr_derived'] = Variable<bool>(restingHrDerived);
+    if (!nullToAbsent || hrMin != null) {
+      map['hr_min'] = Variable<int>(hrMin);
+    }
+    if (!nullToAbsent || hrAvg != null) {
+      map['hr_avg'] = Variable<int>(hrAvg);
+    }
+    if (!nullToAbsent || hrMax != null) {
+      map['hr_max'] = Variable<int>(hrMax);
+    }
+    map['hr_sample_count'] = Variable<int>(hrSampleCount);
+    if (!nullToAbsent || hourlyHrJson != null) {
+      map['hourly_hr_json'] = Variable<String>(hourlyHrJson);
+    }
+    if (!nullToAbsent || hrvNightlyMs != null) {
+      map['hrv_nightly_ms'] = Variable<double>(hrvNightlyMs);
+    }
+    if (!nullToAbsent || hrvMetricIndex != null) {
+      map['hrv_metric_index'] = Variable<int>(hrvMetricIndex);
+    }
+    map['hrv_sample_count'] = Variable<int>(hrvSampleCount);
+    if (!nullToAbsent || spo2Min != null) {
+      map['spo2_min'] = Variable<double>(spo2Min);
+    }
+    if (!nullToAbsent || spo2Avg != null) {
+      map['spo2_avg'] = Variable<double>(spo2Avg);
+    }
+    map['spo2_sample_count'] = Variable<int>(spo2SampleCount);
+    if (!nullToAbsent || respiratoryRateMin != null) {
+      map['respiratory_rate_min'] = Variable<double>(respiratoryRateMin);
+    }
+    if (!nullToAbsent || respiratoryRateAvg != null) {
+      map['respiratory_rate_avg'] = Variable<double>(respiratoryRateAvg);
+    }
+    if (!nullToAbsent || respiratoryRateMax != null) {
+      map['respiratory_rate_max'] = Variable<double>(respiratoryRateMax);
+    }
+    map['respiratory_rate_sample_count'] = Variable<int>(
+      respiratoryRateSampleCount,
+    );
+    if (!nullToAbsent || bodyTempAvgC != null) {
+      map['body_temp_avg_c'] = Variable<double>(bodyTempAvgC);
+    }
+    if (!nullToAbsent || skinTempC != null) {
+      map['skin_temp_c'] = Variable<double>(skinTempC);
+    }
+    if (!nullToAbsent || skinTempMetricIndex != null) {
+      map['skin_temp_metric_index'] = Variable<int>(skinTempMetricIndex);
+    }
+    if (!nullToAbsent || vo2Max != null) {
+      map['vo2_max'] = Variable<double>(vo2Max);
+    }
+    if (!nullToAbsent || primarySourceId != null) {
+      map['primary_source_id'] = Variable<String>(primarySourceId);
+    }
+    if (!nullToAbsent || sourceByMetricJson != null) {
+      map['source_by_metric_json'] = Variable<String>(sourceByMetricJson);
+    }
+    map['source_index'] = Variable<int>(sourceIndex);
+    if (!nullToAbsent || lastSyncedAt != null) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  BiometricDailyDataCompanion toCompanion(bool nullToAbsent) {
+    return BiometricDailyDataCompanion(
+      id: Value(id),
+      date: Value(date),
+      restingHr: restingHr == null && nullToAbsent
+          ? const Value.absent()
+          : Value(restingHr),
+      restingHrDerived: Value(restingHrDerived),
+      hrMin: hrMin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hrMin),
+      hrAvg: hrAvg == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hrAvg),
+      hrMax: hrMax == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hrMax),
+      hrSampleCount: Value(hrSampleCount),
+      hourlyHrJson: hourlyHrJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hourlyHrJson),
+      hrvNightlyMs: hrvNightlyMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hrvNightlyMs),
+      hrvMetricIndex: hrvMetricIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hrvMetricIndex),
+      hrvSampleCount: Value(hrvSampleCount),
+      spo2Min: spo2Min == null && nullToAbsent
+          ? const Value.absent()
+          : Value(spo2Min),
+      spo2Avg: spo2Avg == null && nullToAbsent
+          ? const Value.absent()
+          : Value(spo2Avg),
+      spo2SampleCount: Value(spo2SampleCount),
+      respiratoryRateMin: respiratoryRateMin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(respiratoryRateMin),
+      respiratoryRateAvg: respiratoryRateAvg == null && nullToAbsent
+          ? const Value.absent()
+          : Value(respiratoryRateAvg),
+      respiratoryRateMax: respiratoryRateMax == null && nullToAbsent
+          ? const Value.absent()
+          : Value(respiratoryRateMax),
+      respiratoryRateSampleCount: Value(respiratoryRateSampleCount),
+      bodyTempAvgC: bodyTempAvgC == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bodyTempAvgC),
+      skinTempC: skinTempC == null && nullToAbsent
+          ? const Value.absent()
+          : Value(skinTempC),
+      skinTempMetricIndex: skinTempMetricIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(skinTempMetricIndex),
+      vo2Max: vo2Max == null && nullToAbsent
+          ? const Value.absent()
+          : Value(vo2Max),
+      primarySourceId: primarySourceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(primarySourceId),
+      sourceByMetricJson: sourceByMetricJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceByMetricJson),
+      sourceIndex: Value(sourceIndex),
+      lastSyncedAt: lastSyncedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory BiometricDayRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BiometricDayRow(
+      id: serializer.fromJson<String>(json['id']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      restingHr: serializer.fromJson<int?>(json['restingHr']),
+      restingHrDerived: serializer.fromJson<bool>(json['restingHrDerived']),
+      hrMin: serializer.fromJson<int?>(json['hrMin']),
+      hrAvg: serializer.fromJson<int?>(json['hrAvg']),
+      hrMax: serializer.fromJson<int?>(json['hrMax']),
+      hrSampleCount: serializer.fromJson<int>(json['hrSampleCount']),
+      hourlyHrJson: serializer.fromJson<String?>(json['hourlyHrJson']),
+      hrvNightlyMs: serializer.fromJson<double?>(json['hrvNightlyMs']),
+      hrvMetricIndex: serializer.fromJson<int?>(json['hrvMetricIndex']),
+      hrvSampleCount: serializer.fromJson<int>(json['hrvSampleCount']),
+      spo2Min: serializer.fromJson<double?>(json['spo2Min']),
+      spo2Avg: serializer.fromJson<double?>(json['spo2Avg']),
+      spo2SampleCount: serializer.fromJson<int>(json['spo2SampleCount']),
+      respiratoryRateMin: serializer.fromJson<double?>(
+        json['respiratoryRateMin'],
+      ),
+      respiratoryRateAvg: serializer.fromJson<double?>(
+        json['respiratoryRateAvg'],
+      ),
+      respiratoryRateMax: serializer.fromJson<double?>(
+        json['respiratoryRateMax'],
+      ),
+      respiratoryRateSampleCount: serializer.fromJson<int>(
+        json['respiratoryRateSampleCount'],
+      ),
+      bodyTempAvgC: serializer.fromJson<double?>(json['bodyTempAvgC']),
+      skinTempC: serializer.fromJson<double?>(json['skinTempC']),
+      skinTempMetricIndex: serializer.fromJson<int?>(
+        json['skinTempMetricIndex'],
+      ),
+      vo2Max: serializer.fromJson<double?>(json['vo2Max']),
+      primarySourceId: serializer.fromJson<String?>(json['primarySourceId']),
+      sourceByMetricJson: serializer.fromJson<String?>(
+        json['sourceByMetricJson'],
+      ),
+      sourceIndex: serializer.fromJson<int>(json['sourceIndex']),
+      lastSyncedAt: serializer.fromJson<DateTime?>(json['lastSyncedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'date': serializer.toJson<DateTime>(date),
+      'restingHr': serializer.toJson<int?>(restingHr),
+      'restingHrDerived': serializer.toJson<bool>(restingHrDerived),
+      'hrMin': serializer.toJson<int?>(hrMin),
+      'hrAvg': serializer.toJson<int?>(hrAvg),
+      'hrMax': serializer.toJson<int?>(hrMax),
+      'hrSampleCount': serializer.toJson<int>(hrSampleCount),
+      'hourlyHrJson': serializer.toJson<String?>(hourlyHrJson),
+      'hrvNightlyMs': serializer.toJson<double?>(hrvNightlyMs),
+      'hrvMetricIndex': serializer.toJson<int?>(hrvMetricIndex),
+      'hrvSampleCount': serializer.toJson<int>(hrvSampleCount),
+      'spo2Min': serializer.toJson<double?>(spo2Min),
+      'spo2Avg': serializer.toJson<double?>(spo2Avg),
+      'spo2SampleCount': serializer.toJson<int>(spo2SampleCount),
+      'respiratoryRateMin': serializer.toJson<double?>(respiratoryRateMin),
+      'respiratoryRateAvg': serializer.toJson<double?>(respiratoryRateAvg),
+      'respiratoryRateMax': serializer.toJson<double?>(respiratoryRateMax),
+      'respiratoryRateSampleCount': serializer.toJson<int>(
+        respiratoryRateSampleCount,
+      ),
+      'bodyTempAvgC': serializer.toJson<double?>(bodyTempAvgC),
+      'skinTempC': serializer.toJson<double?>(skinTempC),
+      'skinTempMetricIndex': serializer.toJson<int?>(skinTempMetricIndex),
+      'vo2Max': serializer.toJson<double?>(vo2Max),
+      'primarySourceId': serializer.toJson<String?>(primarySourceId),
+      'sourceByMetricJson': serializer.toJson<String?>(sourceByMetricJson),
+      'sourceIndex': serializer.toJson<int>(sourceIndex),
+      'lastSyncedAt': serializer.toJson<DateTime?>(lastSyncedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  BiometricDayRow copyWith({
+    String? id,
+    DateTime? date,
+    Value<int?> restingHr = const Value.absent(),
+    bool? restingHrDerived,
+    Value<int?> hrMin = const Value.absent(),
+    Value<int?> hrAvg = const Value.absent(),
+    Value<int?> hrMax = const Value.absent(),
+    int? hrSampleCount,
+    Value<String?> hourlyHrJson = const Value.absent(),
+    Value<double?> hrvNightlyMs = const Value.absent(),
+    Value<int?> hrvMetricIndex = const Value.absent(),
+    int? hrvSampleCount,
+    Value<double?> spo2Min = const Value.absent(),
+    Value<double?> spo2Avg = const Value.absent(),
+    int? spo2SampleCount,
+    Value<double?> respiratoryRateMin = const Value.absent(),
+    Value<double?> respiratoryRateAvg = const Value.absent(),
+    Value<double?> respiratoryRateMax = const Value.absent(),
+    int? respiratoryRateSampleCount,
+    Value<double?> bodyTempAvgC = const Value.absent(),
+    Value<double?> skinTempC = const Value.absent(),
+    Value<int?> skinTempMetricIndex = const Value.absent(),
+    Value<double?> vo2Max = const Value.absent(),
+    Value<String?> primarySourceId = const Value.absent(),
+    Value<String?> sourceByMetricJson = const Value.absent(),
+    int? sourceIndex,
+    Value<DateTime?> lastSyncedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => BiometricDayRow(
+    id: id ?? this.id,
+    date: date ?? this.date,
+    restingHr: restingHr.present ? restingHr.value : this.restingHr,
+    restingHrDerived: restingHrDerived ?? this.restingHrDerived,
+    hrMin: hrMin.present ? hrMin.value : this.hrMin,
+    hrAvg: hrAvg.present ? hrAvg.value : this.hrAvg,
+    hrMax: hrMax.present ? hrMax.value : this.hrMax,
+    hrSampleCount: hrSampleCount ?? this.hrSampleCount,
+    hourlyHrJson: hourlyHrJson.present ? hourlyHrJson.value : this.hourlyHrJson,
+    hrvNightlyMs: hrvNightlyMs.present ? hrvNightlyMs.value : this.hrvNightlyMs,
+    hrvMetricIndex: hrvMetricIndex.present
+        ? hrvMetricIndex.value
+        : this.hrvMetricIndex,
+    hrvSampleCount: hrvSampleCount ?? this.hrvSampleCount,
+    spo2Min: spo2Min.present ? spo2Min.value : this.spo2Min,
+    spo2Avg: spo2Avg.present ? spo2Avg.value : this.spo2Avg,
+    spo2SampleCount: spo2SampleCount ?? this.spo2SampleCount,
+    respiratoryRateMin: respiratoryRateMin.present
+        ? respiratoryRateMin.value
+        : this.respiratoryRateMin,
+    respiratoryRateAvg: respiratoryRateAvg.present
+        ? respiratoryRateAvg.value
+        : this.respiratoryRateAvg,
+    respiratoryRateMax: respiratoryRateMax.present
+        ? respiratoryRateMax.value
+        : this.respiratoryRateMax,
+    respiratoryRateSampleCount:
+        respiratoryRateSampleCount ?? this.respiratoryRateSampleCount,
+    bodyTempAvgC: bodyTempAvgC.present ? bodyTempAvgC.value : this.bodyTempAvgC,
+    skinTempC: skinTempC.present ? skinTempC.value : this.skinTempC,
+    skinTempMetricIndex: skinTempMetricIndex.present
+        ? skinTempMetricIndex.value
+        : this.skinTempMetricIndex,
+    vo2Max: vo2Max.present ? vo2Max.value : this.vo2Max,
+    primarySourceId: primarySourceId.present
+        ? primarySourceId.value
+        : this.primarySourceId,
+    sourceByMetricJson: sourceByMetricJson.present
+        ? sourceByMetricJson.value
+        : this.sourceByMetricJson,
+    sourceIndex: sourceIndex ?? this.sourceIndex,
+    lastSyncedAt: lastSyncedAt.present ? lastSyncedAt.value : this.lastSyncedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  BiometricDayRow copyWithCompanion(BiometricDailyDataCompanion data) {
+    return BiometricDayRow(
+      id: data.id.present ? data.id.value : this.id,
+      date: data.date.present ? data.date.value : this.date,
+      restingHr: data.restingHr.present ? data.restingHr.value : this.restingHr,
+      restingHrDerived: data.restingHrDerived.present
+          ? data.restingHrDerived.value
+          : this.restingHrDerived,
+      hrMin: data.hrMin.present ? data.hrMin.value : this.hrMin,
+      hrAvg: data.hrAvg.present ? data.hrAvg.value : this.hrAvg,
+      hrMax: data.hrMax.present ? data.hrMax.value : this.hrMax,
+      hrSampleCount: data.hrSampleCount.present
+          ? data.hrSampleCount.value
+          : this.hrSampleCount,
+      hourlyHrJson: data.hourlyHrJson.present
+          ? data.hourlyHrJson.value
+          : this.hourlyHrJson,
+      hrvNightlyMs: data.hrvNightlyMs.present
+          ? data.hrvNightlyMs.value
+          : this.hrvNightlyMs,
+      hrvMetricIndex: data.hrvMetricIndex.present
+          ? data.hrvMetricIndex.value
+          : this.hrvMetricIndex,
+      hrvSampleCount: data.hrvSampleCount.present
+          ? data.hrvSampleCount.value
+          : this.hrvSampleCount,
+      spo2Min: data.spo2Min.present ? data.spo2Min.value : this.spo2Min,
+      spo2Avg: data.spo2Avg.present ? data.spo2Avg.value : this.spo2Avg,
+      spo2SampleCount: data.spo2SampleCount.present
+          ? data.spo2SampleCount.value
+          : this.spo2SampleCount,
+      respiratoryRateMin: data.respiratoryRateMin.present
+          ? data.respiratoryRateMin.value
+          : this.respiratoryRateMin,
+      respiratoryRateAvg: data.respiratoryRateAvg.present
+          ? data.respiratoryRateAvg.value
+          : this.respiratoryRateAvg,
+      respiratoryRateMax: data.respiratoryRateMax.present
+          ? data.respiratoryRateMax.value
+          : this.respiratoryRateMax,
+      respiratoryRateSampleCount: data.respiratoryRateSampleCount.present
+          ? data.respiratoryRateSampleCount.value
+          : this.respiratoryRateSampleCount,
+      bodyTempAvgC: data.bodyTempAvgC.present
+          ? data.bodyTempAvgC.value
+          : this.bodyTempAvgC,
+      skinTempC: data.skinTempC.present ? data.skinTempC.value : this.skinTempC,
+      skinTempMetricIndex: data.skinTempMetricIndex.present
+          ? data.skinTempMetricIndex.value
+          : this.skinTempMetricIndex,
+      vo2Max: data.vo2Max.present ? data.vo2Max.value : this.vo2Max,
+      primarySourceId: data.primarySourceId.present
+          ? data.primarySourceId.value
+          : this.primarySourceId,
+      sourceByMetricJson: data.sourceByMetricJson.present
+          ? data.sourceByMetricJson.value
+          : this.sourceByMetricJson,
+      sourceIndex: data.sourceIndex.present
+          ? data.sourceIndex.value
+          : this.sourceIndex,
+      lastSyncedAt: data.lastSyncedAt.present
+          ? data.lastSyncedAt.value
+          : this.lastSyncedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BiometricDayRow(')
+          ..write('id: $id, ')
+          ..write('date: $date, ')
+          ..write('restingHr: $restingHr, ')
+          ..write('restingHrDerived: $restingHrDerived, ')
+          ..write('hrMin: $hrMin, ')
+          ..write('hrAvg: $hrAvg, ')
+          ..write('hrMax: $hrMax, ')
+          ..write('hrSampleCount: $hrSampleCount, ')
+          ..write('hourlyHrJson: $hourlyHrJson, ')
+          ..write('hrvNightlyMs: $hrvNightlyMs, ')
+          ..write('hrvMetricIndex: $hrvMetricIndex, ')
+          ..write('hrvSampleCount: $hrvSampleCount, ')
+          ..write('spo2Min: $spo2Min, ')
+          ..write('spo2Avg: $spo2Avg, ')
+          ..write('spo2SampleCount: $spo2SampleCount, ')
+          ..write('respiratoryRateMin: $respiratoryRateMin, ')
+          ..write('respiratoryRateAvg: $respiratoryRateAvg, ')
+          ..write('respiratoryRateMax: $respiratoryRateMax, ')
+          ..write('respiratoryRateSampleCount: $respiratoryRateSampleCount, ')
+          ..write('bodyTempAvgC: $bodyTempAvgC, ')
+          ..write('skinTempC: $skinTempC, ')
+          ..write('skinTempMetricIndex: $skinTempMetricIndex, ')
+          ..write('vo2Max: $vo2Max, ')
+          ..write('primarySourceId: $primarySourceId, ')
+          ..write('sourceByMetricJson: $sourceByMetricJson, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    date,
+    restingHr,
+    restingHrDerived,
+    hrMin,
+    hrAvg,
+    hrMax,
+    hrSampleCount,
+    hourlyHrJson,
+    hrvNightlyMs,
+    hrvMetricIndex,
+    hrvSampleCount,
+    spo2Min,
+    spo2Avg,
+    spo2SampleCount,
+    respiratoryRateMin,
+    respiratoryRateAvg,
+    respiratoryRateMax,
+    respiratoryRateSampleCount,
+    bodyTempAvgC,
+    skinTempC,
+    skinTempMetricIndex,
+    vo2Max,
+    primarySourceId,
+    sourceByMetricJson,
+    sourceIndex,
+    lastSyncedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BiometricDayRow &&
+          other.id == this.id &&
+          other.date == this.date &&
+          other.restingHr == this.restingHr &&
+          other.restingHrDerived == this.restingHrDerived &&
+          other.hrMin == this.hrMin &&
+          other.hrAvg == this.hrAvg &&
+          other.hrMax == this.hrMax &&
+          other.hrSampleCount == this.hrSampleCount &&
+          other.hourlyHrJson == this.hourlyHrJson &&
+          other.hrvNightlyMs == this.hrvNightlyMs &&
+          other.hrvMetricIndex == this.hrvMetricIndex &&
+          other.hrvSampleCount == this.hrvSampleCount &&
+          other.spo2Min == this.spo2Min &&
+          other.spo2Avg == this.spo2Avg &&
+          other.spo2SampleCount == this.spo2SampleCount &&
+          other.respiratoryRateMin == this.respiratoryRateMin &&
+          other.respiratoryRateAvg == this.respiratoryRateAvg &&
+          other.respiratoryRateMax == this.respiratoryRateMax &&
+          other.respiratoryRateSampleCount == this.respiratoryRateSampleCount &&
+          other.bodyTempAvgC == this.bodyTempAvgC &&
+          other.skinTempC == this.skinTempC &&
+          other.skinTempMetricIndex == this.skinTempMetricIndex &&
+          other.vo2Max == this.vo2Max &&
+          other.primarySourceId == this.primarySourceId &&
+          other.sourceByMetricJson == this.sourceByMetricJson &&
+          other.sourceIndex == this.sourceIndex &&
+          other.lastSyncedAt == this.lastSyncedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class BiometricDailyDataCompanion extends UpdateCompanion<BiometricDayRow> {
+  final Value<String> id;
+  final Value<DateTime> date;
+  final Value<int?> restingHr;
+  final Value<bool> restingHrDerived;
+  final Value<int?> hrMin;
+  final Value<int?> hrAvg;
+  final Value<int?> hrMax;
+  final Value<int> hrSampleCount;
+  final Value<String?> hourlyHrJson;
+  final Value<double?> hrvNightlyMs;
+  final Value<int?> hrvMetricIndex;
+  final Value<int> hrvSampleCount;
+  final Value<double?> spo2Min;
+  final Value<double?> spo2Avg;
+  final Value<int> spo2SampleCount;
+  final Value<double?> respiratoryRateMin;
+  final Value<double?> respiratoryRateAvg;
+  final Value<double?> respiratoryRateMax;
+  final Value<int> respiratoryRateSampleCount;
+  final Value<double?> bodyTempAvgC;
+  final Value<double?> skinTempC;
+  final Value<int?> skinTempMetricIndex;
+  final Value<double?> vo2Max;
+  final Value<String?> primarySourceId;
+  final Value<String?> sourceByMetricJson;
+  final Value<int> sourceIndex;
+  final Value<DateTime?> lastSyncedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const BiometricDailyDataCompanion({
+    this.id = const Value.absent(),
+    this.date = const Value.absent(),
+    this.restingHr = const Value.absent(),
+    this.restingHrDerived = const Value.absent(),
+    this.hrMin = const Value.absent(),
+    this.hrAvg = const Value.absent(),
+    this.hrMax = const Value.absent(),
+    this.hrSampleCount = const Value.absent(),
+    this.hourlyHrJson = const Value.absent(),
+    this.hrvNightlyMs = const Value.absent(),
+    this.hrvMetricIndex = const Value.absent(),
+    this.hrvSampleCount = const Value.absent(),
+    this.spo2Min = const Value.absent(),
+    this.spo2Avg = const Value.absent(),
+    this.spo2SampleCount = const Value.absent(),
+    this.respiratoryRateMin = const Value.absent(),
+    this.respiratoryRateAvg = const Value.absent(),
+    this.respiratoryRateMax = const Value.absent(),
+    this.respiratoryRateSampleCount = const Value.absent(),
+    this.bodyTempAvgC = const Value.absent(),
+    this.skinTempC = const Value.absent(),
+    this.skinTempMetricIndex = const Value.absent(),
+    this.vo2Max = const Value.absent(),
+    this.primarySourceId = const Value.absent(),
+    this.sourceByMetricJson = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BiometricDailyDataCompanion.insert({
+    required String id,
+    required DateTime date,
+    this.restingHr = const Value.absent(),
+    this.restingHrDerived = const Value.absent(),
+    this.hrMin = const Value.absent(),
+    this.hrAvg = const Value.absent(),
+    this.hrMax = const Value.absent(),
+    this.hrSampleCount = const Value.absent(),
+    this.hourlyHrJson = const Value.absent(),
+    this.hrvNightlyMs = const Value.absent(),
+    this.hrvMetricIndex = const Value.absent(),
+    this.hrvSampleCount = const Value.absent(),
+    this.spo2Min = const Value.absent(),
+    this.spo2Avg = const Value.absent(),
+    this.spo2SampleCount = const Value.absent(),
+    this.respiratoryRateMin = const Value.absent(),
+    this.respiratoryRateAvg = const Value.absent(),
+    this.respiratoryRateMax = const Value.absent(),
+    this.respiratoryRateSampleCount = const Value.absent(),
+    this.bodyTempAvgC = const Value.absent(),
+    this.skinTempC = const Value.absent(),
+    this.skinTempMetricIndex = const Value.absent(),
+    this.vo2Max = const Value.absent(),
+    this.primarySourceId = const Value.absent(),
+    this.sourceByMetricJson = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       date = Value(date),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<BiometricDayRow> custom({
+    Expression<String>? id,
+    Expression<DateTime>? date,
+    Expression<int>? restingHr,
+    Expression<bool>? restingHrDerived,
+    Expression<int>? hrMin,
+    Expression<int>? hrAvg,
+    Expression<int>? hrMax,
+    Expression<int>? hrSampleCount,
+    Expression<String>? hourlyHrJson,
+    Expression<double>? hrvNightlyMs,
+    Expression<int>? hrvMetricIndex,
+    Expression<int>? hrvSampleCount,
+    Expression<double>? spo2Min,
+    Expression<double>? spo2Avg,
+    Expression<int>? spo2SampleCount,
+    Expression<double>? respiratoryRateMin,
+    Expression<double>? respiratoryRateAvg,
+    Expression<double>? respiratoryRateMax,
+    Expression<int>? respiratoryRateSampleCount,
+    Expression<double>? bodyTempAvgC,
+    Expression<double>? skinTempC,
+    Expression<int>? skinTempMetricIndex,
+    Expression<double>? vo2Max,
+    Expression<String>? primarySourceId,
+    Expression<String>? sourceByMetricJson,
+    Expression<int>? sourceIndex,
+    Expression<DateTime>? lastSyncedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (date != null) 'date': date,
+      if (restingHr != null) 'resting_hr': restingHr,
+      if (restingHrDerived != null) 'resting_hr_derived': restingHrDerived,
+      if (hrMin != null) 'hr_min': hrMin,
+      if (hrAvg != null) 'hr_avg': hrAvg,
+      if (hrMax != null) 'hr_max': hrMax,
+      if (hrSampleCount != null) 'hr_sample_count': hrSampleCount,
+      if (hourlyHrJson != null) 'hourly_hr_json': hourlyHrJson,
+      if (hrvNightlyMs != null) 'hrv_nightly_ms': hrvNightlyMs,
+      if (hrvMetricIndex != null) 'hrv_metric_index': hrvMetricIndex,
+      if (hrvSampleCount != null) 'hrv_sample_count': hrvSampleCount,
+      if (spo2Min != null) 'spo2_min': spo2Min,
+      if (spo2Avg != null) 'spo2_avg': spo2Avg,
+      if (spo2SampleCount != null) 'spo2_sample_count': spo2SampleCount,
+      if (respiratoryRateMin != null)
+        'respiratory_rate_min': respiratoryRateMin,
+      if (respiratoryRateAvg != null)
+        'respiratory_rate_avg': respiratoryRateAvg,
+      if (respiratoryRateMax != null)
+        'respiratory_rate_max': respiratoryRateMax,
+      if (respiratoryRateSampleCount != null)
+        'respiratory_rate_sample_count': respiratoryRateSampleCount,
+      if (bodyTempAvgC != null) 'body_temp_avg_c': bodyTempAvgC,
+      if (skinTempC != null) 'skin_temp_c': skinTempC,
+      if (skinTempMetricIndex != null)
+        'skin_temp_metric_index': skinTempMetricIndex,
+      if (vo2Max != null) 'vo2_max': vo2Max,
+      if (primarySourceId != null) 'primary_source_id': primarySourceId,
+      if (sourceByMetricJson != null)
+        'source_by_metric_json': sourceByMetricJson,
+      if (sourceIndex != null) 'source_index': sourceIndex,
+      if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BiometricDailyDataCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? date,
+    Value<int?>? restingHr,
+    Value<bool>? restingHrDerived,
+    Value<int?>? hrMin,
+    Value<int?>? hrAvg,
+    Value<int?>? hrMax,
+    Value<int>? hrSampleCount,
+    Value<String?>? hourlyHrJson,
+    Value<double?>? hrvNightlyMs,
+    Value<int?>? hrvMetricIndex,
+    Value<int>? hrvSampleCount,
+    Value<double?>? spo2Min,
+    Value<double?>? spo2Avg,
+    Value<int>? spo2SampleCount,
+    Value<double?>? respiratoryRateMin,
+    Value<double?>? respiratoryRateAvg,
+    Value<double?>? respiratoryRateMax,
+    Value<int>? respiratoryRateSampleCount,
+    Value<double?>? bodyTempAvgC,
+    Value<double?>? skinTempC,
+    Value<int?>? skinTempMetricIndex,
+    Value<double?>? vo2Max,
+    Value<String?>? primarySourceId,
+    Value<String?>? sourceByMetricJson,
+    Value<int>? sourceIndex,
+    Value<DateTime?>? lastSyncedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return BiometricDailyDataCompanion(
+      id: id ?? this.id,
+      date: date ?? this.date,
+      restingHr: restingHr ?? this.restingHr,
+      restingHrDerived: restingHrDerived ?? this.restingHrDerived,
+      hrMin: hrMin ?? this.hrMin,
+      hrAvg: hrAvg ?? this.hrAvg,
+      hrMax: hrMax ?? this.hrMax,
+      hrSampleCount: hrSampleCount ?? this.hrSampleCount,
+      hourlyHrJson: hourlyHrJson ?? this.hourlyHrJson,
+      hrvNightlyMs: hrvNightlyMs ?? this.hrvNightlyMs,
+      hrvMetricIndex: hrvMetricIndex ?? this.hrvMetricIndex,
+      hrvSampleCount: hrvSampleCount ?? this.hrvSampleCount,
+      spo2Min: spo2Min ?? this.spo2Min,
+      spo2Avg: spo2Avg ?? this.spo2Avg,
+      spo2SampleCount: spo2SampleCount ?? this.spo2SampleCount,
+      respiratoryRateMin: respiratoryRateMin ?? this.respiratoryRateMin,
+      respiratoryRateAvg: respiratoryRateAvg ?? this.respiratoryRateAvg,
+      respiratoryRateMax: respiratoryRateMax ?? this.respiratoryRateMax,
+      respiratoryRateSampleCount:
+          respiratoryRateSampleCount ?? this.respiratoryRateSampleCount,
+      bodyTempAvgC: bodyTempAvgC ?? this.bodyTempAvgC,
+      skinTempC: skinTempC ?? this.skinTempC,
+      skinTempMetricIndex: skinTempMetricIndex ?? this.skinTempMetricIndex,
+      vo2Max: vo2Max ?? this.vo2Max,
+      primarySourceId: primarySourceId ?? this.primarySourceId,
+      sourceByMetricJson: sourceByMetricJson ?? this.sourceByMetricJson,
+      sourceIndex: sourceIndex ?? this.sourceIndex,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (restingHr.present) {
+      map['resting_hr'] = Variable<int>(restingHr.value);
+    }
+    if (restingHrDerived.present) {
+      map['resting_hr_derived'] = Variable<bool>(restingHrDerived.value);
+    }
+    if (hrMin.present) {
+      map['hr_min'] = Variable<int>(hrMin.value);
+    }
+    if (hrAvg.present) {
+      map['hr_avg'] = Variable<int>(hrAvg.value);
+    }
+    if (hrMax.present) {
+      map['hr_max'] = Variable<int>(hrMax.value);
+    }
+    if (hrSampleCount.present) {
+      map['hr_sample_count'] = Variable<int>(hrSampleCount.value);
+    }
+    if (hourlyHrJson.present) {
+      map['hourly_hr_json'] = Variable<String>(hourlyHrJson.value);
+    }
+    if (hrvNightlyMs.present) {
+      map['hrv_nightly_ms'] = Variable<double>(hrvNightlyMs.value);
+    }
+    if (hrvMetricIndex.present) {
+      map['hrv_metric_index'] = Variable<int>(hrvMetricIndex.value);
+    }
+    if (hrvSampleCount.present) {
+      map['hrv_sample_count'] = Variable<int>(hrvSampleCount.value);
+    }
+    if (spo2Min.present) {
+      map['spo2_min'] = Variable<double>(spo2Min.value);
+    }
+    if (spo2Avg.present) {
+      map['spo2_avg'] = Variable<double>(spo2Avg.value);
+    }
+    if (spo2SampleCount.present) {
+      map['spo2_sample_count'] = Variable<int>(spo2SampleCount.value);
+    }
+    if (respiratoryRateMin.present) {
+      map['respiratory_rate_min'] = Variable<double>(respiratoryRateMin.value);
+    }
+    if (respiratoryRateAvg.present) {
+      map['respiratory_rate_avg'] = Variable<double>(respiratoryRateAvg.value);
+    }
+    if (respiratoryRateMax.present) {
+      map['respiratory_rate_max'] = Variable<double>(respiratoryRateMax.value);
+    }
+    if (respiratoryRateSampleCount.present) {
+      map['respiratory_rate_sample_count'] = Variable<int>(
+        respiratoryRateSampleCount.value,
+      );
+    }
+    if (bodyTempAvgC.present) {
+      map['body_temp_avg_c'] = Variable<double>(bodyTempAvgC.value);
+    }
+    if (skinTempC.present) {
+      map['skin_temp_c'] = Variable<double>(skinTempC.value);
+    }
+    if (skinTempMetricIndex.present) {
+      map['skin_temp_metric_index'] = Variable<int>(skinTempMetricIndex.value);
+    }
+    if (vo2Max.present) {
+      map['vo2_max'] = Variable<double>(vo2Max.value);
+    }
+    if (primarySourceId.present) {
+      map['primary_source_id'] = Variable<String>(primarySourceId.value);
+    }
+    if (sourceByMetricJson.present) {
+      map['source_by_metric_json'] = Variable<String>(sourceByMetricJson.value);
+    }
+    if (sourceIndex.present) {
+      map['source_index'] = Variable<int>(sourceIndex.value);
+    }
+    if (lastSyncedAt.present) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BiometricDailyDataCompanion(')
+          ..write('id: $id, ')
+          ..write('date: $date, ')
+          ..write('restingHr: $restingHr, ')
+          ..write('restingHrDerived: $restingHrDerived, ')
+          ..write('hrMin: $hrMin, ')
+          ..write('hrAvg: $hrAvg, ')
+          ..write('hrMax: $hrMax, ')
+          ..write('hrSampleCount: $hrSampleCount, ')
+          ..write('hourlyHrJson: $hourlyHrJson, ')
+          ..write('hrvNightlyMs: $hrvNightlyMs, ')
+          ..write('hrvMetricIndex: $hrvMetricIndex, ')
+          ..write('hrvSampleCount: $hrvSampleCount, ')
+          ..write('spo2Min: $spo2Min, ')
+          ..write('spo2Avg: $spo2Avg, ')
+          ..write('spo2SampleCount: $spo2SampleCount, ')
+          ..write('respiratoryRateMin: $respiratoryRateMin, ')
+          ..write('respiratoryRateAvg: $respiratoryRateAvg, ')
+          ..write('respiratoryRateMax: $respiratoryRateMax, ')
+          ..write('respiratoryRateSampleCount: $respiratoryRateSampleCount, ')
+          ..write('bodyTempAvgC: $bodyTempAvgC, ')
+          ..write('skinTempC: $skinTempC, ')
+          ..write('skinTempMetricIndex: $skinTempMetricIndex, ')
+          ..write('vo2Max: $vo2Max, ')
+          ..write('primarySourceId: $primarySourceId, ')
+          ..write('sourceByMetricJson: $sourceByMetricJson, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $WorkoutSessionsTable extends WorkoutSessions
+    with TableInfo<$WorkoutSessionsTable, WorkoutSessionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WorkoutSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateKeyMeta = const VerificationMeta(
+    'dateKey',
+  );
+  @override
+  late final GeneratedColumn<String> dateKey = GeneratedColumn<String>(
+    'date_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endedAtMeta = const VerificationMeta(
+    'endedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> endedAt = GeneratedColumn<DateTime>(
+    'ended_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _durationMinutesMeta = const VerificationMeta(
+    'durationMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> durationMinutes = GeneratedColumn<int>(
+    'duration_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _activityTypeMeta = const VerificationMeta(
+    'activityType',
+  );
+  @override
+  late final GeneratedColumn<String> activityType = GeneratedColumn<String>(
+    'activity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _energyKcalMeta = const VerificationMeta(
+    'energyKcal',
+  );
+  @override
+  late final GeneratedColumn<int> energyKcal = GeneratedColumn<int>(
+    'energy_kcal',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _distanceMetersMeta = const VerificationMeta(
+    'distanceMeters',
+  );
+  @override
+  late final GeneratedColumn<double> distanceMeters = GeneratedColumn<double>(
+    'distance_meters',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stepsMeta = const VerificationMeta('steps');
+  @override
+  late final GeneratedColumn<int> steps = GeneratedColumn<int>(
+    'steps',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _avgHrMeta = const VerificationMeta('avgHr');
+  @override
+  late final GeneratedColumn<int> avgHr = GeneratedColumn<int>(
+    'avg_hr',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maxHrMeta = const VerificationMeta('maxHr');
+  @override
+  late final GeneratedColumn<int> maxHr = GeneratedColumn<int>(
+    'max_hr',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceIndexMeta = const VerificationMeta(
+    'sourceIndex',
+  );
+  @override
+  late final GeneratedColumn<int> sourceIndex = GeneratedColumn<int>(
+    'source_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(2),
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dateKey,
+    startedAt,
+    endedAt,
+    durationMinutes,
+    activityType,
+    energyKcal,
+    distanceMeters,
+    steps,
+    avgHr,
+    maxHr,
+    sourceId,
+    sourceIndex,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'workout_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WorkoutSessionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('date_key')) {
+      context.handle(
+        _dateKeyMeta,
+        dateKey.isAcceptableOrUnknown(data['date_key']!, _dateKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateKeyMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('ended_at')) {
+      context.handle(
+        _endedAtMeta,
+        endedAt.isAcceptableOrUnknown(data['ended_at']!, _endedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_endedAtMeta);
+    }
+    if (data.containsKey('duration_minutes')) {
+      context.handle(
+        _durationMinutesMeta,
+        durationMinutes.isAcceptableOrUnknown(
+          data['duration_minutes']!,
+          _durationMinutesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_durationMinutesMeta);
+    }
+    if (data.containsKey('activity_type')) {
+      context.handle(
+        _activityTypeMeta,
+        activityType.isAcceptableOrUnknown(
+          data['activity_type']!,
+          _activityTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_activityTypeMeta);
+    }
+    if (data.containsKey('energy_kcal')) {
+      context.handle(
+        _energyKcalMeta,
+        energyKcal.isAcceptableOrUnknown(data['energy_kcal']!, _energyKcalMeta),
+      );
+    }
+    if (data.containsKey('distance_meters')) {
+      context.handle(
+        _distanceMetersMeta,
+        distanceMeters.isAcceptableOrUnknown(
+          data['distance_meters']!,
+          _distanceMetersMeta,
+        ),
+      );
+    }
+    if (data.containsKey('steps')) {
+      context.handle(
+        _stepsMeta,
+        steps.isAcceptableOrUnknown(data['steps']!, _stepsMeta),
+      );
+    }
+    if (data.containsKey('avg_hr')) {
+      context.handle(
+        _avgHrMeta,
+        avgHr.isAcceptableOrUnknown(data['avg_hr']!, _avgHrMeta),
+      );
+    }
+    if (data.containsKey('max_hr')) {
+      context.handle(
+        _maxHrMeta,
+        maxHr.isAcceptableOrUnknown(data['max_hr']!, _maxHrMeta),
+      );
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    }
+    if (data.containsKey('source_index')) {
+      context.handle(
+        _sourceIndexMeta,
+        sourceIndex.isAcceptableOrUnknown(
+          data['source_index']!,
+          _sourceIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  WorkoutSessionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WorkoutSessionRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dateKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}date_key'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      )!,
+      endedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}ended_at'],
+      )!,
+      durationMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_minutes'],
+      )!,
+      activityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}activity_type'],
+      )!,
+      energyKcal: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}energy_kcal'],
+      ),
+      distanceMeters: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}distance_meters'],
+      ),
+      steps: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}steps'],
+      ),
+      avgHr: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}avg_hr'],
+      ),
+      maxHr: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_hr'],
+      ),
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      ),
+      sourceIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_index'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $WorkoutSessionsTable createAlias(String alias) {
+    return $WorkoutSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class WorkoutSessionRow extends DataClass
+    implements Insertable<WorkoutSessionRow> {
+  final String id;
+  final String dateKey;
+  final DateTime startedAt;
+  final DateTime endedAt;
+  final int durationMinutes;
+
+  /// `HealthWorkoutActivityType.name` as a RAW STRING, never `.index`.
+  ///
+  /// It is a third-party enum whose ordinals shift between plugin releases
+  /// (12.2.0 alone inserted CARDIO_DANCE mid-list), so persisting the index
+  /// would silently reinterpret every historical row on the next `health` bump.
+  /// Our OWN enums — StepSource, SleepSource, BiometricSource — stay
+  /// index-persisted, because we control those.
+  final String activityType;
+  final int? energyKcal;
+  final double? distanceMeters;
+  final int? steps;
+
+  /// Filled only when the same day's heart-rate pass ran, by intersecting
+  /// already-fetched HR samples with this workout's window — never a second
+  /// plugin read. The plugin's `WorkoutSummary` carries no heart rate.
+  final int? avgHr;
+  final int? maxHr;
+  final String? sourceId;
+  final int sourceIndex;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const WorkoutSessionRow({
+    required this.id,
+    required this.dateKey,
+    required this.startedAt,
+    required this.endedAt,
+    required this.durationMinutes,
+    required this.activityType,
+    this.energyKcal,
+    this.distanceMeters,
+    this.steps,
+    this.avgHr,
+    this.maxHr,
+    this.sourceId,
+    required this.sourceIndex,
+    this.note,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['date_key'] = Variable<String>(dateKey);
+    map['started_at'] = Variable<DateTime>(startedAt);
+    map['ended_at'] = Variable<DateTime>(endedAt);
+    map['duration_minutes'] = Variable<int>(durationMinutes);
+    map['activity_type'] = Variable<String>(activityType);
+    if (!nullToAbsent || energyKcal != null) {
+      map['energy_kcal'] = Variable<int>(energyKcal);
+    }
+    if (!nullToAbsent || distanceMeters != null) {
+      map['distance_meters'] = Variable<double>(distanceMeters);
+    }
+    if (!nullToAbsent || steps != null) {
+      map['steps'] = Variable<int>(steps);
+    }
+    if (!nullToAbsent || avgHr != null) {
+      map['avg_hr'] = Variable<int>(avgHr);
+    }
+    if (!nullToAbsent || maxHr != null) {
+      map['max_hr'] = Variable<int>(maxHr);
+    }
+    if (!nullToAbsent || sourceId != null) {
+      map['source_id'] = Variable<String>(sourceId);
+    }
+    map['source_index'] = Variable<int>(sourceIndex);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  WorkoutSessionsCompanion toCompanion(bool nullToAbsent) {
+    return WorkoutSessionsCompanion(
+      id: Value(id),
+      dateKey: Value(dateKey),
+      startedAt: Value(startedAt),
+      endedAt: Value(endedAt),
+      durationMinutes: Value(durationMinutes),
+      activityType: Value(activityType),
+      energyKcal: energyKcal == null && nullToAbsent
+          ? const Value.absent()
+          : Value(energyKcal),
+      distanceMeters: distanceMeters == null && nullToAbsent
+          ? const Value.absent()
+          : Value(distanceMeters),
+      steps: steps == null && nullToAbsent
+          ? const Value.absent()
+          : Value(steps),
+      avgHr: avgHr == null && nullToAbsent
+          ? const Value.absent()
+          : Value(avgHr),
+      maxHr: maxHr == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maxHr),
+      sourceId: sourceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceId),
+      sourceIndex: Value(sourceIndex),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory WorkoutSessionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WorkoutSessionRow(
+      id: serializer.fromJson<String>(json['id']),
+      dateKey: serializer.fromJson<String>(json['dateKey']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      endedAt: serializer.fromJson<DateTime>(json['endedAt']),
+      durationMinutes: serializer.fromJson<int>(json['durationMinutes']),
+      activityType: serializer.fromJson<String>(json['activityType']),
+      energyKcal: serializer.fromJson<int?>(json['energyKcal']),
+      distanceMeters: serializer.fromJson<double?>(json['distanceMeters']),
+      steps: serializer.fromJson<int?>(json['steps']),
+      avgHr: serializer.fromJson<int?>(json['avgHr']),
+      maxHr: serializer.fromJson<int?>(json['maxHr']),
+      sourceId: serializer.fromJson<String?>(json['sourceId']),
+      sourceIndex: serializer.fromJson<int>(json['sourceIndex']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dateKey': serializer.toJson<String>(dateKey),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'endedAt': serializer.toJson<DateTime>(endedAt),
+      'durationMinutes': serializer.toJson<int>(durationMinutes),
+      'activityType': serializer.toJson<String>(activityType),
+      'energyKcal': serializer.toJson<int?>(energyKcal),
+      'distanceMeters': serializer.toJson<double?>(distanceMeters),
+      'steps': serializer.toJson<int?>(steps),
+      'avgHr': serializer.toJson<int?>(avgHr),
+      'maxHr': serializer.toJson<int?>(maxHr),
+      'sourceId': serializer.toJson<String?>(sourceId),
+      'sourceIndex': serializer.toJson<int>(sourceIndex),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  WorkoutSessionRow copyWith({
+    String? id,
+    String? dateKey,
+    DateTime? startedAt,
+    DateTime? endedAt,
+    int? durationMinutes,
+    String? activityType,
+    Value<int?> energyKcal = const Value.absent(),
+    Value<double?> distanceMeters = const Value.absent(),
+    Value<int?> steps = const Value.absent(),
+    Value<int?> avgHr = const Value.absent(),
+    Value<int?> maxHr = const Value.absent(),
+    Value<String?> sourceId = const Value.absent(),
+    int? sourceIndex,
+    Value<String?> note = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => WorkoutSessionRow(
+    id: id ?? this.id,
+    dateKey: dateKey ?? this.dateKey,
+    startedAt: startedAt ?? this.startedAt,
+    endedAt: endedAt ?? this.endedAt,
+    durationMinutes: durationMinutes ?? this.durationMinutes,
+    activityType: activityType ?? this.activityType,
+    energyKcal: energyKcal.present ? energyKcal.value : this.energyKcal,
+    distanceMeters: distanceMeters.present
+        ? distanceMeters.value
+        : this.distanceMeters,
+    steps: steps.present ? steps.value : this.steps,
+    avgHr: avgHr.present ? avgHr.value : this.avgHr,
+    maxHr: maxHr.present ? maxHr.value : this.maxHr,
+    sourceId: sourceId.present ? sourceId.value : this.sourceId,
+    sourceIndex: sourceIndex ?? this.sourceIndex,
+    note: note.present ? note.value : this.note,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  WorkoutSessionRow copyWithCompanion(WorkoutSessionsCompanion data) {
+    return WorkoutSessionRow(
+      id: data.id.present ? data.id.value : this.id,
+      dateKey: data.dateKey.present ? data.dateKey.value : this.dateKey,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      endedAt: data.endedAt.present ? data.endedAt.value : this.endedAt,
+      durationMinutes: data.durationMinutes.present
+          ? data.durationMinutes.value
+          : this.durationMinutes,
+      activityType: data.activityType.present
+          ? data.activityType.value
+          : this.activityType,
+      energyKcal: data.energyKcal.present
+          ? data.energyKcal.value
+          : this.energyKcal,
+      distanceMeters: data.distanceMeters.present
+          ? data.distanceMeters.value
+          : this.distanceMeters,
+      steps: data.steps.present ? data.steps.value : this.steps,
+      avgHr: data.avgHr.present ? data.avgHr.value : this.avgHr,
+      maxHr: data.maxHr.present ? data.maxHr.value : this.maxHr,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      sourceIndex: data.sourceIndex.present
+          ? data.sourceIndex.value
+          : this.sourceIndex,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkoutSessionRow(')
+          ..write('id: $id, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('durationMinutes: $durationMinutes, ')
+          ..write('activityType: $activityType, ')
+          ..write('energyKcal: $energyKcal, ')
+          ..write('distanceMeters: $distanceMeters, ')
+          ..write('steps: $steps, ')
+          ..write('avgHr: $avgHr, ')
+          ..write('maxHr: $maxHr, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    dateKey,
+    startedAt,
+    endedAt,
+    durationMinutes,
+    activityType,
+    energyKcal,
+    distanceMeters,
+    steps,
+    avgHr,
+    maxHr,
+    sourceId,
+    sourceIndex,
+    note,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkoutSessionRow &&
+          other.id == this.id &&
+          other.dateKey == this.dateKey &&
+          other.startedAt == this.startedAt &&
+          other.endedAt == this.endedAt &&
+          other.durationMinutes == this.durationMinutes &&
+          other.activityType == this.activityType &&
+          other.energyKcal == this.energyKcal &&
+          other.distanceMeters == this.distanceMeters &&
+          other.steps == this.steps &&
+          other.avgHr == this.avgHr &&
+          other.maxHr == this.maxHr &&
+          other.sourceId == this.sourceId &&
+          other.sourceIndex == this.sourceIndex &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSessionRow> {
+  final Value<String> id;
+  final Value<String> dateKey;
+  final Value<DateTime> startedAt;
+  final Value<DateTime> endedAt;
+  final Value<int> durationMinutes;
+  final Value<String> activityType;
+  final Value<int?> energyKcal;
+  final Value<double?> distanceMeters;
+  final Value<int?> steps;
+  final Value<int?> avgHr;
+  final Value<int?> maxHr;
+  final Value<String?> sourceId;
+  final Value<int> sourceIndex;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const WorkoutSessionsCompanion({
+    this.id = const Value.absent(),
+    this.dateKey = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.endedAt = const Value.absent(),
+    this.durationMinutes = const Value.absent(),
+    this.activityType = const Value.absent(),
+    this.energyKcal = const Value.absent(),
+    this.distanceMeters = const Value.absent(),
+    this.steps = const Value.absent(),
+    this.avgHr = const Value.absent(),
+    this.maxHr = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WorkoutSessionsCompanion.insert({
+    required String id,
+    required String dateKey,
+    required DateTime startedAt,
+    required DateTime endedAt,
+    required int durationMinutes,
+    required String activityType,
+    this.energyKcal = const Value.absent(),
+    this.distanceMeters = const Value.absent(),
+    this.steps = const Value.absent(),
+    this.avgHr = const Value.absent(),
+    this.maxHr = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.sourceIndex = const Value.absent(),
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       dateKey = Value(dateKey),
+       startedAt = Value(startedAt),
+       endedAt = Value(endedAt),
+       durationMinutes = Value(durationMinutes),
+       activityType = Value(activityType),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<WorkoutSessionRow> custom({
+    Expression<String>? id,
+    Expression<String>? dateKey,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? endedAt,
+    Expression<int>? durationMinutes,
+    Expression<String>? activityType,
+    Expression<int>? energyKcal,
+    Expression<double>? distanceMeters,
+    Expression<int>? steps,
+    Expression<int>? avgHr,
+    Expression<int>? maxHr,
+    Expression<String>? sourceId,
+    Expression<int>? sourceIndex,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dateKey != null) 'date_key': dateKey,
+      if (startedAt != null) 'started_at': startedAt,
+      if (endedAt != null) 'ended_at': endedAt,
+      if (durationMinutes != null) 'duration_minutes': durationMinutes,
+      if (activityType != null) 'activity_type': activityType,
+      if (energyKcal != null) 'energy_kcal': energyKcal,
+      if (distanceMeters != null) 'distance_meters': distanceMeters,
+      if (steps != null) 'steps': steps,
+      if (avgHr != null) 'avg_hr': avgHr,
+      if (maxHr != null) 'max_hr': maxHr,
+      if (sourceId != null) 'source_id': sourceId,
+      if (sourceIndex != null) 'source_index': sourceIndex,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WorkoutSessionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? dateKey,
+    Value<DateTime>? startedAt,
+    Value<DateTime>? endedAt,
+    Value<int>? durationMinutes,
+    Value<String>? activityType,
+    Value<int?>? energyKcal,
+    Value<double?>? distanceMeters,
+    Value<int?>? steps,
+    Value<int?>? avgHr,
+    Value<int?>? maxHr,
+    Value<String?>? sourceId,
+    Value<int>? sourceIndex,
+    Value<String?>? note,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return WorkoutSessionsCompanion(
+      id: id ?? this.id,
+      dateKey: dateKey ?? this.dateKey,
+      startedAt: startedAt ?? this.startedAt,
+      endedAt: endedAt ?? this.endedAt,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      activityType: activityType ?? this.activityType,
+      energyKcal: energyKcal ?? this.energyKcal,
+      distanceMeters: distanceMeters ?? this.distanceMeters,
+      steps: steps ?? this.steps,
+      avgHr: avgHr ?? this.avgHr,
+      maxHr: maxHr ?? this.maxHr,
+      sourceId: sourceId ?? this.sourceId,
+      sourceIndex: sourceIndex ?? this.sourceIndex,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dateKey.present) {
+      map['date_key'] = Variable<String>(dateKey.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (endedAt.present) {
+      map['ended_at'] = Variable<DateTime>(endedAt.value);
+    }
+    if (durationMinutes.present) {
+      map['duration_minutes'] = Variable<int>(durationMinutes.value);
+    }
+    if (activityType.present) {
+      map['activity_type'] = Variable<String>(activityType.value);
+    }
+    if (energyKcal.present) {
+      map['energy_kcal'] = Variable<int>(energyKcal.value);
+    }
+    if (distanceMeters.present) {
+      map['distance_meters'] = Variable<double>(distanceMeters.value);
+    }
+    if (steps.present) {
+      map['steps'] = Variable<int>(steps.value);
+    }
+    if (avgHr.present) {
+      map['avg_hr'] = Variable<int>(avgHr.value);
+    }
+    if (maxHr.present) {
+      map['max_hr'] = Variable<int>(maxHr.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (sourceIndex.present) {
+      map['source_index'] = Variable<int>(sourceIndex.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkoutSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('durationMinutes: $durationMinutes, ')
+          ..write('activityType: $activityType, ')
+          ..write('energyKcal: $energyKcal, ')
+          ..write('distanceMeters: $distanceMeters, ')
+          ..write('steps: $steps, ')
+          ..write('avgHr: $avgHr, ')
+          ..write('maxHr: $maxHr, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('sourceIndex: $sourceIndex, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $HealthSourcesTable extends HealthSources
+    with TableInfo<$HealthSourcesTable, HealthSourceRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $HealthSourcesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceNameMeta = const VerificationMeta(
+    'sourceName',
+  );
+  @override
+  late final GeneratedColumn<String> sourceName = GeneratedColumn<String>(
+    'source_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceModelMeta = const VerificationMeta(
+    'deviceModel',
+  );
+  @override
+  late final GeneratedColumn<String> deviceModel = GeneratedColumn<String>(
+    'device_model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _platformIndexMeta = const VerificationMeta(
+    'platformIndex',
+  );
+  @override
+  late final GeneratedColumn<int> platformIndex = GeneratedColumn<int>(
+    'platform_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _metricsJsonMeta = const VerificationMeta(
+    'metricsJson',
+  );
+  @override
+  late final GeneratedColumn<String> metricsJson = GeneratedColumn<String>(
+    'metrics_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _firstSeenAtMeta = const VerificationMeta(
+    'firstSeenAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> firstSeenAt = GeneratedColumn<DateTime>(
+    'first_seen_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastSeenAtMeta = const VerificationMeta(
+    'lastSeenAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSeenAt = GeneratedColumn<DateTime>(
+    'last_seen_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    sourceName,
+    deviceModel,
+    platformIndex,
+    metricsJson,
+    firstSeenAt,
+    lastSeenAt,
+    priority,
+    enabled,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'health_sources';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<HealthSourceRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('source_name')) {
+      context.handle(
+        _sourceNameMeta,
+        sourceName.isAcceptableOrUnknown(data['source_name']!, _sourceNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceNameMeta);
+    }
+    if (data.containsKey('device_model')) {
+      context.handle(
+        _deviceModelMeta,
+        deviceModel.isAcceptableOrUnknown(
+          data['device_model']!,
+          _deviceModelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('platform_index')) {
+      context.handle(
+        _platformIndexMeta,
+        platformIndex.isAcceptableOrUnknown(
+          data['platform_index']!,
+          _platformIndexMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_platformIndexMeta);
+    }
+    if (data.containsKey('metrics_json')) {
+      context.handle(
+        _metricsJsonMeta,
+        metricsJson.isAcceptableOrUnknown(
+          data['metrics_json']!,
+          _metricsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('first_seen_at')) {
+      context.handle(
+        _firstSeenAtMeta,
+        firstSeenAt.isAcceptableOrUnknown(
+          data['first_seen_at']!,
+          _firstSeenAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_firstSeenAtMeta);
+    }
+    if (data.containsKey('last_seen_at')) {
+      context.handle(
+        _lastSeenAtMeta,
+        lastSeenAt.isAcceptableOrUnknown(
+          data['last_seen_at']!,
+          _lastSeenAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastSeenAtMeta);
+    }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  HealthSourceRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return HealthSourceRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      sourceName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_name'],
+      )!,
+      deviceModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_model'],
+      ),
+      platformIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}platform_index'],
+      )!,
+      metricsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metrics_json'],
+      )!,
+      firstSeenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}first_seen_at'],
+      )!,
+      lastSeenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_seen_at'],
+      )!,
+      priority: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}priority'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $HealthSourcesTable createAlias(String alias) {
+    return $HealthSourcesTable(attachedDatabase, alias);
+  }
+}
+
+class HealthSourceRow extends DataClass implements Insertable<HealthSourceRow> {
+  /// `src_<first 16 hex of sha1("<platform>:<sourceId>:<sourceName>")>`.
+  final String id;
+  final String sourceId;
+  final String sourceName;
+  final String? deviceModel;
+  final int platformIndex;
+
+  /// JSON `{metricKey: {"lastSeenMs": int, "points": int}}`.
+  final String metricsJson;
+  final DateTime firstSeenAt;
+  final DateTime lastSeenAt;
+
+  /// User override from the Connected-devices screen. 0 = no preference;
+  /// higher wins, and beats every automatic signal.
+  final int priority;
+
+  /// User switched this source off — excluded from aggregation entirely.
+  final bool enabled;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const HealthSourceRow({
+    required this.id,
+    required this.sourceId,
+    required this.sourceName,
+    this.deviceModel,
+    required this.platformIndex,
+    required this.metricsJson,
+    required this.firstSeenAt,
+    required this.lastSeenAt,
+    required this.priority,
+    required this.enabled,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['source_id'] = Variable<String>(sourceId);
+    map['source_name'] = Variable<String>(sourceName);
+    if (!nullToAbsent || deviceModel != null) {
+      map['device_model'] = Variable<String>(deviceModel);
+    }
+    map['platform_index'] = Variable<int>(platformIndex);
+    map['metrics_json'] = Variable<String>(metricsJson);
+    map['first_seen_at'] = Variable<DateTime>(firstSeenAt);
+    map['last_seen_at'] = Variable<DateTime>(lastSeenAt);
+    map['priority'] = Variable<int>(priority);
+    map['enabled'] = Variable<bool>(enabled);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  HealthSourcesCompanion toCompanion(bool nullToAbsent) {
+    return HealthSourcesCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      sourceName: Value(sourceName),
+      deviceModel: deviceModel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deviceModel),
+      platformIndex: Value(platformIndex),
+      metricsJson: Value(metricsJson),
+      firstSeenAt: Value(firstSeenAt),
+      lastSeenAt: Value(lastSeenAt),
+      priority: Value(priority),
+      enabled: Value(enabled),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory HealthSourceRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return HealthSourceRow(
+      id: serializer.fromJson<String>(json['id']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      sourceName: serializer.fromJson<String>(json['sourceName']),
+      deviceModel: serializer.fromJson<String?>(json['deviceModel']),
+      platformIndex: serializer.fromJson<int>(json['platformIndex']),
+      metricsJson: serializer.fromJson<String>(json['metricsJson']),
+      firstSeenAt: serializer.fromJson<DateTime>(json['firstSeenAt']),
+      lastSeenAt: serializer.fromJson<DateTime>(json['lastSeenAt']),
+      priority: serializer.fromJson<int>(json['priority']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'sourceName': serializer.toJson<String>(sourceName),
+      'deviceModel': serializer.toJson<String?>(deviceModel),
+      'platformIndex': serializer.toJson<int>(platformIndex),
+      'metricsJson': serializer.toJson<String>(metricsJson),
+      'firstSeenAt': serializer.toJson<DateTime>(firstSeenAt),
+      'lastSeenAt': serializer.toJson<DateTime>(lastSeenAt),
+      'priority': serializer.toJson<int>(priority),
+      'enabled': serializer.toJson<bool>(enabled),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  HealthSourceRow copyWith({
+    String? id,
+    String? sourceId,
+    String? sourceName,
+    Value<String?> deviceModel = const Value.absent(),
+    int? platformIndex,
+    String? metricsJson,
+    DateTime? firstSeenAt,
+    DateTime? lastSeenAt,
+    int? priority,
+    bool? enabled,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => HealthSourceRow(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    sourceName: sourceName ?? this.sourceName,
+    deviceModel: deviceModel.present ? deviceModel.value : this.deviceModel,
+    platformIndex: platformIndex ?? this.platformIndex,
+    metricsJson: metricsJson ?? this.metricsJson,
+    firstSeenAt: firstSeenAt ?? this.firstSeenAt,
+    lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+    priority: priority ?? this.priority,
+    enabled: enabled ?? this.enabled,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  HealthSourceRow copyWithCompanion(HealthSourcesCompanion data) {
+    return HealthSourceRow(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      sourceName: data.sourceName.present
+          ? data.sourceName.value
+          : this.sourceName,
+      deviceModel: data.deviceModel.present
+          ? data.deviceModel.value
+          : this.deviceModel,
+      platformIndex: data.platformIndex.present
+          ? data.platformIndex.value
+          : this.platformIndex,
+      metricsJson: data.metricsJson.present
+          ? data.metricsJson.value
+          : this.metricsJson,
+      firstSeenAt: data.firstSeenAt.present
+          ? data.firstSeenAt.value
+          : this.firstSeenAt,
+      lastSeenAt: data.lastSeenAt.present
+          ? data.lastSeenAt.value
+          : this.lastSeenAt,
+      priority: data.priority.present ? data.priority.value : this.priority,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HealthSourceRow(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('sourceName: $sourceName, ')
+          ..write('deviceModel: $deviceModel, ')
+          ..write('platformIndex: $platformIndex, ')
+          ..write('metricsJson: $metricsJson, ')
+          ..write('firstSeenAt: $firstSeenAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('priority: $priority, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    sourceId,
+    sourceName,
+    deviceModel,
+    platformIndex,
+    metricsJson,
+    firstSeenAt,
+    lastSeenAt,
+    priority,
+    enabled,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is HealthSourceRow &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.sourceName == this.sourceName &&
+          other.deviceModel == this.deviceModel &&
+          other.platformIndex == this.platformIndex &&
+          other.metricsJson == this.metricsJson &&
+          other.firstSeenAt == this.firstSeenAt &&
+          other.lastSeenAt == this.lastSeenAt &&
+          other.priority == this.priority &&
+          other.enabled == this.enabled &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class HealthSourcesCompanion extends UpdateCompanion<HealthSourceRow> {
+  final Value<String> id;
+  final Value<String> sourceId;
+  final Value<String> sourceName;
+  final Value<String?> deviceModel;
+  final Value<int> platformIndex;
+  final Value<String> metricsJson;
+  final Value<DateTime> firstSeenAt;
+  final Value<DateTime> lastSeenAt;
+  final Value<int> priority;
+  final Value<bool> enabled;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const HealthSourcesCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.sourceName = const Value.absent(),
+    this.deviceModel = const Value.absent(),
+    this.platformIndex = const Value.absent(),
+    this.metricsJson = const Value.absent(),
+    this.firstSeenAt = const Value.absent(),
+    this.lastSeenAt = const Value.absent(),
+    this.priority = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  HealthSourcesCompanion.insert({
+    required String id,
+    required String sourceId,
+    required String sourceName,
+    this.deviceModel = const Value.absent(),
+    required int platformIndex,
+    this.metricsJson = const Value.absent(),
+    required DateTime firstSeenAt,
+    required DateTime lastSeenAt,
+    this.priority = const Value.absent(),
+    this.enabled = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sourceId = Value(sourceId),
+       sourceName = Value(sourceName),
+       platformIndex = Value(platformIndex),
+       firstSeenAt = Value(firstSeenAt),
+       lastSeenAt = Value(lastSeenAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<HealthSourceRow> custom({
+    Expression<String>? id,
+    Expression<String>? sourceId,
+    Expression<String>? sourceName,
+    Expression<String>? deviceModel,
+    Expression<int>? platformIndex,
+    Expression<String>? metricsJson,
+    Expression<DateTime>? firstSeenAt,
+    Expression<DateTime>? lastSeenAt,
+    Expression<int>? priority,
+    Expression<bool>? enabled,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (sourceName != null) 'source_name': sourceName,
+      if (deviceModel != null) 'device_model': deviceModel,
+      if (platformIndex != null) 'platform_index': platformIndex,
+      if (metricsJson != null) 'metrics_json': metricsJson,
+      if (firstSeenAt != null) 'first_seen_at': firstSeenAt,
+      if (lastSeenAt != null) 'last_seen_at': lastSeenAt,
+      if (priority != null) 'priority': priority,
+      if (enabled != null) 'enabled': enabled,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  HealthSourcesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sourceId,
+    Value<String>? sourceName,
+    Value<String?>? deviceModel,
+    Value<int>? platformIndex,
+    Value<String>? metricsJson,
+    Value<DateTime>? firstSeenAt,
+    Value<DateTime>? lastSeenAt,
+    Value<int>? priority,
+    Value<bool>? enabled,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return HealthSourcesCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      sourceName: sourceName ?? this.sourceName,
+      deviceModel: deviceModel ?? this.deviceModel,
+      platformIndex: platformIndex ?? this.platformIndex,
+      metricsJson: metricsJson ?? this.metricsJson,
+      firstSeenAt: firstSeenAt ?? this.firstSeenAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      priority: priority ?? this.priority,
+      enabled: enabled ?? this.enabled,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (sourceName.present) {
+      map['source_name'] = Variable<String>(sourceName.value);
+    }
+    if (deviceModel.present) {
+      map['device_model'] = Variable<String>(deviceModel.value);
+    }
+    if (platformIndex.present) {
+      map['platform_index'] = Variable<int>(platformIndex.value);
+    }
+    if (metricsJson.present) {
+      map['metrics_json'] = Variable<String>(metricsJson.value);
+    }
+    if (firstSeenAt.present) {
+      map['first_seen_at'] = Variable<DateTime>(firstSeenAt.value);
+    }
+    if (lastSeenAt.present) {
+      map['last_seen_at'] = Variable<DateTime>(lastSeenAt.value);
+    }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HealthSourcesCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('sourceName: $sourceName, ')
+          ..write('deviceModel: $deviceModel, ')
+          ..write('platformIndex: $platformIndex, ')
+          ..write('metricsJson: $metricsJson, ')
+          ..write('firstSeenAt: $firstSeenAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('priority: $priority, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -25020,6 +28932,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $HealthProfilesTable healthProfiles = $HealthProfilesTable(this);
   late final $SleepSessionsTable sleepSessions = $SleepSessionsTable(this);
   late final $DiaryEntriesTable diaryEntries = $DiaryEntriesTable(this);
+  late final $BiometricDailyDataTable biometricDailyData =
+      $BiometricDailyDataTable(this);
+  late final $WorkoutSessionsTable workoutSessions = $WorkoutSessionsTable(
+    this,
+  );
+  late final $HealthSourcesTable healthSources = $HealthSourcesTable(this);
   late final Index idxMedicineLogsMedicine = Index(
     'idx_medicine_logs_medicine',
     'CREATE INDEX idx_medicine_logs_medicine ON medicine_logs (medicine_id)',
@@ -25068,6 +28986,22 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_diary_entry_at',
     'CREATE INDEX idx_diary_entry_at ON diary_entries (entry_at)',
   );
+  late final Index idxBiometricsDate = Index(
+    'idx_biometrics_date',
+    'CREATE INDEX idx_biometrics_date ON biometric_daily_data (date)',
+  );
+  late final Index idxWorkoutStarted = Index(
+    'idx_workout_started',
+    'CREATE INDEX idx_workout_started ON workout_sessions (started_at)',
+  );
+  late final Index idxWorkoutDateKey = Index(
+    'idx_workout_date_key',
+    'CREATE INDEX idx_workout_date_key ON workout_sessions (date_key)',
+  );
+  late final Index idxHealthSourceLastSeen = Index(
+    'idx_health_source_last_seen',
+    'CREATE INDEX idx_health_source_last_seen ON health_sources (last_seen_at)',
+  );
   late final CoreDao coreDao = CoreDao(this as AppDatabase);
   late final MedicationDao medicationDao = MedicationDao(this as AppDatabase);
   late final WaterDao waterDao = WaterDao(this as AppDatabase);
@@ -25077,6 +29011,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final StepsDao stepsDao = StepsDao(this as AppDatabase);
   late final SleepDao sleepDao = SleepDao(this as AppDatabase);
   late final DiaryDao diaryDao = DiaryDao(this as AppDatabase);
+  late final BiometricsDao biometricsDao = BiometricsDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -25113,6 +29048,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     healthProfiles,
     sleepSessions,
     diaryEntries,
+    biometricDailyData,
+    workoutSessions,
+    healthSources,
     idxMedicineLogsMedicine,
     idxMedicineLogsTime,
     idxWaterDayDate,
@@ -25125,6 +29063,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxStepsDate,
     idxSleepWake,
     idxDiaryEntryAt,
+    idxBiometricsDate,
+    idxWorkoutStarted,
+    idxWorkoutDateKey,
+    idxHealthSourceLastSeen,
   ];
 }
 
@@ -36871,6 +40813,1707 @@ typedef $$DiaryEntriesTableProcessedTableManager =
       DiaryEntry,
       PrefetchHooks Function()
     >;
+typedef $$BiometricDailyDataTableCreateCompanionBuilder =
+    BiometricDailyDataCompanion Function({
+      required String id,
+      required DateTime date,
+      Value<int?> restingHr,
+      Value<bool> restingHrDerived,
+      Value<int?> hrMin,
+      Value<int?> hrAvg,
+      Value<int?> hrMax,
+      Value<int> hrSampleCount,
+      Value<String?> hourlyHrJson,
+      Value<double?> hrvNightlyMs,
+      Value<int?> hrvMetricIndex,
+      Value<int> hrvSampleCount,
+      Value<double?> spo2Min,
+      Value<double?> spo2Avg,
+      Value<int> spo2SampleCount,
+      Value<double?> respiratoryRateMin,
+      Value<double?> respiratoryRateAvg,
+      Value<double?> respiratoryRateMax,
+      Value<int> respiratoryRateSampleCount,
+      Value<double?> bodyTempAvgC,
+      Value<double?> skinTempC,
+      Value<int?> skinTempMetricIndex,
+      Value<double?> vo2Max,
+      Value<String?> primarySourceId,
+      Value<String?> sourceByMetricJson,
+      Value<int> sourceIndex,
+      Value<DateTime?> lastSyncedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$BiometricDailyDataTableUpdateCompanionBuilder =
+    BiometricDailyDataCompanion Function({
+      Value<String> id,
+      Value<DateTime> date,
+      Value<int?> restingHr,
+      Value<bool> restingHrDerived,
+      Value<int?> hrMin,
+      Value<int?> hrAvg,
+      Value<int?> hrMax,
+      Value<int> hrSampleCount,
+      Value<String?> hourlyHrJson,
+      Value<double?> hrvNightlyMs,
+      Value<int?> hrvMetricIndex,
+      Value<int> hrvSampleCount,
+      Value<double?> spo2Min,
+      Value<double?> spo2Avg,
+      Value<int> spo2SampleCount,
+      Value<double?> respiratoryRateMin,
+      Value<double?> respiratoryRateAvg,
+      Value<double?> respiratoryRateMax,
+      Value<int> respiratoryRateSampleCount,
+      Value<double?> bodyTempAvgC,
+      Value<double?> skinTempC,
+      Value<int?> skinTempMetricIndex,
+      Value<double?> vo2Max,
+      Value<String?> primarySourceId,
+      Value<String?> sourceByMetricJson,
+      Value<int> sourceIndex,
+      Value<DateTime?> lastSyncedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$BiometricDailyDataTableFilterComposer
+    extends Composer<_$AppDatabase, $BiometricDailyDataTable> {
+  $$BiometricDailyDataTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get restingHr => $composableBuilder(
+    column: $table.restingHr,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get restingHrDerived => $composableBuilder(
+    column: $table.restingHrDerived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hrMin => $composableBuilder(
+    column: $table.hrMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hrAvg => $composableBuilder(
+    column: $table.hrAvg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hrMax => $composableBuilder(
+    column: $table.hrMax,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hrSampleCount => $composableBuilder(
+    column: $table.hrSampleCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get hourlyHrJson => $composableBuilder(
+    column: $table.hourlyHrJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get hrvNightlyMs => $composableBuilder(
+    column: $table.hrvNightlyMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hrvMetricIndex => $composableBuilder(
+    column: $table.hrvMetricIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hrvSampleCount => $composableBuilder(
+    column: $table.hrvSampleCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get spo2Min => $composableBuilder(
+    column: $table.spo2Min,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get spo2Avg => $composableBuilder(
+    column: $table.spo2Avg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get spo2SampleCount => $composableBuilder(
+    column: $table.spo2SampleCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get respiratoryRateMin => $composableBuilder(
+    column: $table.respiratoryRateMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get respiratoryRateAvg => $composableBuilder(
+    column: $table.respiratoryRateAvg,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get respiratoryRateMax => $composableBuilder(
+    column: $table.respiratoryRateMax,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get respiratoryRateSampleCount => $composableBuilder(
+    column: $table.respiratoryRateSampleCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get bodyTempAvgC => $composableBuilder(
+    column: $table.bodyTempAvgC,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get skinTempC => $composableBuilder(
+    column: $table.skinTempC,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get skinTempMetricIndex => $composableBuilder(
+    column: $table.skinTempMetricIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get vo2Max => $composableBuilder(
+    column: $table.vo2Max,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get primarySourceId => $composableBuilder(
+    column: $table.primarySourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceByMetricJson => $composableBuilder(
+    column: $table.sourceByMetricJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BiometricDailyDataTableOrderingComposer
+    extends Composer<_$AppDatabase, $BiometricDailyDataTable> {
+  $$BiometricDailyDataTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get restingHr => $composableBuilder(
+    column: $table.restingHr,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get restingHrDerived => $composableBuilder(
+    column: $table.restingHrDerived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hrMin => $composableBuilder(
+    column: $table.hrMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hrAvg => $composableBuilder(
+    column: $table.hrAvg,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hrMax => $composableBuilder(
+    column: $table.hrMax,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hrSampleCount => $composableBuilder(
+    column: $table.hrSampleCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get hourlyHrJson => $composableBuilder(
+    column: $table.hourlyHrJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get hrvNightlyMs => $composableBuilder(
+    column: $table.hrvNightlyMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hrvMetricIndex => $composableBuilder(
+    column: $table.hrvMetricIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hrvSampleCount => $composableBuilder(
+    column: $table.hrvSampleCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get spo2Min => $composableBuilder(
+    column: $table.spo2Min,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get spo2Avg => $composableBuilder(
+    column: $table.spo2Avg,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get spo2SampleCount => $composableBuilder(
+    column: $table.spo2SampleCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get respiratoryRateMin => $composableBuilder(
+    column: $table.respiratoryRateMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get respiratoryRateAvg => $composableBuilder(
+    column: $table.respiratoryRateAvg,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get respiratoryRateMax => $composableBuilder(
+    column: $table.respiratoryRateMax,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get respiratoryRateSampleCount => $composableBuilder(
+    column: $table.respiratoryRateSampleCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get bodyTempAvgC => $composableBuilder(
+    column: $table.bodyTempAvgC,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get skinTempC => $composableBuilder(
+    column: $table.skinTempC,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get skinTempMetricIndex => $composableBuilder(
+    column: $table.skinTempMetricIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get vo2Max => $composableBuilder(
+    column: $table.vo2Max,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get primarySourceId => $composableBuilder(
+    column: $table.primarySourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceByMetricJson => $composableBuilder(
+    column: $table.sourceByMetricJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BiometricDailyDataTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BiometricDailyDataTable> {
+  $$BiometricDailyDataTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<int> get restingHr =>
+      $composableBuilder(column: $table.restingHr, builder: (column) => column);
+
+  GeneratedColumn<bool> get restingHrDerived => $composableBuilder(
+    column: $table.restingHrDerived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get hrMin =>
+      $composableBuilder(column: $table.hrMin, builder: (column) => column);
+
+  GeneratedColumn<int> get hrAvg =>
+      $composableBuilder(column: $table.hrAvg, builder: (column) => column);
+
+  GeneratedColumn<int> get hrMax =>
+      $composableBuilder(column: $table.hrMax, builder: (column) => column);
+
+  GeneratedColumn<int> get hrSampleCount => $composableBuilder(
+    column: $table.hrSampleCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get hourlyHrJson => $composableBuilder(
+    column: $table.hourlyHrJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get hrvNightlyMs => $composableBuilder(
+    column: $table.hrvNightlyMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get hrvMetricIndex => $composableBuilder(
+    column: $table.hrvMetricIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get hrvSampleCount => $composableBuilder(
+    column: $table.hrvSampleCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get spo2Min =>
+      $composableBuilder(column: $table.spo2Min, builder: (column) => column);
+
+  GeneratedColumn<double> get spo2Avg =>
+      $composableBuilder(column: $table.spo2Avg, builder: (column) => column);
+
+  GeneratedColumn<int> get spo2SampleCount => $composableBuilder(
+    column: $table.spo2SampleCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get respiratoryRateMin => $composableBuilder(
+    column: $table.respiratoryRateMin,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get respiratoryRateAvg => $composableBuilder(
+    column: $table.respiratoryRateAvg,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get respiratoryRateMax => $composableBuilder(
+    column: $table.respiratoryRateMax,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get respiratoryRateSampleCount => $composableBuilder(
+    column: $table.respiratoryRateSampleCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get bodyTempAvgC => $composableBuilder(
+    column: $table.bodyTempAvgC,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get skinTempC =>
+      $composableBuilder(column: $table.skinTempC, builder: (column) => column);
+
+  GeneratedColumn<int> get skinTempMetricIndex => $composableBuilder(
+    column: $table.skinTempMetricIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get vo2Max =>
+      $composableBuilder(column: $table.vo2Max, builder: (column) => column);
+
+  GeneratedColumn<String> get primarySourceId => $composableBuilder(
+    column: $table.primarySourceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceByMetricJson => $composableBuilder(
+    column: $table.sourceByMetricJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$BiometricDailyDataTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BiometricDailyDataTable,
+          BiometricDayRow,
+          $$BiometricDailyDataTableFilterComposer,
+          $$BiometricDailyDataTableOrderingComposer,
+          $$BiometricDailyDataTableAnnotationComposer,
+          $$BiometricDailyDataTableCreateCompanionBuilder,
+          $$BiometricDailyDataTableUpdateCompanionBuilder,
+          (
+            BiometricDayRow,
+            BaseReferences<
+              _$AppDatabase,
+              $BiometricDailyDataTable,
+              BiometricDayRow
+            >,
+          ),
+          BiometricDayRow,
+          PrefetchHooks Function()
+        > {
+  $$BiometricDailyDataTableTableManager(
+    _$AppDatabase db,
+    $BiometricDailyDataTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BiometricDailyDataTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BiometricDailyDataTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BiometricDailyDataTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> date = const Value.absent(),
+                Value<int?> restingHr = const Value.absent(),
+                Value<bool> restingHrDerived = const Value.absent(),
+                Value<int?> hrMin = const Value.absent(),
+                Value<int?> hrAvg = const Value.absent(),
+                Value<int?> hrMax = const Value.absent(),
+                Value<int> hrSampleCount = const Value.absent(),
+                Value<String?> hourlyHrJson = const Value.absent(),
+                Value<double?> hrvNightlyMs = const Value.absent(),
+                Value<int?> hrvMetricIndex = const Value.absent(),
+                Value<int> hrvSampleCount = const Value.absent(),
+                Value<double?> spo2Min = const Value.absent(),
+                Value<double?> spo2Avg = const Value.absent(),
+                Value<int> spo2SampleCount = const Value.absent(),
+                Value<double?> respiratoryRateMin = const Value.absent(),
+                Value<double?> respiratoryRateAvg = const Value.absent(),
+                Value<double?> respiratoryRateMax = const Value.absent(),
+                Value<int> respiratoryRateSampleCount = const Value.absent(),
+                Value<double?> bodyTempAvgC = const Value.absent(),
+                Value<double?> skinTempC = const Value.absent(),
+                Value<int?> skinTempMetricIndex = const Value.absent(),
+                Value<double?> vo2Max = const Value.absent(),
+                Value<String?> primarySourceId = const Value.absent(),
+                Value<String?> sourceByMetricJson = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BiometricDailyDataCompanion(
+                id: id,
+                date: date,
+                restingHr: restingHr,
+                restingHrDerived: restingHrDerived,
+                hrMin: hrMin,
+                hrAvg: hrAvg,
+                hrMax: hrMax,
+                hrSampleCount: hrSampleCount,
+                hourlyHrJson: hourlyHrJson,
+                hrvNightlyMs: hrvNightlyMs,
+                hrvMetricIndex: hrvMetricIndex,
+                hrvSampleCount: hrvSampleCount,
+                spo2Min: spo2Min,
+                spo2Avg: spo2Avg,
+                spo2SampleCount: spo2SampleCount,
+                respiratoryRateMin: respiratoryRateMin,
+                respiratoryRateAvg: respiratoryRateAvg,
+                respiratoryRateMax: respiratoryRateMax,
+                respiratoryRateSampleCount: respiratoryRateSampleCount,
+                bodyTempAvgC: bodyTempAvgC,
+                skinTempC: skinTempC,
+                skinTempMetricIndex: skinTempMetricIndex,
+                vo2Max: vo2Max,
+                primarySourceId: primarySourceId,
+                sourceByMetricJson: sourceByMetricJson,
+                sourceIndex: sourceIndex,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required DateTime date,
+                Value<int?> restingHr = const Value.absent(),
+                Value<bool> restingHrDerived = const Value.absent(),
+                Value<int?> hrMin = const Value.absent(),
+                Value<int?> hrAvg = const Value.absent(),
+                Value<int?> hrMax = const Value.absent(),
+                Value<int> hrSampleCount = const Value.absent(),
+                Value<String?> hourlyHrJson = const Value.absent(),
+                Value<double?> hrvNightlyMs = const Value.absent(),
+                Value<int?> hrvMetricIndex = const Value.absent(),
+                Value<int> hrvSampleCount = const Value.absent(),
+                Value<double?> spo2Min = const Value.absent(),
+                Value<double?> spo2Avg = const Value.absent(),
+                Value<int> spo2SampleCount = const Value.absent(),
+                Value<double?> respiratoryRateMin = const Value.absent(),
+                Value<double?> respiratoryRateAvg = const Value.absent(),
+                Value<double?> respiratoryRateMax = const Value.absent(),
+                Value<int> respiratoryRateSampleCount = const Value.absent(),
+                Value<double?> bodyTempAvgC = const Value.absent(),
+                Value<double?> skinTempC = const Value.absent(),
+                Value<int?> skinTempMetricIndex = const Value.absent(),
+                Value<double?> vo2Max = const Value.absent(),
+                Value<String?> primarySourceId = const Value.absent(),
+                Value<String?> sourceByMetricJson = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BiometricDailyDataCompanion.insert(
+                id: id,
+                date: date,
+                restingHr: restingHr,
+                restingHrDerived: restingHrDerived,
+                hrMin: hrMin,
+                hrAvg: hrAvg,
+                hrMax: hrMax,
+                hrSampleCount: hrSampleCount,
+                hourlyHrJson: hourlyHrJson,
+                hrvNightlyMs: hrvNightlyMs,
+                hrvMetricIndex: hrvMetricIndex,
+                hrvSampleCount: hrvSampleCount,
+                spo2Min: spo2Min,
+                spo2Avg: spo2Avg,
+                spo2SampleCount: spo2SampleCount,
+                respiratoryRateMin: respiratoryRateMin,
+                respiratoryRateAvg: respiratoryRateAvg,
+                respiratoryRateMax: respiratoryRateMax,
+                respiratoryRateSampleCount: respiratoryRateSampleCount,
+                bodyTempAvgC: bodyTempAvgC,
+                skinTempC: skinTempC,
+                skinTempMetricIndex: skinTempMetricIndex,
+                vo2Max: vo2Max,
+                primarySourceId: primarySourceId,
+                sourceByMetricJson: sourceByMetricJson,
+                sourceIndex: sourceIndex,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BiometricDailyDataTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BiometricDailyDataTable,
+      BiometricDayRow,
+      $$BiometricDailyDataTableFilterComposer,
+      $$BiometricDailyDataTableOrderingComposer,
+      $$BiometricDailyDataTableAnnotationComposer,
+      $$BiometricDailyDataTableCreateCompanionBuilder,
+      $$BiometricDailyDataTableUpdateCompanionBuilder,
+      (
+        BiometricDayRow,
+        BaseReferences<
+          _$AppDatabase,
+          $BiometricDailyDataTable,
+          BiometricDayRow
+        >,
+      ),
+      BiometricDayRow,
+      PrefetchHooks Function()
+    >;
+typedef $$WorkoutSessionsTableCreateCompanionBuilder =
+    WorkoutSessionsCompanion Function({
+      required String id,
+      required String dateKey,
+      required DateTime startedAt,
+      required DateTime endedAt,
+      required int durationMinutes,
+      required String activityType,
+      Value<int?> energyKcal,
+      Value<double?> distanceMeters,
+      Value<int?> steps,
+      Value<int?> avgHr,
+      Value<int?> maxHr,
+      Value<String?> sourceId,
+      Value<int> sourceIndex,
+      Value<String?> note,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$WorkoutSessionsTableUpdateCompanionBuilder =
+    WorkoutSessionsCompanion Function({
+      Value<String> id,
+      Value<String> dateKey,
+      Value<DateTime> startedAt,
+      Value<DateTime> endedAt,
+      Value<int> durationMinutes,
+      Value<String> activityType,
+      Value<int?> energyKcal,
+      Value<double?> distanceMeters,
+      Value<int?> steps,
+      Value<int?> avgHr,
+      Value<int?> maxHr,
+      Value<String?> sourceId,
+      Value<int> sourceIndex,
+      Value<String?> note,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$WorkoutSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $WorkoutSessionsTable> {
+  $$WorkoutSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get activityType => $composableBuilder(
+    column: $table.activityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get energyKcal => $composableBuilder(
+    column: $table.energyKcal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get distanceMeters => $composableBuilder(
+    column: $table.distanceMeters,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get steps => $composableBuilder(
+    column: $table.steps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get avgHr => $composableBuilder(
+    column: $table.avgHr,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxHr => $composableBuilder(
+    column: $table.maxHr,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$WorkoutSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $WorkoutSessionsTable> {
+  $$WorkoutSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get activityType => $composableBuilder(
+    column: $table.activityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get energyKcal => $composableBuilder(
+    column: $table.energyKcal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get distanceMeters => $composableBuilder(
+    column: $table.distanceMeters,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get steps => $composableBuilder(
+    column: $table.steps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get avgHr => $composableBuilder(
+    column: $table.avgHr,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxHr => $composableBuilder(
+    column: $table.maxHr,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$WorkoutSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WorkoutSessionsTable> {
+  $$WorkoutSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dateKey =>
+      $composableBuilder(column: $table.dateKey, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endedAt =>
+      $composableBuilder(column: $table.endedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get activityType => $composableBuilder(
+    column: $table.activityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get energyKcal => $composableBuilder(
+    column: $table.energyKcal,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get distanceMeters => $composableBuilder(
+    column: $table.distanceMeters,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get steps =>
+      $composableBuilder(column: $table.steps, builder: (column) => column);
+
+  GeneratedColumn<int> get avgHr =>
+      $composableBuilder(column: $table.avgHr, builder: (column) => column);
+
+  GeneratedColumn<int> get maxHr =>
+      $composableBuilder(column: $table.maxHr, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<int> get sourceIndex => $composableBuilder(
+    column: $table.sourceIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$WorkoutSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WorkoutSessionsTable,
+          WorkoutSessionRow,
+          $$WorkoutSessionsTableFilterComposer,
+          $$WorkoutSessionsTableOrderingComposer,
+          $$WorkoutSessionsTableAnnotationComposer,
+          $$WorkoutSessionsTableCreateCompanionBuilder,
+          $$WorkoutSessionsTableUpdateCompanionBuilder,
+          (
+            WorkoutSessionRow,
+            BaseReferences<
+              _$AppDatabase,
+              $WorkoutSessionsTable,
+              WorkoutSessionRow
+            >,
+          ),
+          WorkoutSessionRow,
+          PrefetchHooks Function()
+        > {
+  $$WorkoutSessionsTableTableManager(
+    _$AppDatabase db,
+    $WorkoutSessionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WorkoutSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WorkoutSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WorkoutSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> dateKey = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime> endedAt = const Value.absent(),
+                Value<int> durationMinutes = const Value.absent(),
+                Value<String> activityType = const Value.absent(),
+                Value<int?> energyKcal = const Value.absent(),
+                Value<double?> distanceMeters = const Value.absent(),
+                Value<int?> steps = const Value.absent(),
+                Value<int?> avgHr = const Value.absent(),
+                Value<int?> maxHr = const Value.absent(),
+                Value<String?> sourceId = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkoutSessionsCompanion(
+                id: id,
+                dateKey: dateKey,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                durationMinutes: durationMinutes,
+                activityType: activityType,
+                energyKcal: energyKcal,
+                distanceMeters: distanceMeters,
+                steps: steps,
+                avgHr: avgHr,
+                maxHr: maxHr,
+                sourceId: sourceId,
+                sourceIndex: sourceIndex,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String dateKey,
+                required DateTime startedAt,
+                required DateTime endedAt,
+                required int durationMinutes,
+                required String activityType,
+                Value<int?> energyKcal = const Value.absent(),
+                Value<double?> distanceMeters = const Value.absent(),
+                Value<int?> steps = const Value.absent(),
+                Value<int?> avgHr = const Value.absent(),
+                Value<int?> maxHr = const Value.absent(),
+                Value<String?> sourceId = const Value.absent(),
+                Value<int> sourceIndex = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkoutSessionsCompanion.insert(
+                id: id,
+                dateKey: dateKey,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                durationMinutes: durationMinutes,
+                activityType: activityType,
+                energyKcal: energyKcal,
+                distanceMeters: distanceMeters,
+                steps: steps,
+                avgHr: avgHr,
+                maxHr: maxHr,
+                sourceId: sourceId,
+                sourceIndex: sourceIndex,
+                note: note,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$WorkoutSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WorkoutSessionsTable,
+      WorkoutSessionRow,
+      $$WorkoutSessionsTableFilterComposer,
+      $$WorkoutSessionsTableOrderingComposer,
+      $$WorkoutSessionsTableAnnotationComposer,
+      $$WorkoutSessionsTableCreateCompanionBuilder,
+      $$WorkoutSessionsTableUpdateCompanionBuilder,
+      (
+        WorkoutSessionRow,
+        BaseReferences<_$AppDatabase, $WorkoutSessionsTable, WorkoutSessionRow>,
+      ),
+      WorkoutSessionRow,
+      PrefetchHooks Function()
+    >;
+typedef $$HealthSourcesTableCreateCompanionBuilder =
+    HealthSourcesCompanion Function({
+      required String id,
+      required String sourceId,
+      required String sourceName,
+      Value<String?> deviceModel,
+      required int platformIndex,
+      Value<String> metricsJson,
+      required DateTime firstSeenAt,
+      required DateTime lastSeenAt,
+      Value<int> priority,
+      Value<bool> enabled,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$HealthSourcesTableUpdateCompanionBuilder =
+    HealthSourcesCompanion Function({
+      Value<String> id,
+      Value<String> sourceId,
+      Value<String> sourceName,
+      Value<String?> deviceModel,
+      Value<int> platformIndex,
+      Value<String> metricsJson,
+      Value<DateTime> firstSeenAt,
+      Value<DateTime> lastSeenAt,
+      Value<int> priority,
+      Value<bool> enabled,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$HealthSourcesTableFilterComposer
+    extends Composer<_$AppDatabase, $HealthSourcesTable> {
+  $$HealthSourcesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceName => $composableBuilder(
+    column: $table.sourceName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceModel => $composableBuilder(
+    column: $table.deviceModel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get platformIndex => $composableBuilder(
+    column: $table.platformIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metricsJson => $composableBuilder(
+    column: $table.metricsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get firstSeenAt => $composableBuilder(
+    column: $table.firstSeenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$HealthSourcesTableOrderingComposer
+    extends Composer<_$AppDatabase, $HealthSourcesTable> {
+  $$HealthSourcesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceName => $composableBuilder(
+    column: $table.sourceName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceModel => $composableBuilder(
+    column: $table.deviceModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get platformIndex => $composableBuilder(
+    column: $table.platformIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metricsJson => $composableBuilder(
+    column: $table.metricsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get firstSeenAt => $composableBuilder(
+    column: $table.firstSeenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$HealthSourcesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $HealthSourcesTable> {
+  $$HealthSourcesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceName => $composableBuilder(
+    column: $table.sourceName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceModel => $composableBuilder(
+    column: $table.deviceModel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get platformIndex => $composableBuilder(
+    column: $table.platformIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get metricsJson => $composableBuilder(
+    column: $table.metricsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get firstSeenAt => $composableBuilder(
+    column: $table.firstSeenAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$HealthSourcesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $HealthSourcesTable,
+          HealthSourceRow,
+          $$HealthSourcesTableFilterComposer,
+          $$HealthSourcesTableOrderingComposer,
+          $$HealthSourcesTableAnnotationComposer,
+          $$HealthSourcesTableCreateCompanionBuilder,
+          $$HealthSourcesTableUpdateCompanionBuilder,
+          (
+            HealthSourceRow,
+            BaseReferences<_$AppDatabase, $HealthSourcesTable, HealthSourceRow>,
+          ),
+          HealthSourceRow,
+          PrefetchHooks Function()
+        > {
+  $$HealthSourcesTableTableManager(_$AppDatabase db, $HealthSourcesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$HealthSourcesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$HealthSourcesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$HealthSourcesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> sourceName = const Value.absent(),
+                Value<String?> deviceModel = const Value.absent(),
+                Value<int> platformIndex = const Value.absent(),
+                Value<String> metricsJson = const Value.absent(),
+                Value<DateTime> firstSeenAt = const Value.absent(),
+                Value<DateTime> lastSeenAt = const Value.absent(),
+                Value<int> priority = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HealthSourcesCompanion(
+                id: id,
+                sourceId: sourceId,
+                sourceName: sourceName,
+                deviceModel: deviceModel,
+                platformIndex: platformIndex,
+                metricsJson: metricsJson,
+                firstSeenAt: firstSeenAt,
+                lastSeenAt: lastSeenAt,
+                priority: priority,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sourceId,
+                required String sourceName,
+                Value<String?> deviceModel = const Value.absent(),
+                required int platformIndex,
+                Value<String> metricsJson = const Value.absent(),
+                required DateTime firstSeenAt,
+                required DateTime lastSeenAt,
+                Value<int> priority = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HealthSourcesCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                sourceName: sourceName,
+                deviceModel: deviceModel,
+                platformIndex: platformIndex,
+                metricsJson: metricsJson,
+                firstSeenAt: firstSeenAt,
+                lastSeenAt: lastSeenAt,
+                priority: priority,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$HealthSourcesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $HealthSourcesTable,
+      HealthSourceRow,
+      $$HealthSourcesTableFilterComposer,
+      $$HealthSourcesTableOrderingComposer,
+      $$HealthSourcesTableAnnotationComposer,
+      $$HealthSourcesTableCreateCompanionBuilder,
+      $$HealthSourcesTableUpdateCompanionBuilder,
+      (
+        HealthSourceRow,
+        BaseReferences<_$AppDatabase, $HealthSourcesTable, HealthSourceRow>,
+      ),
+      HealthSourceRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -36937,4 +42580,10 @@ class $AppDatabaseManager {
       $$SleepSessionsTableTableManager(_db, _db.sleepSessions);
   $$DiaryEntriesTableTableManager get diaryEntries =>
       $$DiaryEntriesTableTableManager(_db, _db.diaryEntries);
+  $$BiometricDailyDataTableTableManager get biometricDailyData =>
+      $$BiometricDailyDataTableTableManager(_db, _db.biometricDailyData);
+  $$WorkoutSessionsTableTableManager get workoutSessions =>
+      $$WorkoutSessionsTableTableManager(_db, _db.workoutSessions);
+  $$HealthSourcesTableTableManager get healthSources =>
+      $$HealthSourcesTableTableManager(_db, _db.healthSources);
 }

@@ -47,6 +47,31 @@
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+    <!-- Wearable biometrics. Requested as a SEPARATE tier from the biometrics
+         screens, never in the first-run steps+sleep sheet: Health Connect is
+         all-or-nothing per request and throttles re-prompting, so bundling
+         these would make the base grant likelier to be refused. See
+         HealthDataService.biometricTypesFor.
+
+         Names that are not what you would guess from the Dart type:
+         HRV is READ_HEART_RATE_VARIABILITY (no _RMSSD suffix) and SpO2 is
+         READ_OXYGEN_SATURATION (not READ_BLOOD_OXYGEN).
+
+         No READ_VO2_MAX: `health` 13.3.2 declares no VO2MAX type on either
+         platform, so nothing could read it. health_data_types_test.dart fails
+         when that changes. -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE"/>
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY"/>
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION"/>
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE"/>
+    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE"/>
+    <!-- Feature-gated in Health Connect; HealthDataService probes
+         isSkinTemperatureAvailable() and drops the type from the request when
+         the installed version is too old, because one unsupported type makes
+         Android refuse the whole sheet. -->
+    <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE"/>
+    <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
 
     <!-- Vitals: opt-in write-back of BP/glucose/weight readings the user
          already logged locally (Settings toggle, off by default). READ is

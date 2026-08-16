@@ -22,6 +22,7 @@ import 'features/water/services/water_service.dart';
 import 'features/period/services/period_service.dart';
 import 'features/steps/services/step_service.dart';
 import 'features/sleep/services/sleep_service.dart';
+import 'features/biometrics/services/biometrics_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/reminder_reschedule_service.dart';
 import 'core/services/sync_service.dart';
@@ -282,6 +283,7 @@ void main() async {
       _initService('PeriodService', () => PeriodService.init()),
       _initService('StepService', () => StepService.init()),
       _initService('SleepService', () => SleepService.init()),
+      _initService('BiometricsService', () => BiometricsService.init()),
     ]);
     
     // Sync snooze settings asynchronously (non-blocking)

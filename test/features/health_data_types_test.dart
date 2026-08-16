@@ -119,4 +119,93 @@ void main() {
       expect(HealthDataService.vitalsWriteTypes.length, 4);
     });
   });
+
+  group('wearable biometrics', () {
+    test('Android biometric list ⊆ dataTypeKeysAndroid', () {
+      final unsupported = HealthDataService.biometricTypesFor(true)
+          .where((t) => !dataTypeKeysAndroid.contains(t))
+          .toList();
+      expect(unsupported, isEmpty,
+          reason: 'one unmapped type makes Health Connect refuse the WHOLE '
+              'request: ${unsupported.map((t) => t.name).join(', ')}');
+    });
+
+    test('iOS biometric list ⊆ dataTypeKeysIOS', () {
+      final unsupported = HealthDataService.biometricTypesFor(false)
+          .where((t) => !dataTypeKeysIOS.contains(t))
+          .toList();
+      expect(unsupported, isEmpty,
+          reason: unsupported.map((t) => t.name).join(', '));
+    });
+
+    // The single highest-value assertion in this group: HRV is the same bug
+    // shape as DISTANCE_WALKING_RUNNING, and worse in consequence. RMSSD and
+    // SDNN are different statistics over different ranges, so swapping them
+    // does not fail loudly — it silently fabricates a trend.
+    test('HRV is RMSSD on Android and SDNN on iOS, never the other way', () {
+      expect(HealthDataService.hrvTypeAndroid,
+          HealthDataType.HEART_RATE_VARIABILITY_RMSSD);
+      expect(HealthDataService.hrvTypeIOS,
+          HealthDataType.HEART_RATE_VARIABILITY_SDNN);
+      expect(dataTypeKeysAndroid,
+          isNot(contains(HealthDataType.HEART_RATE_VARIABILITY_SDNN)));
+      expect(dataTypeKeysIOS,
+          isNot(contains(HealthDataType.HEART_RATE_VARIABILITY_RMSSD)));
+    });
+
+    test('skin temperature is SKIN_TEMPERATURE on Android and '
+        'SLEEP_WRIST_TEMPERATURE on iOS', () {
+      expect(HealthDataService.skinTempTypeAndroid,
+          HealthDataType.SKIN_TEMPERATURE);
+      expect(HealthDataService.skinTempTypeIOS,
+          HealthDataType.SLEEP_WRIST_TEMPERATURE);
+      expect(dataTypeKeysAndroid,
+          isNot(contains(HealthDataType.SLEEP_WRIST_TEMPERATURE)));
+      expect(dataTypeKeysIOS, isNot(contains(HealthDataType.SKIN_TEMPERATURE)));
+    });
+
+    // A user who allows steps+sleep but declines heart rate is still
+    // "connected". Promoting a biometric into essentialTypes would gate
+    // availability() on it and break the two features that already work.
+    test('no biometric type is essential, and none rides the first-run sheet',
+        () {
+      for (final android in [true, false]) {
+        for (final t in HealthDataService.biometricTypesFor(android)) {
+          expect(HealthDataService.essentialTypesFor(android), isNot(contains(t)),
+              reason: '${t.name} would gate availability()');
+          expect(HealthDataService.readTypesFor(android), isNot(contains(t)),
+              reason: '${t.name} would bloat the first-run consent sheet, '
+                  'which Play policy and grant rates both punish');
+        }
+      }
+    });
+
+    test('biometrics are read-only — none appears in vitalsWriteTypes', () {
+      for (final android in [true, false]) {
+        for (final t in HealthDataService.biometricTypesFor(android)) {
+          expect(HealthDataService.vitalsWriteTypes, isNot(contains(t)));
+        }
+      }
+    });
+
+    test('allReadTypesFor is the union, with no duplicates', () {
+      for (final android in [true, false]) {
+        final all = HealthDataService.allReadTypesFor(android);
+        expect(all.toSet().length, all.length, reason: 'duplicate type');
+        expect(all, containsAll(HealthDataService.readTypesFor(android)));
+        expect(all, containsAll(HealthDataService.biometricTypesFor(android)));
+      }
+    });
+
+    // Encodes a plugin constraint rather than our behaviour: health 13.3.2
+    // declares no VO2MAX on either platform, even though HealthKit and Health
+    // Connect both store one. `BiometricDailyData.vo2Max` exists but has no
+    // importer. When a plugin bump adds the type, THIS test fails and tells
+    // you to wire it up — and to add READ_VO2_MAX to the manifest.
+    test('VO2 max still has no plugin type — wire the importer when this fails',
+        () {
+      final names = HealthDataType.values.map((t) => t.name).toSet();
+      expect(names.any((n) => n.contains('VO2')), isFalse);
+    });
+  });
 }
