@@ -49,6 +49,45 @@ class HealthCloudSyncService {
             .insertOnConflictUpdate(SleepSessionRow.fromJson(m)),
       );
 
+      // ---- Wearable biometrics (daily aggregates) ----
+      //
+      // Uses the *IncludingDeleted* reads so a tombstone can propagate: the
+      // ordinary getters filter deletedAt, and a syncer that cannot see a
+      // tombstone reads it as "missing on this device" and downloads the
+      // deleted day straight back.
+      await _sync(
+        userId, 'biometric_days',
+        local: () async =>
+            db.biometricsDao.getDayRangeIncludingDeleted(from, now),
+        id: (r) => (r as BiometricDayRow).id,
+        updatedMs: (r) =>
+            (r as BiometricDayRow).updatedAt.millisecondsSinceEpoch,
+        toJson: (r) => (r as BiometricDayRow).toJson(),
+        apply: (m) async => db
+            .into(db.biometricDailyData)
+            .insertOnConflictUpdate(BiometricDayRow.fromJson(m)),
+      );
+
+      // ---- Workout sessions ----
+      await _sync(
+        userId, 'workouts',
+        local: () async =>
+            db.biometricsDao.getWorkoutsForRangeIncludingDeleted(from, now),
+        id: (r) => (r as WorkoutSessionRow).id,
+        updatedMs: (r) =>
+            (r as WorkoutSessionRow).updatedAt.millisecondsSinceEpoch,
+        toJson: (r) => (r as WorkoutSessionRow).toJson(),
+        apply: (m) async => db
+            .into(db.workoutSessions)
+            .insertOnConflictUpdate(WorkoutSessionRow.fromJson(m)),
+      );
+
+      // The device registry (`health_sources`) is deliberately NOT synced. It
+      // is device-local by nature — which apps write to THIS phone's Health
+      // Connect — cheap to rebuild from a single sync pass, and it carries
+      // user-supplied device names. Uploading it would widen the health-data
+      // blast radius for no user-visible benefit.
+
       // ---- Shared health profile (single doc) ----
       await _sync(
         userId, 'health_profile',

@@ -32,6 +32,8 @@ rules_version = '2';
 //   users/{uid}/backups/{isoTimestamp}   — BackupService
 //   users/{uid}/step_days/{dateKey}      — HealthCloudSyncService
 //   users/{uid}/sleep_sessions/{id}      — HealthCloudSyncService
+//   users/{uid}/biometric_days/{dateKey} — HealthCloudSyncService
+//   users/{uid}/workouts/{id}            — HealthCloudSyncService
 //   users/{uid}/health_profile/{id}      — HealthCloudSyncService
 //   users/{uid}/period_days/{dateKey}    — HealthCloudSyncService (opt-in)
 //   users/{uid}/menstrual_cycles/{id}    — HealthCloudSyncService (opt-in)
@@ -73,6 +75,27 @@ service cloud.firestore {
 
     function isValidRecord(docId) {
       return idMatchesPath(docId) && isReasonableSize();
+    }
+
+    // The ONE field worth validating server-side.
+    //
+    // Deliberately not a full schema: HealthCloudSyncService._sync ends in
+    // `catch (e) { debugPrint(...) }`, so every rules rejection is SILENT.
+    // Per-field rules would turn any schema drift into sync that stops forever
+    // with no signal to the user or the developer — worse than the malformed
+    // write they prevent — and would force a rules deploy in lockstep with
+    // every field addition. `isOwner` already means the only party who can
+    // write this data is its owner, so field validation mostly defends the
+    // user against themselves.
+    //
+    // `updatedAtMs` is the exception because it is the only field with
+    // CROSS-DEVICE consequences, and its failure mode is nasty:
+    // health_cloud_sync_service.dart reads `(cloud['updatedAtMs'] as int?)`.
+    // That is a CAST — a string or a missing value throws a TypeError, which
+    // the outer catch swallows, silently killing sync for that entire
+    // collection on every device. One line stops it ever landing.
+    function hasSyncTimestamp() {
+      return request.resource.data.updatedAtMs is int;
     }
 
     // ---- per-user private data --------------------------------------------
@@ -149,6 +172,28 @@ service cloud.firestore {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidRecord(sessionId);
       }
+
+      // Wearable biometrics — DAILY AGGREGATES ONLY. Raw samples are never
+      // uploaded: a watch writes ~1 heart-rate sample a minute, and one doc
+      // per sample is both a cost and a privacy blast radius for no benefit.
+      match /biometric_days/{dateKey} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(dateKey)
+                              && hasSyncTimestamp();
+      }
+
+      // Exercise sessions imported from Health Connect / HealthKit.
+      match /workouts/{workoutId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(workoutId)
+                              && hasSyncTimestamp();
+      }
+
+      // `health_sources` is intentionally absent: the device registry is
+      // device-local, cheap to rebuild, and carries user-supplied device
+      // names. Nothing writes it to Firestore, so nothing may.
 
       // Shared health profile (height/weight/stride — used by Steps and Sleep).
       match /health_profile/{docId} {
