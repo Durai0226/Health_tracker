@@ -133,10 +133,9 @@ The app declares 18 health permissions. Copy these:
 | `WRITE_BLOOD_GLUCOSE` | Optional, off by default: same, for blood sugar. |
 | `WRITE_WEIGHT` | Optional, off by default: same, for weight. |
 
-> **Do not submit this before the Heart and Workouts screens exist.** Eleven of
-> those justifications name screens that are not built yet. A declared
-> permission with no visible feature is a rejection, and a rejected health
-> declaration is slow to appeal. The backend is done; the screens are not.
+> The Heart and Workouts screens these justifications name now exist and are
+> reachable from the Health tab, so this form is ready to submit — **once the
+> privacy policy URL from step 1 is live**, since the form asks for it.
 
 ---
 

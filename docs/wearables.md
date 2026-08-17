@@ -49,13 +49,15 @@ protocols. It is a live-workout feature, not wearable sync, and is out of scope.
   breathing rate, body and skin temperature, and workouts; aggregates them to
   one row per day.
 
+- **Heart, Workouts and Connected-devices screens**, reachable from the Health
+  tab. Heart and Workouts are read-only by design.
+- **Cloud sync** for `biometric_days` and `workouts`, behind the existing
+  consent gate, with matching `firestore.rules`.
+
 ## What is NOT built yet
 
-- The Heart / Workouts / Connected-devices **screens**. The data is collected
-  and stored; nothing renders it yet.
-- **Cloud sync** for the new collections (`firestore.rules` blocks + two
-  `_sync` calls).
-- **Background sync**, so data still only refreshes while the app is open.
+- **Background sync**, so data still only refreshes while the app is open —
+  on launch, on resume, and on pull-to-refresh.
 - **iOS background delivery** (`HKObserverQuery`) — deliberately deferred: there
   is no iOS widget target to justify it, and it cannot be tested on a simulator.
 
