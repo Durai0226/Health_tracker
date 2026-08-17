@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/database/app_database.dart' as db;
+import '../../../core/services/background_health_sync_service.dart';
 import '../../../core/services/health_data_service.dart';
+import '../../../core/services/health_sync_queue.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/biometric_metric.dart';
 import '../models/health_source.dart';
@@ -31,6 +33,12 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
   List<HealthSource> _sources = const [];
   HealthAvailability _availability = HealthAvailability.notDetermined;
 
+  /// Whether this device's Health Connect version supports background reads at
+  /// all. When false the toggle is hidden rather than shown-and-broken.
+  bool _bgAvailable = false;
+  bool _bgEnabled = false;
+  bool _bgBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -55,10 +63,15 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
       final avail = await HealthDataService.instance
           .availability()
           .timeout(const Duration(seconds: 6));
+      final bgAvailable =
+          await HealthDataService.instance.isBackgroundReadAvailable();
+      final bgEnabled = await HealthSyncQueue.isEnabled();
       if (!mounted) return;
       setState(() {
         _sources = rows.map(HealthSource.fromRow).toList();
         _availability = avail;
+        _bgAvailable = bgAvailable;
+        _bgEnabled = bgEnabled;
       });
     } catch (_) {
       // Keep whatever is on screen. The list is a snapshot, not a live query,
@@ -81,6 +94,24 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
       await BiometricsService.syncFromHealth();
     } catch (_) {
       if (mounted) await _load(); // put the switch back where the data says
+    }
+  }
+
+  Future<void> _toggleBackground(bool wanted) async {
+    if (_bgBusy) return;
+    setState(() => _bgBusy = true);
+    try {
+      if (wanted) {
+        // Sends the user out to the Health Connect sheet, so the result is
+        // whatever they chose there — never assume the request succeeded.
+        final ok = await BackgroundHealthSyncService.instance.enable();
+        if (mounted) setState(() => _bgEnabled = ok);
+      } else {
+        await BackgroundHealthSyncService.instance.disable();
+        if (mounted) setState(() => _bgEnabled = false);
+      }
+    } finally {
+      if (mounted) setState(() => _bgBusy = false);
     }
   }
 
@@ -173,6 +204,47 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
           'being used for new days.',
           style: tt.bodySmall?.copyWith(color: ext.textTertiary),
         ),
+        // Hidden entirely when the platform cannot do it — an unavailable
+        // toggle that does nothing is worse than no toggle.
+        if (_bgAvailable) ...[
+          const SizedBox(height: AppSpacing.xl),
+          SettingsSection(
+            title: 'Background sync',
+            footer: 'Asks for one more Health Connect permission. Without it '
+                'your data still updates every time you open DlyMinder.',
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Keep syncing in the background',
+                              style: tt.bodyLarge
+                                  ?.copyWith(color: ext.textPrimary)),
+                          const SizedBox(height: 2),
+                          Text(
+                              'Your steps and sleep stay current without '
+                              'opening the app.',
+                              style: tt.bodySmall
+                                  ?.copyWith(color: ext.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    AppSwitch(
+                      value: _bgEnabled,
+                      onChanged: _bgBusy ? null : _toggleBackground,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
