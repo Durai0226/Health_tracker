@@ -53,6 +53,9 @@ import 'package:tablet_remainder/features/reminders/screens/reminders_screen.dar
 import 'package:tablet_remainder/features/diary/screens/diary_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/settings_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/health_privacy_screen.dart';
+import 'package:tablet_remainder/features/biometrics/screens/heart_dashboard_screen.dart';
+import 'package:tablet_remainder/features/biometrics/screens/workouts_screen.dart';
+import 'package:tablet_remainder/features/biometrics/screens/connected_devices_screen.dart';
 import 'package:tablet_remainder/features/home/screens/health_browse_screen.dart';
 
 class _Cost {
@@ -96,6 +99,9 @@ final _screens = <List<dynamic>>[
   ['Diary', 'list', () => const DiaryScreen()],
   ['Settings', 'root', () => const SettingsScreen()],
   ['Settings', 'health_privacy', () => const HealthPrivacyScreen()],
+  ['Biometrics', 'heart', () => const HeartDashboardScreen()],
+  ['Biometrics', 'workouts', () => const WorkoutsScreen()],
+  ['Biometrics', 'connected_devices', () => const ConnectedDevicesScreen()],
 ];
 
 
@@ -134,13 +140,23 @@ const Map<String, int> _elementBudget = {
   'Medication/dashboard': 1385,
   'Period/calendar': 1347,
   'Home/home': 1263,
-  'Home/health_browse': 1116,
+  // 1116 -> 1320: measured 1145 after the Heart, Workouts and Connected
+  // devices tiles were added to the browse grid. A legitimate growth, not
+  // drift — three tiles at ~58 elements each.
+  'Home/health_browse': 1320,
   'Vitals/weight': 1116,
   'Water/statistics': 1090,
   'Vitals/mood': 1074,
   'Medication/adherence_report': 975,
   'Settings/root': 959,
   'Settings/health_privacy': 640,
+  // Measured against seeded biometrics. These were 250 apiece before
+  // `_seedBiometrics` existed AND before the screens stopped gating their body
+  // behind a spinner — i.e. budgeted at their loading state, which is the
+  // exact defect this file's header warns about one level up.
+  'Biometrics/heart': 670,
+  'Biometrics/workouts': 660,
+  'Biometrics/connected_devices': 380,
   'Vitals/blood_sugar': 940,
   'Focus/stats': 1148,
   'Insights/weekly_recap': 856,

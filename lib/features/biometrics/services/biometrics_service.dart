@@ -73,6 +73,14 @@ class BiometricsService {
     unawaited(syncFromHealth());
   }
 
+  /// Re-read the in-memory window from Drift.
+  ///
+  /// Public because two callers legitimately need it without a full [init]:
+  /// the QA seeder, which writes through the DAO and would otherwise leave the
+  /// notifiers empty, and the Connected-devices screen after a source is
+  /// toggled off.
+  static Future<void> reloadFromDb() => _loadFromDb();
+
   static Future<void> _loadFromDb() async {
     final now = DateTime.now();
     final from = DateTime(now.year, now.month, now.day - _memoryWindowDays);

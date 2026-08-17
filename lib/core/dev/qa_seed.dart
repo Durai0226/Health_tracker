@@ -1,6 +1,14 @@
 import 'package:flutter/foundation.dart';
 
+import '../database/app_database.dart' as db;
+import '../health/health_windows.dart';
 import '../services/clean_storage_service.dart';
+import '../../features/biometrics/models/biometric_day.dart';
+import '../../features/biometrics/models/biometric_metric.dart';
+import '../../features/biometrics/models/health_source.dart';
+import '../../features/biometrics/models/workout_session.dart';
+import '../../features/biometrics/services/biometrics_service.dart';
+import '../../features/biometrics/services/health_source_registry.dart';
 import '../../features/diary/models/diary_entry.dart';
 import '../../features/diary/services/diary_storage_service.dart';
 import '../../features/focus/models/focus_plant.dart';
@@ -95,6 +103,7 @@ Future<void> _seedQaData({
   await _seedDiary(now, days);
   await _seedReminders(now);
   await _seedFocus(now, days);
+  await _seedBiometrics(now, days);
 
   await CleanStorageService.setAppPreference(_seedGuardKey, true);
 }
@@ -397,5 +406,119 @@ Future<void> _seedDiary(DateTime now, int days) async {
     }
   } catch (e) {
     debugPrint('seed diary failed: $e');
+  }
+}
+
+/// Wearable biometrics + a few workouts.
+///
+/// Written straight through the DAO rather than through `syncFromHealth`,
+/// because there is no health platform in a QA/E2E run — the same reason
+/// `_seedSteps` uses manual entries.
+///
+/// This exists so the Heart and Workouts screens are measured POPULATED. The
+/// perf harness's own header warns that budgeting a screen at its empty size
+/// is a defect, and without a seeder these two would be budgeted at their
+/// loading spinner.
+Future<void> _seedBiometrics(DateTime now, int days) async {
+  try {
+    final dao = db.AppDatabase.instance.biometricsDao;
+    final today = DateTime(now.year, now.month, now.day);
+
+    // A plausible resting-HR drift plus one poor night, so the trend has shape
+    // instead of being a flat line.
+    const resting = [58, 57, 59, 62, 58, 56, 57, 61, 58];
+    const hrv = [46.0, 52.0, 44.0, 38.0, 55.0, 58.0, 49.0, 41.0, 51.0];
+
+    for (var i = 0; i < days; i++) {
+      final day = DateTime(today.year, today.month, today.day - i);
+      final key = dateKeyOf(day);
+      final r = resting[i % resting.length];
+      await dao.upsertDay(BiometricDay(
+        id: key,
+        date: day,
+        restingHr: r,
+        // Every few days is estimated, so the "(est.)" label and the
+        // "some days are estimated" note both get exercised.
+        restingHrDerived: i % 4 == 3,
+        hrMin: r - 4,
+        hrAvg: r + 14,
+        hrMax: r + 62,
+        hrSampleCount: 900,
+        hourlyHr: [
+          for (var h = 0; h < 24; h++)
+            // Night hours dip; two gaps so the null-not-zero path is covered.
+            (h == 3 || h == 16) ? null : (h < 7 ? r + 2 : r + 12 + (h % 5) * 4)
+        ],
+        hrvNightlyMs: hrv[i % hrv.length],
+        hrvMetric: HrvMetric.rmssd,
+        hrvSampleCount: 1,
+        spo2Min: 94 + (i % 3),
+        spo2Avg: 96 + (i % 2),
+        spo2SampleCount: 40,
+        respiratoryRateMin: 12.0,
+        respiratoryRateAvg: 14.5,
+        respiratoryRateMax: 18.0,
+        respiratoryRateSampleCount: 60,
+        source: BiometricSource.healthConnect,
+        lastSyncedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      ).toCompanion());
+    }
+
+    // Three sessions across the last week.
+    const workouts = [
+      (1, 'RUNNING', 32, 5200.0, 320),
+      (3, 'WALKING', 48, 3900.0, 180),
+      (5, 'STRENGTH_TRAINING', 41, null, 240),
+    ];
+    for (final (daysAgo, type, mins, dist, kcal) in workouts) {
+      final start = DateTime(today.year, today.month, today.day - daysAgo, 7, 15);
+      await dao.upsertWorkout(WorkoutSession(
+        id: 'hw_${start.millisecondsSinceEpoch}_$type',
+        dateKey: dateKeyOf(start),
+        startedAt: start,
+        endedAt: start.add(Duration(minutes: mins)),
+        durationMinutes: mins,
+        activityType: type,
+        energyKcal: kcal,
+        distanceMeters: dist,
+        avgHr: 132,
+        maxHr: 168,
+        source: BiometricSource.healthConnect,
+        createdAt: now,
+        updatedAt: now,
+      ).toCompanion());
+    }
+
+    // One contributing device, so Connected devices is measured with a row
+    // rather than its empty state.
+    final srcId = HealthSourceRegistry.keyForParts(
+        'googleHealthConnect', 'com.samsung.health', 'Galaxy Watch5');
+    await dao.upsertSource(HealthSource(
+      id: srcId,
+      sourceId: 'com.samsung.health',
+      sourceName: 'Galaxy Watch5',
+      platformIndex: 0,
+      metrics: {
+        BiometricMetricKey.hr:
+            SourceMetricStat(lastSeenAt: now, points: 900 * days),
+        BiometricMetricKey.hrv: SourceMetricStat(lastSeenAt: now, points: days),
+        BiometricMetricKey.spo2:
+            SourceMetricStat(lastSeenAt: now, points: 40 * days),
+        BiometricMetricKey.workout:
+            SourceMetricStat(lastSeenAt: now, points: 3),
+      },
+      firstSeenAt: today.subtract(Duration(days: days)),
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now,
+    ).toCompanion());
+    // The seeder writes straight through the DAO, so the service's in-memory
+    // notifiers — which every biometrics screen renders from — are still
+    // empty. Without this the screens measure and screenshot as blank.
+    await BiometricsService.reloadFromDb();
+  } catch (e) {
+    debugPrint('seed biometrics failed: $e');
   }
 }

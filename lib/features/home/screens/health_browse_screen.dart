@@ -6,6 +6,9 @@ import '../../water/screens/aqua_water_dashboard.dart';
 import '../../sleep/screens/sleep_dashboard_screen.dart';
 import '../../steps/screens/steps_dashboard_screen.dart';
 import '../../period/screens/period_dashboard.dart';
+import '../../biometrics/screens/heart_dashboard_screen.dart';
+import '../../biometrics/screens/workouts_screen.dart';
+import '../../biometrics/screens/connected_devices_screen.dart';
 import '../../medication/screens/vitals/blood_pressure_screen.dart';
 import '../../medication/screens/vitals/blood_sugar_screen.dart';
 import '../../medication/screens/vitals/weight_screen.dart';
@@ -51,6 +54,12 @@ class HealthBrowseScreen extends StatelessWidget {
       _tile(ext, Symbols.bedtime_rounded, ext.sleep, 'Sleep',
           'Duration, quality & trends',
           () => open(const SleepDashboardScreen(), FeatureAccent.sleep)),
+      _tile(ext, Symbols.ecg_heart_rounded, ext.medicine, 'Heart',
+          'Resting rate, variability & oxygen',
+          () => open(const HeartDashboardScreen(), FeatureAccent.medicine)),
+      _tile(ext, Symbols.exercise_rounded, ext.steps, 'Workouts',
+          'Sessions imported from your watch',
+          () => open(const WorkoutsScreen(), FeatureAccent.steps)),
       _tile(ext, Symbols.favorite_rounded, ext.period, 'Period',
           'Cycle, phases & predictions',
           () => open(const PeriodDashboard(), FeatureAccent.period)),
@@ -110,6 +119,18 @@ class HealthBrowseScreen extends StatelessWidget {
                               context,
                               MaterialPageRoute<void>(
                                   builder: (_) => const WeeklyRecapScreen()),
+                            )),
+                    _tile(
+                        ext,
+                        Symbols.watch_rounded,
+                        ext.brand,
+                        'Connected devices',
+                        "What's feeding your health data",
+                        () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const ConnectedDevicesScreen()),
                             )),
                     _tile(
                         ext,
