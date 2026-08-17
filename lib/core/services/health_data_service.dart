@@ -266,6 +266,52 @@ class HealthDataService {
     await _writeFlag(_biometricsPrefKey, value);
   }
 
+  // ---- background reads (Android / Health Connect only) ---------------------
+  //
+  // A THIRD separate grant, on top of the base and biometric tiers. It is
+  // feature-gated: older Health Connect versions do not expose it at all, so
+  // every entry point probes availability first and returns false rather than
+  // throwing. iOS has no equivalent — background delivery there is
+  // HKObserverQuery, which `package:health` does not wrap.
+
+  /// Whether this device's Health Connect version supports background reads.
+  Future<bool> isBackgroundReadAvailable() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      await _ensureConfigured();
+      return await _health.isHealthDataInBackgroundAvailable();
+    } catch (e) {
+      debugPrint('HealthDataService.isBackgroundReadAvailable failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> isBackgroundReadAuthorized() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      await _ensureConfigured();
+      return await _health.isHealthDataInBackgroundAuthorized();
+    } catch (e) {
+      debugPrint('HealthDataService.isBackgroundReadAuthorized failed: $e');
+      return false;
+    }
+  }
+
+  /// Ask for background reads. Only meaningful once the base grant exists, and
+  /// only from an explicit user action — Health Connect throttles re-prompting,
+  /// so a speculative request burns an attempt the user may need later.
+  Future<bool> requestBackgroundRead() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      await _ensureConfigured();
+      if (!await isBackgroundReadAvailable()) return false;
+      return await _health.requestHealthDataInBackgroundAuthorization();
+    } catch (e) {
+      debugPrint('HealthDataService.requestBackgroundRead failed: $e');
+      return false;
+    }
+  }
+
   /// Raw samples of ONE biometric type. One type per call by design — see
   /// [_readPoints].
   Future<List<HealthDataPoint>> readBiometricSamples(

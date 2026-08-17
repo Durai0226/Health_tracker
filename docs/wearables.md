@@ -54,10 +54,15 @@ protocols. It is a live-workout feature, not wearable sync, and is out of scope.
 - **Cloud sync** for `biometric_days` and `workouts`, behind the existing
   consent gate, with matching `firestore.rules`.
 
+- **Background sync** (Android), off by default, behind its own Health Connect
+  grant. The worker never touches Drift: it writes a snapshot to
+  SharedPreferences and sets a dirty flag, which the app drains on resume by
+  running the ordinary foreground sync. That keeps the main isolate the only
+  writer and makes the cloud-consent gate structural — the worker cannot read
+  the consent flag, so it cannot upload anything.
+
 ## What is NOT built yet
 
-- **Background sync**, so data still only refreshes while the app is open —
-  on launch, on resume, and on pull-to-refresh.
 - **iOS background delivery** (`HKObserverQuery`) — deliberately deferred: there
   is no iOS widget target to justify it, and it cannot be tested on a simulator.
 

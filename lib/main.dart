@@ -27,6 +27,7 @@ import 'core/services/notification_service.dart';
 import 'core/services/reminder_reschedule_service.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/background_alarm_service.dart';
+import 'core/services/background_health_sync_service.dart';
 import 'core/services/feature_flag_service.dart';
 import 'core/services/feature_manager.dart';
 import 'core/services/simple_ad_service.dart';
@@ -118,6 +119,10 @@ void _initDeferredServices() {
           _initService('SimpleAdService', () => SimpleAdService().init()),
         _initService('SyncService', () async => SyncService().init()),
         _initService('BackgroundAlarmService', () => BackgroundAlarmService().init()),
+        // Separate from BackgroundAlarmService on purpose: a data sync must
+        // not ride the exact-alarm path. See its class doc.
+        _initService('BackgroundHealthSync',
+            () => BackgroundHealthSyncService.instance.init()),
         _initService('FeatureFlagService', () => FeatureFlagService().init()),
         _initService('VitaVibeService', () => VitaVibeService().init()),
         // Other services can be initialized on-demand

@@ -72,6 +72,12 @@
          Android refuse the whole sheet. -->
     <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE"/>
     <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
+    <!-- Keeps the trackers current without the user opening the app. A
+         SEPARATE grant the user can decline on its own, and feature-gated:
+         older Health Connect versions do not expose it, so
+         HealthDataService.isBackgroundReadAvailable() is probed before it is
+         ever requested. Declining it changes nothing except freshness. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"/>
 
     <!-- Vitals: opt-in write-back of BP/glucose/weight readings the user
          already logged locally (Settings toggle, off by default). READ is

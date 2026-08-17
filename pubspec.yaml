@@ -49,6 +49,13 @@ dependencies:
   timezone: ^0.10.0
   flutter_timezone: ^3.0.1
   android_alarm_manager_plus: ^4.0.4
+  # Background health sync ONLY. Deliberately not android_alarm_manager_plus:
+  # its dispatcher calls the Dart callback WITHOUT awaiting it (see
+  # android_alarm_manager_plus 4.0.8, lib/android_alarm_manager_plus.dart:44),
+  # so the native latch counts down before a multi-second Health Connect read
+  # finishes. It also owns the exact-alarm downgrade flag, which a data sync
+  # must not touch. See docs/wearables.md.
+  workmanager: ^0.10.7
   permission_handler: ^11.3.1
   firebase_core: ^3.8.1
   firebase_auth: ^5.3.4

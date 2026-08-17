@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../medication/services/medicine_storage_service.dart';
+import '../../../core/services/health_sync_queue.dart';
+import '../../steps/services/step_service.dart';
+import '../../sleep/services/sleep_service.dart';
+import '../../biometrics/services/biometrics_service.dart';
 import '../../focus/screens/focus_screen.dart';
 import '../../reminders/screens/reminders_screen.dart';
 import '../../medication/screens/nunito_medication_dashboard.dart';
@@ -82,6 +86,25 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     _drainQueuedDoseActions();
+    _drainBackgroundHealthSync();
+  }
+
+  /// The background health worker cannot write to Drift — it drops a snapshot
+  /// in SharedPreferences and sets a dirty flag instead (see
+  /// [HealthSyncQueue]). This is where that gets turned into real rows, by
+  /// running the ordinary foreground sync, which stays the only writer.
+  ///
+  /// Silent by design: unlike the dose drain above, nothing was done on the
+  /// user's behalf that needs confirming — the numbers are just current.
+  Future<void> _drainBackgroundHealthSync() async {
+    try {
+      if (!await HealthSyncQueue.takeDirty()) return;
+      await StepService.syncFromHealth();
+      await SleepService.syncFromHealth();
+      await BiometricsService.syncFromHealth();
+    } catch (e) {
+      debugPrint('Draining background health sync on resume failed: $e');
+    }
   }
 
   Future<void> _drainQueuedDoseActions() async {
