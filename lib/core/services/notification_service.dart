@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'dart:ui' as ui; // IsolateNameServer — stop a ringing AlarmScreen
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -19,7 +20,6 @@ import '../../features/reminders/models/reminder_model.dart';
 import '../models/user_settings.dart';
 import 'background_alarm_service.dart';
 import '../../main.dart';
-import '../widgets/toast/toast.dart';
 
 /// Top-level background handler for notification ACTION taps.
 ///
@@ -244,56 +244,21 @@ class NotificationService {
   
   bool _isInitialized = false;
   bool _permissionsGranted = false;
-  bool _isAppInForeground = true;
-
-  /// Set app foreground state - call from app lifecycle observer
-  void setAppForegroundState(bool inForeground) {
-    _isAppInForeground = inForeground;
-    debugPrint('📱 App foreground state: $inForeground');
-  }
-
-  /// Show in-app toast when app is in foreground instead of system notification
-  void showInAppToast({
-    required String title,
-    String? body,
-    ToastType type = ToastType.reminder,
-    ToastFeature feature = ToastFeature.general,
-    VoidCallback? onAction,
-    String? actionLabel,
-    int? snoozeMinutes,
-  }) {
-    final context = navigatorKey.currentContext;
-    if (context == null) {
-      debugPrint('⚠️ No context available for in-app toast');
-      return;
-    }
-
-    // Show premium toast
-    if (type == ToastType.reminder) {
-      ReminderToast.triggered(
-        context,
-        title: title,
-        body: body,
-        snoozeMinutes: snoozeMinutes ?? 5,
-        onSnooze: onAction,
-      );
-    } else {
-      ToastService.show(
-        context,
-        type: type,
-        feature: feature,
-        title: title,
-        message: body,
-        action: onAction != null && actionLabel != null
-            ? ToastAction(label: actionLabel, onPressed: onAction)
-            : null,
-      );
-    }
-    debugPrint('✓ Showed in-app toast: $title');
-  }
-
-  /// Check if should show in-app toast instead of system notification
-  bool get shouldShowInAppToast => _isAppInForeground;
+  // The in-app-toast cluster was deleted here: `_isAppInForeground`,
+  // `setAppForegroundState`, `showInAppToast` and `shouldShowInAppToast`.
+  //
+  // A complete, working implementation with ZERO callers — nothing ever set the
+  // foreground state, so `shouldShowInAppToast` was permanently true, and nothing
+  // read it or called the toast either. Wiring it up would have meant choosing
+  // behaviour for a path no feature had asked for.
+  //
+  // The idea itself is right and is already implemented properly one layer up,
+  // where it belongs: `FocusService.justCompleted` + `justCompleted.hasConsumer`
+  // decide between an in-app celebration and a notification based on whether a
+  // screen is actually LISTENING — which is the real question, and strictly
+  // better than a foreground flag (the Focus screen is a pushed route, so
+  // foregrounded-but-not-mounted is the ordinary case). `FocusToast` and
+  // `ToastService` are called directly from the widgets that own the moment.
 
   Future<void> init() async {
     if (_isInitialized) {
@@ -519,6 +484,33 @@ class NotificationService {
             enableVibration: true,
             enableLights: true,
             showBadge: true,
+          ),
+          // Focus belongs HERE, with mood/steps/sleep, and not one entry higher.
+          //
+          // Everything above `mood_channel` carries
+          // `audioAttributesUsage: AudioAttributesUsage.alarm` — the alarm audio
+          // stream, which rings through Do Not Disturb at alarm volume. That is
+          // right for a missed dose. Every Focus notification was landing there,
+          // so "New Plant Unlocked! 🌱" arrived as a medicine alarm.
+          //
+          // No `audioAttributesUsage` at all is deliberate: the default is
+          // USAGE_NOTIFICATION, which respects DND. A session-end ping is the
+          // definition of something that should be silent when the user has asked
+          // for silence. `bypassDnd` is not offered by this plugin's channel API
+          // anyway, and setting it natively would need ACCESS_NOTIFICATION_POLICY,
+          // which this app deliberately does not hold.
+          //
+          // `showBadge: false` because a finished session is not an unread item —
+          // there is nothing to come back to and clear.
+          const AndroidNotificationChannel(
+            'focus_channel',
+            'Focus Sessions',
+            description: 'When a focus session or break ends',
+            importance: Importance.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: false,
+            showBadge: false,
           ),
         ];
 
@@ -2012,6 +2004,200 @@ class NotificationService {
     } catch (e) {
       debugPrint('❌ Failed to show caregiver alert: $e');
       return false;
+    }
+  }
+
+  // ---- Focus: reserved id block 918_4xx -----------------------------------
+  //
+  // Kept together and here rather than on the settings screen so
+  // `test/notifications/notification_id_ranges_test.dart` can see the whole
+  // block. A notification id is last-write-wins: two features that compute the
+  // same id are one notification, and cancelling it kills both.
+  static const int focusDailyReminderId = 918_401;
+  static const int focusStreakReminderId = 918_402;
+  // ONE id for the armed completion, not one per phase: a session is only ever
+  // in one phase at a time, so a second id could only ever be a way to leave one
+  // of them armed. Arming replaces by id, which is what makes every arm site
+  // idempotent.
+  static const int focusSessionEndId = 918_410;
+
+  /// A calm, immediate Focus notification — session complete, break over, an
+  /// unlock.
+  ///
+  /// Built directly rather than through [_notificationDetails], which accepts a
+  /// `channelId` and **ignores it**, hardcoding `alarm_channel` with
+  /// `AudioAttributesUsage.alarm`, `AndroidNotificationCategory.alarm`,
+  /// `Importance.max`, a full-screen intent and Snooze/Dismiss actions. Every
+  /// Focus notification went through `showImmediateNotification`, so a plant
+  /// unlock rang on the alarm stream and could take over the lock screen.
+  /// [showCaregiverAlert] exists for the same reason and says so.
+  Future<bool> showFocusNotification({
+    required String title,
+    required String body,
+  }) async {
+    try {
+      if (!_isInitialized) await init();
+      await _notifications.show(
+          focusSessionEndId, title, body, _focusDetails());
+      debugPrint('✓ Focus notification shown: $title');
+      return true;
+    } catch (e) {
+      debugPrint('❌ Failed to show focus notification: $e');
+      return false;
+    }
+  }
+
+  /// The one place Focus notification presentation is defined.
+  ///
+  /// `category: reminder` (never `alarm`), no `audioAttributesUsage`, no
+  /// `fullScreenIntent`, no action buttons, and `autoCancel: true`. No action
+  /// buttons matters beyond tidiness: the app-wide background tap handler is a
+  /// single slot shared with the alarm isolate, so a Focus notification that
+  /// carried actions would need routing there too.
+  NotificationDetails _focusDetails() => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'focus_channel',
+          'Focus Sessions',
+          channelDescription: 'When a focus session or break ends',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          category: AndroidNotificationCategory.reminder,
+          visibility: NotificationVisibility.public,
+          autoCancel: true,
+        ),
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+      );
+
+  /// Schedule (or cancel) a Focus reminder on `focus_channel`.
+  ///
+  /// Deliberately NOT [scheduleGenericReminder]. On Android that routes to
+  /// `BackgroundAlarmService.scheduleOneTimeAlarm`/`scheduleDailyAlarm` →
+  /// `AlarmManager.setAlarmClock()`, and `alarmCallback` then presents the
+  /// notification with a hardcoded `alarm_channel`, `fullScreenIntent: true`,
+  /// `ongoing: true` and **`✓ Take` / `⏰ Snooze` / `✕ Dismiss`** buttons. So
+  /// *"Time to focus — a short session is enough"* arrived at 09:00 as a
+  /// full-screen ringing alarm with a Take button, over the lock screen.
+  ///
+  /// Modelled on [scheduleStepReminder]: Importance.high not max, inexact, no
+  /// full-screen, its own id — so it can never crowd out a medicine reminder.
+  /// Inexact is the right trade here: a focus nudge a few minutes late is a
+  /// nudge; a dose a few minutes late is a dose.
+  Future<void> scheduleFocusReminder({
+    required int id,
+    required bool enabled,
+    required String title,
+    required String body,
+    required DateTime when,
+    bool repeatDaily = false,
+  }) async {
+    try {
+      // cancelNotification, not _notifications.cancel: an older build scheduled
+      // these ids through AlarmManager, and only this tears that registration
+      // down. It is a no-op for ids AlarmManager never held.
+      await cancelNotification(id);
+      if (!enabled) {
+        debugPrint('✓ Focus reminder $id cancelled');
+        return;
+      }
+      if (!_isInitialized) {
+        try {
+          await init();
+        } catch (_) {}
+      }
+      if (!await checkPermissions()) {
+        debugPrint('❌ Focus reminder: notifications not permitted');
+        return;
+      }
+
+      final local = tz.TZDateTime.from(when, tz.local);
+      await _notifications.zonedSchedule(
+        id,
+        title,
+        body,
+        local,
+        _focusDetails(),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: repeatDaily ? DateTimeComponents.time : null,
+      );
+      debugPrint('✓ Focus reminder $id at $local (focus_channel, inexact)');
+    } catch (e) {
+      debugPrint('❌ Focus reminder schedule failed: $e');
+    }
+  }
+
+  /// Schedule the one-shot "your session ended" notification for [at].
+  ///
+  /// The Focus timer cancels its 1 Hz ticker when the app is backgrounded (the
+  /// countdown is derived from an absolute end time, so a background ticker only
+  /// costs battery). The consequence was that `_completeSession()` could only ever
+  /// run on resume, so the app never told you the moment your session ended
+  /// unless you were already looking at it.
+  ///
+  /// `zonedSchedule` is the right vehicle and needs no new native code or
+  /// permission: the manifest already declares `ScheduledNotificationReceiver`
+  /// AND `ScheduledNotificationBootReceiver` with `BOOT_COMPLETED`, so a pending
+  /// focus-end notification survives process death and a reboot.
+  ///
+  /// **Exact, then inexact — never a downgrade flag.** `USE_EXACT_ALARM` was
+  /// deliberately dropped (Play's acceptable-use policy for that auto-granted,
+  /// non-revocable permission covers alarm/timer and calendar apps, which this is
+  /// not), so on Android 14+ `canScheduleExactNotifications()` is false by
+  /// default and this plugin throws `exact_alarms_not_permitted` for BOTH exact
+  /// modes. We retry inexact rather than propagate: a focus ping a few minutes
+  /// late is still a ping. What we must NOT do is touch
+  /// `BackgroundAlarmService.exactAlarmsDowngraded()` — that flag drives the
+  /// "your medicine reminders are inexact" warning, and a focus timer has no
+  /// business raising it. Going through `_notifications` directly rather than
+  /// `BackgroundAlarmService` is what makes that impossible rather than merely
+  /// avoided.
+  Future<void> scheduleFocusCompletion({
+    required int id,
+    required DateTime at,
+    required String title,
+    required String body,
+  }) async {
+    if (!_isInitialized) {
+      try {
+        await init();
+      } catch (_) {}
+    }
+    final when = tz.TZDateTime.from(at, tz.local);
+
+    Future<void> attempt(AndroidScheduleMode mode) => _notifications.zonedSchedule(
+          id,
+          title,
+          body,
+          when,
+          _focusDetails(),
+          androidScheduleMode: mode,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+
+    try {
+      await attempt(AndroidScheduleMode.exactAllowWhileIdle);
+      debugPrint('✓ Focus completion armed for $when (exact)');
+    } on PlatformException catch (e) {
+      if (e.code != 'exact_alarms_not_permitted') rethrow;
+      await attempt(AndroidScheduleMode.inexactAllowWhileIdle);
+      debugPrint('✓ Focus completion armed for $when (inexact — exact denied)');
+    }
+  }
+
+  /// Cancel a pending focus-end notification.
+  ///
+  /// `_notifications.cancel`, deliberately not [cancelNotification]: these ids are
+  /// never registered with AlarmManager, so reaching into `BackgroundAlarmService`
+  /// for them would be a no-op that implies otherwise.
+  Future<void> cancelFocusCompletion(int id) async {
+    try {
+      await _notifications.cancel(id);
+    } catch (e) {
+      debugPrint('Focus completion cancel failed for $id: $e');
     }
   }
 

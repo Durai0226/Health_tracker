@@ -74,4 +74,65 @@ void main() {
           isNot(NotificationService.waterReminderBaseId));
     });
   });
+
+  group('the Focus block', () {
+    // Focus notifications live in a reserved 918_4xx block. Two of the four ids
+    // predate it and were scheduled through `scheduleGenericReminder`, which on
+    // Android hands them to AlarmManager — so they were already load-bearing
+    // before anything asserted they were unique.
+    const focusIds = <int>{
+      NotificationService.focusDailyReminderId,
+      NotificationService.focusStreakReminderId,
+      NotificationService.focusSessionEndId,
+    };
+
+    test('has distinct ids inside its reserved range', () {
+      expect(focusIds.length, 3, reason: 'two Focus ids collided');
+      for (final id in focusIds) {
+        expect(id >= 918_400 && id < 918_500, isTrue,
+            reason: '$id escaped the reserved 918_4xx block');
+      }
+    });
+
+    test('does not collide with water, vitals, bedtime, step or wake', () {
+      expect(focusIds.intersection(waterIds().toSet()), isEmpty);
+      expect(
+        focusIds.intersection({
+          VitalsReminderService.bp.id,
+          VitalsReminderService.glucose.id,
+          VitalsReminderService.weight.id,
+          VitalsReminderService.mood.id,
+          NotificationService.bedtimeReminderId,
+          NotificationService.stepReminderId,
+          NotificationService.wakeAlarmId,
+          900001, // onboarding's daily check-in
+        }),
+        isEmpty,
+      );
+    });
+
+    test('does not collide with medicine slots or their snooze twins', () {
+      // This is the one that matters most. A Focus id landing on a medicine slot
+      // would mean a session-complete banner REPLACING a dose reminder, and the
+      // Focus reschedule sweep silently cancelling it.
+      final slots = <int>{
+        for (int m = 0; m < 1440; m++) slotNotificationId(m ~/ 60, m % 60),
+      };
+      expect(focusIds.intersection(slots), isEmpty);
+      expect(focusIds.intersection(slots.map((id) => id + 100000).toSet()),
+          isEmpty);
+    });
+
+    test('does not collide with caregiver, period or window-nudge blocks', () {
+      for (final id in focusIds) {
+        expect(id >= 920000 && id <= 920999, isFalse,
+            reason: '$id lands in the caregiver alert block');
+        expect(id >= 990001 && id <= 990004, isFalse,
+            reason: '$id lands in the period reminder block');
+        expect(id >= windowNudgeIdOffset && id < windowNudgeId(400, 0, 0),
+            isFalse,
+            reason: '$id lands in the window-nudge block');
+      }
+    });
+  });
 }
