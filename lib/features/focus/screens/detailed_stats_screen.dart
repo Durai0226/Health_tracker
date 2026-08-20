@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../../core/health/focus_insights.dart';
+import '../../../core/health/insight_engine.dart';
+import '../../../core/utils/percent_format.dart';
+import '../models/focus_achievement.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/clean_storage_service.dart';
+import '../models/app_allow_list.dart';
 import '../models/detailed_stats.dart';
 import '../models/focus_session.dart';
 import '../services/stats_service.dart';
@@ -33,10 +39,10 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   @override
   void initState() {
     super.initState();
-    _statsService.init();
     _tagService.init();
     // Derive daily aggregates + patterns straight from the persisted sessions
-    // so the trend charts always reflect real data.
+    // so the trend charts always reflect real data. There is no `init()` to call:
+    // StatsService holds nothing a cold launch needs to read.
     _statsService.buildFromSessions(_focusService.sessions);
     _statsService.updateProductivityPattern(_focusService.sessions);
   }
@@ -95,7 +101,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                         _buildActivityBreakdown(ext),
                         _buildTagStatistics(ext),
                         _buildProductivityPatterns(ext),
+                        _buildDistractions(ext),
                         _buildInsights(ext),
+                        _buildAchievements(ext),
                         _buildGardenLink(ext),
                       ],
                     ),
@@ -118,12 +126,14 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       leading: AppIconButton(
         icon: Symbols.arrow_back_rounded,
         accent: ext.focus,
+        tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
         AppIconButton(
           icon: Symbols.park_rounded,
           accent: ext.focus,
+          tooltip: 'Your garden',
           onPressed: () {
             _hapticService.navigation();
             Navigator.push(
@@ -351,11 +361,19 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   }
 
   Widget _buildChartEmptyState(AppColorsExt ext) {
+    // Was 'No focus sessions yet' with no action — accurate, and a dead end. This
+    // screen is pushed from the Focus screen, so popping is literally the way to
+    // fix the emptiness being reported.
     return EmptyState(
       icon: Symbols.bar_chart_rounded,
-      title: 'No focus sessions yet',
-      message: 'Complete a session to see your trend',
+      title: 'Your trend starts with one session',
+      message: 'Finish a session and this chart fills in.',
       accent: ext.focus,
+      action: AppButton(
+        label: 'Start a session',
+        leadingIcon: Symbols.play_arrow_rounded,
+        onPressed: () => Navigator.pop(context),
+      ),
     );
   }
 
@@ -578,7 +596,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                   child: _buildPatternCard(
                     '⏰',
                     'Peak Hour',
-                    pattern.mostProductiveHourLabel,
+                    FocusInsights.hourLabel(pattern.mostProductiveHour),
                     ext.success,
                   ),
                 ),
@@ -675,13 +693,22 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   // Insights
   // ---------------------------------------------------------------------------
 
-  Widget _buildInsights(AppColorsExt ext) {
-    final insights = _statsService.getInsights();
+  /// What actually pulled the user away, from their own taps.
+  ///
+  /// This is the payoff for the tally, and without it the feature would be the
+  /// exact defect this rework exists to remove: data collected, persisted, and
+  /// never shown. It is also the thing a usage-stats report cannot say — not "you
+  /// were distracted 14% of the time" but "this one, nine times across twelve
+  /// sessions, mostly early".
+  ///
+  /// Renders nothing until something has been logged, so it is invisible on a
+  /// fresh install and for anyone who never uses the tally.
+  Widget _buildDistractions(AppColorsExt ext) {
+    final summaries =
+        DistractionSummary.summarise(_focusService.sessions);
+    if (summaries.isEmpty) return const SizedBox.shrink();
 
-    if (insights.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
+    final names = _distractionNames();
     final tt = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -689,51 +716,219 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Insights', style: tt.titleLarge),
+            Text('What pulls you away', style: tt.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              'From what you logged during sessions. Not measured — you told it.',
+              style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+            ),
             const SizedBox(height: AppSpacing.md),
-            ...insights.map((insight) => Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: insight.color.withOpacity(0.1),
-                    borderRadius: AppRadius.brMd,
-                    border: Border.all(color: insight.color.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(insight.emoji, style: const TextStyle(fontSize: 28)),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              insight.title,
-                              style: tt.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: insight.color,
-                              ),
-                            ),
-                            Text(
-                              insight.description,
-                              style: tt.bodySmall
-                                  ?.copyWith(color: ext.textSecondary),
-                            ),
-                          ],
-                        ),
+            for (final d in summaries.take(5)) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(names[d.appId] ?? 'A distraction',
+                              style: tt.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
+                          Text(
+                            '${d.taps} time${d.taps == 1 ? '' : 's'} across '
+                            '${d.sessions} session${d.sessions == 1 ? '' : 's'} · '
+                            '${d.whenLabel}',
+                            style: tt.bodySmall
+                                ?.copyWith(color: ext.textSecondary),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                )),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
+  /// Distraction ids → the names the user gave them.
+  Map<String, String> _distractionNames() {
+    try {
+      final raw = CleanStorageService.getAppPreferences()['focusAppAllowList'];
+      if (raw is! Map) return const {};
+      final list = AppAllowList.fromJson(Map<String, dynamic>.from(raw));
+      return {for (final a in list.apps) a.id: a.name};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// The same deterministic insight the Focus screen shows, rendered by the same
+  /// card.
+  ///
+  /// This used to call a third generator, `InsightsGenerator`, which shipped
+  /// "Room for Improvement — your focus time decreased by N minutes this week"
+  /// (the loss framing `focus_suggestions_test` bans in `focusCoach`), six
+  /// hardcoded `Color(0xFF...)` values that ignored the theme, and a "Peak Focus
+  /// Time" claim with no `minSessions` threshold at all — so it fired confidently
+  /// off a single session, which is exactly what `bestFocusHour` returns null to
+  /// avoid. Two surfaces disagreeing about the same history is the defect; one
+  /// engine behind both is the fix.
+  Widget _buildInsights(AppColorsExt ext) {
+    final refs = _focusService.sessions
+        .map((s) => FocusSessionRef(
+              startHour: s.startedAt.hour,
+              minutes: s.actualMinutes,
+              completed: s.wasCompleted,
+            ))
+        .toList();
+
+    final insight = InsightEngine.focus(
+      bestFocusHour: FocusInsights.bestFocusHour(refs),
+      completionRate: FocusInsights.completionRate(refs),
+      sessionCount: refs.length,
+      streakDays: _focusService.stats.currentStreak,
+    );
+    if (insight == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: InsightCard(insight: insight),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Garden link
   // ---------------------------------------------------------------------------
+
+  /// The achievements the service has been tracking all along.
+  ///
+  /// `FocusService` computes twenty achievement types, persists them, and fires a
+  /// toast on unlock — and then they were invisible forever, because
+  /// `FocusService.achievements` had no reader anywhere in the app. A one-off
+  /// toast is not a record: the user could not see what they had earned, what was
+  /// close, or that the system existed at all.
+  ///
+  /// Surfaced here rather than in `MilestonesService`, which covers steps and
+  /// sleep: adding focus milestones there would have meant a SECOND achievement
+  /// system computing the same thing from the same data.
+  ///
+  /// Unlocked first, then the closest three still in progress — the whole list of
+  /// twenty is a wall, and the useful information is "what did I earn" plus
+  /// "what's next".
+  Widget _buildAchievements(AppColorsExt ext) {
+    final all = _focusService.achievements.values.toList();
+    if (all.isEmpty) return const SizedBox.shrink();
+
+    final unlocked = all.where((a) => a.isUnlocked).toList()
+      ..sort((a, b) =>
+          (b.unlockedAt ?? DateTime(0)).compareTo(a.unlockedAt ?? DateTime(0)));
+    final inProgress = all.where((a) => !a.isUnlocked).toList()
+      ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
+    final next = inProgress.take(3).toList();
+
+    if (unlocked.isEmpty && next.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Achievements',
+          icon: Symbols.workspace_premium_rounded,
+          accent: ext.focus,
+        ),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '${unlocked.length} of ${all.length} earned',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: ext.textSecondary,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              for (final a in unlocked.take(6)) _achievementRow(ext, a),
+              if (next.isNotEmpty) ...[
+                if (unlocked.isNotEmpty) const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Up next',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: ext.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                for (final a in next) _achievementRow(ext, a),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+      ],
+    );
+  }
+
+  Widget _achievementRow(AppColorsExt ext, FocusAchievement a) {
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          // Fixed box so a wide emoji cannot shift the text column out of
+          // alignment between rows.
+          SizedBox(
+            width: 32,
+            child: Text(
+              a.type.emoji,
+              style: const TextStyle(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  a.type.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: a.isUnlocked ? ext.textPrimary : ext.textSecondary,
+                  ),
+                ),
+                Text(
+                  a.type.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          if (a.isUnlocked)
+            Icon(Symbols.check_circle_rounded,
+                size: 20, color: ext.mark(ext.success))
+          else
+            Text(
+              Pct.text(a.progressPercent),
+              style: tt.labelSmall?.copyWith(
+                color: ext.textSecondary,
+                fontWeight: FontWeight.w700,
+                fontFeatures: kTabular,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildGardenLink(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;

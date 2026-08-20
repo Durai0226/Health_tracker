@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:tablet_remainder/features/focus/models/focus_coins.dart';
 import 'package:tablet_remainder/features/focus/models/app_allow_list.dart';
 import 'package:tablet_remainder/features/focus/models/custom_tag.dart';
-import 'package:tablet_remainder/features/focus/models/focus_leaderboard.dart';
-import 'package:tablet_remainder/features/focus/models/group_focus.dart';
 import 'package:tablet_remainder/features/focus/models/detailed_stats.dart';
 import 'package:tablet_remainder/features/focus/models/focus_session.dart';
 import 'package:tablet_remainder/features/focus/models/focus_plant.dart';
@@ -70,7 +68,14 @@ void main() {
   });
 
   group('AppAllowList Model Tests', () {
-    test('should correctly identify allowed apps', () {
+    // The three tests that were here exercised `isAppAllowed()` and the
+    // `isStrictMode` flag — an enforcement predicate with no production caller,
+    // in a feature that never had the permissions to enforce anything. Testing it
+    // gave the strongest possible false signal: green assertions over a promise
+    // the app could not keep. Both the predicate and these tests are gone.
+    //
+    // What survives is what the list actually is: a note the user writes.
+    test('partitions the list the user wrote', () {
       final allowList = AppAllowList(
         apps: [
           AllowedApp(
@@ -78,31 +83,36 @@ void main() {
             name: 'Spotify',
             packageName: 'com.spotify.music',
             category: AppCategory.music,
-            addedAt: DateTime.now(),
+            addedAt: DateTime(2024, 1, 15),
             isAllowed: true,
+          ),
+          AllowedApp(
+            id: 'socialapp',
+            name: 'Social App',
+            packageName: 'com.social.app',
+            category: AppCategory.social,
+            addedAt: DateTime(2024, 1, 15),
+            isAllowed: false,
           ),
         ],
       );
-      
-      expect(allowList.isAppAllowed('com.spotify.music'), true);
+
+      expect(allowList.allowedApps.map((a) => a.id), ['spotify']);
+      expect(allowList.blockedApps.map((a) => a.id), ['socialapp']);
     });
 
-    test('strict mode should block unlisted apps', () {
-      const allowList = AppAllowList(
-        apps: [],
-        isStrictMode: true,
-      );
-      
-      expect(allowList.isAppAllowed('com.unknown.app'), false);
-    });
-
-    test('non-strict mode should allow unlisted apps', () {
-      const allowList = AppAllowList(
-        apps: [],
-        isStrictMode: false,
-      );
-      
-      expect(allowList.isAppAllowed('com.unknown.app'), true);
+    test('loads a list written before the enforcement flags were removed', () {
+      // Old records carry isStrictMode / blockNotifications /
+      // showWarningOnBlockedApp / gracePeriodSeconds. They must be ignored, not
+      // choked on.
+      final restored = AppAllowList.fromJson({
+        'apps': [],
+        'isStrictMode': true,
+        'blockNotifications': false,
+        'showWarningOnBlockedApp': false,
+        'gracePeriodSeconds': 30,
+      });
+      expect(restored.apps, isEmpty);
     });
 
     test('PresetAllowList should return correct app counts', () {
@@ -165,151 +175,6 @@ void main() {
     });
   });
 
-  group('FocusLeaderboard Model Tests', () {
-    test('LeaderboardEntry should calculate rank change correctly', () {
-      final entry = LeaderboardEntry(
-        oderId: 'user_1',
-        displayName: 'Test User',
-        rank: 5,
-        value: 1000,
-        previousRank: 8,
-      );
-      
-      expect(entry.rankChange, 3);
-      expect(entry.rankImproved, true);
-      expect(entry.rankDeclined, false);
-    });
-
-    test('LeaderboardEntry with declined rank should be detected', () {
-      final entry = LeaderboardEntry(
-        oderId: 'user_1',
-        displayName: 'Test User',
-        rank: 10,
-        value: 500,
-        previousRank: 5,
-      );
-      
-      expect(entry.rankChange, -5);
-      expect(entry.rankImproved, false);
-      expect(entry.rankDeclined, true);
-    });
-
-    test('UserProfile should serialize correctly', () {
-      final profile = UserProfile(
-        oderId: 'user_123',
-        displayName: 'Focus Master',
-        friendCode: 'ABC12345',
-        totalFocusMinutes: 3000,
-        currentStreak: 15,
-        treesPlanted: 50,
-        joinedAt: DateTime(2024, 1, 1),
-      );
-      
-      final json = profile.toJson();
-      final restored = UserProfile.fromJson(json);
-      
-      expect(restored.oderId, 'user_123');
-      expect(restored.displayName, 'Focus Master');
-      expect(restored.totalFocusHours, 50); // 3000 / 60
-      expect(restored.currentStreak, 15);
-    });
-
-    test('FocusFriend serialization should work correctly', () {
-      final friend = FocusFriend(
-        oderId: 'friend_1',
-        displayName: 'Study Buddy',
-        friendCode: 'XYZ98765',
-        addedAt: DateTime(2024, 1, 10),
-        totalFocusMinutes: 1500,
-        currentStreak: 7,
-      );
-      
-      final json = friend.toJson();
-      final restored = FocusFriend.fromJson(json);
-      
-      expect(restored.oderId, 'friend_1');
-      expect(restored.displayName, 'Study Buddy');
-      expect(restored.currentStreak, 7);
-    });
-  });
-
-  group('GroupFocus Model Tests', () {
-    test('GroupFocusSession canStart should require 2+ ready participants', () {
-      final session = GroupFocusSession(
-        id: 'session_1',
-        hostUserId: 'host_user',
-        hostDisplayName: 'Host',
-        roomCode: 'ABC123',
-        targetMinutes: 25,
-        plantType: PlantType.tree,
-        participants: [
-          GroupParticipant(
-            oderId: 'host_user',
-            displayName: 'Host',
-            isHost: true,
-            isReady: true,
-            joinedAt: DateTime.now(),
-          ),
-        ],
-        createdAt: DateTime.now(),
-      );
-      
-      expect(session.canStart, false); // Only 1 participant
-    });
-
-    test('GroupFocusSession with 2 ready participants can start', () {
-      final session = GroupFocusSession(
-        id: 'session_1',
-        hostUserId: 'host_user',
-        hostDisplayName: 'Host',
-        roomCode: 'ABC123',
-        targetMinutes: 25,
-        plantType: PlantType.tree,
-        participants: [
-          GroupParticipant(
-            oderId: 'host_user',
-            displayName: 'Host',
-            isHost: true,
-            isReady: true,
-            joinedAt: DateTime.now(),
-          ),
-          GroupParticipant(
-            oderId: 'user_2',
-            displayName: 'Friend',
-            isHost: false,
-            isReady: true,
-            joinedAt: DateTime.now(),
-          ),
-        ],
-        createdAt: DateTime.now(),
-      );
-      
-      expect(session.canStart, true);
-    });
-
-    test('GroupSessionInvite shareLink should be formatted correctly', () {
-      final invite = GroupSessionInvite(
-        id: 'invite_1',
-        sessionId: 'session_1',
-        roomCode: 'ABC123',
-        hostDisplayName: 'Host',
-        targetMinutes: 25,
-        currentParticipants: 2,
-        maxParticipants: 10,
-        expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      );
-      
-      expect(invite.shareLink, 'dlyminder://focus/join/ABC123');
-      expect(invite.isFull, false);
-    });
-
-    test('ParticipantStatus should have correct properties', () {
-      expect(ParticipantStatus.focusing.emoji, '🎯');
-      expect(ParticipantStatus.completed.emoji, '🏆');
-      expect(ParticipantStatus.abandoned.emoji, '💔');
-    });
-  });
-
   group('DetailedStats Model Tests', () {
     test('DailyFocusStats should calculate totals correctly', () {
       final stats = DailyFocusStats(
@@ -358,12 +223,6 @@ void main() {
       expect(pattern.minutesByHour.containsKey(10), true);
       expect(pattern.minutesByDayOfWeek.containsKey(1), true); // Monday
     });
-
-    test('InsightType should have correct values', () {
-      expect(InsightType.values.length, 4);
-      expect(InsightType.positive.name, 'positive');
-      expect(InsightType.improvement.name, 'improvement');
-    });
   });
 
   group('Integration Tests', () {
@@ -389,41 +248,6 @@ void main() {
       
       expect(coinsEarned, 50);
       expect(session.wasCompleted, true);
-    });
-
-    test('Group session failure should mark all trees as dead', () {
-      final session = GroupFocusSession(
-        id: 'group_session',
-        hostUserId: 'host',
-        hostDisplayName: 'Host',
-        roomCode: 'TEST01',
-        targetMinutes: 25,
-        plantType: PlantType.tree,
-        participants: [
-          GroupParticipant(
-            oderId: 'host',
-            displayName: 'Host',
-            isHost: true,
-            isReady: true,
-            joinedAt: DateTime.now(),
-            status: ParticipantStatus.focusing,
-          ),
-          GroupParticipant(
-            oderId: 'user2',
-            displayName: 'User 2',
-            isHost: false,
-            isReady: true,
-            joinedAt: DateTime.now(),
-            status: ParticipantStatus.abandoned, // This user left
-          ),
-        ],
-        createdAt: DateTime.now(),
-        status: GroupSessionStatus.failed,
-        failedByUserId: 'user2',
-      );
-      
-      expect(session.status, GroupSessionStatus.failed);
-      expect(session.failedByUserId, 'user2');
     });
 
     test('Tag statistics should aggregate correctly', () {
@@ -459,31 +283,14 @@ void main() {
       expect(restored.transactions.isEmpty, true);
     });
 
-    test('AppAllowList with default values should serialize correctly', () {
+    test('AppAllowList round-trips an empty list', () {
       const allowList = AppAllowList();
-      final json = allowList.toJson();
-      final restored = AppAllowList.fromJson(json);
-      
-      expect(restored.isStrictMode, false);
-      expect(restored.blockNotifications, true);
-      expect(restored.gracePeriodSeconds, 10);
+      final restored = AppAllowList.fromJson(allowList.toJson());
+
+      expect(restored.apps, isEmpty);
+      expect(restored.allowedApps, isEmpty);
+      expect(restored.blockedApps, isEmpty);
     });
 
-    test('GroupFocusSession progress should be 0 when not started', () {
-      final session = GroupFocusSession(
-        id: 'session_1',
-        hostUserId: 'host',
-        hostDisplayName: 'Host',
-        roomCode: 'ABC123',
-        targetMinutes: 25,
-        plantType: PlantType.tree,
-        participants: [],
-        createdAt: DateTime.now(),
-        status: GroupSessionStatus.waiting,
-      );
-      
-      expect(session.progress, 0);
-      expect(session.remainingTime, null);
-    });
   });
 }

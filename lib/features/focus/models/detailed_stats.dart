@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../../../core/utils/enum_json.dart';
 import 'focus_session.dart';
 
 enum StatsPeriod {
@@ -38,7 +38,22 @@ extension StatsPeriodExtension on StatsPeriod {
 
 class DailyFocusStats {
   final DateTime date;
+
+  /// Minutes from **completed** sessions only.
+  ///
+  /// This used to include abandoned sessions' elapsed minutes, while
+  /// `FocusService.todayMinutes` counted completed ones — so the Focus screen and
+  /// the Statistics screen reported different totals for the same day, and the
+  /// streak derived from them disagreed too ("1 day streak" in the header vs
+  /// "0 Day Streak" in Statistics, recorded in docs/ui-audit.md).
+  ///
+  /// One definition, in one place: "focus time" is time you finished.
   final int totalMinutes;
+
+  /// Elapsed minutes from abandoned sessions, kept separately so the honest
+  /// definition above does not throw the data away.
+  final int abandonedMinutes;
+
   final int sessionsCount;
   final int completedSessions;
   final int abandonedSessions;
@@ -51,6 +66,7 @@ class DailyFocusStats {
   DailyFocusStats({
     required this.date,
     this.totalMinutes = 0,
+    this.abandonedMinutes = 0,
     this.sessionsCount = 0,
     this.completedSessions = 0,
     this.abandonedSessions = 0,
@@ -68,6 +84,7 @@ class DailyFocusStats {
   Map<String, dynamic> toJson() => {
         'date': date.toIso8601String(),
         'totalMinutes': totalMinutes,
+        'abandonedMinutes': abandonedMinutes,
         'sessionsCount': sessionsCount,
         'completedSessions': completedSessions,
         'abandonedSessions': abandonedSessions,
@@ -82,13 +99,15 @@ class DailyFocusStats {
     Map<FocusActivityType, int> activities = {};
     if (json['minutesByActivity'] != null) {
       (json['minutesByActivity'] as Map).forEach((key, value) {
-        activities[FocusActivityType.values[int.parse(key.toString())]] = value;
+        final k = EnumJson.key(FocusActivityType.values, key);
+        if (k != null && value is int) activities[k] = value;
       });
     }
 
     return DailyFocusStats(
       date: DateTime.parse(json['date']),
       totalMinutes: json['totalMinutes'] ?? 0,
+      abandonedMinutes: json['abandonedMinutes'] ?? 0,
       sessionsCount: json['sessionsCount'] ?? 0,
       completedSessions: json['completedSessions'] ?? 0,
       abandonedSessions: json['abandonedSessions'] ?? 0,
@@ -336,14 +355,6 @@ class ProductivityPattern {
     required this.leastProductiveDay,
   });
 
-  String get mostProductiveHourLabel {
-    if (mostProductiveHour < 12) {
-      return '${mostProductiveHour == 0 ? 12 : mostProductiveHour} AM';
-    } else {
-      return '${mostProductiveHour == 12 ? 12 : mostProductiveHour - 12} PM';
-    }
-  }
-
   String get mostProductiveDayLabel {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return days[mostProductiveDay - 1];
@@ -404,77 +415,69 @@ class ProductivityPattern {
   }
 }
 
-class FocusInsight {
-  final String title;
-  final String description;
-  final String emoji;
-  final Color color;
-  final InsightType type;
+/// One distraction's tally across many sessions.
+///
+/// Deliberately NOT a score. Taps ÷ minutes would convert a self-awareness tool
+/// into a thing you can be bad at, and would punish the honest logger — the user
+/// who taps every time would look worse than the one who never opens the screen.
+/// These are counts and a position, and the user draws the conclusion.
+class DistractionSummary {
+  final String appId;
 
-  FocusInsight({
-    required this.title,
-    required this.description,
-    required this.emoji,
-    required this.color,
-    required this.type,
+  /// Total taps.
+  final int taps;
+
+  /// How many distinct sessions this pulled at the user in.
+  final int sessions;
+
+  /// Median seconds into the session. Median rather than mean because one late
+  /// tap in a 90-minute session should not move where this reads as happening.
+  final int medianSecond;
+
+  const DistractionSummary({
+    required this.appId,
+    required this.taps,
+    required this.sessions,
+    required this.medianSecond,
   });
-}
 
-enum InsightType {
-  positive,
-  improvement,
-  milestone,
-  trend,
-}
+  /// "mostly in the first 10 minutes" — the actionable half.
+  ///
+  /// A bucket, not a precise figure: the honest resolution of a handful of
+  /// self-reported taps is "early / mid / late", and quoting "at 7m 12s" would
+  /// imply a precision the data does not have.
+  String get whenLabel {
+    if (medianSecond < 600) return 'mostly in the first 10 minutes';
+    if (medianSecond < 1800) return 'mostly 10–30 minutes in';
+    return 'mostly later in the session';
+  }
 
-class InsightsGenerator {
-  static List<FocusInsight> generate({
-    required WeeklyFocusStats currentWeek,
-    required WeeklyFocusStats? previousWeek,
-    required ProductivityPattern pattern,
-    required int currentStreak,
-  }) {
-    List<FocusInsight> insights = [];
-
-    if (previousWeek != null) {
-      final weekChange = currentWeek.totalMinutes - previousWeek.totalMinutes;
-      if (weekChange > 0) {
-        insights.add(FocusInsight(
-          title: 'Great Progress!',
-          description: 'You focused $weekChange more minutes this week than last week',
-          emoji: '📈',
-          color: const Color(0xFF4CAF50),
-          type: InsightType.positive,
-        ));
-      } else if (weekChange < -30) {
-        insights.add(FocusInsight(
-          title: 'Room for Improvement',
-          description: 'Your focus time decreased by ${-weekChange} minutes this week',
-          emoji: '💪',
-          color: const Color(0xFFFF9800),
-          type: InsightType.improvement,
-        ));
+  /// Ranked tallies, heaviest first. Empty when nothing was ever logged.
+  static List<DistractionSummary> summarise(List<FocusSession> sessions) {
+    final taps = <String, List<int>>{};
+    final inSessions = <String, Set<String>>{};
+    for (final s in sessions) {
+      for (final d in s.distractions) {
+        taps.putIfAbsent(d.appId, () => []).add(d.atSecond);
+        inSessions.putIfAbsent(d.appId, () => {}).add(s.id);
       }
     }
 
-    if (currentStreak >= 7) {
-      insights.add(FocusInsight(
-        title: '$currentStreak Day Streak!',
-        description: 'Keep up the amazing consistency',
-        emoji: '🔥',
-        color: const Color(0xFFFF5722),
-        type: InsightType.milestone,
+    final out = <DistractionSummary>[];
+    taps.forEach((appId, seconds) {
+      seconds.sort();
+      final mid = seconds.length ~/ 2;
+      final median = seconds.length.isOdd
+          ? seconds[mid]
+          : ((seconds[mid - 1] + seconds[mid]) / 2).round();
+      out.add(DistractionSummary(
+        appId: appId,
+        taps: seconds.length,
+        sessions: inSessions[appId]!.length,
+        medianSecond: median,
       ));
-    }
-
-    insights.add(FocusInsight(
-      title: 'Peak Focus Time',
-      description: 'You\'re most productive at ${pattern.mostProductiveHourLabel}',
-      emoji: '⏰',
-      color: const Color(0xFF2196F3),
-      type: InsightType.trend,
-    ));
-
-    return insights;
+    });
+    out.sort((a, b) => b.taps.compareTo(a.taps));
+    return out;
   }
 }

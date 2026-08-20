@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../../../core/services/clean_storage_service.dart';
+import 'tag_service.dart';
+import 'package:clock/clock.dart';
 import '../models/focus_session.dart';
 import '../models/detailed_stats.dart';
 
@@ -14,98 +15,14 @@ class StatsService extends ChangeNotifier {
   List<DailyFocusStats> get dailyStats => List.unmodifiable(_dailyStats);
   ProductivityPattern? get productivityPattern => _productivityPattern;
 
-  Future<void> init() async {
-    await _loadData();
-    debugPrint('✓ StatsService initialized');
-  }
-
-  Future<void> _loadData() async {
-    try {
-      final prefs = CleanStorageService.getAppPreferences();
-      
-      final statsJson = prefs['focusDailyStats'];
-      if (statsJson != null && statsJson is List) {
-        _dailyStats = statsJson
-            .map((s) => DailyFocusStats.fromJson(Map<String, dynamic>.from(s)))
-            .toList();
-      }
-
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error loading stats data: $e');
-    }
-  }
-
-  Future<void> _saveData() async {
-    try {
-      await CleanStorageService.setAppPreference(
-        'focusDailyStats',
-        _dailyStats.take(365).map((s) => s.toJson()).toList(),
-      );
-    } catch (e) {
-      debugPrint('Error saving stats data: $e');
-    }
-  }
-
-  Future<void> recordSession(FocusSession session) async {
-    final date = DateTime(
-      session.startedAt.year,
-      session.startedAt.month,
-      session.startedAt.day,
-    );
-
-    final existingIndex = _dailyStats.indexWhere((s) => 
-        s.date.year == date.year && 
-        s.date.month == date.month && 
-        s.date.day == date.day);
-
-    DailyFocusStats dayStats;
-    
-    if (existingIndex >= 0) {
-      final existing = _dailyStats[existingIndex];
-      final updatedActivities = Map<FocusActivityType, int>.from(existing.minutesByActivity);
-      updatedActivities[session.activityType] = 
-          (updatedActivities[session.activityType] ?? 0) + session.actualMinutes;
-
-      dayStats = DailyFocusStats(
-        date: date,
-        totalMinutes: existing.totalMinutes + session.actualMinutes,
-        sessionsCount: existing.sessionsCount + 1,
-        completedSessions: existing.completedSessions + (session.wasCompleted ? 1 : 0),
-        abandonedSessions: existing.abandonedSessions + (session.wasAbandoned ? 1 : 0),
-        minutesByActivity: updatedActivities,
-        minutesByTag: existing.minutesByTag,
-        plantsGrown: existing.plantsGrown + (session.wasCompleted ? 1 : 0),
-        plantsWithered: existing.plantsWithered + (session.wasAbandoned ? 1 : 0),
-        coinsEarned: existing.coinsEarned + (session.wasCompleted ? session.actualMinutes * 2 : 0),
-      );
-      
-      _dailyStats[existingIndex] = dayStats;
-    } else {
-      dayStats = DailyFocusStats(
-        date: date,
-        totalMinutes: session.actualMinutes,
-        sessionsCount: 1,
-        completedSessions: session.wasCompleted ? 1 : 0,
-        abandonedSessions: session.wasAbandoned ? 1 : 0,
-        minutesByActivity: {session.activityType: session.actualMinutes},
-        plantsGrown: session.wasCompleted ? 1 : 0,
-        plantsWithered: session.wasAbandoned ? 1 : 0,
-        coinsEarned: session.wasCompleted ? session.actualMinutes * 2 : 0,
-      );
-      
-      _dailyStats.add(dayStats);
-      _dailyStats.sort((a, b) => b.date.compareTo(a.date));
-    }
-
-    await _saveData();
-    notifyListeners();
-  }
-
-  /// Rebuilds the in-memory daily aggregates directly from the persisted
-  /// [FocusService.sessions] list. This makes the stored `focusDailyStats`
-  /// aggregate redundant so trend charts always reflect real session data
-  /// (recordSession is no longer required for charts to populate).
+  /// Rebuilds the in-memory daily aggregates directly from [FocusService.sessions].
+  ///
+  /// This is the ONLY derivation of daily focus stats. There used to be a second
+  /// one — an incremental `recordSession()` writing a `focusDailyStats` blob —
+  /// which had no production caller, and whose async `_loadData()` raced this
+  /// method to assign `_dailyStats`. Two sources of truth for the same number is
+  /// how the header and the Statistics screen came to disagree about one day's
+  /// streak, so the aggregate is now always recomputed and never stored.
   void buildFromSessions(List<FocusSession> sessions) {
     final Map<String, DailyFocusStats> byDay = {};
 
@@ -121,11 +38,18 @@ class StatsService extends ChangeNotifier {
       if (existing == null) {
         byDay[key] = DailyFocusStats(
           date: date,
-          totalMinutes: session.actualMinutes,
+          // Completed minutes only — see DailyFocusStats.totalMinutes. Counting
+          // abandoned time here is what made this screen disagree with the Focus
+          // screen about the same day.
+          totalMinutes: session.wasCompleted ? session.actualMinutes : 0,
+          abandonedMinutes: session.wasAbandoned ? session.actualMinutes : 0,
           sessionsCount: 1,
           completedSessions: session.wasCompleted ? 1 : 0,
           abandonedSessions: session.wasAbandoned ? 1 : 0,
-          minutesByActivity: {session.activityType: session.actualMinutes},
+          minutesByActivity: {
+            session.activityType:
+                session.wasCompleted ? session.actualMinutes : 0
+          },
           minutesByTag: _tagMinutes({}, session),
           plantsGrown: session.wasCompleted ? 1 : 0,
           plantsWithered: session.wasAbandoned ? 1 : 0,
@@ -135,11 +59,15 @@ class StatsService extends ChangeNotifier {
         final activities =
             Map<FocusActivityType, int>.from(existing.minutesByActivity);
         activities[session.activityType] =
-            (activities[session.activityType] ?? 0) + session.actualMinutes;
+            (activities[session.activityType] ?? 0) +
+                (session.wasCompleted ? session.actualMinutes : 0);
 
         byDay[key] = DailyFocusStats(
           date: date,
-          totalMinutes: existing.totalMinutes + session.actualMinutes,
+          totalMinutes: existing.totalMinutes +
+              (session.wasCompleted ? session.actualMinutes : 0),
+          abandonedMinutes: existing.abandonedMinutes +
+              (session.wasAbandoned ? session.actualMinutes : 0),
           sessionsCount: existing.sessionsCount + 1,
           completedSessions:
               existing.completedSessions + (session.wasCompleted ? 1 : 0),
@@ -161,10 +89,26 @@ class StatsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Tag minutes for a session, skipping tags that no longer exist.
+  ///
+  /// `TagService.deleteTag` scrubs its own `_sessionTags` map but cannot scrub the
+  /// `tagIds` list copied onto each `FocusSession` — that is history, and rewriting
+  /// it would be a lie about what the session was tagged at the time. So the
+  /// breakdown filtered nothing and happily rendered a deleted tag's id as a row,
+  /// attributing minutes to a tag the user had removed.
+  ///
+  /// Filtering here keeps the history honest and the UI correct, and it also
+  /// covers any other source of an unknown id (a restored backup from a build with
+  /// different tags, for instance).
+  ///
+  /// Minutes are completed-only, matching `DailyFocusStats.totalMinutes`, so the
+  /// per-tag rows sum to the day's headline instead of exceeding it.
   Map<String, int> _tagMinutes(Map<String, int> base, FocusSession session) {
-    if (session.tagIds.isEmpty) return base;
+    if (session.tagIds.isEmpty || !session.wasCompleted) return base;
+    final known = TagService().tags.map((t) => t.id).toSet();
     final result = Map<String, int>.from(base);
     for (final tagId in session.tagIds) {
+      if (!known.contains(tagId)) continue;
       result[tagId] = (result[tagId] ?? 0) + session.actualMinutes;
     }
     return result;
@@ -187,22 +131,22 @@ class StatsService extends ChangeNotifier {
   }
 
   DailyFocusStats getTodayStats() {
-    final today = DateTime.now();
+    final today = clock.now();
     return getStatsForDate(today) ?? DailyFocusStats(date: today);
   }
 
   WeeklyFocusStats getWeekStats({DateTime? weekStart}) {
-    final start = weekStart ?? _getWeekStart(DateTime.now());
+    final start = weekStart ?? _getWeekStart(clock.now());
     return WeeklyFocusStats.calculate(_dailyStats, start);
   }
 
   WeeklyFocusStats getLastWeekStats() {
-    final lastWeekStart = _getWeekStart(DateTime.now()).subtract(const Duration(days: 7));
+    final lastWeekStart = _getWeekStart(clock.now()).subtract(const Duration(days: 7));
     return WeeklyFocusStats.calculate(_dailyStats, lastWeekStart);
   }
 
   MonthlyFocusStats getMonthStats({int? year, int? month}) {
-    final now = DateTime.now();
+    final now = clock.now();
     return MonthlyFocusStats.calculate(
       _dailyStats,
       year ?? now.year,
@@ -211,7 +155,7 @@ class StatsService extends ChangeNotifier {
   }
 
   YearlyFocusStats getYearStats({int? year}) {
-    return YearlyFocusStats.calculate(_dailyStats, year ?? DateTime.now().year);
+    return YearlyFocusStats.calculate(_dailyStats, year ?? clock.now().year);
   }
 
   List<DailyFocusStats> getStatsForRange(DateTime start, DateTime end) {
@@ -220,20 +164,20 @@ class StatsService extends ChangeNotifier {
   }
 
   List<DailyFocusStats> getLast7Days() {
-    final now = DateTime.now();
+    final now = clock.now();
     final weekAgo = now.subtract(const Duration(days: 7));
     return getStatsForRange(weekAgo, now);
   }
 
   List<DailyFocusStats> getLast30Days() {
-    final now = DateTime.now();
+    final now = clock.now();
     final monthAgo = now.subtract(const Duration(days: 30));
     return getStatsForRange(monthAgo, now);
   }
 
   List<WeeklyFocusStats> getLast4Weeks() {
     final List<WeeklyFocusStats> weeks = [];
-    var weekStart = _getWeekStart(DateTime.now());
+    var weekStart = _getWeekStart(clock.now());
     
     for (int i = 0; i < 4; i++) {
       weeks.add(WeeklyFocusStats.calculate(_dailyStats, weekStart));
@@ -245,7 +189,7 @@ class StatsService extends ChangeNotifier {
 
   List<MonthlyFocusStats> getLast12Months() {
     final List<MonthlyFocusStats> months = [];
-    var date = DateTime.now();
+    var date = clock.now();
     
     for (int i = 0; i < 12; i++) {
       months.add(MonthlyFocusStats.calculate(_dailyStats, date.year, date.month));
@@ -253,24 +197,6 @@ class StatsService extends ChangeNotifier {
     }
     
     return months;
-  }
-
-  List<FocusInsight> getInsights() {
-    final currentWeek = getWeekStats();
-    final previousWeek = getLastWeekStats();
-    final pattern = _productivityPattern;
-
-    if (pattern == null) return [];
-
-    final prefs = CleanStorageService.getAppPreferences();
-    final currentStreak = prefs['focusStats']?['currentStreak'] ?? 0;
-
-    return InsightsGenerator.generate(
-      currentWeek: currentWeek,
-      previousWeek: previousWeek,
-      pattern: pattern,
-      currentStreak: currentStreak,
-    );
   }
 
   Map<FocusActivityType, int> getActivityBreakdown(StatsPeriod period) {
@@ -287,7 +213,7 @@ class StatsService extends ChangeNotifier {
         relevantStats = getLast30Days();
         break;
       case StatsPeriod.yearly:
-        relevantStats = _dailyStats.where((s) => s.date.year == DateTime.now().year).toList();
+        relevantStats = _dailyStats.where((s) => s.date.year == clock.now().year).toList();
         break;
     }
 
@@ -317,4 +243,11 @@ class StatsService extends ChangeNotifier {
   DateTime _getWeekStart(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
   }
+  /// Fresh-install state between tests. See FocusService.resetForTesting.
+  @visibleForTesting
+  void resetForTesting() {
+    _dailyStats = [];
+    _productivityPattern = null;
+  }
+
 }

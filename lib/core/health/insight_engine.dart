@@ -139,6 +139,7 @@ class InsightEngine {
     double completionRate = 1,
     int sessionCount = 0,
     int streakDays = 0,
+    int? suggestedMinutes,
   }) {
     if (sessionCount >= 4 && completionRate < 0.5) {
       return Insight(
@@ -149,6 +150,11 @@ class InsightEngine {
         detail: 'Under half your sessions finish. A shorter target can make it easier to complete and build momentum.',
         metric: '${(completionRate * 100).round()}%',
         why: 'Completed sessions ÷ total sessions.',
+        // `Insight.actionLabel` and `InsightCard(onAction:)` have both existed
+        // since the insight kit was written, and Focus set neither — so every
+        // focus insight was a statement the user could not act on without
+        // working out for themselves which control it referred to.
+        actionLabel: suggestedMinutes != null ? 'Try ${suggestedMinutes}m' : null,
         rank: 42,
       );
     }
@@ -161,6 +167,7 @@ class InsightEngine {
         detail: 'You focus most around ${FocusInsights.hourLabel(bestFocusHour)}. Protect that window for deep work.',
         metric: FocusInsights.hourLabel(bestFocusHour),
         why: 'Hour of day with the most accumulated focus minutes.',
+        actionLabel: 'Remind me then',
         rank: 34,
       );
     }
