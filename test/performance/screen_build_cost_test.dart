@@ -133,6 +133,20 @@ final _screens = <List<dynamic>>[
 /// ~196 elements per row is a Dismissible + card + category chip + relative
 /// time + priority marker each. Budgeting a list at its zero-row size is the
 /// same defect this file's header warns about, one level up.
+///
+/// `Focus/stats` moved again, 1148 -> 1328 (measured 1155), when its bespoke
+/// insight rendering was replaced by the shared `InsightCard`:
+///
+///   without any insight   1082
+///   with InsightCard      1155   (+73)
+///
+/// The 73 is bought, not leaked. The card it replaced was an emoji, a title and a
+/// description in a hand-rolled Container; `InsightCard` adds the metric, the
+/// feature label and the `why` chip — the explainability contract every other
+/// insight surface in the app already meets. The generator behind the old row
+/// (`InsightsGenerator`) shipped loss framing, six hardcoded colours and a "Peak
+/// Focus Time" claim with no minimum-sessions threshold, so the elements saved
+/// were being spent on a worse answer.
 const Map<String, int> _elementBudget = {
   'Water/calendar': 2081,
   'Water/dashboard': 2018,
@@ -158,7 +172,7 @@ const Map<String, int> _elementBudget = {
   'Biometrics/workouts': 660,
   'Biometrics/connected_devices': 380,
   'Vitals/blood_sugar': 940,
-  'Focus/stats': 1148,
+  'Focus/stats': 1328,
   'Insights/weekly_recap': 856,
   'Vitals/blood_pressure': 854,
   'Insights/trends': 988,
@@ -373,10 +387,35 @@ void main() {
           source: 'within-run ratio (machine-independent)'));
       }
     }
+    // Beacon first — WITH a sample count. This harness is the one that proved a
+    // bare beacon is worthless: run with only its `warmup` test it emitted all
+    // four beacons, zero findings, exit 0, and printed this table with a header
+    // and no data rows — output byte-identical to an honest 29-screen run. Every
+    // gate below passes vacuously over an empty `costs`, and line 329
+    // (`elementCounts.isEmpty ? 1`) actively hardens the empty case instead of
+    // failing it.
+    reportMeasured(
+        const ['build-error', 'never-settles', 'element-budget', 'tree-size'],
+        samples: costs.length);
+
     for (final f in findings) {
       emitFinding(f);
     }
     p(renderRatingTable(findings, deviceMeasured: false));
+
+    // A sweep that skipped screens must not read as a sweep that found nothing.
+    // Three sibling harnesses already assert their own non-vacuity
+    // (`focus_dark_mode` on resolved text pairs, `focus_a11y` on tap targets,
+    // `focus_geometry` on section headers); this file was the one that did not.
+    //
+    // Placed AFTER the emit loop, deliberately: `expect` throws, and a harness
+    // that dies before reporting contributes nothing to the score. Placing it
+    // above would have made a partial run silently unpriced instead of loudly
+    // invalid — the same asymmetry this whole exercise keeps tripping over.
+    expect(costs.length, _screens.length,
+        reason: 'measured ${costs.length} of ${_screens.length} screens — the '
+            'gates below are all "is this collection empty", so a partial run '
+            'grades identically to a perfect one');
 
     // THE GATE.
     //
