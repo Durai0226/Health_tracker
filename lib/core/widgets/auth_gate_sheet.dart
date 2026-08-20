@@ -140,6 +140,7 @@ class _AuthGateSheetState extends State<AuthGateSheet>
                         alignment: Alignment.centerRight,
                         child: IconButton(
                           visualDensity: VisualDensity.compact,
+                          tooltip: 'Close',
                           onPressed: () => Navigator.pop(context, false),
                           icon: Icon(Symbols.close_rounded, color: ext.textTertiary),
                         ),

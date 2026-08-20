@@ -162,7 +162,16 @@ class SettingsTile extends StatelessWidget {
           Icon(Symbols.chevron_right_rounded, size: 22, color: ext.textTertiary);
     }
 
-    return Material(
+    // A switch row is TWO tap targets: this `InkWell`, which a screen reader
+    // names from the title text inside it, and the `AppSwitch`, which has no text
+    // of its own and so is announced as a bare "switch, on" — the user is told a
+    // control exists and not what it governs. Merging makes the row one node,
+    // announced as title + subtitle + state, which is both the WCAG 2.2 SC 4.1.2
+    // requirement and simply how a settings row should read.
+    //
+    // Scoped to the switch case on purpose: a custom `trailing` may hold its own
+    // interactive widget, and merging would swallow it.
+    Widget tile = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: effectiveOnTap,
@@ -207,5 +216,7 @@ class SettingsTile extends StatelessWidget {
         ),
       ),
     );
+    if (switchValue != null) tile = MergeSemantics(child: tile);
+    return tile;
   }
 }

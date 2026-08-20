@@ -200,13 +200,13 @@ mixin ToastAnimationMixin<T extends StatefulWidget> on State<T>, TickerProviderS
     shimmerController = AnimationController(
       duration: ToastTheme.shimmerDuration,
       vsync: this,
-    )..repeat();
+    );
 
     // Pulse animation controller (loops)
     pulseController = AnimationController(
       duration: ToastTheme.pulseDuration,
       vsync: this,
-    )..repeat(reverse: true);
+    );
 
     // Progress animation controller
     progressController = AnimationController(
@@ -271,6 +271,36 @@ mixin ToastAnimationMixin<T extends StatefulWidget> on State<T>, TickerProviderS
         dismissToast(onDismiss: onDismiss);
       }
     });
+  }
+
+  /// Start or stop the two PERPETUAL loops to match the user's preference.
+  ///
+  /// Must be called from `didChangeDependencies`, never `initState`. The first
+  /// version of this fix read `MediaQuery.maybeDisableAnimationsOf(context)`
+  /// inside `initState` and was worse than not fixing it at all:
+  /// `StatefulElement.dependOnInheritedElement` asserts when called before
+  /// `initState` completes, so in debug it threw
+  /// "dependOnInheritedWidgetOfExactType<MediaQuery>() ... was called before
+  /// State.initState() completed" and returned null — every toast became an error
+  /// widget. It survived review because the harnesses suppress
+  /// `FlutterError.onError` and the completion gate only asked
+  /// `ToastOverlay.hasActiveToasts`, which counts overlay ENTRIES and cannot tell
+  /// a rendered toast from a red error box.
+  ///
+  /// The shimmer and the pulse loop forever, so they are what gets suppressed. The
+  /// entry slide and the auto-dismiss progress bar are deliberately left alone:
+  /// both are finite, and the progress bar is the only cue for how long the toast
+  /// will stay. Reduce-motion means less gratuitous movement, not less information.
+  void applyToastMotionPreference({required bool reduceMotion}) {
+    if (reduceMotion) {
+      shimmerController.stop();
+      shimmerController.value = 0.0;
+      pulseController.stop();
+      pulseController.value = 0.0;
+    } else {
+      if (!shimmerController.isAnimating) shimmerController.repeat();
+      if (!pulseController.isAnimating) pulseController.repeat(reverse: true);
+    }
   }
 
   Future<void> dismissToast({VoidCallback? onDismiss}) async {

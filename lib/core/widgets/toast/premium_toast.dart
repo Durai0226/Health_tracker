@@ -86,7 +86,8 @@ class _PremiumToastState extends State<PremiumToast>
       );
     }
 
-    // Initialize animations
+    // Controllers only. The perpetual loops are started from
+    // didChangeDependencies, which is the only place MediaQuery may be read.
     initToastAnimations(
       autoDismissDuration: widget.autoDismissDuration,
       onDismiss: widget.onDismiss,
@@ -94,6 +95,14 @@ class _PremiumToastState extends State<PremiumToast>
 
     // Haptic feedback on show
     HapticFeedback.lightImpact();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    applyToastMotionPreference(
+      reduceMotion: MediaQuery.disableAnimationsOf(context),
+    );
   }
 
   @override

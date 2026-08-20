@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/haptic_service.dart';
 import 'package:flutter/services.dart';
 import '../../design/app_design.dart';
 
@@ -44,7 +45,7 @@ class SegmentedToggle extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
                   if (i != index) {
-                    HapticFeedback.selectionClick();
+                    HapticService().selectionClick();
                     onChanged(i);
                   }
                 },

@@ -86,7 +86,11 @@ class _RingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final radius = (size.width - stroke) / 2;
+    // Guard the radius: a caller passing a stroke wider than the box would
+    // otherwise ask Skia to stroke a negative-radius circle.
+    final radius = math.max(0.0, (size.width - stroke) / 2);
+    if (radius == 0) return;
+
     final trackPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
@@ -98,15 +102,44 @@ class _RingPainter extends CustomPainter {
       ..color = fill;
 
     canvas.drawCircle(center, radius, trackPaint);
-    if (value > 0) {
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2,
-        2 * math.pi * value,
-        false,
-        fillPaint,
-      );
+    if (value <= 0) return;
+
+    // A closed ring means DONE — so draw the full circle rather than a 2π arc.
+    // An arc that sweeps the whole way round with round caps laps itself at the
+    // 12-o'clock start, leaving a visible seam on the one state that has to look
+    // perfect.
+    if (value >= 1.0) {
+      canvas.drawCircle(center, radius, fillPaint);
+      return;
     }
+
+    // ROUND CAPS ADD INK THE VALUE DIDN'T ASK FOR.
+    //
+    // StrokeCap.round extends the stroke by half its width past each end of the
+    // arc, so the ink actually laid down spans `sweep + stroke/radius` radians,
+    // not `sweep`. On the 104px hero ring (stroke 10, radius 47) that overshoot
+    // is 0.213 rad — 3.4% of the circle — which meant **anything at or above
+    // ~96.6% painted as a fully closed ring**: the two caps met and overlapped.
+    // The user reads a closed ring as 100%, so a 97%-adherence day was
+    // indistinguishable from a perfect one, and the centre caption then had to
+    // argue with the picture around it.
+    //
+    // Subtracting the cap extension makes total ink equal the value again, and
+    // makes the 1.0 case above the only way to draw a closed ring.
+    final capRadians = stroke / radius;
+    final sweep = 2 * math.pi * value - capRadians;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2 + capRadians / 2,
+      // Below one cap's worth of arc there is no geometry left to shorten: a
+      // round cap at sweep 0 is a dot of diameter `stroke`, which is the
+      // smallest mark this ring can make. Clamping to 0 keeps a just-started
+      // value visible instead of vanishing — the dot over-reads slightly, and
+      // over-reading a first dose is the safe direction.
+      sweep > 0 ? sweep : 0,
+      false,
+      fillPaint,
+    );
   }
 
   @override

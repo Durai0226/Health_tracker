@@ -98,11 +98,38 @@ class _ParticleSystemState extends State<ParticleSystem>
       duration: const Duration(seconds: 3),
       vsync: this,
     );
+    // Started from didChangeDependencies, where MediaQuery can be read safely.
+  }
 
-    if (widget.isPlaying) {
-      _spawnParticles();
-      _controller.repeat();
-      _controller.addListener(_updateParticles);
+  /// True when the user has asked the OS for less motion.
+  bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Confetti is the purest possible case of decorative motion, and this
+    // controller `repeat()`s for as long as the toast is up while consulting
+    // nothing. It mattered the moment the Focus completion toast was wired with
+    // `showParticles: true`: celebrating a finished session by throwing particles
+    // at somebody who has asked their phone to stop moving things is not a
+    // celebration.
+    //
+    // Suppressed entirely rather than frozen mid-flight: a static scatter of
+    // confetti pinned over a toast reads as a rendering fault, and unlike a
+    // progress ring these particles carry no information to preserve.
+    if (widget.isPlaying && !_reduceMotion) {
+      if (_particles.isEmpty) _spawnParticles();
+      if (!_controller.isAnimating) {
+        _controller
+          ..addListener(_updateParticles)
+          ..repeat();
+      }
+    } else {
+      _controller.stop();
+      _controller.removeListener(_updateParticles);
+      if (_particles.isNotEmpty) {
+        setState(_particles.clear);
+      }
     }
   }
 

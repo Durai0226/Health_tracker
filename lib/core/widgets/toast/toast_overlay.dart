@@ -153,6 +153,26 @@ class ToastOverlay {
 
   /// Get the number of active toasts
   int get activeToastCount => _activeToasts.length;
+
+  /// Return the process-wide singleton to a fresh-launch state.
+  ///
+  /// [_overlayState] is cached once (`??=` in [show]) and never invalidated, so
+  /// in a test isolate the FIRST pumped overlay is retained for every later test
+  /// in the file — after which toasts are inserted into a defunct `OverlayState`
+  /// and `hasActiveToasts` describes a tree that no longer exists. Without this
+  /// seam, a harness asserting "completion produced in-app feedback" would pass
+  /// or fail on test ORDER rather than on the code.
+  ///
+  /// Entries are removed rather than just cleared: an abandoned `OverlayEntry`
+  /// keeps its subtree mounted and trips the pending-timer check in teardown.
+  @visibleForTesting
+  void resetForTesting() {
+    for (final entry in List<_ToastEntry>.from(_activeToasts)) {
+      if (entry.overlayEntry.mounted) entry.overlayEntry.remove();
+    }
+    _activeToasts.clear();
+    _overlayState = null;
+  }
 }
 
 /// Toast overlay widget wrapper
