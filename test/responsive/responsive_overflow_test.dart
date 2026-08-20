@@ -491,6 +491,13 @@ void main() {
     // Emit BEFORE asserting: `expect` throws, and a harness that dies before
     // reporting contributes nothing to the score. That asymmetry is how three
     // instruments could fail the build while leaving the rating at 100.
+    // Beacon first: these dimensions were measured, findings or not. A
+    // clean run and a run that never happened are otherwise the same
+    // silence, and tool/rate.dart scored both as perfect.
+    reportMeasured(
+        const ['unrenderable', 'overflow', 'renders-blank', 'wrapped-header-text'],
+        samples: rendered);
+
     for (final e in unrenderable.entries) {
       emitFinding(Finding(
           feature: e.key.split('/').first, screen: e.key,

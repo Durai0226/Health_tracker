@@ -21,10 +21,22 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
+import 'package:tablet_remainder/core/services/audio_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
+import 'package:tablet_remainder/features/focus/services/coins_service.dart';
+import 'package:tablet_remainder/features/focus/services/focus_service.dart';
+import 'package:tablet_remainder/features/focus/services/tag_service.dart';
+
+import '../support/fake_audio_engine.dart';
 
 import 'package:tablet_remainder/features/focus/screens/focus_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/custom_tags_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/detailed_stats_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/focus_garden_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/app_allow_list_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/plant_real_trees_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/relaxation_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/settings/focus_reminders_settings_screen.dart';
 import 'package:tablet_remainder/features/home/screens/home_dashboard.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_dashboard.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/blood_pressure_screen.dart';
@@ -44,8 +56,18 @@ final Map<String, Widget Function()> _screens = {
   'home': () => HomeDashboard(onNavigate: (int i, {int? healthTab}) {}),
   'medicine': () => const NunitoMedicationDashboard(),
   'water_dashboard': () => const AquaWaterDashboard(),
+  // All eight Focus surfaces. Only `focus` and `focus_tags` were registered
+  // before, so six screens had never had a tap target measured — and an audit
+  // that covers two of eight screens reports "none" for the other six in exactly
+  // the same words it uses for a clean result.
   'focus': () => const FocusScreen(),
   'focus_tags': () => const CustomTagsScreen(),
+  'focus_stats': () => const DetailedStatsScreen(),
+  'focus_garden': () => const FocusGardenScreen(),
+  'focus_apps': () => const AppAllowListScreen(),
+  'plant_trees': () => const PlantRealTreesScreen(),
+  'relaxation': () => const RelaxationScreen(),
+  'focus_reminders': () => const FocusRemindersSettingsScreen(),
   'settings': () => const SettingsScreen(),
   'vitavibe': () => const VitaVibeSettingsScreen(),
   'sleep': () => const SleepDashboardScreen(),
@@ -115,6 +137,8 @@ void main() {
   // screen -> "WidgetType WxH"
   final small = <String, List<String>>{};
   final belowWcag = <String, List<String>>{};
+  /// Screens that threw while building, so their targets were never measured.
+  final couldNotBuild = <String, String>{};
   var measured = 0;
 
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
@@ -124,9 +148,20 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     AppDatabase.setInstanceForTesting(db);
     ActiveProfileService().resetForTesting();
+    // The six Focus surfaces added to this audit reach the audio player and three
+    // singletons that outlive a single test. Substituting a fake engine keeps the
+    // audit off the platform, and resetting the singletons keeps a measurement
+    // from depending on which screen was pumped before it.
+    AudioService().engineForTesting = FakeAudioEngine();
+    FocusService().resetForTesting();
+    CoinsService().resetForTesting();
+    TagService().resetForTesting();
   });
 
-  tearDown(() async => db.close());
+  tearDown(() async {
+    FocusService().resetForTesting();
+    await db.close();
+  });
 
   for (final entry in _screens.entries) {
     testWidgets('${entry.key}: tap targets meet 44pt', (tester) async {
@@ -144,8 +179,19 @@ void main() {
         ));
         await tester.pump(const Duration(milliseconds: 50));
         await tester.pump(const Duration(seconds: 1));
-      } catch (_) {
+      } catch (e) {
         FlutterError.onError = prev;
+        // Recorded, not swallowed. This used to `return` silently, so a screen
+        // that would not build was indistinguishable from a screen with no
+        // undersized targets — and this audit's whole job is to say which screens
+        // it measured. Nineteen screens build today, so nothing is currently being
+        // hidden; the hole was latent, and latent is how the last three green
+        // instruments in this repo started.
+        //
+        // Gated, not scored: `unrenderable` in `responsive_overflow` owns the
+        // severity for a screen that throws, and pricing it here too would cost
+        // two findings for one defect.
+        couldNotBuild[entry.key] = '$e'.split('\n').first;
         return;
       }
       FlutterError.onError = prev;
@@ -239,6 +285,12 @@ void main() {
       }
     }
     // ignore: avoid_print
+    print('\n-- COULD NOT BE BUILT (nothing measured) --');
+    // ignore: avoid_print
+    print(couldNotBuild.isEmpty
+        ? '  none'
+        : couldNotBuild.entries.map((e) => '  ${e.key}: ${e.value}').join('\n'));
+    // ignore: avoid_print
     print('=============================================\n');
 
     // THE GATE. Like the overflow harness, this file had no `expect()` at all —
@@ -246,6 +298,12 @@ void main() {
     // px as a hard minimum, so anything below it is a conformance failure, not
     // a note. (The Apple 44pt list stays advisory: it is a comfort guideline,
     // and gating on it would fail the app today.)
+    // Beacon first: these dimensions were measured, findings or not.
+    // Without this a clean run and a run that never happened are the same
+    // silence, and tool/rate.dart scores both as perfect.
+    reportMeasured(const ['touch-target-wcag', 'touch-target-comfort'],
+        samples: measured);
+
     for (final e in belowWcag.entries) {
       emitFinding(Finding(
           feature: e.key.split('/').first, screen: e.key,
@@ -261,6 +319,10 @@ void main() {
           source: 'Apple HIG 44pt — advisory, not conformance'));
     }
 
+    expect(couldNotBuild, isEmpty,
+        reason: 'these screens were never measured, so "none below the floor" '
+            'above does not cover them:\n'
+            '${couldNotBuild.entries.map((e) => '${e.key}: ${e.value}').join('\n')}');
     expect(belowWcag, isEmpty,
         reason: 'Tappable targets below the WCAG 2.2 SC 2.5.8 minimum of 24pt '
             '— see the BELOW WCAG section above.');

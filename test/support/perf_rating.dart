@@ -64,6 +64,49 @@ void emitFinding(Finding f) {
   print('PERF|${jsonEncode(f.toJson())}');
 }
 
+/// Announce that [dimensions] were actually MEASURED, whatever the outcome.
+///
+/// ## Why a clean run has to say something
+///
+/// `emitFinding` only prints when something is wrong, so a dimension that found
+/// nothing and a dimension that never ran produce **byte-identical output**:
+/// silence. Everything downstream inherited that ambiguity. `tool/rate.dart`
+/// claimed in its own header to "REFUSE to print a score when a declared
+/// dimension never reported", and `rating/manifest.json` and `docs/rating.md`
+/// repeated the claim — but it was never implemented, because with only `PERF|`
+/// lines to read it was not implementable. Pointing all seven harness paths at
+/// nonexistent files printed **100/100, grade A, 5.00/5, `manifest OK`, exit 0**
+/// with zero dimensions measured.
+///
+/// This is the missing half of the protocol: one beacon per dimension, emitted
+/// unconditionally, so "measured and clean" and "never measured" are finally
+/// different bytes.
+///
+/// Call it from `tearDownAll` and **before** the gating `expect`s, for the same
+/// reason findings are emitted first: `expect` throws, and a harness that dies
+/// before reporting contributes nothing — which is precisely how a broken
+/// instrument reads as a clean one.
+/// [samples] is how many things were actually inspected, and it is the half that
+/// makes a beacon mean anything.
+///
+/// A bare beacon certifies that the FILE ran, not that the dimension was
+/// measured. `screen_build_cost_test.dart` proved it: run with only its `warmup`
+/// test it emitted all four of its beacons, zero findings, exit 0, and printed its
+/// cost table with a header and no data rows — output byte-identical to an honest
+/// 29-screen run. Every gate in it passes vacuously over an empty sample, and one
+/// actively hardens the empty case (`elementCounts.isEmpty ? 1`). So a harness that
+/// measured nothing certified itself clean, which is the same hole the beacon was
+/// added to close, one level in.
+///
+/// `tool/rate.dart` treats a reported count of zero as UNMEASURED. Omit [samples]
+/// only where "how many" genuinely has no meaning.
+void reportMeasured(Iterable<String> dimensions, {int? samples}) {
+  for (final d in dimensions) {
+    // ignore: avoid_print
+    print(samples == null ? 'DIM|$d' : 'DIM|$d|$samples');
+  }
+}
+
 /// Grade bands. `≤` is meaningful — see [scoreOf].
 String gradeFor(int score) {
   if (score >= 90) return 'A';

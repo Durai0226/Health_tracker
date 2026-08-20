@@ -4,40 +4,155 @@
     "",
     "Every dimension that contributes to the rating is listed here, with the",
     "harness responsible for it. `tool/rate.dart` REFUSES to print a score if a",
-    "listed dimension never reported — because the alternative is what this repo",
+    "listed dimension never reported \u2014 because the alternative is what this repo",
     "did before: a harness that did not run and a harness that found nothing",
     "printed the identical result, and 'no findings' was indistinguishable from",
     "'no measurement'. That is the whole reason the number moved between runs.",
     "",
+    "That paragraph was AN ASPIRATION, NOT A FACT, until an adversarial audit",
+    "reproduced the hole: with all seven harness paths pointing at nonexistent",
+    "files the tool printed 100/100, 5.00/5, 'manifest OK' and exit 0. It could",
+    "not have worked, either \u2014 a clean dimension emitted no output at all, so",
+    "'clean' and 'never ran' were the same bytes. Each harness now emits one",
+    "`DIM|<id>` beacon per dimension it measures, via `reportMeasured()` in",
+    "test/support/perf_rating.dart, and rate.dart requires one per entry below.",
+    "If you add a dimension here, its harness MUST beacon it or every run is",
+    "INVALID. That is the intended failure direction.",
+    "",
+    "The `sev` field below is now what PRICES a finding. A harness that emits a",
+    "different severity for its own dimension makes the run INVALID rather than",
+    "silently repricing its own defect.",
+    "",
     "Severity is priced in test/support/perf_rating.dart: P0 -40, P1 -15, P2 -5.",
-    "4.5/5 == score 90 == zero P0, zero P1, at most two P2, across the whole app."
+    "4.5/5 == score 90 == zero P0, zero P1, at most two P2, across the whole app.",
+    "",
+    "The first twelve dimensions all measure STRUCTURE: does it build, does it",
+    "overflow, is the text visible, are the targets big enough. Every one of them",
+    "can be green on a screen a blind user cannot operate, that ignores the",
+    "reduce-motion preference, that offers a new user nothing to do, and that",
+    "answers a finished session with silence. The app scored 95/100 while",
+    "`Semantics(` appeared zero times in the whole Focus feature.",
+    "",
+    "That is not the score being wrong, it is the score being blind. The four",
+    "dimensions after `alignment-drift` add EXPERIENCE, held to the same standard",
+    "as the rest: each is a count or a boolean against a citable standard or a",
+    "structural contract in this codebase. Taste stays out of the number, and",
+    "docs/rating.md is explicit that delight is not something this tool can see."
   ],
-
   "dimensions": [
-    { "id": "build-error",          "harness": "screen_build_cost",     "sev": "p0", "device": false,
-      "source": "binary: the screen threw while building" },
-    { "id": "never-settles",        "harness": "screen_build_cost",     "sev": "p1", "device": false,
-      "source": "binary: a perpetual animation costs battery unobserved" },
-    { "id": "element-budget",       "harness": "screen_build_cost",     "sev": "p2", "device": false,
-      "source": "measured baseline + ~15% (rating/element_budget notes in-file)" },
-    { "id": "tree-size",            "harness": "screen_build_cost",     "sev": "p1", "device": false,
-      "source": "within-run ratio to the median (machine-independent)" },
-
-    { "id": "unrenderable",         "harness": "responsive_overflow",   "sev": "p0", "device": false,
-      "source": "binary: the screen threw while building" },
-    { "id": "overflow",             "harness": "responsive_overflow",   "sev": "p1", "device": false,
-      "source": "RenderFlex overflow at a supported width/text scale" },
-    { "id": "renders-blank",        "harness": "responsive_overflow",   "sev": "p1", "device": false,
-      "source": "binary: a screen with no text is not a screen" },
-    { "id": "wrapped-header-text",  "harness": "responsive_overflow",   "sev": "p2", "device": false,
-      "source": "header chrome must be one line at every supported size" },
-
-    { "id": "touch-target-wcag",    "harness": "touch_target_audit",    "sev": "p0", "device": false,
-      "source": "WCAG 2.2 SC 2.5.8 — 24x24 CSS px minimum" },
-    { "id": "touch-target-comfort", "harness": "touch_target_audit",    "sev": "p2", "device": false,
-      "source": "Apple HIG 44pt — advisory, not conformance" }
+    {
+      "id": "build-error",
+      "harness": "screen_build_cost",
+      "sev": "p0",
+      "device": false,
+      "source": "binary: the screen threw while building"
+    },
+    {
+      "id": "never-settles",
+      "harness": "screen_build_cost",
+      "sev": "p1",
+      "device": false,
+      "source": "binary: a perpetual animation costs battery unobserved"
+    },
+    {
+      "id": "element-budget",
+      "harness": "screen_build_cost",
+      "sev": "p2",
+      "device": false,
+      "source": "measured baseline + ~15% (rating/element_budget notes in-file)"
+    },
+    {
+      "id": "tree-size",
+      "harness": "screen_build_cost",
+      "sev": "p1",
+      "device": false,
+      "source": "within-run ratio to the median (machine-independent)"
+    },
+    {
+      "id": "unrenderable",
+      "harness": "responsive_overflow",
+      "sev": "p0",
+      "device": false,
+      "source": "binary: the screen threw while building"
+    },
+    {
+      "id": "overflow",
+      "harness": "responsive_overflow",
+      "sev": "p1",
+      "device": false,
+      "source": "RenderFlex overflow at a supported width/text scale"
+    },
+    {
+      "id": "renders-blank",
+      "harness": "responsive_overflow",
+      "sev": "p1",
+      "device": false,
+      "source": "binary: a screen with no text is not a screen"
+    },
+    {
+      "id": "wrapped-header-text",
+      "harness": "responsive_overflow",
+      "sev": "p2",
+      "device": false,
+      "source": "header chrome must be one line at every supported size"
+    },
+    {
+      "id": "touch-target-wcag",
+      "harness": "touch_target_audit",
+      "sev": "p0",
+      "device": false,
+      "source": "WCAG 2.2 SC 2.5.8 \u2014 24x24 CSS px minimum"
+    },
+    {
+      "id": "touch-target-comfort",
+      "harness": "touch_target_audit",
+      "sev": "p2",
+      "device": false,
+      "source": "Apple HIG 44pt \u2014 advisory, not conformance"
+    },
+    {
+      "id": "invisible-text",
+      "harness": "focus_dark_mode",
+      "sev": "p0",
+      "device": false,
+      "source": "WCAG ratio from Color.computeLuminance against the nearest opaque ancestor; gradient subtrees skipped; gated only under 1.5:1 because the measured failure was 1.05:1 and no legitimate pairing lands there"
+    },
+    {
+      "id": "alignment-drift",
+      "harness": "focus_geometry",
+      "sev": "p2",
+      "device": false,
+      "source": "geometry assertion on the laid-out render tree (shared left edges, square ring, centred clock, equal grid cards)"
+    },
+    {
+      "id": "no-semantics",
+      "harness": "focus_a11y",
+      "sev": "p1",
+      "device": false,
+      "source": "WCAG 2.2 SC 4.1.2 Name, Role, Value (Level A) — count of nodes in the real semantics tree carrying a tap/longPress action with no label, value, tooltip or hint; the property Flutter's own labeledTapTargetGuideline asserts"
+    },
+    {
+      "id": "motion-not-reduced",
+      "harness": "focus_a11y",
+      "sev": "p1",
+      "device": false,
+      "source": "WCAG 2.2 SC 2.3.3 Animation from Interactions — binary: SchedulerBinding.transientCallbackCount still above zero after 6s idle with disableAnimations true. Paired with an opposite assertion that the motion still runs when allowed, so the gate cannot be cleared by deleting the animation"
+    },
+    {
+      "id": "dead-end-empty-state",
+      "harness": "focus_first_run",
+      "sev": "p1",
+      "device": false,
+      "source": "structural: a fresh install must render an EmptyState with a non-null action. Requiring the shared widget is the load-bearing half — a hand-rolled empty Column carries no action contract to check"
+    },
+    {
+      "id": "silent-completion",
+      "harness": "focus_first_run",
+      "sev": "p1",
+      "device": false,
+      "source": "structural: ToastOverlay.hasActiveToasts after driving a real session to completion with the screen mounted. Defaults to a finding, so an unmeasured run cannot read as a clean one"
+    }
   ],
-
   "excluded": [
     {
       "id": "memory-growth",

@@ -13,13 +13,28 @@ void main() {
   final root = Directory.current.path;
   final dir = Directory('$root/integration_test');
 
-  List<File> suites() => !dir.existsSync()
+  List<File> testsUnder(Directory d) => !d.existsSync()
       ? <File>[]
-      : dir
+      : d
           .listSync(recursive: true)
           .whereType<File>()
           .where((f) => f.path.endsWith('_test.dart'))
           .toList();
+
+  /// Device suites. The five original rules below are all about *device*
+  /// failure modes, so they stay scoped here.
+  List<File> suites() => testsUnder(dir);
+
+  /// Headless unit/widget suites. Only the rules that are equally true off-device
+  /// are applied to these — see `unitRuleScope` below for which, and why not the
+  /// others.
+  ///
+  /// This file excludes itself: its own rule regexes are code, not comments, so
+  /// `RegExp(r'Icons\.')` would be reported as a violation of the rule it
+  /// implements.
+  List<File> unitSuites() => testsUnder(Directory('$root/test'))
+      .where((f) => !f.path.endsWith('e2e_suite_conventions_test.dart'))
+      .toList();
 
   String rel(File f) => f.path.replaceFirst('$root/', '');
 
@@ -56,9 +71,9 @@ void main() {
   ///
   /// An opt-out marker is honoured on the offending line or the one above it,
   /// and is looked for in the RAW line — the marker lives in a comment.
-  List<String> scan(RegExp re, {String? optOut}) {
+  List<String> scan(RegExp re, {String? optOut, List<File>? files}) {
     final hits = <String>[];
-    for (final f in suites()) {
+    for (final f in files ?? suites()) {
       final lines = f.readAsLinesSync();
       for (var i = 0; i < lines.length; i++) {
         final code = codeOf(lines[i]);
@@ -179,6 +194,105 @@ void main() {
           'into a green run. Annotate `// e2e-skip-ok: <reason>` if the skip '
           'is genuinely about an absent platform capability:\n  '
           '${hits.join('\n  ')}',
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Rules that hold for the HEADLESS suites too.
+  //
+  // Only two of the five above generalise, and the reasoning matters because
+  // over-extending them would have made this file useless:
+  //
+  //   * pumpAndSettle — NOT extended. It is banned on device because
+  //     integration_test sets `defaultTestTimeout = Timeout.none`, so a
+  //     never-settling animation burns ten real minutes. Under `flutter test`
+  //     it is the normal, correct idiom, and there are 86 legitimate uses in
+  //     test/. Banning it there would be cargo-culting the rule past its reason.
+  //   * app.main() — NOT extended. Meaningless off-device.
+  //   * markTestSkipped — NOT extended. Headless suites legitimately skip on
+  //     absent platform capabilities.
+  //   * every-testWidgets-has-an-expect — NOT extended, reluctantly. Three
+  //     headless harnesses deliberately collect across many surfaces and gate
+  //     once in `tearDownAll` (see responsive_overflow_test.dart, which
+  //     documents why), so the assertion is real but lives outside the test
+  //     body. Extending this rule would flag three correct harnesses and teach
+  //     people to annotate rather than to think.
+  // ---------------------------------------------------------------------------
+
+  test('the unit scanner sees the suites at all', () {
+    // Same vacuous-pass guard as above, for the second scope.
+    expect(unitSuites(), isNotEmpty,
+        reason: 'Found no *_test.dart under test/ — the unit rules below would '
+            'pass having checked nothing.');
+  });
+
+  test('no find.byIcon(Icons.*) in headless suites either', () {
+    // This one is not device-specific at all: IconData equality compares
+    // codePoint AND fontFamily AND fontPackage, so `find.byIcon(Icons.foo)`
+    // against a widget tree that draws `Symbols.foo` is a permanent zero match
+    // in EVERY harness. It stayed invisible for months because the rule that
+    // catches it only ever scanned integration_test/.
+    final hits = scan(RegExp(r'Icons\.'),
+        optOut: 'e2e-icons-ok:', files: unitSuites());
+    expect(
+      hits,
+      isEmpty,
+      reason: 'The app draws Symbols.* (app_icons.dart), so these finders can '
+          'never match, in any build — and a finder that matches nothing makes '
+          'the assertion after it unreachable rather than failing:\n  '
+          '${hits.join('\n  ')}',
+    );
+  });
+
+  test('no two tests in the same group share a title', () {
+    // Two same-named tests in one scope are a merge artifact, and the framework
+    // runs both without complaint. focus_feature_e2e_test.dart shipped a pair
+    // named 'DetailedStatsScreen builds without errors' with contradictory
+    // expectations ('Focus Statistics' vs 'Detailed Statistics') — both wrong,
+    // both invisible behind a skip. When one of a same-named pair fails, the
+    // report names a title matching two bodies, so the failure is ambiguous to
+    // read as well as ambiguous to fix.
+    //
+    // Keyed by GROUP + title, not title alone. The same leaf name under two
+    // different groups is a good, common pattern — vitals_tombstone_test.dart
+    // has `test('blood pressure')` under both 'delete hides the reading' and
+    // 'Undo re-saves the same id', and those full names are distinct. A rule
+    // that flagged them would be punishing correct code, which is how lints get
+    // switched off.
+    //
+    // The group is approximated as the nearest preceding `group(` declaration
+    // rather than by parsing brace scope. That is exact for the parallel-group
+    // and same-group cases this rule is about; a top-level test declared after a
+    // group could in principle be mis-attributed, hence the opt-out marker.
+    final decl = RegExp(
+        r'''\b(group|testWidgets|test)\s*\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")''');
+    final offenders = <String>[];
+    for (final f in [...suites(), ...unitSuites()]) {
+      final src = f.readAsStringSync();
+      final seen = <String>{};
+      final dupes = <String>{};
+      var group = '<top level>';
+      for (final m in decl.allMatches(src)) {
+        final title = m.group(2) ?? m.group(3)!;
+        if (m.group(1) == 'group') {
+          group = title;
+          continue;
+        }
+        // Generated titles (e.g. '$name fits every supported phone') are
+        // distinct per iteration at run time even though the literal repeats.
+        if (title.contains(r'$')) continue;
+        if (src.contains('$title\', // dupe-title-ok:')) continue;
+        if (!seen.add('$group $title')) dupes.add('$group > $title');
+      }
+      for (final d in dupes) {
+        offenders.add('${rel(f)}  duplicate: "$d"');
+      }
+    }
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'Two tests in one group share a name. Rename one of each pair so '
+          'a failure names exactly one body:\n  ${offenders.join('\n  ')}',
     );
   });
 }
