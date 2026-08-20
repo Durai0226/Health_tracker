@@ -53,6 +53,43 @@ class FocusInsights {
     return done / sessions.length;
   }
 
+  /// The session length this user actually FINISHES, or null if unknown yet.
+  ///
+  /// The duration someone picks and the duration they see through are different
+  /// numbers. A user who repeatedly sets 45 minutes and gives up at 18 is being
+  /// quietly told twice a day that they failed, when the honest reading is that
+  /// their real session is twenty minutes and they have been choosing badly.
+  ///
+  /// Three deliberate choices:
+  ///
+  ///  * **Only completed sessions count.** Abandoned ones measure the ambition,
+  ///    not the capacity, and feeding them back in would keep recommending the
+  ///    length that is not working.
+  ///  * **Median, not mean.** One 180-minute marathon should not drag the
+  ///    suggestion up for weeks.
+  ///  * **Returns null under [minSessions].** A confident recommendation from two
+  ///    data points is worse than saying nothing, because the user cannot tell
+  ///    which one they are being given. Silence is the correct output for
+  ///    not-enough-evidence.
+  ///
+  /// Rounded to the nearest 5 minutes so the app suggests "20", not "19".
+  static int? suggestedMinutes(
+    List<FocusSessionRef> sessions, {
+    int minSessions = 5,
+  }) {
+    final done = sessions.where((s) => s.completed).map((s) => s.minutes).toList()
+      ..sort();
+    if (done.length < minSessions) return null;
+
+    final mid = done.length ~/ 2;
+    final median = done.length.isOdd
+        ? done[mid]
+        : ((done[mid - 1] + done[mid]) / 2).round();
+
+    final rounded = (median / 5).round() * 5;
+    return rounded.clamp(5, 120);
+  }
+
   /// Human 12-hour label for an hour ("2 PM", "9 AM").
   static String hourLabel(int hour) {
     final h12 = hour % 12 == 0 ? 12 : hour % 12;

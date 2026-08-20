@@ -1,10 +1,34 @@
 import 'focus_plant.dart';
+import '../../../core/utils/enum_json.dart';
 import 'ambient_sound.dart';
 
 /// How a focus session runs.
 /// - [single]: one continuous timer (default — preserves the plant/coin loop).
 /// - [pomodoro]: alternating work / break intervals for a number of rounds.
-enum FocusMode { single, pomodoro }
+/// How a session is timed.
+///
+/// **APPEND ONLY — never insert.** The mode is persisted by `.index`, both in the
+/// `focusMode` preference and inside the `focusActiveSession` crash-recovery
+/// snapshot. `EnumJson.at` clamps an unknown ordinal to a default, so appending
+/// is safe; inserting silently reinterprets every stored value.
+enum FocusMode {
+  single,
+  pomodoro,
+
+  /// Count UP until the user stops — the Flowtime technique.
+  ///
+  /// The right fit for this app specifically, because the completion model here
+  /// is already "you decide when it is over": `abandonSession` is literally a
+  /// Give Up button, and the crash-recovery path refuses to guess intent. Flow
+  /// mode is that stance expressed as a timer rather than as an escape hatch.
+  ///
+  /// The evidence for it, kept here and out of the UI: flow takes 15–20 minutes
+  /// to reach, so a 25-minute countdown can cut it short; a 2025 DeskTime
+  /// analysis found top performers averaged ~75 minutes of work to ~33 of rest;
+  /// and analytical work optimises around 25–45 minutes while divergent work runs
+  /// 90–120. A fixed 25 is a default, not a finding.
+  flow,
+}
 
 extension FocusModeExtension on FocusMode {
   String get label {
@@ -13,6 +37,8 @@ extension FocusModeExtension on FocusMode {
         return 'Single';
       case FocusMode.pomodoro:
         return 'Pomodoro';
+      case FocusMode.flow:
+        return 'Flow';
     }
   }
 }
@@ -91,6 +117,33 @@ class FocusSession {
   final String? note;
   final List<String> tagIds;
 
+  /// How the session felt, self-reported: 0 = went well, 1 = mixed,
+  /// 2 = struggled. Null when the user did not say.
+  ///
+  /// **Lower is better, matching the existing mood index (0 = Great … 4 =
+  /// Terrible)** that `CorrelationEngine._moodMeaningfulDelta` is written
+  /// against. A second, opposite scale convention in the same app is how sign
+  /// errors ship — a correlation would come out backwards and read as a finding.
+  ///
+  /// Worth collecting specifically because this is a health app: a subjective
+  /// focus-quality rating is a far more defensible correlation input than
+  /// minutes. "Sessions after a short night feel harder" is the user's own
+  /// report, not the app's inference about their brain.
+  final int? quality;
+
+  /// Distractions the user tapped during the session, as (id, seconds elapsed).
+  ///
+  /// Self-reported, and that is the point rather than a limitation. The app
+  /// cannot see app switches and deliberately does not try — but the ACT of
+  /// logging is itself the interposed pause that the friction research credits,
+  /// and the timestamps buy something a usage-stats report cannot: not "you were
+  /// distracted 14% of the time" but "Instagram pulled at you nine times across
+  /// twelve sessions, mostly in the first ten minutes".
+  ///
+  /// Never scored. Taps ÷ minutes would turn a self-awareness tool into a thing
+  /// you can be bad at, and would punish the honest logger.
+  final List<DistractionTap> distractions;
+
   FocusSession({
     required this.id,
     required this.startedAt,
@@ -104,6 +157,8 @@ class FocusSession {
     this.soundUsed,
     this.note,
     this.tagIds = const [],
+    this.quality,
+    this.distractions = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -119,22 +174,45 @@ class FocusSession {
         'soundUsed': soundUsed?.index,
         'note': note,
         'tagIds': tagIds,
+        'quality': quality,
+        'distractions': distractions.map((d) => d.toJson()).toList(),
       };
 
   factory FocusSession.fromJson(Map<String, dynamic> json) => FocusSession(
         id: json['id'] ?? '',
-        startedAt: DateTime.parse(json['startedAt']),
-        completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt']) : null,
+        // A session with no parseable start is not recoverable data, but it must
+        // not take the rest of the history down with it.
+        startedAt: DateTime.tryParse(json['startedAt']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+        completedAt: DateTime.tryParse(json['completedAt']?.toString() ?? ''),
         targetMinutes: json['targetMinutes'] ?? 0,
         actualMinutes: json['actualMinutes'] ?? 0,
         wasCompleted: json['wasCompleted'] ?? false,
         wasAbandoned: json['wasAbandoned'] ?? false,
-        activityType: FocusActivityType.values[json['activityType'] ?? 0],
-        plantType: PlantType.values[json['plantType'] ?? 0],
-        soundUsed: json['soundUsed'] != null ? AmbientSoundType.values[json['soundUsed']] : null,
+        activityType: EnumJson.at(FocusActivityType.values, json['activityType'],
+            FocusActivityType.work),
+        plantType:
+            EnumJson.at(PlantType.values, json['plantType'], PlantType.seedling),
+        soundUsed: json['soundUsed'] == null
+            ? null
+            : EnumJson.at(AmbientSoundType.values, json['soundUsed'],
+                AmbientSoundType.none),
         note: json['note'],
         // Backward-compatible: older persisted sessions have no tagIds → [].
-        tagIds: json['tagIds'] != null ? List<String>.from(json['tagIds']) : const [],
+        tagIds: json['tagIds'] is List
+            ? List<String>.from(json['tagIds'].map((e) => e.toString()))
+            : const [],
+        // Same pattern for both new fields. A record written before they existed
+        // must load, not throw — the alternative is one old session taking the
+        // whole history down with it.
+        quality: json['quality'] is int ? json['quality'] as int : null,
+        distractions: json['distractions'] is List
+            ? (json['distractions'] as List)
+                .whereType<Map>()
+                .map((e) => DistractionTap.fromJson(
+                    Map<String, dynamic>.from(e)))
+                .toList()
+            : const [],
       );
 
   FocusSession copyWith({
@@ -150,6 +228,8 @@ class FocusSession {
     AmbientSoundType? soundUsed,
     String? note,
     List<String>? tagIds,
+    int? quality,
+    List<DistractionTap>? distractions,
   }) {
     return FocusSession(
       id: id ?? this.id,
@@ -164,8 +244,30 @@ class FocusSession {
       soundUsed: soundUsed ?? this.soundUsed,
       note: note ?? this.note,
       tagIds: tagIds ?? this.tagIds,
+      quality: quality ?? this.quality,
+      distractions: distractions ?? this.distractions,
     );
   }
+}
+
+/// One tap on the user's own distraction list, during a session.
+class DistractionTap {
+  /// The `AllowedApp.id` that was tapped.
+  final String appId;
+
+  /// Seconds into the session. Kept rather than a wall-clock time because the
+  /// useful question is "how far in did this happen", which is comparable across
+  /// sessions of different lengths and at different times of day.
+  final int atSecond;
+
+  const DistractionTap({required this.appId, required this.atSecond});
+
+  Map<String, dynamic> toJson() => {'appId': appId, 'atSecond': atSecond};
+
+  factory DistractionTap.fromJson(Map<String, dynamic> json) => DistractionTap(
+        appId: json['appId']?.toString() ?? '',
+        atSecond: json['atSecond'] is int ? json['atSecond'] as int : 0,
+      );
 }
 
 class FocusStats {
@@ -217,14 +319,16 @@ class FocusStats {
     Map<FocusActivityType, int> minutesByActivity = {};
     if (json['minutesByActivity'] != null) {
       (json['minutesByActivity'] as Map).forEach((key, value) {
-        minutesByActivity[FocusActivityType.values[int.parse(key)]] = value;
+        final k = EnumJson.key(FocusActivityType.values, key);
+        if (k != null && value is int) minutesByActivity[k] = value;
       });
     }
 
     Map<PlantType, int> plantCounts = {};
     if (json['plantCounts'] != null) {
       (json['plantCounts'] as Map).forEach((key, value) {
-        plantCounts[PlantType.values[int.parse(key)]] = value;
+        final k = EnumJson.key(PlantType.values, key);
+        if (k != null && value is int) plantCounts[k] = value;
       });
     }
 

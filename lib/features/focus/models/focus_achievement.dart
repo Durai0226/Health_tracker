@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/services/audio_service.dart';
+import '../../../core/utils/enum_json.dart';
 
 enum AchievementType {
   firstSession,
@@ -25,6 +27,49 @@ enum AchievementType {
   allPlants,
   breathingMaster,
   soundExplorer,
+}
+
+/// Achievement weight class.
+enum AchievementTier { bronze, silver, gold, platinum }
+
+extension AchievementTierExtension on AchievementTier {
+  Color get color {
+    switch (this) {
+      case AchievementTier.bronze:
+        return const Color(0xFFCD7F32);
+      case AchievementTier.silver:
+        return const Color(0xFFC0C0C0);
+      case AchievementTier.gold:
+        return const Color(0xFFFFD700);
+      case AchievementTier.platinum:
+        return const Color(0xFFE5E4E2);
+    }
+  }
+
+  /// Coins paid on unlock.
+  ///
+  /// Deliberately the SAME scale as the streak bonus — `CoinsCalculator` pays
+  /// 10/25/50/100 at 3/7/14/30 days — rather than a new one invented here. Two
+  /// independently-chosen reward ladders in one economy drift, and the streak
+  /// ladder is already calibrated against the things that spend coins.
+  ///
+  /// The ceiling matters more than the exact numbers: trees cost 200–600, so a
+  /// platinum unlock at 100 is a real step toward one without buying it outright.
+  /// A completed minute pays 2, so it is also worth about a 50-minute session —
+  /// generous, but not so generous that the sessions become beside the point,
+  /// which is the failure mode to avoid, since the sessions are the product.
+  int get coinReward {
+    switch (this) {
+      case AchievementTier.bronze:
+        return 10;
+      case AchievementTier.silver:
+        return 25;
+      case AchievementTier.gold:
+        return 50;
+      case AchievementTier.platinum:
+        return 100;
+    }
+  }
 }
 
 extension AchievementTypeExtension on AchievementType {
@@ -187,19 +232,27 @@ extension AchievementTypeExtension on AchievementType {
     }
   }
 
-  Color get color {
+  /// Bronze / Silver / Gold / Platinum.
+  ///
+  /// Extracted from [color], which already encoded exactly this and was the only
+  /// place it existed. Naming it means the coin reward can derive from it instead
+  /// of being a SECOND twenty-four-case switch — and a second switch over the
+  /// same enum is how `soundExplorer` came to require fifteen sounds from a
+  /// three-sound catalogue. Adding an achievement now cannot forget its reward,
+  /// because there is nowhere to forget it.
+  AchievementTier get tier {
     switch (this) {
       case AchievementType.firstSession:
       case AchievementType.tenMinutes:
       case AchievementType.thirtyMinutes:
-        return const Color(0xFFCD7F32); // Bronze
+        return AchievementTier.bronze;
       case AchievementType.oneHour:
       case AchievementType.threeHours:
       case AchievementType.fiveHours:
       case AchievementType.firstPlant:
       case AchievementType.tenPlants:
       case AchievementType.firstStreak:
-        return const Color(0xFFC0C0C0); // Silver
+        return AchievementTier.silver;
       case AchievementType.tenHours:
       case AchievementType.twentyFiveHours:
       case AchievementType.fiftyPlants:
@@ -207,7 +260,7 @@ extension AchievementTypeExtension on AchievementType {
       case AchievementType.earlyBird:
       case AchievementType.nightOwl:
       case AchievementType.weekendWarrior:
-        return const Color(0xFFFFD700); // Gold
+        return AchievementTier.gold;
       case AchievementType.fiftyHours:
       case AchievementType.hundredHours:
       case AchievementType.hundredPlants:
@@ -216,9 +269,18 @@ extension AchievementTypeExtension on AchievementType {
       case AchievementType.allPlants:
       case AchievementType.breathingMaster:
       case AchievementType.soundExplorer:
-        return const Color(0xFFE5E4E2); // Platinum
+        return AchievementTier.platinum;
     }
   }
+
+  Color get color => tier.color;
+
+  /// Coins paid when this unlocks.
+  ///
+  /// `CoinsService.addAchievementBonus` existed with no caller, so twenty-four
+  /// achievements unlocked, fired a notification, and paid nothing — while a
+  /// method advertising the opposite sat in the ledger.
+  int get coinReward => tier.coinReward;
 
   int get requiredValue {
     switch (this) {
@@ -269,7 +331,11 @@ extension AchievementTypeExtension on AchievementType {
       case AchievementType.breathingMaster:
         return 50;
       case AchievementType.soundExplorer:
-        return 15;
+        // Derived, never a literal. This was hardcoded to 15 while the catalogue
+        // shipped three playable sounds, which made a visible achievement
+        // permanently unreachable — the same defect class as `perfectWeek` having
+        // no updater at all. `focus_guards_test` pins the two together.
+        return AudioService.playableAmbientSounds.length;
     }
   }
 }
@@ -300,7 +366,8 @@ class FocusAchievement {
       };
 
   factory FocusAchievement.fromJson(Map<String, dynamic> json) => FocusAchievement(
-        type: AchievementType.values[json['type'] ?? 0],
+        type: EnumJson.at(AchievementType.values, json['type'],
+            AchievementType.values.first),
         unlockedAt: json['unlockedAt'] != null ? DateTime.parse(json['unlockedAt']) : null,
         currentProgress: json['currentProgress'] ?? 0,
         isUnlocked: json['isUnlocked'] ?? false,

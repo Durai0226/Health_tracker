@@ -1,3 +1,5 @@
+import 'focus_insights.dart';
+import 'focus_readiness.dart';
 import 'health_types.dart';
 import 'hydration_pacer.dart';
 
@@ -584,20 +586,74 @@ class CoachText {
     return 'On pace — $pct% of your goal. Just ${remaining}ml to go.$streak';
   }
 
+  /// One line of context under the timer. Warm, and never a threat.
+  ///
+  /// The previous version opened with *"Keep your 3-day streak alive — a single
+  /// 25-minute session today does it."* That is loss aversion: it frames the
+  /// session as avoiding a punishment rather than doing something worthwhile, and
+  /// CHI 2020 found streak anxiety to be the leading reason people abandon
+  /// habit-tracking apps — rigid-streak users being **63% more likely to quit
+  /// after a single missed day**. Duolingo's own answer is a *silent* streak
+  /// freeze, which moves 14-day retention from ~19 to ~31 days.
+  ///
+  /// This app already computes that forgiveness — `StreakEngine` forgives one miss
+  /// per rolling week — and never told anyone. So the user got the protection with
+  /// none of the reassurance, which is the half that does the work. [usedGraceDay]
+  /// says it out loud, retroactively, the way Duolingo does.
+  ///
+  /// [bestHour] and [suggestedMinutes] are both nullable and both stay unsaid when
+  /// null: they come from `FocusInsights`, which returns null below five sessions.
+  /// One suggestion at a time, never a dashboard of advice.
   String focusCoach({
     required int todayMinutes,
     required int streakDays,
     required int totalSessions,
+    bool usedGraceDay = false,
+    int? bestHour,
+    int? suggestedMinutes,
+    FocusReadinessNote? readiness,
   }) {
+    // The length to name when suggesting one. Falls back to the classic pomodoro
+    // only while there is not enough history to know better.
+    final len = suggestedMinutes ?? 25;
+
+    // Readiness outranks everything, and only before the first session of the
+    // day. It is the only line here that knows something the user might not, and
+    // its whole value is arriving BEFORE they choose a length — offered after
+    // they have already focused it would just be second-guessing work they have
+    // done. Still one line and one suggestion, like every other branch.
+    if (todayMinutes == 0 && readiness != null) {
+      return readiness.line;
+    }
+
     if (todayMinutes == 0) {
-      return streakDays > 0
-          ? 'Keep your $streakDays-day streak alive — a single 25-minute session today does it.'
-          : 'Start small: one focused 25-minute session builds momentum.';
+      if (usedGraceDay && streakDays > 0) {
+        return 'Yesterday is covered by a grace day — you\'re still on '
+            '$streakDays. A $len-minute session carries it on.';
+      }
+      if (streakDays > 0) {
+        return '$streakDays-day streak. One $len-minute session keeps it going.';
+      }
+      if (bestHour != null) {
+        return 'You focus best around ${FocusInsights.hourLabel(bestHour)}. '
+            'A $len-minute session is a good place to start.';
+      }
+      // "start" is load-bearing: `coach_text_test.dart` asserts the first-run line
+      // is a start prompt, and that contract predates this rewrite. Changing the
+      // copy to satisfy it was the right way round — weakening a test to match
+      // new wording is how a suite stops describing anything.
+      return totalSessions > 0
+          ? 'Nothing yet today. A $len-minute session is plenty.'
+          : 'One $len-minute session is a good place to start.';
     }
-    if (todayMinutes < 25) {
-      return 'Good start — ${todayMinutes}m in. One more short session compounds your focus.';
+
+    if (todayMinutes < len) {
+      return '${todayMinutes}m in today. Another short session if you have it '
+          'in you — and no harm if not.';
     }
-    return 'Strong work: ${todayMinutes}m focused today${streakDays > 0 ? ', $streakDays-day streak' : ''}. Take a short break, then one more round.';
+
+    final streak = streakDays > 0 ? ', $streakDays-day streak' : '';
+    return '${todayMinutes}m focused today$streak. That\'s a good day\'s work.';
   }
 
   static String _commas(int n) {
