@@ -744,6 +744,17 @@ class CleanStorageService {
         _appPreferencesCache.remove(k);
       }
 
+      // Focus session history is a real table since v15, so wiping the `focus*`
+      // preference keys is no longer enough — that would leave the entire session
+      // history behind while telling the user their data was deleted. Removing
+      // `focusSessionsMigratedToDrift` above also means the next launch would look
+      // for a legacy blob, find none, and simply record itself as migrated again.
+      try {
+        await AppDatabase.instance.focusDao.deleteEverything();
+      } catch (e) {
+        debugPrint('Error clearing focus sessions: $e');
+      }
+
       // Drop in-memory caches and refresh reactive state so the UI updates now.
       _medicinesCache.clear();
       _remindersCache.clear();

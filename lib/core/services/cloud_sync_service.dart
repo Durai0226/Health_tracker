@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import '../../features/medication/models/medicine.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
+import '../database/app_database.dart';
 import 'clean_storage_service.dart';
 import 'health_cloud_sync_service.dart';
+import 'lww_collection_sync.dart';
 
 class CloudSyncService {
   static final CloudSyncService _instance = CloudSyncService._internal();
@@ -30,6 +32,7 @@ class CloudSyncService {
       await Future.wait([
         _syncMedicines(userId),
         _syncWaterIntake(userId),
+        _syncFocusSessions(userId),
         // Period (opt-in) / Steps / Sleep — LWW + tombstones.
         HealthCloudSyncService.instance.syncAll(userId),
       ]);
@@ -41,6 +44,36 @@ class CloudSyncService {
     } finally {
       _isSyncing = false;
     }
+  }
+
+  /// Focus sessions — last-write-wins, tombstones included.
+  ///
+  /// Here rather than in `HealthCloudSyncService`, on purpose. Focus is not
+  /// Health Connect / HealthKit data: it is read from no health permission,
+  /// appears in no per-permission justification, and is not covered by the Play
+  /// "Health apps" declaration. Syncing it through the health service would pull
+  /// a productivity timer into that declaration and its Data-safety rows for no
+  /// benefit, so it rides beside medicines and water — which are equally not
+  /// health-platform data.
+  ///
+  /// LWW rather than the naive "cloud empty → upload, else download" used for
+  /// medicines above, because sessions ACCUMULATE independently: two devices both
+  /// generate new ids, and whole-collection replacement in either direction would
+  /// throw away one side's history.
+  Future<void> _syncFocusSessions(String userId) async {
+    final db = AppDatabase.instance;
+    await syncLwwCollection(
+      _firestore,
+      userId,
+      'focus_sessions',
+      // Tombstones included: a deletion has to propagate like any other change.
+      local: () async => db.focusDao.getAllIncludingDeleted(),
+      id: (r) => (r as FocusSessionRow).id,
+      updatedMs: (r) =>
+          (r as FocusSessionRow).updatedAt.millisecondsSinceEpoch,
+      toJson: (r) => (r as FocusSessionRow).toJson(),
+      apply: (m) async => db.focusDao.upsertRaw(m),
+    );
   }
 
   Future<void> _syncMedicines(String userId) async {

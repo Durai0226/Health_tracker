@@ -369,25 +369,129 @@ Future<void> _seedFocus(DateTime now, int days) async {
   // StreakEngine, which is most of its logic.
   try {
     final sessions = <Map<String, dynamic>>[];
+    final garden = <Map<String, dynamic>>[];
+    final minutesByActivity = <FocusActivityType, int>{};
+    final plantCounts = <PlantType, int>{};
+    var totalMinutes = 0;
+    var abandoned = 0;
+
     final span = days > 60 ? 60 : days; // 100-entry persistence cap
     for (var d = 0; d < span; d++) {
       if (d % 5 == 4) continue;
       final day = now.subtract(Duration(days: d));
       final target = 25 + (d % 3) * 10; // 25 / 35 / 45
       final started = DateTime(day.year, day.month, day.day, 9 + (d % 6), 15);
+      final activity =
+          FocusActivityType.values[d % FocusActivityType.values.length];
+      final plant = PlantType.values[d % PlantType.values.length];
+
+      // Every 7th session is ABANDONED, at a fraction of its target.
+      //
+      // A seed of nothing but perfect sessions cannot exercise the halves of this
+      // feature that deal with imperfection: `StatsService.abandonedMinutes`,
+      // the completion-rate insight, the withered-plant branch of the garden, and
+      // `FocusInsights.suggestedMinutes`, whose whole point is that the length a
+      // user PICKS and the length they FINISH are different numbers. With only
+      // completed sessions the suggestion is trivially the target.
+      final wasAbandoned = d % 7 == 6;
+      final actual = wasAbandoned ? (target * 0.4).round() : target;
+
       sessions.add(FocusSession(
         id: 'seed-focus-$d',
         startedAt: started,
-        completedAt: started.add(Duration(minutes: target)),
+        completedAt: started.add(Duration(minutes: actual)),
         targetMinutes: target,
-        actualMinutes: target,
-        wasCompleted: true,
-        activityType:
-            FocusActivityType.values[d % FocusActivityType.values.length],
-        plantType: PlantType.values[d % PlantType.values.length],
+        actualMinutes: actual,
+        wasCompleted: !wasAbandoned,
+        wasAbandoned: wasAbandoned,
+        activityType: activity,
+        plantType: plant,
       ).toJson());
+
+      // The garden is a SEPARATE preference, not derived from sessions.
+      //
+      // Seeding only `focusSessions` left the Garden screen empty next to a
+      // statistics screen reporting 48 sessions — an inconsistent state no real
+      // user can reach, and the exact screen a QA pass is most likely to open.
+      garden.add(FocusPlant(
+        id: 'seed-plant-$d',
+        type: plant,
+        plantedAt: started,
+        durationMinutes: actual,
+        isAlive: !wasAbandoned,
+        growthProgress: wasAbandoned ? 0.4 : 1.0,
+        activity: activity.name,
+      ).toJson());
+
+      if (wasAbandoned) {
+        abandoned++;
+      } else {
+        totalMinutes += actual;
+        minutesByActivity[activity] = (minutesByActivity[activity] ?? 0) + actual;
+        plantCounts[plant] = (plantCounts[plant] ?? 0) + 1;
+      }
     }
+
+    // Seeded through the LEGACY blob on purpose, with the migration flag cleared.
+    //
+    // Two things fall out of that, both wanted. The seed keeps writing plain
+    // preference JSON — the shape it can construct without a database handle —
+    // and `FocusService.init()` moves it into the table on the next launch, which
+    // means every QA run also exercises the v15 migration path rather than
+    // leaving it tested only in isolation. Clearing the flag is what makes
+    // re-seeding work: without it, a second seed's sessions would be written to a
+    // blob nothing reads.
     await CleanStorageService.setAppPreference('focusSessions', sessions);
+    await CleanStorageService.setAppPreference(
+        'focusSessionsMigratedToDrift', false);
+    try {
+      await db.AppDatabase.instance.focusDao.deleteEverything();
+    } catch (_) {
+      // A QA seed on a fresh install has no table rows to clear.
+    }
+    await CleanStorageService.setAppPreference('focusGarden', garden);
+
+    // Stats are persisted, not recomputed on load, so they have to agree with the
+    // sessions above or the app shows two different truths on two screens.
+    //
+    // `currentStreak` is deliberately NOT hand-written: `FocusService`
+    // recomputes it from the seeded days through `StreakEngine` on init, and a
+    // seeded value would simply be overwritten — worse, it would look correct
+    // until someone wondered why editing it changed nothing.
+    final completed = sessions.length - abandoned;
+    await CleanStorageService.setAppPreference('focusStats', {
+      'totalMinutes': totalMinutes,
+      'totalSessions': sessions.length,
+      'completedSessions': completed,
+      'abandonedSessions': abandoned,
+      'currentStreak': 0,
+      'longestStreak': 4, // the 5-day gap above caps an unforgiven run at 4
+      'totalPlants': completed,
+      'deadPlants': abandoned,
+      'minutesByActivity':
+          minutesByActivity.map((k, v) => MapEntry(k.index.toString(), v)),
+      'plantCounts': plantCounts.map((k, v) => MapEntry(k.index.toString(), v)),
+      'lastSessionDate': now.toIso8601String(),
+    });
+
+    // Unlock every plant that the seeded minutes have genuinely earned, so the
+    // plant picker shows a realistic mix of unlocked and locked rather than the
+    // two a fresh install starts with.
+    final unlocked = PlantType.values
+        .where((p) => totalMinutes >= p.unlockMinutes)
+        .map((p) => p.index)
+        .toList();
+    await CleanStorageService.setAppPreference('focusUnlockedPlants', unlocked);
+
+    // Coins follow the earn rate in CoinsService (2 per minute) so the Plant
+    // Trees screen has a balance to spend.
+    await CleanStorageService.setAppPreference('focusCoins', {
+      'totalCoins': totalMinutes * 2,
+      'lifetimeCoins': totalMinutes * 2,
+      'coinsSpentOnTrees': 0,
+      'plantedTrees': <Map<String, dynamic>>[],
+      'transactions': <Map<String, dynamic>>[],
+    });
   } catch (e) {
     debugPrint('seed focus failed: $e');
   }
