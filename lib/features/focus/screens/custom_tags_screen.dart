@@ -121,20 +121,24 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
         children: [
           // Each stat takes an equal share so the 3-up row can never run past
           // the card edge on a narrow phone or at large text sizes.
-          Expanded(child: _buildStatItem('🏷️', '${tags.length}', 'Total Tags')),
+          Expanded(child: _buildStatItem(Symbols.label_rounded, '${tags.length}', 'Total Tags')),
           Container(width: 1, height: 50, color: Colors.white24),
-          Expanded(child: _buildStatItem('✨', '$customCount', 'Custom')),
+          Expanded(child: _buildStatItem(Symbols.auto_awesome_rounded, '$customCount', 'Custom')),
           Container(width: 1, height: 50, color: Colors.white24),
-          Expanded(child: _buildStatItem('📊', '$totalUsage', 'Total Uses')),
+          Expanded(child: _buildStatItem(Symbols.insights_rounded, '$totalUsage', 'Total Uses')),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String emoji, String value, String label) {
+  /// Takes an [IconData]: this is chrome, in a coloured header.
+  ///
+  /// The tag emoji further down the screen stay as they are — those are the
+  /// user's own choice, persisted, and the whole point of the picker.
+  Widget _buildStatItem(IconData icon, String value, String label) {
     return Column(
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 24)),
+        Icon(icon, size: 22, color: Colors.white),
         const SizedBox(height: 8),
         // scaleDown never enlarges, so the default rendering is unchanged and
         // only genuinely-too-wide values shrink to fit their column.

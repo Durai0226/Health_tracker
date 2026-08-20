@@ -191,11 +191,11 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _buildPresetChip('📊 Productivity', PresetAllowList.getProductivityApps()),
+              _buildPresetChip(Symbols.insights_rounded, 'Productivity', PresetAllowList.getProductivityApps()),
               const SizedBox(width: 12),
-              _buildPresetChip('📚 Education', PresetAllowList.getEducationApps()),
+              _buildPresetChip(Symbols.school_rounded, 'Education', PresetAllowList.getEducationApps()),
               const SizedBox(width: 12),
-              _buildPresetChip('🎵 Music', PresetAllowList.getMusicApps()),
+              _buildPresetChip(Symbols.music_note_rounded, 'Music', PresetAllowList.getMusicApps()),
             ],
           ),
         ),
@@ -203,7 +203,12 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     );
   }
 
-  Widget _buildPresetChip(String label, List<AllowedApp> apps) {
+  /// A preset chip. The leading glyph is an icon, not part of the label string.
+  ///
+  /// Baking an emoji into the label meant it could not be tinted, could not
+  /// scale with the text, and was read aloud by a screen reader as its Unicode
+  /// name in front of the words that matter.
+  Widget _buildPresetChip(IconData icon, String label, List<AllowedApp> apps) {
     return GestureDetector(
       onTap: () => _addPresetApps(apps),
       child: Container(
@@ -216,6 +221,8 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Icon(icon, size: 18, color: AppColors.getTextSecondary(context)),
+            const SizedBox(width: 6),
             Text(label),
             const SizedBox(width: 8),
             const Icon(Symbols.add_circle_rounded, size: 18, color: AppColors.primary),

@@ -105,7 +105,11 @@ class FocusGardenScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Text('🌳', style: TextStyle(fontSize: 40)),
+                      // Chrome, so a Material Symbol. The PLANTS below keep
+                      // their emoji — those are each species' identity and the
+                      // whole point of a garden.
+                      Icon(Symbols.park_rounded,
+                          size: 40, color: AppColors.getFocusAccent(context)),
                       const SizedBox(width: 16),
                       // Flexible so the title block shares the row instead of
                       // pushing past the right edge on narrow phones.

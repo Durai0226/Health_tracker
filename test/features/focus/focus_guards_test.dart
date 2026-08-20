@@ -644,6 +644,59 @@ void main() {
       }
     });
 
+    test('chrome is drawn with Material Symbols, not emoji', () {
+      // `docs/ui-audit.md` P1: an emoji in a coloured container is a glyph from
+      // the system font. It will not take the accent colour, will not scale with
+      // the icon size the rest of the app uses, renders differently on every OS
+      // version, and in dark mode keeps whatever contrast the vendor chose.
+      //
+      // THE LINE THIS GUARD DRAWS, and it is the reason it is a font-size rule
+      // rather than a ban: emoji used as CONTENT are correct and stay.
+      // `PlantType.emoji` IS the plant — replacing 🌳 with an outline glyph would
+      // erase the garden metaphor the whole feature is built on. `CustomTag.emoji`
+      // is a persisted user choice from a picker. A withered 🥀 shares a slot
+      // with the species emoji beside it, so a Symbol there would look broken.
+      // Copy like "your plant has withered 🥀" is a sentence, not an icon.
+      //
+      // Chrome, though, was always BADGE-SIZED — 22 to 64pt in a decorated
+      // container. Inline content glyphs run at the default text size. So the
+      // rule is: no emoji in a Text() that also sets a fontSize of 20 or more.
+      // It catches every case the audit named and none of the legitimate ones.
+      final hits = <String>[];
+      final emoji = RegExp(
+          r"[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]",
+          unicode: true);
+      final sized = RegExp(r'fontSize:\s*(\d+)');
+      for (final f in focusFiles) {
+        // `read`, not `code`: `code` strips comment LINES, which would delete the
+        // opt-out annotation before it could be seen. Same shape as the haptic
+        // guard above — skip comment lines by hand, and require the marker inline
+        // on the offending line so it cannot drift away from what it excuses.
+        final lines = read(f).split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          final line = lines[i];
+          if (line.trimLeft().startsWith('//')) continue;
+          if (!line.contains('Text(')) continue;
+          if (!emoji.hasMatch(line)) continue;
+          // Same opt-out idiom as the haptic and notification guards above. It
+          // exists because the font-size heuristic cannot tell a badge from a
+          // large piece of CONTENT — the plant metaphor legitimately renders a
+          // withered flower at 28pt — and forcing the author to say which it is
+          // beats loosening the rule until it catches nothing.
+          if (line.contains('emoji-content-ok:')) continue;
+          final m = sized.firstMatch(line);
+          if (m == null) continue;
+          if (int.parse(m.group(1)!) < 20) continue;
+          hits.add('${f.path}:${i + 1}  ${line.trim()}');
+        }
+      }
+      expect(hits, isEmpty,
+          reason: 'badge-sized emoji is iconography — use Material Symbols so it '
+              'tints, scales and themes, or annotate '
+              '`// emoji-content-ok: <reason>` if it is genuinely content:'
+              '\n${hits.join('\n')}');
+    });
+
     test('no medical or pseudo-scientific claim in a Focus string literal', () {
       const banned = [
         'dna',

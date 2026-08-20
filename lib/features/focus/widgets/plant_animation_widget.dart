@@ -286,7 +286,7 @@ class _PlantAnimationWidgetState extends State<PlantAnimationWidget>
         shape: BoxShape.circle,
       ),
       child: const Center(
-        child: Text('💔', style: TextStyle(fontSize: 24)),
+        child: Text('💔', style: TextStyle(fontSize: 24)), // emoji-content-ok: plant state
       ),
     );
   }

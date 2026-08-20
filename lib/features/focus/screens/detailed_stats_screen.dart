@@ -270,8 +270,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
               color: ext.warning.container,
               borderRadius: AppRadius.brMd,
             ),
-            child: const Center(
-              child: Text('🔥', style: TextStyle(fontSize: 28)),
+            child: Center(
+              child: Icon(Symbols.local_fire_department_rounded,
+                  size: 26, color: ext.warning.onContainer),
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -594,7 +595,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
               children: [
                 Expanded(
                   child: _buildPatternCard(
-                    '⏰',
+                    Symbols.schedule_rounded,
                     'Peak Hour',
                     FocusInsights.hourLabel(pattern.mostProductiveHour),
                     ext.success,
@@ -603,7 +604,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: _buildPatternCard(
-                    '📅',
+                    Symbols.calendar_month_rounded,
                     'Best Day',
                     pattern.mostProductiveDayLabel,
                     ext.info,
@@ -626,7 +627,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
   }
 
   Widget _buildPatternCard(
-      String emoji, String label, String value, AccentSwatch accent) {
+      IconData icon, String label, String value, AccentSwatch accent) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     return Container(
@@ -638,7 +639,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
+          Icon(icon, size: 22, color: accent.onContainer),
           const SizedBox(height: 8),
           Text(label, style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
           Text(
@@ -949,7 +950,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
               color: ext.focus.container,
               borderRadius: AppRadius.brMd,
             ),
-            child: const Center(child: Text('🌳', style: TextStyle(fontSize: 28))),
+            child: Center(
+                child: Icon(Symbols.park_rounded,
+                    size: 26, color: ext.focus.onContainer)),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(

@@ -1981,7 +1981,7 @@ class _FocusScreenState extends State<FocusScreen> {
     final cards = <Widget>[
       _buildFeatureCard(
         ext,
-        emoji: '🌬️',
+        icon: Symbols.air_rounded,
         title: 'Breathing',
         subtitle: 'Wind down',
         accent: ext.focus,
@@ -1989,7 +1989,7 @@ class _FocusScreenState extends State<FocusScreen> {
       ),
       _buildFeatureCard(
         ext,
-        emoji: '🧘',
+        icon: Symbols.self_improvement_rounded,
         title: 'Relaxation',
         subtitle: 'Ambient sound',
         accent: ext.success,
@@ -2001,7 +2001,7 @@ class _FocusScreenState extends State<FocusScreen> {
       ),
       _buildFeatureCard(
         ext,
-        emoji: '📊',
+        icon: Symbols.insights_rounded,
         title: 'Statistics',
         subtitle: 'Your trends',
         accent: ext.info,
@@ -2010,7 +2010,7 @@ class _FocusScreenState extends State<FocusScreen> {
       ),
       _buildFeatureCard(
         ext,
-        emoji: '🌍',
+        icon: Symbols.park_rounded,
         title: 'Plant Trees',
         subtitle: '${_coinsService.totalCoins} coins',
         accent: ext.success,
@@ -2019,7 +2019,7 @@ class _FocusScreenState extends State<FocusScreen> {
       ),
       _buildFeatureCard(
         ext,
-        emoji: '🏷️',
+        icon: Symbols.label_rounded,
         title: 'Tags',
         subtitle: 'Organise',
         accent: ext.reminders,
@@ -2028,7 +2028,7 @@ class _FocusScreenState extends State<FocusScreen> {
       ),
       _buildFeatureCard(
         ext,
-        emoji: '📱',
+        icon: Symbols.phone_iphone_rounded,
         title: 'Distractions',
         subtitle: 'What pulls you',
         accent: ext.focus,
@@ -2071,9 +2071,22 @@ class _FocusScreenState extends State<FocusScreen> {
     return rows;
   }
 
+  /// One card in the More grid.
+  ///
+  /// Takes an [IconData], not an emoji. An emoji in a coloured container is a
+  /// glyph from the system font: it will not take the accent colour, will not
+  /// scale with the icon size the rest of the app uses, renders differently on
+  /// every OS version, and in dark mode keeps whatever contrast the vendor chose.
+  /// Every other feature in this app draws chrome with Material Symbols.
+  ///
+  /// This is scoped to CHROME. `PlantType.emoji`, `AchievementType.emoji`, the
+  /// tag picker's `availableEmojis` and the activity/category/sound labels all
+  /// stay as they are — those are content, not iconography. A plant IS its
+  /// emoji; replacing 🌳 with an outline glyph would erase the garden metaphor
+  /// the feature is built on, and the tag emoji is a persisted user choice.
   Widget _buildFeatureCard(
     AppColorsExt ext, {
-    required String emoji,
+    required IconData icon,
     required String title,
     required String subtitle,
     required AccentSwatch accent,
@@ -2093,7 +2106,7 @@ class _FocusScreenState extends State<FocusScreen> {
               color: accent.container,
               borderRadius: AppRadius.brSm,
             ),
-            child: Text(emoji, style: const TextStyle(fontSize: 22)),
+            child: Icon(icon, size: 22, color: accent.onContainer),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(title, style: Theme.of(context).textTheme.titleLarge),
@@ -2314,7 +2327,10 @@ class _FocusScreenState extends State<FocusScreen> {
         shape: RoundedRectangleBorder(borderRadius: AppRadius.brSheet),
         title: const Row(
           children: [
-            Text('🥀', style: TextStyle(fontSize: 28)),
+            // emoji-content-ok: the withered plant IS the subject of this
+            // dialog, and it sits in the same glyph slot as the living species
+            // emoji everywhere else in the garden.
+            Text('🥀', style: TextStyle(fontSize: 28)), // emoji-content-ok: the plant
             SizedBox(width: 12),
             Text('Give up?'),
           ],

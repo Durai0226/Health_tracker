@@ -404,7 +404,28 @@ at all (`dependents` renders a completely blank body). Several charts reserve
 **Emoji used as product iconography (7+ screens).** `water`, `water_awards`,
 `custom_cup`, `focus_stats`, `focus_tags`, `focus_apps`, `plant_trees`,
 `relaxation`. The rest of the app is on Material Symbols; these won't tint,
-scale or theme. `custom_cup` additionally offers 🏃 🧴 🥝 and four alcohol
+scale or theme.
+
+**Fixed for Focus.** All fifteen badge-sized emoji across `focus`, `focus_stats`,
+`focus_tags`, `focus_apps`, `plant_trees` and `focus_garden` are now Material
+Symbols, and `focus_guards_test` keeps them that way.
+
+The boundary the fix drew, which is the interesting part: emoji used as CONTENT
+are correct and stayed. `PlantType.emoji` *is* the plant — replacing 🌳 with an
+outline glyph would erase the garden metaphor the feature is built on.
+`CustomTag.emoji` is a persisted choice the user made from a picker. A withered
+🥀 shares a glyph slot with the living species beside it, so a Symbol there would
+look broken rather than consistent. Copy like "your plant has withered 🥀" is a
+sentence.
+
+So the guard is a font-size rule, not a ban: no emoji in a `Text()` that also
+sets `fontSize` ≥ 20. Chrome was always badge-sized (22–64pt in a decorated
+container); inline content glyphs run at the default text size. Two genuine
+content cases at 24 and 28pt carry an inline `// emoji-content-ok:` marker, the
+same opt-out idiom the haptic and notification guards use.
+
+The `water` screens named above are untouched — including `custom_cup` offering
+🏃 🧴 🥝 and four alcohol emoji in a hydration tracker. `custom_cup` additionally offers 🏃 🧴 🥝 and four alcohol
 emoji in a hydration tracker.
 
 **Contradictory data.** `focus` header says "1 day streak" while its own

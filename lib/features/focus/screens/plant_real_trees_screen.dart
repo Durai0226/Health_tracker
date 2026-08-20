@@ -115,7 +115,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   children: [
                     Row(
                       children: [
-                        const Text('🪙', style: TextStyle(fontSize: 32)),
+                        Icon(Symbols.toll_rounded, size: 30, color: AppColors.getFocusAccent(context)),
                         const SizedBox(width: 12),
                         Flexible(
                           child: FittedBox(
@@ -162,7 +162,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   ),
                   child: Column(
                     children: [
-                      const Text('🌍', style: TextStyle(fontSize: 24)),
+                      Icon(Symbols.park_rounded, size: 22, color: AppColors.getFocusAccent(context)),
                       const SizedBox(height: 4),
                       FittedBox(
                         fit: BoxFit.scaleDown,
@@ -399,7 +399,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('🪙', style: TextStyle(fontSize: 14)),
+                    Icon(Symbols.toll_rounded, size: 14, color: AppColors.getFocusAccent(context)),
                     const SizedBox(width: 4),
                     Text(
                       '${treeType.coinCost}',
@@ -432,7 +432,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('🌍', style: TextStyle(fontSize: 64)),
+              Icon(Symbols.park_rounded, size: 56, color: AppColors.getTextLight(context)),
               const SizedBox(height: 16),
               Text(
                 'Your forest is empty',
@@ -564,7 +564,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('📜', style: TextStyle(fontSize: 64)),
+              Icon(Symbols.receipt_long_rounded, size: 56, color: AppColors.getTextLight(context)),
               const SizedBox(height: 16),
               Text(
                 'No transactions yet',
@@ -702,7 +702,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             const SizedBox(height: 24),
             Row(
               children: [
-                const Text('🪙', style: TextStyle(fontSize: 24)),
+                Icon(Symbols.toll_rounded, size: 22, color: AppColors.getFocusAccent(context)),
                 const SizedBox(width: 8),
                 Text(
                   '${treeType.coinCost} coins',
