@@ -227,7 +227,118 @@ Not blocking the forms, but blocking a real release:
   Sign-In fails with `ApiException: 10`.
 - **Deploy the Firestore rules before the client build** that writes the new
   collections — `firebase deploy --only firestore:rules`. Otherwise every write
-  is denied and the sync code swallows the error silently.
+  is denied and the sync code swallows the error silently. **This now includes
+  `focus_sessions`** (added at schema v15); `firestore.rules` is default-deny, so
+  without the deploy every focus session upload fails and `syncLwwCollection`
+  logs it and moves on.
 - **Nothing here has run on a real device.** Health Connect is mobile-only, so
   the permission sheet, the rationale deep link and any real sync are still
   unverified.
+
+## ⚠️ Mindfulness write-back: the Kotlin is NOT compile-verified
+
+`android/app/src/main/kotlin/com/dlyminder/app/MindfulnessChannel.kt` was written
+without ever being compiled, because **there is no Java runtime on the machine it
+was written on** — `./gradlew` fails with "Unable to locate a Java Runtime", and
+`flutter doctor` reports the Android SDK but no JDK. Every other line of the Focus
+work is covered by the headless suite; this one file is not, and a Kotlin compile
+error here breaks the **entire Android build**, not just this feature.
+
+**Before any Android build, run:**
+
+```bash
+cd android && ./gradlew :app:compileDebugKotlin
+```
+
+Two dependencies were added to `android/app/build.gradle.kts` specifically because
+of a trap worth knowing: the `health` plugin pulls in both
+`androidx.health.connect:connect-client` and the coroutines library with
+`implementation(...)`, which places them on our RUNTIME classpath and deliberately
+keeps them off our COMPILE classpath. Assuming they were inherited would have been
+a build error waiting for whoever added the next native health call, so both are
+now declared explicitly. If the compile fails, that is the first place to look —
+followed by the exact `MindfulnessSessionRecord` constructor signature, which is
+`@ExperimentalMindfulnessSessionApi` and may still shift.
+
+Then, on a device with a recent Play System Update:
+
+- [ ] **The toggle appears at all.** Focus reminder settings → "Save mindful
+      minutes". If `FEATURE_MINDFULNESS_SESSION` is unavailable the row is hidden
+      by design, so its absence is not necessarily a bug — check `isAvailable`
+      first. It must be probed BEFORE any permission request: Health Connect
+      refuses the whole permission sheet if one requested type is unsupported,
+      which would break the permissions the app genuinely needs.
+- [ ] **Only WRITE_MINDFULNESS is requested**, never READ.
+- [ ] **A completed breathing exercise appears** in Health Connect; one closed
+      early does not.
+- [ ] **A work session does NOT appear.** This is the point of the feature, not a
+      limitation of it — Forest writes every focus session to Apple Health as
+      Mindful Minutes, and a coding sprint filed as mindfulness practice is a
+      false claim in a record the user may show a clinician.
+- [ ] **Revoking the permission in the Health Connect app** bounces the toggle
+      back off on next open rather than leaving it stuck on and silently writing
+      nothing.
+- [ ] `docs/release-checklist.md`'s per-permission justification table needs a
+      `WRITE_MINDFULNESS` row, and the declared-health-permission count updating.
+
+## Focus: device checks no test can cover
+
+Notification *delivery* is an OS behaviour. The headless suite asserts the calls,
+the channel, the ids and the reminder-migration contract, but only a device can
+prove any of it arrives. These are quick and each one guards a defect that
+shipped:
+
+- [ ] **Focus notifications are not alarms.** Complete a short session with the
+      app backgrounded. The banner must appear under *Settings → Notifications →
+      **Focus Sessions***, at notification volume, with **no** Snooze/Dismiss
+      buttons and **no** full-screen takeover. Before this work it arrived on
+      *Alarm Reminders*, on the alarm audio stream, through Do Not Disturb.
+- [ ] **The reminder migration actually fires.** This needs an **upgrade**, not a
+      fresh install — a clean install has nothing to migrate. On a build from
+      before this change, turn the daily focus reminder on and confirm it fires as
+      a full-screen alarm with a `✓ Take` button. Then install the new build,
+      launch it once, and confirm the same reminder now arrives as a quiet
+      heads-up on *Focus Sessions*. `FocusService.init()` runs the migration
+      unawaited on the startup path, so one launch is enough.
+- [ ] **Do Not Disturb is respected.** Turn DND on, finish a session, confirm
+      silence. The old `alarm_channel` route rang regardless.
+- [ ] **The migration does not claim success when it cannot run.** Deny
+      notification permission, launch once, grant permission, launch again — the
+      reminder must be scheduled by the second launch. The flag is only written
+      after the teardown succeeds, so a failed attempt retries.
+- [ ] **Relaxation completion** uses the same calm channel — it had the identical
+      defect and was fixed in the same pass.
+
+### The armed completion notification
+
+`FocusSessionAlarm` makes the arm/disarm *decisions* assertable headlessly — 12
+cases cover arming at phase start, re-arming against the pushed-forward end time
+after a pause, the foreground pre-emption, and the double-announce guard. None of
+them can prove the OS delivers. These can:
+
+- [ ] **It arrives when you are away.** Start a 2-minute session, background the
+      app, lock the phone. The banner must appear at T+2:00 on *Focus Sessions* —
+      and **no second banner** when you unlock. The second half is the real test:
+      once completion can be delivered in the background, the resume path is one
+      missing guard away from announcing again.
+- [ ] **It does NOT arrive when you are watching.** Run a session to zero with the
+      Focus screen open. You should get the in-app celebration and no system
+      banner. AlarmManager can fire exactly at the end time while the 1 Hz ticker
+      reaches it up to a second later, so the app disarms in the final three
+      foreground seconds.
+- [ ] **Leaving in those last seconds still works.** Background the app with ~2
+      seconds left; the banner must still arrive.
+- [ ] **Doze.** `adb shell dumpsys deviceidle force-idle`, screen off, confirm a
+      25-minute session's ping still lands close enough to be useful.
+      `USE_EXACT_ALARM` was deliberately dropped, so on Android 14+ this is
+      expected to fall back to inexact — a few minutes late is acceptable here and
+      would not be for a dose.
+- [ ] **The fallback does not touch the medicine warning.** After a session on a
+      device where exact alarms are denied, confirm the app is *not* showing
+      "your medicine reminders are inexact". The focus path goes through
+      `_notifications` directly and never
+      `BackgroundAlarmService.exactAlarmsDowngraded()`, so this should be
+      impossible — worth one look.
+- [ ] **Reboot mid-session.** Start a long session, reboot, confirm the app
+      recovers the session (`ScheduledNotificationBootReceiver` is already
+      declared, so the pending notification should survive too).

@@ -116,7 +116,20 @@ padding. *Fixed to 44pt.* Audit now reports **nothing** below the 24pt floor
 across 311 measured tappables.
 
 Still below Apple's 44pt comfort target (not a hard failure): `period_calendar`
-date cells at 41×41, several 40×40 controls, and 32pt chips on `focus`.
+date cells at 41×41 and several 40×40 controls.
+
+**Correction — the "32pt chips on `focus`" listed here were never a defect.**
+The audit was extended from 2 Focus screens to all 8 and now measures 299
+tappables; it reports **nothing** below the WCAG 24pt floor anywhere in Focus,
+and no 32pt chip at all. `AppChip` applies `minHeight: onTap != null ? 44 : 0`
+(`primitives.dart`), so the chips that sit at 32pt are the *display-only* ones,
+which cannot be tapped and are therefore not touch targets. The original entry
+came from a version of the audit that counted `InkWell(onTap: null)` as
+interactive — it was measuring the wrong property, and four findings across two
+surfaces went with it.
+
+One real target did surface once the other six screens were registered: the
+`relaxation` back button at 42×42 (`10 + 22 + 10` padding). Fixed to 44pt.
 
 ---
 
