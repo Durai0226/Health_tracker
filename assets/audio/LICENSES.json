@@ -1,0 +1,130 @@
+{
+  "_comment": [
+    "Provenance for every bundled audio asset.",
+    "",
+    "CC0 requires no attribution, so this file is not a legal obligation \u2014 it is",
+    "what turns an app-store or legal question into a five-minute answer instead",
+    "of an archaeology project. Given how this feature got here (15 hotlinked",
+    "Pixabay URLs in breach of their no-hotlinking terms, plus two verified",
+    "CC BY-NC tracks in an ad-supported app with no attribution anywhere), that is",
+    "worth the ten minutes.",
+    "",
+    "Rule: CC0 only. Not CC-BY, not CC-BY-NC. CC0 is the one licence with no",
+    "attribution duty, no commercial restriction, and no ambiguity about",
+    "redistributing the audio AS the product, which is what a soundscape feature",
+    "does. See docs/audio-sourcing.md."
+  ],
+  "assets": {
+    "white_noise.wav": {
+      "title": "White noise",
+      "author": "generated",
+      "source": "synthesised in-repo \u2014 dart run tool/gen_noise.dart",
+      "license": "n/a \u2014 generated, not licensed",
+      "licenseUrl": null,
+      "note": "Flat spectral density. 16-bit PCM on purpose: lossy codecs discard exactly the broadband detail noise is made of."
+    },
+    "pink_noise.wav": {
+      "title": "Pink noise",
+      "author": "generated",
+      "source": "synthesised in-repo \u2014 dart run tool/gen_noise.dart",
+      "license": "n/a \u2014 generated, not licensed",
+      "licenseUrl": null,
+      "note": "-3 dB/octave, Paul Kellet's economical filter."
+    },
+    "brown_noise.wav": {
+      "title": "Brown noise",
+      "author": "generated",
+      "source": "synthesised in-repo \u2014 dart run tool/gen_noise.dart",
+      "license": "n/a \u2014 generated, not licensed",
+      "licenseUrl": null,
+      "note": "-6 dB/octave via a LEAKY integrator; a plain one random-walks into DC offset, which sounds like a thump."
+    }
+  },
+  "pending": {
+    "rain.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "thunderstorm.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "ocean.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "forest.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "fireplace.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "wind.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "birds.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "river.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "cafe.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "library.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "night_sounds.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "meditation.m4a": {
+      "title": null,
+      "author": null,
+      "source": null,
+      "license": "MUST be CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  },
+  "_pendingNote": "Field recordings that still need sourcing. Filter Freesound to Creative Commons 0 and fill in title/author/source as each lands. The guard test 'every declared audio asset exists on disk' names whichever are still missing."
+}

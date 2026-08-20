@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
+import '../../../core/services/audio_service.dart';
 import '../models/relaxation_music.dart';
 import '../services/relaxation_service.dart';
 
@@ -36,13 +37,30 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    
-    _pulseController.repeat(reverse: true);
 
     _waveController = AnimationController(
       duration: const Duration(seconds: 4),
       vsync: this,
-    )..repeat();
+    );
+    // Both repeat forever, so both are started from didChangeDependencies, where
+    // the reduce-motion preference can be read.
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Purely decorative: a breathing pulse and a drifting wave behind the cards.
+    // Nothing here carries information, so under reduce-motion both simply hold
+    // still at their resting value.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulseController.stop();
+      _pulseController.value = 0.0;
+      _waveController.stop();
+      _waveController.value = 0.0;
+    } else {
+      if (!_pulseController.isAnimating) _pulseController.repeat(reverse: true);
+      if (!_waveController.isAnimating) _waveController.repeat();
+    }
   }
 
   @override
@@ -105,22 +123,28 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.getCardBg(context),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          Semantics(
+            button: true,
+            label: 'Back',
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                // 11 + 22 + 11 = 44. At 10 this measured 42x42 and was the only
+                // Focus target under the Apple HIG comfort minimum.
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: AppColors.getCardBg(context),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(Symbols.arrow_back_rounded, size: 22),
               ),
-              child: const Icon(Symbols.arrow_back_rounded, size: 22),
             ),
           ),
           const SizedBox(width: 16),
@@ -269,9 +293,53 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
     );
   }
 
+  /// The tracks in the selected category that actually have audio behind them.
+  ///
+  /// `AudioService.hasRelaxationAudio` was written for exactly this and then had
+  /// no caller, so this list rendered all fourteen catalogue entries while three
+  /// files existed: eleven of them started a real, fully-functional countdown and
+  /// played nothing. The count beside "Select Music" is the filtered count for the
+  /// same reason — "6 tracks" above two rows is its own small lie.
+  /// A category whose CC0 audio has not been sourced yet.
+  ///
+  /// Not a shared `EmptyState`: the screen around it is not empty — the category
+  /// cards and the duration selector are still usable, and this is one section
+  /// reporting on itself. Saying so plainly beats a header above an empty list,
+  /// which reads as a bug.
+  Widget _buildNoTracksYet() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.getSurface(context),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Symbols.library_music_rounded,
+              color: AppColors.getTextSecondary(context)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Soundscapes for this category are on the way. '
+              'The other categories have tracks you can start now.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.getTextSecondary(context),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMusicList() {
-    final tracks = _relaxationService.selectedCategory.tracks;
-    
+    final tracks = _relaxationService.selectedCategory.tracks
+        .where((t) => AudioService.hasRelaxationAudio(t.assetKey))
+        .toList();
+
+    if (tracks.isEmpty) return _buildNoTracksYet();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -945,36 +1013,48 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Pause/Resume button
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.mediumImpact();
-            if (_relaxationService.isPaused) {
-              _relaxationService.resumeSession();
-            } else {
-              _relaxationService.pauseSession();
-            }
-          },
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.getCardBg(context),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: category.color.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Icon(
-              _relaxationService.isPaused
-                  ? Symbols.play_arrow_rounded
-                  : Symbols.pause_rounded,
-              color: category.color,
-              size: 40,
+        // Pause/Resume button.
+        //
+        // Icon-only, so without an explicit label a screen reader announces the
+        // one control of a running relaxation session as just "button". The
+        // label has to track the state — saying "Pause" on an already-paused
+        // session is worse than saying nothing.
+        Semantics(
+          button: true,
+          label: _relaxationService.isPaused ? 'Resume' : 'Pause',
+          child: GestureDetector(
+            onTap: () {
+              // No haptic here. This called `focusComplete()` — the session-
+              // COMPLETE celebration pattern — for a pause, and it double-buzzed:
+              // `RelaxationService.pauseSession`/`resumeSession` already fire
+              // `focusPause()`/`focusStart()` themselves.
+              if (_relaxationService.isPaused) {
+                _relaxationService.resumeSession();
+              } else {
+                _relaxationService.pauseSession();
+              }
+            },
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.getCardBg(context),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: category.color.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Icon(
+                _relaxationService.isPaused
+                    ? Symbols.play_arrow_rounded
+                    : Symbols.pause_rounded,
+                color: category.color,
+                size: 40,
+              ),
             ),
           ),
         ),

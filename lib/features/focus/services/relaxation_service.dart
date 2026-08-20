@@ -1,13 +1,15 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart';
+import '../../../core/services/haptic_service.dart';
+import 'package:clock/clock.dart';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/audio_service.dart';
 import '../models/relaxation_music.dart';
 
-class RelaxationService extends ChangeNotifier {
+class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
   static final RelaxationService _instance = RelaxationService._internal();
   factory RelaxationService() => _instance;
   RelaxationService._internal();
@@ -20,6 +22,17 @@ class RelaxationService extends ChangeNotifier {
   int _remainingSeconds = 0;
   int _selectedMinutes = 15;
   DateTime? _startTime;
+
+  /// Absolute wall-clock end of the session.
+  ///
+  /// The countdown used to be purely tick-accumulated (`_remainingSeconds--` once
+  /// a second) with no wall-clock anchor and no lifecycle observer — the only one
+  /// of the three timers in this feature without either. When Android suspended
+  /// the isolate's timers in the background the countdown simply stalled while the
+  /// audio kept playing (iOS has the `audio` background mode), so a 15-minute
+  /// session overshot by however long the app spent backgrounded, and completion
+  /// only fired once the user came back.
+  DateTime? _endTime;
   Timer? _timer;
   
   // Current Session Config
@@ -53,7 +66,7 @@ class RelaxationService extends ChangeNotifier {
   }
   
   int get todayMinutes {
-    final today = DateTime.now();
+    final today = clock.now();
     return _sessions
         .where((s) => _isSameDay(s.startedAt, today) && s.wasCompleted)
         .fold(0, (sum, s) => sum + s.actualMinutes);
@@ -63,7 +76,56 @@ class RelaxationService extends ChangeNotifier {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _syncTimer();
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        if (_isRunning && !_isPaused) {
+          _timer?.cancel();
+          _timer = null;
+        }
+      case AppLifecycleState.inactive:
+        break;
+    }
+  }
+
+  /// Recompute the countdown from the wall clock on the way back in.
+  void _syncTimer() {
+    if (!_isRunning || _isPaused || _endTime == null) return;
+    final remaining = _endTime!.difference(clock.now()).inSeconds;
+    if (remaining <= 0) {
+      _remainingSeconds = 0;
+      _completeSession();
+      return;
+    }
+    _remainingSeconds = remaining;
+    _startTimer();
+    notifyListeners();
+  }
+
+  bool _didInit = false;
+
   Future<void> init() async {
+    // Guarded, and it has to be.
+    //
+    // `RelaxationScreen.initState` calls this, and `RelaxationService` is a
+    // process-wide singleton, so every mount used to register ANOTHER lifecycle
+    // observer on the same object — with no `removeObserver` anywhere to undo it.
+    // Open the relaxation screen three times and `didChangeAppLifecycleState`
+    // fires three times per transition, so one resume ran `_syncTimer()` three
+    // times and a session that had elapsed completed three times over: three sets
+    // of side effects for one session.
+    //
+    // `FocusService` already had exactly this guard (`_didInit`, plus a
+    // `removeObserver` in `resetForTesting`) for exactly this reason; this service
+    // was written from the same shape and missed it.
+    if (_didInit) return;
+    _didInit = true;
+    WidgetsBinding.instance.addObserver(this);
     await _audioService.init();
     await _loadData();
     debugPrint('✓ RelaxationService initialized');
@@ -153,10 +215,11 @@ class RelaxationService extends ChangeNotifier {
     _isRunning = true;
     _isPaused = false;
     _remainingSeconds = _selectedMinutes * 60;
-    _startTime = DateTime.now();
+    _startTime = clock.now();
+    _endTime = _startTime!.add(Duration(minutes: _selectedMinutes));
     
     // Provide haptic feedback for session start
-    HapticFeedback.heavyImpact();
+    HapticService().focusStart();
     
     // Start timer and update UI IMMEDIATELY for smooth experience
     _startTimer();
@@ -172,8 +235,7 @@ class RelaxationService extends ChangeNotifier {
     if (_selectedMusic == null) return;
     
     try {
-      // Use the enum's string representation as the key for audio lookup
-      final musicKey = _selectedMusic.toString().split('.').last;
+      final musicKey = _selectedMusic!.assetKey;
       debugPrint('Playing relaxation music with key: $musicKey');
       await _audioService.playRelaxationMusic(musicKey, volume: _volume);
     } catch (e) {
@@ -222,11 +284,32 @@ class RelaxationService extends ChangeNotifier {
     // null session and threw — a stray timer callback after a session ended
     // would have crashed the isolate.
     if (!_isRunning) return;
-    if (_remainingSeconds > 0 && !_isPaused) {
+    if (_isPaused) return;
+
+    // Derived from the absolute end time rather than decremented, so a tick that
+    // never fired (backgrounded, suspended, throttled) cannot cost the user time.
+    // `primeForTest` leaves `_endTime` null, so fall back to decrementing there.
+    if (_endTime != null) {
+      final ms = _endTime!.difference(clock.now()).inMilliseconds;
+      final remaining = (ms / 1000).ceil();
+      if (remaining <= 0) {
+        _remainingSeconds = 0;
+        tick.value = 0;
+        _completeSession();
+        return;
+      }
+      if (_remainingSeconds != remaining) {
+        _remainingSeconds = remaining;
+        // Deliberately NOT notifyListeners(): see [tick].
+        tick.value = remaining;
+      }
+      return;
+    }
+
+    if (_remainingSeconds > 0) {
       _remainingSeconds--;
-      // Deliberately NOT notifyListeners(): see [tick].
       tick.value = _remainingSeconds;
-    } else if (_remainingSeconds <= 0) {
+    } else {
       _completeSession();
     }
   }
@@ -235,7 +318,7 @@ class RelaxationService extends ChangeNotifier {
     if (_isRunning && !_isPaused) {
       _isPaused = true;
       _audioService.pause();
-      HapticFeedback.lightImpact();
+      HapticService().focusPause();
       notifyListeners();
     }
   }
@@ -244,7 +327,7 @@ class RelaxationService extends ChangeNotifier {
     if (_isRunning && _isPaused) {
       _isPaused = false;
       _audioService.resume();
-      HapticFeedback.lightImpact();
+      HapticService().focusStart();
       notifyListeners();
     }
   }
@@ -254,7 +337,7 @@ class RelaxationService extends ChangeNotifier {
     
     _timer?.cancel();
     await _audioService.stop();
-    HapticFeedback.heavyImpact();
+    HapticService().focusComplete();
     
     final elapsedMinutes = _selectedMinutes - (_remainingSeconds ~/ 60);
     
@@ -262,7 +345,7 @@ class RelaxationService extends ChangeNotifier {
     final session = RelaxationSession(
       id: _generateId(),
       startedAt: _startTime!,
-      completedAt: DateTime.now(),
+      completedAt: clock.now(),
       targetMinutes: _selectedMinutes,
       actualMinutes: elapsedMinutes,
       wasCompleted: false,
@@ -287,13 +370,13 @@ class RelaxationService extends ChangeNotifier {
   Future<void> _completeSession() async {
     _timer?.cancel();
     await _audioService.stop();
-    HapticFeedback.heavyImpact();
+    HapticService().focusComplete();
     
     // Create completed session
     final session = RelaxationSession(
       id: _generateId(),
       startedAt: _startTime!,
-      completedAt: DateTime.now(),
+      completedAt: clock.now(),
       targetMinutes: _selectedMinutes,
       actualMinutes: _selectedMinutes,
       wasCompleted: true,
@@ -320,8 +403,11 @@ class RelaxationService extends ChangeNotifier {
       usageByTrack: trackUsage,
     );
     
-    // Show notification
-    await NotificationService().showImmediateNotification(
+    // `showFocusNotification`, not `showImmediateNotification`: the latter routes
+    // through `_notificationDetails`, which ignores its channelId and hardcodes
+    // `alarm_channel` — so the end of a relaxation session rang on the alarm
+    // audio stream, through Do Not Disturb, with Snooze/Dismiss buttons.
+    await NotificationService().showFocusNotification(
       title: 'Relaxation Complete! ${_selectedCategory.emoji}',
       body: 'You completed $_selectedMinutes minutes of ${_selectedCategory.name}. Feel refreshed!',
     );
@@ -337,11 +423,12 @@ class RelaxationService extends ChangeNotifier {
     _isPaused = false;
     _remainingSeconds = 0;
     _startTime = null;
+    _endTime = null;
     notifyListeners();
   }
 
   String _generateId() {
-    return '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}';
+    return '${clock.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}';
   }
 
   bool get isAudioPlaying => _audioService.isPlaying;
@@ -357,4 +444,33 @@ class RelaxationService extends ChangeNotifier {
     _audioService.stop();
     super.dispose();
   }
+  /// Fresh-install state between tests. See FocusService.resetForTesting.
+  ///
+  /// `tick` is reset, never disposed — disposing a singleton's notifier
+  /// poisons every later test in the isolate.
+  @visibleForTesting
+  void resetForTesting() {
+    _timer?.cancel();
+    _timer = null;
+    // Mirror FocusService: deregister the lifecycle observer and clear the guard,
+    // or every test in the isolate inherits the previous test's observer and one
+    // resume drives N sessions to completion.
+    if (_didInit) {
+      WidgetsBinding.instance.removeObserver(this);
+      _didInit = false;
+    }
+    _isRunning = false;
+    _isPaused = false;
+    _remainingSeconds = 0;
+    _selectedMinutes = 15;
+    _selectedCategory = RelaxationCategory.deepFocus;
+    _selectedMusic = null;
+    _volume = 0.7;
+    _startTime = null;
+    _endTime = null;
+    _stats = const RelaxationStats();
+    _sessions = [];
+    tick.value = 0;
+  }
+
 }

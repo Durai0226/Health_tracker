@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/enum_json.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 enum RelaxationCategory {
@@ -115,20 +116,30 @@ enum RelaxationMusicType {
 }
 
 extension RelaxationMusicTypeExtension on RelaxationMusicType {
+  /// The persisted identifier (`deepSleepDelta`), not the display name.
+  ///
+  /// `name` below shadows `dart:core`'s `EnumName.name` — a local extension on
+  /// `RelaxationMusicType` is more specific than one on `Enum` — so `track.name`
+  /// gives you "Deep Rest", never the identifier. Callers that need the audio
+  /// lookup key were reaching for `toString().split('.').last` instead, once in
+  /// the service and about to be a second time in the screen. This is that key,
+  /// named for what it is.
+  String get assetKey => EnumName(this).name;
+
   String get name {
     switch (this) {
       case RelaxationMusicType.binauralBeatsAlpha:
-        return 'Binaural Beats (Alpha)';
+        return 'Focus Ambience';
       case RelaxationMusicType.lofiHipHop:
         return 'Lo-fi Hip Hop';
       case RelaxationMusicType.ambientInstrumental:
         return 'Ambient Instrumental';
       case RelaxationMusicType.gammaFocus40Hz:
-        return '40 Hz Gamma Focus';
+        return 'Bright Focus';
       case RelaxationMusicType.healing432Hz:
-        return '432 Hz Healing';
+        return 'Calm Piano';
       case RelaxationMusicType.miracleTone528Hz:
-        return '528 Hz Miracle Tone';
+        return 'Ambient Reflection';
       case RelaxationMusicType.tibetanBowls:
         return 'Tibetan Singing Bowls';
       case RelaxationMusicType.rainOnWindow:
@@ -138,13 +149,13 @@ extension RelaxationMusicTypeExtension on RelaxationMusicType {
       case RelaxationMusicType.forestBirds:
         return 'Forest Birds';
       case RelaxationMusicType.rainPiano432Hz:
-        return 'Rain + Piano + 432 Hz';
+        return 'Rain & Piano';
       case RelaxationMusicType.deepSleepDelta:
-        return 'Deep Sleep Delta Waves';
+        return 'Deep Sleep';
       case RelaxationMusicType.softPianoRain:
         return 'Soft Piano with Rain';
       case RelaxationMusicType.healingNightSounds:
-        return 'Healing Night Sounds';
+        return 'Night Sounds';
     }
   }
 
@@ -184,19 +195,19 @@ extension RelaxationMusicTypeExtension on RelaxationMusicType {
   String get description {
     switch (this) {
       case RelaxationMusicType.binauralBeatsAlpha:
-        return 'Alpha waves (8-12 Hz) for calm alertness and focus';
+        return 'Steady, wordless ambience for staying with a task';
       case RelaxationMusicType.lofiHipHop:
         return 'Steady rhythm, minimal distraction for studying';
       case RelaxationMusicType.ambientInstrumental:
         return 'Brian Eno style ambient for deep concentration';
       case RelaxationMusicType.gammaFocus40Hz:
-        return 'Strong mental clarity and cognitive enhancement';
+        return 'Brighter, more energetic ambience for daytime work';
       case RelaxationMusicType.healing432Hz:
-        return 'Natural frequency for deep relaxation';
+        return 'Slow solo piano, designed to help you unwind';
       case RelaxationMusicType.miracleTone528Hz:
-        return 'Emotional balance and DNA repair frequency';
+        return 'Sparse, reflective tones for winding down';
       case RelaxationMusicType.tibetanBowls:
-        return 'Deep nervous system reset and meditation';
+        return 'Sustained metallic tones, often used in meditation';
       case RelaxationMusicType.rainOnWindow:
         return 'Gentle rain sounds for calming the mind';
       case RelaxationMusicType.oceanWaves:
@@ -204,46 +215,13 @@ extension RelaxationMusicTypeExtension on RelaxationMusicType {
       case RelaxationMusicType.forestBirds:
         return 'Natural forest ambiance with birdsong';
       case RelaxationMusicType.rainPiano432Hz:
-        return 'Ultimate calm: rain, piano & healing frequency';
+        return 'Rainfall layered under soft piano';
       case RelaxationMusicType.deepSleepDelta:
-        return 'Delta waves for deep restorative sleep';
+        return 'Very slow, low ambience for falling asleep';
       case RelaxationMusicType.softPianoRain:
         return 'Gentle piano melodies with rain background';
       case RelaxationMusicType.healingNightSounds:
-        return 'Peaceful night ambiance for complete reset';
-    }
-  }
-
-  String get searchQuery {
-    switch (this) {
-      case RelaxationMusicType.binauralBeatsAlpha:
-        return 'Alpha wave binaural beats focus';
-      case RelaxationMusicType.lofiHipHop:
-        return 'Lo-fi beats to study/relax to';
-      case RelaxationMusicType.ambientInstrumental:
-        return 'Deep ambient concentration music';
-      case RelaxationMusicType.gammaFocus40Hz:
-        return '40 Hz focus music';
-      case RelaxationMusicType.healing432Hz:
-        return '432 Hz deep healing music';
-      case RelaxationMusicType.miracleTone528Hz:
-        return '528 Hz miracle tone';
-      case RelaxationMusicType.tibetanBowls:
-        return 'Tibetan bowls meditation 1 hour';
-      case RelaxationMusicType.rainOnWindow:
-        return 'Heavy rain for sleep';
-      case RelaxationMusicType.oceanWaves:
-        return 'Ocean waves 10 hours';
-      case RelaxationMusicType.forestBirds:
-        return 'Forest birds nature sounds';
-      case RelaxationMusicType.rainPiano432Hz:
-        return 'Rain piano 432 Hz sleep music';
-      case RelaxationMusicType.deepSleepDelta:
-        return 'Delta waves deep sleep';
-      case RelaxationMusicType.softPianoRain:
-        return 'Soft piano rain music';
-      case RelaxationMusicType.healingNightSounds:
-        return 'Healing night sounds sleep';
+        return 'Crickets and still night air';
     }
   }
 
@@ -379,8 +357,10 @@ class RelaxationSession {
         actualMinutes: json['actualMinutes'] ?? 0,
         wasCompleted: json['wasCompleted'] ?? false,
         wasAbandoned: json['wasAbandoned'] ?? false,
-        musicType: RelaxationMusicType.values[json['musicType'] ?? 0],
-        category: RelaxationCategory.values[json['category'] ?? 0],
+        musicType: EnumJson.at(RelaxationMusicType.values, json['musicType'],
+            RelaxationMusicType.values.first),
+        category: EnumJson.at(RelaxationCategory.values, json['category'],
+            RelaxationCategory.values.first),
       );
 
   RelaxationSession copyWith({
@@ -441,14 +421,16 @@ class RelaxationStats {
     Map<RelaxationCategory, int> minutesByCategory = {};
     if (json['minutesByCategory'] != null) {
       (json['minutesByCategory'] as Map).forEach((key, value) {
-        minutesByCategory[RelaxationCategory.values[int.parse(key)]] = value;
+        final k = EnumJson.key(RelaxationCategory.values, key);
+        if (k != null && value is int) minutesByCategory[k] = value;
       });
     }
 
     Map<RelaxationMusicType, int> usageByTrack = {};
     if (json['usageByTrack'] != null) {
       (json['usageByTrack'] as Map).forEach((key, value) {
-        usageByTrack[RelaxationMusicType.values[int.parse(key)]] = value;
+        final k = EnumJson.key(RelaxationMusicType.values, key);
+        if (k != null && value is int) usageByTrack[k] = value;
       });
     }
 

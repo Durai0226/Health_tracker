@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/services/audio_service.dart';
 import '../models/ambient_sound.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -9,12 +10,21 @@ class AmbientSoundSelector extends StatelessWidget {
   final ValueChanged<AmbientSoundType> onSoundChanged;
   final ValueChanged<double> onVolumeChanged;
 
+  /// Called once when the thumb is released, for the caller to PERSIST.
+  ///
+  /// Separate from [onVolumeChanged] because the two have different costs:
+  /// [onVolumeChanged] fires every drag frame and should only move the audio
+  /// volume, while this fires once and is where a write belongs. Optional so the
+  /// widget still works with one callback; falls back to [onVolumeChanged].
+  final ValueChanged<double>? onVolumeCommitted;
+
   const AmbientSoundSelector({
     super.key,
     required this.selectedSound,
     required this.volume,
     required this.onSoundChanged,
     required this.onVolumeChanged,
+    this.onVolumeCommitted,
   });
 
   @override
@@ -59,7 +69,12 @@ class AmbientSoundSelector extends StatelessWidget {
               ),
               child: Slider(
                 value: volume,
+                // Live feedback while dragging: audio volume follows the thumb.
                 onChanged: onVolumeChanged,
+                // …but the PERSIST happens once, on release. `onChanged` alone
+                // meant every drag frame ran a Drift write; the service now
+                // writes a single key, and this makes it a single write.
+                onChangeEnd: onVolumeCommitted ?? onVolumeChanged,
               ),
             ),
           ),
@@ -72,9 +87,20 @@ class AmbientSoundSelector extends StatelessWidget {
     );
   }
 
+  /// Only the sounds that actually play, grouped by category.
+  ///
+  /// This used to walk `AmbientSoundType.values` unfiltered, so the picker
+  /// offered fifteen chips while three files existed: tapping twelve of them set
+  /// `AudioService.lastError` and played silence, with the session running on as
+  /// if nothing were wrong. A category that ends up empty is dropped rather than
+  /// rendered as a header over nothing.
+  ///
+  /// As each wave of CC0 audio lands (see `docs/audio-sourcing.md`), its chips
+  /// reappear here with no change to this file.
   Map<String, List<AmbientSoundType>> _groupByCategory() {
     final Map<String, List<AmbientSoundType>> grouped = {};
     for (final sound in AmbientSoundType.values) {
+      if (!AudioService.hasAmbientAudio(sound)) continue;
       grouped.putIfAbsent(sound.category, () => []);
       grouped[sound.category]!.add(sound);
     }
