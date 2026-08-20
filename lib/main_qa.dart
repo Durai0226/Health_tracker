@@ -16,6 +16,15 @@ import 'core/theme/app_theme.dart';
 import 'features/medication/screens/nunito_medication_dashboard.dart';
 import 'features/medication/screens/nunito_add_medication_flow.dart';
 import 'features/medication/services/medicine_storage_service.dart';
+// Prefixed: app_database.dart (imported above) exports Drift-generated classes
+// with these exact names, so unprefixed imports are ambiguous.
+import 'features/medication/models/enhanced_medicine.dart' as med;
+import 'features/medication/models/medicine_enums.dart' as med_enums;
+import 'features/medication/models/medicine_log.dart' as med_log;
+import 'features/medication/models/medicine_schedule.dart' as med_sched;
+import 'features/reminders/models/reminder_model.dart' as rem;
+import 'features/water/models/beverage_type.dart' as bev;
+import 'features/water/services/water_service.dart';
 import 'features/home/screens/home_dashboard.dart';
 import 'features/settings/screens/settings_screen.dart';
 import 'features/reminders/screens/add_reminder_screen.dart';
@@ -87,6 +96,11 @@ Future<void> main() async {
   await FeatureFlagService().init();
   await StepService.init();
   await SleepService.init();
+  // Water was never initialised here, so every QA run showed Home's hydration
+  // card at "0 / 2500 ml" no matter what the seed wrote.
+  try {
+    await WaterService.init();
+  } catch (_) {}
   try {
     await MedicineCleanStorageService.init();
   } catch (_) {}
@@ -150,6 +164,76 @@ Future<void> _seed() async {
       quality: i == 1 ? 5 : 4,
     );
   }
+
+  // Medicine: a PARTIALLY DONE day — the state the Today dashboard is actually
+  // about, and the one no QA build could reach before, because this seed only
+  // ever wrote steps and sleep. Home therefore always rendered its empty-state
+  // fallback on a device, which is exactly how "All doses taken — nice work"
+  // and a 100% ring could sit under a live "UP NEXT" line without being seen.
+  //
+  // Slots are placed relative to `now` so the scenario survives being run at any
+  // hour, and clipped to today because a schedule slot only exists on its own
+  // day. One dose is already taken, one is still ahead.
+  final today = DateTime(now.year, now.month, now.day);
+  final endOfDay = DateTime(now.year, now.month, now.day, 23, 59);
+  DateTime? mid(DateTime a, DateTime b) {
+    final gap = b.difference(a).inMinutes;
+    return gap < 2 ? null : a.add(Duration(minutes: gap ~/ 2));
+  }
+
+  final pastSlot = mid(today, now);
+  final futureSlot = mid(now, endOfDay);
+  final slots = [pastSlot, futureSlot].whereType<DateTime>().toList();
+  if (slots.isNotEmpty) {
+    try {
+      await MedicineCleanStorageService.addMedicine(med.EnhancedMedicine(
+        id: 'qa-metformin',
+        name: 'Metformin',
+        strength: '500 mg',
+        dosageForm: med_enums.DosageForm.tablet,
+        dosageAmount: 1,
+        createdAt: today.subtract(const Duration(days: 30)),
+        schedule: med_sched.MedicineSchedule(
+          frequencyType: slots.length == 2
+              ? med_enums.FrequencyType.twiceDaily
+              : med_enums.FrequencyType.onceDaily,
+          times: slots
+              .map((t) => med_sched.ScheduledTime(hour: t.hour, minute: t.minute))
+              .toList(),
+        ),
+      ));
+      if (pastSlot != null) {
+        await MedicineCleanStorageService.addLog(med_log.MedicineLog.taken(
+          id: MedicineCleanStorageService.doseLogId('qa-metformin', pastSlot),
+          medicineId: 'qa-metformin',
+          scheduledTime: pastSlot,
+        ));
+      }
+    } catch (_) {}
+  }
+
+  // Water: partway to the goal, so the hydration card shows a real percentage
+  // rather than 0%.
+  try {
+    await WaterService.addWaterLog(
+        amountMl: 1400, beverage: bev.BeverageType.defaultBeverages.first);
+  } catch (_) {}
+
+  // Reminders: one already past (overdue) and one later, so the Reminders card
+  // and the Reminders pulse cell both have something to count.
+  try {
+    for (final (i, at) in [
+      now.subtract(const Duration(minutes: 40)),
+      now.add(const Duration(hours: 2)),
+    ].indexed) {
+      await CleanStorageService.saveReminder(rem.Reminder(
+        id: 'qa-reminder-$i',
+        title: i == 0 ? 'Check blood pressure' : 'Evening walk',
+        body: 'QA seed',
+        scheduledTime: at,
+      ));
+    }
+  } catch (_) {}
 
   await CleanStorageService.setAppPreference('qa_seeded', true);
 }

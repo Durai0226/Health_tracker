@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
 
@@ -72,6 +73,8 @@ class FocusGardenScreen extends StatelessWidget {
       pinned: true,
       backgroundColor: AppColors.getBackground(context),
       leading: IconButton(
+        // Announced as just "button" by TalkBack and VoiceOver without this.
+        tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),
@@ -316,38 +319,28 @@ class FocusGardenScreen extends StatelessWidget {
     );
   }
 
+  /// What a brand-new user meets here.
+  ///
+  /// Was a hand-rolled Column reading *"Your garden is empty / Complete focus
+  /// sessions to grow plants!"* — which states an absence, blames the reader for
+  /// it, and offers nothing to do about it. This screen is reached from the Focus
+  /// screen, so the way forward is one tap back.
+  ///
+  /// Routed through the shared [EmptyState] on purpose: a hand-rolled empty state
+  /// carries no action contract, so nothing can check that it offers a way out.
+  /// The `dead-end-empty-state` gate in `focus_first_run_test.dart` requires the
+  /// shared widget for exactly that reason.
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        // Gutter + breathing room so the copy wraps inside the screen rather
-        // than running to the very edge once it is twice the size.
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🌱', style: TextStyle(fontSize: 64)),
-            const SizedBox(height: 16),
-            Text(
-              'Your garden is empty',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.getTextPrimary(context),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Complete focus sessions to grow plants!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.getTextSecondary(context),
-              ),
-            ),
-          ],
-        ),
+    final ext = AppColorsExt.of(context);
+    return EmptyState(
+      icon: Symbols.potted_plant_rounded,
+      title: 'Your garden grows as you focus',
+      message: 'Every session you finish plants something here.',
+      accent: ext.focus,
+      action: AppButton(
+        label: 'Start a session',
+        leadingIcon: Symbols.play_arrow_rounded,
+        onPressed: () => Navigator.pop(context),
       ),
     );
   }

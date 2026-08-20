@@ -1,6 +1,8 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
+import '../../../core/utils/percent_format.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/active_profile_service.dart';
 import '../../medication/models/dependent_profile.dart';
@@ -103,7 +105,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// Now each table is read once, the two independent reads run concurrently,
   /// and the summary and dose list are computed from the rows already in hand.
   Future<_MedicineHomeData> _loadMedicineData() async {
-    final now = DateTime.now();
+    final now = clock.now();
     final (meds, logs, streak) = await (
       MedicineCleanStorageService.getAllMedicines(),
       MedicineCleanStorageService.getLogsForDate(now),
@@ -201,27 +203,30 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// same live sources the feature cards use. Shared by the hero fallback and
   /// the pulse row so a "done" count is computed in exactly one place.
   _PillarStats _pillarStats(DailyMedicineSummary? summary) {
-    final medTotal = summary?.totalScheduled ?? 0;
+    // totalPlanned, NOT totalScheduled: this is a "today" pillar, so it counts
+    // the whole day's plan. Against the due-so-far denominator, a user whose
+    // only doses were still ahead of them scored the medicine pillar as DONE at
+    // breakfast, and the at-a-glance ring read one-of-four higher than the truth.
+    final medTotal = summary?.totalPlanned ?? 0;
     final medTaken = summary?.taken ?? 0;
-    // Nothing due today counts as done — you can't do more. A dose that was
-    // deliberately skipped (or has already gone missed) is *resolved*, not
+    // Nothing scheduled today counts as done — you can't do more. A dose that
+    // was deliberately skipped (or has already gone missed) is *resolved*, not
     // outstanding: counting only `taken` left the pillar permanently incomplete
     // after a skip, with nothing the user could do about it.
-    final medResolved =
-        medTaken + (summary?.skipped ?? 0) + (summary?.missed ?? 0);
-    final medDone = medTotal == 0 || medResolved >= medTotal;
+    final medDone = summary?.isDayResolved ?? true;
 
     final goal = WaterService.getDailyGoal();
     final water = WaterService.getTodayData();
     final waterMl = water.effectiveHydrationMl;
-    final waterPct =
-        goal > 0 ? ((waterMl / goal) * 100).round().clamp(0, 100) : 0;
+    // Same rule as the medicine ring: this caption sits inside the arc, so it
+    // must not read 100% at 2,490 of 2,500 ml while the ring is visibly open.
+    final waterPct = goal > 0 ? Pct.of(waterMl / goal) : 0;
     final waterDone = goal > 0 && water.goalReached;
 
     final focusMin = _focus.todayMinutes;
     final focusDone = focusMin > 0;
 
-    final now = DateTime.now();
+    final now = clock.now();
     final todays = CleanStorageService.getReminders()
         .where((r) => _isSameDay(r.scheduledTime, now))
         .toList();
@@ -284,11 +289,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
           final hasMeds = data?.hasMedicines ?? false;
           final dose = data?.nextDose;
           final taken = data?.summary.taken ?? 0;
-          final total = data?.summary.totalScheduled ?? 0;
+          // The hero's counter is a "today" sentence, so it counts the whole
+          // day's plan. On the due-so-far denominator it read "1 of 1 taken
+          // today" directly beneath its own "UP NEXT · 20:00" line.
+          final total = data?.summary.totalPlanned ?? 0;
 
           // NEXT-DOSE — meds exist and something is due.
           if (hasMeds && dose != null) {
-            final overdue = dose.scheduledTime.isBefore(DateTime.now());
+            final overdue = dose.scheduledTime.isBefore(clock.now());
             final accent = overdue ? ext.error : ext.medicine;
             final timeLabel = DateFormats.time.format(dose.scheduledTime);
             final med = dose.medicine;
@@ -373,13 +381,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
             );
           }
 
-          // NOTHING-LEFT — meds exist and every due dose is resolved. "Resolved"
-          // includes skipped/missed, otherwise a skipped dose dropped the hero
-          // all the way to the generic "no medicines" fallback.
-          final resolved =
-              taken + (data?.summary.skipped ?? 0) + (data?.summary.missed ?? 0);
-          if (hasMeds && total > 0 && resolved >= total) {
-            final perfect = taken >= total;
+          // NOTHING-LEFT — meds exist and every dose PLANNED FOR TODAY is
+          // resolved. "Resolved" includes skipped/missed, otherwise a skipped
+          // dose dropped the hero all the way to the generic "no medicines"
+          // fallback. Reached only when `nextDose` is null, so it cannot fire
+          // while something is still pending later today.
+          if (hasMeds && total > 0 && (data?.summary.isDayResolved ?? false)) {
+            final perfect = data?.summary.isPerfectDay ?? false;
             return _heroShell(
               ext,
               color: Color.alphaBlend(
@@ -765,9 +773,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
           final p = _pillarStats(snapshot.data?.summary);
           final cells = <Widget>[
             _StaggeredKpi(
-              // Clamped, and the numerator capped, so a stray duplicate log can
-              // never render "3/2". Water/Focus already clamped; Meds and
-              // Reminders didn't.
+              // Counts the whole day's plan (see _pillarStats). Clamped, and the
+              // numerator capped, so a stray duplicate log can never render
+              // "3/2". Water/Focus already clamped; Meds and Reminders didn't.
               progress: p.medTotal == 0
                   ? 1
                   : (p.medTaken / p.medTotal).clamp(0.0, 1.0),
@@ -835,7 +843,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _buildBriefingStrip(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
-    final hour = DateTime.now().hour;
+    final hour = clock.now().hour;
     final IconData glyph = hour >= 21
         ? Symbols.bedtime_rounded
         : (hour < 8 || hour >= 18)
@@ -898,7 +906,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
         waterPct: d.waterPct,
         focusMinutes: d.focusMinutes,
         remindersLeft: d.remindersLeft,
-        hour: DateTime.now().hour,
+        hour: clock.now().hour,
         steps: d.steps,
         stepGoal: d.stepGoal,
         sleepMinutes: d.sleepMinutes,
@@ -910,18 +918,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// [AiAssistant.dailyBriefing] intent expects. Reuses the exact same live
   /// sources the manual dashboard reads.
   Future<_BriefingData> _briefingData() async {
-    final now = DateTime.now();
+    final now = clock.now();
 
     final med = await _medicineData(MedicineCleanStorageService.revision.value);
     final s = med.summary;
-    final medsTotal = s.totalScheduled;
+    // CoachText derives `medsLeft = medsTotal - medsTaken`, and its
+    // highest-priority nudge is "unfinished doses after 18:00". On the
+    // due-so-far denominator that subtraction was always 0 for a dose that had
+    // not come round yet, so the one sentence this strip exists to say could
+    // never fire for an evening dose.
+    final medsTotal = s.totalPlanned;
     final medsTaken = s.taken;
 
     final goal = WaterService.getDailyGoal();
     final water = WaterService.getTodayData();
-    final waterPct = goal > 0
-        ? ((water.effectiveHydrationMl / goal) * 100).round().clamp(0, 100)
-        : 0;
+    final waterPct = goal > 0 ? Pct.of(water.effectiveHydrationMl / goal) : 0;
 
     final focusMinutes = _focus.todayMinutes;
 
@@ -1092,6 +1103,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
   // ---- medicine ------------------------------------------------------------
 
   Widget _buildMedicineCard(AppColorsExt ext) {
+    // Listens to the ACTIVE PROFILE as well as the revision — the same pairing
+    // `_liveBuilder` gives the hero and the pulse row.
+    //
+    // Switching from "Me" to a dependent is not a medicine mutation, so it never
+    // bumps `revision`. Subscribed to the revision alone, this card did not
+    // rebuild and went on rendering the previous profile's doses, while the hero
+    // above it (which does listen) switched immediately — so the two halves of
+    // one screen disagreed about whose medicines were on display.
+    return ListenableBuilder(
+      listenable: ActiveProfileService(),
+      builder: (context, _) => _medicineCardBody(ext),
+    );
+  }
+
+  Widget _medicineCardBody(AppColorsExt ext) {
     return ValueListenableBuilder<int>(
       valueListenable: MedicineCleanStorageService.revision,
       builder: (context, rev, _) {
@@ -1113,10 +1139,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
             }
 
             final s = data?.summary;
-            final total = s?.totalScheduled ?? 0;
+            // The whole day's plan, not just the doses already due — this is a
+            // "today" card. See DailyMedicineSummary's class doc.
+            final total = s?.totalPlanned ?? 0;
             final taken = s?.taken ?? 0;
             final missed = s?.missed ?? 0;
-            final adherence = s?.adherenceRate ?? 0;
+            final outstanding = s?.outstanding ?? 0;
             final streak = data?.streak ?? 0;
 
             final String status;
@@ -1124,12 +1152,17 @@ class _HomeDashboardState extends State<HomeDashboard> {
               status = 'No doses scheduled today';
             } else if (taken >= total) {
               status = 'All doses taken — nice work';
+            } else if (outstanding == 0) {
+              // Everything is resolved but not everything was taken, so
+              // "All doses taken" would be false and "n left" would be zero.
+              status = 'Nothing left today · $taken of $total taken';
             } else if (missed > 0) {
-              status = '$missed missed · ${total - taken - missed} left today';
+              status = '$missed missed · $outstanding left today';
             } else {
-              status = '${total - taken} of $total doses left today';
+              status = '$outstanding of $total doses left today';
             }
 
+            final dayCompletion = s?.dayCompletion ?? 0;
             return _featureCard(
               accent: ext.medicine,
               icon: Symbols.medication_rounded,
@@ -1137,16 +1170,27 @@ class _HomeDashboardState extends State<HomeDashboard> {
               subtitle: status,
               onTap: () => widget.onNavigate(1, healthTab: 0),
               badge: streak > 0 ? _streakChip(ext.medicine, streak) : null,
+              // ONE fraction drives both the arc and its caption. They used to
+              // come from different denominators — the arc from taken/due-so-far,
+              // the label from adherenceRate — so the ring could sit visibly open
+              // under the word "100%". Pct.of additionally refuses to print 100%
+              // for anything that is not genuinely complete.
               trailing: total > 0
-                  ? ProgressRing(
-                      progress: (taken / total).clamp(0.0, 1.0),
-                      size: 48,
-                      stroke: 5,
-                      accent: ext.medicine,
-                      center: Text('${(adherence * 100).round()}%',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: ext.medicine.strong,
-                              fontWeight: FontWeight.w800)),
+                  ? Semantics(
+                      label: "Today's doses: $taken of $total taken, "
+                          '${Pct.text(dayCompletion)}',
+                      excludeSemantics: true,
+                      child: ProgressRing(
+                        progress: dayCompletion,
+                        size: 48,
+                        stroke: 5,
+                        accent: ext.medicine,
+                        center: Text(Pct.text(dayCompletion),
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: ext.medicine.strong,
+                                fontWeight: FontWeight.w800,
+                                fontFeatures: kTabular)),
+                      ),
                     )
                   : null,
             );
@@ -1188,7 +1232,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
     // Days the goal was hit over the last 7 (same source as the weekly strip) —
     // a WeekDotStrip so hydration doesn't twin the medicine adherence ring.
-    final now = DateTime.now();
+    final now = clock.now();
     int daysHit = 0;
     for (var i = 0; i < 7; i++) {
       final d = DateTime(now.year, now.month, now.day)
@@ -1214,7 +1258,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
         children: [
           WeekDotStrip(filled: daysHit, accent: ext.water),
           const SizedBox(height: 6),
-          Text('${(progress * 100).round()}% today',
+          Text('${Pct.of(progress)}% today',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: ext.mark(ext.water),
                   fontWeight: FontWeight.w800,
@@ -1245,7 +1289,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _weeklyStripBody(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
-    final now = DateTime.now();
+    final now = clock.now();
     final days = List<DateTime>.generate(
         7, (i) => DateTime(now.year, now.month, now.day)
             .subtract(Duration(days: 6 - i)));
@@ -1426,7 +1470,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _buildRemindersCard(AppColorsExt ext) {
     final reminders = CleanStorageService.getReminders();
-    final now = DateTime.now();
+    final now = clock.now();
     final pending = reminders.where((r) => !r.isCompleted).toList()
       ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     final today = pending

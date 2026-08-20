@@ -57,28 +57,54 @@ class _PlantAnimationWidgetState extends State<PlantAnimationWidget>
       CurvedAnimation(parent: _growController, curve: Curves.elasticOut),
     );
 
-    if (widget.isAnimating) {
-      _swayController.repeat(reverse: true);
-      _sparkleController.repeat();
+    // Motion is started from didChangeDependencies, not here: whether it should
+    // run at all depends on MediaQuery, which is not safe to depend on in
+    // initState.
+  }
+
+  /// True when the user has asked the OS for less motion.
+  bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
+
+  bool get _shouldSway => widget.isAnimating && !_reduceMotion;
+
+  /// Start or stop the perpetual controllers to match preference and props.
+  ///
+  /// The sway and the sparkle are `repeat()`, so before this existed they ran for
+  /// as long as the widget was mounted no matter what the user had asked for.
+  /// This app is a health tracker, and for a vestibular-sensitive user constant
+  /// background motion is not a rough edge — it is a reason to stop using it.
+  ///
+  /// The growth animation is finite, so instead of being suppressed it is jumped
+  /// to its end value: the plant still shows how far along it is, it just does not
+  /// travel there. Reduce-motion means less movement, not less information.
+  void _applyMotionPreference({bool restartGrowth = false}) {
+    if (_shouldSway) {
+      if (!_swayController.isAnimating) _swayController.repeat(reverse: true);
+      if (!_sparkleController.isAnimating) _sparkleController.repeat();
+    } else {
+      _swayController.stop();
+      _sparkleController.stop();
     }
-    _growController.forward();
+
+    if (_reduceMotion) {
+      _growController.value = 1.0;
+    } else if (restartGrowth || _growController.value == 0.0) {
+      _growController.forward(from: 0);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Also the hook that reacts when the preference is toggled while mounted.
+    _applyMotionPreference();
   }
 
   @override
   void didUpdateWidget(PlantAnimationWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.progress != oldWidget.progress) {
-      _growController.forward(from: 0);
-    }
-    if (widget.isAnimating != oldWidget.isAnimating) {
-      if (widget.isAnimating) {
-        _swayController.repeat(reverse: true);
-        _sparkleController.repeat();
-      } else {
-        _swayController.stop();
-        _sparkleController.stop();
-      }
-    }
+    _applyMotionPreference(
+        restartGrowth: widget.progress != oldWidget.progress);
   }
 
   @override

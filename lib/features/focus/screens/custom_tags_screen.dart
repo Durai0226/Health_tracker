@@ -79,6 +79,8 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       pinned: true,
       backgroundColor: AppColors.getBackground(context),
       leading: IconButton(
+        // Announced as just "button" by TalkBack and VoiceOver without this.
+        tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),

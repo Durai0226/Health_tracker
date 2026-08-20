@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../core/services/haptic_service.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
@@ -58,8 +59,25 @@ class _BreathingWidgetState extends State<BreathingWidget>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    
-    _pulseController.repeat(reverse: true);
+    // The idle pulse is started from didChangeDependencies, where MediaQuery can
+    // safely be read.
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The ambient "ready" pulse behind the breathing circle repeats forever. The
+    // guided breath itself (`_breathController`) is deliberately left alone: its
+    // motion IS the instruction — a breathing exercise with no expanding circle
+    // is not a reduced-motion version of the feature, it is the feature removed.
+    // WCAG 2.2 SC 2.3.3 asks for non-essential motion to be suppressible, and
+    // draws exactly this distinction.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulseController.stop();
+      _pulseController.value = 0.0;
+    } else if (!_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    }
   }
 
   @override
@@ -130,7 +148,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
       }
 
       setState(() => _currentCount--);
-      HapticFeedback.selectionClick();
+      HapticService().focusBreathing();
 
       if (_currentCount <= 0) {
         timer.cancel();
@@ -189,7 +207,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
       _currentPhase = BreathingPhase.inhale;
     });
 
-    HapticFeedback.mediumImpact();
+      HapticService().focusComplete();
 
     if (_completedCycles >= widget.targetCycles) {
       _isActive = false;
@@ -234,6 +252,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
               _stop();
               widget.onClose?.call();
             },
+            tooltip: 'Close',
             icon: const Icon(Symbols.close_rounded),
             style: IconButton.styleFrom(
               backgroundColor: AppColors.getCardBg(context),

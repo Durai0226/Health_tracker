@@ -61,6 +61,8 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       pinned: true,
       backgroundColor: AppColors.getBackground(context),
       leading: IconButton(
+        // Announced as just "button" by TalkBack and VoiceOver without this.
+        tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),
@@ -72,7 +74,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
         ),
       ),
       title: const Text(
-        'Plant Real Trees',
+        'Garden Shop',
         style: TextStyle(fontWeight: FontWeight.bold),
       ),
     );
@@ -205,7 +207,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               children: [
                 Expanded(
                   child: _buildImpactStat(
-                      '${_coinsService.totalCO2Offset} kg', 'CO₂ Offset'),
+                      '${_coinsService.coins.coinsSpentOnTrees}', 'Coins Spent'),
                 ),
                 Container(width: 1, height: 30, color: Colors.white24),
                 Expanded(
@@ -442,7 +444,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Plant your first real tree!',
+                'Redeem coins to grow your garden',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.getTextSecondary(context),
@@ -502,15 +504,14 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
+                // The two lines that used to sit here rendered
+                // `tree.location` and `tree.partnerOrganization` as fact. Both
+                // were fabricated at redemption time — the location by
+                // `Random()` from eight countries, the partner hardcoded to a
+                // real charity with no agreement in place. Replaced with the one
+                // thing the app actually knows about this record.
                 Text(
-                  '📍 ${tree.location ?? "Unknown location"}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.getTextSecondary(context),
-                  ),
-                ),
-                Text(
-                  '🏢 ${tree.partnerOrganization ?? "Partner organization"}',
+                  '🪙 ${tree.coinsCost} coins',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.getTextSecondary(context),
@@ -536,8 +537,10 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   color: const Color(0xFF4CAF50).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
+                // Was a hardcoded '🌱 Growing' badge on every row — a live
+                // status for a tree that does not exist anywhere.
                 child: const Text(
-                  '🌱 Growing',
+                  '🌱 In your garden',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -681,7 +684,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             Text(treeType.emoji, style: const TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(
-              'Plant a ${treeType.name}?',
+              'Add a ${treeType.name}?',
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -731,11 +734,12 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   child: ElevatedButton(
                     onPressed: () async {
                       Navigator.pop(context);
-                      final success = await _coinsService.plantRealTree(treeType);
+                      final success =
+                          await _coinsService.redeemGardenTree(treeType);
                       if (success && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('🌱 ${treeType.name} planted!'),
+                            content: Text('🌱 ${treeType.name} added to your garden'),
                             backgroundColor: const Color(0xFF4CAF50),
                           ),
                         );
@@ -749,7 +753,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                       ),
                     ),
                     child: const Text(
-                      'Plant Tree 🌱',
+                      'Add to Garden 🌱',
                       style: TextStyle(color: Colors.white),
                     ),
                   ),
