@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/enum_json.dart';
 
 enum RealTreeType {
   oak,
@@ -174,23 +175,36 @@ class FocusCoins {
   }
 }
 
+/// A commemorative tree the user redeemed with focus coins, kept **in their own
+/// garden**. It is an in-app reward and nothing more.
+///
+/// It did not used to be described that way. Redeeming one wrote a record
+/// carrying `partnerOrganization: 'Trees for the Future'` — a real 501(c)(3),
+/// hardcoded with no agreement — and a `location` chosen by `Random()` from eight
+/// countries, which the screen then presented to the user as fact ("📍 Kenya,
+/// Africa"). `CoinsService` had no HTTP client and no Firestore write, so nothing
+/// left the device: coins were debited for a real-world outcome that never
+/// happened, and the geography was invented per redemption.
+///
+/// Those three fields are gone. Not deprecated — removed, because a field that
+/// exists gets rendered again. `fromJson` deliberately ignores them so records
+/// written by the old build still load, minus the fabrications.
+///
+/// If a genuine planting partnership is ever signed, the honest shape is the one
+/// Forest uses: a named partner who **publicly reciprocates**, plantings funded
+/// from app revenue rather than the user's currency, a hard per-account cap, and
+/// no certificate. Until such an agreement exists, this stays an in-app reward.
 class RealTreePlanting {
   final String id;
   final RealTreeType treeType;
   final DateTime plantedAt;
   final int coinsCost;
-  final String? certificateId;
-  final String? location;
-  final String? partnerOrganization;
 
   RealTreePlanting({
     required this.id,
     required this.treeType,
     required this.plantedAt,
     required this.coinsCost,
-    this.certificateId,
-    this.location,
-    this.partnerOrganization,
   });
 
   Map<String, dynamic> toJson() => {
@@ -198,20 +212,23 @@ class RealTreePlanting {
         'treeType': treeType.index,
         'plantedAt': plantedAt.toIso8601String(),
         'coinsCost': coinsCost,
-        'certificateId': certificateId,
-        'location': location,
-        'partnerOrganization': partnerOrganization,
       };
 
-  factory RealTreePlanting.fromJson(Map<String, dynamic> json) => RealTreePlanting(
-        id: json['id'] ?? '',
-        treeType: RealTreeType.values[json['treeType'] ?? 0],
-        plantedAt: DateTime.parse(json['plantedAt']),
-        coinsCost: json['coinsCost'] ?? 0,
-        certificateId: json['certificateId'],
-        location: json['location'],
-        partnerOrganization: json['partnerOrganization'],
-      );
+  /// Tolerant by design: older records carry `certificateId`, `location` and
+  /// `partnerOrganization`, and an unknown `treeType` index can arrive from a
+  /// build that had more species. Both degrade instead of throwing — persisted
+  /// data outlives the code that wrote it.
+  factory RealTreePlanting.fromJson(Map<String, dynamic> json) {
+    return RealTreePlanting(
+      id: json['id'] ?? '',
+      treeType:
+          EnumJson.at(RealTreeType.values, json['treeType'], RealTreeType.oak),
+      plantedAt:
+          DateTime.tryParse(json['plantedAt']?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0),
+      coinsCost: json['coinsCost'] ?? 0,
+    );
+  }
 }
 
 enum CoinTransactionType {
@@ -287,7 +304,8 @@ class CoinTransaction {
 
   factory CoinTransaction.fromJson(Map<String, dynamic> json) => CoinTransaction(
         id: json['id'] ?? '',
-        type: CoinTransactionType.values[json['type'] ?? 0],
+        type: EnumJson.at(CoinTransactionType.values, json['type'],
+            CoinTransactionType.earned),
         amount: json['amount'] ?? 0,
         timestamp: DateTime.parse(json['timestamp']),
         description: json['description'] ?? '',

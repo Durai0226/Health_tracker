@@ -18,6 +18,7 @@ import 'core/services/haptic_service.dart';
 import 'core/services/vitavibe_service.dart';
 import 'features/medication/services/medicine_storage_service.dart';
 import 'features/medication/services/intake_tracking_service.dart';
+import 'features/focus/services/focus_service.dart';
 import 'features/water/services/water_service.dart';
 import 'features/period/services/period_service.dart';
 import 'features/steps/services/step_service.dart';
@@ -313,6 +314,15 @@ void main() async {
       _initService('FeatureManager', () => FeatureManager().init()),
       _initService('ActiveProfileService', () => ActiveProfileService().init()),
       _initService('AppLockService', () => AppLockService().init()),
+      // Focus hydrates at startup, not on screen mount.
+      //
+      // init() used to be called ONLY from FocusScreen.initState, so on a cold
+      // launch the Today dashboard's Focus KPI and streak chip read an
+      // un-hydrated singleton and rendered 0 minutes / no streak — with the real
+      // data sitting on disk the whole time — until the user happened to open the
+      // Focus screen once. Cheap here: it reads the already-loaded preference
+      // cache, and audio self-initialises later on first playback.
+      _initService('FocusService', () => FocusService().init()),
     ]);
     
     // Defer non-critical services to after app launch

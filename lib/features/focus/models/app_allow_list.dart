@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/enum_json.dart';
 
 enum AppCategory {
   productivity,
@@ -120,7 +121,8 @@ class AllowedApp {
         name: json['name'] ?? '',
         packageName: json['packageName'],
         bundleId: json['bundleId'],
-        category: AppCategory.values[json['category'] ?? 0],
+        category: EnumJson.at(
+            AppCategory.values, json['category'], AppCategory.other),
         isAllowed: json['isAllowed'] ?? true,
         addedAt: DateTime.parse(json['addedAt']),
         iconUrl: json['iconUrl'],
@@ -149,72 +151,42 @@ class AllowedApp {
   }
 }
 
+/// The user's own list of apps that tend to pull them out of a focus session.
+///
+/// **It is a note to self, not an enforcement mechanism**, and the model no
+/// longer pretends otherwise. It used to carry `isStrictMode`,
+/// `blockNotifications`, `showWarningOnBlockedApp` and `gracePeriodSeconds`,
+/// plus an `isAppAllowed(packageName)` predicate — the shape of a real blocker.
+/// None of it ran: `isAppAllowed` had no production caller, nothing in the app
+/// detects an app switch, and the manifest declares none of the permissions
+/// blocking needs. The presets could not have matched anything even if something
+/// had called it, because they were created with `packageName` and `bundleId`
+/// both null.
+///
+/// Those five members are removed rather than left unused, because a field that
+/// exists gets rendered again and a predicate that exists gets called. `fromJson`
+/// ignores the old keys so existing lists still load.
 class AppAllowList {
   final List<AllowedApp> apps;
-  final bool isStrictMode;
-  final bool blockNotifications;
-  final bool showWarningOnBlockedApp;
-  final int gracePeriodSeconds;
 
-  const AppAllowList({
-    this.apps = const [],
-    this.isStrictMode = false,
-    this.blockNotifications = true,
-    this.showWarningOnBlockedApp = true,
-    this.gracePeriodSeconds = 10,
-  });
+  const AppAllowList({this.apps = const []});
 
   List<AllowedApp> get allowedApps => apps.where((a) => a.isAllowed).toList();
   List<AllowedApp> get blockedApps => apps.where((a) => !a.isAllowed).toList();
 
-  bool isAppAllowed(String packageName) {
-    final app = apps.firstWhere(
-      (a) => a.packageName == packageName || a.bundleId == packageName,
-      orElse: () => AllowedApp(
-        id: '',
-        name: '',
-        category: AppCategory.other,
-        addedAt: DateTime.now(),
-        isAllowed: !isStrictMode,
-      ),
-    );
-    return app.isAllowed;
-  }
-
   Map<String, dynamic> toJson() => {
         'apps': apps.map((a) => a.toJson()).toList(),
-        'isStrictMode': isStrictMode,
-        'blockNotifications': blockNotifications,
-        'showWarningOnBlockedApp': showWarningOnBlockedApp,
-        'gracePeriodSeconds': gracePeriodSeconds,
       };
 
   factory AppAllowList.fromJson(Map<String, dynamic> json) => AppAllowList(
         apps: (json['apps'] as List?)
                 ?.map((a) => AllowedApp.fromJson(Map<String, dynamic>.from(a)))
                 .toList() ??
-            [],
-        isStrictMode: json['isStrictMode'] ?? false,
-        blockNotifications: json['blockNotifications'] ?? true,
-        showWarningOnBlockedApp: json['showWarningOnBlockedApp'] ?? true,
-        gracePeriodSeconds: json['gracePeriodSeconds'] ?? 10,
+            const [],
       );
 
-  AppAllowList copyWith({
-    List<AllowedApp>? apps,
-    bool? isStrictMode,
-    bool? blockNotifications,
-    bool? showWarningOnBlockedApp,
-    int? gracePeriodSeconds,
-  }) {
-    return AppAllowList(
-      apps: apps ?? this.apps,
-      isStrictMode: isStrictMode ?? this.isStrictMode,
-      blockNotifications: blockNotifications ?? this.blockNotifications,
-      showWarningOnBlockedApp: showWarningOnBlockedApp ?? this.showWarningOnBlockedApp,
-      gracePeriodSeconds: gracePeriodSeconds ?? this.gracePeriodSeconds,
-    );
-  }
+  AppAllowList copyWith({List<AllowedApp>? apps}) =>
+      AppAllowList(apps: apps ?? this.apps);
 }
 
 class PresetAllowList {

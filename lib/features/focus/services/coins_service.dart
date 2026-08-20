@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../models/focus_coins.dart';
@@ -56,7 +57,7 @@ class CoinsService extends ChangeNotifier {
       id: _generateId(),
       type: CoinTransactionType.earned,
       amount: earnedCoins,
-      timestamp: DateTime.now(),
+      timestamp: clock.now(),
       description: 'Earned from $minutes min focus session',
       relatedSessionId: sessionId,
     );
@@ -83,7 +84,7 @@ class CoinsService extends ChangeNotifier {
       id: _generateId(),
       type: CoinTransactionType.streakBonus,
       amount: bonus,
-      timestamp: DateTime.now(),
+      timestamp: clock.now(),
       description: '$streakDays day streak bonus!',
     );
 
@@ -106,7 +107,7 @@ class CoinsService extends ChangeNotifier {
       id: _generateId(),
       type: CoinTransactionType.achievementBonus,
       amount: amount,
-      timestamp: DateTime.now(),
+      timestamp: clock.now(),
       description: 'Achievement unlocked: $achievementName',
     );
 
@@ -122,29 +123,32 @@ class CoinsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> plantRealTree(RealTreeType treeType) async {
+  /// Redeem coins for a commemorative tree in the user's own garden.
+  ///
+  /// Formerly `plantRealTree`. It never planted a real tree: it wrote a hardcoded
+  /// partner organisation and a `Random()` planting location into the record, and
+  /// made no network call of any kind. Renamed so no caller can believe otherwise.
+  Future<bool> redeemGardenTree(RealTreeType treeType) async {
     final cost = treeType.coinCost;
-    
+
     if (_coins.totalCoins < cost) {
-      debugPrint('✗ Not enough coins to plant ${treeType.name}');
+      debugPrint('✗ Not enough coins to redeem ${treeType.name}');
       return false;
     }
 
     final planting = RealTreePlanting(
       id: _generateId(),
       treeType: treeType,
-      plantedAt: DateTime.now(),
+      plantedAt: clock.now(),
       coinsCost: cost,
-      partnerOrganization: 'Trees for the Future',
-      location: _getRandomLocation(),
     );
 
     final spendTransaction = CoinTransaction(
       id: _generateId(),
       type: CoinTransactionType.spent,
       amount: cost,
-      timestamp: DateTime.now(),
-      description: 'Planted a real ${treeType.name}!',
+      timestamp: clock.now(),
+      description: 'Added a ${treeType.name} to your garden',
     );
 
     final updatedTransactions = [spendTransaction, ..._coins.transactions];
@@ -160,30 +164,22 @@ class CoinsService extends ChangeNotifier {
     await _saveData();
     notifyListeners();
     
-    debugPrint('✓ Planted real ${treeType.name} for $cost coins');
+    debugPrint('✓ Added ${treeType.name} to the garden for $cost coins');
     return true;
+  }
+
+  /// Fresh-install state between tests. See FocusService.resetForTesting.
+  @visibleForTesting
+  void resetForTesting() {
+    _coins = const FocusCoins();
   }
 
   bool canAfford(RealTreeType treeType) {
     return _coins.totalCoins >= treeType.coinCost;
   }
 
-  String _getRandomLocation() {
-    final locations = [
-      'Kenya, Africa',
-      'Brazil, South America',
-      'Indonesia, Asia',
-      'India, Asia',
-      'Madagascar, Africa',
-      'Philippines, Asia',
-      'Mexico, North America',
-      'Ethiopia, Africa',
-    ];
-    return locations[Random().nextInt(locations.length)];
-  }
-
   String _generateId() {
-    return '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}';
+    return '${clock.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}';
   }
 
   Map<RealTreeType, int> get treesCountByType {
@@ -194,7 +190,13 @@ class CoinsService extends ChangeNotifier {
     return counts;
   }
 
-  int get totalCO2Offset {
-    return _coins.plantedTrees.length * 22;
-  }
+  // `totalCO2Offset` was removed, not corrected.
+  //
+  // It returned `plantedTrees.length * 22`, presented in the UI as "N kg CO₂
+  // Offset" — a specific environmental claim derived from a constant, for
+  // plantings that never happened. There is no smaller honest version of that
+  // number, because the app has no basis for any number: no partner, no
+  // agreement, no request ever leaving the device. Under the FTC Green Guides an
+  // environmental claim needs competent and reliable substantiation, so the fix
+  // is deletion rather than a better multiplier.
 }

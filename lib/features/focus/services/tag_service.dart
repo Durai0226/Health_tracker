@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../models/custom_tag.dart';
@@ -75,7 +76,7 @@ class TagService extends ChangeNotifier {
         orElse: () => FocusTag.availableColors.first,
       ),
       emoji: emoji,
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
       isDefault: false,
     );
 
@@ -178,6 +179,13 @@ class TagService extends ChangeNotifier {
   }
 
   String _generateId() {
-    return 'tag_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}';
+    return 'tag_${clock.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}';
   }
+  /// Fresh-install state between tests. See FocusService.resetForTesting.
+  @visibleForTesting
+  void resetForTesting() {
+    _tags = DefaultTags.getDefaultTags();
+    _sessionTags = {};
+  }
+
 }

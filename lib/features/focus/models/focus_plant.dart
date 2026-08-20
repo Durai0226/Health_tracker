@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/enum_json.dart';
 
 enum PlantType {
   seedling,
@@ -222,7 +223,7 @@ class FocusPlant {
 
   factory FocusPlant.fromJson(Map<String, dynamic> json) => FocusPlant(
         id: json['id'] ?? '',
-        type: PlantType.values[json['type'] ?? 0],
+        type: EnumJson.at(PlantType.values, json['type'], PlantType.seedling),
         plantedAt: DateTime.parse(json['plantedAt']),
         durationMinutes: json['durationMinutes'] ?? 0,
         isAlive: json['isAlive'] ?? true,
