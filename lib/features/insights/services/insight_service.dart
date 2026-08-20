@@ -82,7 +82,13 @@ class InsightService {
         completionRate: FocusInsights.completionRate(refs),
         sessionCount: refs.length,
         streakDays: fs.stats.currentStreak,
+        suggestedMinutes: FocusInsights.suggestedMinutes(refs),
       ));
+
+      // Focus vs sleep. Zero extra queries: both `FocusService.sessions` and
+      // `SleepService.getAllSessions()` are already in memory, which is why this
+      // sits inside the existing try rather than getting its own.
+      out.add(CorrelationEngine.focusVsSleep(_focusVsSleepDays(fs)));
     } catch (_) {}
 
     // Vitals — BP + glucose pattern detection.
@@ -362,4 +368,58 @@ class InsightService {
 
   static String _dayKey(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Days the user ATTEMPTED a focus session, grouped by whether the preceding
+  /// night beat their own median, with that day's completion rate as the metric.
+  ///
+  /// Three things this does deliberately:
+  ///
+  ///  * **Only attempted days are returned.** A day with no session started is
+  ///    absent, not a zero. Including them would make the insight a measure of
+  ///    whether the user opened the app — the same defect
+  ///    `SleepService.sleepDebtMinutes` documents for its own average.
+  ///  * **The grouping is the user's own median**, not a 7-hour constant: a
+  ///    six-hour sleeper is not deprived against their own baseline.
+  ///  * **The night is the one BEFORE the day.** Sleep is keyed to the morning it
+  ///    ends, so a session on the 15th is matched against the night that ended on
+  ///    the 15th. Getting this off by one would silently reverse the arrow.
+  static List<GroupedDay> _focusVsSleepDays(FocusService fs) {
+    final nights = SleepService.getAllSessions();
+    if (nights.length < CorrelationResult.minPerGroup * 2) return const [];
+
+    // `SleepSession.dateKey` is documented as "the night's WAKE-UP date", which
+    // is exactly the pairing wanted: a session on the 15th is matched against the
+    // night that ended on the 15th. Deriving a key from `bedtime` instead would
+    // have been off by one for every night that crosses midnight — i.e. all of
+    // them — and would have silently reversed the arrow.
+    final asleepByDay = <String, int>{
+      for (final n in nights) n.dateKey: n.asleepMinutes,
+    };
+    final values = asleepByDay.values.toList()..sort();
+    final mid = values.length ~/ 2;
+    final median = values.length.isOdd
+        ? values[mid]
+        : ((values[mid - 1] + values[mid]) / 2).round();
+
+    // started / completed per calendar day.
+    final started = <String, int>{};
+    final completed = <String, int>{};
+    for (final s in fs.sessions) {
+      final key = _dayKey(s.startedAt);
+      started[key] = (started[key] ?? 0) + 1;
+      if (s.wasCompleted) completed[key] = (completed[key] ?? 0) + 1;
+    }
+
+    final out = <GroupedDay>[];
+    started.forEach((key, count) {
+      final slept = asleepByDay[key];
+      if (slept == null || count == 0) return;
+      out.add(GroupedDay(
+        day: DateTime.parse(key),
+        inGroup: slept >= median,
+        value: (completed[key] ?? 0) / count,
+      ));
+    });
+    return out;
+  }
 }

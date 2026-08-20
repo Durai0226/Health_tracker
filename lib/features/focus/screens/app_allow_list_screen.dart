@@ -3,6 +3,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../../../core/services/haptic_service.dart';
+import '../services/focus_service.dart';
 import '../models/app_allow_list.dart';
 
 class AppAllowListScreen extends StatefulWidget {
@@ -79,6 +81,8 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
       pinned: true,
       backgroundColor: AppColors.getBackground(context),
       leading: IconButton(
+        // Announced as just "button" by TalkBack and VoiceOver without this.
+        tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
         icon: Container(
           padding: const EdgeInsets.all(8),
@@ -90,12 +94,32 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
         ),
       ),
       title: const Text(
-        'App Allow List',
+        'Distractions',
         style: TextStyle(fontWeight: FontWeight.bold),
       ),
     );
   }
 
+  /// An honest description of what this list is — and is not.
+  ///
+  /// This card used to hold four switches: "Strict Mode — Only allowed apps can
+  /// be used during focus", "Block Notifications — Silence notifications from
+  /// non-allowed apps", "Show Warning — Display warning when opening blocked
+  /// app", and a "Grace Period — Seconds before tree dies when leaving app"
+  /// dropdown. All four persisted correctly and **enforced nothing**:
+  /// `AppAllowList.isAppAllowed` had no production caller, no app-switch
+  /// detection existed anywhere in the codebase, and the manifest declares none
+  /// of the four permissions blocking would require (`PACKAGE_USAGE_STATS`,
+  /// `AccessibilityService`, `QUERY_ALL_PACKAGES`, `SYSTEM_ALERT_WINDOW`).
+  ///
+  /// Real blocking is not being added, deliberately. On Android it needs the
+  /// AccessibilityService API, a category Google tightened in October 2025 to
+  /// prohibit autonomous action; on iOS it needs Apple's Family Controls
+  /// entitlement, and that API has had regressions open since iOS 26 beta 1 —
+  /// Opal, a well-funded Editors' Choice app, still ships a documented bypass.
+  /// What research consistently shows works instead is friction and
+  /// accountability: naming your distractions up front, and ending a session
+  /// with a deliberate "Give Up" rather than a background heuristic that guesses.
   Widget _buildSettingsCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -110,172 +134,46 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Focus Settings',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: const Icon(Symbols.info_rounded,
+                color: AppColors.primary, size: 20),
           ),
-          const SizedBox(height: 16),
-          _buildSettingSwitch(
-            'Strict Mode',
-            'Only allowed apps can be used during focus',
-            Symbols.shield_rounded,
-            _allowList.isStrictMode,
-            (value) {
-              setState(() {
-                _allowList = _allowList.copyWith(isStrictMode: value);
-              });
-              _saveData();
-            },
-          ),
-          Divider(height: 24, color: AppColors.getDivider(context)),
-          _buildSettingSwitch(
-            'Block Notifications',
-            'Silence notifications from non-allowed apps',
-            Symbols.notifications_off_rounded,
-            _allowList.blockNotifications,
-            (value) {
-              setState(() {
-                _allowList = _allowList.copyWith(blockNotifications: value);
-              });
-              _saveData();
-            },
-          ),
-          Divider(height: 24, color: AppColors.getDivider(context)),
-          _buildSettingSwitch(
-            'Show Warning',
-            'Display warning when opening blocked app',
-            Symbols.warning_rounded,
-            _allowList.showWarningOnBlockedApp,
-            (value) {
-              setState(() {
-                _allowList = _allowList.copyWith(showWarningOnBlockedApp: value);
-              });
-              _saveData();
-            },
-          ),
-          Divider(height: 24, color: AppColors.getDivider(context)),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'This is your own list',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
-                child: const Icon(Symbols.timer_rounded, color: AppColors.primary, size: 20),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Grace Period',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'Seconds before tree dies when leaving app',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.getTextSecondary(context),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  'DlyMinder does not block or monitor other apps. Writing down '
+                  'what pulls you away makes it easier to notice when it happens '
+                  '— and your session only ends when you tap Give Up.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: AppColors.getTextSecondary(context),
+                  ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.getGrey200(context),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButton<int>(
-                  value: _allowList.gracePeriodSeconds,
-                  underline: const SizedBox(),
-                  isDense: true,
-                  dropdownColor: AppColors.getCardBg(context),
-                  iconEnabledColor: AppColors.getTextSecondary(context),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.getTextPrimary(context),
-                      ),
-                  items: [5, 10, 15, 30, 60].map((seconds) {
-                    return DropdownMenuItem(
-                      value: seconds,
-                      child: Text('${seconds}s'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _allowList = _allowList.copyWith(gracePeriodSeconds: value);
-                      });
-                      _saveData();
-                    }
-                  },
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSettingSwitch(
-    String title,
-    String subtitle,
-    IconData icon,
-    bool value,
-    ValueChanged<bool> onChanged,
-  ) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: AppColors.primary, size: 20),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.getTextSecondary(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-        AppSwitch(
-          value: value,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
 
   Widget _buildPresetSection() {
     return Column(
@@ -352,55 +250,61 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Both children are Flexible with a one-line clamp. Unconstrained, this
+        // `spaceBetween` Row overflowed by 28px at 320pt — a pre-existing defect
+        // that only surfaced once the settings card above it got shorter: the
+        // SliverList had never laid this header out, because it sat below the
+        // fold behind four switches. A lazily-built list hides overflow until
+        // something above it shrinks.
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Allowed Apps',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            const Flexible(
+              child: Text(
+                'Your list',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            Text(
-              '${_allowList.allowedApps.length} apps',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.getTextSecondary(context),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                '${_allowList.apps.length} listed',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.getTextSecondary(context),
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 16),
         if (_allowList.apps.isEmpty)
+          // Was a hand-rolled card reading 'No apps added yet' with nothing to
+          // tap, on a screen whose entire purpose is adding things. Unlike the
+          // garden and the stats chart, the way forward here is on this screen,
+          // so the action opens the add dialog directly.
           Container(
-            padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: AppColors.getCardBg(context),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Center(
-              child: Column(
-                children: [
-                  const Text('📱', style: TextStyle(fontSize: 48)),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No apps added yet',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.getTextPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Add apps that won\'t kill your tree during focus',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.getTextSecondary(context),
-                    ),
-                  ),
-                ],
+            child: EmptyState(
+              icon: Symbols.phone_iphone_rounded,
+              title: 'Name what pulls you away',
+              message: 'Listing a distraction is how you start noticing it '
+                  'sooner.',
+              action: AppButton(
+                label: 'Add a distraction',
+                leadingIcon: Symbols.add_rounded,
+                onPressed: _showAddAppDialog,
               ),
             ),
           )
@@ -413,15 +317,42 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     );
   }
 
+  /// Whether a focus session is running right now.
+  ///
+  /// Changes what this screen is FOR. At rest it is a list you curate; during a
+  /// session it is a tally you tap. Same list, and still no monitoring of any
+  /// kind — the user is the sensor.
+  bool get _sessionRunning => FocusService().isRunning;
+
+  /// Log that this distraction pulled at the user, and go back to the ring.
+  ///
+  /// The tap is the intervention, not the data. Naming what just pulled you away
+  /// is the interposed pause the friction research credits, and it is the one
+  /// version of that available on a platform where real blocking is a dead end.
+  /// The timestamps then answer a question a usage report cannot: not "you were
+  /// distracted 14% of the time" but "this one, nine times, mostly early".
+  void _logDistraction(AllowedApp app) {
+    HapticService().selection();
+    FocusService().logDistraction(app.id);
+    context.toastSuccess('Noted — ${app.name}');
+    Navigator.of(context).maybePop();
+  }
+
   Widget _buildAppCard(AllowedApp app, int index) {
+    final logging = _sessionRunning;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       decoration: BoxDecoration(
         color: AppColors.getCardBg(context),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: InkWell(
+        onTap: logging ? () => _logDistraction(app) : null,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
         children: [
           Container(
             width: 44,
@@ -456,29 +387,58 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               ],
             ),
           ),
-          AppSwitch(
-            value: app.isAllowed,
-            onChanged: (value) {
-              setState(() {
-                final updatedApps = List<AllowedApp>.from(_allowList.apps);
-                updatedApps[index] = app.copyWith(isAllowed: value);
-                _allowList = _allowList.copyWith(apps: updatedApps);
-              });
-              _saveData();
-            },
+          // Mid-session the controls give way to the tally affordance. Editing
+          // the list is not the mid-session need, and leaving a destructive
+          // icon-only button next to the thing the user is meant to be tapping
+          // quickly is how an accidental delete happens.
+          if (logging)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Pulled me away',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.getTextSecondary(context),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Symbols.add_circle_rounded,
+                    size: 20, color: AppColors.getTextSecondary(context)),
+              ],
+            )
+          else ...[
+            AppSwitch(
+              value: app.isAllowed,
+              onChanged: (value) {
+                setState(() {
+                  final updatedApps = List<AllowedApp>.from(_allowList.apps);
+                  updatedApps[index] = app.copyWith(isAllowed: value);
+                  _allowList = _allowList.copyWith(apps: updatedApps);
+                });
+                _saveData();
+              },
+            ),
+            IconButton(
+              // Destructive and icon-only: announced as just "button" without
+              // this. The a11y sweep never saw it because a fresh install has no
+              // apps, so this row only exists once the user has added one.
+              tooltip: 'Remove',
+              onPressed: () {
+                setState(() {
+                  final updatedApps = List<AllowedApp>.from(_allowList.apps)
+                    ..removeAt(index);
+                  _allowList = _allowList.copyWith(apps: updatedApps);
+                });
+                _saveData();
+              },
+              icon: const Icon(Symbols.delete_rounded, color: AppColors.error),
+            ),
+          ],
+            ],
           ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                final updatedApps = List<AllowedApp>.from(_allowList.apps)
-                  ..removeAt(index);
-                _allowList = _allowList.copyWith(apps: updatedApps);
-              });
-              _saveData();
-            },
-            icon: const Icon(Symbols.delete_rounded, color: AppColors.error),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -516,7 +476,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Add App to Allow List',
+                'Add a distraction',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,

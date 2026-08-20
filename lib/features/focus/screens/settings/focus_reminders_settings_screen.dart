@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:tablet_remainder/core/services/haptic_service.dart';
+import 'package:tablet_remainder/core/services/mindfulness_channel.dart';
+import 'package:tablet_remainder/features/focus/services/focus_reminder_scheduler.dart';
+import 'package:tablet_remainder/features/focus/services/focus_service.dart';
 import 'package:tablet_remainder/core/widgets/app/app_pickers.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -26,8 +30,19 @@ class _FocusRemindersSettingsScreenState
   bool _dailyReminder = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
   bool _streakReminder = true;
-  bool _breakReminder = true;
   bool _isLoading = true;
+
+  /// Whether this device can store mindfulness sessions at all.
+  ///
+  /// Probed once and used to HIDE the row rather than disable it.
+  /// `MindfulnessSessionRecord` is an experimental Health Connect API delivered
+  /// by a Play System Update, so plenty of devices cannot — and a switch that
+  /// cannot be switched on is worse than an absent one. Critically, the probe has
+  /// to happen before the permission is ever requested: Health Connect refuses
+  /// the WHOLE permission sheet if any requested type is unsupported, which would
+  /// break the health permissions the app genuinely needs.
+  bool _mindfulnessAvailable = false;
+  bool _mindfulnessBusy = false;
 
   @override
   void initState() {
@@ -47,9 +62,30 @@ class _FocusRemindersSettingsScreenState
         minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
       );
       _streakReminder = prefs.getBool('focus_streak_reminder') ?? true;
-      _breakReminder = prefs.getBool('focus_break_reminder') ?? true;
       _isLoading = false;
     });
+    // Re-evaluate on every visit, not only on a toggle. "At risk" is a fact about
+    // today, so a nudge scheduled yesterday has to be re-decided rather than left
+    // standing.
+    await _applySchedule();
+    final available = await MindfulnessChannel.instance.isAvailable();
+    if (!mounted) return;
+    setState(() => _mindfulnessAvailable = available);
+  }
+
+  /// Toggle mindfulness write-back.
+  ///
+  /// `setMindfulnessSync` re-checks the real OS grant, so a user who revoked the
+  /// permission in the Health Connect app gets the switch bounced back off rather
+  /// than left stuck on, silently writing nothing. The busy flag stops a double
+  /// tap racing two permission checks.
+  Future<void> _toggleMindfulness(bool value) async {
+    if (_mindfulnessBusy) return;
+    setState(() => _mindfulnessBusy = true);
+    HapticService().toggle();
+    await FocusService().setMindfulnessSync(value);
+    if (!mounted) return;
+    setState(() => _mindfulnessBusy = false);
   }
 
   Future<void> _persist() async {
@@ -60,11 +96,31 @@ class _FocusRemindersSettingsScreenState
       '${_reminderTime.hour}:${_reminderTime.minute}',
     );
     await prefs.setBool('focus_streak_reminder', _streakReminder);
-    await prefs.setBool('focus_break_reminder', _breakReminder);
+    await _applySchedule();
   }
 
+  /// Make the switches mean something.
+  ///
+  /// Every toggle on this screen used to be write-only: three `setBool` calls and
+  /// nothing else. `NotificationService` was not even imported, so
+  /// *"Alert when your streak is at risk"* promised a notification the app had no
+  /// code to send. A switch that does nothing is worse than an absent feature —
+  /// the user believes they are covered.
+  ///
+  /// The scheduling itself lives in [FocusReminderScheduler] because a second
+  /// caller needs it: the startup migration that takes these two ids off
+  /// AlarmManager for installs that already had reminders switched on. It reads
+  /// the same prefs [_persist] has just written, so this runs after that, never
+  /// before.
+  ///
+  /// The streak nudge is re-decided on every visit and only while the streak is
+  /// ACTUALLY at risk. That works because the streak can only be advanced by
+  /// using the app: if a session was completed, the app was open, and this ran
+  /// again. So the nudge is never sent to somebody who has already focused today.
+  Future<void> _applySchedule() => FocusReminderScheduler.apply();
+
   void _update(VoidCallback change) {
-    HapticFeedback.lightImpact();
+    HapticService().toggle();
     setState(change);
     _persist();
   }
@@ -93,6 +149,7 @@ class _FocusRemindersSettingsScreenState
               leading: AppIconButton(
                 icon: Symbols.arrow_back_rounded,
                 filled: false,
+                tooltip: 'Back',
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -145,17 +202,44 @@ class _FocusRemindersSettingsScreenState
                               onSwitchChanged: (v) =>
                                   _update(() => _streakReminder = v),
                             ),
-                            SettingsTile(
-                              icon: Symbols.coffee_rounded,
-                              title: 'Break reminder',
-                              subtitle: 'Remind me to take breaks',
-                              accent: accent,
-                              switchValue: _breakReminder,
-                              onSwitchChanged: (v) =>
-                                  _update(() => _breakReminder = v),
-                            ),
+                            // "Break reminder" used to sit here. It was removed
+                            // rather than wired: it wrote a preference and
+                            // scheduled nothing, and there is no correct thing
+                            // for it to schedule. Breaks are a within-session
+                            // concern, and Pomodoro mode already starts them
+                            // automatically at the end of each work interval
+                            // (`FocusService._startBreak`). A push notification
+                            // telling somebody to take a break, sent at a fixed
+                            // hour with no idea whether they are mid-session,
+                            // would be noise — so the honest options were wire it
+                            // correctly or drop it.
                           ],
                         ),
+                        // Hidden, not disabled, when the platform cannot store
+                        // mindfulness sessions. A switch that cannot be switched
+                        // on is worse than an absent one — and the probe has to
+                        // run BEFORE any permission request, because Health
+                        // Connect refuses the whole sheet if one requested type
+                        // is unsupported.
+                        if (_mindfulnessAvailable)
+                          SettingsSection(
+                            title: 'Health Connect',
+                            footer: 'Only breathing and meditation are written. '
+                                'A work session is not a mindfulness session, so '
+                                'it is never saved as one.',
+                            children: [
+                              SettingsTile(
+                                icon: Symbols.self_improvement_rounded,
+                                title: 'Save mindful minutes',
+                                subtitle: 'Write completed breathing and '
+                                    'meditation to Health Connect',
+                                accent: accent,
+                                switchValue: FocusService().mindfulnessSync,
+                                onSwitchChanged:
+                                    _mindfulnessBusy ? null : _toggleMindfulness,
+                              ),
+                            ],
+                          ),
                       ],
                     ),
             ),
