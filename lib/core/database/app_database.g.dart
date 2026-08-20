@@ -28878,6 +28878,1210 @@ class HealthSourcesCompanion extends UpdateCompanion<HealthSourceRow> {
   }
 }
 
+class $FocusSessionsTable extends FocusSessions
+    with TableInfo<$FocusSessionsTable, FocusSessionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FocusSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateKeyMeta = const VerificationMeta(
+    'dateKey',
+  );
+  @override
+  late final GeneratedColumn<String> dateKey = GeneratedColumn<String>(
+    'date_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _targetMinutesMeta = const VerificationMeta(
+    'targetMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> targetMinutes = GeneratedColumn<int>(
+    'target_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actualMinutesMeta = const VerificationMeta(
+    'actualMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> actualMinutes = GeneratedColumn<int>(
+    'actual_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _wasCompletedMeta = const VerificationMeta(
+    'wasCompleted',
+  );
+  @override
+  late final GeneratedColumn<bool> wasCompleted = GeneratedColumn<bool>(
+    'was_completed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("was_completed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _wasAbandonedMeta = const VerificationMeta(
+    'wasAbandoned',
+  );
+  @override
+  late final GeneratedColumn<bool> wasAbandoned = GeneratedColumn<bool>(
+    'was_abandoned',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("was_abandoned" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _activityTypeIndexMeta = const VerificationMeta(
+    'activityTypeIndex',
+  );
+  @override
+  late final GeneratedColumn<int> activityTypeIndex = GeneratedColumn<int>(
+    'activity_type_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _plantTypeIndexMeta = const VerificationMeta(
+    'plantTypeIndex',
+  );
+  @override
+  late final GeneratedColumn<int> plantTypeIndex = GeneratedColumn<int>(
+    'plant_type_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _soundUsedIndexMeta = const VerificationMeta(
+    'soundUsedIndex',
+  );
+  @override
+  late final GeneratedColumn<int> soundUsedIndex = GeneratedColumn<int>(
+    'sound_used_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tagIdsJsonMeta = const VerificationMeta(
+    'tagIdsJson',
+  );
+  @override
+  late final GeneratedColumn<String> tagIdsJson = GeneratedColumn<String>(
+    'tag_ids_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _distractionsJsonMeta = const VerificationMeta(
+    'distractionsJson',
+  );
+  @override
+  late final GeneratedColumn<String> distractionsJson = GeneratedColumn<String>(
+    'distractions_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _qualityMeta = const VerificationMeta(
+    'quality',
+  );
+  @override
+  late final GeneratedColumn<int> quality = GeneratedColumn<int>(
+    'quality',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _schemaVerMeta = const VerificationMeta(
+    'schemaVer',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVer = GeneratedColumn<int>(
+    'schema_ver',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _dataJsonMeta = const VerificationMeta(
+    'dataJson',
+  );
+  @override
+  late final GeneratedColumn<String> dataJson = GeneratedColumn<String>(
+    'data_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dateKey,
+    startedAt,
+    completedAt,
+    targetMinutes,
+    actualMinutes,
+    wasCompleted,
+    wasAbandoned,
+    activityTypeIndex,
+    plantTypeIndex,
+    soundUsedIndex,
+    note,
+    tagIdsJson,
+    distractionsJson,
+    quality,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'focus_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FocusSessionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('date_key')) {
+      context.handle(
+        _dateKeyMeta,
+        dateKey.isAcceptableOrUnknown(data['date_key']!, _dateKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateKeyMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('target_minutes')) {
+      context.handle(
+        _targetMinutesMeta,
+        targetMinutes.isAcceptableOrUnknown(
+          data['target_minutes']!,
+          _targetMinutesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_targetMinutesMeta);
+    }
+    if (data.containsKey('actual_minutes')) {
+      context.handle(
+        _actualMinutesMeta,
+        actualMinutes.isAcceptableOrUnknown(
+          data['actual_minutes']!,
+          _actualMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('was_completed')) {
+      context.handle(
+        _wasCompletedMeta,
+        wasCompleted.isAcceptableOrUnknown(
+          data['was_completed']!,
+          _wasCompletedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('was_abandoned')) {
+      context.handle(
+        _wasAbandonedMeta,
+        wasAbandoned.isAcceptableOrUnknown(
+          data['was_abandoned']!,
+          _wasAbandonedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('activity_type_index')) {
+      context.handle(
+        _activityTypeIndexMeta,
+        activityTypeIndex.isAcceptableOrUnknown(
+          data['activity_type_index']!,
+          _activityTypeIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('plant_type_index')) {
+      context.handle(
+        _plantTypeIndexMeta,
+        plantTypeIndex.isAcceptableOrUnknown(
+          data['plant_type_index']!,
+          _plantTypeIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sound_used_index')) {
+      context.handle(
+        _soundUsedIndexMeta,
+        soundUsedIndex.isAcceptableOrUnknown(
+          data['sound_used_index']!,
+          _soundUsedIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('tag_ids_json')) {
+      context.handle(
+        _tagIdsJsonMeta,
+        tagIdsJson.isAcceptableOrUnknown(
+          data['tag_ids_json']!,
+          _tagIdsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('distractions_json')) {
+      context.handle(
+        _distractionsJsonMeta,
+        distractionsJson.isAcceptableOrUnknown(
+          data['distractions_json']!,
+          _distractionsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('quality')) {
+      context.handle(
+        _qualityMeta,
+        quality.isAcceptableOrUnknown(data['quality']!, _qualityMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('schema_ver')) {
+      context.handle(
+        _schemaVerMeta,
+        schemaVer.isAcceptableOrUnknown(data['schema_ver']!, _schemaVerMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    if (data.containsKey('data_json')) {
+      context.handle(
+        _dataJsonMeta,
+        dataJson.isAcceptableOrUnknown(data['data_json']!, _dataJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FocusSessionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FocusSessionRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      dateKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}date_key'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
+      targetMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target_minutes'],
+      )!,
+      actualMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}actual_minutes'],
+      )!,
+      wasCompleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}was_completed'],
+      )!,
+      wasAbandoned: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}was_abandoned'],
+      )!,
+      activityTypeIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}activity_type_index'],
+      )!,
+      plantTypeIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}plant_type_index'],
+      )!,
+      soundUsedIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sound_used_index'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      tagIdsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tag_ids_json'],
+      )!,
+      distractionsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}distractions_json'],
+      )!,
+      quality: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quality'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      schemaVer: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_ver'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+      dataJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data_json'],
+      ),
+    );
+  }
+
+  @override
+  $FocusSessionsTable createAlias(String alias) {
+    return $FocusSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class FocusSessionRow extends DataClass implements Insertable<FocusSessionRow> {
+  final String id;
+
+  /// `yyyy-MM-dd` of [startedAt], local. Indexed for the by-day roll-ups.
+  final String dateKey;
+  final DateTime startedAt;
+  final DateTime? completedAt;
+
+  /// What the user asked for, and what they actually got. Kept separate because
+  /// the difference IS the signal: `FocusInsights.suggestedMinutes` is the median
+  /// of [actualMinutes] over completed sessions, which is how the app learns the
+  /// length someone finishes rather than the length they pick.
+  final int targetMinutes;
+  final int actualMinutes;
+
+  /// Mutually exclusive in practice, but stored as two flags rather than one
+  /// enum because that is the existing persisted shape and a day can hold both
+  /// kinds. `DailyFocusStats` counts completed minutes and abandoned minutes
+  /// separately, and collapsing these would lose that.
+  final bool wasCompleted;
+  final bool wasAbandoned;
+  final int activityTypeIndex;
+  final int plantTypeIndex;
+  final int? soundUsedIndex;
+
+  /// The stated intention, capped at `FocusService.kMaxIntentionChars`.
+  final String? note;
+
+  /// JSON arrays rather than join tables, deliberately.
+  ///
+  /// Neither is ever queried BY its contents — tag statistics and the distraction
+  /// tally both walk the sessions they already have in memory — so two join
+  /// tables would buy nothing and cost two migrations, two DAOs and a cascade
+  /// delete. If either ever needs a `WHERE tag = ?`, that is the point to
+  /// normalise it, not before.
+  final String tagIdsJson;
+  final String distractionsJson;
+
+  /// Self-reported: 0 = went well, 1 = mixed, 2 = struggled. Lower is better,
+  /// matching the mood index the correlation engine is written against.
+  final int? quality;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int schemaVer;
+  final bool synced;
+  final String? dataJson;
+  const FocusSessionRow({
+    required this.id,
+    required this.dateKey,
+    required this.startedAt,
+    this.completedAt,
+    required this.targetMinutes,
+    required this.actualMinutes,
+    required this.wasCompleted,
+    required this.wasAbandoned,
+    required this.activityTypeIndex,
+    required this.plantTypeIndex,
+    this.soundUsedIndex,
+    this.note,
+    required this.tagIdsJson,
+    required this.distractionsJson,
+    this.quality,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.schemaVer,
+    required this.synced,
+    this.dataJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['date_key'] = Variable<String>(dateKey);
+    map['started_at'] = Variable<DateTime>(startedAt);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    map['target_minutes'] = Variable<int>(targetMinutes);
+    map['actual_minutes'] = Variable<int>(actualMinutes);
+    map['was_completed'] = Variable<bool>(wasCompleted);
+    map['was_abandoned'] = Variable<bool>(wasAbandoned);
+    map['activity_type_index'] = Variable<int>(activityTypeIndex);
+    map['plant_type_index'] = Variable<int>(plantTypeIndex);
+    if (!nullToAbsent || soundUsedIndex != null) {
+      map['sound_used_index'] = Variable<int>(soundUsedIndex);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['tag_ids_json'] = Variable<String>(tagIdsJson);
+    map['distractions_json'] = Variable<String>(distractionsJson);
+    if (!nullToAbsent || quality != null) {
+      map['quality'] = Variable<int>(quality);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['schema_ver'] = Variable<int>(schemaVer);
+    map['synced'] = Variable<bool>(synced);
+    if (!nullToAbsent || dataJson != null) {
+      map['data_json'] = Variable<String>(dataJson);
+    }
+    return map;
+  }
+
+  FocusSessionsCompanion toCompanion(bool nullToAbsent) {
+    return FocusSessionsCompanion(
+      id: Value(id),
+      dateKey: Value(dateKey),
+      startedAt: Value(startedAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+      targetMinutes: Value(targetMinutes),
+      actualMinutes: Value(actualMinutes),
+      wasCompleted: Value(wasCompleted),
+      wasAbandoned: Value(wasAbandoned),
+      activityTypeIndex: Value(activityTypeIndex),
+      plantTypeIndex: Value(plantTypeIndex),
+      soundUsedIndex: soundUsedIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(soundUsedIndex),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      tagIdsJson: Value(tagIdsJson),
+      distractionsJson: Value(distractionsJson),
+      quality: quality == null && nullToAbsent
+          ? const Value.absent()
+          : Value(quality),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      schemaVer: Value(schemaVer),
+      synced: Value(synced),
+      dataJson: dataJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dataJson),
+    );
+  }
+
+  factory FocusSessionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FocusSessionRow(
+      id: serializer.fromJson<String>(json['id']),
+      dateKey: serializer.fromJson<String>(json['dateKey']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+      targetMinutes: serializer.fromJson<int>(json['targetMinutes']),
+      actualMinutes: serializer.fromJson<int>(json['actualMinutes']),
+      wasCompleted: serializer.fromJson<bool>(json['wasCompleted']),
+      wasAbandoned: serializer.fromJson<bool>(json['wasAbandoned']),
+      activityTypeIndex: serializer.fromJson<int>(json['activityTypeIndex']),
+      plantTypeIndex: serializer.fromJson<int>(json['plantTypeIndex']),
+      soundUsedIndex: serializer.fromJson<int?>(json['soundUsedIndex']),
+      note: serializer.fromJson<String?>(json['note']),
+      tagIdsJson: serializer.fromJson<String>(json['tagIdsJson']),
+      distractionsJson: serializer.fromJson<String>(json['distractionsJson']),
+      quality: serializer.fromJson<int?>(json['quality']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      schemaVer: serializer.fromJson<int>(json['schemaVer']),
+      synced: serializer.fromJson<bool>(json['synced']),
+      dataJson: serializer.fromJson<String?>(json['dataJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'dateKey': serializer.toJson<String>(dateKey),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+      'targetMinutes': serializer.toJson<int>(targetMinutes),
+      'actualMinutes': serializer.toJson<int>(actualMinutes),
+      'wasCompleted': serializer.toJson<bool>(wasCompleted),
+      'wasAbandoned': serializer.toJson<bool>(wasAbandoned),
+      'activityTypeIndex': serializer.toJson<int>(activityTypeIndex),
+      'plantTypeIndex': serializer.toJson<int>(plantTypeIndex),
+      'soundUsedIndex': serializer.toJson<int?>(soundUsedIndex),
+      'note': serializer.toJson<String?>(note),
+      'tagIdsJson': serializer.toJson<String>(tagIdsJson),
+      'distractionsJson': serializer.toJson<String>(distractionsJson),
+      'quality': serializer.toJson<int?>(quality),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'schemaVer': serializer.toJson<int>(schemaVer),
+      'synced': serializer.toJson<bool>(synced),
+      'dataJson': serializer.toJson<String?>(dataJson),
+    };
+  }
+
+  FocusSessionRow copyWith({
+    String? id,
+    String? dateKey,
+    DateTime? startedAt,
+    Value<DateTime?> completedAt = const Value.absent(),
+    int? targetMinutes,
+    int? actualMinutes,
+    bool? wasCompleted,
+    bool? wasAbandoned,
+    int? activityTypeIndex,
+    int? plantTypeIndex,
+    Value<int?> soundUsedIndex = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    String? tagIdsJson,
+    String? distractionsJson,
+    Value<int?> quality = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    int? schemaVer,
+    bool? synced,
+    Value<String?> dataJson = const Value.absent(),
+  }) => FocusSessionRow(
+    id: id ?? this.id,
+    dateKey: dateKey ?? this.dateKey,
+    startedAt: startedAt ?? this.startedAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+    targetMinutes: targetMinutes ?? this.targetMinutes,
+    actualMinutes: actualMinutes ?? this.actualMinutes,
+    wasCompleted: wasCompleted ?? this.wasCompleted,
+    wasAbandoned: wasAbandoned ?? this.wasAbandoned,
+    activityTypeIndex: activityTypeIndex ?? this.activityTypeIndex,
+    plantTypeIndex: plantTypeIndex ?? this.plantTypeIndex,
+    soundUsedIndex: soundUsedIndex.present
+        ? soundUsedIndex.value
+        : this.soundUsedIndex,
+    note: note.present ? note.value : this.note,
+    tagIdsJson: tagIdsJson ?? this.tagIdsJson,
+    distractionsJson: distractionsJson ?? this.distractionsJson,
+    quality: quality.present ? quality.value : this.quality,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    schemaVer: schemaVer ?? this.schemaVer,
+    synced: synced ?? this.synced,
+    dataJson: dataJson.present ? dataJson.value : this.dataJson,
+  );
+  FocusSessionRow copyWithCompanion(FocusSessionsCompanion data) {
+    return FocusSessionRow(
+      id: data.id.present ? data.id.value : this.id,
+      dateKey: data.dateKey.present ? data.dateKey.value : this.dateKey,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+      targetMinutes: data.targetMinutes.present
+          ? data.targetMinutes.value
+          : this.targetMinutes,
+      actualMinutes: data.actualMinutes.present
+          ? data.actualMinutes.value
+          : this.actualMinutes,
+      wasCompleted: data.wasCompleted.present
+          ? data.wasCompleted.value
+          : this.wasCompleted,
+      wasAbandoned: data.wasAbandoned.present
+          ? data.wasAbandoned.value
+          : this.wasAbandoned,
+      activityTypeIndex: data.activityTypeIndex.present
+          ? data.activityTypeIndex.value
+          : this.activityTypeIndex,
+      plantTypeIndex: data.plantTypeIndex.present
+          ? data.plantTypeIndex.value
+          : this.plantTypeIndex,
+      soundUsedIndex: data.soundUsedIndex.present
+          ? data.soundUsedIndex.value
+          : this.soundUsedIndex,
+      note: data.note.present ? data.note.value : this.note,
+      tagIdsJson: data.tagIdsJson.present
+          ? data.tagIdsJson.value
+          : this.tagIdsJson,
+      distractionsJson: data.distractionsJson.present
+          ? data.distractionsJson.value
+          : this.distractionsJson,
+      quality: data.quality.present ? data.quality.value : this.quality,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      schemaVer: data.schemaVer.present ? data.schemaVer.value : this.schemaVer,
+      synced: data.synced.present ? data.synced.value : this.synced,
+      dataJson: data.dataJson.present ? data.dataJson.value : this.dataJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FocusSessionRow(')
+          ..write('id: $id, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('targetMinutes: $targetMinutes, ')
+          ..write('actualMinutes: $actualMinutes, ')
+          ..write('wasCompleted: $wasCompleted, ')
+          ..write('wasAbandoned: $wasAbandoned, ')
+          ..write('activityTypeIndex: $activityTypeIndex, ')
+          ..write('plantTypeIndex: $plantTypeIndex, ')
+          ..write('soundUsedIndex: $soundUsedIndex, ')
+          ..write('note: $note, ')
+          ..write('tagIdsJson: $tagIdsJson, ')
+          ..write('distractionsJson: $distractionsJson, ')
+          ..write('quality: $quality, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    dateKey,
+    startedAt,
+    completedAt,
+    targetMinutes,
+    actualMinutes,
+    wasCompleted,
+    wasAbandoned,
+    activityTypeIndex,
+    plantTypeIndex,
+    soundUsedIndex,
+    note,
+    tagIdsJson,
+    distractionsJson,
+    quality,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    schemaVer,
+    synced,
+    dataJson,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FocusSessionRow &&
+          other.id == this.id &&
+          other.dateKey == this.dateKey &&
+          other.startedAt == this.startedAt &&
+          other.completedAt == this.completedAt &&
+          other.targetMinutes == this.targetMinutes &&
+          other.actualMinutes == this.actualMinutes &&
+          other.wasCompleted == this.wasCompleted &&
+          other.wasAbandoned == this.wasAbandoned &&
+          other.activityTypeIndex == this.activityTypeIndex &&
+          other.plantTypeIndex == this.plantTypeIndex &&
+          other.soundUsedIndex == this.soundUsedIndex &&
+          other.note == this.note &&
+          other.tagIdsJson == this.tagIdsJson &&
+          other.distractionsJson == this.distractionsJson &&
+          other.quality == this.quality &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.schemaVer == this.schemaVer &&
+          other.synced == this.synced &&
+          other.dataJson == this.dataJson);
+}
+
+class FocusSessionsCompanion extends UpdateCompanion<FocusSessionRow> {
+  final Value<String> id;
+  final Value<String> dateKey;
+  final Value<DateTime> startedAt;
+  final Value<DateTime?> completedAt;
+  final Value<int> targetMinutes;
+  final Value<int> actualMinutes;
+  final Value<bool> wasCompleted;
+  final Value<bool> wasAbandoned;
+  final Value<int> activityTypeIndex;
+  final Value<int> plantTypeIndex;
+  final Value<int?> soundUsedIndex;
+  final Value<String?> note;
+  final Value<String> tagIdsJson;
+  final Value<String> distractionsJson;
+  final Value<int?> quality;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> schemaVer;
+  final Value<bool> synced;
+  final Value<String?> dataJson;
+  final Value<int> rowid;
+  const FocusSessionsCompanion({
+    this.id = const Value.absent(),
+    this.dateKey = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.targetMinutes = const Value.absent(),
+    this.actualMinutes = const Value.absent(),
+    this.wasCompleted = const Value.absent(),
+    this.wasAbandoned = const Value.absent(),
+    this.activityTypeIndex = const Value.absent(),
+    this.plantTypeIndex = const Value.absent(),
+    this.soundUsedIndex = const Value.absent(),
+    this.note = const Value.absent(),
+    this.tagIdsJson = const Value.absent(),
+    this.distractionsJson = const Value.absent(),
+    this.quality = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FocusSessionsCompanion.insert({
+    required String id,
+    required String dateKey,
+    required DateTime startedAt,
+    this.completedAt = const Value.absent(),
+    required int targetMinutes,
+    this.actualMinutes = const Value.absent(),
+    this.wasCompleted = const Value.absent(),
+    this.wasAbandoned = const Value.absent(),
+    this.activityTypeIndex = const Value.absent(),
+    this.plantTypeIndex = const Value.absent(),
+    this.soundUsedIndex = const Value.absent(),
+    this.note = const Value.absent(),
+    this.tagIdsJson = const Value.absent(),
+    this.distractionsJson = const Value.absent(),
+    this.quality = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.schemaVer = const Value.absent(),
+    this.synced = const Value.absent(),
+    this.dataJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       dateKey = Value(dateKey),
+       startedAt = Value(startedAt),
+       targetMinutes = Value(targetMinutes),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<FocusSessionRow> custom({
+    Expression<String>? id,
+    Expression<String>? dateKey,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? completedAt,
+    Expression<int>? targetMinutes,
+    Expression<int>? actualMinutes,
+    Expression<bool>? wasCompleted,
+    Expression<bool>? wasAbandoned,
+    Expression<int>? activityTypeIndex,
+    Expression<int>? plantTypeIndex,
+    Expression<int>? soundUsedIndex,
+    Expression<String>? note,
+    Expression<String>? tagIdsJson,
+    Expression<String>? distractionsJson,
+    Expression<int>? quality,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? schemaVer,
+    Expression<bool>? synced,
+    Expression<String>? dataJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dateKey != null) 'date_key': dateKey,
+      if (startedAt != null) 'started_at': startedAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (targetMinutes != null) 'target_minutes': targetMinutes,
+      if (actualMinutes != null) 'actual_minutes': actualMinutes,
+      if (wasCompleted != null) 'was_completed': wasCompleted,
+      if (wasAbandoned != null) 'was_abandoned': wasAbandoned,
+      if (activityTypeIndex != null) 'activity_type_index': activityTypeIndex,
+      if (plantTypeIndex != null) 'plant_type_index': plantTypeIndex,
+      if (soundUsedIndex != null) 'sound_used_index': soundUsedIndex,
+      if (note != null) 'note': note,
+      if (tagIdsJson != null) 'tag_ids_json': tagIdsJson,
+      if (distractionsJson != null) 'distractions_json': distractionsJson,
+      if (quality != null) 'quality': quality,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (schemaVer != null) 'schema_ver': schemaVer,
+      if (synced != null) 'synced': synced,
+      if (dataJson != null) 'data_json': dataJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FocusSessionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? dateKey,
+    Value<DateTime>? startedAt,
+    Value<DateTime?>? completedAt,
+    Value<int>? targetMinutes,
+    Value<int>? actualMinutes,
+    Value<bool>? wasCompleted,
+    Value<bool>? wasAbandoned,
+    Value<int>? activityTypeIndex,
+    Value<int>? plantTypeIndex,
+    Value<int?>? soundUsedIndex,
+    Value<String?>? note,
+    Value<String>? tagIdsJson,
+    Value<String>? distractionsJson,
+    Value<int?>? quality,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? schemaVer,
+    Value<bool>? synced,
+    Value<String?>? dataJson,
+    Value<int>? rowid,
+  }) {
+    return FocusSessionsCompanion(
+      id: id ?? this.id,
+      dateKey: dateKey ?? this.dateKey,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      targetMinutes: targetMinutes ?? this.targetMinutes,
+      actualMinutes: actualMinutes ?? this.actualMinutes,
+      wasCompleted: wasCompleted ?? this.wasCompleted,
+      wasAbandoned: wasAbandoned ?? this.wasAbandoned,
+      activityTypeIndex: activityTypeIndex ?? this.activityTypeIndex,
+      plantTypeIndex: plantTypeIndex ?? this.plantTypeIndex,
+      soundUsedIndex: soundUsedIndex ?? this.soundUsedIndex,
+      note: note ?? this.note,
+      tagIdsJson: tagIdsJson ?? this.tagIdsJson,
+      distractionsJson: distractionsJson ?? this.distractionsJson,
+      quality: quality ?? this.quality,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVer: schemaVer ?? this.schemaVer,
+      synced: synced ?? this.synced,
+      dataJson: dataJson ?? this.dataJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (dateKey.present) {
+      map['date_key'] = Variable<String>(dateKey.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (targetMinutes.present) {
+      map['target_minutes'] = Variable<int>(targetMinutes.value);
+    }
+    if (actualMinutes.present) {
+      map['actual_minutes'] = Variable<int>(actualMinutes.value);
+    }
+    if (wasCompleted.present) {
+      map['was_completed'] = Variable<bool>(wasCompleted.value);
+    }
+    if (wasAbandoned.present) {
+      map['was_abandoned'] = Variable<bool>(wasAbandoned.value);
+    }
+    if (activityTypeIndex.present) {
+      map['activity_type_index'] = Variable<int>(activityTypeIndex.value);
+    }
+    if (plantTypeIndex.present) {
+      map['plant_type_index'] = Variable<int>(plantTypeIndex.value);
+    }
+    if (soundUsedIndex.present) {
+      map['sound_used_index'] = Variable<int>(soundUsedIndex.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (tagIdsJson.present) {
+      map['tag_ids_json'] = Variable<String>(tagIdsJson.value);
+    }
+    if (distractionsJson.present) {
+      map['distractions_json'] = Variable<String>(distractionsJson.value);
+    }
+    if (quality.present) {
+      map['quality'] = Variable<int>(quality.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (schemaVer.present) {
+      map['schema_ver'] = Variable<int>(schemaVer.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    if (dataJson.present) {
+      map['data_json'] = Variable<String>(dataJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FocusSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('targetMinutes: $targetMinutes, ')
+          ..write('actualMinutes: $actualMinutes, ')
+          ..write('wasCompleted: $wasCompleted, ')
+          ..write('wasAbandoned: $wasAbandoned, ')
+          ..write('activityTypeIndex: $activityTypeIndex, ')
+          ..write('plantTypeIndex: $plantTypeIndex, ')
+          ..write('soundUsedIndex: $soundUsedIndex, ')
+          ..write('note: $note, ')
+          ..write('tagIdsJson: $tagIdsJson, ')
+          ..write('distractionsJson: $distractionsJson, ')
+          ..write('quality: $quality, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('schemaVer: $schemaVer, ')
+          ..write('synced: $synced, ')
+          ..write('dataJson: $dataJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -28938,6 +30142,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $HealthSourcesTable healthSources = $HealthSourcesTable(this);
+  late final $FocusSessionsTable focusSessions = $FocusSessionsTable(this);
   late final Index idxMedicineLogsMedicine = Index(
     'idx_medicine_logs_medicine',
     'CREATE INDEX idx_medicine_logs_medicine ON medicine_logs (medicine_id)',
@@ -29012,6 +30217,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final SleepDao sleepDao = SleepDao(this as AppDatabase);
   late final DiaryDao diaryDao = DiaryDao(this as AppDatabase);
   late final BiometricsDao biometricsDao = BiometricsDao(this as AppDatabase);
+  late final FocusDao focusDao = FocusDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -29051,6 +30257,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     biometricDailyData,
     workoutSessions,
     healthSources,
+    focusSessions,
     idxMedicineLogsMedicine,
     idxMedicineLogsTime,
     idxWaterDayDate,
@@ -42514,6 +43721,530 @@ typedef $$HealthSourcesTableProcessedTableManager =
       HealthSourceRow,
       PrefetchHooks Function()
     >;
+typedef $$FocusSessionsTableCreateCompanionBuilder =
+    FocusSessionsCompanion Function({
+      required String id,
+      required String dateKey,
+      required DateTime startedAt,
+      Value<DateTime?> completedAt,
+      required int targetMinutes,
+      Value<int> actualMinutes,
+      Value<bool> wasCompleted,
+      Value<bool> wasAbandoned,
+      Value<int> activityTypeIndex,
+      Value<int> plantTypeIndex,
+      Value<int?> soundUsedIndex,
+      Value<String?> note,
+      Value<String> tagIdsJson,
+      Value<String> distractionsJson,
+      Value<int?> quality,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+typedef $$FocusSessionsTableUpdateCompanionBuilder =
+    FocusSessionsCompanion Function({
+      Value<String> id,
+      Value<String> dateKey,
+      Value<DateTime> startedAt,
+      Value<DateTime?> completedAt,
+      Value<int> targetMinutes,
+      Value<int> actualMinutes,
+      Value<bool> wasCompleted,
+      Value<bool> wasAbandoned,
+      Value<int> activityTypeIndex,
+      Value<int> plantTypeIndex,
+      Value<int?> soundUsedIndex,
+      Value<String?> note,
+      Value<String> tagIdsJson,
+      Value<String> distractionsJson,
+      Value<int?> quality,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> schemaVer,
+      Value<bool> synced,
+      Value<String?> dataJson,
+      Value<int> rowid,
+    });
+
+class $$FocusSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $FocusSessionsTable> {
+  $$FocusSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get targetMinutes => $composableBuilder(
+    column: $table.targetMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get actualMinutes => $composableBuilder(
+    column: $table.actualMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get wasCompleted => $composableBuilder(
+    column: $table.wasCompleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get wasAbandoned => $composableBuilder(
+    column: $table.wasAbandoned,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get activityTypeIndex => $composableBuilder(
+    column: $table.activityTypeIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get plantTypeIndex => $composableBuilder(
+    column: $table.plantTypeIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get soundUsedIndex => $composableBuilder(
+    column: $table.soundUsedIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagIdsJson => $composableBuilder(
+    column: $table.tagIdsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get distractionsJson => $composableBuilder(
+    column: $table.distractionsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FocusSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FocusSessionsTable> {
+  $$FocusSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get targetMinutes => $composableBuilder(
+    column: $table.targetMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get actualMinutes => $composableBuilder(
+    column: $table.actualMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get wasCompleted => $composableBuilder(
+    column: $table.wasCompleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get wasAbandoned => $composableBuilder(
+    column: $table.wasAbandoned,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get activityTypeIndex => $composableBuilder(
+    column: $table.activityTypeIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get plantTypeIndex => $composableBuilder(
+    column: $table.plantTypeIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get soundUsedIndex => $composableBuilder(
+    column: $table.soundUsedIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagIdsJson => $composableBuilder(
+    column: $table.tagIdsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get distractionsJson => $composableBuilder(
+    column: $table.distractionsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVer => $composableBuilder(
+    column: $table.schemaVer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dataJson => $composableBuilder(
+    column: $table.dataJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FocusSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FocusSessionsTable> {
+  $$FocusSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dateKey =>
+      $composableBuilder(column: $table.dateKey, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get targetMinutes => $composableBuilder(
+    column: $table.targetMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get actualMinutes => $composableBuilder(
+    column: $table.actualMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get wasCompleted => $composableBuilder(
+    column: $table.wasCompleted,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get wasAbandoned => $composableBuilder(
+    column: $table.wasAbandoned,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get activityTypeIndex => $composableBuilder(
+    column: $table.activityTypeIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get plantTypeIndex => $composableBuilder(
+    column: $table.plantTypeIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get soundUsedIndex => $composableBuilder(
+    column: $table.soundUsedIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<String> get tagIdsJson => $composableBuilder(
+    column: $table.tagIdsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get distractionsJson => $composableBuilder(
+    column: $table.distractionsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get quality =>
+      $composableBuilder(column: $table.quality, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVer =>
+      $composableBuilder(column: $table.schemaVer, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+
+  GeneratedColumn<String> get dataJson =>
+      $composableBuilder(column: $table.dataJson, builder: (column) => column);
+}
+
+class $$FocusSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FocusSessionsTable,
+          FocusSessionRow,
+          $$FocusSessionsTableFilterComposer,
+          $$FocusSessionsTableOrderingComposer,
+          $$FocusSessionsTableAnnotationComposer,
+          $$FocusSessionsTableCreateCompanionBuilder,
+          $$FocusSessionsTableUpdateCompanionBuilder,
+          (
+            FocusSessionRow,
+            BaseReferences<_$AppDatabase, $FocusSessionsTable, FocusSessionRow>,
+          ),
+          FocusSessionRow,
+          PrefetchHooks Function()
+        > {
+  $$FocusSessionsTableTableManager(_$AppDatabase db, $FocusSessionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FocusSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FocusSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FocusSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> dateKey = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<int> targetMinutes = const Value.absent(),
+                Value<int> actualMinutes = const Value.absent(),
+                Value<bool> wasCompleted = const Value.absent(),
+                Value<bool> wasAbandoned = const Value.absent(),
+                Value<int> activityTypeIndex = const Value.absent(),
+                Value<int> plantTypeIndex = const Value.absent(),
+                Value<int?> soundUsedIndex = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String> tagIdsJson = const Value.absent(),
+                Value<String> distractionsJson = const Value.absent(),
+                Value<int?> quality = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FocusSessionsCompanion(
+                id: id,
+                dateKey: dateKey,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                targetMinutes: targetMinutes,
+                actualMinutes: actualMinutes,
+                wasCompleted: wasCompleted,
+                wasAbandoned: wasAbandoned,
+                activityTypeIndex: activityTypeIndex,
+                plantTypeIndex: plantTypeIndex,
+                soundUsedIndex: soundUsedIndex,
+                note: note,
+                tagIdsJson: tagIdsJson,
+                distractionsJson: distractionsJson,
+                quality: quality,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String dateKey,
+                required DateTime startedAt,
+                Value<DateTime?> completedAt = const Value.absent(),
+                required int targetMinutes,
+                Value<int> actualMinutes = const Value.absent(),
+                Value<bool> wasCompleted = const Value.absent(),
+                Value<bool> wasAbandoned = const Value.absent(),
+                Value<int> activityTypeIndex = const Value.absent(),
+                Value<int> plantTypeIndex = const Value.absent(),
+                Value<int?> soundUsedIndex = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String> tagIdsJson = const Value.absent(),
+                Value<String> distractionsJson = const Value.absent(),
+                Value<int?> quality = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> schemaVer = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+                Value<String?> dataJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FocusSessionsCompanion.insert(
+                id: id,
+                dateKey: dateKey,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                targetMinutes: targetMinutes,
+                actualMinutes: actualMinutes,
+                wasCompleted: wasCompleted,
+                wasAbandoned: wasAbandoned,
+                activityTypeIndex: activityTypeIndex,
+                plantTypeIndex: plantTypeIndex,
+                soundUsedIndex: soundUsedIndex,
+                note: note,
+                tagIdsJson: tagIdsJson,
+                distractionsJson: distractionsJson,
+                quality: quality,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                schemaVer: schemaVer,
+                synced: synced,
+                dataJson: dataJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FocusSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FocusSessionsTable,
+      FocusSessionRow,
+      $$FocusSessionsTableFilterComposer,
+      $$FocusSessionsTableOrderingComposer,
+      $$FocusSessionsTableAnnotationComposer,
+      $$FocusSessionsTableCreateCompanionBuilder,
+      $$FocusSessionsTableUpdateCompanionBuilder,
+      (
+        FocusSessionRow,
+        BaseReferences<_$AppDatabase, $FocusSessionsTable, FocusSessionRow>,
+      ),
+      FocusSessionRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -42586,4 +44317,6 @@ class $AppDatabaseManager {
       $$WorkoutSessionsTableTableManager(_db, _db.workoutSessions);
   $$HealthSourcesTableTableManager get healthSources =>
       $$HealthSourcesTableTableManager(_db, _db.healthSources);
+  $$FocusSessionsTableTableManager get focusSessions =>
+      $$FocusSessionsTableTableManager(_db, _db.focusSessions);
 }

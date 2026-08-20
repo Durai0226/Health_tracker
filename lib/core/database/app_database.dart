@@ -13,6 +13,7 @@ import 'tables/steps_tables.dart';
 import 'tables/sleep_tables.dart';
 import 'tables/diary_tables.dart';
 import 'tables/biometrics_tables.dart';
+import 'tables/focus_tables.dart';
 
 import 'daos/core_dao.dart';
 import 'daos/medication_dao.dart';
@@ -24,6 +25,7 @@ import 'daos/steps_dao.dart';
 import 'daos/sleep_dao.dart';
 import 'daos/diary_dao.dart';
 import 'daos/biometrics_dao.dart';
+import 'daos/focus_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -84,6 +86,9 @@ part 'app_database.g.dart';
     WorkoutSessions,
     HealthSources,
 
+    // Focus
+    FocusSessions,
+
   ],
   daos: [
     CoreDao,
@@ -96,6 +101,7 @@ part 'app_database.g.dart';
     SleepDao,
     DiaryDao,
     BiometricsDao,
+    FocusDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -107,7 +113,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -328,6 +334,20 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(workoutSessions);
           await m.createTable(healthSources);
           debugPrint('✓ Created biometrics + workout + source tables (v14)');
+        }
+        if (from < 15) {
+          // Focus sessions get a real table. `createTable` ONLY — deliberately
+          // the whole of this step.
+          //
+          // The rows themselves are moved across in Dart, from
+          // `FocusService.init()`, and not here. Reading `AppPreferences` from
+          // inside a MigrationStrategy would mean touching CleanStorageService
+          // before its cache is loaded, and a failure at this point has no UI to
+          // report itself — which is exactly the lesson the v13 `alterTable`
+          // step recorded the hard way. `createTable`-only is also the shape v4,
+          // v5, v10 and v14 all used without incident.
+          await m.createTable(focusSessions);
+          debugPrint('✓ Created focus session table (v15)');
         }
       },
     );

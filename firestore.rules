@@ -195,6 +195,26 @@ service cloud.firestore {
       // device-local, cheap to rebuild, and carries user-supplied device
       // names. Nothing writes it to Firestore, so nothing may.
 
+      // Focus sessions.
+      //
+      // Deliberately here, beside medicines and water, and NOT inside the health
+      // block above. Focus is not Health Connect / HealthKit data: it is not
+      // covered by the Play "Health apps" declaration, appears in no
+      // per-permission justification, and is read from no health permission. It
+      // syncs through `CloudSyncService` for the same reason — putting it on the
+      // health syncer would drag a productivity timer into a health-data
+      // declaration for no benefit.
+      //
+      // The note field carries free text the user typed (their stated
+      // intention), which is why `isReasonableSize` matters here as much as the
+      // id check.
+      match /focus_sessions/{sessionId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(sessionId)
+                              && hasSyncTimestamp();
+      }
+
       // Shared health profile (height/weight/stride — used by Steps and Sleep).
       match /health_profile/{docId} {
         allow read, delete: if isOwner(userId);

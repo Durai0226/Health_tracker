@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+
+import 'lww_collection_sync.dart';
 import '../database/app_database.dart';
 
 /// Syncs the Period / Steps / Sleep features to Firestore under
@@ -139,9 +141,9 @@ class HealthCloudSyncService {
     }
   }
 
-  /// One collection, last-write-wins by `updatedMs` (mirrored as `updatedAtMs`
-  /// on the cloud doc for cheap comparison). Tombstones (`deletedAt`) ride along
-  /// as ordinary rows.
+  /// One collection, last-write-wins. See [syncLwwCollection], which this now
+  /// delegates to — the rule moved out when focus sessions needed the same
+  /// semantics without belonging to the health syncer.
   Future<void> _sync(
     String userId,
     String collection, {
@@ -150,33 +152,11 @@ class HealthCloudSyncService {
     required int Function(dynamic) updatedMs,
     required Map<String, dynamic> Function(dynamic) toJson,
     required Future<void> Function(Map<String, dynamic>) apply,
-  }) async {
-    try {
-      final ref =
-          _fs.collection('users').doc(userId).collection(collection);
-      final locals = await local();
-      final localById = {for (final r in locals) id(r): r};
-      final snap = await ref.limit(1000).get();
-      final cloudById = <String, Map<String, dynamic>>{
-        for (final d in snap.docs) d.id: {...d.data(), 'id': d.id},
-      };
-      final ids = {...localById.keys, ...cloudById.keys};
-      for (final docId in ids) {
-        final r = localById[docId];
-        final cloud = cloudById[docId];
-        final lMs = r == null ? -1 : updatedMs(r);
-        final cMs = (cloud?['updatedAtMs'] as int?) ?? -1;
-        if (r != null && lMs >= cMs) {
-          final data = toJson(r);
-          data['updatedAtMs'] = lMs;
-          data['id'] = docId;
-          await ref.doc(docId).set(data);
-        } else if (cloud != null && cMs > lMs) {
-          await apply(cloud);
-        }
-      }
-    } catch (e) {
-      debugPrint('HealthCloudSync[$collection] failed: $e');
-    }
-  }
+  }) =>
+      syncLwwCollection(_fs, userId, collection,
+          local: local,
+          id: id,
+          updatedMs: updatedMs,
+          toJson: toJson,
+          apply: apply);
 }
