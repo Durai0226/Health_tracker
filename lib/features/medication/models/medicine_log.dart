@@ -311,14 +311,38 @@ class MedicineLog {
   }
 }
 
-/// Daily summary of medicine logs
+/// Daily summary of medicine logs.
+///
+/// **Two denominators, deliberately.** They are equal for any past date and
+/// differ only for today, which is precisely where the dashboard lives:
+///
+/// * [totalScheduled] — slots that are already **due** (past slots, up to now).
+///   This is the adherence denominator: a dose at 20:00 must not drag your rate
+///   down at 09:00 just because you haven't taken it yet.
+/// * [totalPlanned] — **every** slot on the date, future included. This is
+///   "today's plan", and it is what any Today surface must count against.
+///
+/// Reading [totalScheduled] as "today's doses" is what made Home announce
+/// "All doses taken — nice work" with a 100% ring at lunchtime while the hero
+/// directly above it said a dose was up next at 20:00. Pick the one that
+/// matches the sentence you are writing.
 class DailyMedicineSummary {
   final DateTime date;
+
+  /// Slots already due — the adherence denominator. See the class doc.
   final int totalScheduled;
+
+  /// Every slot on this date, future included — the "today's plan" denominator.
+  final int totalPlanned;
+
   final int taken;
   final int skipped;
   final int missed;
+
+  /// [taken] / [totalScheduled], clamped to 0..1. A *rate*, not today's
+  /// progress — use [dayCompletion] for anything captioned "today".
   final double adherenceRate;
+
   final List<String> medicinesTaken;
   final List<String> medicinesMissed;
 
@@ -331,14 +355,44 @@ class DailyMedicineSummary {
     required this.adherenceRate,
     required this.medicinesTaken,
     required this.medicinesMissed,
-  });
+    // Optional so every existing call site keeps compiling and so summaries
+    // deserialized from before this field existed degrade to the old
+    // behaviour instead of silently reading 0 doses planned.
+    int? totalPlanned,
+  }) : totalPlanned = totalPlanned ?? totalScheduled;
 
+  /// Doses with an outcome: taken, deliberately skipped, or already gone missed.
+  /// A skipped dose is *resolved*, not outstanding — there is nothing left for
+  /// the user to do about it.
+  int get resolved => taken + skipped + missed;
+
+  /// Doses still actionable today. Clamped: duplicate logs healed at read time
+  /// can still make [resolved] exceed the plan on old installs.
+  int get outstanding => (totalPlanned - resolved).clamp(0, totalPlanned);
+
+  /// How much of **today's plan** is taken, 0..1. This is what a ring on a
+  /// Today surface draws, and its centre label must be [Pct.of] of this exact
+  /// value so the caption and the arc can never disagree.
+  double get dayCompletion =>
+      totalPlanned > 0 ? (taken / totalPlanned).clamp(0.0, 1.0) : 1.0;
+
+  /// Nothing left to act on today, however it was resolved.
+  bool get isDayResolved => totalPlanned == 0 || resolved >= totalPlanned;
+
+  /// Every dose planned for today was actually taken — no skips, no misses.
+  bool get isPerfectDay => totalPlanned > 0 && taken >= totalPlanned;
+
+  /// Adherence-complete for the doses that were **due**. Scoped to
+  /// [totalScheduled] on purpose: its one caller grades past days, where the two
+  /// denominators are equal anyway.
   bool get isComplete => taken == totalScheduled;
+
   bool get hasIssues => skipped > 0 || missed > 0;
 
   Map<String, dynamic> toJson() => {
     'date': date.toIso8601String(),
     'totalScheduled': totalScheduled,
+    'totalPlanned': totalPlanned,
     'taken': taken,
     'skipped': skipped,
     'missed': missed,
@@ -350,6 +404,7 @@ class DailyMedicineSummary {
   factory DailyMedicineSummary.fromJson(Map<String, dynamic> json) => DailyMedicineSummary(
     date: DateTime.parse(json['date']),
     totalScheduled: json['totalScheduled'] ?? 0,
+    totalPlanned: json['totalPlanned'] as int?,
     taken: json['taken'] ?? 0,
     skipped: json['skipped'] ?? 0,
     missed: json['missed'] ?? 0,

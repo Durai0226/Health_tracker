@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1370,7 +1371,7 @@ class MedicineCleanStorageService {
     required List<EnhancedMedicine> medicines,
     DateTime? now,
   }) =>
-      _summaryFor(date, logs, medicines, now ?? DateTime.now());
+      _summaryFor(date, logs, medicines, now ?? clock.now());
 
   /// Daily summaries for a whole date range in **two** queries.
   ///
@@ -1425,16 +1426,24 @@ class MedicineCleanStorageService {
     DateTime now,
   ) {
 
-    // Denominator = scheduled (non-PRN) slots for this date that are already
-    // due (past slots for prior days, or up to now for today). Future slots are
-    // not counted so today's remaining doses don't drag adherence down.
+    // TWO denominators, because "how am I doing?" and "what does today hold?"
+    // are different questions and the dashboard needs both:
+    //
+    //   scheduled — slots already DUE (up to `now`). The adherence denominator:
+    //               a dose at 20:00 must not drag the rate down at 09:00.
+    //   planned   — EVERY slot on the date. What a Today surface counts against.
+    //
+    // For any past date `now` is beyond every slot, so the two are identical and
+    // historic adherence is untouched.
     int scheduled = 0;
+    int planned = 0;
     for (final m in medicines) {
       if (!m.isActive || m.isArchived) continue;
       if (m.schedule.isPRN) continue;
       final slots = m.schedule.getScheduledTimesForDate(date);
       for (final slot in slots) {
         if (slot.isBefore(m.createdAt)) continue;
+        planned++;
         if (slot.isAfter(now)) continue;
         scheduled++;
       }
@@ -1463,6 +1472,7 @@ class MedicineCleanStorageService {
     return DailyMedicineSummary(
       date: date,
       totalScheduled: scheduled,
+      totalPlanned: planned,
       taken: taken,
       skipped: skipped,
       missed: missed,
