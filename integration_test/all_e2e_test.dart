@@ -2,6 +2,7 @@ import 'a01_shell_nav_e2e_test.dart' as a01;
 import 'a02_today_e2e_test.dart' as a02;
 import 'a03_headers_e2e_test.dart' as a03;
 import 'c06_diary_e2e_test.dart' as c06;
+import 'e01_focus_e2e_test.dart' as e01;
 import 'z01_perf_e2e_test.dart' as z01;
 
 /// One entrypoint for the whole device pass.
@@ -30,5 +31,9 @@ void main() {
   a02.main();
   a03.main();
   c06.main();
+  // `e*` is focus. The file existed and was never imported here, so the device
+  // pass ran every suite EXCEPT the feature it was written for — and running it
+  // standalone would pay the whole assemble-and-install cost again for one file.
+  e01.main();
   z01.main();
 }

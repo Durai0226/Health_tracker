@@ -118,3 +118,37 @@ const kWizAddMedication = 'Add Medication'; // :3179
 const kWizInteraction = 'Possible drug interaction'; // :550
 const kWizSaveAnyway = 'Save anyway'; // :568
 const kWizCancel = 'Cancel'; // :563
+
+// ── Focus ─────────────────────────────────────────────────────────────────
+//
+// The resting surface after the restructure: ring, duration chips, one coach
+// line, the setup row, then the More grid. `kFocusStart` is the primary action
+// and the only way into a session.
+const kFocusCardTitle = 'Focus'; // home_dashboard.dart:1454
+const kFocusStart = 'Start Focus'; // focus_screen.dart:504
+const kFocusStartPomodoro = 'Start Pomodoro'; // focus_screen.dart:503
+const kFocusPause = 'Pause'; // focus_screen.dart:523
+const kFocusResume = 'Resume'; // focus_screen.dart:523
+const kFocusGiveUp = 'Give Up'; // focus_screen.dart:544
+const kFocusSetupRow = 'Session setup'; // focus_screen.dart:672
+const kFocusMoreHeader = 'More'; // focus_screen.dart:1520
+const kFocusGridBreathing = 'Breathing'; // focus_screen.dart:1534
+const kFocusGridRelaxation = 'Relaxation'; // focus_screen.dart:1542
+const kFocusGridStatistics = 'Statistics'; // focus_screen.dart:1556
+const kFocusGridPlantTrees = 'Plant Trees'; // focus_screen.dart:1564
+const kFocusGridTags = 'Tags'; // focus_screen.dart:1572
+const kFocusGridDistractions = 'Distractions'; // focus_screen.dart:1580
+const kFocusDuration = 'Duration'; // focus_screen.dart (duration SectionHeader)
+const kFocusTodayProgress = "Today's Progress"; // focus_screen.dart (quick stats)
+const kGardenTitle = 'My Garden'; // focus_garden_screen.dart:117
+const kStatsTitle = 'Statistics'; // detailed_stats_screen.dart:117
+
+// Focus dialogs and sheet sections.
+const kFocusSessionLocked = 'Session Locked'; // focus_screen.dart:1868
+const kFocusStayFocused = 'Stay Focused'; // focus_screen.dart:1889
+const kFocusGiveUpTitle = 'Give up?'; // focus_screen.dart:1825
+const kFocusKeepGoing = 'Keep Going'; // focus_screen.dart:1827
+const kFocusSheetActivity = 'Activity'; // focus_screen.dart (activity selector)
+const kFocusSheetPlant = 'Choose Plant'; // focus_screen.dart (plant selector)
+const kFocusSheetSound = 'Ambient Sound'; // focus_screen.dart (sound selector)
+const kGardenEmptyTitle = 'Your garden grows as you focus'; // focus_garden_screen.dart
