@@ -37,6 +37,13 @@ class MainActivity : FlutterFragmentActivity() {
     private var healthChannel: MethodChannel? = null
 
     /**
+     * Mindfulness write-back. Pull-only, so unlike [healthChannel] it needs no
+     * cold-start buffer: Dart always initiates, and if the engine is not attached
+     * there is by definition nothing waiting to be delivered.
+     */
+    private var mindfulness: MindfulnessChannel? = null
+
+    /**
      * Set when Health Connect launches us to show the rationale, cleared when
      * Dart takes it.
      *
@@ -77,6 +84,14 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                     }
                 }
+
+        mindfulness = MindfulnessChannel(applicationContext)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            MindfulnessChannel.CHANNEL
+        ).setMethodCallHandler { call, result ->
+            mindfulness?.handle(call, result) ?: result.success(null)
+        }
 
         // Cold start: the launching intent is already available here.
         captureHealthIntent(intent)

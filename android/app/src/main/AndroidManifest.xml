@@ -44,6 +44,11 @@
     <!-- Steps + Sleep: live pedometer + Health Connect reads -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
+    <!-- Mindfulness write-back (optional, off by default).
+         WRITE only, deliberately: nothing in this app reads other apps'
+         mindfulness data, and asking for a permission with no consumer weakens
+         the Health Connect declaration for the ones we do need. -->
+    <uses-permission android:name="android.permission.health.WRITE_MINDFULNESS" />
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>

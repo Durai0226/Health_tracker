@@ -104,4 +104,26 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+
+    // Health Connect client, declared EXPLICITLY and not inherited.
+    //
+    // The `health` plugin already depends on this, but with `implementation(...)`
+    // — which puts it on our RUNTIME classpath and deliberately keeps it off our
+    // COMPILE classpath. So `MindfulnessSessionRecord` in MainActivity.kt would
+    // not resolve without this line, and assuming otherwise is a build error
+    // waiting for whoever adds the next native health call.
+    //
+    // Pinned to the same version the plugin resolves to, so the two cannot
+    // disagree at runtime. `MindfulnessSessionRecord` needs >= 1.1.0-rc01; keep
+    // this at or above that if the plugin is ever bumped.
+    implementation("androidx.health.connect:connect-client:1.2.0-alpha02")
+
+    // Coroutines, for the same reason and with the same trap.
+    //
+    // Every Health Connect call is a `suspend` function, so MindfulnessChannel.kt
+    // needs a scope — and the coroutines library reaches this module only through
+    // other plugins' `implementation(...)`, which keeps it OFF our compile
+    // classpath exactly as connect-client is. Relying on it would compile on a
+    // machine that happened to resolve it and fail on the next one.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
