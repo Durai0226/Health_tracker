@@ -62,6 +62,13 @@ class DrugInfoCatalog {
     }
   }
 
+  /// Every loaded monograph.
+  ///
+  /// Exposed so the condition-library search index can build its drug-name hop
+  /// — "statin" or "metformin" finding the right page — without a second load
+  /// of the same asset. Empty until [ensureLoaded] completes.
+  static Iterable<DrugInfo> get all => _byGeneric?.values ?? const [];
+
   /// The full monograph for a medicine, or null when it isn't in the catalogue.
   ///
   /// Exposed so the medication detail screen can render a static "About this

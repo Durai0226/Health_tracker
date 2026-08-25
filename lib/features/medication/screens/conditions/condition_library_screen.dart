@@ -4,8 +4,11 @@ import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/insight_kit.dart' show SafetyDisclaimerBar;
-import '../../data/condition_library_data.dart';
+import '../../../../core/health/drug_info_catalog.dart';
 import '../../models/condition_info.dart';
+import '../../services/condition_library_service.dart';
+import '../../services/condition_search_index.dart';
+import '../../services/medicine_storage_service.dart';
 import 'condition_detail_screen.dart';
 
 /// Browsable, searchable library of common-condition reference entries —
@@ -22,10 +25,46 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
   final _searchController = TextEditingController();
   String _query = '';
 
+  /// Null until the medicine read completes — so the pinned sliver is ABSENT
+  /// rather than empty on the first frame. An empty "Related to what you
+  /// track" box is a worse answer than no box.
+  ConditionLibraryPersonalisation? _personal;
+
+  @override
+  void initState() {
+    super.initState();
+    _buildIndex();
+    _loadPersonalisation();
+    // Adding a medicine should change what is pinned here without a restart.
+    MedicineCleanStorageService.revision.addListener(_loadPersonalisation);
+  }
+
   @override
   void dispose() {
+    MedicineCleanStorageService.revision.removeListener(_loadPersonalisation);
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _buildIndex() async {
+    if (ConditionSearchIndex.isBuilt) return;
+    try {
+      await DrugInfoCatalog.ensureLoaded();
+      ConditionSearchIndex.build(
+        genericsForCondition: () => ConditionSearchIndex.drugTermsFrom(
+            DrugInfoCatalog.all.map((d) => (generic: d.generic, klass: d.klass))),
+      );
+    } catch (_) {
+      // Search degrades to name-and-aliases rather than to nothing — see
+      // ConditionSearchIndex.search's fallback.
+      ConditionSearchIndex.build();
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadPersonalisation() async {
+    final p = await ConditionLibraryService.load();
+    if (mounted) setState(() => _personal = p);
   }
 
   @override
@@ -35,12 +74,21 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
     final tt = Theme.of(context).textTheme;
     final query = _query.trim().toLowerCase();
 
+    // Ranked, and widened past name-and-aliases: "chest pain", "swelling" and
+    // "statin" all returned the empty state before this.
+    final hits = ConditionSearchIndex.search(query);
     final byCategory = <ConditionCategory, List<ConditionInfo>>{};
-    for (final c in conditionLibrary) {
-      if (!c.matches(query)) continue;
-      (byCategory[c.category] ??= []).add(c);
+    for (final h in hits) {
+      (byCategory[h.condition.category] ??= []).add(h.condition);
     }
     final hasResults = byCategory.isNotEmpty;
+
+    // The pinned sliver shows only while browsing. During a search the user has
+    // told us what they want, and a "related to you" block above their results
+    // is in the way.
+    final related = query.isEmpty
+        ? (_personal?.relatedConditions ?? const <ConditionInfo>[])
+        : const <ConditionInfo>[];
 
     return AppScaffold(
       safeTop: true,
@@ -50,20 +98,14 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
             title: 'Condition library',
             icon: Symbols.menu_book_rounded,
             accent: accent,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: accent,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context, accent: accent),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.gutter, AppSpacing.md, AppSpacing.gutter, 0),
-            child: AppTextField(
+            child: AppSearchField(
               controller: _searchController,
               hint: 'Search conditions',
-              prefixIcon: Symbols.search_rounded,
               accent: accent,
               onChanged: (v) => setState(() => _query = v),
             ),
@@ -75,6 +117,22 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
                     padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
                         AppSpacing.lg, AppSpacing.gutter, AppSpacing.xl),
                     children: [
+                      if (related.isNotEmpty) ...[
+                        SectionHeader(
+                            title: 'Related to what you track',
+                            icon: Symbols.medication_rounded,
+                            accent: accent),
+                        const SizedBox(height: AppSpacing.sm),
+                        AppListGroup(
+                          children: [
+                            for (final c in related)
+                              _row(context, ext, tt, accent, c,
+                                  trailingCount:
+                                      _personal!.linksFor(c.id).length),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
                       for (final category in ConditionCategory.values)
                         if (byCategory[category]?.isNotEmpty ?? false) ...[
                           SectionHeader(
@@ -82,17 +140,10 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
                               icon: category.icon,
                               accent: accent),
                           const SizedBox(height: AppSpacing.sm),
-                          AppCard(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: AppSpacing.xs),
-                            child: Column(
-                              children: _withDividers(
-                                ext,
-                                byCategory[category]!
-                                    .map((c) => _row(context, ext, tt, accent, c))
-                                    .toList(),
-                              ),
-                            ),
+                          AppListGroup(
+                            children: byCategory[category]!
+                                .map((c) => _row(context, ext, tt, accent, c))
+                                .toList(),
                           ),
                           const SizedBox(height: AppSpacing.lg),
                         ],
@@ -106,12 +157,16 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
   }
 
   Widget _row(BuildContext context, AppColorsExt ext, TextTheme tt,
-      AccentSwatch accent, ConditionInfo c) {
+      AccentSwatch accent, ConditionInfo c, {int? trailingCount}) {
     return AppListTile(
       icon: c.category.icon,
       iconColor: ext.mark(accent),
       title: c.name,
-      subtitle: c.overview,
+      // In the pinned sliver the useful subtitle is the connection, not the
+      // encyclopedia blurb the reader can get by tapping through.
+      subtitle: trailingCount == null
+          ? c.overview
+          : '$trailingCount of your medicines ${trailingCount == 1 ? 'relates' : 'relate'} to this area',
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => ConditionDetailScreen(condition: c)),
@@ -119,16 +174,6 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
     );
   }
 
-  List<Widget> _withDividers(AppColorsExt ext, List<Widget> tiles) {
-    final out = <Widget>[];
-    for (var i = 0; i < tiles.length; i++) {
-      out.add(tiles[i]);
-      if (i < tiles.length - 1) {
-        out.add(Divider(height: 1, indent: 52, endIndent: 8, color: ext.outline));
-      }
-    }
-    return out;
-  }
 }
 
 class _NoResults extends StatelessWidget {

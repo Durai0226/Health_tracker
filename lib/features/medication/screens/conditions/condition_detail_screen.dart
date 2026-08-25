@@ -4,15 +4,49 @@ import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/insight_kit.dart' show SafetyDisclaimerBar;
+import '../../../../core/utils/relative_time.dart';
 import '../../models/condition_info.dart';
+import '../../services/condition_library_service.dart';
+import '../nunito_medication_detail_screen.dart';
 
 /// Detail view for one [ConditionInfo] — overview, common symptoms, self-care
 /// tips, and red-flag symptoms. General education only; see
 /// [ConditionInfo]'s doc and the persistent [SafetyDisclaimerBar] at the foot
 /// of this screen.
-class ConditionDetailScreen extends StatelessWidget {
+class ConditionDetailScreen extends StatefulWidget {
   final ConditionInfo condition;
   const ConditionDetailScreen({super.key, required this.condition});
+
+  @override
+  State<ConditionDetailScreen> createState() => _ConditionDetailScreenState();
+}
+
+class _ConditionDetailScreenState extends State<ConditionDetailScreen> {
+  /// Null until loaded — so both personalised sections are ABSENT rather than
+  /// empty on the first frame. A "Your medicines in this area" heading over
+  /// nothing reads as a bug.
+  ConditionLibraryPersonalisation? _personal;
+  ConditionReadings? _readings;
+
+  ConditionInfo get condition => widget.condition;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final p = await ConditionLibraryService.load();
+    if (!mounted) return;
+    setState(() => _personal = p);
+
+    // The second select of the 1-3 contract, and only for the two conditions
+    // that have an objective measurement. Twelve of the fourteen pages never
+    // ask.
+    final r = await ConditionLibraryService.readingsFor(condition.id);
+    if (mounted) setState(() => _readings = r);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,12 +62,7 @@ class ConditionDetailScreen extends StatelessWidget {
             title: condition.name,
             icon: condition.category.icon,
             accent: accent,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: accent,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context, accent: accent),
           ),
           Expanded(
             child: ListView(
@@ -52,6 +81,8 @@ class ConditionDetailScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                ..._yourMedicines(context, ext, tt, accent),
+                ..._yourReadings(context, ext, tt, accent),
                 const SizedBox(height: AppSpacing.lg),
                 _bulletSection(
                   ext,
@@ -114,6 +145,105 @@ class ConditionDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // ------------------------------------------- Your medicines in this area
+
+  /// The heading is the safety design, not decoration.
+  ///
+  /// *"Your medicines in this area"* — the subject is the medicine, the
+  /// predicate is its drug family, and the condition is context the reader
+  /// supplied by opening this page. Nothing here says the reader has anything.
+  List<Widget> _yourMedicines(BuildContext context, AppColorsExt ext,
+      TextTheme tt, AccentSwatch accent) {
+    final links = _personal?.linksFor(condition.id) ?? const [];
+    if (links.isEmpty) return const [];
+
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      SectionHeader(
+          title: 'Your medicines in this area',
+          icon: Symbols.medication_rounded,
+          accent: accent),
+      const SizedBox(height: AppSpacing.sm),
+      AppListGroup(
+        children: [
+          for (final l in links)
+            AppListTile(
+              icon: Symbols.pill_rounded,
+              iconColor: ext.mark(accent),
+              title: l.medicineName,
+              // The drug class, not a restatement of the condition.
+              subtitle: l.drugClass ?? 'You noted this is for this area',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  // Deliberately NOT duplicating the monograph here: the
+                  // medicine detail screen already renders all four paragraphs,
+                  // and a second rendering is bloat plus a divergence risk.
+                  builder: (_) =>
+                      NunitoMedicationDetailScreen(medicine: l.medicine),
+                ),
+              ),
+            ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      // One chip carrying the reasoning for the strongest link on the page, so
+      // the inference is inspectable rather than taken on trust.
+      WhyThisChip(why: links.first.why),
+    ];
+  }
+
+  // ------------------------------------------------ Your recent readings
+
+  List<Widget> _yourReadings(BuildContext context, AppColorsExt ext,
+      TextTheme tt, AccentSwatch accent) {
+    final r = _readings;
+    // Absent on the twelve pages with no objective measurement, and absent
+    // while loading or after a failed read — null is not zero.
+    if (r == null || !r.hasAny) return const [];
+
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      SectionHeader(
+          title: 'Your recent readings',
+          icon: Symbols.monitoring_rounded,
+          accent: accent),
+      const SizedBox(height: AppSpacing.sm),
+      AppCard(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(r.latestValue ?? '—',
+                      style: tt.headlineSmall?.copyWith(
+                          color: ext.textPrimary,
+                          fontWeight: FontWeight.w800)),
+                  if (r.latestLabel != null)
+                    Text(r.latestLabel!,
+                        style:
+                            tt.bodySmall?.copyWith(color: ext.textSecondary)),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Flexible(
+              child: Text(
+                // A count belongs in text like this, not in a meter with an
+                // invented denominator.
+                '${r.count} in the last 90 days'
+                '${r.latestAt == null ? '' : '\nLatest ${RelativeTime.since(r.latestAt!)}'}',
+                textAlign: TextAlign.end,
+                style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 
   Widget _bulletSection(
