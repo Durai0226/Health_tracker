@@ -32,6 +32,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// The worker cannot read `CleanStorageService.cloudSyncEnabled` (that needs
 /// Drift), so it must never touch Firestore, so it cannot leak health data for
 /// a user who never opted in. That is a structural guarantee, not a promise.
+/// Why the background worker switched itself off.
+///
+/// Stored **by name**, not by index, so reordering this enum cannot silently
+/// reinterpret a notice already written to a user's device — the same rule
+/// `ReminderOccurrences` uses for its outcome column.
+enum SyncDisableReason {
+  /// Health Connect background-read authorization was revoked. Actionable: the
+  /// user can grant it again from this screen.
+  permissionRevoked,
+
+  /// The authorization probe itself failed. NOT the same fact as a revocation —
+  /// `isBackgroundReadAuthorized()` returns false from its own catch block, so a
+  /// transient platform error lands here too, and telling the user their
+  /// permission was revoked when it was not is worse than saying nothing
+  /// precise.
+  checkFailed,
+}
+
 abstract final class HealthSyncQueue {
   /// `flutter.` is prepended by shared_preferences itself. If the iOS
   /// background shim ever lands it must write `flutter.health_bg_snapshot`
@@ -41,6 +59,21 @@ abstract final class HealthSyncQueue {
   static const String _kLastRunMs = 'health_bg_last_run_ms';
   static const String _kLastError = 'health_bg_last_error';
   static const String _kEnabled = 'health_bg_enabled';
+
+  /// Why background sync turned ITSELF off, and when.
+  ///
+  /// The worker disables itself on lost authorization
+  /// (`background_health_sync_service.dart`) and used to leave no trace at all.
+  /// The switch does read back off next time the user opens this screen, so the
+  /// fact was technically observable — but "the toggle I set is off again" with
+  /// no reason, no timestamp and no way to act on it is indistinguishable from
+  /// the app losing a setting.
+  ///
+  /// Prefs rather than a table, deliberately: `background_health_sync_policy_test`
+  /// forbids the background isolate from touching Drift, so a column here would
+  /// be unwritable from the one place that needs to write it.
+  static const String _kDisabledReason = 'health_bg_disabled_reason';
+  static const String _kDisabledAtMs = 'health_bg_disabled_at_ms';
 
   /// Bumped when the snapshot's shape changes, so a blob written by an older
   /// build is discarded rather than misread into the wrong fields.
@@ -60,8 +93,66 @@ abstract final class HealthSyncQueue {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kEnabled, value);
       if (!value) await prefs.remove(_kSnapshot);
+      // Turning it ON always clears a previous self-disable: the user has
+      // answered it. Leaving the notice up after they act is the fastest way to
+      // make a banner feel broken.
+      if (value) {
+        await prefs.remove(_kDisabledReason);
+        await prefs.remove(_kDisabledAtMs);
+      }
     } catch (e) {
       debugPrint('HealthSyncQueue.setEnabled failed: $e');
+    }
+  }
+
+  /// Record that the WORKER disabled background sync, and why.
+  ///
+  /// Separate from [setEnabled] so a user switching it off by hand never leaves
+  /// an explanatory notice behind — they know why it is off.
+  static Future<void> recordSelfDisable(SyncDisableReason reason) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kDisabledReason, reason.name);
+      await prefs.setInt(
+          _kDisabledAtMs, DateTime.now().millisecondsSinceEpoch);
+      await prefs.setBool(_kEnabled, false);
+      await prefs.remove(_kSnapshot);
+    } catch (e) {
+      debugPrint('HealthSyncQueue.recordSelfDisable failed: $e');
+    }
+  }
+
+  /// The pending self-disable notice, or null when there is none.
+  ///
+  /// Null once the user re-enables, so the caller renders nothing rather than a
+  /// stale explanation.
+  static Future<({SyncDisableReason reason, DateTime at})?> selfDisable() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name = prefs.getString(_kDisabledReason);
+      if (name == null) return null;
+      final ms = prefs.getInt(_kDisabledAtMs);
+      final reason = SyncDisableReason.values
+          .cast<SyncDisableReason?>()
+          .firstWhere((r) => r!.name == name, orElse: () => null);
+      if (reason == null) return null;
+      return (
+        reason: reason,
+        at: DateTime.fromMillisecondsSinceEpoch(
+            ms ?? DateTime.now().millisecondsSinceEpoch),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> clearSelfDisable() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kDisabledReason);
+      await prefs.remove(_kDisabledAtMs);
+    } catch (_) {
+      // Nothing useful to do; the notice will simply show once more.
     }
   }
 
@@ -150,7 +241,15 @@ abstract final class HealthSyncQueue {
   @visibleForTesting
   static Future<void> clearForTesting() async {
     final prefs = await SharedPreferences.getInstance();
-    for (final k in [_kSnapshot, _kDirty, _kLastRunMs, _kLastError, _kEnabled]) {
+    for (final k in [
+      _kSnapshot,
+      _kDirty,
+      _kLastRunMs,
+      _kLastError,
+      _kEnabled,
+      _kDisabledReason,
+      _kDisabledAtMs,
+    ]) {
       await prefs.remove(k);
     }
   }

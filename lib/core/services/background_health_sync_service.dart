@@ -41,11 +41,26 @@ void healthSyncCallbackDispatcher() {
       if (await health.availability() != HealthAvailability.available) {
         return true;
       }
-      if (!await health.isBackgroundReadAuthorized()) {
-        // The user revoked it. Stop rather than retrying a permission that
-        // cannot come back without them visiting the app.
+      final auth = await health.backgroundReadAuthorization();
+      if (auth != BackgroundReadAuth.granted) {
+        // Stop rather than retrying a permission that cannot come back without
+        // the user visiting the app.
+        //
+        // Recording a REASON is the point. This branch used to call
+        // `setEnabled(false)` and leave: the switch read back off next time the
+        // user opened Connected devices, with no explanation and nothing to act
+        // on, which is indistinguishable from the app losing a setting.
+        //
+        // And `denied` is not the only way in — `backgroundReadAuthorization`
+        // returns `unknown` when the probe itself throws, so a transient
+        // platform error also lands here. Claiming "your permission was
+        // revoked" in that case would be a lie the user cannot check.
         await Workmanager().cancelByUniqueName(kHealthSyncUniqueName);
-        await HealthSyncQueue.setEnabled(false);
+        await HealthSyncQueue.recordSelfDisable(
+          auth == BackgroundReadAuth.denied
+              ? SyncDisableReason.permissionRevoked
+              : SyncDisableReason.checkFailed,
+        );
         return true;
       }
 

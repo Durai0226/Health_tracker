@@ -53,6 +53,22 @@ enum HealthAvailability {
 ///
 /// So: build the request per platform, and read one type at a time so a future
 /// plugin gap degrades to "that metric is missing" instead of "nothing works".
+/// The three answers a background-read authorization probe can give, plus the
+/// platform's own "not applicable".
+enum BackgroundReadAuth {
+  granted,
+
+  /// The platform answered, and the answer was no.
+  denied,
+
+  /// The probe itself failed. Distinct from [denied] on purpose — see
+  /// [HealthDataService.backgroundReadAuthorization].
+  unknown,
+
+  /// Not Android, so the concept does not exist here.
+  unsupported,
+}
+
 class HealthDataService {
   HealthDataService._();
   static final HealthDataService instance = HealthDataService._();
@@ -192,6 +208,46 @@ class HealthDataService {
   static List<HealthDataType> get biometricTypes =>
       biometricTypesFor(Platform.isAndroid);
 
+  /// The biometric types this device can actually be asked about.
+  ///
+  /// **Both the permission REQUEST and the permission CHECK must derive from
+  /// this.** They used to disagree, and the consequence was total: the request
+  /// dropped skin temperature when Health Connect was too old to know the type,
+  /// while the check kept asking about all eight. So on any Android device with
+  /// an older Health Connect the user granted the seven scopes, the sheet
+  /// succeeded, and then `hasPermissions` answered **false** forever — because
+  /// it was asking about a scope that had never been requested and could not be
+  /// granted. The Enable card stayed up, the heart and workout dashboards stayed
+  /// empty, and `BiometricsService.syncFromHealth` returned 0 on every call.
+  ///
+  /// That is the same defect the class docstring above describes for
+  /// `DISTANCE_WALKING_RUNNING` and `SLEEP_IN_BED` — *"which is why granting
+  /// access used to leave the Enable card up forever"* — reintroduced through one
+  /// list being fixed and the other not.
+  ///
+  /// Pure, and takes the support answer as a parameter rather than probing, so
+  /// the asymmetry is directly testable: headless `flutter test` runs on neither
+  /// platform and cannot reach the plugin.
+  @visibleForTesting
+  static List<HealthDataType> effectiveBiometricTypesFor(
+    bool android, {
+    required bool skinTemperatureSupported,
+  }) {
+    final types = biometricTypesFor(android);
+    if (!skinTemperatureSupported) {
+      types.remove(android ? skinTempTypeAndroid : skinTempTypeIOS);
+    }
+    return types;
+  }
+
+  /// [effectiveBiometricTypesFor] for the running platform, probing the plugin
+  /// for skin-temperature support.
+  Future<List<HealthDataType>> _effectiveBiometricTypes() async =>
+      effectiveBiometricTypesFor(
+        Platform.isAndroid,
+        skinTemperatureSupported: await isSkinTemperatureSupported(),
+      );
+
   /// Every type the app can ever read — for the conformance tests, which assert
   /// both platform lists against the plugin's own `dataTypeKeys*`.
   static List<HealthDataType> allReadTypesFor(bool android) => [
@@ -210,7 +266,10 @@ class HealthDataService {
   Future<bool> hasBiometricPermission() async {
     try {
       await _ensureConfigured();
-      final types = biometricTypes;
+      // The SAME list the request uses — see [effectiveBiometricTypesFor].
+      // Asking about a scope that was never requested makes Android answer
+      // false no matter what the user granted.
+      final types = await _effectiveBiometricTypes();
       final has = await _health.hasPermissions(types,
           permissions: _readAccessFor(types));
       if (has != null) return has;
@@ -232,10 +291,7 @@ class HealthDataService {
   Future<bool> requestBiometricPermission() async {
     try {
       await _ensureConfigured();
-      final types = List<HealthDataType>.from(biometricTypes);
-      if (!await isSkinTemperatureSupported()) {
-        types.remove(skinTempType);
-      }
+      final types = await _effectiveBiometricTypes();
       final granted = await _health.requestAuthorization(types,
           permissions: _readAccessFor(types));
       // iOS returns true whenever the sheet closed without error, so re-check
@@ -286,14 +342,25 @@ class HealthDataService {
     }
   }
 
-  Future<bool> isBackgroundReadAuthorized() async {
-    if (!Platform.isAndroid) return false;
+  Future<bool> isBackgroundReadAuthorized() async =>
+      await backgroundReadAuthorization() == BackgroundReadAuth.granted;
+
+  /// [isBackgroundReadAuthorized], but able to say WHY it is not granted.
+  ///
+  /// The bool form collapses "the user revoked it" and "the probe threw" into
+  /// the same `false`, and the background worker acts on that by switching
+  /// itself off. Telling someone their permission was revoked when the platform
+  /// call merely failed is worse than saying nothing precise, so the worker
+  /// needs the distinction even though every UI caller is happy with the bool.
+  Future<BackgroundReadAuth> backgroundReadAuthorization() async {
+    if (!Platform.isAndroid) return BackgroundReadAuth.unsupported;
     try {
       await _ensureConfigured();
-      return await _health.isHealthDataInBackgroundAuthorized();
+      final ok = await _health.isHealthDataInBackgroundAuthorized();
+      return ok ? BackgroundReadAuth.granted : BackgroundReadAuth.denied;
     } catch (e) {
       debugPrint('HealthDataService.isBackgroundReadAuthorized failed: $e');
-      return false;
+      return BackgroundReadAuth.unknown;
     }
   }
 
@@ -466,6 +533,99 @@ class HealthDataService {
     } catch (e) {
       debugPrint('HealthDataService.writeWeight failed: $e');
       return false;
+    }
+  }
+
+  // ============ HYDRATION ============
+
+  /// Hydration is a single type on both platforms, kept separate from
+  /// [vitalsWriteTypes] so the user can grant water without also granting blood
+  /// pressure, glucose and weight — and so a hydration denial cannot look like a
+  /// vitals denial.
+  ///
+  /// `HealthDataType.WATER` maps to Health Connect's `HydrationRecord`
+  /// (aggregate `VOLUME_TOTAL`) on Android and HealthKit's `.dietaryWater` on
+  /// iOS, in `HealthDataUnit.LITER` on both. It appears in the plugin's Android
+  /// *and* iOS type lists, so unlike mindfulness this needs no method channel of
+  /// our own.
+  static const List<HealthDataType> hydrationWriteTypes = [
+    HealthDataType.WATER,
+  ];
+
+  /// Whether the hydration write scope is granted.
+  ///
+  /// [HealthDataAccess.WRITE], not `READ_WRITE` — see
+  /// [hasVitalsWritePermission] for why `READ_WRITE` always reads as denied on
+  /// iOS.
+  Future<bool> hasHydrationWritePermission() async {
+    try {
+      await _ensureConfigured();
+      final has = await _health.hasPermissions(hydrationWriteTypes,
+          permissions: const [HealthDataAccess.WRITE]);
+      return has == true;
+    } catch (e) {
+      debugPrint('HealthDataService.hasHydrationWritePermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Ask for the hydration write scope. As with vitals, `package:health` has no
+  /// write-only request — WRITE always brings READ along.
+  Future<bool> requestHydrationWritePermission() async {
+    try {
+      await _ensureConfigured();
+      final granted = await _health.requestAuthorization(hydrationWriteTypes,
+          permissions: _readWriteAccessFor(hydrationWriteTypes));
+      return granted == true;
+    } catch (e) {
+      debugPrint('HealthDataService.requestHydrationWritePermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Write one drink to the platform health store.
+  ///
+  /// [volumeMl] is the RAW volume drunk, not our hydration-adjusted figure:
+  /// Health Connect's `HydrationRecord` and HealthKit's `dietaryWater` both mean
+  /// "fluid consumed", and every other app reading them assumes that. Our
+  /// beverage coefficients are a DlyMinder concept and stay on our side.
+  ///
+  /// `HydrationRecord` is an INTERVAL record and rejects a zero-length span on
+  /// some Health Connect versions, so a drink is written as a one-minute
+  /// interval ending at [at]. Volume is capped at Health Connect's documented
+  /// 100 L maximum; anything at or below zero is not written at all (an
+  /// alcohol-adjusted negative must never reach this).
+  Future<bool> writeWater({required int volumeMl, required DateTime at}) async {
+    if (volumeMl <= 0) return false;
+    try {
+      await _ensureConfigured();
+      final litres = (volumeMl / 1000).clamp(0.0, 100.0);
+      return await _health.writeHealthData(
+        value: litres,
+        type: HealthDataType.WATER,
+        unit: HealthDataUnit.LITER,
+        startTime: at.subtract(const Duration(minutes: 1)),
+        endTime: at,
+        recordingMethod: RecordingMethod.manual,
+      );
+    } catch (e) {
+      debugPrint('HealthDataService.writeWater failed: $e');
+      return false;
+    }
+  }
+
+  /// Total hydration recorded by ANY app over [from]..[to], in millilitres.
+  ///
+  /// Lets the app show "you also logged 500 ml in another app" rather than
+  /// pretending its own database is the whole picture.
+  Future<int> readWaterMl(DateTime from, DateTime to) async {
+    try {
+      // _sumNumeric returns null for "no samples", which is 0 ml here.
+      final litres = await _sumNumeric([HealthDataType.WATER], from, to);
+      return litres == null ? 0 : (litres * 1000).round();
+    } catch (e) {
+      debugPrint('HealthDataService.readWaterMl failed: $e');
+      return 0;
     }
   }
 

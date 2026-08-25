@@ -406,12 +406,15 @@ class BiometricsService {
     } else {
       // 5th percentile of the NIGHT's heart rate. Needs enough samples to mean
       // anything — below that it is one stray low reading, not a resting rate.
-      final nightHr = _numeric(points
-          .where((p) =>
-              p.type == HealthDataType.HEART_RATE &&
-              !p.dateFrom.isBefore(sleepWin.start) &&
-              p.dateFrom.isBefore(sleepWin.end))
-          .toList());
+      //
+      // Via `inWindow`, NOT a hand-rolled filter. This branch used to re-derive
+      // the type + window predicate inline and, in doing so, dropped the
+      // `known[...].enabled` term that `inWindow` carries — so a source the user
+      // had switched off on Connected devices still fed derived resting HR. That
+      // made the screen's core promise false for exactly one metric, and it was
+      // invisible because every OTHER metric goes through `inWindow`.
+      final nightHr =
+          _numeric(inWindow(HealthDataType.HEART_RATE, sleepWin));
       if (nightHr.length >= 20) {
         nightHr.sort();
         restingHr = nightHr[(nightHr.length * 0.05).floor()].round();
