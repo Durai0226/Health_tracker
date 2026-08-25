@@ -1,350 +1,276 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import '../../../core/design/app_design.dart';
-import '../../../core/design/app_colors_ext.dart';
-import '../../../core/health/insight.dart';
-import '../../../core/health/vitals_analyzer.dart';
+
+import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
-import '../../medication/services/medicine_storage_service.dart';
-import '../../medication/services/vitals_storage_service.dart';
-import '../../water/services/water_service.dart';
-import '../../focus/services/focus_service.dart';
-import '../../steps/services/step_service.dart';
-import '../../sleep/services/sleep_service.dart';
-import '../../sleep/models/sleep_consistency.dart';
-import '../services/insight_service.dart';
+import '../../../core/widgets/app/insight_kit.dart'
+    show InsightCard, SafetyDisclaimerBar;
+import '../services/insight_actions.dart';
+import '../services/trends_data_service.dart';
+import '../services/weekly_recap_service.dart';
+import '../widgets/trend_chart_card.dart';
 
-class _WeekStats {
-  final int? adherencePct;
-  final int waterDaysHit;
-  final int focusMinutes;
-  final int readingsLogged;
-  final String? bpAvg;
-  final int? glucoseAvg;
-  final int stepsDaysGoalMet;
-  final int sleepNightsLogged;
-  final double sleepRegularity;
-  final SleepConsistency sleepConsistency;
-  final List<Insight> highlights;
-  const _WeekStats({
-    this.adherencePct,
-    required this.waterDaysHit,
-    required this.focusMinutes,
-    required this.readingsLogged,
-    this.bpAvg,
-    this.glucoseAvg,
-    required this.stepsDaysGoalMet,
-    required this.sleepNightsLogged,
-    required this.sleepRegularity,
-    required this.sleepConsistency,
-    required this.highlights,
-  });
-}
-
-/// A calm weekly recap: deterministic 7-day numbers + the top insights, narrated
-/// plainly. Expected, self-paced, high-trust (Whoop/Spotify-Wrapped pattern).
+/// Your last seven days, as a scrollable report.
+///
+/// ## What this replaces
+///
+/// The previous version rendered **nine radial gauges** and no time series.
+/// Four of those gauges had no denominator to be a fraction of:
+///
+/// | ring | expression | the problem |
+/// |---|---|---|
+/// | Avg BP | `s.bpAvg != null ? 1 : 0` | a **closed circle** meaning "a value exists", drawn beside "Avg BP 150/95" |
+/// | Avg sugar | `s.glucoseAvg != null ? 1 : 0` | same |
+/// | Focus | `s.focusMinutes / 150` | 150 minutes a week is a target nobody set |
+/// | Readings | `s.readingsLogged / 14` | so is 14 readings |
+///
+/// The first two are worth dwelling on, because `ProgressRing`'s painter makes
+/// them worse than they look: it subtracts a round-cap allowance, so only a
+/// value of exactly `1.0` paints a **fully closed** circle. `? 1 : 0` therefore
+/// renders the single most emphatic thing that widget can draw, to say nothing
+/// more than "this field is not null".
+///
+/// A ring promises *this much of a limit*. Where there is no limit the honest
+/// form is a bar, and that choice now lives in one place — [TrendGoalCard.build],
+/// shared with Trends — so two screens cannot drift apart about when a ring is
+/// earned. Water, steps, sleep and adherence keep theirs because
+/// `TrendSeries.goal` is a real stored limit, and each falls back to a bar on its
+/// own when that goal is unset.
+///
+/// ## Failure used to look like a new user
+///
+/// Every data block was wrapped in `catch (_) {}`. On a real database failure
+/// `adherencePct` went null, which tripped the `primaryEmpty` branch, which
+/// rendered *"Start logging and your recap fills in here"* — to somebody with
+/// months of history. The retry panel existed and could not be reached.
+///
+/// Three smaller versions of the same fault, all removed by moving the gather
+/// into [WeeklyRecapService]:
+///
+/// * `var regularity = 0.75` survived its swallowed exception, so a failed sleep
+///   read rendered a plausible regularity index no data supported.
+/// * `waterDays++` sat *inside* the loop it was wrapped in, so a throw partway
+///   through silently reported a partial count as a whole week.
+/// * `readings` accumulated with `+=` across two separate try blocks, so a
+///   glucose failure yielded a blood-pressure-only count with nothing to say so.
+///
+/// The service separates the three facts the old screen collapsed: **null is "we
+/// don't know", zero is "we measured zero", a throw is "ask again."**
 class WeeklyRecapScreen extends StatefulWidget {
   const WeeklyRecapScreen({super.key});
 
   @override
   State<WeeklyRecapScreen> createState() => _WeeklyRecapScreenState();
+
+  /// One card per measure, and only for trackers with data this week.
+  ///
+  /// A tracker never used gets no card at all, so somebody who does not
+  /// menstruate never meets a permanently empty Cycle card on a page about
+  /// their week. Every card here carries the chart table twin and the spoken
+  /// summary from `trend_chart_card.dart`, so none of them is colour-only.
+  ///
+  /// **Static and `@visibleForTesting` on purpose.** Every card is gated on
+  /// `series.hasData`, and this repo's widget tests run against an empty
+  /// in-memory database — so pumping the screen renders NO cards and any
+  /// assertion about them passes vacuously. That was not hypothetical: the
+  /// first version of the "no ring without a limit" test stayed green while a
+  /// deliberately fabricated focus ring was in the tree. Calling this directly
+  /// with a hand-built bundle is what makes the assertion bite.
+  @visibleForTesting
+  static List<Widget> cardsFor(AppColorsExt ext, WeeklyRecap r) =>
+      _cards(ext, r, r.bundle.range.days);
+
+  static List<Widget> _cards(AppColorsExt ext, WeeklyRecap r, int days) {
+    final b = r.bundle;
+    // A reserved STATUS colour, always paired with the legend — never a series.
+    final bandGreen =
+        ext.mark(ext.success).withOpacity(ext.isDark ? 0.16 : 0.12);
+
+    return [
+      if (b.adherence.hasData)
+        TrendGoalCard.build(
+          ext: ext,
+          accent: ext.medicine,
+          icon: Symbols.medication_rounded,
+          title: 'Medicine',
+          series: b.adherence,
+          days: days,
+          featureName: 'doses',
+          formatValue: (v) => '${v.round()}%',
+          centerValue: (gp) => '${(gp * 100).round()}%',
+          centerCaption: 'adherence',
+          ringHeadline: (_) =>
+              '${b.adherence.loggedDays} of $days days tracked',
+          miniMaxY: 100,
+          barHeadline: '${b.adherence.average!.round()}% avg',
+          barMaxY: 100,
+        ),
+
+      if (b.water.hasData)
+        TrendGoalCard.build(
+          ext: ext,
+          accent: ext.water,
+          icon: Symbols.water_drop_rounded,
+          title: 'Water',
+          series: b.water,
+          days: days,
+          featureName: 'water',
+          formatValue: (v) => '${v.round()} ml',
+          centerValue: (_) => '${b.water.goalPercent!.round()}%',
+          centerCaption: 'of goal',
+          ringHeadline: (_) =>
+              'avg ${(b.water.average! / 1000).toStringAsFixed(1)} L',
+          barHeadline: '${(b.water.average! / 1000).toStringAsFixed(1)} L avg',
+        ),
+
+      if (b.steps.hasData)
+        TrendGoalCard.build(
+          ext: ext,
+          accent: ext.steps,
+          icon: Symbols.directions_walk_rounded,
+          title: 'Steps',
+          series: b.steps,
+          days: days,
+          featureName: 'steps',
+          formatValue: (v) => '${v.round()} steps',
+          centerValue: (_) => '${b.steps.goalPercent!.round()}%',
+          centerCaption: 'of goal',
+          ringHeadline: (_) => 'avg ${b.steps.average!.round()} a day',
+          barHeadline: '${b.steps.average!.round()} avg',
+        ),
+
+      if (b.sleep.hasData)
+        TrendGoalCard.build(
+          ext: ext,
+          accent: ext.sleep,
+          icon: Symbols.bedtime_rounded,
+          title: 'Sleep',
+          series: b.sleep,
+          days: days,
+          featureName: 'sleep',
+          formatValue: (v) => '${v.toStringAsFixed(1)}h',
+          centerValue: (_) => '${b.sleep.goalPercent!.round()}%',
+          centerCaption: 'of goal',
+          ringHeadline: (_) =>
+              'avg ${b.sleep.average!.toStringAsFixed(1)}h a night',
+          barHeadline: '${b.sleep.average!.toStringAsFixed(1)}h avg',
+        ),
+
+      // A BAR, not a ring. The old screen drew focus against a hardcoded 150
+      // minutes — a weekly target nobody set — and a ring against an invented
+      // denominator is the most confident-looking way to be wrong.
+      if (b.focus.hasData)
+        TrendChartCard(
+          accent: ext.focus,
+          icon: Symbols.timer_rounded,
+          title: 'Focus',
+          headline: '${b.focus.total!.round()} min',
+          trend: TrendGoalCard.goodTrend(b.focus),
+          series: b.focus,
+          kind: TrendChartKind.bar,
+          rangeDays: days,
+          featureName: 'focus',
+          formatValue: (v) => '${v.round()} min',
+        ),
+
+      // Two series, ONE axis — both are mmHg, which is what makes this the only
+      // legitimate multi-series card on the page. It is also the only form in
+      // which "150/95" is legible at all; the old ring said only that it existed.
+      if (b.bloodPressure.hasData)
+        TrendChartCard(
+          accent: ext.period,
+          icon: Symbols.favorite_rounded,
+          title: 'Blood pressure',
+          headline: '${b.bloodPressure.latest!.round()}/'
+              '${b.bloodPressure.latest2!.round()}',
+          series: b.bloodPressure,
+          kind: TrendChartKind.line,
+          seriesLabels: const ['Sys', 'Dia'],
+          bands: [TrendBand(60, 120, bandGreen)],
+          rangeDays: days,
+          featureName: 'blood pressure',
+          formatValue: (v) => v.round().toString(),
+        ),
+
+      // Time-in-range: a share of readings that genuinely sums to 100, unlike a
+      // ring meaning "a value exists".
+      if (b.glucose.hasData)
+        TrendTimeInRangeCard(
+          accent: ext.medicine,
+          icon: Symbols.glucose_rounded,
+          title: 'Blood sugar',
+          tir: b.glucoseTir,
+          series: b.glucose,
+          rangeDays: days,
+          featureName: 'glucose',
+          formatValue: (v) => '${v.round()} mg/dL',
+        ),
+
+      if (b.weight.hasData)
+        TrendChartCard(
+          accent: ext.brand,
+          icon: Symbols.monitor_weight_rounded,
+          title: 'Weight',
+          // No trend arrow: weight has no universal good direction, which the
+          // weight screen already argues in its own comment.
+          headline: '${b.weight.latest!.toStringAsFixed(1)} kg',
+          series: b.weight,
+          kind: TrendChartKind.line,
+          rangeDays: days,
+          featureName: 'weight',
+          formatValue: (v) => '${v.toStringAsFixed(1)} kg',
+        ),
+    ];
+  }
 }
 
 class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
-  late Future<_WeekStats> _future;
+  late Future<WeeklyRecap> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _gather();
+    _future = WeeklyRecapService.load();
   }
 
-  Future<_WeekStats> _gather() async {
-    final now = DateTime.now();
-    final from = now.subtract(const Duration(days: 7));
-
-    int? adherence;
-    try {
-      // One row per slot: a pre-fix install can hold both a `missed` and a
-      // `taken` row for one dose, which would inflate `due`.
-      // Ranged query, not a full-table scan filtered in Dart. This screen
-      // only ever looks at 7 days, but it was reading every log ever written —
-      // and `medicine_logs` grows forever with no pruning.
-      final logs = MedicineCleanStorageService.dedupeByDose(
-          await MedicineCleanStorageService.getLogsForDateRange(
-              from, DateTime.now()));
-      final due =
-          logs.where((l) => l.countsAsTaken || l.isMissed || l.isSkipped).length;
-      final taken = logs.where((l) => l.countsAsTaken).length;
-      if (due > 0) adherence = (taken / due * 100).round();
-    } catch (_) {}
-
-    int waterDays = 0;
-    try {
-      for (var i = 0; i < 7; i++) {
-        final d = now.subtract(Duration(days: i));
-        final data = WaterService.getDataForDate(d);
-        if (data != null && data.dailyGoalMl > 0 && data.effectiveHydrationMl >= data.dailyGoalMl) {
-          waterDays++;
-        }
-      }
-    } catch (_) {}
-
-    int focusMin = 0;
-    try {
-      focusMin = FocusService()
-          .sessions
-          .where((s) => s.startedAt.isAfter(from) && s.wasCompleted)
-          .fold(0, (a, s) => a + s.actualMinutes);
-    } catch (_) {}
-
-    int readings = 0;
-    String? bpAvg;
-    int? glucoseAvg;
-    try {
-      // Bounded in Dart rather than SQL for now — `getAllBp` has no ranged
-      // variant — but at least fetched ONCE. gatherAll() below reads the same
-      // table again; that duplicate is what the shared fetch there removed.
-      final bp = (await VitalsStorageService.getAllBp())
-          .where((r) => r.takenAt.isAfter(from))
-          .toList();
-      readings += bp.length;
-      final s = VitalsAnalyzer.mean(bp.map((r) => r.systolic).toList());
-      final d = VitalsAnalyzer.mean(bp.map((r) => r.diastolic).toList());
-      if (s != null && d != null) bpAvg = '${s.round()}/${d.round()}';
-    } catch (_) {}
-    try {
-      final gl = (await VitalsStorageService.getAllGlucose())
-          .where((r) => r.takenAt.isAfter(from))
-          .toList();
-      readings += gl.length;
-      final m = VitalsAnalyzer.mean(gl.map((r) => r.valueMgdl).toList());
-      if (m != null) glucoseAvg = m.round();
-    } catch (_) {}
-
-    int stepsDaysMet = 0;
-    try {
-      await StepService.init();
-      stepsDaysMet = (StepService.getWeeklyStats()['daysGoalMet'] as int?) ?? 0;
-    } catch (_) {}
-
-    int sleepNights = 0;
-    var regularity = 0.75;
-    var consistency = SleepConsistency.building;
-    try {
-      await SleepService.init();
-      sleepNights =
-          SleepService.getWeeklyTrend().where((d) => d.hasData).length;
-      regularity = SleepService.regularityIndex();
-      consistency = SleepConsistency.fromIndex(
-        regularity,
-        sampleSize: SleepService.regularitySampleSize(),
-      );
-    } catch (_) {}
-
-    final highlights = await InsightService.gatherAll();
-
-    return _WeekStats(
-      adherencePct: adherence,
-      waterDaysHit: waterDays,
-      focusMinutes: focusMin,
-      readingsLogged: readings,
-      bpAvg: bpAvg,
-      glucoseAvg: glucoseAvg,
-      stepsDaysGoalMet: stepsDaysMet,
-      sleepNightsLogged: sleepNights,
-      sleepRegularity: regularity,
-      sleepConsistency: consistency,
-      highlights: highlights,
-    );
-  }
-
-  static String _rhythmShort(SleepConsistency c) {
-    switch (c) {
-      case SleepConsistency.veryRegular:
-        return 'Steady';
-      case SleepConsistency.fairlyRegular:
-        return 'Fair';
-      case SleepConsistency.variable:
-        return 'Varies';
-      case SleepConsistency.building:
-        return '—';
-    }
-  }
+  void _reload() => setState(() => _future = WeeklyRecapService.load());
 
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final accent = ext.brand;
-    final now = DateTime.now();
-    final from = now.subtract(const Duration(days: 6));
+
     return AppScaffold(
       safeTop: true,
       body: Column(
         children: [
           AppHeader(
             title: 'Weekly recap',
-            greeting: '${_mon(from).toUpperCase()} ${from.day} – ${_mon(now).toUpperCase()} ${now.day}',
             accent: accent,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: accent,
-              onPressed: () {
-                if (Navigator.canPop(context)) Navigator.pop(context);
-              },
-            ),
+            leading: AppHeader.backButton(context, accent: accent),
             bottom: Container(height: 1, color: ext.outline),
           ),
           Expanded(
-            child: FutureBuilder<_WeekStats>(
+            child: FutureBuilder<WeeklyRecap>(
               future: _future,
               builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return Center(child: CircularProgressIndicator(color: ext.mark(accent)));
-                }
-                // Don't force-unwrap: an error must surface a retry, not blank
-                // the screen (or crash on `snap.data!`).
-                if (snap.hasError || !snap.hasData) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.xl),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Symbols.error_rounded,
-                              size: 40, color: ext.textTertiary),
-                          const SizedBox(height: AppSpacing.md),
-                          Text("Couldn't load your recap",
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(color: ext.textPrimary)),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'Something went wrong gathering this week. Please try again.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(color: ext.textSecondary),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          AppButton(
-                            label: 'Try again',
-                            leadingIcon: Symbols.refresh_rounded,
-                            accent: accent,
-                            onPressed: () =>
-                                setState(() => _future = _gather()),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                final s = snap.data!;
-                final primaryEmpty = s.adherencePct == null &&
-                    s.waterDaysHit == 0 &&
-                    s.focusMinutes == 0;
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.gutter, AppSpacing.lg, AppSpacing.gutter, AppSpacing.huge),
-                  children: [
-                    _headline(ext, s, from, now),
-                    const SizedBox(height: AppSpacing.md),
-                    if (primaryEmpty)
-                      _emptyLedger(ext)
-                    else
-                      _kpiCard(ext, [
-                        KpiCell(
-                          progress: (s.adherencePct ?? 0) / 100,
-                          muted: s.adherencePct == null,
-                          value: s.adherencePct != null ? '${s.adherencePct}%' : '—',
-                          label: 'Doses',
-                          accent: ext.medicine,
-                        ),
-                        KpiCell(
-                          progress: s.waterDaysHit / 7,
-                          muted: s.waterDaysHit == 0,
-                          value: '${s.waterDaysHit}/7',
-                          label: 'Water days',
-                          accent: ext.water,
-                        ),
-                        KpiCell(
-                          progress: (s.focusMinutes / 150).clamp(0, 1).toDouble(),
-                          muted: s.focusMinutes == 0,
-                          value: '${s.focusMinutes}m',
-                          label: 'Focus',
-                          accent: ext.focus,
-                        ),
-                      ]),
-                    if (s.stepsDaysGoalMet > 0 || s.sleepNightsLogged > 0) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      _kpiCard(ext, [
-                        KpiCell(
-                          progress: s.stepsDaysGoalMet / 7,
-                          muted: s.stepsDaysGoalMet == 0,
-                          value: '${s.stepsDaysGoalMet}/7',
-                          label: 'Step goals',
-                          accent: ext.steps,
-                        ),
-                        KpiCell(
-                          progress: s.sleepNightsLogged / 7,
-                          muted: s.sleepNightsLogged == 0,
-                          value: '${s.sleepNightsLogged}/7',
-                          label: 'Sleep logs',
-                          accent: ext.sleep,
-                        ),
-                        KpiCell(
-                          progress: s.sleepConsistency.hasEnoughData
-                              ? s.sleepRegularity.clamp(0.0, 1.0)
-                              : 0,
-                          muted: !s.sleepConsistency.hasEnoughData,
-                          value: _rhythmShort(s.sleepConsistency),
-                          label: 'Rhythm',
-                          accent: ext.sleep,
-                        ),
-                      ]),
-                    ],
-                    if (s.bpAvg != null || s.glucoseAvg != null) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      _kpiCard(ext, [
-                        KpiCell(
-                          progress: s.bpAvg != null ? 1 : 0,
-                          muted: s.bpAvg == null,
-                          value: s.bpAvg ?? '—',
-                          label: 'Avg BP',
-                          accent: InsightVisuals.accent(context, InsightFeature.bloodPressure),
-                        ),
-                        KpiCell(
-                          progress: s.glucoseAvg != null ? 1 : 0,
-                          muted: s.glucoseAvg == null,
-                          value: s.glucoseAvg != null ? '${s.glucoseAvg}' : '—',
-                          label: 'Avg sugar',
-                          accent: InsightVisuals.accent(context, InsightFeature.bloodSugar),
-                        ),
-                        KpiCell(
-                          progress: (s.readingsLogged / 14).clamp(0, 1).toDouble(),
-                          muted: s.readingsLogged == 0,
-                          value: '${s.readingsLogged}',
-                          label: 'Readings',
-                          accent: ext.brand,
-                        ),
-                      ]),
-                    ],
-                    if (s.highlights.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: 'Highlights', icon: Symbols.star_rounded, accent: accent),
-                      const SizedBox(height: AppSpacing.sm),
-                      for (final i in s.highlights.take(4))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: InsightCard(insight: i),
-                        ),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    const SafetyDisclaimerBar(),
-                  ],
+                final loading = snap.connectionState != ConnectionState.done;
+                return AsyncSection<WeeklyRecap>(
+                  isLoading: loading,
+                  data: snap.hasData ? snap.data : null,
+                  error: snap.error,
+                  onRetry: _reload,
+                  // A skeleton at the report's own rhythm. The old screen showed
+                  // a centred spinner, which says nothing about what is coming.
+                  skeleton: const PageSkeleton.report(),
+                  errorTitle: "Couldn't load your recap",
+                  errorMessage:
+                      'Your data is safe — please try again. Nothing has been '
+                      'lost.',
+                  loadingSemanticLabel: 'Building your weekly recap',
+                  banner: snap.hasData ? _partialBanner(snap.data!) : null,
+                  builder: (context, recap) => _report(context, recap),
                 );
               },
             ),
@@ -354,92 +280,233 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
     );
   }
 
-  static String _mon(DateTime d) => const [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ][d.month - 1];
+  // ------------------------------------------------------------------ BANNER
 
-  /// A KPI ledger row: equal ring cells separated by hairline dividers, all
-  /// numerals locked to one baseline (the one deliberate use of centering).
-  Widget _kpiCard(AppColorsExt ext, List<Widget> cells) {
-    final children = <Widget>[];
-    for (var i = 0; i < cells.length; i++) {
-      if (i != 0) children.add(Container(width: 1, color: ext.outline));
-      children.add(Expanded(child: cells[i]));
-    }
-    return AppCard(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-      child: IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: children),
-      ),
-    );
-  }
-
-  Widget _emptyLedger(AppColorsExt ext) {
+  /// Names what is missing rather than letting a partial week read as a quiet one.
+  Widget? _partialBanner(WeeklyRecap r) {
+    if (r.failedSources.isEmpty) return null;
+    final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     return AppCard(
-      child: Text('Start logging and your recap fills in here.',
-          style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
-    );
-  }
-
-  /// The editorial teal cover: overline · a big tabular cover number (adherence)
-  /// with a caption, then the narrative sentence, and a quiet seal watermark.
-  Widget _headline(AppColorsExt ext, _WeekStats s, DateTime from, DateTime now) {
-    final tt = Theme.of(context).textTheme;
-    final on = ext.brand.onContainer;
-    final hasAny =
-        s.adherencePct != null || s.waterDaysHit > 0 || s.focusMinutes > 0;
-
-    // Narrative — the cover number carries adherence, so this leads with the rest.
-    final parts = <String>[];
-    if (s.waterDaysHit > 0) {
-      parts.add('${s.waterDaysHit} hydrated ${s.waterDaysHit == 1 ? 'day' : 'days'}');
-    }
-    if (s.focusMinutes > 0) parts.add('${s.focusMinutes} focus minutes');
-    final String narrative;
-    if (!hasAny) {
-      narrative = 'Log a few things this week and your recap will fill in.';
-    } else if (s.adherencePct != null) {
-      narrative = parts.isEmpty
-          ? 'Steady dosing this week — keep the momentum going.'
-          : 'Plus ${parts.join(' and ')}. Keep the momentum going.';
-    } else {
-      narrative = 'This week: ${parts.join(' and ')}. Keep the momentum going.';
-    }
-
-    return AppCard(
-      color: ext.brand.container,
-      padding: const EdgeInsets.all(AppSpacing.gutter),
-      child: Stack(
+      child: Row(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'THIS WEEK · ${_mon(from).toUpperCase()} ${from.day}–${now.day}',
-                style: tt.labelSmall
-                    ?.copyWith(color: on.withOpacity(0.7), letterSpacing: 0.6),
-              ),
-              if (s.adherencePct != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text('${s.adherencePct}%',
-                    style: tt.displayLarge?.copyWith(
-                        color: on,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: kTabular,
-                        height: 1.0)),
-                const SizedBox(height: AppSpacing.xs),
-                Text('of doses taken',
-                    style: tt.bodyMedium?.copyWith(color: on.withOpacity(0.8))),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              Text(narrative,
-                  style: tt.headlineSmall?.copyWith(color: on, height: 1.3)),
-            ],
+          Icon(Symbols.info_rounded, size: 20, color: ext.mark(ext.warning)),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              "Some of this week couldn't be loaded: "
+              '${r.failedSources.join(', ')}. Everything else is below.',
+              style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+            ),
           ),
         ],
       ),
     );
   }
+
+  // ------------------------------------------------------------------ REPORT
+
+  Widget _report(BuildContext context, WeeklyRecap r) {
+    final ext = AppColorsExt.of(context);
+    final accent = ext.brand;
+    final days = r.bundle.range.days;
+    final cards = WeeklyRecapScreen._cards(ext, r, days);
+
+    return RefreshIndicator(
+      color: accent.base,
+      onRefresh: () async => _reload(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
+            AppSpacing.gutter, AppSpacing.huge),
+        children: [
+          // ---- Tier 1 — one figure, no chart at all. ---------------------
+          _cover(ext, r),
+
+          // Only when something WAS logged but nothing is chartable. With a
+          // truly empty week the cover already says it, and saying it twice in
+          // two different phrasings reads as a bug.
+          if (cards.isEmpty && r.hero.hasValue) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _emptyWeek(ext),
+          ] else if (cards.isNotEmpty) ...[
+            // ---- Tier 2 — one measure per card, never a dual axis. ------
+            const SizedBox(height: AppSpacing.xl),
+            SectionHeader(
+                title: 'Your week, day by day',
+                icon: Symbols.calendar_view_week_rounded,
+                accent: accent),
+            const SizedBox(height: AppSpacing.sm),
+            for (final card in cards)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: card,
+              ),
+          ],
+
+          // ---- Tier 3 — highlights. ------------------------------------
+          if (r.highlights.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            SectionHeader(
+                title: 'Highlights',
+                icon: Symbols.star_rounded,
+                accent: accent),
+            const SizedBox(height: AppSpacing.sm),
+            for (final i in r.highlights.take(4))
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: InsightCard(
+                  insight: i,
+                  onAction: InsightActions.of(context, i),
+                ),
+              ),
+          ],
+
+          const SizedBox(height: AppSpacing.lg),
+          const SafetyDisclaimerBar(),
+        ],
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------------- COVER
+
+  /// One figure, its denominator, and an optional delta. No ring.
+  ///
+  /// `displayLarge` is 32px, and stays 32px. That is this app's established hero
+  /// size — `water_hero_gauge` and `step_activity_ring` both use it — so making
+  /// the recap's cover bigger would be a change to the house scale, not a fix.
+  ///
+  /// What did change is the figures. The old cover applied `kTabular`, and
+  /// tabular figures give every digit the width of a `0`, so a large standalone
+  /// number reads loose. Proportional here; tabular only where numbers align in
+  /// columns, which is what the table view exists for.
+  Widget _cover(AppColorsExt ext, WeeklyRecap r) {
+    final tt = Theme.of(context).textTheme;
+    final on = ext.brand.onContainer;
+    final hero = r.hero;
+
+    final range = '${DateFormats.dayMonth.format(r.from).toUpperCase()} – '
+        '${DateFormats.dayMonth.format(r.to).toUpperCase()}';
+
+    return AppCard(
+      color: ext.brand.container,
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('THIS WEEK · $range',
+              style: tt.labelSmall
+                  ?.copyWith(color: on.withOpacity(0.7), letterSpacing: 0.6)),
+          if (hero.hasValue) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      switch (hero.kind) {
+                        RecapHeroKind.adherence => '${hero.value}%',
+                        RecapHeroKind.daysLogged => '${hero.value}',
+                      },
+                      maxLines: 1,
+                      style: tt.displayLarge?.copyWith(
+                          color: on, fontWeight: FontWeight.w800, height: 1.0),
+                    ),
+                  ),
+                ),
+                if (hero.deltaPct != null && hero.deltaPct != 0) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  _deltaChip(ext, hero.deltaPct!),
+                ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            // The denominator, always. "86%" alone is magic; "86% of doses
+            // taken, across 5 days with doses due" is checkable.
+            Text(
+              switch (hero.kind) {
+                RecapHeroKind.adherence =>
+                  'of doses taken, ${hero.denominator}',
+                RecapHeroKind.daysLogged => 'days logged ${hero.denominator}',
+              },
+              style: tt.bodyMedium?.copyWith(color: on.withOpacity(0.85)),
+            ),
+          ] else
+            // No value — and deliberately not an em dash. The old screen had
+            // four reachable em-dash sites; a dash is what a screen shows when
+            // it has given up.
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Nothing logged yet this week.',
+                      style:
+                          tt.headlineSmall?.copyWith(color: on, height: 1.3)),
+                  const SizedBox(height: AppSpacing.xs),
+                  // The reassurance belongs here rather than in a second card
+                  // saying the same thing differently. Somebody returning after
+                  // a gap wants to know their history survived.
+                  Text('Your history is still here — log anything and this '
+                      'week starts filling in.',
+                      style: tt.bodyMedium
+                          ?.copyWith(color: on.withOpacity(0.85))),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _deltaChip(AppColorsExt ext, int delta) {
+    final tt = Theme.of(context).textTheme;
+    final up = delta > 0;
+    // Adherence is the one hero here where "up" is unambiguously good.
+    final swatch = up ? ext.success : ext.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration:
+          BoxDecoration(color: swatch.container, borderRadius: AppRadius.brFull),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(up ? Symbols.trending_up_rounded : Symbols.trending_down_rounded,
+              size: 14, color: swatch.onContainer),
+          const SizedBox(width: 4),
+          Text('${up ? '+' : ''}$delta pts',
+              style: tt.labelSmall?.copyWith(
+                  color: swatch.onContainer, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyWeek(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Nothing logged this week',
+              style: tt.titleMedium?.copyWith(
+                  color: ext.textPrimary, fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppSpacing.sm),
+          // "You stopped" and "you are new" are different messages, and the old
+          // screen said the second to both. This one says the history is still
+          // there, which is what somebody returning after a gap wants to know.
+          Text(
+            'Your history is still here. Log anything and this week starts '
+            'filling in.',
+            style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------------- CARDS
 }

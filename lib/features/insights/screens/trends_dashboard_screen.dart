@@ -127,14 +127,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
             // No back arrow on the root tab — there would be nothing to pop.
             leading: widget.isRoot
                 ? null
-                : AppIconButton(
-                    icon: Symbols.arrow_back_rounded,
-                    filled: false,
-                    accent: ext.brand,
-                    onPressed: () {
-                      if (Navigator.canPop(context)) Navigator.pop(context);
-                    },
-                  ),
+                : AppHeader.backButton(context, accent: ext.brand),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -154,17 +147,26 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
               future: _future,
               builder: (context, snap) {
                 if (snap.hasData) _lastGood = snap.data;
-                if (snap.connectionState != ConnectionState.done) {
-                  // Stale-while-revalidate: only the genuinely-empty first
-                  // load gets skeletons. An error still surfaces below.
-                  return _lastGood != null
-                      ? _dashboard(ext, _lastGood!)
-                      : _loading(ext);
-                }
-                if (snap.hasError || !snap.hasData) {
-                  return _error(ext);
-                }
-                return _dashboard(ext, snap.data!);
+                final loading = snap.connectionState != ConnectionState.done;
+                return AsyncSection<TrendsBundle>(
+                  isLoading: loading,
+                  // Stale-while-revalidate, expressed as data rather than as a
+                  // branch: while a new range loads, the previous bundle IS the
+                  // data. An error still resolves to null and surfaces the
+                  // retry panel, which is the behaviour this screen already had
+                  // and the one Connected Devices was missing.
+                  data: snap.hasData
+                      ? snap.data
+                      : (loading ? _lastGood : null),
+                  error: snap.error,
+                  onRetry: _retry,
+                  // No onRefresh here: _dashboard owns its own RefreshIndicator
+                  // around the ListView, and nesting two of them gives the
+                  // gesture two competing owners.
+                  skeleton: const PageSkeleton.report(),
+                  errorTitle: "Couldn't load your trends",
+                  builder: (context, b) => _dashboard(ext, b),
+                );
               },
             ),
           ),
@@ -184,7 +186,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
 
     final cards = <Widget>[
       // MEDICINE ADHERENCE — ring vs a fixed 100% goal.
-      _goalCard(
+      TrendGoalCard.build(
         ext: ext,
         accent: ext.medicine,
         icon: Symbols.medication_rounded,
@@ -204,7 +206,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         onTap: () => _open(const NunitoMedicationDashboard()),
       ),
       // WATER — ring vs the stored daily goal (falls back to bars if unset).
-      _goalCard(
+      TrendGoalCard.build(
         ext: ext,
         accent: ext.water,
         icon: Symbols.water_drop_rounded,
@@ -226,7 +228,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         onTap: () => _open(const AquaWaterDashboard()),
       ),
       // STEPS — ring vs the stored/adaptive step goal.
-      _goalCard(
+      TrendGoalCard.build(
         ext: ext,
         accent: ext.steps,
         icon: Symbols.directions_walk_rounded,
@@ -245,7 +247,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         onTap: () => _open(const StepsDashboardScreen()),
       ),
       // SLEEP — ring vs the schedule's nightly target.
-      _goalCard(
+      TrendGoalCard.build(
         ext: ext,
         accent: ext.sleep,
         icon: Symbols.bedtime_rounded,
@@ -264,7 +266,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         onTap: () => _open(const SleepDashboardScreen()),
       ),
       // FOCUS — ring vs a sensible daily focus target.
-      _goalCard(
+      TrendGoalCard.build(
         ext: ext,
         accent: ext.focus,
         icon: Symbols.self_improvement_rounded,
@@ -469,128 +471,14 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
 
   // ------------------------------------------------------------------ STATES
 
-  Widget _loading(AppColorsExt ext) => ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
-            AppSpacing.gutter, AppSpacing.huge),
-        children: List.generate(
-          4,
-          (_) => Container(
-            height: 208,
-            margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-            decoration: BoxDecoration(
-                color: ext.surfaceVariant, borderRadius: AppRadius.brCard),
-          ),
-        ),
-      );
-
-  Widget _error(AppColorsExt ext) {
-    final tt = Theme.of(context).textTheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Symbols.error_rounded, size: 32, color: ext.textTertiary),
-            const SizedBox(height: AppSpacing.md),
-            Text("Couldn't load your trends",
-                textAlign: TextAlign.center,
-                style: tt.headlineSmall?.copyWith(color: ext.textPrimary)),
-            const SizedBox(height: 6),
-            Text('Your data is safe — please try again.',
-                textAlign: TextAlign.center,
-                style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              label: 'Try again',
-              variant: AppButtonVariant.ghost,
-              size: AppButtonSize.sm,
-              leadingIcon: Symbols.refresh_rounded,
-              accent: ext.brand,
-              onPressed: () =>
-                  setState(() => _future = TrendsDataService.build(_range)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  void _retry() =>
+      setState(() => _future = TrendsDataService.build(_range));
 
   // ------------------------------------------------------------------ HELPERS
-
-  /// Builds a goal-progress card: a [TrendRingCard] when the series has a usable
-  /// goal (so `goalProgress` resolves), otherwise the plain [TrendChartCard] bar
-  /// chart — which also carries the shared empty state when there's no data.
-  static Widget _goalCard({
-    required AppColorsExt ext,
-    required AccentSwatch accent,
-    required IconData icon,
-    required String title,
-    required TrendSeries series,
-    required int days,
-    required String featureName,
-    required String Function(double) formatValue,
-    required String Function(double gp) centerValue,
-    required String centerCaption,
-    required String Function(double gp) ringHeadline,
-    required String barHeadline,
-    double? miniMaxY,
-    double? barMaxY,
-    String? barGoalLabel,
-    VoidCallback? onTap,
-  }) {
-    final gp = series.goalProgress;
-    if (gp != null) {
-      return TrendRingCard(
-        accent: accent,
-        icon: icon,
-        title: title,
-        ringProgress: gp,
-        centerValue: centerValue(gp),
-        centerCaption: centerCaption,
-        headline: ringHeadline(gp),
-        trend: _goodTrend(series),
-        series: series,
-        miniMaxY: miniMaxY,
-        rangeDays: days,
-        featureName: featureName,
-        formatValue: formatValue,
-        onTap: onTap,
-      );
-    }
-    return TrendChartCard(
-      accent: accent,
-      icon: icon,
-      title: title,
-      headline: barHeadline,
-      trend: _goodTrend(series),
-      series: series,
-      kind: TrendChartKind.bar,
-      maxY: barMaxY,
-      goalLabel: barGoalLabel,
-      rangeDays: days,
-      featureName: featureName,
-      formatValue: formatValue,
-      onTap: onTap,
-    );
-  }
 
   /// Compact nightly-goal label ("8h" whole, "7.5h" otherwise).
   static String _goalHours(double h) =>
       h % 1 == 0 ? '${h.round()}h' : '${h.toStringAsFixed(1)}h';
-
-  /// Trend arrow only for features where "up = good", and only when the series
-  /// shows a real rise or fall (a flat/insufficient series shows no arrow).
-  static StatTrend? _goodTrend(TrendSeries s) {
-    switch (s.direction) {
-      case 1:
-        return StatTrend.up;
-      case -1:
-        return StatTrend.down;
-      default:
-        return null;
-    }
-  }
 
   static String _fmtInt(double v) {
     final s = v.round().toString();

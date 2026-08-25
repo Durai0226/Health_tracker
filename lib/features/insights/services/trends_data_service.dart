@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
+
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/vitals_storage_service.dart';
 import '../../water/services/water_service.dart';
@@ -246,7 +248,13 @@ class TrendsDataService {
       PeriodService.init(),
     ]);
 
-    final now = DateTime.now();
+    // clock.now(), not DateTime.now(). Two reasons, and the second is the one
+    // that found this: pinning the clock is how the window becomes testable at
+    // all, and the Weekly Recap composes this bundle while computing its own
+    // `from`/`to` for the heading. With one side reading the wall clock and the
+    // other a pinned clock they silently disagreed — a test asserting the
+    // bundle's first day matched the recap's `from` failed by exactly one day.
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final n = range.days;
     final start = today.subtract(Duration(days: n - 1));
