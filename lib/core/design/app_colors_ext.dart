@@ -11,6 +11,15 @@ enum FeatureAccent { brand, medicine, water, focus, reminders, period, steps, sl
 ///              (cyan & amber `base` fail contrast as marks — always use [strong]).
 /// - [container]   : subtle tinted background (chips, tracks, icon badges).
 /// - [onContainer] : text/icon on a [container].
+/// - [chart]  : the accent as a chart MARK — a bar, a line, a dot — on a card
+///              surface. A separate role because a mark and a button fill have
+///              different constraints, and measurement showed the app was using
+///              the wrong one: [mark] (`strong` on light, `base` on dark) put
+///              brand and water below the chroma floor on light and ALL SEVEN
+///              feature accents outside the lightness band on dark. See the
+///              CHART MARKS block in `app_palette.dart` for the validator
+///              output, and for the one thing this palette must never be used
+///              for.
 @immutable
 class AccentSwatch {
   final Color base;
@@ -18,6 +27,7 @@ class AccentSwatch {
   final Color strong;
   final Color container;
   final Color onContainer;
+  final Color chart;
 
   const AccentSwatch({
     required this.base,
@@ -25,6 +35,7 @@ class AccentSwatch {
     required this.strong,
     required this.container,
     required this.onContainer,
+    required this.chart,
   });
 
   static AccentSwatch lerp(AccentSwatch a, AccentSwatch b, double t) => AccentSwatch(
@@ -33,6 +44,7 @@ class AccentSwatch {
         strong: Color.lerp(a.strong, b.strong, t)!,
         container: Color.lerp(a.container, b.container, t)!,
         onContainer: Color.lerp(a.onContainer, b.onContainer, t)!,
+        chart: Color.lerp(a.chart, b.chart, t)!,
       );
 }
 
@@ -110,6 +122,19 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
   /// on the app/card surface. Light → darkened `strong`; dark → vivid `base`.
   Color mark(AccentSwatch s) => isDark ? s.base : s.strong;
 
+  /// The colour for a chart MARK — a bar, a line, a dot on a plot surface.
+  ///
+  /// Use this instead of [mark] for anything a chart actually draws, including
+  /// a legend key (a legend swatch IS a mark). [mark] stays correct for chrome:
+  /// an accent icon or a small accent label beside body text.
+  ///
+  /// The two differ because they are answering different questions, and the
+  /// answers were measured, not assumed. On dark, [mark] returns `base`, and all
+  /// seven feature `base` values sit at L 0.68–0.80 — outside the dark plot
+  /// band of 0.48–0.67. On light, [mark] returns `strong`, and brand (chroma
+  /// 0.084) and water (0.094) fall below the chroma floor, i.e. they read gray.
+  Color chartMark(AccentSwatch s) => s.chart;
+
   /// AA-safe background for a FILLED control (primary button). Pairs with [fillFg].
   Color fillBg(AccentSwatch s) => isDark ? s.base : s.strong;
 
@@ -136,6 +161,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.brandText,
       container: AppPalette.brandContainer,
       onContainer: AppPalette.onBrandContainer,
+      chart: AppPalette.brandChartL,
     ),
     medicine: AccentSwatch(
       base: AppPalette.medicine,
@@ -143,6 +169,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.medicineStrong,
       container: AppPalette.medicineContainer,
       onContainer: AppPalette.onMedicineContainer,
+      chart: AppPalette.medicineChartL,
     ),
     water: AccentSwatch(
       base: AppPalette.water,
@@ -150,6 +177,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.waterStrong,
       container: AppPalette.waterContainer,
       onContainer: AppPalette.onWaterContainer,
+      chart: AppPalette.waterChartL,
     ),
     focus: AccentSwatch(
       base: AppPalette.focus,
@@ -157,6 +185,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.focusStrong,
       container: AppPalette.focusContainer,
       onContainer: AppPalette.onFocusContainer,
+      chart: AppPalette.focusChartL,
     ),
     reminders: AccentSwatch(
       base: AppPalette.reminders,
@@ -164,6 +193,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.remindersStrong,
       container: AppPalette.remindersContainer,
       onContainer: AppPalette.onRemindersContainer,
+      chart: AppPalette.remindersChartL,
     ),
     period: AccentSwatch(
       base: AppPalette.period,
@@ -171,6 +201,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.periodStrong,
       container: AppPalette.periodContainer,
       onContainer: AppPalette.onPeriodContainer,
+      chart: AppPalette.periodChartL,
     ),
     steps: AccentSwatch(
       base: AppPalette.steps,
@@ -178,6 +209,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.stepsStrong,
       container: AppPalette.stepsContainer,
       onContainer: AppPalette.onStepsContainer,
+      chart: AppPalette.stepsChartL,
     ),
     sleep: AccentSwatch(
       base: AppPalette.sleep,
@@ -185,6 +217,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.sleepStrong,
       container: AppPalette.sleepContainer,
       onContainer: AppPalette.onSleepContainer,
+      chart: AppPalette.sleepChartL,
     ),
     success: AccentSwatch(
       base: AppPalette.success,
@@ -192,6 +225,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.successStrong,
       container: AppPalette.successContainer,
       onContainer: AppPalette.onSuccessContainer,
+      chart: AppPalette.successStrong,
     ),
     warning: AccentSwatch(
       base: AppPalette.warning,
@@ -199,6 +233,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.warningStrong,
       container: AppPalette.warningContainer,
       onContainer: AppPalette.onWarningContainer,
+      chart: AppPalette.warningStrong,
     ),
     error: AccentSwatch(
       base: AppPalette.error,
@@ -206,6 +241,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.errorStrong,
       container: AppPalette.errorContainer,
       onContainer: AppPalette.onErrorContainer,
+      chart: AppPalette.errorStrong,
     ),
     info: AccentSwatch(
       base: AppPalette.info,
@@ -213,6 +249,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.infoStrong,
       container: AppPalette.infoContainer,
       onContainer: AppPalette.onInfoContainer,
+      chart: AppPalette.infoStrong,
     ),
   );
 
@@ -236,6 +273,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.brandTextDark,
       container: AppPalette.brandContainerDark,
       onContainer: AppPalette.onBrandContainerDark,
+      chart: AppPalette.brandChartD,
     ),
     medicine: AccentSwatch(
       base: AppPalette.medicineDark,
@@ -243,6 +281,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.medicineStrongDark,
       container: AppPalette.medicineContainerDark,
       onContainer: AppPalette.onMedicineContainerDark,
+      chart: AppPalette.medicineChartD,
     ),
     water: AccentSwatch(
       base: AppPalette.waterDark,
@@ -250,6 +289,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.waterStrongDark,
       container: AppPalette.waterContainerDark,
       onContainer: AppPalette.onWaterContainerDark,
+      chart: AppPalette.waterChartD,
     ),
     focus: AccentSwatch(
       base: AppPalette.focusDark,
@@ -257,6 +297,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.focusStrongDark,
       container: AppPalette.focusContainerDark,
       onContainer: AppPalette.onFocusContainerDark,
+      chart: AppPalette.focusChartD,
     ),
     reminders: AccentSwatch(
       base: AppPalette.remindersDark,
@@ -264,6 +305,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.remindersStrongDark,
       container: AppPalette.remindersContainerDark,
       onContainer: AppPalette.onRemindersContainerDark,
+      chart: AppPalette.remindersChartD,
     ),
     period: AccentSwatch(
       base: AppPalette.periodDark,
@@ -271,6 +313,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.periodStrongDark,
       container: AppPalette.periodContainerDark,
       onContainer: AppPalette.onPeriodContainerDark,
+      chart: AppPalette.periodChartD,
     ),
     steps: AccentSwatch(
       base: AppPalette.stepsDark,
@@ -278,6 +321,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.stepsStrongDark,
       container: AppPalette.stepsContainerDark,
       onContainer: AppPalette.onStepsContainerDark,
+      chart: AppPalette.stepsChartD,
     ),
     sleep: AccentSwatch(
       base: AppPalette.sleepDark,
@@ -285,6 +329,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.sleepStrongDark,
       container: AppPalette.sleepContainerDark,
       onContainer: AppPalette.onSleepContainerDark,
+      chart: AppPalette.sleepChartD,
     ),
     success: AccentSwatch(
       base: AppPalette.successDark,
@@ -292,6 +337,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.successDark,
       container: AppPalette.onSuccessContainer,
       onContainer: AppPalette.successContainer,
+      chart: AppPalette.successDark,
     ),
     warning: AccentSwatch(
       base: AppPalette.warningDark,
@@ -299,6 +345,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.warningDark,
       container: AppPalette.remindersContainerDark,
       onContainer: AppPalette.onRemindersContainerDark,
+      chart: AppPalette.warningDark,
     ),
     error: AccentSwatch(
       base: AppPalette.errorDark,
@@ -306,6 +353,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.errorDark,
       container: AppPalette.onErrorContainer,
       onContainer: AppPalette.errorContainer,
+      chart: AppPalette.errorDark,
     ),
     info: AccentSwatch(
       base: AppPalette.infoDark,
@@ -313,6 +361,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
       strong: AppPalette.infoDark,
       container: AppPalette.onInfoContainer,
       onContainer: AppPalette.infoContainer,
+      chart: AppPalette.infoDark,
     ),
   );
 

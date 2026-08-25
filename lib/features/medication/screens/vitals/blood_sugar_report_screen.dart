@@ -169,7 +169,7 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
     final maxY = series.isEmpty ? 250.0 : (series.reduce((a, b) => a > b ? a : b) + 20).clamp(120, 500).toDouble();
     return VitalsTrendChart(
       series: [
-        VitalsSeries(values: series, color: ext.mark(accent), label: 'Blood sugar'),
+        VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Blood sugar'),
       ],
       minY: minY,
       maxY: maxY,

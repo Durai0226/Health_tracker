@@ -63,7 +63,22 @@ class StepActivityRing extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             ring,
-            Column(
+            // The centre stack has to fit INSIDE the ring's fixed box, and at
+            // 2.0x Dynamic Type it does not: icon + 32px figure + caption +
+            // pill overflowed the 236pt square vertically. The responsive sweep
+            // could not even report it as an overflow — it surfaced as an
+            // uncaught framework exception, which is why it went unseen while
+            // that sweep ran against an empty database and this ring showed no
+            // numbers at all.
+            //
+            // scaleDown never enlarges, so at ordinary text sizes this renders
+            // exactly as before; only the cases that would clip are shrunk. The
+            // horizontal padding keeps it off the ring stroke.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Symbols.directions_walk_rounded,
@@ -117,6 +132,8 @@ class StepActivityRing extends StatelessWidget {
                   ),
                 ),
               ],
+                ),
+              ),
             ),
           ],
         ),

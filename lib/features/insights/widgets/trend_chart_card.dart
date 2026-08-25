@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/widgets/app/app_widgets.dart';
 import '../services/trends_data_service.dart';
+import 'trend_table_view.dart';
 
 /// Whether a [TrendChartCard] renders its series as daily bars or as lines.
 enum TrendChartKind { bar, line }
@@ -96,6 +97,22 @@ class TrendChartCard extends StatelessWidget {
 
   static String _defaultFormat(double v) => v.toStringAsFixed(0);
 
+  /// Table column headings, derived rather than passed.
+  ///
+  /// [seriesLabels] already names the one genuine two-series case (BP: "Sys" /
+  /// "Dia"), so the table needs no new parameter and no call site changes. The
+  /// cells carry their own unit because every caller's [formatValue] renders
+  /// one, which is why the heading is a measure name and not a unit.
+  String get _tableValueLabel =>
+      (seriesLabels != null && seriesLabels!.isNotEmpty)
+          ? seriesLabels![0]
+          : title;
+
+  String? get _tableSecondaryLabel =>
+      (seriesLabels != null && seriesLabels!.length >= 2)
+          ? seriesLabels![1]
+          : null;
+
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
@@ -112,11 +129,39 @@ class TrendChartCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           SizedBox(
             height: 128,
-            child: hasData ? _chart(context, ext) : _empty(ext, tt),
+            // The chart is a CustomPaint: to a screen reader it is a blank box,
+            // and its touch tooltips would leak a scatter of unlabelled numbers
+            // if fl_chart ever emits them. Replace the subtree's semantics with
+            // one spoken summary, and let the table below carry every value.
+            child: hasData
+                ? Semantics(
+                    container: true,
+                    label: trendSeriesSummary(
+                      title: title,
+                      series: series,
+                      rangeDays: rangeDays,
+                      formatValue: formatValue,
+                      valueLabel: _tableValueLabel,
+                      secondaryLabel: _tableSecondaryLabel,
+                    ),
+                    child: ExcludeSemantics(child: _chart(context, ext)),
+                  )
+                : _empty(ext, tt),
           ),
           if (hasData && seriesLabels != null && seriesLabels!.length >= 2) ...[
             const SizedBox(height: AppSpacing.sm),
             _legend(ext, tt),
+          ],
+          if (hasData) ...[
+            const SizedBox(height: AppSpacing.xs),
+            TrendTableButton(
+              title: title,
+              accent: accent,
+              series: series,
+              valueLabel: _tableValueLabel,
+              secondaryLabel: _tableSecondaryLabel,
+              formatValue: formatValue,
+            ),
           ],
         ],
       ),
@@ -155,13 +200,28 @@ class TrendChartCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        Text(headline,
-            maxLines: 1,
-            style: tt.headlineSmall?.copyWith(
-                color: ext.textPrimary,
-                fontWeight: FontWeight.w800,
-                fontFeatures: _tabular,
-                letterSpacing: -0.3)),
+        // Flexible + scaleDown, not ellipsis. This Text had neither, so at 2.0x
+        // Dynamic Type on a 320pt screen the header overflowed by 93px — a bug
+        // that the screen-level responsive harness cannot see, because it
+        // renders Trends against an empty database where every headline is an
+        // em dash. Measured, then fixed, then pinned by
+        // trend_table_view_test.dart's card-level sweep.
+        //
+        // A headline is a NUMBER. "2.1 L a…" is worse than a smaller "2.1 L
+        // avg", which is why this shrinks rather than truncating.
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(headline,
+                maxLines: 1,
+                style: tt.headlineSmall?.copyWith(
+                    color: ext.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: _tabular,
+                    letterSpacing: -0.3)),
+          ),
+        ),
         if (trend != null) ...[
           const SizedBox(width: 4),
           Icon(_trendIcon(trend!), size: 18, color: _trendColor(ext, trend!)),
@@ -171,7 +231,7 @@ class TrendChartCard extends StatelessWidget {
   }
 
   Widget _legend(AppColorsExt ext, TextTheme tt) {
-    final mark = ext.mark(accent);
+    final mark = ext.chartMark(accent);
     Widget item(Color c, String label) => Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -216,7 +276,7 @@ class TrendChartCard extends StatelessWidget {
       return _TrendLineChart(
         series: series,
         ext: ext,
-        primaryColor: ext.mark(accent),
+        primaryColor: ext.chartMark(accent),
         seriesLabels: seriesLabels,
         formatValue: formatValue,
         rangeDays: rangeDays,
@@ -227,7 +287,7 @@ class TrendChartCard extends StatelessWidget {
     return _TrendBarChart(
       series: series,
       ext: ext,
-      barColor: ext.mark(accent),
+      barColor: ext.chartMark(accent),
       maxY: maxY,
       formatValue: formatValue,
       rangeDays: rangeDays,
@@ -647,6 +707,9 @@ class TrendRingCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
+                    // mark(), not chartMark(): this is a title icon sitting
+                    // beside text, i.e. chrome. chartMark is for what the plot
+                    // draws.
                     Icon(icon, size: 16, color: ext.mark(accent)),
                     const SizedBox(width: 6),
                     Expanded(
@@ -678,14 +741,25 @@ class TrendRingCard extends StatelessWidget {
                 SizedBox(
                   height: 44,
                   child: series.hasData
-                      ? _MiniBarChart(
-                          series: series,
-                          ext: ext,
-                          barColor: ext.mark(accent),
-                          maxY: miniMaxY,
-                          formatValue: formatValue,
-                          rangeDays: rangeDays,
-                          animate: animate,
+                      ? Semantics(
+                          container: true,
+                          label: trendSeriesSummary(
+                            title: title,
+                            series: series,
+                            rangeDays: rangeDays,
+                            formatValue: formatValue,
+                          ),
+                          child: ExcludeSemantics(
+                            child: _MiniBarChart(
+                              series: series,
+                              ext: ext,
+                              barColor: ext.chartMark(accent),
+                              maxY: miniMaxY,
+                              formatValue: formatValue,
+                              rangeDays: rangeDays,
+                              animate: animate,
+                            ),
+                          ),
                         )
                       : Align(
                           alignment: Alignment.centerLeft,
@@ -697,6 +771,18 @@ class TrendRingCard extends StatelessWidget {
                           ),
                         ),
                 ),
+                // The ring's centre figure is an aggregate; the mini bars are
+                // 44pt tall with no axis at all. So on this card type the table
+                // is not a fallback for a contrast shortfall — it is the only
+                // place a specific day's number can be read.
+                if (series.hasData)
+                  TrendTableButton(
+                    title: title,
+                    accent: accent,
+                    series: series,
+                    valueLabel: title,
+                    formatValue: formatValue,
+                  ),
               ],
             ),
           ),
@@ -866,13 +952,20 @@ class TrendTimeInRangeCard extends StatelessWidget {
                         color: ext.textPrimary, fontWeight: FontWeight.w700)),
               ),
               const SizedBox(width: 10),
-              Text(
-                hasData ? '${tir.inRangePct.round()}% in range' : '—',
-                maxLines: 1,
-                style: tt.titleMedium?.copyWith(
-                    color: hasData ? ext.mark(ext.success) : ext.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontFeatures: _tabular),
+              // Same unconstrained-headline shape as TrendChartCard._header.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    hasData ? '${tir.inRangePct.round()}% in range' : '—',
+                    maxLines: 1,
+                    style: tt.titleMedium?.copyWith(
+                        color: hasData ? ext.mark(ext.success) : ext.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: _tabular),
+                  ),
+                ),
               ),
             ],
           ),
@@ -894,28 +987,51 @@ class TrendTimeInRangeCard extends StatelessWidget {
               ),
             )
           else ...[
-            _segmentedBar(ext, tt),
+            _segmentedBar(context, ext, tt),
             const SizedBox(height: AppSpacing.md),
             _breakdown(ext, tt),
             const SizedBox(height: AppSpacing.md),
             SizedBox(
               height: 120,
-              child: _TrendLineChart(
-                series: series,
-                ext: ext,
-                primaryColor: ext.mark(accent),
-                seriesLabels: null,
-                formatValue: formatValue,
-                rangeDays: rangeDays,
-                animate: animate,
-                bands: [
-                  TrendBand(
-                    kGlucoseLowThreshold.toDouble(),
-                    kGlucoseHighThreshold.toDouble(),
-                    ext.mark(ext.success).withOpacity(ext.isDark ? 0.16 : 0.12),
+              child: Semantics(
+                container: true,
+                label: trendSeriesSummary(
+                  title: title,
+                  series: series,
+                  rangeDays: rangeDays,
+                  formatValue: formatValue,
+                ),
+                child: ExcludeSemantics(
+                  child: _TrendLineChart(
+                    series: series,
+                    ext: ext,
+                    primaryColor: ext.chartMark(accent),
+                    seriesLabels: null,
+                    formatValue: formatValue,
+                    rangeDays: rangeDays,
+                    animate: animate,
+                    bands: [
+                      TrendBand(
+                        kGlucoseLowThreshold.toDouble(),
+                        kGlucoseHighThreshold.toDouble(),
+                        ext
+                            .mark(ext.success)
+                            .withOpacity(ext.isDark ? 0.16 : 0.12),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
+            ),
+            // The time-in-range split above is already spoken text, so this
+            // table is specifically for the daily line underneath it.
+            const SizedBox(height: AppSpacing.xs),
+            TrendTableButton(
+              title: title,
+              accent: accent,
+              series: series,
+              valueLabel: title,
+              formatValue: formatValue,
             ),
           ],
         ],
@@ -924,8 +1040,20 @@ class TrendTimeInRangeCard extends StatelessWidget {
   }
 
   // Stacked segmented bar — proportional fills, 2px surface gaps between them,
-  // % labels inside segments wide enough to read.
-  Widget _segmentedBar(AppColorsExt ext, TextTheme tt) {
+  // and a % label inside a segment ONLY where the rendered text actually fits.
+  //
+  // The gate used to be `pct >= 12`: a share-of-total standing in for a width.
+  // It is blind to text scale and to how wide the card is, and measurement
+  // showed what that costs — at 320pt a 13% segment is 36.9pt wide, the label
+  // needs 33.9pt at 1.0x (3pt of total breathing room), exactly 36.9pt at 1.3x,
+  // and is CLIPPED at 2.0x. A cropped "13%" is worse than no label, and it
+  // throws nothing, so no overflow harness can see it.
+  //
+  // So the label is measured against its real slot. When it doesn't fit it is
+  // dropped, not shrunk and not clipped: nothing is gated by that, because
+  // [_breakdown] below names every segment's percentage as ordinary text and
+  // the table twin carries the daily values.
+  Widget _segmentedBar(BuildContext context, AppColorsExt ext, TextTheme tt) {
     final segments = <(int, Color, Color, double)>[
       if (tir.low > 0)
         (tir.low, ext.fillBg(ext.warning), ext.fillFg(ext.warning), tir.lowPct),
@@ -939,29 +1067,50 @@ class TrendTimeInRangeCard extends StatelessWidget {
       if (tir.high > 0)
         (tir.high, ext.fillBg(ext.error), ext.fillFg(ext.error), tir.highPct),
     ];
-    final children = <Widget>[];
-    for (var i = 0; i < segments.length; i++) {
-      final (count, bg, fg, pct) = segments[i];
-      if (i > 0) children.add(const SizedBox(width: 2)); // surface gap
-      children.add(Expanded(
-        flex: count,
-        child: Container(
-          height: 18,
-          alignment: Alignment.center,
-          decoration:
-              BoxDecoration(color: bg, borderRadius: AppRadius.brFull),
-          child: pct >= 12
-              ? Text('${pct.round()}%',
-                  maxLines: 1,
-                  style: tt.labelSmall?.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: _tabular))
-              : null,
-        ),
-      ));
-    }
-    return Row(children: children);
+    final total = segments.fold<int>(0, (a, s) => a + s.$1);
+    final scaler = MediaQuery.textScalerOf(context);
+    final labelStyle = tt.labelSmall?.copyWith(
+        fontWeight: FontWeight.w700, fontFeatures: _tabular);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      // Gaps are fixed; the fills share what's left in proportion to counts.
+      final gaps = 2.0 * (segments.length - 1);
+      final fillWidth = (constraints.maxWidth - gaps).clamp(0.0, double.infinity);
+
+      final children = <Widget>[];
+      for (var i = 0; i < segments.length; i++) {
+        final (count, bg, fg, pct) = segments[i];
+        if (i > 0) children.add(const SizedBox(width: 2)); // surface gap
+
+        final text = '${pct.round()}%';
+        final slot = total == 0 ? 0.0 : fillWidth * count / total;
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: labelStyle),
+          textDirection: TextDirection.ltr,
+          textScaler: scaler,
+          maxLines: 1,
+        )..layout();
+        // 5pt of clear space each side, or the label sits on the rounded end.
+        final fits = painter.width + 10 <= slot;
+
+        children.add(Expanded(
+          flex: count,
+          child: Container(
+            height: 18,
+            alignment: Alignment.center,
+            decoration:
+                BoxDecoration(color: bg, borderRadius: AppRadius.brFull),
+            child: fits
+                ? Text(text,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: labelStyle?.copyWith(color: fg))
+                : null,
+          ),
+        ));
+      }
+      return Row(children: children);
+    });
   }
 
   // Labelled breakdown so every segment's % is named (never colour-alone).
@@ -977,15 +1126,37 @@ class TrendTimeInRangeCard extends StatelessWidget {
                     BoxDecoration(color: c, borderRadius: BorderRadius.circular(3)),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(label,
-                  style: tt.bodySmall?.copyWith(
-                      color: ext.textPrimary, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 6),
-              Text(range,
-                  style: tt.labelSmall?.copyWith(
-                      color: ext.textTertiary, fontFeatures: _tabular)),
-              const Spacer(),
+              // The name and the range were two bare Texts either side of a
+              // Spacer, so at 2.0x Dynamic Type on a 320pt screen this row
+              // overflowed by 136px. Expanded + Flexible lets the pair give way
+              // while the percentage on the right stays pinned and whole — the
+              // number is the point of the row.
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.bodySmall?.copyWith(
+                              color: ext.textPrimary,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(range,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.labelSmall?.copyWith(
+                              color: ext.textTertiary,
+                              fontFeatures: _tabular)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               Text('${pct.round()}%',
+                  maxLines: 1,
                   style: tt.bodySmall?.copyWith(
                       color: ext.textSecondary,
                       fontWeight: FontWeight.w700,
@@ -1052,4 +1223,90 @@ int _pow10(int e) {
     r *= 10;
   }
   return r;
+}
+
+/// Chooses between a ring and a bar for a goal-backed series — and owns the
+/// "up = good" arrow rule.
+///
+/// Extracted from `trends_dashboard_screen.dart`, where it was a private static.
+/// The Weekly Recap needs the same choice for water, steps, sleep and adherence,
+/// and a near-copy on the second screen is how two surfaces start disagreeing
+/// about when a ring is honest.
+abstract final class TrendGoalCard {
+  /// A [TrendRingCard] when the series has a usable goal — so `goalProgress`
+  /// resolves against a REAL limit — otherwise the plain [TrendChartCard] bar,
+  /// which also carries the shared empty state.
+  ///
+  /// This is the line between an honest ring and a fabricated one. A ring
+  /// implies a denominator; if the series has no goal there isn't one, and a
+  /// bar is the truthful form.
+  /// Builds a goal-progress card: a [TrendRingCard] when the series has a usable
+  /// goal (so `goalProgress` resolves), otherwise the plain [TrendChartCard] bar
+  /// chart — which also carries the shared empty state when there's no data.
+  static Widget build({
+    required AppColorsExt ext,
+    required AccentSwatch accent,
+    required IconData icon,
+    required String title,
+    required TrendSeries series,
+    required int days,
+    required String featureName,
+    required String Function(double) formatValue,
+    required String Function(double gp) centerValue,
+    required String centerCaption,
+    required String Function(double gp) ringHeadline,
+    required String barHeadline,
+    double? miniMaxY,
+    double? barMaxY,
+    String? barGoalLabel,
+    VoidCallback? onTap,
+  }) {
+    final gp = series.goalProgress;
+    if (gp != null) {
+      return TrendRingCard(
+        accent: accent,
+        icon: icon,
+        title: title,
+        ringProgress: gp,
+        centerValue: centerValue(gp),
+        centerCaption: centerCaption,
+        headline: ringHeadline(gp),
+        trend: goodTrend(series),
+        series: series,
+        miniMaxY: miniMaxY,
+        rangeDays: days,
+        featureName: featureName,
+        formatValue: formatValue,
+        onTap: onTap,
+      );
+    }
+    return TrendChartCard(
+      accent: accent,
+      icon: icon,
+      title: title,
+      headline: barHeadline,
+      trend: goodTrend(series),
+      series: series,
+      kind: TrendChartKind.bar,
+      maxY: barMaxY,
+      goalLabel: barGoalLabel,
+      rangeDays: days,
+      featureName: featureName,
+      formatValue: formatValue,
+      onTap: onTap,
+    );
+  }
+
+  /// Trend arrow only for features where "up = good", and only when the series
+  /// shows a real rise or fall (a flat/insufficient series shows no arrow).
+  static StatTrend? goodTrend(TrendSeries s) {
+    switch (s.direction) {
+      case 1:
+        return StatTrend.up;
+      case -1:
+        return StatTrend.down;
+      default:
+        return null;
+    }
+  }
 }

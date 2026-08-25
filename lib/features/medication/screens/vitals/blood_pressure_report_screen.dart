@@ -172,7 +172,7 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
     final maxY = all.isEmpty ? 200.0 : (all.reduce((a, b) => a > b ? a : b) + 10).clamp(60, 320).toDouble();
     return VitalsTrendChart(
       series: [
-        VitalsSeries(values: sys, color: ext.mark(accent), label: 'Systolic'),
+        VitalsSeries(values: sys, color: ext.chartMark(accent), label: 'Systolic'),
         VitalsSeries(values: dia, color: ext.textSecondary, label: 'Diastolic'),
       ],
       minY: minY,

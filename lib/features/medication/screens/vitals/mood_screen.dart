@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/relative_time.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/utils/date_formats.dart';
@@ -151,7 +152,7 @@ class _MoodScreenState extends State<MoodScreen> {
             categoryIcon: VitalsColors.moodIcon(latest.moodIndex),
             categoryLabel: latest.label,
             meaning: _meaning(latest.moodIndex),
-            subtitle: 'Last logged · ${_timeAgo(latest.takenAt)}'
+            subtitle: 'Last logged · ${RelativeTime.since(latest.takenAt)}'
                 '${latest.note != null ? ' · ${latest.note}' : ''}',
           ),
           const SizedBox(height: AppSpacing.md),
@@ -187,7 +188,7 @@ class _MoodScreenState extends State<MoodScreen> {
           AppCard(
             child: VitalsTrendChart(
               series: [
-                VitalsSeries(values: series, color: ext.mark(accent), label: 'Mood'),
+                VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Mood'),
               ],
               minY: 0,
               maxY: (moodRatingLabels.length - 1).toDouble(),
@@ -268,14 +269,6 @@ class _MoodScreenState extends State<MoodScreen> {
     return meanings[index.clamp(0, meanings.length - 1)];
   }
 
-  static String _timeAgo(DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return 'just now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-    if (d.inHours < 24) return '${d.inHours}h ago';
-    if (d.inDays < 7) return '${d.inDays}d ago';
-    return DateFormats.dayMonth.format(t);
-  }
 }
 
 // ---------------------------------------------------------------------------

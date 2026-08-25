@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/relative_time.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/utils/date_formats.dart';
@@ -239,7 +240,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
             categoryLabel:
                 '${VitalsAnalyzer.glucoseLabel(cls)} · ${VitalsAnalyzer.glucoseContextLabel(latest.context)}',
             meaning: VitalsAnalyzer.glucoseMeaning(cls),
-            subtitle: 'Last reading · ${_timeAgo(latest.takenAt)}',
+            subtitle: 'Last reading · ${RelativeTime.since(latest.takenAt)}',
           ),
           const SizedBox(height: AppSpacing.md),
           StatTileRow(tiles: [
@@ -280,7 +281,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
           AppCard(
             child: VitalsTrendChart(
               series: [
-                VitalsSeries(values: series, color: ext.mark(accent), label: 'Blood sugar'),
+                VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Blood sugar'),
               ],
               minY: minY,
               maxY: maxY,
@@ -370,14 +371,6 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     );
   }
 
-  static String _timeAgo(DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return 'just now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-    if (d.inHours < 24) return '${d.inHours}h ago';
-    if (d.inDays < 7) return '${d.inDays}d ago';
-    return DateFormats.dayMonth.format(t);
-  }
 }
 
 // ---------------------------------------------------------------------------

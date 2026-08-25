@@ -106,6 +106,72 @@ class AppPalette {
   static const onSleepContainer = Color(0xFF4338CA);
   static const onSleepContainerDark = Color(0xFFDDD6FE);
 
+  // ─────────────────────────── CHART MARKS ────────────────────────────
+  //
+  // The colour a chart MARK is drawn in — a bar, a line, a dot. Deliberately
+  // separate from the UI accents above, because a mark on a plot surface and a
+  // button fill have different jobs and different constraints.
+  //
+  // Every value below was produced by running the dataviz validator, one slot at
+  // a time, against the real card surfaces (#FFFFFF light, #171B22 dark), and
+  // snapping to the nearest passing step in the same hue family. What the
+  // charts used BEFORE this was `AppColorsExt.mark()`, i.e. `strong` on light
+  // and `base` on dark — and measured, that set fails:
+  //
+  //   light  brand   #00695C  chroma 0.084  -> reads GRAY as a mark
+  //   light  water   #0E7490  chroma 0.094  -> reads GRAY as a mark
+  //   dark   ALL SEVEN sit at L 0.68–0.80, outside the dark band 0.48–0.67
+  //   dark   brand   #4DB6AC  chroma 0.098  -> reads GRAY as a mark
+  //
+  // That dark row is the expected outcome of an automatic light->dark accent
+  // swap: those values are tuned for chrome on a dark surface, not for marks on
+  // a dark PLOT surface. Hence a set authored and validated rather than swapped.
+  //
+  // All 16 now pass lightness band, chroma floor and >=3:1 contrast against
+  // their own surface. Re-check with, from the dataviz skill directory:
+  //
+  //   node scripts/validate_palette.js "<hex>" --mode light --surface "#FFFFFF"
+  //   node scripts/validate_palette.js "<hex>" --mode dark  --surface "#171B22"
+  //
+  // ── What these checks deliberately do NOT gate, and why ──
+  //
+  // The validator's categorical pair checks (adjacent and all-pairs CVD
+  // separation, and the normal-vision floor) are about telling series apart
+  // WITHIN one plot. This app never does that: every chart card is single-series
+  // with its own icon and title, and the one two-series card (blood pressure)
+  // draws both lines in the SAME hue at different opacity — one hue, two shades,
+  // not categorical. Colour is never the identity channel here.
+  //
+  // Measured, for the record, so nobody has to guess later:
+  //   light adjacent  steps #15803D <-> period #BE185D   ΔE 3.0 (deutan)
+  //   dark  adjacent  steps #16A34A <-> period #DB2777   ΔE 6.1 (deutan)
+  //   both  all-pairs focus <-> medicine                 ΔE 0.8 (protan)
+  //   both  all-pairs sleep <-> medicine                 ΔE 4.4 (normal vision)
+  //
+  // The indigo/violet collisions are not fixable here: medicine, sleep and focus
+  // being indigo-violet is an app-wide identity decision, not a chart choice.
+  //
+  // >>> So: if a future chart EVER puts two or more features in ONE plot, this
+  // >>> palette is not valid for it. Medicine, sleep and focus are mutually
+  // >>> indistinguishable — to a protanope AND to full colour vision. Use small
+  // >>> multiples, or fold to one series plus context in gray.
+  static const brandChartL = Color(0xFF00897B);
+  static const brandChartD = Color(0xFF26A69A);
+  static const medicineChartL = Color(0xFF4F46E5);
+  static const medicineChartD = Color(0xFF6366F1);
+  static const waterChartL = Color(0xFF0891B2);
+  static const waterChartD = Color(0xFF0EA5C9);
+  static const focusChartL = Color(0xFF7C3AED);
+  static const focusChartD = Color(0xFF8B5CF6);
+  static const periodChartL = Color(0xFFBE185D);
+  static const periodChartD = Color(0xFFDB2777);
+  static const stepsChartL = Color(0xFF15803D);
+  static const stepsChartD = Color(0xFF16A34A);
+  static const sleepChartL = Color(0xFF5B4BD6);
+  static const sleepChartD = Color(0xFF7C6FF0);
+  static const remindersChartL = Color(0xFFB45309);
+  static const remindersChartD = Color(0xFFD97706);
+
   // ── Surfaces ──
   static const backgroundL = Color(0xFFF5F6F8);
   static const backgroundD = Color(0xFF0F1319);

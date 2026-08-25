@@ -5,6 +5,28 @@ import '../../health/vitals_analyzer.dart';
 
 /// Colors for the vitals trackers, kept self-contained so we don't have to
 /// thread two new accents through the core [AppColorsExt] theme extension.
+///
+/// Every `chart:` value here was validated per-slot against its own card
+/// surface (#FFFFFF light, #171B22 dark) for OKLab lightness band, chroma floor
+/// and >=3:1 contrast — see `test/design/chart_palette_test.dart`. What these
+/// screens drew BEFORE was `AppColorsExt.mark()`, and measured, that failed for
+/// four of the five in dark and two of the five in light:
+///
+///   light  weight    #0F766E  chroma 0.086  -> reads GRAY as a mark
+///   light  caffeine  #6F452E  chroma 0.068  -> reads GRAY as a mark
+///   dark   bp        #FB7185  L 0.719  (band 0.48-0.67)
+///   dark   glucose   #A78BFA  L 0.709
+///   dark   weight    #2DD4BF  L 0.785
+///   dark   caffeine  #D7A487  L 0.759, chroma 0.073
+///   dark   mood      #FBBF24  L 0.837
+///
+/// **Caffeine is the honest hard case.** Brown IS a low-chroma orange, so no
+/// step of the original coffee-brown family clears the 0.1 chroma floor — the
+/// best was #B5764F at 0.096. Saturating far enough to pass turns it into the
+/// amber that mood already owns. The resolution is a sienna (#A0522D light,
+/// #C86A3A dark): it clears the floor in both modes and still reads as coffee
+/// rather than as orange. They sit on different screens, so the residual warmth
+/// they share costs nothing.
 ///  - Two distinct tracker identities (BP = rose/cardio, Sugar = violet/glucose).
 ///  - A 5-step classification band scale (green→dark-red), theme-aware and
 ///    always paired with an icon + label in the UI (colorblind-safe).
@@ -18,13 +40,15 @@ class VitalsColors {
           on: Color(0xFF4C0519),
           strong: Color(0xFFFDA4AF),
           container: Color(0xFF3F1220),
-          onContainer: Color(0xFFFECDD3))
+          onContainer: Color(0xFFFECDD3),
+          chart: Color(0xFFE11D48))
       : const AccentSwatch(
           base: Color(0xFFE11D48),
           on: Colors.white,
           strong: Color(0xFFBE123C),
           container: Color(0xFFFFE4E6),
-          onContainer: Color(0xFF881337));
+          onContainer: Color(0xFF881337),
+          chart: Color(0xFFBE123C));
 
   /// Blood-sugar "glucose" accent (violet).
   static AccentSwatch glucoseAccent(bool isDark) => isDark
@@ -33,13 +57,15 @@ class VitalsColors {
           on: Color(0xFF2E1065),
           strong: Color(0xFFC4B5FD),
           container: Color(0xFF2A1D4D),
-          onContainer: Color(0xFFDDD6FE))
+          onContainer: Color(0xFFDDD6FE),
+          chart: Color(0xFF7C3AED))
       : const AccentSwatch(
           base: Color(0xFF7C3AED),
           on: Colors.white,
           strong: Color(0xFF6D28D9),
           container: Color(0xFFEDE9FE),
-          onContainer: Color(0xFF4C1D95));
+          onContainer: Color(0xFF4C1D95),
+          chart: Color(0xFF6D28D9));
 
   /// Weight "body measurement" accent (teal).
   static AccentSwatch weightAccent(bool isDark) => isDark
@@ -48,13 +74,15 @@ class VitalsColors {
           on: Color(0xFF042F2E),
           strong: Color(0xFF5EEAD4),
           container: Color(0xFF0F3B38),
-          onContainer: Color(0xFF99F6E4))
+          onContainer: Color(0xFF99F6E4),
+          chart: Color(0xFF0E9C8E))
       : const AccentSwatch(
           base: Color(0xFF0D9488),
           on: Colors.white,
           strong: Color(0xFF0F766E),
           container: Color(0xFFCCFBF1),
-          onContainer: Color(0xFF134E4A));
+          onContainer: Color(0xFF134E4A),
+          chart: Color(0xFF0D9488));
 
   /// Caffeine "coffee" accent (warm brown). Replaces the raw
   /// `Colors.brown.shade*` the caffeine screen used to hardcode, so it
@@ -66,13 +94,15 @@ class VitalsColors {
           on: Color(0xFF3E2416),
           strong: Color(0xFFE8C0A8),
           container: Color(0xFF3A2A20),
-          onContainer: Color(0xFFF0D6C4))
+          onContainer: Color(0xFFF0D6C4),
+          chart: Color(0xFFC86A3A))
       : const AccentSwatch(
           base: Color(0xFF8D5B3F),
           on: Colors.white,
           strong: Color(0xFF6F452E),
           container: Color(0xFFF5E4D8),
-          onContainer: Color(0xFF4A2C1A));
+          onContainer: Color(0xFF4A2C1A),
+          chart: Color(0xFFA0522D));
 
   /// Mood "wellbeing" accent (amber).
   static AccentSwatch moodAccent(bool isDark) => isDark
@@ -81,13 +111,15 @@ class VitalsColors {
           on: Color(0xFF451A03),
           strong: Color(0xFFFCD34D),
           container: Color(0xFF3F2D0B),
-          onContainer: Color(0xFFFDE68A))
+          onContainer: Color(0xFFFDE68A),
+          chart: Color(0xFFD97706))
       : const AccentSwatch(
           base: Color(0xFFD97706),
           on: Colors.white,
           strong: Color(0xFFB45309),
           container: Color(0xFFFEF3C7),
-          onContainer: Color(0xFF78350F));
+          onContainer: Color(0xFF78350F),
+          chart: Color(0xFFB45309));
 
   // 5-step band scale (vivid mark color). Dark variants are lighter for contrast.
   static const _green = [Color(0xFF16A34A), Color(0xFF4ADE80)];

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../../../core/utils/relative_time.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/utils/date_formats.dart';
@@ -252,7 +253,7 @@ class _WeightScreenState extends State<WeightScreen> {
             deltaLabel: (deltaKg == null || deltaKg == 0)
                 ? null
                 : '${deltaKg > 0 ? '+' : '-'}${_display(deltaKg.abs())} $_unitLabel vs last',
-            subtitle: 'Last logged · ${_timeAgo(latest.takenAt)}',
+            subtitle: 'Last logged · ${RelativeTime.since(latest.takenAt)}',
           ),
           const SizedBox(height: AppSpacing.md),
           StatTileRow(tiles: [
@@ -281,7 +282,7 @@ class _WeightScreenState extends State<WeightScreen> {
           AppCard(
             child: VitalsTrendChart(
               series: [
-                VitalsSeries(values: series, color: ext.mark(accent), label: 'Weight'),
+                VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Weight'),
               ],
               minY: minY,
               maxY: maxY,
@@ -349,14 +350,6 @@ class _WeightScreenState extends State<WeightScreen> {
     return list.reduce((a, b) => a + b) / list.length;
   }
 
-  static String _timeAgo(DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return 'just now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-    if (d.inHours < 24) return '${d.inHours}h ago';
-    if (d.inDays < 7) return '${d.inDays}d ago';
-    return DateFormats.dayMonth.format(t);
-  }
 }
 
 // ---------------------------------------------------------------------------
