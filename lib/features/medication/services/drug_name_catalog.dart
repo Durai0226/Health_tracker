@@ -63,9 +63,23 @@ class DrugNameCatalog {
     return null;
   }
 
-  /// Resolve a display/brand name to its generic (active ingredient) via an
-  /// exact, case-insensitive match, e.g. "Dolo 650" → "Paracetamol". Returns
-  /// null when unknown. Used to bridge a brand to a drug monograph.
+  /// Resolve a display/brand name to its generic (active ingredient), e.g.
+  /// "Dolo 650" → "Paracetamol". Returns null when unknown. Used to bridge a
+  /// brand to a drug monograph.
+  ///
+  /// Tries an exact case-insensitive match first, then falls back to the
+  /// longest catalog name that the input *starts with*.
+  ///
+  /// The fallback matters because people type what is printed on the box, and
+  /// what is printed on the box carries a strength: the catalog has "Lithosun
+  /// SR" but the user's medicine is called "Lithosun SR 400". Exact matching
+  /// alone returned null for that, which meant every downstream consumer —
+  /// interaction checks, the monograph on the detail screen, and now the
+  /// hydration rules — silently saw an unknown drug. Cataloguing every
+  /// strength of every brand is not a real option.
+  ///
+  /// Longest-first so "Lithosun SR" wins over "Lithosun", and a word boundary
+  /// is required so "Lipril" cannot match a hypothetical "Liprilstatin".
   static String? genericFor(String name) {
     if (_entries == null) return null;
     final n = name.trim().toLowerCase();
@@ -73,7 +87,21 @@ class DrugNameCatalog {
     for (final e in _entries!) {
       if (e.name.toLowerCase() == n) return e.generic;
     }
-    return null;
+
+    String? best;
+    var bestLen = 0;
+    for (final e in _entries!) {
+      final candidate = e.name.toLowerCase();
+      if (candidate.length <= bestLen || !n.startsWith(candidate)) continue;
+      // Require the match to end at a boundary, so a longer WORD is not
+      // mistaken for the shorter drug it happens to begin with.
+      final next = n.codeUnitAt(candidate.length);
+      final isAlpha = (next >= 97 && next <= 122);
+      if (isAlpha) continue;
+      best = e.generic;
+      bestLen = candidate.length;
+    }
+    return best;
   }
 
   /// Up to [limit] suggestions matching [query] against the display name OR the

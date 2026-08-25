@@ -24,6 +24,20 @@ class ParsedReminder {
   /// length; harmless for plain reminders.
   final int? durationMinutes;
 
+  /// An RFC 5545 `RRULE:` string when the phrase describes a repeat the
+  /// six-value [repeat] vocabulary cannot express — "every other Tuesday",
+  /// "every 3 days", "monthly", or any of those with an end condition.
+  ///
+  /// A string rather than a typed rule so this file stays free of feature and
+  /// package imports, exactly like every other field here.
+  final String? recurrenceRule;
+
+  /// An explicit end date from "until 5 July".
+  final DateTime? endsAt;
+
+  /// An explicit occurrence count from "5 times".
+  final int? occurrenceLimit;
+
   const ParsedReminder({
     required this.title,
     this.time,
@@ -32,6 +46,9 @@ class ParsedReminder {
     this.categoryHint,
     this.customDays,
     this.durationMinutes,
+    this.recurrenceRule,
+    this.endsAt,
+    this.occurrenceLimit,
   });
 }
 
