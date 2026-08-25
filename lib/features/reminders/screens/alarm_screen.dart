@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:audio_session/audio_session.dart';
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ import '../../../core/utils/date_formats.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../core/design/app_colors_ext.dart';
+import '../../../core/services/background_alarm_service.dart'
+    show doseInstantFromAlarmPayload;
 import '../../../core/services/notification_service.dart';
 import '../../../main.dart' show navigatorKey;
 import '../../medication/models/medicine_enums.dart' show SkipReason;
@@ -226,14 +229,10 @@ class _AlarmScreenState extends State<AlarmScreen>
     return (medId != null && medId.isNotEmpty) ? [medId] : const [];
   }
 
-  DateTime _payloadScheduledTime() {
-    final hour = (widget.payload['hour'] as num?)?.toInt();
-    final minute = (widget.payload['minute'] as num?)?.toInt();
-    final now = DateTime.now();
-    return (hour != null && minute != null)
-        ? DateTime(now.year, now.month, now.day, hour, minute)
-        : now;
-  }
+  /// Which dose this alarm is for — see [doseInstantFromAlarmPayload], which
+  /// carries the reasoning and the regression it guards against.
+  DateTime _payloadScheduledTime() =>
+      doseInstantFromAlarmPayload(widget.payload, now: clock.now());
 
   /// Medicine alarms only: log every due medicine taken right here (foreground
   /// → Drift is available), cancel the notification, and leave.

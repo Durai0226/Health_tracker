@@ -9,6 +9,7 @@ import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
 import '../utils/reminder_helper.dart';
 import 'add_reminder_screen.dart';
+import '../services/reminder_service.dart';
 
 /// The Reminders destination — Calm Clarity, dark-aware, lists real reminders.
 class RemindersScreen extends StatefulWidget {
@@ -38,16 +39,37 @@ class _RemindersScreenState extends State<RemindersScreen> {
     _categories = CleanStorageService.getAllCategories();
     _load();
     _loadCategories();
+    // Live: any write to the reminders table — here, from the reschedule pass,
+    // from a cloud arrival, from an occurrence being recorded — refreshes this
+    // screen. Before ReminderService there was no notifier at all, so every
+    // surface re-read a static cache after each Navigator.push returned, and two
+    // surfaces could disagree until one happened to be re-entered.
+    ReminderService.instance.addListener(_onRemindersChanged);
+    // Idempotent; covers a deep-link straight to this screen in a build where
+    // the launch-time start has not run.
+    ReminderService.instance.start();
   }
 
   @override
   void dispose() {
+    ReminderService.instance.removeListener(_onRemindersChanged);
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onRemindersChanged() {
+    if (mounted) _load();
+  }
+
   void _load() {
-    final all = CleanStorageService.getReminders().toList()
+    // Prefer the notifier's list once it has loaded; fall back to the
+    // synchronous cache for the very first frame. Both are the same data —
+    // ReminderService refreshes that cache on every emission — so this is a
+    // freshness preference, not a second source of truth.
+    final source = ReminderService.instance.isLoaded
+        ? ReminderService.instance.reminders
+        : CleanStorageService.getReminders();
+    final all = source.toList()
       ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     setState(() => _reminders = all);
   }
@@ -178,6 +200,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
             initialCategoryId: result.categoryId,
             initialPriority: result.priority,
             initialCustomDays: result.customDays,
+            initialRecurrenceRule: result.recurrenceRule,
+            initialEndsAt: result.endsAt,
+            initialOccurrenceLimit: result.occurrenceLimit,
           ),
         ),
       );
@@ -204,6 +229,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
       priority: priority,
       categoryId: categoryId,
       customDays: parsed.customDays,
+      recurrenceRule: parsed.recurrenceRule,
+      endsAt: parsed.endsAt,
+      occurrenceLimit: parsed.occurrenceLimit,
     );
   }
 
@@ -261,6 +289,24 @@ class _RemindersScreenState extends State<RemindersScreen> {
   Future<void> _toggle(Reminder r) async {
     final markingComplete = !r.isCompleted;
 
+    // Write the occurrence BEFORE anything mutates the reminder.
+    //
+    // The roll-forward below overwrites `scheduledTime`, and `isCompleted` is a
+    // single boolean it also resets — so until this row existed, completing a
+    // repeating reminder erased the only evidence it had ever been due. That is
+    // why no adherence rate, streak or digest was possible for these.
+    //
+    // Un-completing is a correction, not an event: it reverts the occurrence to
+    // pending rather than recording a second one.
+    await CleanStorageService.recordReminderOutcome(
+      reminderId: r.id,
+      scheduledFor: r.scheduledTime,
+      outcome: markingComplete
+          ? ReminderOutcome.done
+          : ReminderOutcome.pending,
+      source: 'app',
+    );
+
     // Roll a repeating reminder forward to its next occurrence instead of
     // letting it die in the Completed section. Same row (same id) is reused via
     // copyWith + saveReminder upsert, so no duplicates are created.
@@ -275,7 +321,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
       // Reschedule the notification for the new time (consistent with the
       // add/edit path which keys notifications off id.hashCode).
       await NotificationService().scheduleGenericReminder(
-        id: rolled.id.hashCode,
+        id: rolled.notificationSlot,
         title: rolled.title,
         body: rolled.body,
         scheduledTime: next,
@@ -294,7 +340,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
       // (Repeating reminders are handled above via roll-forward reschedule.)
       if (markingComplete) {
         await NotificationService()
-            .cancelGenericReminder(r.id.hashCode, r.repeatType, r.customDays);
+            .cancelGenericReminder(
+                r.notificationSlot, r.repeatType, r.customDays);
       }
     }
     _load();
@@ -302,11 +349,15 @@ class _RemindersScreenState extends State<RemindersScreen> {
 
   Future<void> _delete(Reminder r) async {
     await CleanStorageService.deleteReminder(r.id);
+    // The occurrence rows go with it. They are history, so this is the ONLY
+    // place that clears them — never as routine cleanup.
+    await CleanStorageService.deleteReminderOccurrences(r.id);
     // Recurring weekday/weekends/custom reminders schedule one notification per
     // day, so cancel ALL sub-notifications — not just the base id — otherwise
     // 2–5 alerts keep firing forever after delete.
     await NotificationService()
-        .cancelGenericReminder(r.id.hashCode, r.repeatType, r.customDays);
+        .cancelGenericReminder(
+            r.notificationSlot, r.repeatType, r.customDays);
     _load();
   }
 
@@ -390,24 +441,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: AppTextField(
+            child: AppSearchField(
               controller: _searchController,
               hint: 'Search reminders',
-              prefixIcon: Symbols.search_rounded,
               accent: ext.reminders,
-              textInputAction: TextInputAction.search,
               onChanged: (v) => setState(() => _searchQuery = v),
-              suffix: _searchQuery.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: Icon(Symbols.close_rounded,
-                          size: 18, color: ext.textTertiary),
-                      tooltip: 'Clear search',
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -793,6 +831,13 @@ class _SmartReminder {
   final String? categoryId;
   final List<int>? customDays;
 
+  /// An RFC 5545 rule for repeats [RepeatType] cannot express — "every other
+  /// Tuesday", "every 3 days", "monthly", optionally bounded. Null when the
+  /// phrase was ordinary and [repeat] already covers it.
+  final String? recurrenceRule;
+  final DateTime? endsAt;
+  final int? occurrenceLimit;
+
   _SmartReminder({
     required this.title,
     this.time,
@@ -800,6 +845,9 @@ class _SmartReminder {
     this.priority,
     this.categoryId,
     this.customDays,
+    this.recurrenceRule,
+    this.endsAt,
+    this.occurrenceLimit,
   });
 }
 

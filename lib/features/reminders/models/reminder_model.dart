@@ -1,3 +1,9 @@
+import 'reminder_escalation.dart';
+
+// Re-exported so a consumer needs one import for the whole reminder vocabulary,
+// the way RepeatType / ReminderPriority / ReminderOutcome already work.
+export 'reminder_escalation.dart';
+
 
 enum RepeatType {
   none,
@@ -6,6 +12,39 @@ enum RepeatType {
   weekdays,
   weekends,
   custom,
+}
+
+/// What became of one scheduled occurrence of a reminder.
+///
+/// Stored by `.name`, never by index: these rows are history, and reordering an
+/// enum must not silently reinterpret what already happened.
+enum ReminderOutcome {
+  /// Due, not yet resolved. The state every occurrence starts in.
+  pending,
+
+  /// The user acted on it.
+  done,
+
+  /// The user explicitly declined this one occurrence. Distinct from [missed] —
+  /// a deliberate skip is not a failure, and lumping them together would make
+  /// adherence punish honesty.
+  skipped,
+
+  /// Never resolved, and its window has closed. Written by the sweep, not by the
+  /// user. This is the denominator: without it a user who never opens the app
+  /// shows perfect adherence forever.
+  missed;
+
+  static ReminderOutcome fromName(String? name) {
+    for (final v in ReminderOutcome.values) {
+      if (v.name == name) return v;
+    }
+    return ReminderOutcome.pending;
+  }
+
+  /// Whether this occurrence is settled. A pending one may still become
+  /// anything; the others are final.
+  bool get isResolved => this != ReminderOutcome.pending;
 }
 
 enum ReminderPriority {
@@ -33,6 +72,28 @@ class Reminder {
   final String? imagePath;
   final String? noteId;
 
+  /// The OS notification id this reminder is armed under, allocated from the
+  /// reserved generic-reminder block. Null for rows written before schema v16;
+  /// use [notificationSlot], which falls back to the legacy derivation so an
+  /// already-armed alarm stays cancellable.
+  final int? notificationId;
+
+  /// An RFC 5545 `RRULE:` string when the repeat is richer than [repeatType] can
+  /// express. Null means "use [repeatType]".
+  final String? recurrenceRule;
+
+  /// Stop repeating after this instant. Null means forever.
+  final DateTime? endsAt;
+
+  /// Stop after this many occurrences. Null means unlimited.
+  final int? occurrenceLimit;
+
+  /// Temporarily stopped without being deleted.
+  final bool isPaused;
+
+  /// How hard this reminder pushes when it is ignored. See [ReminderEscalation].
+  final ReminderEscalation escalation;
+
   Reminder({
     required this.id,
     required this.title,
@@ -51,6 +112,12 @@ class Reminder {
     this.note,
     this.imagePath,
     this.noteId,
+    this.notificationId,
+    this.recurrenceRule,
+    this.endsAt,
+    this.occurrenceLimit,
+    this.isPaused = false,
+    this.escalation = ReminderEscalation.standard,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -69,6 +136,12 @@ class Reminder {
     String? note,
     String? imagePath,
     String? noteId,
+    int? notificationId,
+    String? recurrenceRule,
+    DateTime? endsAt,
+    int? occurrenceLimit,
+    bool? isPaused,
+    ReminderEscalation? escalation,
   }) {
     return Reminder(
       id: id,
@@ -88,8 +161,27 @@ class Reminder {
       note: note ?? this.note,
       imagePath: imagePath ?? this.imagePath,
       noteId: noteId ?? this.noteId,
+      notificationId: notificationId ?? this.notificationId,
+      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
+      endsAt: endsAt ?? this.endsAt,
+      occurrenceLimit: occurrenceLimit ?? this.occurrenceLimit,
+      isPaused: isPaused ?? this.isPaused,
+      escalation: escalation ?? this.escalation,
     );
   }
+
+  /// The id to schedule and cancel under.
+  ///
+  /// Prefers the allocated, reserved [notificationId]. Falls back to the legacy
+  /// `id.hashCode & 0x7FFFFFFF` for rows that predate schema v16 — not because
+  /// that derivation is acceptable (it is unreserved and can collide with any
+  /// other family's block) but because those rows' alarms are already armed under
+  /// it, and cancelling them requires reproducing it. Every save allocates a real
+  /// id, so this fallback drains as reminders are touched.
+  int get notificationSlot => notificationId ?? legacyNotificationId;
+
+  /// The pre-v16 derivation. Only for cancelling what it already armed.
+  int get legacyNotificationId => id.hashCode & 0x7FFFFFFF;
 
   Map<String, dynamic> toJson() {
     return {
@@ -109,6 +201,12 @@ class Reminder {
       'note': note,
       'imagePath': imagePath,
       'noteId': noteId,
+      'notificationId': notificationId,
+      'recurrenceRule': recurrenceRule,
+      'endsAt': endsAt?.toIso8601String(),
+      'occurrenceLimit': occurrenceLimit,
+      'isPaused': isPaused,
+      'escalation': escalation.name,
     };
   }
 
@@ -143,6 +241,14 @@ class Reminder {
       note: json['note'],
       imagePath: json['imagePath'],
       noteId: json['noteId'],
+      notificationId: (json['notificationId'] as num?)?.toInt(),
+      recurrenceRule: json['recurrenceRule'] as String?,
+      endsAt: json['endsAt'] != null
+          ? DateTime.tryParse(json['endsAt'].toString())
+          : null,
+      occurrenceLimit: (json['occurrenceLimit'] as num?)?.toInt(),
+      isPaused: json['isPaused'] == true,
+      escalation: ReminderEscalation.fromName(json['escalation'] as String?),
     );
   }
 }

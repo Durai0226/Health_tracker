@@ -106,6 +106,18 @@ dependencies:
   url_launcher: ^6.2.5
   # Premium Bottom Navigation Packages
   material_symbols_icons: ^4.2951.0
+  # RFC 5545 recurrence rules, for reminder repeats the old 6-value enum could
+  # not express: every N days/weeks, monthly, "last Friday", an end date, an
+  # occurrence count.
+  #
+  # NOTE on time zones: this package requires every DateTime to have
+  # `isUtc: true` and, in its own words, "doesn't care about any time-zone-
+  # related stuff". A reminder is a WALL-CLOCK promise ("08:00, whatever the
+  # offset that day"), so we hand it local Y/M/D/h/m *labelled* UTC and
+  # reinterpret the results as local — the floating-time convention. That is
+  # what keeps 08:00 at 08:00 across a DST boundary; see ReminderRecurrence.
+  # Also note WKST is unsupported: Monday is the only week start.
+  rrule: ^0.2.18
 
 dev_dependencies:
   flutter_test:

@@ -1,3 +1,5 @@
+import 'package:clock/clock.dart';
+
 import 'focus_insights.dart';
 import 'focus_readiness.dart';
 import 'health_types.dart';
@@ -96,13 +98,22 @@ class CoachText {
   ParsedReminder parseReminder(String input) {
     final text = input.trim();
     final lower = text.toLowerCase();
-    final now = DateTime.now();
+    // `clock.now()` so a test can pin the wall clock with `withClock`. Every
+    // branch below is relative to now ("tomorrow", "next week", "at 8"), so with
+    // `DateTime.now()` the suite could only ever assert ranges, never the actual
+    // instant a phrase should resolve to.
+    final now = clock.now();
 
     var repeat = _repeat(lower);
     final priority = _priority(lower);
     final category = _category(lower);
     List<int>? customDays;
     final durationMinutes = _parseDuration(lower);
+    // Richer repeats than the six-value vocabulary can express. Null means the
+    // phrase was ordinary and `repeat` above already covers it.
+    final rrule = _recurrenceRule(lower);
+    final endsAt = _untilDate(lower);
+    final occurrenceLimit = _occurrenceLimit(lower);
 
     // Relative "in N minutes/hours/days/weeks/months/years" takes precedence.
     final rel = RegExp(
@@ -134,6 +145,9 @@ class CoachText {
         priority: priority,
         categoryHint: category,
         durationMinutes: durationMinutes,
+        recurrenceRule: rrule,
+        endsAt: endsAt,
+        occurrenceLimit: occurrenceLimit,
       );
     }
 
@@ -148,6 +162,9 @@ class CoachText {
         priority: priority,
         categoryHint: category,
         durationMinutes: durationMinutes,
+        recurrenceRule: rrule,
+        endsAt: endsAt,
+        occurrenceLimit: occurrenceLimit,
       );
     }
     if (RegExp(r'\bnext month\b').hasMatch(lower)) {
@@ -159,6 +176,9 @@ class CoachText {
         priority: priority,
         categoryHint: category,
         durationMinutes: durationMinutes,
+        recurrenceRule: rrule,
+        endsAt: endsAt,
+        occurrenceLimit: occurrenceLimit,
       );
     }
 
@@ -255,6 +275,9 @@ class CoachText {
       categoryHint: category,
       customDays: customDays,
       durationMinutes: durationMinutes,
+      recurrenceRule: rrule,
+      endsAt: endsAt,
+      occurrenceLimit: occurrenceLimit,
     );
   }
 
@@ -302,6 +325,146 @@ class CoachText {
       return 'weekly';
     }
     return 'none';
+  }
+
+  /// An RFC 5545 rule for the repeats the six-value [_repeat] vocabulary cannot
+  /// express, or null to fall back to it.
+  ///
+  /// Deliberately narrow. It recognises the phrasings people actually type —
+  /// "every other Tuesday", "every 3 days", "every 2 weeks", "monthly" — and
+  /// declines everything else rather than guessing: a wrong rule is a reminder
+  /// that fires on the wrong days indefinitely, which is worse than falling back
+  /// to a plain weekly one the user can see and correct.
+  ///
+  /// Stays a string so this file needs no dependency on `rrule`; the feature
+  /// layer parses it.
+  String? _recurrenceRule(String lower) {
+    const byDay = {
+      'monday': 'MO',
+      'tuesday': 'TU',
+      'wednesday': 'WE',
+      'thursday': 'TH',
+      'friday': 'FR',
+      'saturday': 'SA',
+      'sunday': 'SU',
+    };
+
+    String withBounds(String base) {
+      final count = _occurrenceLimit(lower);
+      if (count != null) return '$base;COUNT=$count';
+      final until = _untilDate(lower);
+      if (until != null) {
+        final u = until.toUtc();
+        String two(int v) => v.toString().padLeft(2, '0');
+        return '$base;UNTIL=${u.year}${two(u.month)}${two(u.day)}'
+            'T${two(u.hour)}${two(u.minute)}${two(u.second)}Z';
+      }
+      return base;
+    }
+
+    // "every other <weekday>" / "every 2nd <weekday>"
+    final otherDay = RegExp(
+            r'\bevery\s+(other|2nd|second)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b')
+        .firstMatch(lower);
+    if (otherDay != null) {
+      return withBounds(
+          'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${byDay[otherDay.group(2)]}');
+    }
+
+    // "every other day" / "every other week"
+    final otherUnit =
+        RegExp(r'\bevery\s+(other|2nd|second)\s+(day|week|month)s?\b')
+            .firstMatch(lower);
+    if (otherUnit != null) {
+      const freq = {'day': 'DAILY', 'week': 'WEEKLY', 'month': 'MONTHLY'};
+      return withBounds(
+          'RRULE:FREQ=${freq[otherUnit.group(2)]};INTERVAL=2');
+    }
+
+    // "every 3 days" / "every 2 weeks" / "every 6 months"
+    final everyN =
+        RegExp(r'\bevery\s+(\d+)\s*(day|week|month)s?\b').firstMatch(lower);
+    if (everyN != null) {
+      final n = int.parse(everyN.group(1)!);
+      // "every 1 day" is just daily; the legacy path handles it and produces a
+      // cheaper repeating notification.
+      if (n > 1 && n <= 365) {
+        const freq = {'day': 'DAILY', 'week': 'WEEKLY', 'month': 'MONTHLY'};
+        return withBounds(
+            'RRULE:FREQ=${freq[everyN.group(2)]};INTERVAL=$n');
+      }
+    }
+
+    // "monthly" / "every month"
+    if (RegExp(r'\b(monthly|every month|each month)\b').hasMatch(lower)) {
+      return withBounds('RRULE:FREQ=MONTHLY');
+    }
+    // "yearly" / "annually"
+    if (RegExp(r'\b(yearly|annually|every year|each year)\b').hasMatch(lower)) {
+      return withBounds('RRULE:FREQ=YEARLY');
+    }
+
+    // A bounded plain repeat still needs a rule to carry the bound.
+    final base = _repeat(lower);
+    if (base == 'daily' || base == 'weekly') {
+      if (_occurrenceLimit(lower) != null || _untilDate(lower) != null) {
+        return withBounds(
+            'RRULE:FREQ=${base == 'daily' ? 'DAILY' : 'WEEKLY'}');
+      }
+    }
+    return null;
+  }
+
+  /// "5 times", "for 10 occurrences".
+  int? _occurrenceLimit(String lower) {
+    final m = RegExp(r'\b(\d+)\s*(times|occurrences)\b').firstMatch(lower);
+    if (m == null) return null;
+    final n = int.parse(m.group(1)!);
+    return (n > 0 && n <= 999) ? n : null;
+  }
+
+  /// "until 5 july", "until july 5", "until 2026-07-05".
+  DateTime? _untilDate(String lower) {
+    const months = {
+      'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5,
+      'june': 6, 'july': 7, 'august': 8, 'september': 9, 'october': 10,
+      'november': 11, 'december': 12,
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'jun': 6, 'jul': 7,
+      'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    };
+    final iso = RegExp(r'\buntil\s+(\d{4})-(\d{1,2})-(\d{1,2})\b')
+        .firstMatch(lower);
+    if (iso != null) {
+      return DateTime(int.parse(iso.group(1)!), int.parse(iso.group(2)!),
+          int.parse(iso.group(3)!), 23, 59, 59);
+    }
+    final names = months.keys.join('|');
+    final dayFirst =
+        RegExp('\\buntil\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s+($names)\\b')
+            .firstMatch(lower);
+    if (dayFirst != null) {
+      return _untilFor(
+          months[dayFirst.group(2)]!, int.parse(dayFirst.group(1)!));
+    }
+    final monthFirst =
+        RegExp('\\buntil\\s+($names)\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b')
+            .firstMatch(lower);
+    if (monthFirst != null) {
+      return _untilFor(
+          months[monthFirst.group(1)]!, int.parse(monthFirst.group(2)!));
+    }
+    return null;
+  }
+
+  /// A month/day with no year means the NEXT such date, not one in the past.
+  DateTime? _untilFor(int month, int day) {
+    if (day < 1 || day > 31) return null;
+    final now = clock.now();
+    var candidate = DateTime(now.year, month, day, 23, 59, 59);
+    if (candidate.isBefore(now)) {
+      candidate = DateTime(now.year + 1, month, day, 23, 59, 59);
+    }
+    return candidate;
   }
 
   String _priority(String lower) {
@@ -548,10 +711,36 @@ class CoachText {
     required int goalMl,
     required int streakDays,
     required int hour,
+    bool isRestricted = false,
+    /// The user's real waking window. Defaults keep old callers working, but
+    /// every production caller now passes `WaterService.wakingWindow()` — pacing
+    /// against office hours told night-shift users they were always ahead.
+    int wakeMinutes = 7 * 60,
+    int sleepMinutes = 23 * 60,
   }) {
     final remaining = (goalMl - intakeMl).clamp(0, goalMl);
     final pct = goalMl > 0 ? (intakeMl / goalMl * 100).round() : 0;
     final streak = streakDays > 0 ? ' Your $streakDays-day streak is looking great!' : '';
+
+    // Under a prescribed fluid ceiling every line below is wrong — they all
+    // encourage drinking more, which is the opposite of the clinical advice the
+    // user is following. No streak framing either: there is nothing to
+    // congratulate about approaching a limit.
+    if (isRestricted && goalMl > 0) {
+      final left = goalMl - intakeMl;
+      if (left < 0) {
+        return 'You are ${-left}ml over your ${goalMl}ml daily limit. Worth '
+            'mentioning to your clinician if it happens often.';
+      }
+      if (left == 0) {
+        return 'You have reached your ${goalMl}ml daily limit for today.';
+      }
+      if (pct >= 80) {
+        return 'Close to your limit — ${left}ml left of ${goalMl}ml today.';
+      }
+      return '${intakeMl}ml of your ${goalMl}ml limit so far. ${left}ml left.';
+    }
+
     if (intakeMl >= goalMl && goalMl > 0) {
       return '🎉 Goal reached — ${intakeMl}ml today! Keep sipping to stay ahead.$streak';
     }
@@ -562,6 +751,8 @@ class CoachText {
       intakeMl: intakeMl,
       goalMl: goalMl,
       nowMinutes: hour * 60 + 30,
+      wakeMinutes: wakeMinutes,
+      sleepMinutes: sleepMinutes,
     );
 
     if (hour < 10) {

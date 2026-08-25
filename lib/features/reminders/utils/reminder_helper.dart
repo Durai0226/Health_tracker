@@ -1,92 +1,54 @@
+import 'package:clock/clock.dart';
+
 import '../models/reminder_model.dart';
+import '../models/reminder_recurrence.dart';
 
 class ReminderHelper {
-  static DateTime getNextOccurrence(Reminder reminder) {
-    // If not repeating, just return the same time (logic elsewhere handles this)
-    if (reminder.repeatType == RepeatType.none) {
-      return reminder.scheduledTime;
-    }
+  /// The next time this reminder should fire, or null if it never should again.
+  ///
+  /// Null is a real answer, not a failure: a paused reminder, one past its
+  /// `endsAt`, or one that has used up its `occurrenceLimit` has no next
+  /// occurrence. Before those existed a repeating reminder ran forever and
+  /// deleting it was the only way to stop it.
+  ///
+  /// The stepping itself lives in [ReminderRecurrence], which handles both the
+  /// legacy [RepeatType] enum and an RFC 5545 rule, and — critically — steps by
+  /// CALENDAR day rather than by a 24-hour `Duration`, so an 08:00 reminder is
+  /// still 08:00 on the far side of a DST transition.
+  static DateTime? nextOccurrenceOrNull(Reminder reminder) {
+    if (reminder.isPaused) return null;
 
-    final current = reminder.scheduledTime;
-    final now = DateTime.now();
-    
-    // If the scheduled time is in the past, we might want to calculate from NOW
-    // or from the scheduled time to keep the exact cycle.
-    // For smart reminders, usually we want the NEXT occurrence from NOW if it was overdue,
-    // or from the scheduled time if we want to be strict.
-    // Let's assume we want to maintain the specific time of day.
-    
-    // Base calculation date: usually current scheduled time.
-    // However, if the user missed it by 3 days, should it move to yesterday (still overdue) or tomorrow?
-    // Let's stick to "Next valid slot after current scheduled time".
-    // If that slot is still in the past (e.g. daily reminder from 5 days ago), 
-    // we should probably jump to the next future slot.
-    
-    DateTime nextDate = _calculateNext(current, reminder.repeatType, reminder.customDays);
-    
-    // If the calculcated next date is still in the past (e.g. user checks off a task from 1 week ago),
-    // keep advancing until it's in the future.
-    while (nextDate.isBefore(now)) {
-      nextDate = _calculateNext(nextDate, reminder.repeatType, reminder.customDays);
-    }
-    
-    return nextDate;
+    final recurrence = ReminderRecurrence.parse(
+      reminder.recurrenceRule,
+      fallback: reminder.repeatType,
+      fallbackDays: reminder.customDays,
+    );
+    if (!recurrence.repeats) return null;
+
+    // `clock.now()`, not `DateTime.now()` — the project convention (see the
+    // rationale in pubspec.yaml beside the `clock` dependency). Everything here
+    // is time-of-day dependent, so a test that cannot pin the wall clock can
+    // only assert invariants, never an actual instant.
+    final now = clock.now();
+    final next = recurrence.nextAfter(
+      start: reminder.scheduledTime,
+      after: now.isAfter(reminder.scheduledTime) ? now : reminder.scheduledTime,
+    );
+    if (next == null) return null;
+    if (reminder.endsAt != null && next.isAfter(reminder.endsAt!)) return null;
+    return next;
   }
 
-  static DateTime _calculateNext(DateTime current, RepeatType type, List<int>? customDays) {
-    switch (type) {
-      case RepeatType.daily:
-        return current.add(const Duration(days: 1));
-        
-      case RepeatType.weekly:
-        return current.add(const Duration(days: 7));
-        
-      case RepeatType.weekdays:
-        // Mon(1) .. Fri(5), Sat(6), Sun(7)
-        // If Fri(5) -> Mon(plus 3)
-        // If Sat(6) -> Mon(plus 2)
-        // If Sun(7) -> Mon(plus 1)
-        // Else -> Next day
-        if (current.weekday >= 5) {
-          // Fri -> Mon (+3)
-          // Sat -> Mon (+2)
-          // Sun -> Mon (+1)
-          return current.add(Duration(days: 8 - current.weekday));
-        }
-        return current.add(const Duration(days: 1));
-        
-      case RepeatType.weekends:
-        // Sat(6), Sun(7)
-        if (current.weekday == DateTime.saturday) {
-          return current.add(const Duration(days: 1)); // Sat -> Sun
-        }
-        if (current.weekday == DateTime.sunday) {
-          return current.add(const Duration(days: 6)); // Sun -> Sat
-        }
-        // If weekday, find next Saturday
-        final daysUntilSat = DateTime.saturday - current.weekday;
-        final jump = daysUntilSat > 0 ? daysUntilSat : daysUntilSat + 7;
-        return current.add(Duration(days: jump));
-        
-      case RepeatType.custom:
-        if (customDays == null || customDays.isEmpty) {
-          return current.add(const Duration(days: 1)); // Fallback
-        }
-        
-        // Find next matching day
-        // Current weekday: 1-7
-        var tempDate = current;
-        // Limit loop to avoid infinite loop
-        for (int i = 0; i < 14; i++) {
-          tempDate = tempDate.add(const Duration(days: 1));
-          if (customDays.contains(tempDate.weekday)) {
-            return tempDate;
-          }
-        }
-        return current.add(const Duration(days: 1)); // Fallback
-        
-      default:
-        return current;
+  /// Back-compatible shape: callers that cannot express "never again" get the
+  /// current time back, which they already treat as "nothing to schedule".
+  ///
+  /// Prefer [nextOccurrenceOrNull]; this exists so the change to an end-capable
+  /// recurrence did not have to land in every call site at once.
+  static DateTime getNextOccurrence(Reminder reminder) {
+    if (reminder.repeatType == RepeatType.none &&
+        reminder.recurrenceRule == null) {
+      return reminder.scheduledTime;
     }
+    return nextOccurrenceOrNull(reminder) ?? reminder.scheduledTime;
   }
 }

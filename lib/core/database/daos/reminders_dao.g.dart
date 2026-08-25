@@ -7,6 +7,8 @@ mixin _$RemindersDaoMixin on DatabaseAccessor<AppDatabase> {
   $RemindersTable get reminders => attachedDatabase.reminders;
   $ReminderCategoriesTable get reminderCategories =>
       attachedDatabase.reminderCategories;
+  $ReminderOccurrencesTable get reminderOccurrences =>
+      attachedDatabase.reminderOccurrences;
   RemindersDaoManager get managers => RemindersDaoManager(this);
 }
 
@@ -19,5 +21,10 @@ class RemindersDaoManager {
       $$ReminderCategoriesTableTableManager(
         _db.attachedDatabase,
         _db.reminderCategories,
+      );
+  $$ReminderOccurrencesTableTableManager get reminderOccurrences =>
+      $$ReminderOccurrencesTableTableManager(
+        _db.attachedDatabase,
+        _db.reminderOccurrences,
       );
 }

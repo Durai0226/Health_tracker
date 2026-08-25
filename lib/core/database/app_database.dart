@@ -57,6 +57,7 @@ part 'app_database.g.dart';
     // Reminders tables
     Reminders,
     ReminderCategories,
+    ReminderOccurrences,
 
     // Vitals tables (blood pressure, blood glucose, weight, mood)
     BloodPressureReadings,
@@ -113,7 +114,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 19;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -348,6 +349,93 @@ class AppDatabase extends _$AppDatabase {
           // v5, v10 and v14 all used without incident.
           await m.createTable(focusSessions);
           debugPrint('✓ Created focus session table (v15)');
+        }
+        if (from < 16) {
+          // Reminders get a stored, reserved notification id instead of one
+          // derived from `id.hashCode` at each call site — which was unreserved
+          // and could collide with the fixed blocks other features own.
+          //
+          // `addColumn` only, nullable, no backfill: filling it needs the
+          // allocator (which reads the table) and would mean doing Dart work
+          // inside a MigrationStrategy, the trap the v13 `alterTable` step
+          // recorded the hard way. Existing rows fall back to the legacy
+          // derivation until their next save, so their already-armed alarms stay
+          // cancellable in the meantime.
+          //
+          // Guarded, and any future addColumn step must be too: the v12 and v13
+          // steps above call `createAll()`, which creates every table at its
+          // CURRENT definition. So a database upgrading from below 13 arrives
+          // here with `notification_id` already present, and a bare ALTER TABLE
+          // fails with "duplicate column name" — taking the whole migration down
+          // with it, on exactly the oldest installs.
+          final hasColumn = await customSelect("PRAGMA table_info('reminders')")
+              .get()
+              .then((rows) =>
+                  rows.any((r) => r.read<String>('name') == 'notification_id'));
+          if (hasColumn) {
+            debugPrint(
+                '• reminders.notificationId already present (createAll in an '
+                'earlier step) — skipping (v16)');
+          } else {
+            await m.addColumn(reminders, reminders.notificationId);
+            debugPrint('✓ Added reminders.notificationId (v16)');
+          }
+        }
+        if (from < 17) {
+          // One row per occurrence of a generic reminder. `isCompleted` is a
+          // single mutable boolean that roll-forward overwrote, so these
+          // reminders destroyed their own history — and adherence, streaks, a
+          // digest and adaptive timing all need that history to exist.
+          //
+          // `createTable` only, the same shape v4, v5, v10, v14 and v15 used
+          // without incident. Nothing is backfilled: there is no history to
+          // recover, which is the entire point.
+          //
+          // Unlike v16 this needs no existence guard — `createTable` is a
+          // CREATE TABLE IF NOT EXISTS in drift, so the `createAll()` in the
+          // v12/v13 steps having already made it is harmless.
+          await m.createTable(reminderOccurrences);
+          debugPrint('✓ Created reminder occurrences table (v17)');
+        }
+        if (from < 18) {
+          // Richer repeats: an RFC 5545 rule string, an end date, an occurrence
+          // limit, and a pause flag. Before this the six-value `repeatType` was
+          // the whole vocabulary, a repeating reminder ran forever, and deleting
+          // it was the only way to stop it — which also destroyed its history.
+          //
+          // Guarded for the same reason v16 is: the v12/v13 steps call
+          // `createAll()`, so a database upgrading from below 13 already has
+          // these columns and a bare ALTER TABLE would fail with "duplicate
+          // column name", taking the migration down on the oldest installs.
+          final existing = await customSelect("PRAGMA table_info('reminders')")
+              .get()
+              .then((rows) => rows.map((r) => r.read<String>('name')).toSet());
+          for (final column in <String, GeneratedColumn<Object>>{
+            'recurrence_rule': reminders.recurrenceRule,
+            'ends_at': reminders.endsAt,
+            'occurrence_limit': reminders.occurrenceLimit,
+            'is_paused': reminders.isPaused,
+          }.entries) {
+            if (existing.contains(column.key)) continue;
+            await m.addColumn(reminders, column.value);
+          }
+          debugPrint('✓ Added reminders recurrence columns (v18)');
+        }
+        if (from < 19) {
+          // How insistent a reminder is, per reminder. Escalation used to be
+          // all-or-nothing and decided by whichever code path happened to
+          // schedule it, so a vitamin could ring like a heart medication and a
+          // heart medication could arrive as a silent notification.
+          //
+          // Guarded, same reason as v16 and v18 — `createAll()` in the v12/v13
+          // steps means an old database already has the column.
+          final cols = await customSelect("PRAGMA table_info('reminders')")
+              .get()
+              .then((rows) => rows.map((r) => r.read<String>('name')).toSet());
+          if (!cols.contains('escalation')) {
+            await m.addColumn(reminders, reminders.escalation);
+          }
+          debugPrint('✓ Added reminders.escalation (v19)');
         }
       },
     );

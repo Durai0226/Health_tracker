@@ -1,73 +1,199 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import '../health/hydration_pacer.dart';
 import 'clean_storage_service.dart';
 import 'notification_service.dart';
 import '../../features/medication/services/appointment_reminder_service.dart';
+import '../../features/medication/services/refill_reminder_service.dart';
+import '../../features/medication/services/vitals_reminder_service.dart';
+import '../../features/reminders/models/reminder_model.dart';
+import '../../features/reminders/services/reminder_alarm.dart';
 import '../../features/medication/services/medication_reminder_service.dart';
 import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/sleep/services/sleep_service.dart';
 import '../../features/water/services/water_service.dart';
 
+/// One reminder family's contribution to the "rebuild everything" pass.
+///
+/// The seam behind "shared core, feature-owned UIs": a feature keeps its own
+/// service and settings screen and hands over exactly one thing — how to re-arm
+/// itself. It does not hand over scheduling code, and the core does not reach
+/// into its internals.
+class ReminderFamily {
+  const ReminderFamily(this.name, this.rearm);
+
+  /// Human-readable, used only in logs.
+  final String name;
+
+  /// Re-arm everything this family owns; return how many were armed.
+  ///
+  /// Must be safe to call repeatedly — this runs on every app start, on an
+  /// exact-alarm grant, and after a restore. Cancel-then-schedule, not
+  /// schedule-again.
+  final Future<int> Function() rearm;
+}
+
 class ReminderRescheduleService {
+  /// The families rebuilt by [rescheduleAllReminders], in order.
+  ///
+  /// This used to be five near-identical `try { … } catch { failCount++ }`
+  /// blocks inline, which is how two families ended up missing entirely: adding
+  /// one meant editing this method, and nothing made the omission visible.
+  ///
+  /// Order matters only for the budget: doses are armed before nudges, so if the
+  /// OS pending-notification ceiling is reached it is a hydration reminder that
+  /// does not fit, not a dose. See [ReminderBudget].
+  static final List<ReminderFamily> _families = <ReminderFamily>[
+    ReminderFamily('medicines', _rescheduleMedicines),
+    ReminderFamily('appointments', _rescheduleAppointments),
+    ReminderFamily('generic reminders', rescheduleGenericReminders),
+    ReminderFamily('vitals', VitalsReminderService.rescheduleAll),
+    ReminderFamily('refills', RefillReminderService.rescheduleAll),
+    ReminderFamily('water', rescheduleWaterReminders),
+  ];
+
+  /// Add a family. For anything defined outside this file's imports; the
+  /// built-ins are registered above rather than at startup, so there is no
+  /// ordering hazard and no way to boot with a family silently unregistered.
+  static void register(ReminderFamily family) {
+    if (_families.any((f) => f.name == family.name)) return;
+    _families.add(family);
+  }
+
+  @visibleForTesting
+  static List<String> get familyNames =>
+      List.unmodifiable(_families.map((f) => f.name));
+
+  /// Rebuild every family's reminders.
+  ///
+  /// Runs on every app start (`main._initDeferredServices`, off the critical
+  /// path) and whenever an exact-alarm grant lands
+  /// (`AppShell._rearmIfExactAlarmsWereGranted`). Each family is isolated: one
+  /// throwing must not stop the rest, which is the difference between losing one
+  /// family's reminders and losing all of them.
   static Future<void> rescheduleAllReminders() async {
     debugPrint('🔄 Rescheduling all reminders...');
+    var armed = 0;
+    var failed = 0;
 
-    try {
-      int successCount = 0;
-      int failCount = 0;
-
-      // Schedule medicine reminders using MedicationReminderService
+    for (final family in _families) {
       try {
-        // Unscoped: every profile's reminders must be (re)scheduled, not just
-        // whichever one happens to be active — see
-        // MedicationReminderService.rescheduleAll's doc for why.
-        final medicines = await MedicineCleanStorageService.getAllMedicines(
-            scopeToActiveProfile: false);
-        final reminderService = MedicationReminderService();
-        // One-time: clear any medicine alarms left under the old hash-based IDs
-        // before we reschedule with the new dense (collision-free) scheme.
-        await reminderService.migrateNotificationIdsIfNeeded();
-        await reminderService.scheduleAllReminders(medicines);
-        successCount += medicines.where((m) => m.reminderEnabled).length;
-        debugPrint('✓ Medicine reminders scheduled: ${medicines.length} medicines');
+        final n = await family.rearm();
+        armed += n;
+        debugPrint('✓ ${family.name}: $n re-armed');
       } catch (e) {
-        debugPrint('⚠️ Medicine reminder scheduling failed: $e');
-        failCount++;
+        failed++;
+        debugPrint('⚠️ ${family.name} rescheduling failed: $e');
       }
-
-      // Re-establish interval water reminders from the persisted config so they
-      // survive a restart, honouring the adaptive quiet-hours / goal-reached
-      // toggles (mirrors how medicine reminders are rebuilt above).
-      try {
-        successCount += await rescheduleWaterReminders();
-      } catch (e) {
-        debugPrint('⚠️ Water reminder scheduling failed: $e');
-        failCount++;
-      }
-
-      // Re-establish appointment reminders the same way — a device reboot or
-      // app update can lose AndroidAlarmManager's pending alarms, and unlike
-      // medicine/water reminders (rebuilt from a full recompute above),
-      // nothing else re-schedules these.
-      try {
-        final upcoming = await MedicineCleanStorageService.getUpcomingAppointments(
-            scopeToActiveProfile: false);
-        for (final appointment in upcoming) {
-          await AppointmentReminderService.schedule(appointment);
-        }
-        successCount += upcoming.where((a) => a.reminderEnabled).length;
-        debugPrint('✓ Appointment reminders scheduled: ${upcoming.length} appointments');
-      } catch (e) {
-        debugPrint('⚠️ Appointment reminder scheduling failed: $e');
-        failCount++;
-      }
-
-      debugPrint('✓ Rescheduled $successCount reminders successfully');
-      if (failCount > 0) {
-        debugPrint('⚠️ Failed to reschedule $failCount reminders');
-      }
-    } catch (e) {
-      debugPrint('❌ Failed to reschedule reminders: $e');
     }
+
+    debugPrint('✓ Rescheduled $armed reminders across '
+        '${_families.length - failed}/${_families.length} families');
+    if (failed > 0) {
+      debugPrint('⚠️ $failed reminder families failed to reschedule');
+    }
+  }
+
+  /// Unscoped by profile on purpose: every profile's reminders must be
+  /// (re)scheduled, not just whichever one happens to be active — see
+  /// `MedicationReminderService.rescheduleAll`'s doc for why.
+  static Future<int> _rescheduleMedicines() async {
+    final medicines = await MedicineCleanStorageService.getAllMedicines(
+        scopeToActiveProfile: false);
+    final reminderService = MedicationReminderService();
+    // One-time: clear any medicine alarms left under the old hash-based IDs
+    // before we reschedule with the new dense (collision-free) scheme.
+    await reminderService.migrateNotificationIdsIfNeeded();
+    await reminderService.scheduleAllReminders(medicines);
+    return medicines.where((m) => m.reminderEnabled).length;
+  }
+
+  /// A device reboot or app update can lose AndroidAlarmManager's pending
+  /// alarms, and unlike medicine reminders (rebuilt from a full recompute)
+  /// nothing else re-schedules these.
+  static Future<int> _rescheduleAppointments() async {
+    final upcoming = await MedicineCleanStorageService.getUpcomingAppointments(
+        scopeToActiveProfile: false);
+    for (final appointment in upcoming) {
+      await AppointmentReminderService.schedule(appointment);
+    }
+    return upcoming.where((a) => a.reminderEnabled).length;
+  }
+
+  /// Re-arm every incomplete generic reminder, allocating a reserved
+  /// notification id for any that predates schema v16.
+  ///
+  /// This is also what drains the legacy `id.hashCode` fallback: the old id is
+  /// cancelled first, so an alarm armed under an unreserved id (which could sit
+  /// on top of another family's block) is cleared rather than orphaned.
+  ///
+  /// Completed non-repeating reminders are skipped — re-arming one would ring
+  /// for something the user already ticked off.
+  /// [alarm] is injectable purely so this is testable — see [ReminderAlarm].
+  /// Everything decided below (which reminders are skipped, that the old id is
+  /// cancelled before a new one is allocated) is ordinary logic; only the
+  /// delivery it hands off to is an OS behaviour.
+  static Future<int> rescheduleGenericReminders({
+    ReminderAlarm alarm = const NotificationReminderAlarm(),
+  }) async {
+    // Close out occurrences nobody ever answered, BEFORE anything reads the log.
+    //
+    // This is the denominator, and without it there isn't one: no `missed` rows
+    // means every adherence figure reads 100% for everyone forever. Exactly the
+    // failure `reconcileMissedDoses` exists to prevent on the medication side —
+    // "a user who never opens the app would otherwise show 100% adherence
+    // forever" — and it was reintroduced here by writing the sweep and never
+    // calling it.
+    //
+    // Runs here rather than on a timer because this pass already runs at every
+    // app start and on an exact-alarm grant, and a miss does not need to be
+    // recorded the instant it happens — only before anything reports on it.
+    await CleanStorageService.reconcileMissedReminders();
+
+    final reminders = await CleanStorageService.getAllReminders();
+    final now = clock.now();
+    var armed = 0;
+
+    for (final reminder in reminders) {
+      if (reminder.isCompleted && reminder.repeatType == RepeatType.none) {
+        continue;
+      }
+      // A one-off whose time has passed has nothing left to fire.
+      if (reminder.repeatType == RepeatType.none &&
+          reminder.scheduledTime.isBefore(now)) {
+        continue;
+      }
+      try {
+        // Clear whatever it is currently armed under BEFORE allocating, or the
+        // old registration outlives the reminder with nothing able to cancel it.
+        await alarm.disarm(
+          id: reminder.notificationSlot,
+          repeatType: reminder.repeatType,
+          customDays: reminder.customDays,
+        );
+        final stored = reminder.notificationId == null
+            ? await CleanStorageService.saveReminderAllocatingId(reminder)
+            : reminder;
+        final ok = await alarm.arm(ReminderArmRequest(
+          reminderId: stored.id,
+          escalation: stored.escalation,
+          id: stored.notificationSlot,
+          title: stored.title,
+          body: stored.body,
+          scheduledTime: stored.scheduledTime,
+          repeatType: stored.repeatType,
+          customDays: stored.customDays,
+          snoozeDuration: stored.snoozeDuration,
+          sound: stored.sound,
+          priority: stored.priority,
+        ));
+        if (ok) armed++;
+      } catch (e) {
+        debugPrint('⚠️ Re-arming reminder "${reminder.title}" failed: $e');
+      }
+    }
+    debugPrint('✓ Generic reminders re-armed: $armed');
+    return armed;
   }
 
   /// (Re)schedule interval water reminders from the persisted config.
@@ -93,6 +219,15 @@ class ReminderRescheduleService {
 
     if (config == null || !config.enabled) {
       await notif.cancelAllWaterReminders();
+      return 0;
+    }
+
+    // A prescribed fluid ceiling inverts the whole point of a reminder: the
+    // user is trying to drink LESS, and a nudge to drink more is actively
+    // against medical advice. Nothing is scheduled at all in that mode.
+    if (WaterService.isFluidRestricted) {
+      await notif.cancelAllWaterReminders();
+      debugPrint('💧 Water reminders off — profile is on a fluid restriction');
       return 0;
     }
 
@@ -132,6 +267,104 @@ class ReminderRescheduleService {
       bedHour: bedHour,
       bedMinute: bedMinute,
     );
-    return notif.scheduleWaterReminderTimes(times);
+
+    return notif.scheduleWaterReminderTimes(
+      _pruneToRemainingNeed(times,
+          bedHour: bedHour,
+          bedMinute: bedMinute,
+          // The user's real waking window, so pacing is measured against
+          // their day and not against office hours — the same mistake
+          // hydrationCoach was fixed for.
+          wakeMinutes: wakeHour * 60 + wakeMinute),
+    );
+  }
+
+  /// Drop reminders the user does not need.
+  ///
+  /// The schedule was generated once in the settings screen and then frozen:
+  /// every slot fired every day regardless of whether the person had already
+  /// drunk two litres. That is the fixed-interval nagging the whole category is
+  /// criticised for, and notification fatigue is the top reason people disable
+  /// hydration reminders entirely.
+  ///
+  /// Rather than reschedule on every sip — `scheduleWaterReminderTimes` first
+  /// issues ~200 `cancel()` calls and then up to 100 `zonedSchedule`s, each
+  /// preceded by its own permission check, so running it per drink would be
+  /// absurd — this prunes at reschedule time using the same idea Hydro Coach
+  /// uses: how many more drinks are actually needed to close today's gap?
+  ///
+  ///   drinksNeeded = ceil(remaining / typical drink size)
+  ///
+  /// If there are more remaining slots than drinks needed, keep an evenly
+  /// spaced subset. Someone 200 ml short gets one more nudge instead of six;
+  /// someone who has drunk nothing all day still gets the full schedule.
+  ///
+  /// Only slots still ahead of `now` are considered — a slot at 09:00 is not a
+  /// candidate at 4pm.
+  static List<int> _pruneToRemainingNeed(
+    List<int> times, {
+    required int bedHour,
+    required int bedMinute,
+    int wakeMinutes = 7 * 60,
+  }) {
+    if (times.isEmpty) return times;
+
+    final today = WaterService.getTodayData();
+    final remaining = today.dailyGoalMl - today.effectiveHydrationMl;
+    if (remaining <= 0) return const [];
+
+    final now = clock.now();
+    final nowMinutes = now.hour * 60 + now.minute;
+    final future = times.where((t) => t > nowMinutes).toList();
+    // Everything left today has passed; the times still need to be registered
+    // because they repeat daily, so leave the schedule alone.
+    if (future.isEmpty) return times;
+
+    final drink = WaterService.typicalDrinkMl();
+    var needed = (remaining / (drink <= 0 ? 250 : drink)).ceil();
+
+    // Pace, not just total.
+    //
+    // Remaining volume alone says nothing about urgency: someone 800 ml short at
+    // 10am is comfortably ahead, and someone 800 ml short at 8pm is not.
+    // `HydrationPacer` already computes exactly that distinction and was wired
+    // only to display — the reminder schedule, the one place it could change
+    // behaviour, ignored it.
+    //
+    // Ahead of pace: one fewer nudge, floored at one so the schedule never goes
+    // silent on someone who still has a gap to close. Projected to miss: keep
+    // every remaining slot, because that is the case where nagging is the point.
+    try {
+      final pace = HydrationPacer.compute(
+        intakeMl: today.effectiveHydrationMl,
+        goalMl: today.dailyGoalMl,
+        nowMinutes: nowMinutes,
+        wakeMinutes: wakeMinutes,
+        sleepMinutes: bedHour * 60 + bedMinute,
+      );
+      if (pace.projectedToMiss) {
+        return times;
+      } else if (pace.status == 'ahead' && needed > 1) {
+        needed -= 1;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Hydration pacing unavailable; pruning on volume only: $e');
+    }
+
+    if (needed >= future.length) return times;
+    if (needed <= 0) return const [];
+
+    // Evenly spaced subset of the remaining slots, always including the last
+    // one so there is a final nudge before bed.
+    final kept = <int>{};
+    for (var i = 0; i < needed; i++) {
+      final idx = ((i + 1) * future.length / needed).ceil() - 1;
+      kept.add(future[idx.clamp(0, future.length - 1)]);
+    }
+
+    // Past slots stay scheduled: they repeat daily and will be re-pruned
+    // tomorrow against tomorrow's progress.
+    final past = times.where((t) => t <= nowMinutes);
+    return [...past, ...kept]..sort();
   }
 }

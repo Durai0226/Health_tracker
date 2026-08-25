@@ -9,8 +9,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/notification_service.dart';
-import '../../../core/services/feature_flag_service.dart';
+import '../../../core/health/adaptive_timing.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../services/reminder_insights.dart';
 import '../models/reminder_category_model.dart';
 import '../models/reminder_model.dart';
 import 'category_management_screen.dart';
@@ -28,6 +29,14 @@ class AddReminderScreen extends StatefulWidget {
   final ReminderPriority? initialPriority;
   final List<int>? initialCustomDays;
 
+  /// An RFC 5545 rule from Smart Add ("every other Tuesday", "every 3 days"),
+  /// for repeats the [RepeatType] dropdown cannot express. Carried through save
+  /// untouched — there is no picker for it yet, so editing the repeat dropdown
+  /// is what clears it.
+  final String? initialRecurrenceRule;
+  final DateTime? initialEndsAt;
+  final int? initialOccurrenceLimit;
+
   const AddReminderScreen({
     super.key,
     this.reminder,
@@ -38,6 +47,9 @@ class AddReminderScreen extends StatefulWidget {
     this.initialCategoryId,
     this.initialPriority,
     this.initialCustomDays,
+    this.initialRecurrenceRule,
+    this.initialEndsAt,
+    this.initialOccurrenceLimit,
   });
 
   @override
@@ -54,6 +66,26 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   TimeOfDay _selectedTime = TimeOfDay.now();
   RepeatType _repeatType = RepeatType.none;
   List<int> _customDays = [];
+
+  /// An RFC 5545 rule, when the repeat is richer than the dropdown can show.
+  ///
+  /// There is no picker for it yet, so it only ever arrives from Smart Add or
+  /// from an existing row. Touching the repeat dropdown clears it — silently
+  /// keeping a hidden "every other Tuesday" while the dropdown reads "Every
+  /// Week" would be a reminder that does not do what the screen says.
+  String? _recurrenceRule;
+  DateTime? _endsAt;
+  int? _occurrenceLimit;
+  ReminderEscalation _escalation = ReminderEscalation.standard;
+
+  /// "You usually do this at 08:40 — move it?"
+  ///
+  /// Only ever a suggestion with an explicit Apply. The engine behind it
+  /// (`AdaptiveTiming`, via `ReminderInsights`) already refuses to be confident
+  /// without ≥4 samples, a ≥15 minute shift and a tight IQR — but the reason it
+  /// is not applied automatically is not statistical. Extraction can be
+  /// automated; scheduling authority stays with the user.
+  AdaptiveSuggestion? _timeSuggestion;
   int _snoozeDuration = 5;
   String _sound = 'default';
   // Default to a normal alert level — not every new reminder should fire at the
@@ -102,6 +134,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _customDays = widget.reminder!.customDays != null
           ? List<int>.from(widget.reminder!.customDays!)
           : [];
+      _recurrenceRule = widget.reminder!.recurrenceRule;
+      _endsAt = widget.reminder!.endsAt;
+      _occurrenceLimit = widget.reminder!.occurrenceLimit;
+      _escalation = widget.reminder!.escalation;
+      _loadTimeSuggestion();
       _snoozeDuration = widget.reminder?.snoozeDuration ?? 5;
       _sound = widget.reminder?.sound ?? 'default';
       // New reminders default to Medium (matches the model default) — High for
@@ -141,6 +178,9 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           widget.initialCustomDays!.isNotEmpty) {
         _customDays = List<int>.from(widget.initialCustomDays!);
       }
+      _recurrenceRule = widget.initialRecurrenceRule;
+      _endsAt = widget.initialEndsAt;
+      _occurrenceLimit = widget.initialOccurrenceLimit;
     }
 
     // Seed from the sync cache, then refresh from Drift.
@@ -307,25 +347,33 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         note: null, // merged into `body`; field kept (deprecated) for old records
         imagePath: _selectedImagePath,
         noteId: widget.noteId ?? widget.reminder?.noteId,
+        // Preserved on edit so an existing reminder keeps the id it is already
+        // armed under; null for a new one, and allocated by the save below.
+        notificationId: widget.reminder?.notificationId,
+        recurrenceRule: _recurrenceRule,
+        endsAt: _endsAt,
+        occurrenceLimit: _occurrenceLimit,
+        isPaused: widget.reminder?.isPaused ?? false,
+        escalation: _escalation,
       );
 
-      // Save reminder using Drift storage
-      await CleanStorageService.saveReminder(reminder);
-
-      // Schedule notification
-      final notificationId = reminderId.hashCode;
+      // Save FIRST and arm under the id that was actually stored. The id used to
+      // be `reminderId.hashCode`, which is unreserved and can collide with the
+      // fixed blocks other features own.
+      final saved =
+          await CleanStorageService.saveReminderAllocatingId(reminder);
 
       await NotificationService().scheduleGenericReminder(
-        id: notificationId,
-        title: reminder.title,
-        body: reminder.body,
+        id: saved.notificationSlot,
+        title: saved.title,
+        body: saved.body,
         scheduledTime: scheduledDateTime,
-        repeatType: reminder.repeatType,
-        customDays: reminder.customDays,
-        snoozeDuration: reminder.snoozeDuration,
-        sound: reminder.sound,
-        priority: reminder.priority,
-        payload: reminder.noteId != null ? 'note:${reminder.noteId}' : null,
+        repeatType: saved.repeatType,
+        customDays: saved.customDays,
+        snoozeDuration: saved.snoozeDuration,
+        sound: saved.sound,
+        priority: saved.priority,
+        payload: saved.noteId != null ? 'note:${saved.noteId}' : null,
       );
 
       if (mounted) {
@@ -435,6 +483,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       ),
                       const SizedBox(height: AppSpacing.xl),
 
+                      if (_timeSuggestion != null) ...[
+                        _buildTimeSuggestion(ext, rem),
+                        const SizedBox(height: AppSpacing.xl),
+                      ],
+
                       // ---- Repeat ----
                       SectionHeader(
                         title: 'Repeat',
@@ -453,13 +506,16 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                           style: tt.bodyLarge?.copyWith(color: ext.textPrimary),
                           icon: Icon(Symbols.keyboard_arrow_down_rounded,
                               color: ext.mark(rem)),
-                          items: RepeatType.values.where((type) {
-                            if (type == RepeatType.custom) {
-                              return FeatureFlagService().isAdvancedRepeatEnabled ||
-                                  _repeatType == RepeatType.custom;
-                            }
-                            return true;
-                          }).map((type) {
+                          // Every repeat type, unconditionally.
+                          //
+                          // `custom` (pick your own days) used to be gated
+                          // behind FeatureFlagService.keyAdvancedRepeat, which
+                          // is off by default and toggleable only from the
+                          // early-access screen — so on a stock install the one
+                          // repeat option people actually reach for was invisible,
+                          // while the on-device parser could produce it from
+                          // "every Mon and Thu" and the DB happily stored it.
+                          items: RepeatType.values.map((type) {
                             String label;
                             switch (type) {
                               case RepeatType.none: label = 'Does not repeat'; break;
@@ -478,6 +534,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                             if (value != null) {
                               setState(() {
                                 _repeatType = value;
+                                // Picking from the dropdown discards any RRULE.
+                                // Keeping a hidden "every other Tuesday" while
+                                // the dropdown reads "Every Week" would be a
+                                // reminder that does not do what the screen says.
+                                _recurrenceRule = null;
                                 if (value == RepeatType.custom && _customDays.isEmpty) {
                                   // Default to today if empty
                                   _customDays.add(_selectedDate.weekday);
@@ -692,6 +753,30 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       ),
                       const SizedBox(height: AppSpacing.xl),
 
+                      // ---- How insistent ----
+                      //
+                      // Distinct from Priority above, which orders the LIST.
+                      // This decides what happens when the reminder is ignored:
+                      // whether it rings, whether it asks again, whether it
+                      // takes over the screen. Before this existed the answer
+                      // was decided by whichever code path scheduled it.
+                      SectionHeader(
+                        title: 'If you don\'t respond',
+                        icon: Symbols.notifications_active_rounded,
+                        accent: rem,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Column(
+                        children: [
+                          for (final level in ReminderEscalation.values) ...[
+                            _buildEscalationOption(level, ext, rem),
+                            if (level != ReminderEscalation.values.last)
+                              const SizedBox(height: AppSpacing.xs),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+
                       // ---- Category ----
                       SectionHeader(
                         title: 'Category',
@@ -859,6 +944,130 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         border: Border.all(color: ext.outline),
       ),
       child: DropdownButtonHideUnderline(child: child),
+    );
+  }
+
+  Future<void> _loadTimeSuggestion() async {
+    final reminder = widget.reminder;
+    if (reminder == null) return;
+    try {
+      final occurrences =
+          await CleanStorageService.getReminderOccurrences(reminder.id);
+      final suggestion = ReminderInsights.suggestTimeShift(
+        reminder: reminder,
+        occurrences: occurrences,
+      );
+      if (!mounted || !suggestion.confident) return;
+      setState(() => _timeSuggestion = suggestion);
+    } catch (e) {
+      debugPrint('⚠️ Loading the time suggestion failed: $e');
+    }
+  }
+
+  Widget _buildTimeSuggestion(AppColorsExt ext, AccentSwatch rem) {
+    final s = _timeSuggestion!;
+    final hour = s.suggestedMinutes ~/ 60;
+    final minute = s.suggestedMinutes % 60;
+    final label = TimeOfDay(hour: hour, minute: minute).format(context);
+    final later = s.deltaMinutes > 0;
+    return AppCard(
+      child: Row(
+        children: [
+          Icon(Symbols.schedule_rounded, color: ext.mark(rem), size: 20),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You usually do this around $label',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: ext.textPrimary),
+                ),
+                Text(
+                  'Based on ${s.sampleCount} times you marked it done, '
+                  '${s.deltaMinutes.abs()} min ${later ? 'later' : 'earlier'} '
+                  'than scheduled.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: ext.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          AppButton(
+            label: 'Move it',
+            size: AppButtonSize.sm,
+            variant: AppButtonVariant.tonal,
+            onPressed: () => setState(() {
+              _selectedTime = TimeOfDay(hour: hour, minute: minute);
+              _selectedDate = DateTime(_selectedDate.year, _selectedDate.month,
+                  _selectedDate.day, hour, minute);
+              // Dismiss once applied — leaving it up would invite the user to
+              // "apply" a shift that is already in the form.
+              _timeSuggestion = null;
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEscalationOption(
+      ReminderEscalation level, AppColorsExt ext, AccentSwatch rem) {
+    final isSelected = _escalation == level;
+    return GestureDetector(
+      onTap: () => setState(() => _escalation = level),
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md, horizontal: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: isSelected ? rem.container : ext.surfaceVariant,
+          borderRadius: AppRadius.brMd,
+          border: Border.all(
+            color: isSelected ? ext.mark(rem) : ext.outline,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected
+                  ? Symbols.radio_button_checked_rounded
+                  : Symbols.radio_button_unchecked_rounded,
+              size: 20,
+              color: isSelected ? ext.mark(rem) : ext.textTertiary,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    level.label,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: ext.textPrimary,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                  ),
+                  Text(
+                    level.description,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: ext.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

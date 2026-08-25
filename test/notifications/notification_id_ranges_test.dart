@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tablet_remainder/core/database/daos/reminders_dao.dart';
+import 'package:tablet_remainder/core/services/background_alarm_service.dart';
 import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/features/medication/services/reminder_slot_grouping.dart';
 import 'package:tablet_remainder/features/medication/services/reminder_window_nudges.dart';
@@ -11,6 +13,89 @@ void main() {
   Iterable<int> waterIds() => List.generate(
       NotificationService.maxWaterReminders,
       (i) => NotificationService.waterReminderBaseId + i);
+
+  /// Every OTHER family had a reserved block and a test here. Generic user
+  /// reminders had neither: their ids were `uuid.hashCode & 0x7FFFFFFF`, which
+  /// can land anywhere in the 31-bit space — including directly on top of the
+  /// bedtime, focus, water or period ids below. A collision means one reminder
+  /// cancels or overwrites another's alarm, with nothing to indicate it.
+  group('generic user reminders now have a reserved block too', () {
+    /// The whole allocatable block, plus the sub-ids and snooze twin the
+    /// scheduler derives from each one.
+    Iterable<int> genericIds() => [
+          for (var i = 0; i < genericReminderIdCapacity; i++)
+            genericReminderIdBase + i,
+        ];
+
+    /// `scheduleGenericReminder` arms weekday/weekend/custom repeats at
+    /// `base + weekday`, so those must stay inside the block too.
+    Iterable<int> genericSubIds() => [
+          for (var i = 0; i < genericReminderIdCapacity; i++)
+            for (var d = 1; d <= 7; d++) genericReminderIdBase + i + d,
+        ];
+
+    test('the block and its weekday sub-ids stay inside 970000-979999', () {
+      for (final id in [...genericIds(), ...genericSubIds()]) {
+        expect(id, greaterThanOrEqualTo(970000));
+        expect(id, lessThan(980000),
+            reason: '$id escaped the block — 990001 is the period family');
+      }
+    });
+
+    test('does not collide with ANY other reserved id', () {
+      final others = <int>{
+        ...waterIds(),
+        NotificationService.waterReminderBaseId,
+        VitalsReminderService.bp.id,
+        VitalsReminderService.glucose.id,
+        VitalsReminderService.weight.id,
+        VitalsReminderService.mood.id,
+        NotificationService.bedtimeReminderId,
+        NotificationService.stepReminderId,
+        NotificationService.wakeAlarmId,
+        NotificationService.focusDailyReminderId,
+        // Medicine slots: one per minute of the day, plus their snooze twins.
+        for (var m = 0; m < 1440; m++) slotIdOffset + m,
+        for (var m = 0; m < 1440; m++) slotIdOffset + m + snoozeIdOffset,
+      };
+      final generic = {...genericIds(), ...genericSubIds()};
+      expect(generic.intersection(others), isEmpty);
+    });
+
+    test('the snooze twin block is also disjoint', () {
+      // Every snooze re-arms at `id + snoozeIdOffset`, so the twin range needs
+      // the same clearance the block itself does.
+      final twins = {
+        for (final id in genericIds()) id + snoozeIdOffset,
+      };
+      expect(twins.first, genericReminderSnoozeIdBase);
+      // Must not fall back onto the medicine slot block or the water block.
+      for (final id in twins) {
+        expect(id, greaterThanOrEqualTo(1070000));
+        expect(
+          [
+            NotificationService.bedtimeReminderId,
+            NotificationService.stepReminderId,
+            NotificationService.wakeAlarmId,
+            NotificationService.focusDailyReminderId,
+          ].contains(id),
+          isFalse,
+        );
+      }
+    });
+
+    test('the DAO\'s snooze-offset mirror matches the real one', () {
+      // reminders_dao.dart duplicates the constant so a DAO never imports the
+      // notification layer. Duplicated constants drift; this is the pin.
+      expect(snoozeIdOffsetForIdRanges, snoozeIdOffset);
+    });
+
+    test('the capacity leaves room for the weekday sub-ids', () {
+      // The highest sub-id must still be inside the block.
+      final highest = genericReminderIdBase + genericReminderIdCapacity - 1 + 7;
+      expect(highest, lessThan(980000));
+    });
+  });
 
   group('interval water reminders vs the rest of the app', () {
     test('do not collide with the vitals reminders', () {

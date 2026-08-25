@@ -1,8 +1,17 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'background_alarm_service.dart' show kShowOnLockScreenPref;
+import '../../features/reminders/models/reminder_kind.dart'
+    show reminderResolvedKey;
+import 'background_alarm_service.dart'
+    show
+        defaultMaxSnoozeCount,
+        kShowOnLockScreenPref,
+        maxSnoozeCountKey,
+        snoozeEnabledKey,
+        snoozeIntervalMinutesKey;
 import '../database/app_database.dart';
 import '../database/daos/core_dao.dart';
 import '../database/daos/medication_dao.dart';
@@ -142,6 +151,38 @@ class CleanStorageService {
     return List.unmodifiable(_remindersCache);
   }
 
+  /// Persist a reminder, allocating its reserved notification id on first save.
+  ///
+  /// Rows written before schema v16 arrive with `notificationId == null`.
+  /// Allocating here means the legacy `id.hashCode` fallback drains naturally as
+  /// reminders are touched, instead of needing Dart work inside a Drift
+  /// migration — the trap the v13 `alterTable` step recorded the hard way.
+  ///
+  /// Returns the reminder AS STORED, so the caller arms the notification under
+  /// the id that was actually written rather than the one it passed in.
+  static Future<ReminderModel.Reminder> saveReminderAllocatingId(
+      ReminderModel.Reminder reminder) async {
+    var toSave = reminder;
+    if (toSave.notificationId == null) {
+      try {
+        final slot = await _remindersDao.allocateNotificationId();
+        if (slot != null) {
+          toSave = toSave.copyWith(notificationId: slot);
+        } else {
+          // Block full. Keep the legacy derivation rather than refuse to save:
+          // an unreserved id risks a collision, no reminder at all is a
+          // guaranteed miss.
+          debugPrint(
+              '⚠️ Generic reminder id block full — falling back to the legacy id');
+        }
+      } catch (e) {
+        debugPrint('⚠️ Allocating a reminder notification id failed: $e');
+      }
+    }
+    await saveReminder(toSave);
+    return toSave;
+  }
+
   /// Save reminder using Drift
   static Future<void> saveReminder(ReminderModel.Reminder reminder) async {
     try {
@@ -164,6 +205,12 @@ class CleanStorageService {
         note: Value(reminder.note),
         imagePath: Value(reminder.imagePath),
         noteId: Value(reminder.noteId),
+        notificationId: Value(reminder.notificationId),
+        recurrenceRule: Value(reminder.recurrenceRule),
+        endsAt: Value(reminder.endsAt),
+        occurrenceLimit: Value(reminder.occurrenceLimit),
+        isPaused: Value(reminder.isPaused),
+        escalation: Value(reminder.escalation.name),
         createdAt: reminder.createdAt,
         updatedAt: reminder.updatedAt,
       );
@@ -174,6 +221,127 @@ class CleanStorageService {
       debugPrint('✓ Reminder saved: ${reminder.title}');
     } catch (e) {
       debugPrint('Error saving reminder: $e');
+    }
+  }
+
+  // ============ REMINDER OCCURRENCES ============
+
+  /// Record what happened to one occurrence of a reminder.
+  ///
+  /// This is the write that `isCompleted` could never be. That field is a single
+  /// mutable boolean: completing a repeating reminder overwrote it and rolled
+  /// `scheduledTime` forward, so the app destroyed its own history and no
+  /// adherence rate, streak, digest or adaptive timing could be computed. An
+  /// occurrence row is append-only history keyed on the instant it was due.
+  ///
+  /// Idempotent — the id is derived from (reminderId, scheduledFor), so a double
+  /// tap or a background action drained twice updates one row rather than
+  /// inventing a second.
+  static Future<void> recordReminderOutcome({
+    required String reminderId,
+    required DateTime scheduledFor,
+    required ReminderModel.ReminderOutcome outcome,
+    DateTime? actedAt,
+    DateTime? firedAt,
+    int? snoozeCount,
+    String? source,
+  }) async {
+    try {
+      await _remindersDao.recordOccurrence(
+        ReminderOccurrencesCompanion.insert(
+          id: RemindersDao.occurrenceId(reminderId, scheduledFor),
+          reminderId: reminderId,
+          scheduledFor: scheduledFor,
+          outcome: Value(outcome.name),
+          // `clock.now()` for a resolution with no explicit time — the project
+          // convention, and it makes these rows testable with `withClock`.
+          actedAt: Value(
+              outcome.isResolved ? (actedAt ?? clock.now()) : actedAt),
+          firedAt: Value(firedAt),
+          snoozeCount: snoozeCount == null ? const Value.absent() : Value(snoozeCount),
+          source: Value(source),
+        ),
+      );
+      // Mirror to SharedPreferences so the ALARM ISOLATE can see it. That
+      // isolate has no Drift connection, so without this a follow-up would fire
+      // for a reminder the user ticked off twenty minutes ago. Same contract as
+      // `nudgeResolvedKey` on the medication side.
+      if (outcome.isResolved) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool(
+              reminderResolvedKey(reminderId, scheduledFor), true);
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Error recording reminder outcome: $e');
+    }
+  }
+
+  /// Every recorded occurrence of one reminder, oldest first.
+  static Future<List<ReminderOccurrence>> getReminderOccurrences(
+      String reminderId) async {
+    try {
+      return await _remindersDao.occurrencesFor(reminderId);
+    } catch (e) {
+      debugPrint('Error reading reminder occurrences: $e');
+      return const [];
+    }
+  }
+
+  /// Drop a reminder's occurrence history, when the reminder itself is deleted.
+  ///
+  /// Only for a real delete. These rows ARE the adherence record, so nothing
+  /// else may clear them.
+  static Future<void> deleteReminderOccurrences(String reminderId) async {
+    try {
+      await _remindersDao.deleteOccurrencesFor(reminderId);
+    } catch (e) {
+      debugPrint('Error deleting reminder occurrences: $e');
+    }
+  }
+
+  /// Close out occurrences that were never resolved and whose time has passed.
+  ///
+  /// The denominator. Without it a user who never opens the app has no `missed`
+  /// rows at all and therefore shows perfect adherence forever — the same reason
+  /// `reconcileMissedDoses` exists on the medication side.
+  ///
+  /// [grace] is how long after the due time an occurrence may still be resolved
+  /// normally; only rows older than that are written off.
+  static Future<int> reconcileMissedReminders({Duration? grace}) async {
+    try {
+      final settings = getUserSettings();
+      // Honour the user's own threshold. `autoMarkMissed` off means they do not
+      // want unanswered occurrences written off at all — an adherence figure
+      // they did not ask for is worse than none.
+      if (!settings.autoMarkMissed) return 0;
+      final window =
+          grace ?? Duration(minutes: settings.missedThresholdMinutes);
+      final cutoff = clock.now().subtract(window);
+      final stale = await _remindersDao.pendingBefore(cutoff);
+      for (final row in stale) {
+        await _remindersDao.recordOccurrence(
+          ReminderOccurrencesCompanion.insert(
+            id: row.id,
+            reminderId: row.reminderId,
+            scheduledFor: row.scheduledFor,
+            outcome: const Value('missed'),
+            firedAt: Value(row.firedAt),
+            snoozeCount: Value(row.snoozeCount),
+            source: Value(row.source),
+            // Deliberately no actedAt: nobody acted. Writing `now` here would
+            // make a miss look like a very late completion.
+          ),
+        );
+      }
+      if (stale.isNotEmpty) {
+        debugPrint('✓ Marked ${stale.length} reminder occurrences missed');
+      }
+      return stale.length;
+    } catch (e) {
+      debugPrint('Error reconciling missed reminders: $e');
+      return 0;
     }
   }
 
@@ -208,6 +376,12 @@ class CleanStorageService {
           note: row.note,
           imagePath: row.imagePath,
           noteId: row.noteId,
+          notificationId: row.notificationId,
+          recurrenceRule: row.recurrenceRule,
+          endsAt: row.endsAt,
+          occurrenceLimit: row.occurrenceLimit,
+          isPaused: row.isPaused,
+          escalation: ReminderModel.ReminderEscalation.fromName(row.escalation),
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         );
@@ -454,7 +628,25 @@ class CleanStorageService {
   }
   
   /// Save synced reminder from model object (for cloud sync)
-  static Future<void> saveSyncedReminderFromModel(ReminderModel.Reminder reminder) async {
+  /// Persist a reminder that arrived from the cloud.
+  ///
+  /// **Every column, not a subset.** This used to write ten of seventeen,
+  /// silently dropping `customDaysJson`, `snoozeDuration`, `sound`, `note`,
+  /// `imagePath` and `noteId`. The consequence was worse than lost detail:
+  /// `sync_service` then scheduled the reminder with its `repeatType` intact but
+  /// `customDays` null, and the `custom` branch of `scheduleGenericReminder`
+  /// loops over that list — so a cloud-arrived custom reminder armed **zero**
+  /// notifications while appearing perfectly normal in the list.
+  ///
+  /// Latent rather than live: nothing currently writes to `users/{uid}/reminders`
+  /// (`RemindersCloudService` was deleted in `0dd3c72`), so the listener in
+  /// `sync_service` never receives anything. Fixed rather than deleted because
+  /// whether reminders should sync across devices is a product decision, and
+  /// leaving a *broken* dormant path is strictly worse than leaving a correct
+  /// one — the next person to add a writer would inherit the bug, not discover
+  /// it.
+  static Future<void> saveSyncedReminderFromModel(
+      ReminderModel.Reminder reminder) async {
     try {
       final companion = RemindersCompanion.insert(
         id: reminder.id,
@@ -463,8 +655,25 @@ class CleanStorageService {
         categoryId: Value(reminder.categoryId),
         scheduledTime: reminder.scheduledTime,
         repeatType: Value(reminder.repeatType.index),
+        customDaysJson: Value(reminder.customDays != null
+            ? jsonEncode(reminder.customDays)
+            : null),
+        snoozeDuration: Value(reminder.snoozeDuration),
+        sound: Value(reminder.sound ?? 'default'),
         priority: Value(reminder.priority.index),
         isCompleted: Value(reminder.isCompleted),
+        isSynced: const Value(true),
+        note: Value(reminder.note),
+        imagePath: Value(reminder.imagePath),
+        noteId: Value(reminder.noteId),
+        recurrenceRule: Value(reminder.recurrenceRule),
+        endsAt: Value(reminder.endsAt),
+        occurrenceLimit: Value(reminder.occurrenceLimit),
+        isPaused: Value(reminder.isPaused),
+        escalation: Value(reminder.escalation.name),
+        // Not carried from the cloud: notification ids are per-device, allocated
+        // from this device's reserved block. Taking another device's id would
+        // collide with whatever local reminder already holds it.
         createdAt: reminder.createdAt,
         updatedAt: reminder.updatedAt,
       );
@@ -527,6 +736,23 @@ class CleanStorageService {
       vibrationEnabled: getAppPreference('vibrationEnabled', true) == true,
       snoozeIntervalMinutes: getAppPreference('snoozeInterval', 5) as int? ?? 5,
       snoozeEnabled: getAppPreference('snoozeEnabled', true) == true,
+      // Was saved nowhere and read nowhere, so `maxSnoozeCount` was permanently
+      // the model's default however the user set it — and the alarm isolate's
+      // cap, which reads the mirrored key, was permanently 3.
+      maxSnoozeCount: getAppPreference('maxSnoozeCount', defaultMaxSnoozeCount)
+              as int? ??
+          defaultMaxSnoozeCount,
+      // Four more that existed in UserSettingsTable and were written and read
+      // nowhere, so they were permanently their model defaults however the user
+      // set them. `autoMarkMissed` + `missedThresholdMinutes` are what turn an
+      // unanswered occurrence into a `missed` row — the denominator every
+      // adherence figure needs.
+      autoMarkMissed: getAppPreference('autoMarkMissed', true) == true,
+      missedThresholdMinutes:
+          getAppPreference('missedThresholdMinutes', 60) as int? ?? 60,
+      reminderSnoozeMinutes:
+          getAppPreference('reminderSnoozeMinutes', 10) as int? ?? 10,
+      preferredRingtone: getAppPreference('preferredRingtone') as String?,
       // Migrate legacy darkMode flag → 3-way theme preference when unset.
       themeModePreference: getAppPreference(
               'themeMode',
@@ -554,21 +780,48 @@ class CleanStorageService {
     await setAppPreference('vibrationEnabled', settings.vibrationEnabled);
     await setAppPreference('snoozeInterval', settings.snoozeIntervalMinutes);
     await setAppPreference('snoozeEnabled', settings.snoozeEnabled);
+    await setAppPreference('maxSnoozeCount', settings.maxSnoozeCount);
+    await setAppPreference('autoMarkMissed', settings.autoMarkMissed);
+    await setAppPreference(
+        'missedThresholdMinutes', settings.missedThresholdMinutes);
+    await setAppPreference(
+        'reminderSnoozeMinutes', settings.reminderSnoozeMinutes);
+    if (settings.preferredRingtone != null) {
+      await setAppPreference('preferredRingtone', settings.preferredRingtone);
+    }
     await setAppPreference('themeMode', settings.themeModePreference);
     // Persist the notification 'Display' + alarm settings so they survive reopen.
     await setAppPreference('showOnLockScreen', settings.showOnLockScreen);
-    // Mirror into SharedPreferences as well: the alarm fires in a background
-    // isolate with no Drift connection, so that is the only place it can read
-    // this from. Without the mirror the toggle silently did nothing on
-    // Android, which is where every medicine reminder actually goes.
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(kShowOnLockScreenPref, settings.showOnLockScreen);
-    } catch (_) {}
+    await mirrorSettingsForAlarmIsolate(settings);
     await setAppPreference('persistentNotification', settings.persistentNotification);
     await setAppPreference('fullScreenNotification', settings.fullScreenNotification);
     await setAppPreference('alarmRingDuration', settings.alarmRingDurationSeconds);
     await setAppPreference('notificationSound', settings.notificationSound);
+  }
+
+  /// Copy every setting the ALARM ISOLATE needs into SharedPreferences.
+  ///
+  /// That isolate has no Drift connection, so SharedPreferences is the only
+  /// place it can read these from. Without the mirror the toggles silently did
+  /// nothing on Android — which is where every medicine reminder actually goes.
+  ///
+  /// Called from [saveUserSettings] and from startup. It used to be only
+  /// startup, and only two of these keys: changing the snooze interval in
+  /// Settings therefore had no effect until the next cold start, and
+  /// `maxSnoozeCount` was never mirrored at all, so the cap was stuck at
+  /// [defaultMaxSnoozeCount] no matter what the user chose.
+  static Future<void> mirrorSettingsForAlarmIsolate(
+      UserSettings settings) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(kShowOnLockScreenPref, settings.showOnLockScreen);
+      await prefs.setInt(
+          snoozeIntervalMinutesKey, settings.snoozeIntervalMinutes);
+      await prefs.setBool(snoozeEnabledKey, settings.snoozeEnabled);
+      await prefs.setInt(maxSnoozeCountKey, settings.maxSnoozeCount);
+    } catch (e) {
+      debugPrint('⚠️ Mirroring settings for the alarm isolate failed: $e');
+    }
   }
   
   /// Full backup snapshot: medicines, focus sessions, reminders, water,
@@ -576,8 +829,10 @@ class CleanStorageService {
   /// services so this service never names the generated Drift `EnhancedMedicine`
   /// (which it imports unprefixed) and avoids the naming clash.
   static Future<Map<String, dynamic>> exportAllData() async {
-    final water = WaterService.listenToDailyData()?.value.values.toList() ??
-        const <DailyWaterData>[];
+    // Read the whole persisted history, NOT `listenToDailyData()?.value` — that
+    // is WaterService's 90-day warm cache, so backups silently contained only
+    // the last three months of drinking for any longer-running user.
+    final water = await WaterService.exportAllDaysForBackup();
     return {
       // v4: adds a 'vitals' section (BP + glucose, later weight). v5 adds
       // 'diary'. Older backups simply omit sections and are restored
@@ -657,8 +912,17 @@ class CleanStorageService {
   ///   * periodDays / menstrualCycles / periodSettingsTable
   ///   * stepDailyData / stepManualEntries  — incl. hand-typed entries
   ///   * sleepSessions / healthProfiles
-  ///   * enhancedWaterLogs / waterAchievements — per-drink history; the day
-  ///                           totals restore, the individual logs do not
+  ///   * waterAchievements   — unlocked badges and points (recomputed from the
+  ///                           restored history by refreshAfterRestore, so this
+  ///                           one is derived rather than lost)
+  ///
+  /// `enhancedWaterLogs` used to be in that list. It no longer is: the backup
+  /// format has always *carried* per-drink logs (DailyWaterData.toJson embeds
+  /// them) — the restore path just dropped them by writing through
+  /// `saveDailyData`, which persists the day row only. It now uses
+  /// `WaterService.restoreDayWithLogs`, so the logs are covered and the table
+  /// is cleared here alongside the day totals it belongs to. Leaving it
+  /// uncleared would orphan every log whose day is not in the backup.
   ///
   /// The rollback snapshot uses the same lossy export, so the failure path
   /// could not recover them either. Restoring a backup must never destroy data
@@ -671,6 +935,8 @@ class CleanStorageService {
     try {
       await db.delete(db.reminders).go();
       await db.delete(db.enhancedMedicines).go();
+      // Logs before day totals: the logs reference the day id.
+      await db.delete(db.enhancedWaterLogs).go();
       await db.delete(db.dailyWaterDataTable).go();
       await db.delete(db.bloodPressureReadings).go();
       await db.delete(db.glucoseReadings).go();
@@ -791,9 +1057,9 @@ class CleanStorageService {
     try {
       if (clearExisting) {
         // Only the backup-covered tables. Using clearAllPersistentData() here
-        // deleted dose history, period history, sleep/step entries and
-        // per-drink water logs that the backup cannot restore — permanently,
-        // while the UI said "Backup restored successfully".
+        // deleted dose history, period history and sleep/step entries that the
+        // backup cannot restore — permanently, while the UI said "Backup
+        // restored successfully".
         await clearRestorableData();
       }
       await importData(data);
@@ -856,12 +1122,25 @@ class CleanStorageService {
           debugPrint('Import reminder failed: $e');
         }
       }
-      for (final w in (data['water'] as List? ?? const [])) {
+      // `saveDailyData` persists only the day row, so restoring through it left
+      // every restored day's totals with no per-drink entries behind them.
+      // `restoreDayWithLogs` writes both.
+      final waterRows = (data['water'] as List? ?? const []);
+      for (final w in waterRows) {
         try {
-          await WaterService.saveDailyData(
+          await WaterService.restoreDayWithLogs(
               DailyWaterData.fromJson(Map<String, dynamic>.from(w)));
         } catch (e) {
           debugPrint('Import water failed: $e');
+        }
+      }
+      if (waterRows.isNotEmpty) {
+        // Favourites and achievements are derived; recompute once at the end
+        // rather than per day.
+        try {
+          await WaterService.refreshAfterRestore();
+        } catch (e) {
+          debugPrint('Water post-restore refresh failed: $e');
         }
       }
       // Vitals (v4+). Missing key → leave existing readings intact.

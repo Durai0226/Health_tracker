@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/health/adaptive_timing.dart';
 import '../../../core/services/background_alarm_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/reminder_budget.dart';
+import '../../../core/services/background_alarm_service.dart'
+    show ReminderKind;
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
@@ -187,9 +190,28 @@ class MedicationReminderService {
 
     debugPrint('📅 Scheduling ${slots.length} reminders for ${medicine.name}');
 
+    // iOS keeps only the soonest-firing 64 pending requests and silently
+    // discards the rest. This path arms one per (medicine, slot) — up to 24 each
+    // — so three medicines on frequent schedules already overflow, and what gets
+    // dropped is whatever is furthest out. A dose is never *pruned* by the
+    // budget (see ReminderBudget.allocate), but it must know when the platform
+    // is about to prune it for us, because that failure is otherwise invisible:
+    // no error, no log, just a dose that never arrives.
+    final pending = await _notificationService.getPendingNotificationCount();
+    final headroom =
+        ReminderBudget.headroomFor(ReminderKind.dose, pending: pending);
+    final wanted =
+        slots.length < _maxSlotsPerMedicine ? slots.length : _maxSlotsPerMedicine;
+    final limit = wanted < headroom ? wanted : headroom;
+    ReminderBudget.reportTruncation(
+      family: 'iOS dose reminders for ${medicine.name}',
+      wanted: wanted,
+      granted: limit,
+    );
+
     final scheduleJson = jsonEncode(medicine.schedule.toJson());
 
-    for (int i = 0; i < slots.length && i < _maxSlotsPerMedicine; i++) {
+    for (int i = 0; i < limit; i++) {
       final time = slots[i];
       final notificationId = await _notificationIdFor(medicine.id, i);
 

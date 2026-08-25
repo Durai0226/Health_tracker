@@ -13,12 +13,32 @@ class StreakResult {
   /// Today isn't completed yet and the streak will break if the day ends unmet.
   final bool atRisk;
 
+  /// Grace days still available in the current trailing week — the user's
+  /// "shield".
+  ///
+  /// The forgiveness was always computed and then thrown away: the engine knew
+  /// it had absorbed a miss, and the UI only ever showed a number that hadn't
+  /// dropped. That wastes the entire point. Duolingo's streak freeze is worth
+  /// +3.3% D14 retention, and their finding is that the freeze has to be
+  /// *visible and already in the user's pocket before they miss* — someone who
+  /// has just broken a streak is not in the app to discover that it was
+  /// actually saved.
+  final int gracesRemaining;
+
+  /// How many grace days a full week starts with.
+  final int gracesPerWeek;
+
   const StreakResult({
     required this.current,
     required this.longest,
     required this.usedGrace,
     required this.atRisk,
+    this.gracesRemaining = 0,
+    this.gracesPerWeek = 0,
   });
+
+  /// True when a miss right now would still be absorbed.
+  bool get isProtected => gracesRemaining > 0;
 }
 
 class StreakEngine {
@@ -45,8 +65,20 @@ class StreakEngine {
     var graceLeft = graceDaysPerWeek;
     var stepsInWeek = 0;
 
+    // Grace still in hand in the CURRENT trailing week — i.e. what would absorb
+    // a miss today. This is captured when the first week's walk completes and
+    // never touched again: `graceLeft` at loop exit describes the OLDEST week
+    // the walk reached, which is not what "your shield" means to a user
+    // standing on today.
+    var gracesThisWeek = graceDaysPerWeek;
+    var capturedThisWeek = false;
+
     while (!cursor.isBefore(earliest)) {
       if (stepsInWeek == 7) {
+        if (!capturedThisWeek) {
+          gracesThisWeek = graceLeft;
+          capturedThisWeek = true;
+        }
         stepsInWeek = 0;
         graceLeft = graceDaysPerWeek; // reset grace each trailing week
       }
@@ -63,6 +95,9 @@ class StreakEngine {
       cursor = _prevDay(cursor);
       stepsInWeek++;
     }
+    // History shorter than a week: the walk never completed one, so the
+    // running value IS the current week's.
+    if (!capturedThisWeek) gracesThisWeek = graceLeft;
 
     // Longest streak across history, applying the same weekly-grace rule.
     final longest = _longest(done, graceDaysPerWeek);
@@ -74,6 +109,8 @@ class StreakEngine {
       longest: longest < current ? current : longest,
       usedGrace: usedGrace,
       atRisk: atRisk,
+      gracesRemaining: gracesThisWeek.clamp(0, graceDaysPerWeek),
+      gracesPerWeek: graceDaysPerWeek,
     );
   }
 

@@ -16,7 +16,12 @@
 
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:tablet_remainder/core/health/streak_engine.dart';
+import 'package:rrule/rrule.dart';
+import 'package:tablet_remainder/features/reminders/models/reminder_model.dart';
+import 'package:tablet_remainder/features/reminders/models/reminder_recurrence.dart';
+import 'package:tablet_remainder/features/reminders/utils/reminder_helper.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_enums.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_schedule.dart';
 import 'package:tablet_remainder/features/period/models/cycle_phase.dart';
@@ -34,6 +39,97 @@ void _expect(Object? actual, Object? expected, String what) {
 /// Calendar-day construction — safe in every zone.
 DateTime _d(int y, int m, int day) => DateTime(y, m, day);
 
+/// A wall-clock instant — the thing a reminder actually promises the user.
+DateTime _at(int y, int m, int day, int h, [int min = 0]) =>
+    DateTime(y, m, day, h, min);
+
+Reminder _reminder(DateTime at, RepeatType repeat, {List<int>? customDays}) =>
+    Reminder(
+      id: 'probe',
+      title: 'probe',
+      body: '',
+      scheduledTime: at,
+      repeatType: repeat,
+      customDays: customDays,
+    );
+
+/// `ReminderHelper.getNextOccurrence` — "same time tomorrow" must mean the same
+/// WALL-CLOCK time, not 24 absolute hours later.
+///
+/// `_calculateNext` used `add(const Duration(days: 1))`. A civil day across a
+/// transition is 23 or 25 hours, so an 08:00 reminder became 09:00 (spring
+/// forward) or 07:00 (fall back) — and since each occurrence is computed from the
+/// previous one, the drift compounded. Unobservable in the default suite, which
+/// runs in a zone chosen by whoever is running it.
+void _reminderRecurrence() {
+  void expectNext(
+    String what, {
+    required Reminder reminder,
+    required DateTime now,
+    required DateTime expected,
+  }) {
+    withClock(Clock.fixed(now), () {
+      _expect(ReminderHelper.getNextOccurrence(reminder), expected, what);
+    });
+  }
+
+  // 2026 US transitions: spring forward Mar 8 (23h day), fall back Nov 1 (25h).
+  expectNext(
+    'daily 08:00 across spring forward stays 08:00',
+    reminder: _reminder(_at(2026, 3, 7, 8), RepeatType.daily),
+    now: _at(2026, 3, 7, 9),
+    expected: _at(2026, 3, 8, 8),
+  );
+  expectNext(
+    'daily 08:00 across fall back stays 08:00',
+    reminder: _reminder(_at(2026, 10, 31, 8), RepeatType.daily),
+    now: _at(2026, 10, 31, 9),
+    expected: _at(2026, 11, 1, 8),
+  );
+  expectNext(
+    'weekly 08:00 spanning spring forward stays 08:00 on the same weekday',
+    reminder: _reminder(_at(2026, 3, 1, 8), RepeatType.weekly),
+    now: _at(2026, 3, 1, 9),
+    expected: _at(2026, 3, 8, 8),
+  );
+  expectNext(
+    'weekdays Fri -> Mon across spring forward stays 07:30',
+    reminder: _reminder(_at(2026, 3, 6, 7, 30), RepeatType.weekdays),
+    now: _at(2026, 3, 6, 8),
+    expected: _at(2026, 3, 9, 7, 30),
+  );
+  expectNext(
+    'weekends Sat -> Sun across fall back stays 21:00',
+    reminder: _reminder(_at(2026, 10, 31, 21), RepeatType.weekends),
+    now: _at(2026, 10, 31, 22),
+    expected: _at(2026, 11, 1, 21),
+  );
+  expectNext(
+    'custom Mondays across spring forward stays 08:00',
+    reminder: _reminder(_at(2026, 3, 2, 8), RepeatType.custom,
+        customDays: const [DateTime.monday]),
+    now: _at(2026, 3, 2, 9),
+    expected: _at(2026, 3, 9, 8),
+  );
+  // The compounding case: the catch-up loop steps a missed daily reminder
+  // forward one day at a time, so it crosses the transition mid-loop. Every one
+  // of those steps used to shed or gain an hour.
+  expectNext(
+    'a daily reminder missed for 10 days, caught up across spring forward',
+    reminder: _reminder(_at(2026, 3, 1, 8), RepeatType.daily),
+    now: _at(2026, 3, 10, 12),
+    expected: _at(2026, 3, 11, 8),
+  );
+  // 09:30 on Nov 1 exists twice in a fall-back zone. The reminder must land on
+  // the wall-clock time regardless of which offset DateTime resolves it to.
+  expectNext(
+    'a time inside the repeated hour still resolves to that wall clock',
+    reminder: _reminder(_at(2026, 10, 31, 1, 30), RepeatType.daily),
+    now: _at(2026, 10, 31, 2),
+    expected: _at(2026, 11, 1, 1, 30),
+  );
+}
+
 void main() {
   // Guard against a vacuous run: if the ambient zone has no DST, none of this
   // proves anything and the parent test is being lied to.
@@ -49,6 +145,8 @@ void main() {
   _streakEngine();
   _medicineSchedule();
   _cyclePredictor();
+  _reminderRecurrence();
+  _rruleFloatingTime();
 
   if (_failures.isEmpty) {
     stdout.writeln('DST probe OK (${DateTime(2026, 7, 1).timeZoneName}).');
@@ -237,4 +335,87 @@ void _cyclePredictor() {
     pregnancyStartDate: _d(2026, 3, 1),
   );
   _expect(preg.gestationalDays, 19, 'predict: gestational days across DST');
+}
+
+/// RFC 5545 recurrence under a real DST zone.
+///
+/// `rrule` requires every DateTime to have `isUtc: true` and states it "doesn't
+/// care about any time-zone-related stuff". A reminder, however, is a WALL-CLOCK
+/// promise: 08:00 means 08:00 whatever the offset is that day.
+///
+/// The naive treatment — convert local→UTC, generate, convert back — reproduces
+/// exactly the bug `_calculateNext` was just fixed for, because the offset
+/// changes across a transition. [ReminderRecurrence] instead RELABELS the local
+/// wall clock as UTC, so the arithmetic never touches a zone and cannot gain or
+/// lose an hour.
+///
+/// This is the check that convention is actually holding. It cannot live in the
+/// ordinary suite: a Dart process reads its zone once at startup.
+void _rruleFloatingTime() {
+  ReminderRecurrence r(String s) =>
+      ReminderRecurrence.rrule(RecurrenceRule.fromString(s));
+
+  void expectAllAt(String what, List<DateTime> got, int hour, int minute) {
+    for (final d in got) {
+      if (d.hour != hour || d.minute != minute) {
+        _failures.add('$what\n    expected: every instance at '
+            '$hour:${minute.toString().padLeft(2, '0')}'
+            '\n    actual:   $d');
+        return;
+      }
+    }
+  }
+
+  // 2026 US transitions: spring forward Mar 8, fall back Nov 1.
+  expectAllAt(
+    'daily RRULE across spring forward holds 08:00',
+    r('RRULE:FREQ=DAILY').preview(start: DateTime(2026, 3, 5, 8), limit: 8),
+    8,
+    0,
+  );
+  expectAllAt(
+    'daily RRULE across fall back holds 21:30',
+    r('RRULE:FREQ=DAILY').preview(start: DateTime(2026, 10, 29, 21, 30), limit: 8),
+    21,
+    30,
+  );
+  expectAllAt(
+    'every-other-week RRULE holds 07:15 across both transitions',
+    r('RRULE:FREQ=WEEKLY;INTERVAL=2')
+        .preview(start: DateTime(2026, 2, 3, 7, 15), limit: 26),
+    7,
+    15,
+  );
+  expectAllAt(
+    'monthly BYSETPOS holds 17:45 all year',
+    r('RRULE:FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1')
+        .preview(start: DateTime(2026, 1, 30, 17, 45), limit: 12),
+    17,
+    45,
+  );
+
+  // The precise instant, not just the time of day: the day after spring forward.
+  _expect(
+    r('RRULE:FREQ=DAILY')
+        .nextAfter(start: DateTime(2026, 3, 7, 8), after: DateTime(2026, 3, 7, 9)),
+    DateTime(2026, 3, 8, 8),
+    'daily RRULE lands on Mar 8 08:00, not 07:00 or 09:00',
+  );
+  _expect(
+    r('RRULE:FREQ=DAILY').nextAfter(
+        start: DateTime(2026, 10, 31, 8), after: DateTime(2026, 10, 31, 9)),
+    DateTime(2026, 11, 1, 8),
+    'daily RRULE lands on Nov 1 08:00 across fall back',
+  );
+
+  // Instances must come back LOCAL. A leaked UTC DateTime compares wrongly
+  // against clock.now() and would be off by the whole zone offset.
+  for (final d in r('RRULE:FREQ=DAILY')
+      .preview(start: DateTime(2026, 6, 1, 8), limit: 3)) {
+    if (d.isUtc) {
+      _failures.add('RRULE instances must be reinterpreted as local'
+          '\n    expected: isUtc == false\n    actual:   $d');
+      break;
+    }
+  }
 }

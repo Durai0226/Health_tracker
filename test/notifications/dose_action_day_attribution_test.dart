@@ -177,6 +177,73 @@ void main() {
     });
   });
 
+  group('the full-screen AlarmScreen resolves the same dose instant', () {
+    // AlarmScreen derived this itself, as
+    // `DateTime(now.year, now.month, now.day, hour, minute)` — so the foreground
+    // "✓ Take" button attributed doses by a different rule than the notification
+    // action right next to it. Everything below is the case the background path
+    // was already tested for; the point is that ONE function now answers it.
+    final justAfterMidnight = DateTime(2026, 3, 2, 0, 5);
+
+    test('a 23:55 dose taken at 00:05 belongs to yesterday', () {
+      expect(
+        doseInstantFromAlarmPayload({'hour': 23, 'minute': 55},
+            now: justAfterMidnight),
+        DateTime(2026, 3, 1, 23, 55),
+      );
+    });
+
+    test('a payload-stamped instant wins over re-deriving one', () {
+      // The background path resolves the instant and stamps it; re-deriving
+      // cannot know which day a snoozed re-fire belongs to.
+      final stamped = DateTime(2026, 2, 27, 8, 0);
+      expect(
+        doseInstantFromAlarmPayload({
+          'doseEpochMs': stamped.millisecondsSinceEpoch,
+          // Deliberately contradictory — the stamp must win.
+          'hour': 23,
+          'minute': 55,
+        }, now: justAfterMidnight),
+        stamped,
+      );
+    });
+
+    test('a same-day dose is unaffected', () {
+      expect(
+        doseInstantFromAlarmPayload({'hour': 8, 'minute': 0},
+            now: DateTime(2026, 3, 2, 8, 1)),
+        DateTime(2026, 3, 2, 8, 0),
+      );
+    });
+
+    test('a generic reminder with no clock time falls back to now', () {
+      // Nothing to attribute: a generic reminder has no dose identity.
+      expect(doseInstantFromAlarmPayload(const {}, now: justAfterMidnight),
+          justAfterMidnight);
+      expect(
+          doseInstantFromAlarmPayload({'hour': 9}, now: justAfterMidnight),
+          justAfterMidnight,
+          reason: 'a half-specified time is not a dose time');
+    });
+
+    test('it agrees with resolveDoseInstant, which the background path uses', () {
+      // The two must never diverge again — that divergence WAS the bug.
+      for (final t in [
+        (23, 55),
+        (0, 0),
+        (12, 30),
+        (8, 0),
+      ]) {
+        expect(
+          doseInstantFromAlarmPayload({'hour': t.$1, 'minute': t.$2},
+              now: justAfterMidnight),
+          resolveDoseInstant(justAfterMidnight, t.$1, t.$2),
+          reason: 'at ${t.$1}:${t.$2}',
+        );
+      }
+    });
+  });
+
   group('notificationTapBackground (the handler a cold start installs)', () {
     test('"✓ Take" reaches the dose queue', () async {
       // flutter_local_notifications keeps ONE app-wide background callback

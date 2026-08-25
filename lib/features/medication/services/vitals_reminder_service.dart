@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 
 import '../../../core/services/clean_storage_service.dart';
@@ -59,6 +60,33 @@ class VitalsReminderService {
     body: 'Take a moment to log your mood today.',
     defaultHour: 20,
   );
+
+  /// Every spec, in a fixed order — so a caller can iterate them without
+  /// hardcoding a list that silently goes stale when a fifth vital is added.
+  static const List<VitalsReminderSpec> all = [bp, glucose, weight, mood];
+
+  /// Re-arm every enabled vitals reminder from persisted state.
+  ///
+  /// These are `zonedSchedule`/AlarmManager registrations, so they do not
+  /// survive an id-scheme change, a restore, or an exact-alarm grant that
+  /// arrives after they were armed inexactly. Nothing re-established them:
+  /// `ReminderRescheduleService` covered medicines, water and appointments only,
+  /// and vitals had no rearm path at all — so a reminder the user had switched
+  /// on could quietly stop existing and the toggle would still read "On".
+  static Future<int> rescheduleAll() async {
+    var armed = 0;
+    for (final spec in all) {
+      if (!isEnabled(spec)) continue;
+      final t = timeOf(spec);
+      try {
+        await apply(spec, enabled: true, hour: t.hour, minute: t.minute);
+        armed++;
+      } catch (e) {
+        debugPrint('⚠️ Re-arming the ${spec.title} reminder failed: $e');
+      }
+    }
+    return armed;
+  }
 
   static bool isEnabled(VitalsReminderSpec s) =>
       CleanStorageService.getAppPreference('${s.prefKey}_on', false) == true;
