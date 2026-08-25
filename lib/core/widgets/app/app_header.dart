@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
+import 'app_button.dart';
 
 /// How the header arranges its chrome relative to its title.
 enum HeaderLayout {
@@ -51,6 +53,30 @@ class AppHeader extends StatelessWidget {
     this.padding = const EdgeInsets.fromLTRB(
         AppSpacing.gutter, AppSpacing.lg, AppSpacing.gutter, AppSpacing.sm),
   });
+
+  /// The standard back affordance for a pushed screen.
+  ///
+  /// This exact 8-line block — `AppIconButton` with `arrow_back_rounded`, a
+  /// `canPop` guard, and `filled: false` — is copy-pasted across dozens of
+  /// screens. A whole detail-page scaffold widget was considered and rejected:
+  /// 61 files use `Symbols.arrow_back_rounded`, so a wrapper would be a 61-file
+  /// migration for about twelve lines each, and `AppHeader` already absorbs the
+  /// genuinely hard parts (the title `FittedBox`, the bounded leading slot, the
+  /// stacked layout). This static is the small piece that was actually
+  /// duplicated.
+  ///
+  /// The `canPop` guard matters: on a screen that is also reachable as a route
+  /// root (the QA harness and the responsive sweep both mount screens that way)
+  /// an unguarded `Navigator.pop` throws.
+  static Widget backButton(BuildContext context, {AccentSwatch? accent}) =>
+      AppIconButton(
+        icon: Symbols.arrow_back_rounded,
+        filled: false,
+        accent: accent,
+        onPressed: () {
+          if (Navigator.canPop(context)) Navigator.pop(context);
+        },
+      );
 
   /// A greeting must NEVER wrap.
   ///

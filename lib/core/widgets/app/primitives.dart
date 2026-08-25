@@ -88,7 +88,23 @@ class SectionHeader extends StatelessWidget {
             ),
             const SizedBox(width: 10),
           ],
-          Expanded(child: Text(title, style: tt.headlineMedium)),
+          // `header: true` inside the shared widget, not at each call site.
+          //
+          // A heading is what lets VoiceOver's rotor and TalkBack's
+          // heading-navigation jump between sections instead of swiping through
+          // every row of every list. Doing it here makes every section header in
+          // the app navigable in one change; doing it per call site guarantees
+          // that most of them never get it.
+          //
+          // The Text stays inside the Semantics rather than the other way
+          // round, so the header node carries the title as its label and the
+          // action button beside it remains a separate, operable node.
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(title, style: tt.headlineMedium),
+            ),
+          ),
           if (actionLabel != null && onAction != null)
             TextButton(
               onPressed: onAction,
@@ -477,6 +493,108 @@ class AppTextField extends StatelessWidget {
 }
 
 /// Shimmer loading placeholder.
+/// A page-shaped placeholder built from [LoadingSkeleton] blocks.
+///
+/// The point is not "show something while loading" — it is that the placeholder
+/// must occupy the **same** rhythm as the loaded page, or the swap jumps and the
+/// skeleton has made the wait feel worse rather than better. So the padding and
+/// separator sizes here are the ones real bodies use
+/// (`AppSpacing.gutter` horizontal, `AppSpacing.lg` between cards), and callers
+/// pass the real card height.
+///
+/// Two named constructors cover the shapes this app actually needs. Add a third
+/// only when a third page genuinely differs — a parameter per screen defeats the
+/// purpose.
+///
+/// Caveat inherited from [LoadingSkeleton]: while one of these is mounted,
+/// `pumpAndSettle` never returns. Tests must use an explicit `pump(Duration)`.
+class PageSkeleton extends StatelessWidget {
+  const PageSkeleton({
+    super.key,
+    this.headerLines = 0,
+    this.cards = 3,
+    this.cardHeight = 96,
+    this.rows = 0,
+    this.padding,
+  });
+
+  /// A hero block plus stacked cards — a report or dashboard.
+  const PageSkeleton.report({super.key})
+      : headerLines = 2,
+        cards = 3,
+        cardHeight = 208,
+        rows = 0,
+        padding = null;
+
+  /// A short intro plus list rows — a settings-shaped or registry-shaped page.
+  const PageSkeleton.list({super.key, this.rows = 6})
+      : headerLines = 2,
+        cards = 0,
+        cardHeight = 96,
+        padding = null;
+
+  /// Full-width lines above the content, for an intro paragraph.
+  final int headerLines;
+
+  /// Large blocks, sized by [cardHeight].
+  final int cards;
+  final double cardHeight;
+
+  /// List-row-height blocks.
+  final int rows;
+
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+
+    for (var i = 0; i < headerLines; i++) {
+      children.add(LoadingSkeleton.line(
+        // Ragged widths read as text; equal widths read as a table.
+        width: i.isEven ? 260 : 180,
+      ));
+      children.add(const SizedBox(height: AppSpacing.sm));
+    }
+    if (headerLines > 0) {
+      children.add(const SizedBox(height: AppSpacing.md));
+    }
+
+    for (var i = 0; i < cards; i++) {
+      children.add(LoadingSkeleton(
+        width: double.infinity,
+        height: cardHeight,
+        radius: AppRadius.card,
+      ));
+      if (i != cards - 1) {
+        children.add(const SizedBox(height: AppSpacing.lg));
+      }
+    }
+
+    if (cards > 0 && rows > 0) {
+      children.add(const SizedBox(height: AppSpacing.lg));
+    }
+
+    for (var i = 0; i < rows; i++) {
+      children.add(const LoadingSkeleton(
+        width: double.infinity,
+        height: 64,
+        radius: AppRadius.card,
+      ));
+      if (i != rows - 1) {
+        children.add(const SizedBox(height: AppSpacing.sm));
+      }
+    }
+
+    return ListView(
+      padding: padding ??
+          const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.md,
+              AppSpacing.gutter, AppSpacing.xxl),
+      children: children,
+    );
+  }
+}
+
 class LoadingSkeleton extends StatefulWidget {
   final double? width;
   final double height;
@@ -504,9 +622,41 @@ class LoadingSkeleton extends StatefulWidget {
 
 class _LoadingSkeletonState extends State<LoadingSkeleton>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
-        ..repeat(reverse: true);
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1200));
+
+  /// Whether the shimmer is currently running, so a dependency change does not
+  /// restart an already-running repeat.
+  bool _animating = false;
+
+  /// The shimmer starts here, not in the field initialiser, because
+  /// `MediaQuery.disableAnimationsOf` needs a context — and it used to call
+  /// `..repeat(reverse: true)` unconditionally, so a skeleton kept a ticker
+  /// spinning forever even with reduce-motion on. That is both an accessibility
+  /// problem (a pulsing block is a vestibular trigger) and a test hazard: any
+  /// harness asserting `transientCallbackCount` settles to zero sees a
+  /// perpetually-animating widget.
+  ///
+  /// Note the animation is a COLOUR lerp, so the widget count still stabilises —
+  /// `pumpAndSettle` will nonetheless hang while one is mounted. Use an explicit
+  /// `pump(Duration)` in tests.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (reduceMotion) {
+      if (_animating) {
+        _c.stop();
+        _animating = false;
+      }
+      // Sit at the midpoint so the block still reads as a placeholder rather
+      // than as surfaceVariant-coloured empty space.
+      _c.value = 0.5;
+    } else if (!_animating) {
+      _animating = true;
+      _c.repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {

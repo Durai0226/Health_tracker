@@ -3,6 +3,9 @@ library app_widgets;
 
 export '../../design/app_design.dart';
 export 'app_card.dart';
+export 'async_section.dart';
+export 'app_search_field.dart';
+export 'list_group.dart';
 export 'app_logo.dart';
 export 'app_nav_bar.dart';
 export 'app_button.dart';
