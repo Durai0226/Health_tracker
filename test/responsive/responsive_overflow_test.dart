@@ -135,7 +135,12 @@ const Map<String, String> _blankAllowlist = {
 const Map<String, int> _seededOverflowBaseline = {
   'sleep_history': 90,
   'water_dashboard': 56,
-  'water_stats': 41,
+  // 48, not the 41 I first recorded. The original figure was measured on a run
+  // that was itself broken: StepActivityRing was still throwing an UNCAUGHT
+  // framework exception at that point ("Multiple exceptions (5) were detected"),
+  // and captures after it were lost. Re-measured twice, identically, once the
+  // sweep ran clean. Not a regression in the water screen — a bad baseline.
+  'water_stats': 48,
   'focus_stats': 26,
   'period': 18,
   // proactive_nudge's two are the "No Material widget found" artifact described
