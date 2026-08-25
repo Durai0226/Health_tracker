@@ -11,6 +11,8 @@ import '../support/perf_rating.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
+import 'package:tablet_remainder/core/dev/qa_seed.dart';
+import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
 import 'package:tablet_remainder/core/widgets/app/app_header.dart';
@@ -63,6 +65,7 @@ import 'package:tablet_remainder/features/settings/screens/health_privacy_screen
 import 'package:tablet_remainder/features/biometrics/screens/heart_dashboard_screen.dart';
 import 'package:tablet_remainder/features/biometrics/screens/workouts_screen.dart';
 import 'package:tablet_remainder/features/biometrics/screens/connected_devices_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/conditions/condition_library_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/early_access_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/reminders_hub_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_dashboard_screen.dart';
@@ -91,15 +94,59 @@ import 'package:tablet_remainder/features/insights/screens/trends_dashboard_scre
 /// failure mode this whole exercise exists to fix. Every entry needs a reason.
 const Map<String, String> _blankAllowlist = {
   'proactive_nudge':
-      'Not a screen — a frequency-capped banner. `if (_insight == null) return '
-          'const SizedBox.shrink()` (proactive_nudge.dart). On the empty '
-          'database this sweep uses there is no insight to show, so rendering '
-          'nothing is the correct behaviour.',
+      'Not a screen — a frequency-capped banner. It is mounted here without a '
+          'Scaffold, so it throws "No Material widget found" before it can '
+          'render anything, and the absurd +99882px figures it reports are that '
+          'failure rather than a layout. A harness artifact. (The old reason '
+          'given here — no insight on an empty database — went stale the moment '
+          'this sweep started seeding.)',
   'backup':
       'Caught in its loading state: the body is `_isLoading ? _buildLoading() '
           ': _buildContent()` (backup_screen.dart) and the skeleton carries no '
           'text. A harness artifact, not a defect — the cloud lookup never '
           'resolves headlessly.',
+};
+
+/// Screens that ALREADY overflow with seeded data, and by how many
+/// device x scale combinations.
+///
+/// ## Why this list exists
+///
+/// This sweep used to run against an empty database. Every screen therefore
+/// rendered its EMPTY state, and an empty state has almost nothing in it to
+/// overflow — so the harness reported "NO OVERFLOWS" while proving only that
+/// the empty states fit. Seeding it surfaced **234 real overflow combinations
+/// across eight screens**, none of which was new; they had simply never been
+/// looked at.
+///
+/// Fixing all eight in the same change as switching the harness on would make
+/// both impossible to review, so the known set is recorded here and the gate
+/// fails on anything BEYOND it.
+///
+/// ## This list may only shrink
+///
+/// The count is asserted in both directions. Overflow more than the number and
+/// the gate fails as a regression; overflow *less* and it fails too, telling you
+/// to lower the number. A baseline that silently absorbs improvements is a
+/// baseline that never gets smaller — and this repo has already been bitten by
+/// instruments that could not fail.
+///
+/// Ordered worst first. Every one is at 320pt, most only above 1.0x text scale.
+const Map<String, int> _seededOverflowBaseline = {
+  'sleep_history': 90,
+  'water_dashboard': 56,
+  'water_stats': 41,
+  'focus_stats': 26,
+  'period': 18,
+  // proactive_nudge's two are the "No Material widget found" artifact described
+  // in _blankAllowlist, not a layout at all.
+  'proactive_nudge': 2,
+  // One combination each, all at the 320pt floor. `home` is the one that should
+  // go first: it is the app's primary screen and it overflows at **1.0x**, i.e.
+  // at the default text size, not only under Dynamic Type.
+  'home': 1, // 320 @1.0x, right +52px
+  'glucose': 1, // 320 @2.0x, right +33px — inside AppHeader's own layout
+  'weight': 1, // 320 @2.0x, right +26px
 };
 
 /// Phone sizes this app must support, in LOGICAL pixels (portrait).
@@ -173,6 +220,10 @@ final Map<String, ScreenBuilder> _screens = {
   'heart': () => const HeartDashboardScreen(),
   'workouts': () => const WorkoutsScreen(),
   'connected_devices': () => const ConnectedDevicesScreen(),
+  // hypertension is the responsive fixture of choice on the DETAIL side:
+  // longest name and the only entry that renders both personalised
+  // sections. The list screen goes here.
+  'condition_library': () => const ConditionLibraryScreen(),
   'early_access': () => const EarlyAccessScreen(),
   'reminders_hub': () => const RemindersHubScreen(),
   'sleep': () => const SleepDashboardScreen(),
@@ -272,6 +323,19 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     AppDatabase.setInstanceForTesting(db);
     ActiveProfileService().resetForTesting();
+    // Seeded, the way `screen_build_cost_test.dart` already is — and for a
+    // sharper reason here. On an empty database every screen renders its EMPTY
+    // state, and an empty state has almost nothing in it to overflow. So this
+    // harness was reporting "NO OVERFLOWS" while proving only that the empty
+    // states fit.
+    //
+    // Measured cost of that gap, on the one card file that got a widget-level
+    // sweep with real data: a 93px header overflow, a 136px and a 17px row
+    // overflow, and a silently CLIPPED in-segment label — four defects in a
+    // file this harness had declared clean across 48 device/scale combinations.
+    CleanStorageService.resetForTesting();
+    await CleanStorageService.init();
+    await seedQaData(force: true);
   });
 
   tearDown(() async => db.close());
@@ -535,8 +599,37 @@ void main() {
           source: 'binary: a screen with no text is not a screen'));
     }
 
-    expect(overflows, isEmpty,
-        reason: 'Screens overflowed — see the OVERFLOWS section above.');
+    // Anything not in the baseline, or worse than the baseline, fails.
+    final regressions = <String>[];
+    final improvements = <String>[];
+    for (final e in overflows.entries) {
+      final known = _seededOverflowBaseline[e.key];
+      if (known == null) {
+        regressions.add('${e.key}: ${e.value.length} combination(s), and this '
+            'screen has never overflowed before');
+      } else if (e.value.length > known) {
+        regressions.add('${e.key}: ${e.value.length} combination(s), baseline '
+            'is $known');
+      } else if (e.value.length < known) {
+        improvements.add('${e.key}: now ${e.value.length}, baseline says '
+            '$known — lower it');
+      }
+    }
+    for (final name in _seededOverflowBaseline.keys) {
+      if (!overflows.containsKey(name)) {
+        improvements.add('$name: fixed entirely — remove it from the baseline');
+      }
+    }
+
+    expect(regressions, isEmpty,
+        reason: 'Screens overflowed beyond the recorded baseline — see the '
+            'OVERFLOWS section above.\n${regressions.join('\n')}');
+    // Failing on an IMPROVEMENT is deliberate. A baseline that absorbs progress
+    // silently is a baseline that never shrinks.
+    expect(improvements, isEmpty,
+        reason: 'Good news, and an action: these are better than the baseline '
+            'records, so the baseline is now lying.\n'
+            '${improvements.join('\n')}');
     expect(wraps, isEmpty,
         reason: 'Header text wrapped — see the WRAPPED HEADER TEXT section '
             'above. Header chrome must render on one line at every supported '

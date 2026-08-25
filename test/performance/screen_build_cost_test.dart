@@ -56,6 +56,7 @@ import 'package:tablet_remainder/features/settings/screens/health_privacy_screen
 import 'package:tablet_remainder/features/biometrics/screens/heart_dashboard_screen.dart';
 import 'package:tablet_remainder/features/biometrics/screens/workouts_screen.dart';
 import 'package:tablet_remainder/features/biometrics/screens/connected_devices_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/conditions/condition_library_screen.dart';
 import 'package:tablet_remainder/features/home/screens/health_browse_screen.dart';
 
 class _Cost {
@@ -102,6 +103,7 @@ final _screens = <List<dynamic>>[
   ['Biometrics', 'heart', () => const HeartDashboardScreen()],
   ['Biometrics', 'workouts', () => const WorkoutsScreen()],
   ['Biometrics', 'connected_devices', () => const ConnectedDevicesScreen()],
+  ['Medication', 'condition_library', () => const ConditionLibraryScreen()],
 ];
 
 
@@ -163,14 +165,36 @@ const Map<String, int> _elementBudget = {
   'Vitals/mood': 1074,
   'Medication/adherence_report': 975,
   'Settings/root': 959,
-  'Settings/health_privacy': 640,
+  // 640 -> 765: measured 665 after the two hydration disclosure rows (one
+  // "what we read", one "what we write back") were added alongside the Health
+  // Connect hydration permissions. The screen's own doc comment requires it:
+  // "If you add a data type, change this screen in the same commit" — claiming
+  // less than you read is what fails review. Two AppListTiles at ~12 elements
+  // each; growth, not drift.
+  'Settings/health_privacy': 765,
   // Measured against seeded biometrics. These were 250 apiece before
   // `_seedBiometrics` existed AND before the screens stopped gating their body
   // behind a spinner — i.e. budgeted at their loading state, which is the
   // exact defect this file's header warns about one level up.
   'Biometrics/heart': 670,
   'Biometrics/workouts': 660,
-  'Biometrics/connected_devices': 380,
+  // 380 -> 440: measured 383 once the screen could actually RENDER the seeded
+  // device. `qa_seed.dart:598` plants a Galaxy Watch5 with the comment "so
+  // Connected devices is measured with a row rather than its empty state" — and
+  // it never was. The old screen resolved four sequential awaits into one
+  // setState with only one of them time-bounded, so under `testWidgets` the
+  // platform probe never returned, the 6s timeout threw into a bare catch, and
+  // the single setState never ran. 380 was this screen's EMPTY state, which is
+  // precisely the defect this file's header warns about one level up, and it is
+  // why the number sat at 380 next to siblings at 660-670.
+  //
+  // Measured now: 320 empty, 383 with one device row. +63 for a row carrying an
+  // icon, a name, a pin marker, two metric labels, a relative timestamp and a
+  // named switch.
+  'Biometrics/connected_devices': 440,
+  // New registration, measured 547 against the seeded database. The screen was
+  // in NONE of the four harnesses before this — it now sits in all four.
+  'Medication/condition_library': 630,
   'Vitals/blood_sugar': 940,
   'Focus/stats': 1328,
   'Insights/weekly_recap': 856,

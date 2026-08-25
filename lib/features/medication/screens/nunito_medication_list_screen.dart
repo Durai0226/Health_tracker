@@ -371,23 +371,11 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
               ],
               bottom: Column(
                 children: [
-                  AppTextField(
+                  AppSearchField(
                     controller: _searchController,
-                    hint: 'Search medications...',
-                    prefixIcon: Symbols.search_rounded,
+                    hint: 'Search medications',
                     accent: ext.medicine,
                     onChanged: _onSearchChanged,
-                    textInputAction: TextInputAction.search,
-                    suffix: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(Symbols.clear_rounded,
-                                color: ext.textTertiary),
-                            onPressed: () {
-                              _searchController.clear();
-                              _onSearchChanged('');
-                            },
-                          )
-                        : null,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   SegmentedToggle(

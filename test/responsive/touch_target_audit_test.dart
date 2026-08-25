@@ -37,6 +37,8 @@ import 'package:tablet_remainder/features/focus/screens/app_allow_list_screen.da
 import 'package:tablet_remainder/features/focus/screens/plant_real_trees_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/relaxation_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/settings/focus_reminders_settings_screen.dart';
+import 'package:tablet_remainder/features/biometrics/screens/connected_devices_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/conditions/condition_library_screen.dart';
 import 'package:tablet_remainder/features/home/screens/home_dashboard.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_dashboard.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/blood_pressure_screen.dart';
@@ -53,6 +55,10 @@ const double _appleMin = 44.0;
 const double _wcagMin = 24.0;
 
 final Map<String, Widget Function()> _screens = {
+  // Never registered before, on a screen that is almost entirely controls: a
+  // switch per source, plus the row itself as a nav target.
+  'connected_devices': () => const ConnectedDevicesScreen(),
+  'condition_library': () => const ConditionLibraryScreen(),
   'home': () => HomeDashboard(onNavigate: (int i, {int? healthTab}) {}),
   'medicine': () => const NunitoMedicationDashboard(),
   'water_dashboard': () => const AquaWaterDashboard(),
@@ -242,7 +248,15 @@ void main() {
           }
         }
       }
+      // Drain anything still armed before the tree goes away, or a screen with
+      // a bounded platform probe fails as "a Timer is still pending after the
+      // widget tree was disposed" — which says nothing about touch targets.
+      // `screen_build_cost_test.dart` already does exactly this, for the same
+      // reason and with the same 8s; this harness had no equivalent, so the
+      // first registered screen holding a `.timeout()` would have taken it down.
+      // Costs no real wall time: the clock here is fake.
       await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 8));
     });
   }
 

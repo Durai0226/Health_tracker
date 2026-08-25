@@ -8,6 +8,10 @@ import 'package:tablet_remainder/core/database/app_database.dart' show AppDataba
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
+import 'package:tablet_remainder/features/biometrics/screens/connected_devices_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/conditions/condition_library_screen.dart';
+import 'package:tablet_remainder/features/biometrics/screens/heart_dashboard_screen.dart';
+import 'package:tablet_remainder/features/biometrics/screens/workouts_screen.dart';
 import 'package:tablet_remainder/features/diary/screens/diary_screen.dart';
 import 'package:tablet_remainder/features/period/screens/period_dashboard.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_dashboard_screen.dart';
@@ -51,6 +55,13 @@ void main() {
     'Sleep': () => const SleepDashboardScreen(),
     'Period': () => const PeriodDashboard(),
     'Diary': () => const DiaryScreen(),
+    // The three biometrics screens are all pushed from the Health hub and none
+    // of them was registered here. Connected devices is the one that matters
+    // most: it is the only route to the per-device detail screen.
+    'Heart': () => const HeartDashboardScreen(),
+    'Workouts': () => const WorkoutsScreen(),
+    'Connected devices': () => const ConnectedDevicesScreen(),
+    'Condition library': () => const ConditionLibraryScreen(),
   };
 
   screens.forEach((name, build) {

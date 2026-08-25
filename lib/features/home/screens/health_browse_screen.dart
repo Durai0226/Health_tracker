@@ -105,10 +105,7 @@ class HealthBrowseScreen extends StatelessWidget {
                 _trendsCard(context, ext, tt),
                 const SizedBox(height: AppSpacing.md),
                 // Re-homed here: the Insights hub was its only entry point.
-                AppCard(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                  child: Column(children: _withDividers(ext, [
+                AppListGroup(children: [
                     _tile(
                         ext,
                         Symbols.calendar_view_week_rounded,
@@ -143,8 +140,7 @@ class HealthBrowseScreen extends StatelessWidget {
                               MaterialPageRoute<void>(
                                   builder: (_) => const ConditionLibraryScreen()),
                             )),
-                  ])),
-                ),
+                ]),
                 const SizedBox(height: AppSpacing.xl),
                 Text('Your trackers',
                     style: tt.headlineSmall?.copyWith(color: ext.textPrimary)),
@@ -153,11 +149,7 @@ class HealthBrowseScreen extends StatelessWidget {
                     style:
                         tt.bodyMedium?.copyWith(color: ext.textSecondary)),
                 const SizedBox(height: AppSpacing.lg),
-                AppCard(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                  child: Column(children: _withDividers(ext, tiles)),
-                ),
+                AppListGroup(children: tiles),
               ],
             ),
           ),
@@ -227,15 +219,4 @@ class HealthBrowseScreen extends StatelessWidget {
         onTap: onTap,
       );
 
-  List<Widget> _withDividers(AppColorsExt ext, List<Widget> tiles) {
-    final out = <Widget>[];
-    for (var i = 0; i < tiles.length; i++) {
-      out.add(tiles[i]);
-      if (i < tiles.length - 1) {
-        out.add(Divider(
-            height: 1, indent: 52, endIndent: 8, color: ext.outline));
-      }
-    }
-    return out;
-  }
 }

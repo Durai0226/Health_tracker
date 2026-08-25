@@ -601,31 +601,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(title: title, icon: icon, accent: ext.brand),
-        AppCard(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-          child: Column(children: _withDividers(tiles)),
-        ),
+        AppListGroup(children: tiles),
         const SizedBox(height: AppSpacing.lg),
       ],
     );
   }
 
-  List<Widget> _withDividers(List<Widget> tiles) {
-    final ext = AppColorsExt.of(context);
-    final out = <Widget>[];
-    for (var i = 0; i < tiles.length; i++) {
-      out.add(tiles[i]);
-      if (i < tiles.length - 1) {
-        out.add(Divider(
-          height: 1,
-          indent: 52,
-          endIndent: 8,
-          color: ext.outline,
-        ));
-      }
-    }
-    return out;
-  }
 
   Widget _buildAppearanceCard() {
     final ext = AppColorsExt.of(context);

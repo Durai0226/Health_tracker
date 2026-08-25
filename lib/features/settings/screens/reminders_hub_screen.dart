@@ -11,6 +11,7 @@ import '../../period/services/period_reminder_service.dart';
 import '../../sleep/screens/sleep_schedule_settings_screen.dart';
 import '../../steps/screens/steps_goal_settings_screen.dart';
 import '../../water/screens/water_reminder_settings_screen.dart';
+import '../../reminders/screens/reminders_screen.dart';
 
 /// One place to find and manage every feature's reminders — so a user never has
 /// to hunt through each feature's own settings to start getting nudged toward
@@ -56,6 +57,17 @@ class RemindersHubScreen extends StatelessWidget {
                   footer:
                       'Turn on gentle nudges for the things you want to stay on top of. Each one respects your notification settings.',
                   children: [
+                    // Your own reminders come first: this hub listed ten
+                    // per-feature families and not the one the user creates
+                    // themselves, so the generic reminders screen was reachable
+                    // only from the Today dashboard card.
+                    SettingsTile(
+                      icon: Symbols.notifications_active_rounded,
+                      accent: ext.reminders,
+                      title: 'Your own reminders',
+                      subtitle: 'Anything you set yourself',
+                      onTap: () => go(const RemindersScreen()),
+                    ),
                     SettingsTile(
                       icon: Symbols.medication_rounded,
                       accent: ext.medicine,
