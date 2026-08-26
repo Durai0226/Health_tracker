@@ -123,12 +123,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
       greeting: 'Your focus insights',
       icon: Symbols.insights_rounded,
       accent: ext.focus,
-      leading: AppIconButton(
-        icon: Symbols.arrow_back_rounded,
-        accent: ext.focus,
-        tooltip: 'Back',
-        onPressed: () => Navigator.pop(context),
-      ),
+      leading: AppHeader.backButton(context),
       actions: [
         AppIconButton(
           icon: Symbols.park_rounded,

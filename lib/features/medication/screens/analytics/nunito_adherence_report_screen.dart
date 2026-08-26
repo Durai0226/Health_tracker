@@ -188,12 +188,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
               title: 'Adherence',
               icon: Symbols.insights_rounded,
               accent: ext.medicine,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: ext.medicine,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
               bottom: SegmentedToggle(
                 index: _selectedPeriod,
                 onChanged: _onPeriodChanged,

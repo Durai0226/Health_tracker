@@ -129,12 +129,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
             title: 'Blood pressure',
             icon: Symbols.favorite_rounded,
             accent: accent,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: accent,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context),
             actions: [
               VitalsReminderButton(
                 id: 900020,

@@ -137,12 +137,7 @@ class _VitalsReminderSettingsScreenState
           AppHeader(
             title: 'Vitals reminders',
             accent: acc,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: acc,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context),
           ),
           Expanded(
             child: ListView(

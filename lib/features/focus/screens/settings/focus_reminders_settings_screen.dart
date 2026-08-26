@@ -146,12 +146,7 @@ class _FocusRemindersSettingsScreenState
               title: 'Focus reminders',
               icon: Symbols.notifications_rounded,
               accent: accent,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                tooltip: 'Back',
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: _isLoading

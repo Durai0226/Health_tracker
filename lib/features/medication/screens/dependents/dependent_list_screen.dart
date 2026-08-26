@@ -123,10 +123,7 @@ class _DependentListScreenState extends State<DependentListScreen> {
                   : 'Family & caregivers',
               icon: Symbols.group_rounded,
               accent: med,
-              leading: IconButton(
-                icon: Icon(Symbols.arrow_back_rounded, color: ext.textPrimary),
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
               // Always offered, even while switching — someone realizing they
               // need to add a new family member shouldn't have to back out
               // to Settings first to find the add flow.

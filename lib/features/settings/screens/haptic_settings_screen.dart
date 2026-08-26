@@ -37,12 +37,7 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
               title: 'Haptic feedback',
               icon: Symbols.vibration_rounded,
               accent: ext.brand,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: ext.brand,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: ListenableBuilder(

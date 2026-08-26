@@ -26,12 +26,7 @@ class StepsHistoryScreen extends StatelessWidget {
           AppHeader(
             title: 'Step history',
             icon: Symbols.history_rounded,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              tooltip: 'Back',
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
+            leading: AppHeader.backButton(context),
           ),
           Expanded(
             child: listenable == null

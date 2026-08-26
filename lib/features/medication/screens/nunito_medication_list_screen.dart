@@ -355,12 +355,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
               title: 'Medications',
               icon: Symbols.medication_rounded,
               accent: ext.medicine,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: ext.medicine,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
               actions: [
                 AppIconButton(
                   icon: Symbols.ios_share_rounded,

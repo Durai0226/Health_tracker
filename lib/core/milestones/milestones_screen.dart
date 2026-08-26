@@ -24,13 +24,7 @@ class MilestonesScreen extends StatelessWidget {
             title: 'Milestones',
             icon: Symbols.military_tech_rounded,
             accent: accent,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              tooltip: 'Back',
-              accent: accent,
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
+            leading: AppHeader.backButton(context),
           ),
           Expanded(
             child: FutureBuilder<({List<Milestone> all, List<Milestone> newlyEarned})>(

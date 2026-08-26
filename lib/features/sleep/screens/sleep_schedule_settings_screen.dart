@@ -84,12 +84,7 @@ class _SleepScheduleSettingsScreenState
               title: 'Sleep schedule',
               icon: Symbols.tune_rounded,
               accent: sleep,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                tooltip: 'Back',
-                accent: sleep,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),

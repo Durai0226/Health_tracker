@@ -103,12 +103,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
             AppHeader(
               title: 'Backup & Restore',
               accent: ext.brand,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: ext.brand,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: ListView(

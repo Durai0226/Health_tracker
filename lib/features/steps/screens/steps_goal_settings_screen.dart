@@ -155,12 +155,7 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
           AppHeader(
             title: 'Goal & profile',
             icon: Symbols.tune_rounded,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              tooltip: 'Back',
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
+            leading: AppHeader.backButton(context),
           ),
           Expanded(
             child: ListView(

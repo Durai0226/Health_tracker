@@ -142,12 +142,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
             AppHeader(
               title: widget.isSelectionMode ? 'Select Doctor' : 'Doctors',
               accent: accent,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: accent,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: _isLoading

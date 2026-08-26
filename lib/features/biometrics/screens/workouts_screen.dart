@@ -99,12 +99,7 @@ class _WorkoutsScreenState extends State<WorkoutsScreen>
               title: 'Workouts',
               icon: Symbols.exercise_rounded,
               accent: accent,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: accent,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: ValueListenableBuilder<Map<String, List<WorkoutSession>>>(

@@ -40,12 +40,7 @@ class RemindersHubScreen extends StatelessWidget {
           AppHeader(
             title: 'Reminders',
             accent: acc,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: acc,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context),
           ),
           Expanded(
             child: ListView(

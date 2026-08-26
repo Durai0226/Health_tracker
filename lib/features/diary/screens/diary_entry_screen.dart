@@ -72,12 +72,7 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
             title: widget.existing == null ? 'New entry' : 'Edit entry',
             icon: Symbols.auto_stories_rounded,
             accent: accent,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: accent,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context),
             actions: [
               AppIconButton(
                 icon: Symbols.check_rounded,

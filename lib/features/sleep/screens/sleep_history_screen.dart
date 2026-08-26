@@ -63,12 +63,7 @@ class SleepHistoryScreen extends StatelessWidget {
                   title: 'Sleep history',
                   icon: Symbols.history_rounded,
                   accent: sleep,
-                  leading: AppIconButton(
-                    icon: Symbols.arrow_back_rounded,
-                    tooltip: 'Back',
-                    accent: sleep,
-                    onPressed: () => Navigator.pop(context),
-                  ),
+                  leading: AppHeader.backButton(context),
                 ),
                 if (sessions.isEmpty)
                   Padding(

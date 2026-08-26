@@ -95,12 +95,7 @@ class _MoodScreenState extends State<MoodScreen> {
             title: 'Mood',
             icon: Symbols.mood_rounded,
             accent: accent,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              accent: accent,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context),
             actions: [
               VitalsReminderButton(
                 id: VitalsReminderService.mood.id,

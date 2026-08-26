@@ -166,12 +166,7 @@ class _NotificationSettingsScreenState
           children: [
             AppHeader(
               title: 'Notifications',
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: ext.brand,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
               actions: [
                 // Quiet fading "Saved" check — replaces the Save button/pill.
                 AnimatedOpacity(

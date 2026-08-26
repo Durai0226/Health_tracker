@@ -89,13 +89,7 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
               title: 'Refill & supply',
               icon: Symbols.inventory_2_rounded,
               accent: ext.medicine,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                tooltip: 'Back',
-                accent: ext.medicine,
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: _loading

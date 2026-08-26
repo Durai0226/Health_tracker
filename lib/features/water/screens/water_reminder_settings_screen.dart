@@ -164,11 +164,7 @@ class _WaterReminderSettingsScreenState
           AppHeader(
             title: 'Water Reminders',
             icon: Symbols.water_drop_rounded,
-            leading: AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              onPressed: () => Navigator.pop(context),
-            ),
+            leading: AppHeader.backButton(context),
           ),
           Expanded(
             child: ListView(

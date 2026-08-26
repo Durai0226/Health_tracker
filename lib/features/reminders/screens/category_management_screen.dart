@@ -35,12 +35,7 @@ class CategoryManagementScreen extends StatelessWidget {
             AppHeader(
               title: 'Categories',
               accent: ext.reminders,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: ext.reminders,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: StreamBuilder<List<db.ReminderCategory>>(

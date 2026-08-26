@@ -112,12 +112,7 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
               title: 'Heart',
               icon: Symbols.ecg_heart_rounded,
               accent: accent,
-              leading: AppIconButton(
-                icon: Symbols.arrow_back_rounded,
-                filled: false,
-                accent: accent,
-                onPressed: () => Navigator.pop(context),
-              ),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: ValueListenableBuilder<Map<String, BiometricDay>>(
