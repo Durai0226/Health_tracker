@@ -163,7 +163,6 @@ class _WaterReminderSettingsScreenState
         children: [
           AppHeader(
             title: 'Water Reminders',
-            icon: Symbols.water_drop_rounded,
             leading: AppHeader.backButton(context),
           ),
           Expanded(

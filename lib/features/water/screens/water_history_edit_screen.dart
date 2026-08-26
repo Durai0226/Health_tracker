@@ -108,7 +108,6 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
         children: [
           AppHeader(
             title: 'Edit History',
-            accent: ext.water,
             leading: AppIconButton(
               icon: Symbols.arrow_back_rounded,
               filled: false,

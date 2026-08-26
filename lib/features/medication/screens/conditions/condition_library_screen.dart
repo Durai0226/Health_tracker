@@ -96,8 +96,6 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
         children: [
           AppHeader(
             title: 'Condition library',
-            icon: Symbols.menu_book_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context, accent: accent),
           ),
           Padding(

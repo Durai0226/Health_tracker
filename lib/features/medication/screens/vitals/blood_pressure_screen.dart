@@ -127,8 +127,6 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
         children: [
           AppHeader(
             title: 'Blood pressure',
-            icon: Symbols.favorite_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
             actions: [
               VitalsReminderButton(

@@ -27,7 +27,6 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
     return AccentScope(
       feature: FeatureAccent.brand,
       child: AppScaffold(
@@ -35,8 +34,6 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
           children: [
             AppHeader(
               title: 'Haptic feedback',
-              icon: Symbols.vibration_rounded,
-              accent: ext.brand,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

@@ -93,8 +93,6 @@ class _MoodScreenState extends State<MoodScreen> {
         children: [
           AppHeader(
             title: 'Mood',
-            icon: Symbols.mood_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
             actions: [
               VitalsReminderButton(

@@ -113,7 +113,6 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
           children: [
             AppHeader(
               title: _isEditing ? 'Edit Doctor' : 'Add Doctor',
-              accent: accent,
               leading: AppIconButton(
                 icon: Symbols.close_rounded,
                 filled: false,

@@ -156,7 +156,6 @@ class _NunitoAddEditAppointmentScreenState
           children: [
             AppHeader(
               title: _isEditing ? 'Edit appointment' : 'Add appointment',
-              accent: accent,
               leading: AppIconButton(
                 icon: Symbols.close_rounded,
                 filled: false,

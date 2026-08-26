@@ -81,7 +81,6 @@ class _PeriodReminderSettingsScreenState
         children: [
           AppHeader(
             title: 'Period reminders',
-            accent: acc,
             leading: AppHeader.backButton(context),
           ),
           Expanded(

@@ -353,8 +353,6 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
           children: [
             AppHeader(
               title: 'Medications',
-              icon: Symbols.medication_rounded,
-              accent: ext.medicine,
               leading: AppHeader.backButton(context),
               actions: [
                 AppIconButton(

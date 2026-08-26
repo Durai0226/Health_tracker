@@ -55,8 +55,6 @@ class HealthPrivacyScreen extends StatelessWidget {
           children: [
             AppHeader(
               title: 'Health data & privacy',
-              icon: Symbols.health_and_safety_rounded,
-              accent: ext.brand,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

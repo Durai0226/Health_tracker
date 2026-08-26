@@ -144,8 +144,6 @@ class _FocusRemindersSettingsScreenState
           children: [
             AppHeader(
               title: 'Focus reminders',
-              icon: Symbols.notifications_rounded,
-              accent: accent,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

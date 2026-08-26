@@ -775,7 +775,6 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final ext = AppColorsExt.of(context);
     return AppHeader(
       title: _isEditing ? 'Edit Medication' : 'Add Medication',
-      accent: ext.medicine,
       leading: AppIconButton(
         icon: Symbols.close_rounded,
         filled: false,

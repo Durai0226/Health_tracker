@@ -25,7 +25,6 @@ class StepsHistoryScreen extends StatelessWidget {
         children: [
           AppHeader(
             title: 'Step history',
-            icon: Symbols.history_rounded,
             leading: AppHeader.backButton(context),
           ),
           Expanded(

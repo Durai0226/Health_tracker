@@ -309,6 +309,113 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // ------------------------------------------------ what the space is spent on
+
+  group('the header spends its height on the title', () {
+    /// The redesign's claim is that it gives vertical space back, so measure it.
+    ///
+    /// Short titles on purpose. The `flutter_test` fallback font is roughly
+    /// twice the advance width of shipped Plus Jakarta Sans, so any assertion
+    /// that depends on *where a real string wraps* is measuring the harness.
+    /// These two assert the geometry underneath it, which does not move.
+    testWidgets('the floor is M3 small, and one line of chrome sits above it',
+        (tester) async {
+      // No chrome at all: the title's 24pt line box plus 24pt of padding is
+      // 48, so `_minHeight` is what the reader actually sees. This is the one
+      // assertion that proves that constant is load-bearing rather than
+      // decorative.
+      for (final scale in [1.0, 1.3, 1.5]) {
+        await pumpHeader(
+          tester,
+          width: 320,
+          scale: scale,
+          header: const AppHeader(title: 'Sleep'),
+        );
+        expect(tester.getSize(find.byType(AppHeader)).height, 64.0,
+            reason: 'M3 small top-app-bar container height, at ${scale}x');
+      }
+
+      // With a back arrow the 44pt control is taller than the title, so the
+      // header is 44 + 24 of padding and the floor stops binding.
+      for (final scale in [1.0, 1.3, 1.5]) {
+        await pumpHeader(
+          tester,
+          width: 320,
+          scale: scale,
+          header: AppHeader(
+              title: 'Sleep', leading: Builder(builder: AppHeader.backButton)),
+        );
+        expect(tester.getSize(find.byType(AppHeader)).height, 68.0,
+            reason: 'back button 44 + padding 24, at ${scale}x');
+      }
+    });
+
+    testWidgets('it is flat to 1.5x, which is the whole reason for 18/24',
+        (tester) async {
+      // The header only grows once the title's line box passes the 44pt back
+      // button. At the `headlineLarge` 26/32 this replaced, that happened at
+      // 1.375x — so most screens grew through most of the supported range. At
+      // `headlineSmall` 18/24 it does not happen until 1.83x.
+      //
+      // The two scales below straddle nothing by accident: 1.5 is under it and
+      // 2.0 is over it, and the app clamps Dynamic Type at 2.0.
+      double at(double scale) => tester.getSize(find.byType(AppHeader)).height;
+      final heights = <double, double>{};
+      for (final scale in [1.0, 1.5, 2.0]) {
+        await pumpHeader(
+          tester,
+          width: 320,
+          scale: scale,
+          header: AppHeader(
+              title: 'Sleep', leading: Builder(builder: AppHeader.backButton)),
+        );
+        heights[scale] = at(scale);
+      }
+      expect(heights[1.0], heights[1.5],
+          reason: 'the header must not grow across most of the type range');
+      expect(heights[2.0]!, greaterThan(heights[1.5]!),
+          reason: 'and it must grow when the text genuinely needs it — a fixed '
+              'height on a container of scalable text is the defect');
+    });
+
+    testWidgets('the widest chrome in the app leaves the title full size',
+        (tester) async {
+      // Weight carries the most chrome anywhere: back arrow, unit pill, export
+      // and reminder. `docs/ui-audit.md:341` recorded its title auto-shrinking
+      // to about half the size used on every other screen — the shrink-to-fit
+      // absorbing an overcrowded row.
+      await pumpHeader(
+        tester,
+        width: 320,
+        scale: 1.0,
+        header: AppHeader(
+          title: 'Weight',
+          leading: Builder(builder: AppHeader.backButton),
+          actions: [
+            const AppChip(label: 'kg'),
+            AppIconButton(icon: Symbols.ios_share_rounded, onPressed: () {}),
+            AppIconButton(icon: Symbols.alarm_rounded, onPressed: () {}),
+          ],
+        ),
+      );
+
+      final ctx = tester.element(find.text('Weight'));
+      final resolved = tester.widget<Text>(find.text('Weight')).style?.fontSize ??
+          Theme.of(ctx).textTheme.headlineSmall!.fontSize!;
+      expect(resolved, 18.0,
+          reason: 'the audit recorded this rendering at roughly half the size '
+              'used elsewhere; nothing may shrink it now');
+
+      // Two lines is the design allowance, and the harness font uses both here
+      // where shipped Jakarta needs one — 6 characters at 18pt is ~57pt of
+      // real advance against a ~92pt title column. What must hold either way
+      // is that nothing is CUT.
+      expect(renderedLineCount(tester, find.text('Weight')),
+          lessThanOrEqualTo(2));
+      expect(collectTruncatedText(tester, find.byType(AppHeader)), isEmpty);
+    });
+  });
+
   group('the ~49 inline call sites are unaffected', () {
     testWidgets('auto resolves to inline when there is no greeting',
         (tester) async {

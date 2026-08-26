@@ -48,8 +48,6 @@ class HealthSourceDetailScreen extends StatelessWidget {
               children: [
                 AppHeader(
                   title: source?.displayName ?? 'Device',
-                  icon: Symbols.watch_rounded,
-                  accent: ext.brand,
                   leading: AppHeader.backButton(context, accent: ext.brand),
                 ),
                 Expanded(

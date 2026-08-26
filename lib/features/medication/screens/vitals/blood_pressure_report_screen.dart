@@ -84,8 +84,6 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
         children: [
           AppHeader(
             title: 'Blood pressure report',
-            icon: Symbols.assessment_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
             actions: [
               AppIconButton(

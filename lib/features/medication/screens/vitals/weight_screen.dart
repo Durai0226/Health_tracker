@@ -156,8 +156,6 @@ class _WeightScreenState extends State<WeightScreen> {
         children: [
           AppHeader(
             title: 'Weight',
-            icon: Symbols.monitor_weight_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
             // NB: no manual spacers between these — AppHeader already inserts
             // an 8pt gap before every action. The explicit SizedBoxes that used

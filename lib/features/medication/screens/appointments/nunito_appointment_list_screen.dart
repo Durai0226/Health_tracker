@@ -124,7 +124,6 @@ class _NunitoAppointmentListScreenState
           children: [
             AppHeader(
               title: 'Appointments',
-              accent: accent,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

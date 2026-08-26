@@ -87,8 +87,6 @@ class _WorkoutsScreenState extends State<WorkoutsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final accent = ext.steps;
 
     return AccentScope(
       feature: FeatureAccent.steps,
@@ -97,8 +95,6 @@ class _WorkoutsScreenState extends State<WorkoutsScreen>
           children: [
             AppHeader(
               title: 'Workouts',
-              icon: Symbols.exercise_rounded,
-              accent: accent,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

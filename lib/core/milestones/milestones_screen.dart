@@ -22,8 +22,6 @@ class MilestonesScreen extends StatelessWidget {
         children: [
           AppHeader(
             title: 'Milestones',
-            icon: Symbols.military_tech_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
           ),
           Expanded(

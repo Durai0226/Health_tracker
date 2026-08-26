@@ -139,7 +139,6 @@ class _BackupScreenState extends State<BackupScreen> {
           children: [
             AppHeader(
               title: 'Backup & Restore',
-              accent: ext.brand,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

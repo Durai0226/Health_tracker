@@ -122,8 +122,6 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         children: [
           AppHeader(
             title: 'Trends',
-            icon: Symbols.monitoring_rounded,
-            accent: ext.brand,
             // No back arrow on the root tab — there would be nothing to pop.
             leading: widget.isRoot
                 ? null

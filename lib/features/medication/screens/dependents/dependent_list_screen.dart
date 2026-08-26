@@ -121,8 +121,6 @@ class _DependentListScreenState extends State<DependentListScreen> {
               title: widget.isSelectionMode
                   ? 'Switch profile'
                   : 'Family & caregivers',
-              icon: Symbols.group_rounded,
-              accent: med,
               leading: AppHeader.backButton(context),
               // Always offered, even while switching — someone realizing they
               // need to add a new family member shouldn't have to back out

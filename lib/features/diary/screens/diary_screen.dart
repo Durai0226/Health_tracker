@@ -81,8 +81,6 @@ class _DiaryScreenState extends State<DiaryScreen> {
         children: [
           AppHeader(
             title: 'Diary',
-            icon: Symbols.auto_stories_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
           ),
           Expanded(

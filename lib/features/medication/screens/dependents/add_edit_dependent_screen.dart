@@ -164,8 +164,6 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
           children: [
             AppHeader(
               title: _isEditing ? 'Edit profile' : 'Add family member',
-              icon: Symbols.person_add_rounded,
-              accent: med,
               leading: IconButton(
                 icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
                 onPressed: () => Navigator.pop(context),

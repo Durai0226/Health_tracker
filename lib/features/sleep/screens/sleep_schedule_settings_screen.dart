@@ -82,8 +82,6 @@ class _SleepScheduleSettingsScreenState
           children: [
             AppHeader(
               title: 'Sleep schedule',
-              icon: Symbols.tune_rounded,
-              accent: sleep,
               leading: AppHeader.backButton(context),
             ),
             Padding(

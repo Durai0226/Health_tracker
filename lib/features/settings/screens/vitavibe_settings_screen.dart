@@ -46,8 +46,6 @@ class _VitaVibeSettingsScreenState extends State<VitaVibeSettingsScreen> {
           children: [
             AppHeader(
               title: 'Haptix',
-              icon: Symbols.vibration_rounded,
-              accent: accent,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

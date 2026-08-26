@@ -668,7 +668,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 // matching the bottom-nav tab the user tapped to get here.
                 title: 'Today',
                 layout: HeaderLayout.stacked,
-                accent: ext.brand,
                 leading: ListenableBuilder(
                   listenable: ActiveProfileService(),
                   builder: (context, _) => FutureBuilder<String>(

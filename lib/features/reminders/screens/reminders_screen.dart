@@ -380,7 +380,6 @@ class _RemindersScreenState extends State<RemindersScreen> {
           children: [
             AppHeader(
               title: 'Reminders',
-              accent: ext.reminders,
               actions: [
                 IconButton(
                   icon: Icon(Symbols.auto_awesome_rounded,

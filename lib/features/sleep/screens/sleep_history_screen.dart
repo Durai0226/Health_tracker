@@ -61,8 +61,6 @@ class SleepHistoryScreen extends StatelessWidget {
               children: [
                 AppHeader(
                   title: 'Sleep history',
-                  icon: Symbols.history_rounded,
-                  accent: sleep,
                   leading: AppHeader.backButton(context),
                 ),
                 if (sessions.isEmpty)

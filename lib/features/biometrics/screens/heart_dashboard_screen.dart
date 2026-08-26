@@ -100,8 +100,6 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final accent = ext.medicine;
 
     return AccentScope(
       feature: FeatureAccent.medicine,
@@ -110,8 +108,6 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
           children: [
             AppHeader(
               title: 'Heart',
-              icon: Symbols.ecg_heart_rounded,
-              accent: accent,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

@@ -97,8 +97,6 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
           children: [
             AppHeader(
               title: 'Connected devices',
-              icon: Symbols.watch_rounded,
-              accent: ext.brand,
               leading: AppHeader.backButton(context, accent: ext.brand),
             ),
             Expanded(

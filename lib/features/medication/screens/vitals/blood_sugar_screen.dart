@@ -132,8 +132,6 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
         children: [
           AppHeader(
             title: 'Blood sugar',
-            icon: Symbols.water_drop_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
             // NB: no manual spacers between these — AppHeader already inserts
             // an 8pt gap before every action. The explicit SizedBox that used

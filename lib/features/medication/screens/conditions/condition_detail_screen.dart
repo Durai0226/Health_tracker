@@ -60,8 +60,6 @@ class _ConditionDetailScreenState extends State<ConditionDetailScreen> {
         children: [
           AppHeader(
             title: condition.name,
-            icon: condition.category.icon,
-            accent: accent,
             leading: AppHeader.backButton(context, accent: accent),
           ),
           Expanded(

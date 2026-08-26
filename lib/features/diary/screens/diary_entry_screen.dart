@@ -70,8 +70,6 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
         children: [
           AppHeader(
             title: widget.existing == null ? 'New entry' : 'Edit entry',
-            icon: Symbols.auto_stories_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
             actions: [
               AppIconButton(

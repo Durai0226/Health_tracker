@@ -186,8 +186,6 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
           children: [
             AppHeader(
               title: 'Adherence',
-              icon: Symbols.insights_rounded,
-              accent: ext.medicine,
               leading: AppHeader.backButton(context),
               bottom: SegmentedToggle(
                 index: _selectedPeriod,

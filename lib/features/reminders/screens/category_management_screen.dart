@@ -34,7 +34,6 @@ class CategoryManagementScreen extends StatelessWidget {
           children: [
             AppHeader(
               title: 'Categories',
-              accent: ext.reminders,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

@@ -278,8 +278,6 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         if (!widget.embedded)
           AppHeader(
             title: 'Sleep',
-            icon: Symbols.bedtime_rounded,
-            accent: AppColorsExt.of(context).sleep,
             // Also on the loading state, or the way back appears only once the
             // data arrives — worst exactly when a slow load makes leaving most
             // likely.
@@ -406,8 +404,6 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
           AppHeader(
             title: 'Sleep',
             greeting: _greeting(),
-            icon: Symbols.bedtime_rounded,
-            accent: ext.sleep,
             // Sleep was the only pushed tracker with NO back affordance. Water
             // and Steps both carry one; this screen had three `actions` and no
             // `leading`, so opening it from the Health hub or the Log sheet

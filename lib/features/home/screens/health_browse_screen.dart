@@ -94,7 +94,6 @@ class HealthBrowseScreen extends StatelessWidget {
         children: [
           AppHeader(
             title: 'Health',
-            accent: ext.brand,
             bottom: Container(height: 1, color: ext.outline),
           ),
           Expanded(

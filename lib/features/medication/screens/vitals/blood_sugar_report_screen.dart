@@ -83,8 +83,6 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
         children: [
           AppHeader(
             title: 'Blood sugar report',
-            icon: Symbols.assessment_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
             actions: [
               AppIconButton(

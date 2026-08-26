@@ -544,8 +544,6 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       // Short title so it never truncates beside the greeting + two actions.
       title: 'Medicine',
       greeting: _getGreeting(),
-      icon: Symbols.medication_rounded,
-      accent: ext.medicine,
       actions: [
         AppIconButton(
           icon: _viewMode == _MedicationViewMode.timeline

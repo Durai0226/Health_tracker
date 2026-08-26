@@ -352,8 +352,6 @@ class _FocusScreenState extends State<FocusScreen> {
     return AppHeader(
       title: 'Focus',
       greeting: _focusService.isRunning ? 'Stay focused' : 'Ready to focus?',
-      icon: Symbols.center_focus_strong_rounded,
-      accent: ext.focus,
       actions: [
         AppIconButton(
           icon: Symbols.spa_rounded,

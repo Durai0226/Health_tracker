@@ -327,7 +327,6 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
         children: [
           AppHeader(
             title: 'Steps',
-            icon: Symbols.directions_walk_rounded,
             leading: canPop
                 ? AppIconButton(
                     icon: Symbols.arrow_back_rounded,

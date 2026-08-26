@@ -247,7 +247,6 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
         children: [
           AppHeader(
             title: 'Weekly recap',
-            accent: accent,
             leading: AppHeader.backButton(context, accent: accent),
             bottom: Container(height: 1, color: ext.outline),
           ),

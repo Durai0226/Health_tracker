@@ -136,7 +136,6 @@ class _VitalsReminderSettingsScreenState
         children: [
           AppHeader(
             title: 'Vitals reminders',
-            accent: acc,
             leading: AppHeader.backButton(context),
           ),
           Expanded(

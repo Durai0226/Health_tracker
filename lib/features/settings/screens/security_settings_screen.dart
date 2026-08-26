@@ -116,7 +116,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
     final enabled = _service.isLockEnabled;
 
     return AccentScope(
@@ -126,8 +125,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           children: [
             AppHeader(
               title: 'App lock',
-              icon: Symbols.lock_rounded,
-              accent: ext.brand,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

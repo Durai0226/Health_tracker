@@ -79,7 +79,6 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
     return AccentScope(
       feature: FeatureAccent.medicine,
       child: AppScaffold(
@@ -87,8 +86,6 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
           children: [
             AppHeader(
               title: 'Refill & supply',
-              icon: Symbols.inventory_2_rounded,
-              accent: ext.medicine,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

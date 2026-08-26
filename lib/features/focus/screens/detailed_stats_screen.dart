@@ -121,8 +121,6 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
     return AppHeader(
       title: 'Statistics',
       greeting: 'Your focus insights',
-      icon: Symbols.insights_rounded,
-      accent: ext.focus,
       leading: AppHeader.backButton(context),
       actions: [
         AppIconButton(

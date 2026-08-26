@@ -133,8 +133,6 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
           children: [
             AppHeader(
               title: widget.isSelectionMode ? 'Select Clinic' : 'Clinics',
-              icon: Symbols.local_hospital_rounded,
-              accent: med,
               leading: AppHeader.backButton(context),
             ),
             Expanded(

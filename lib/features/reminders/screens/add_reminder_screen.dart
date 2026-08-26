@@ -415,8 +415,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           children: [
             AppHeader(
               title: isEditing ? 'Edit Reminder' : 'New Reminder',
-              icon: Symbols.notifications_active_rounded,
-              accent: rem,
               leading: IconButton(
                 icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
                 onPressed: () => Navigator.pop(context),

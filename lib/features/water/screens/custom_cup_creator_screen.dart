@@ -218,8 +218,6 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           children: [
             AppHeader(
               title: isEditing ? 'Edit Cup' : 'New Cup',
-              icon: Symbols.local_drink_rounded,
-              accent: water,
               leading: AppIconButton(
                 icon: Symbols.close_rounded,
                 accent: water,

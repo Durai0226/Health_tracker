@@ -22,7 +22,6 @@ class RemindersHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final acc = ext.reminders;
     final periodOn = PeriodReminderService.getConfig().anyEnabled;
     final bpOn = VitalsReminderService.isEnabled(VitalsReminderService.bp);
     final sugarOn =
@@ -39,7 +38,6 @@ class RemindersHubScreen extends StatelessWidget {
         children: [
           AppHeader(
             title: 'Reminders',
-            accent: acc,
             leading: AppHeader.backButton(context),
           ),
           Expanded(

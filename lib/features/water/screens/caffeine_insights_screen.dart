@@ -174,8 +174,6 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
         children: [
           AppHeader(
             title: 'Caffeine',
-            icon: Symbols.coffee_rounded,
-            accent: accent,
             leading: AppHeader.backButton(context),
           ),
           Expanded(
