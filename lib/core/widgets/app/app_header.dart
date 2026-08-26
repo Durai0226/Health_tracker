@@ -4,28 +4,64 @@ import '../../design/app_design.dart';
 import 'app_button.dart';
 
 /// How the header arranges its chrome relative to its title.
+///
+/// Two values, and the second one is used by exactly one screen. That is not
+/// an oversight — see the measurements on [AppHeader].
 enum HeaderLayout {
-  /// Stack when a [AppHeader.greeting] is present, otherwise sit inline.
-  auto,
-
-  /// Single row: leading · title · actions. Correct for a short literal title
-  /// with at most a back button and a couple of icon actions.
+  /// Single row: leading · title · actions. Every screen but Home.
   inline,
 
-  /// Two rows: chrome on top, then greeting + title across the FULL width.
+  /// Two rows: chrome on top, title across the FULL width below it.
   ///
-  /// This is the Material 3 medium/large top-app-bar and Apple large-title
-  /// structure. Use it whenever the title has to share the row with anything
-  /// text-bearing (a profile chip, a streak pill), because those size to their
-  /// content and leave the title whatever is left.
+  /// The Material 3 medium top-app-bar structure. Correct when the title has to
+  /// share its row with something TEXT-BEARING on both sides, because those
+  /// size to their content and leave the title whatever is left.
   stacked,
 }
 
 /// One calm, compact, non-gradient header for every screen — the antidote to
 /// the four legacy header grammars and the double-header hub.
 ///
-/// Use as a box (top of a Column / SliverToBoxAdapter). Optional [greeting]
-/// (one place only), [actions], and a [bottom] slot for a segmented control.
+/// Use as a box (top of a Column / SliverToBoxAdapter). Optional [actions] and
+/// a [bottom] slot for a segmented control.
+///
+/// ## No greeting, and [HeaderLayout.stacked] survives on one screen
+///
+/// The greeting slot is gone, because a greeting is **content**. "Good morning"
+/// belongs in the scroll body where it scrolls away, not pinned above the data
+/// the user opened the app to read. Two of its four callers were not greetings
+/// at all — "Ready to focus?" over a title reading *Focus*, and "Your focus
+/// insights" over *Statistics* — and those are simply deleted.
+///
+/// The post-mortem's fix is preserved rather than discarded. The greeting that
+/// wrapped to three lines did so because it was unbounded user data inside
+/// FIXED CHROME competing with text-bearing controls. In a scroller at full
+/// content width it has neither problem, which is why the body copies carry no
+/// `maxLines` and why that is a decision rather than an omission.
+///
+/// **The second layout was going to go too, and measurement stopped it.** The
+/// argument for deleting it was that `headlineSmall` 18/24 fits beside chrome
+/// where `headlineLarge` 26/32 could not. True in general; false on Home, which
+/// is the only screen whose chrome is text-bearing on BOTH sides — a profile
+/// chip carrying a user-entered dependent name on the left, a streak pill and a
+/// settings button on the right. Inline, at 320pt:
+///
+/// | profile label | title column | header |
+/// |---|---|---|
+/// | "Me" | 73.4pt | 72pt |
+/// | "Grandmother Elizabeth Katherine" | **36.8pt** | **96pt** |
+///
+/// "Today" needs ~47pt of real Plus Jakarta Sans at 18pt, so the second row is
+/// not the harness font over-reporting — the title genuinely does not fit, and
+/// the header grows to three lines. That is the original bug with the greeting
+/// swapped for the title. `docs/home-header.md` reached this conclusion first
+/// and it still holds.
+///
+/// The change that would retire the second layout is on the screen, not here:
+/// an avatar-only profile chip (44pt, initial in a circle, name in the switcher
+/// sheet on tap) makes Home's chrome identical to every other screen's and
+/// leaves the title 124pt at 320pt. That is a product decision about Home, not
+/// a header refactor, so it is not smuggled in with one.
 ///
 /// ## There is no icon slot
 ///
@@ -44,7 +80,6 @@ enum HeaderLayout {
 /// one — and the title is the thing the reader came for.
 class AppHeader extends StatelessWidget {
   final String title;
-  final String? greeting;
   final List<Widget> actions;
   final Widget? leading;
   final Widget? bottom;
@@ -53,11 +88,10 @@ class AppHeader extends StatelessWidget {
   const AppHeader({
     super.key,
     required this.title,
-    this.greeting,
     this.actions = const [],
     this.leading,
     this.bottom,
-    this.layout = HeaderLayout.auto,
+    this.layout = HeaderLayout.inline,
   });
 
   /// Removed rather than defaulted: `padding` and `safeTop` were parameters
@@ -131,21 +165,6 @@ class AppHeader extends StatelessWidget {
         ),
       );
 
-  /// A greeting must NEVER wrap.
-  ///
-  /// This is the bug that shipped: with a "Me" profile chip, a streak pill and
-  /// a settings button all sizing to their content, the title column was left
-  /// ~114 of 320pt, and `Good evening · Wednesday, Aug 12` — which needs ~215pt
-  /// — soft-wrapped to three lines. A soft wrap is not an overflow, so nothing
-  /// threw and the responsive harness passed. One clamp makes that impossible
-  /// regardless of how starved the column gets.
-  Widget _greetingText(TextTheme tt, AppColorsExt ext) => Text(
-        greeting!,
-        style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-
   /// Wrap to a second line before giving up; never shrink.
   ///
   /// This replaced a `FittedBox(scaleDown)` that existed for a real reason —
@@ -174,11 +193,13 @@ class AppHeader extends StatelessWidget {
   /// 21-character title at large type on a small phone, and clamping to two and
   /// ellipsising would have swapped one silent failure for another.
   ///
-  /// The greeting stays clamped to one line and that asymmetry is deliberate.
-  /// The bug the clamp exists for was caused by INTERPOLATED USER DATA — a
-  /// profile name inside "Good evening · …" — which has no length bound. A title
-  /// is a developer-authored literal; the longest in this app is 21 characters.
-  /// Letting a literal wrap is safe in a way that letting user data wrap is not.
+  /// The bug the original clamp existed for was caused by INTERPOLATED USER
+  /// DATA — a profile name inside "Good evening · …" — which has no length
+  /// bound. A title is a developer-authored literal; the longest in this app is
+  /// 21 characters. Letting a literal wrap is safe in a way that letting user
+  /// data wrap is not, which is why the title's allowance is generous and the
+  /// only remaining unbounded string, the profile chip's label, stays clamped
+  /// inside `AppChip`.
   ///
   /// A test bounds it at three lines, so a future title that needs four fails
   /// and the fix is shorter copy — the right lever, and the same one
@@ -265,24 +286,14 @@ class AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
 
-    final stacked = switch (layout) {
-      HeaderLayout.stacked => true,
-      HeaderLayout.inline => false,
-      HeaderLayout.auto => greeting != null,
-    };
-
     // Chrome on its own row, then the title across the full width. Nothing
-    // competes for horizontal space, so the title cannot be starved and the
-    // greeting cannot be squeezed into a three-line block.
+    // competes for horizontal space, so the title cannot be starved. Home only.
     Widget buildStacked(double maxWidth) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Skipped entirely when there is no chrome, so a greeting-only
-            // header never renders an empty row plus its gap.
             if (leading != null || actions.isNotEmpty) ...[
               Row(
                 children: [
@@ -293,7 +304,6 @@ class AppHeader extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
             ],
-            if (greeting != null) _greetingText(tt, ext),
             _titleText(context, tt),
           ],
         );
@@ -302,23 +312,14 @@ class AppHeader extends StatelessWidget {
     // actions, and both are already bounded to 40% of the row each. So there is
     // no width arithmetic here any more and no element that conditionally
     // disappears: what the widget is asked to render, it renders.
-    Widget buildInline(double maxWidth) {
+    Widget buildRow(double maxWidth) {
       return Row(
         children: [
           if (leading != null) ...[
             _boundedLeading(maxWidth),
             const SizedBox(width: 8),
           ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (greeting != null) _greetingText(tt, ext),
-                _titleText(context, tt),
-              ],
-            ),
-          ),
+          Expanded(child: _titleText(context, tt)),
           ..._boundedActions(maxWidth),
         ],
       );
@@ -340,9 +341,10 @@ class AppHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                stacked
-                    ? buildStacked(constraints.maxWidth)
-                    : buildInline(constraints.maxWidth),
+                switch (layout) {
+                  HeaderLayout.stacked => buildStacked(constraints.maxWidth),
+                  HeaderLayout.inline => buildRow(constraints.maxWidth),
+                },
                 if (bottom != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   bottom!,

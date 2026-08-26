@@ -458,8 +458,10 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
               controller: _scrollController,
               physics: const BouncingScrollPhysics(),
               slivers: [
-                if (!widget.embedded)
-                  SliverToBoxAdapter(child: _buildHeader())
+                if (!widget.embedded) ...[
+                  SliverToBoxAdapter(child: _buildHeader()),
+                  SliverToBoxAdapter(child: _buildGreeting()),
+                ]
                 else
                   const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
                 if (_interactions.isNotEmpty)
@@ -538,12 +540,28 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     );
   }
 
+  /// The greeting, now that it is body content rather than header chrome.
+  ///
+  /// It gets the full content width here, so the one-line clamp the header
+  /// needed is not carried over — a greeting wrapping inside a scroller costs
+  /// the reader nothing, whereas in fixed chrome it cost 3 lines of the screen
+  /// that never scrolled away.
+  Widget _buildGreeting() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.sm),
+      child: Text(_getGreeting(),
+          style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+    );
+  }
+
   Widget _buildHeader() {
     final ext = AppColorsExt.of(context);
     return AppHeader(
-      // Short title so it never truncates beside the greeting + two actions.
+      // Short title so it never truncates beside three actions.
       title: 'Medicine',
-      greeting: _getGreeting(),
       actions: [
         AppIconButton(
           icon: _viewMode == _MedicationViewMode.timeline

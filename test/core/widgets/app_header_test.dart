@@ -22,20 +22,12 @@ import 'package:tablet_remainder/core/widgets/app/primitives.dart';
 
 import '../../support/text_layout.dart';
 
-/// The real string from the screenshot, and the worst case of the same shape
-/// (`DateFormat('EEEE, MMM d')` peaks at "Good afternoon · Wednesday, Sep 30").
-const _screenshotGreeting = 'Good evening · Wednesday, Aug 12';
-const _worstCaseGreeting = 'Good afternoon · Wednesday, Sep 30';
-
 /// A user-entered dependent name. `AppChip` has a `Flexible` + ellipsis, but it
 /// never engaged because `leading` was handed unbounded constraints.
 const _longProfileName = 'Grandmother Elizabeth Katherine';
 
 /// Phone widths the app supports, narrowest first.
 const _widths = <double>[320, 360, 375, 390, 428];
-
-/// 2.0 is the WCAG 1.4.4 AA requirement and the app's current clamp.
-const _scales = <double>[1.0, 1.3, 2.0];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -70,15 +62,13 @@ void main() {
   /// Home's exact chrome: a text-bearing profile chip, a text-bearing streak
   /// pill and an icon button. This combination is what starved the title.
   Widget homeLikeHeader({
-    String? greeting,
     String title = 'Today',
     String profileLabel = 'Me',
-    HeaderLayout layout = HeaderLayout.stacked,
     bool streakVisible = true,
+    HeaderLayout layout = HeaderLayout.stacked,
   }) =>
       AppHeader(
         title: title,
-        greeting: greeting,
         layout: layout,
         leading: AppChip(
           label: profileLabel,
@@ -101,38 +91,21 @@ void main() {
         ],
       );
 
-  group('a greeting never wraps', () {
-    for (final width in _widths) {
-      for (final scale in _scales) {
-        testWidgets('${width.toInt()}pt @ ${scale}x', (tester) async {
-          await pumpHeader(
-            tester,
-            width: width,
-            scale: scale,
-            header: homeLikeHeader(greeting: _screenshotGreeting),
-          );
-
-          expectSingleLine(
-            tester,
-            find.text(_screenshotGreeting),
-            label: 'The greeting from the screenshot',
-          );
-          expect(tester.takeException(), isNull);
-        });
-      }
-    }
-
-    testWidgets('worst-case greeting at the narrowest width', (tester) async {
-      await pumpHeader(
-        tester,
-        width: 320,
-        scale: 1.0,
-        header: homeLikeHeader(greeting: _worstCaseGreeting),
-      );
-      expectSingleLine(tester, find.text(_worstCaseGreeting),
-          label: 'The longest greeting the app can generate');
-    });
-  });
+  // The `a greeting never wraps` group lived here — 15 combinations pinning
+  // `Good evening · Wednesday, Aug 12` to one line at every supported width and
+  // text scale. It is gone with the slot it tested, and that needs justifying
+  // rather than quietly deleting, because those tests encode a post-mortem.
+  //
+  // What the bug actually was: unbounded USER DATA (a profile name inside the
+  // greeting) inside FIXED CHROME competing with text-bearing controls. Both
+  // halves matter. The greeting now renders in the scroll body at full content
+  // width, where it competes with nothing and where wrapping costs the reader a
+  // line of a scroller rather than a permanent band of the screen.
+  //
+  // The unbounded-user-data half is still covered, by the group below on the
+  // profile chip — which is the string that actually has no length bound. That
+  // is the protection worth keeping; the greeting's one-line clamp was the
+  // symptom's dressing.
 
   group('a title never wraps', () {
     for (final width in _widths) {
@@ -417,49 +390,79 @@ void main() {
   });
 
   group('the ~49 inline call sites are unaffected', () {
-    testWidgets('auto resolves to inline when there is no greeting',
+    testWidgets('a header with a back arrow does not pay for a second row',
         (tester) async {
-      Future<double> heightOf(HeaderLayout layout, {bool chrome = false}) async {
-        await pumpHeader(
-          tester,
-          width: 360,
-          scale: 1.0,
-          header: AppHeader(
-            title: 'Settings',
-            layout: layout,
-            actions: chrome
-                ? [AppIconButton(icon: Symbols.settings_rounded, onPressed: () {})]
-                : const [],
-          ),
-        );
-        return tester.getSize(find.byType(AppHeader)).height;
-      }
-
-      expect(
-        await heightOf(HeaderLayout.auto),
-        await heightOf(HeaderLayout.inline),
-        reason: 'A header with no greeting must keep the inline layout. '
-            'Stacking all ~49 of these would silently reflow the whole app.',
+      // The default is inline, and it must stay one control tall — a chrome
+      // row plus a title row on a pushed detail screen is the double-header
+      // this redesign exists to remove.
+      await pumpHeader(
+        tester,
+        width: 360,
+        scale: 1.0,
+        header: AppHeader(
+          title: 'Settings',
+          leading: Builder(builder: AppHeader.backButton),
+          actions: [AppIconButton(icon: Symbols.settings_rounded, onPressed: () {})],
+        ),
       );
+      final withChrome = tester.getSize(find.byType(AppHeader)).height;
 
-      // The comparison only proves something if the two layouts CAN differ.
-      // With chrome present they must: stacked gives it its own row.
-      expect(
-        await heightOf(HeaderLayout.stacked, chrome: true),
-        greaterThan(await heightOf(HeaderLayout.inline, chrome: true)),
-        reason: 'The two layouts must actually differ, otherwise the equality '
-            'above proves nothing.',
+      await pumpHeader(
+        tester,
+        width: 360,
+        scale: 1.0,
+        header: const AppHeader(title: 'Settings'),
       );
+      final bare = tester.getSize(find.byType(AppHeader)).height;
 
-      // A greeting-only header must NOT pay for an empty chrome row.
-      expect(
-        await heightOf(HeaderLayout.stacked),
-        await heightOf(HeaderLayout.inline),
-        reason: 'With no leading and no actions there is no chrome to put on '
-            'row 1, so stacking must not add a row or its gap.',
-      );
+      // 68 against 64 — the 4pt is the back button being taller than the title,
+      // not a second row. Stacked would add a whole 44pt band plus its gap.
+      expect(withChrome - bare, lessThan(8 + 44),
+          reason: 'chrome is $withChrome vs $bare bare; anything approaching a '
+              'second row means the title stopped sharing the row');
 
       expectSingleLine(tester, find.text('Settings'), label: 'A literal title');
+    });
+
+    testWidgets('the second layout still earns its keep on Home',
+        (tester) async {
+      // The plan called for deleting HeaderLayout.stacked outright, on the
+      // grounds that headlineSmall 18/24 fits beside chrome where the
+      // headlineLarge 26/32 it replaced could not. True in general; measured
+      // false on Home, which is the only screen carrying a text-bearing chip on
+      // BOTH sides of its title.
+      //
+      // This test is what stopped that deletion, so it asserts the thing that
+      // would have to change for the deletion to become correct: the width the
+      // inline layout leaves the title when the profile name is a long one.
+      await pumpHeader(
+        tester,
+        width: 320,
+        scale: 1.0,
+        header: homeLikeHeader(
+            profileLabel: _longProfileName, layout: HeaderLayout.inline),
+      );
+      final inlineCol =
+          tester.renderObject<RenderBox>(find.text('Today')).constraints.maxWidth;
+
+      await pumpHeader(
+        tester,
+        width: 320,
+        scale: 1.0,
+        header: homeLikeHeader(profileLabel: _longProfileName),
+      );
+      final stackedCol =
+          tester.renderObject<RenderBox>(find.text('Today')).constraints.maxWidth;
+
+      // 36.8pt against 280pt. "Today" needs ~47pt of real Plus Jakarta Sans at
+      // 18pt, so inline does not fit it on a device either — this is not the
+      // harness font over-reporting.
+      expect(inlineCol, lessThan(47.0),
+          reason: 'inline left the title ${inlineCol.toStringAsFixed(1)}pt. If '
+              "this ever exceeds what 'Today' needs — most likely because the "
+              'profile chip became avatar-only — stacked can go and Home joins '
+              'the other 59 screens.');
+      expect(stackedCol, greaterThan(inlineCol * 5));
     });
 
     testWidgets('title + back arrow keeps the inline geometry', (tester) async {

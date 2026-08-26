@@ -119,8 +119,9 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
 
   Widget _buildHeader(AppColorsExt ext) {
     return AppHeader(
+      // "Your focus insights" over "Statistics", inside the Focus feature,
+      // is a line that tells the reader nothing they did not already know.
       title: 'Statistics',
-      greeting: 'Your focus insights',
       leading: AppHeader.backButton(context),
       actions: [
         AppIconButton(

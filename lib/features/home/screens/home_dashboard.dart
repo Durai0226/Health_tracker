@@ -667,6 +667,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 // and a title has to describe the view — so this is "Today",
                 // matching the bottom-nav tab the user tapped to get here.
                 title: 'Today',
+                // The app's only stacked header, and the only screen whose
+                // chrome is text-bearing on both sides. `AppHeader`'s doc
+                // carries the measurement: inline at 320pt with a long
+                // dependent name the title column is 36.8pt and "Today" wraps
+                // to three lines.
                 layout: HeaderLayout.stacked,
                 leading: ListenableBuilder(
                   listenable: ActiveProfileService(),

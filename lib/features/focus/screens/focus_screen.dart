@@ -350,8 +350,10 @@ class _FocusScreenState extends State<FocusScreen> {
 
   Widget _buildHeader(AppColorsExt ext) {
     return AppHeader(
+      // No eyebrow. "Ready to focus?" above a title reading "Focus" is the
+      // same word twice, and the running/idle state it encoded is already
+      // unmistakable from the timer directly below it.
       title: 'Focus',
-      greeting: _focusService.isRunning ? 'Stay focused' : 'Ready to focus?',
       actions: [
         AppIconButton(
           icon: Symbols.spa_rounded,

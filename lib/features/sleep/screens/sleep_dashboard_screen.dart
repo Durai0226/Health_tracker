@@ -400,10 +400,9 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     return ListView(
       padding: const EdgeInsets.only(bottom: 100),
       children: [
-        if (!widget.embedded)
+        if (!widget.embedded) ...[
           AppHeader(
             title: 'Sleep',
-            greeting: _greeting(),
             // Sleep was the only pushed tracker with NO back affordance. Water
             // and Steps both carry one; this screen had three `actions` and no
             // `leading`, so opening it from the Health hub or the Log sheet
@@ -438,8 +437,24 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
                 onPressed: _openSettings,
               ),
             ],
-          )
-        else
+          ),
+          // The greeting, now body content rather than header chrome. It gets
+          // the full content width here, so the header's one-line clamp is not
+          // carried over — a greeting wrapping inside a scroller costs the
+          // reader nothing, whereas in fixed chrome it cost three lines of a
+          // header that never scrolled away.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.sm),
+            child: Text(
+              _greeting(),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: ext.textSecondary),
+            ),
+          ),
+        ] else
           const SizedBox(height: AppSpacing.sm),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
