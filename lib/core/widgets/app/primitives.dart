@@ -1,8 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
 
 /// Flat scaffold on the token background.
+///
+/// ## It also owns the status-bar glyph colour
+///
+/// `AppBarTheme.systemOverlayStyle` used to be the only place in the app that
+/// set it, and a theme only reaches screens that actually build an `AppBar` —
+/// eleven of them. The other ~60 compose `AppScaffold` + `AppHeader` and
+/// declared nothing, so their glyph colour was whatever the last `AppBar`
+/// screen left behind, or the platform default on a cold start.
+///
+/// That default is white glyphs: neither `values/styles.xml` nor
+/// `values-night/styles.xml` sets `windowLightStatusBar`. And the app targets
+/// SDK 36, where **edge-to-edge is enforced and cannot be opted out of** — so
+/// the light `background` is drawn behind the status bar rather than a dark
+/// system strip sitting above it. White clock, wifi and battery on a white
+/// background, on Home.
+///
+/// This is the same defect `AppBarTheme`'s comment records fixing on three
+/// water screens; it was simply never true for the rest of the app. Declaring
+/// it here means every screen states its own, from its own theme, with no
+/// dependence on whether it happens to build an `AppBar`.
 class AppScaffold extends StatelessWidget {
   final Widget body;
   final Widget? floatingActionButton;
@@ -40,13 +61,34 @@ class AppScaffold extends StatelessWidget {
         child: content,
       );
     }
-    return Scaffold(
-      backgroundColor: ext.background,
-      extendBody: extendBody,
-      floatingActionButton: floatingActionButton,
-      floatingActionButtonLocation: floatingActionButtonLocation,
-      bottomNavigationBar: bottomNavigationBar,
-      body: content,
+    // Derived from the resolved tokens rather than passed in: a screen cannot
+    // get this wrong, and a screen that changes its background gets the right
+    // glyphs for free. `SystemUiOverlayStyle.dark` means DARK GLYPHS — it is
+    // named for the content, not the background it sits on.
+    final overlay = ext.isDark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlay.copyWith(
+        // Both bars must be transparent under enforced edge-to-edge; setting a
+        // colour is a no-op on API 35+ and a mismatched strip below that.
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        // The gesture pill sits over the app's own background too, so it needs
+        // the same treatment as the status bar and for the same reason.
+        systemNavigationBarIconBrightness:
+            ext.isDark ? Brightness.light : Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: ext.background,
+        extendBody: extendBody,
+        floatingActionButton: floatingActionButton,
+        floatingActionButtonLocation: floatingActionButtonLocation,
+        bottomNavigationBar: bottomNavigationBar,
+        body: content,
+      ),
     );
   }
 }
