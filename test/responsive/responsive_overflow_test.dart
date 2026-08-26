@@ -150,7 +150,9 @@ const Map<String, int> _seededOverflowBaseline = {
   // go first: it is the app's primary screen and it overflows at **1.0x**, i.e.
   // at the default text size, not only under Dynamic Type.
   'home': 1, // 320 @1.0x, right +52px
-  'glucose': 1, // 320 @2.0x, right +33px — inside AppHeader's own layout
+  // glucose is gone: its one combination was "inside AppHeader's own layout",
+  // and the header redesign fixed it. Surfaced by the shrink-only side of this
+  // gate, which fails when a screen does BETTER than its record.
   'weight': 1, // 320 @2.0x, right +26px
 };
 

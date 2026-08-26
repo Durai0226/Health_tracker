@@ -276,6 +276,15 @@ class AppIconButton extends StatelessWidget {
   final bool filled;
   final String? tooltip;
 
+  /// Overrides the accent-derived foreground.
+  ///
+  /// For CHROME — a control whose identity should not move with the feature it
+  /// happens to sit in. The back arrow is the case this exists for: it resolved
+  /// to at least 13 hues across the app, because it took whichever accent the
+  /// screen was scoped to. Same distinction the chart work draws between
+  /// `mark()` and `chartMark()`.
+  final Color? color;
+
   const AppIconButton({
     super.key,
     required this.icon,
@@ -284,6 +293,7 @@ class AppIconButton extends StatelessWidget {
     this.size = 44,
     this.filled = true,
     this.tooltip,
+    this.color,
   });
 
   @override
@@ -291,7 +301,7 @@ class AppIconButton extends StatelessWidget {
     final ext = AppColorsExt.of(context);
     final s = accent ?? AccentScope.swatchOf(context);
     final bg = filled ? ext.surface : Colors.transparent;
-    final fg = ext.mark(s);
+    final fg = color ?? ext.mark(s);
 
     Widget btn = Material(
       color: bg,

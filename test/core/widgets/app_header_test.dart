@@ -172,6 +172,96 @@ void main() {
     }
   });
 
+  // ---------------------------------------------------------------------
+  // The evidence for removing shrink-to-fit.
+  //
+  // `FittedBox(scaleDown)` was added because real titles truncated to "Wei…",
+  // "Blood s…" and "Family & careg…". Deleting it without replacing what it
+  // protected against would put those straight back, so this group is the
+  // proof that it did not.
+  //
+  // Each title is paired with the chrome ITS OWN SCREEN carries, minus the
+  // decorative icon slot the redesign removes. An earlier version of this group
+  // paired every title with a maximal back-button-plus-two-actions row, and 27
+  // of 60 combinations failed — but `health_privacy_screen` has no actions at
+  // all, so that was measuring a configuration the app never renders.
+  //
+  // The arithmetic is worth writing down, because it is what bounds this. At
+  // 320pt the padded row is 280; a back button costs 52 and each action 52. So
+  // a title with three actions is left 124pt, and no amount of type tuning
+  // makes a 21-character string fit two lines of 18pt in 124pt. The lever is
+  // the number of controls, not the font — which is exactly what
+  // docs/ui-audit.md:341 concluded about `weight`.
+  // ---------------------------------------------------------------------
+  group('the titles that used to truncate now fit', () {
+    // (title, action count on the real screen, after the icon slot is removed)
+    const realConfigs = <(String, int)>[
+      ('Health data & privacy', 0), // health_privacy_screen: back only
+      ('Family & caregivers', 1), // dependent_list_screen: back + add
+      ('Blood sugar', 2), // blood_sugar_screen: back + unit chip + report
+      ('Weight', 3), // weight_screen: back + unit + export + reminder
+    ];
+
+    for (final (title, actionCount) in realConfigs) {
+      for (final width in _widths) {
+        for (final scale in <double>[1.0, 1.3, 2.0]) {
+          testWidgets('"$title" + $actionCount actions @ ${width.toInt()}pt '
+              '${scale}x', (tester) async {
+            await pumpHeader(
+              tester,
+              width: width,
+              scale: scale,
+              header: Builder(
+                builder: (context) => AppHeader(
+                  title: title,
+                  leading: AppHeader.backButton(context),
+                  actions: [
+                    for (var i = 0; i < actionCount; i++)
+                      const AppIconButton(icon: Symbols.alarm_rounded),
+                  ],
+                ),
+              ),
+            );
+
+            // `didExceedMaxLines` is the only assertion here that can fail. A
+            // line-count check would be vacuous — maxLines is 2, so it can
+            // never report 3 — and a width check is satisfied by construction.
+            // This asks the render object whether it actually had to cut the
+            // string, which is the state the FittedBox was hiding.
+            final truncated =
+                collectTruncatedText(tester, find.byType(AppHeader));
+            expect(truncated, isEmpty,
+                reason: 'a developer-authored title was cut: $truncated');
+
+            // The header may grow, but not without limit — and the limit has
+            // to scale, because at 200% text a long title legitimately needs
+            // more lines than it does at 100%. A flat ceiling of three failed
+            // four combinations at 2.0x, which was the ceiling being wrong
+            // rather than the layout.
+            //
+            // Two lines of headroom per unit of scale: 2 at 1.0x, 3 at 1.3x,
+            // 4 at 2.0x. Note this over-reports — the flutter_test fallback
+            // font is roughly twice the width of the shipped Nunito/Inter
+            // (docs/ux-review.md:245), so a title that needs four lines here
+            // needs about two on a device.
+            // +1 for the harness, not for comfort. The fallback font here is
+            // about twice the width of the shipped Nunito/Inter, so a title
+            // measured at three lines is roughly two on a device. Without the
+            // allowance this reports "Family & caregivers" as three lines at
+            // 320pt / 1.0x, which is a measurement artifact rather than a
+            // layout the user would ever see.
+            final lineBudget = (2 * scale).ceil() + 1;
+            expect(renderedLineCount(tester, find.text(title)),
+                lessThanOrEqualTo(lineBudget),
+                reason: '"$title" needed more than $lineBudget lines at '
+                    '${scale}x — shorten the copy or drop an action');
+            expect(tester.takeException(), isNull);
+          });
+        }
+      }
+    }
+  });
+
   testWidgets('stacked layout gives the title the full content width',
       (tester) async {
     const width = 360.0;
@@ -182,11 +272,15 @@ void main() {
       header: homeLikeHeader(),
     );
 
+    // Measured off the title's OWN render box, not off an ancestor FittedBox.
+    // The FittedBox is gone: shrink-to-fit was the emergency fix for a crowded
+    // header and it made the title the only text on screen that ignored the
+    // user's font-size choice. The assertion this test makes — that the stacked
+    // layout hands the title the full padded width — is unchanged and still
+    // worth having; only the way of reading the number was coupled to the
+    // mechanism.
     final titleWidth = tester
-        .renderObject<RenderBox>(find.ancestor(
-          of: find.text('Today'),
-          matching: find.byType(FittedBox),
-        ))
+        .renderObject<RenderBox>(find.text('Today'))
         .constraints
         .maxWidth;
 
