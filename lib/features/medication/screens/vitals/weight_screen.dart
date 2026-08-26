@@ -145,7 +145,6 @@ class _WeightScreenState extends State<WeightScreen> {
     final accent = VitalsColors.weightAccent(ext.isDark);
 
     return AppScaffold(
-      safeTop: true,
       floatingActionButton: AppFab(
         icon: Symbols.add_rounded,
         label: 'Log',

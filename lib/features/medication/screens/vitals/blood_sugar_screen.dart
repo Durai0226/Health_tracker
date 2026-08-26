@@ -121,7 +121,6 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     final accent = VitalsColors.glucoseAccent(ext.isDark);
 
     return AppScaffold(
-      safeTop: true,
       floatingActionButton: AppFab(
         icon: Symbols.add_rounded,
         label: 'Log',

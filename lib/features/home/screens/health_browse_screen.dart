@@ -89,7 +89,6 @@ class HealthBrowseScreen extends StatelessWidget {
     ];
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

@@ -117,7 +117,6 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
     final ext = AppColorsExt.of(context);
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

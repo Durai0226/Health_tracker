@@ -211,7 +211,6 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     final isEditing = widget.existingContainer != null;
 
     return AppScaffold(
-      safeTop: true,
       body: Form(
         key: _formKey,
         child: Column(

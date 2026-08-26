@@ -1,4 +1,5 @@
-/// Every screen declares its own status-bar glyph colour.
+/// Screen chrome that every screen gets from `AppScaffold`: the status-bar
+/// glyph colour, and the display-cutout inset.
 ///
 /// Before this, `AppBarTheme.systemOverlayStyle` was the only declaration in
 /// the app, and a theme only reaches screens that build an `AppBar` — eleven of
@@ -74,5 +75,56 @@ void main() {
     expect(find.byType(AppBar), findsNothing);
     expect(find.byType(AnnotatedRegion<SystemUiOverlayStyle>), findsOneWidget,
         reason: 'a screen with no AppBar must still declare its glyph colour');
+  });
+
+  // -------------------------------------------------------- cutout insets
+
+  group('the body is inset from a display cutout', () {
+    /// `safeTop` is a misnomer — `AppHeader` applies its own `SafeArea` and
+    /// `SafeArea` removes what it consumes from the `MediaQuery` beneath it, so
+    /// the top is a no-op. What the flag actually buys is the LEFT and RIGHT
+    /// insets, which the body below the header does not otherwise get.
+    ///
+    /// It used to default to false with 20 of 66 screens opting in, so 46 had a
+    /// body running under the cutout in landscape while their neighbours did
+    /// not. These two tests are why that asymmetry cannot come back.
+    Future<Rect> bodyRectWith(WidgetTester tester, EdgeInsets padding,
+        {bool safeTop = true}) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(800, 400);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: MediaQuery(
+          data: MediaQueryData(
+              size: const Size(800, 400), padding: padding, viewPadding: padding),
+          child: AppScaffold(
+            safeTop: safeTop,
+            body: Container(key: const Key('body'), color: const Color(0xFF000000)),
+          ),
+        ),
+      ));
+      await tester.pump();
+      return tester.getRect(find.byKey(const Key('body')));
+    }
+
+    testWidgets('a landscape notch does not run under the body', (tester) async {
+      // A phone held landscape: the cutout is on one side, not the top.
+      const notch = EdgeInsets.only(left: 44, right: 12);
+      final inset = await bodyRectWith(tester, notch);
+      expect(inset.left, 44.0);
+      expect(inset.right, 800.0 - 12.0);
+    });
+
+    testWidgets('and opting out is still possible for a full-bleed body',
+        (tester) async {
+      // The parameter stays because a deliberately edge-to-edge body is a real
+      // case. What changed is which way round the default points.
+      const notch = EdgeInsets.only(left: 44, right: 12);
+      final bleed = await bodyRectWith(tester, notch, safeTop: false);
+      expect(bleed.left, 0.0);
+      expect(bleed.right, 800.0);
+    });
   });
 }

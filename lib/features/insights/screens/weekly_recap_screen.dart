@@ -242,7 +242,6 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
     final accent = ext.brand;
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

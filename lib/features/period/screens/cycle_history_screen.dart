@@ -17,7 +17,6 @@ class CycleHistoryScreen extends StatelessWidget {
     return AccentScope(
       feature: FeatureAccent.period,
       child: AppScaffold(
-        safeTop: true,
         body: ValueListenableBuilder(
           valueListenable: PeriodService.listenToDays(),
           builder: (context, _, _) => _content(context),

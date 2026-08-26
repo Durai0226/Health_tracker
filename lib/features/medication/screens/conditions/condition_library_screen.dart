@@ -91,7 +91,6 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
         : const <ConditionInfo>[];
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

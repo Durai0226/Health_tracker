@@ -116,7 +116,6 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     final accent = VitalsColors.bpAccent(ext.isDark);
 
     return AppScaffold(
-      safeTop: true,
       floatingActionButton: AppFab(
         icon: Symbols.add_rounded,
         label: 'Log',

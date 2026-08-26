@@ -30,6 +30,20 @@ class AppScaffold extends StatelessWidget {
   final FloatingActionButtonLocation? floatingActionButtonLocation;
   final Widget? bottomNavigationBar;
   final bool extendBody;
+
+  /// Inset the body from display cutouts. **On by default**, and the name is a
+  /// historical misnomer: it is not about the top.
+  ///
+  /// `AppHeader` applies its own `SafeArea`, and `SafeArea` removes what it
+  /// consumes from the `MediaQuery` it passes down, so nesting is a no-op at
+  /// the top. What this actually buys is the LEFT and RIGHT insets, which the
+  /// body below the header does not otherwise get and which matter on a notched
+  /// device in landscape.
+  ///
+  /// It used to default to false, and 20 of 66 screens opted in — so 46 screens
+  /// had a body that ran under the cutout in landscape while their neighbours
+  /// did not. An inset that is correct for a screen is correct for all of them;
+  /// the only reason to pass `false` is a body that is deliberately full-bleed.
   final bool safeTop;
 
   /// Tapping empty space dismisses the keyboard (on by default). This is the
@@ -44,7 +58,7 @@ class AppScaffold extends StatelessWidget {
     this.floatingActionButtonLocation,
     this.bottomNavigationBar,
     this.extendBody = false,
-    this.safeTop = false,
+    this.safeTop = true,
     this.dismissKeyboardOnTap = true,
   });
 

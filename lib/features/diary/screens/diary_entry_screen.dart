@@ -65,7 +65,6 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
     final tt = Theme.of(context).textTheme;
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

@@ -169,7 +169,6 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
     final accent = VitalsColors.caffeineAccent(ext.isDark);
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

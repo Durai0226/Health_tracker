@@ -70,7 +70,6 @@ class _DiaryScreenState extends State<DiaryScreen> {
     final accent = ext.brand;
 
     return AppScaffold(
-      safeTop: true,
       floatingActionButton: AppFab(
         icon: Symbols.add_rounded,
         label: 'New entry',

@@ -72,7 +72,7 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
       feature: FeatureAccent.period,
       child: widget.embedded
           ? _buildBody(context)
-          : AppScaffold(safeTop: true, body: _buildBody(context)),
+          : AppScaffold(body: _buildBody(context)),
     );
   }
 

@@ -85,14 +85,7 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
 
     return AccentScope(
       feature: FeatureAccent.brand,
-      // safeTop, and NOT because the top would otherwise clip — AppHeader
-      // already applies its own SafeArea, and SafeArea's MediaQuery.removePadding
-      // makes the nesting a no-op there. It is here for the LEFT and RIGHT
-      // insets, which the body below the header does not otherwise get, and
-      // which matter on a notched device in landscape. Fifteen screens in this
-      // app already nest exactly this way.
       child: AppScaffold(
-        safeTop: true,
         body: Column(
           children: [
             AppHeader(

@@ -33,7 +33,6 @@ class HealthSourceDetailScreen extends StatelessWidget {
     return AccentScope(
       feature: FeatureAccent.brand,
       child: AppScaffold(
-        safeTop: true,
         body: ValueListenableBuilder<ConnectedDevicesState>(
           valueListenable: controller,
           builder: (context, state, _) {

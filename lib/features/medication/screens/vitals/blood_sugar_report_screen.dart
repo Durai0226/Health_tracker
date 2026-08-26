@@ -78,7 +78,6 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
     final data = _inWindow;
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

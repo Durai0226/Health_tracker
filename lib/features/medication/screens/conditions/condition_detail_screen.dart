@@ -55,7 +55,6 @@ class _ConditionDetailScreenState extends State<ConditionDetailScreen> {
     final tt = Theme.of(context).textTheme;
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(

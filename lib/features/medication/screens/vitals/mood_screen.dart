@@ -82,7 +82,6 @@ class _MoodScreenState extends State<MoodScreen> {
     final accent = VitalsColors.moodAccent(ext.isDark);
 
     return AppScaffold(
-      safeTop: true,
       floatingActionButton: AppFab(
         icon: Symbols.add_rounded,
         label: 'Log',

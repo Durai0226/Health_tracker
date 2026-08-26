@@ -79,7 +79,6 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
     final data = _inWindow;
 
     return AppScaffold(
-      safeTop: true,
       body: Column(
         children: [
           AppHeader(
