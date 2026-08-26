@@ -97,8 +97,12 @@ void main() {
           .allMatches(entity.readAsStringSync())
           .length;
     }
-    expect(uses, greaterThanOrEqualTo(35),
-        reason: 'only $uses call sites use the shared static; the migration '
-            'covered 39');
+    // 43 at the time of writing: 6 that predate the migration plus the 37 it
+    // folded in. Floored rather than pinned, so adding a screen is not a test
+    // failure — the point is that the static is load-bearing, not that the
+    // count is frozen.
+    expect(uses, greaterThanOrEqualTo(40),
+        reason: 'only \$uses call sites use the shared static; 43 did when the '
+            'migration landed, so something has been un-migrated');
   });
 }
