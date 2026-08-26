@@ -218,14 +218,13 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: AppRadius.brSm),
         side: BorderSide(color: ext.outline),
       ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((s) =>
-            s.contains(WidgetState.selected) ? ext.brand.base : ext.textTertiary),
-        trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-            ? ext.brand.base.withOpacity(0.45)
-            : ext.surfaceVariant),
-        trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
-      ),
+      // No `switchTheme`. It set exactly the three properties `AppSwitch`
+      // overrode, so it styled nothing — and it encoded a DIFFERENT design from
+      // the one that shipped: a teal thumb on a 45%-opacity teal wash, which
+      // measures 1.849:1 in light and 2.466:1 in dark and would fail 1.4.11 on
+      // its own. A decoy that would have silently styled the next raw `Switch`
+      // anyone added. There is no raw `Switch`, `SwitchListTile` or
+      // `Switch.adaptive` anywhere in lib/ — `AppSwitch` is the only one.
       sliderTheme: SliderThemeData(
         activeTrackColor: ext.brand.base,
         inactiveTrackColor: ext.surfaceVariant,
