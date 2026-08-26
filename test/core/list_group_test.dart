@@ -114,19 +114,19 @@ void main() {
       final divider = tester.widget<Divider>(find.byType(Divider));
       // The old value was 8 against a tile that pads 12, so the rule overshot
       // the content at the right-hand end by 4pt.
-      expect(divider.endIndent, AppListTileMetrics.horizontalPadding);
+      expect(divider.endIndent, AppRowMetrics.horizontalPadding);
     });
   });
 
   group('metrics are derived, not copied', () {
     test('textInset is the sum of the tile parts', () {
-      expect(AppListTileMetrics.iconBox, 36);
-      expect(AppListTileMetrics.textInset, 62);
+      expect(AppRowMetrics.iconBox, 36);
+      expect(AppRowMetrics.textInset, 62);
       expect(
-        AppListTileMetrics.textInset,
-        AppListTileMetrics.horizontalPadding +
-            AppListTileMetrics.iconBox +
-            AppListTileMetrics.iconGap,
+        AppRowMetrics.textInset,
+        AppRowMetrics.horizontalPadding +
+            AppRowMetrics.iconBox +
+            AppRowMetrics.iconGap,
       );
     });
 

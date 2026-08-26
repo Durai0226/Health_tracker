@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -363,42 +365,98 @@ class AppListTile extends StatelessWidget {
     final s = accent ?? AccentScope.swatchOf(context);
     final tt = Theme.of(context).textTheme;
     final ic = iconColor ?? s.onContainer;
+
+    // No chevron without an `onTap`.
+    //
+    // This was `trailing ?? Icon(chevron)`, ungated — so 14 call sites that
+    // pass neither rendered an arrow that does nothing. Twelve of them are on
+    // `health_privacy_screen`, the Play-required health disclosure screen,
+    // where every row invites a tap it will not answer.
+    //
+    // It also retires the `trailing: SizedBox.shrink()` workaround, which four
+    // sites used to suppress the arrow and which rendered 14 rows carrying an
+    // invisible widget purely to defeat a default.
+    final Widget? effectiveTrailing = trailing ??
+        (onTap != null
+            ? Icon(Symbols.chevron_right_rounded,
+                size: AppRowMetrics.chevronSize, color: ext.textTertiary)
+            : null);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: AppRadius.brMd,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: (iconColor ?? s.base).withOpacity(0.12),
-                  borderRadius: AppRadius.brSm,
-                ),
-                child: Icon(icon, size: 20, color: ic),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: tt.titleLarge
-                            ?.copyWith(color: titleColor ?? ext.textPrimary)),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(subtitle!,
-                          style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
-                    ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppRowMetrics.minHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppRowMetrics.horizontalPadding,
+                vertical: AppSpacing.md),
+            child: LayoutBuilder(
+              builder: (context, c) => Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (iconColor ?? s.base).withOpacity(0.12),
+                      borderRadius: AppRadius.brSm,
+                    ),
+                    child: Icon(icon, size: AppRowMetrics.glyphSize, color: ic),
+                  ),
+                  const SizedBox(width: AppRowMetrics.iconGap),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          style: tt.titleLarge
+                              ?.copyWith(color: titleColor ?? ext.textPrimary),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle!,
+                            style: tt.bodyMedium
+                                ?.copyWith(color: ext.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (effectiveTrailing != null) ...[
+                    // Gap and cap, neither of which this row had. With the
+                    // trailing unconstrained and non-flex, a long
+                    // `trailing: Text(...)` took its full intrinsic width
+                    // first: at 360pt the title column measured 0.0 and the
+                    // row threw `A RenderFlex overflowed by 188 pixels`.
+                    const SizedBox(width: AppRowMetrics.trailingGap),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxWidth: math.max(AppRowMetrics.trailingFloor,
+                              c.maxWidth * AppRowMetrics.trailingShare)),
+                      // A cap alone is not enough: a trailing that CANNOT
+                      // shrink — `settings_screen.dart`'s "Haptix" row is a
+                      // Row holding a switch AND a label — overflows the
+                      // ConstrainedBox instead of fitting it (+12px at 428pt in
+                      // the sweep). `scaleDown` never enlarges, so every row
+                      // with room renders byte-identically and only an
+                      // over-stuffed trailing is touched.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: effectiveTrailing,
+                      ),
+                    ),
                   ],
-                ),
+                ],
               ),
-              trailing ??
-                  Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
-            ],
+            ),
           ),
         ),
       ),

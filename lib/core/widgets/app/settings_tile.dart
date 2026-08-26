@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
@@ -36,8 +38,13 @@ class SettingsSection extends StatelessWidget {
       if (i > 0) {
         rows.add(Divider(
           height: 1,
-          indent: 58, // aligns to the label past the 32 tile + 12 pad + 14 gap
-          endIndent: 12,
+          // Was a hardcoded 58, derived from a 32pt icon chip this row no
+          // longer has. `AppListGroup` derived 62 from the same anatomy, so
+          // `health_privacy_screen.dart` — which puts AppListTiles inside
+          // SettingsSections — drew eight rules 4pt left of the text they
+          // align to. One source now, so they cannot disagree again.
+          indent: AppRowMetrics.textInset,
+          endIndent: AppRowMetrics.horizontalPadding,
           color: ext.outline,
         ));
       }
@@ -154,12 +161,13 @@ class SettingsTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Symbols.chevron_right_rounded, size: 22, color: ext.textTertiary),
+          Icon(Symbols.chevron_right_rounded,
+              size: AppRowMetrics.chevronSize, color: ext.textTertiary),
         ],
       );
     } else if (onTap != null) {
-      trailingWidget =
-          Icon(Symbols.chevron_right_rounded, size: 22, color: ext.textTertiary);
+      trailingWidget = Icon(Symbols.chevron_right_rounded,
+          size: AppRowMetrics.chevronSize, color: ext.textTertiary);
     }
 
     // A switch row is TWO tap targets: this `InkWell`, which a screen reader
@@ -175,43 +183,103 @@ class SettingsTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: effectiveOnTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            children: [
-              // Uniform neutral tile — the fix for the per-row rainbow.
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: ext.surfaceVariant,
-                  borderRadius: AppRadius.brSm,
-                ),
-                child: Icon(icon, size: 18, color: ext.textSecondary),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: tt.titleLarge?.copyWith(color: ext.textPrimary)),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(subtitle!,
-                          style: tt.bodyMedium
-                              ?.copyWith(color: ext.textSecondary)),
-                    ],
+        child: ConstrainedBox(
+          // A floor, never a fixed height: the title may take a second line at
+          // large type and the row has to be free to grow with it.
+          constraints: const BoxConstraints(minHeight: AppRowMetrics.minHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppRowMetrics.horizontalPadding,
+                vertical: AppSpacing.md),
+            child: LayoutBuilder(
+              builder: (context, c) => Row(
+                children: [
+                  // Uniform neutral chip — the fix for the per-row rainbow.
+                  // 36 rather than 32, matching AppListTile, so one divider
+                  // inset serves both.
+                  Container(
+                    width: AppRowMetrics.iconBox,
+                    height: AppRowMetrics.iconBox,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: ext.surfaceVariant,
+                      borderRadius: AppRadius.brSm,
+                    ),
+                    child: Icon(icon,
+                        size: AppRowMetrics.glyphSize,
+                        color: ext.textSecondary),
+                  ),
+                  const SizedBox(width: AppRowMetrics.iconGap),
+                  // Plain `Expanded`, and the trailing OUTSIDE the flex.
+                  //
+                  // This was `Expanded(flex: 3)` against `Flexible(flex: 2)`:
+                  // a tight 60% for the text and a loose 40% for the trailing,
+                  // so whatever the trailing did not use was never handed back.
+                  // At 393pt that reserved 108.4pt beside a 60pt switch and
+                  // left 48.4pt of every row blank while the title wrapped in
+                  // 162.6. The title column measured 118.8pt at 320.
+                  //
+                  // Now the trailing takes its intrinsic width and the text
+                  // takes the rest: 172pt at 320 for a chevron row, 134 for a
+                  // switch row.
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Two lines, then ellipsis. Android's settings guidance:
+                        // "If titles are long, they can continue on the next
+                        // line instead of being truncated."
+                        Text(
+                          title,
+                          style: tt.titleLarge?.copyWith(color: ext.textPrimary),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 2),
+                          // ONE line. Same guidance: "The subtext should be
+                          // only one line. Additional text gets truncated with
+                          // an ellipsis." The subtitle is a status, and a
+                          // status that needs four lines is not a status.
+                          Text(
+                            subtitle!,
+                            style: tt.bodyMedium
+                                ?.copyWith(color: ext.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (trailingWidget != null) ...[
+                    const SizedBox(width: AppRowMetrics.trailingGap),
+                    // Capped, so an intrinsically wide custom `trailing` cannot
+                    // do to this row what it does to AppListTile, where an
+                    // unconstrained trailing collapsed the title column to
+                    // 0.0pt and threw a 188px overflow.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxWidth: math.max(AppRowMetrics.trailingFloor,
+                              c.maxWidth * AppRowMetrics.trailingShare)),
+                      // A cap alone is not enough: a trailing that CANNOT
+                      // shrink — `settings_screen.dart`'s "Haptix" row is a
+                      // Row holding a switch AND a label — overflows the
+                      // ConstrainedBox instead of fitting it (+12px at 428pt in
+                      // the sweep). `scaleDown` never enlarges, so every row
+                      // with room renders byte-identically and only an
+                      // over-stuffed trailing is touched.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: trailingWidget,
+                      ),
+                    ),
                   ],
-                ),
+                ],
               ),
-              if (trailingWidget != null) ...[
-                const SizedBox(width: 12),
-                Flexible(flex: 2, child: trailingWidget),
-              ],
-            ],
+            ),
           ),
         ),
       ),

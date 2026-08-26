@@ -164,14 +164,33 @@ const Map<String, int> _elementBudget = {
   'Water/statistics': 1090,
   'Vitals/mood': 1074,
   'Medication/adherence_report': 975,
-  'Settings/root': 959,
+  // 959 -> 1549: measured 1347 after the settings-row redesign. The number
+  // nearly doubled and it is the fix working, not leakage — A/B'd by unclamping
+  // the subtitle alone and re-running:
+  //
+  //                       before   wrappers only   + subtitle clamp
+  //   Settings/root          847             880               1347
+  //   Settings/health_priv   665             644                879
+  //   Medication/cond_lib    547             562               1081
+  //
+  // The middle column is this change's structural cost: a ConstrainedBox, a
+  // LayoutBuilder and a FittedBox per row, ~1 element per row net. Everything
+  // beyond it is the ListView building MORE ROWS, because clamping the subtitle
+  // to one line made every row shorter and more of them now fit the 844pt
+  // viewport plus its cache extent. Those rows are on screen; the app is
+  // showing more content per screenful, which is the point.
+  //
+  // `health_privacy` is the interesting one: it fell BELOW its old figure in
+  // the middle column (644 vs 665) because gating the chevron on `onTap`
+  // deleted twelve arrows that never did anything.
+  'Settings/root': 1549,
   // 640 -> 765: measured 665 after the two hydration disclosure rows (one
   // "what we read", one "what we write back") were added alongside the Health
   // Connect hydration permissions. The screen's own doc comment requires it:
   // "If you add a data type, change this screen in the same commit" — claiming
   // less than you read is what fails review. Two AppListTiles at ~12 elements
   // each; growth, not drift.
-  'Settings/health_privacy': 765,
+  'Settings/health_privacy': 1011,
   // Measured against seeded biometrics. These were 250 apiece before
   // `_seedBiometrics` existed AND before the screens stopped gating their body
   // behind a spinner — i.e. budgeted at their loading state, which is the
@@ -194,7 +213,10 @@ const Map<String, int> _elementBudget = {
   'Biometrics/connected_devices': 440,
   // New registration, measured 547 against the seeded database. The screen was
   // in NONE of the four harnesses before this — it now sits in all four.
-  'Medication/condition_library': 630,
+  // 630 -> 1243: measured 1081, same cause as Settings/root above — the
+  // condition list's rows are one AppListTile in a builder, and a one-line
+  // subtitle nearly doubles how many of them fit the viewport.
+  'Medication/condition_library': 1243,
   'Vitals/blood_sugar': 940,
   'Focus/stats': 1328,
   'Insights/weekly_recap': 856,

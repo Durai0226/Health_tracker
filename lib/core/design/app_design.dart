@@ -5,6 +5,7 @@ export '../constants/app_spacing.dart';
 export 'app_palette.dart';
 export 'app_colors_ext.dart';
 export 'app_radius.dart';
+export 'app_row_metrics.dart';
 export 'app_shadows.dart';
 export 'app_motion.dart';
 export 'app_typography.dart';

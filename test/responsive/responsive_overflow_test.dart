@@ -16,6 +16,7 @@ import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
 import 'package:tablet_remainder/core/widgets/app/app_header.dart';
+import 'package:tablet_remainder/core/widgets/app/settings_tile.dart';
 
 import '../support/text_layout.dart';
 
@@ -302,6 +303,8 @@ void main() {
   // screen -> list of "device @scale: detail"
   final overflows = <String, List<String>>{};
   final wraps = <String, List<String>>{};
+  final rowWraps = <String, List<String>>{};
+  final rowCuts = <String, List<String>>{};
   final truncations = <String, List<String>>{};
   // A blank screen never overflows, so the overflow check alone would pass it.
   // Track text count per screen to catch "renders nothing" regressions.
@@ -410,6 +413,41 @@ void main() {
                 collectWrappedText(tester, find.byType(AppHeader));
             for (final w in wrapped) {
               wraps.putIfAbsent(name, () => []).add('${dev.key} @${scale}x  $w');
+            }
+
+            // ROW BODY text that wrapped. Separate bucket, separate gate.
+            //
+            // The header scope above is the only place this harness ever
+            // looked, and it is why the settings screenshots got through: an
+            // unclamped subtitle running to four lines is a legal layout, so
+            // `_isOverflow` cannot see it, and a row body is not inside an
+            // AppHeader.
+            //
+            // Allowance 2, not 1. A row is not chrome — Android's settings
+            // guidance says a long TITLE may continue onto a second line while
+            // the subtext "should be only one line". Applying the looser of the
+            // two uniformly catches the three- and four-line rows without the
+            // gate having to decide which slot each RichText belongs to.
+            for (final w in collectWrappedText(tester, find.byType(SettingsTile),
+                defaultAllowance: 2)) {
+              rowWraps.putIfAbsent(name, () => []).add('${dev.key} @${scale}x  $w');
+            }
+
+            // Row text that was CUT, which is the other half and the one that
+            // survives clamping.
+            //
+            // The two helpers divide the work: `collectWrappedText` re-lays the
+            // paragraph out and compares against its declared allowance, so it
+            // is meaningful only for an UNCLAMPED `Text` — for a clamped one the
+            // painter stops at the same `maxLines` the comparison uses, and the
+            // check can never fire. `didExceedMaxLines` answers the clamped
+            // case: "you gave it two lines and it needed more".
+            //
+            // Clamping the title to 2 and the subtitle to 1 therefore moves the
+            // signal from the first bucket to this one. Gating only the first
+            // would have looked like a fix and measured nothing.
+            for (final t in collectTruncatedText(tester, find.byType(SettingsTile))) {
+              rowCuts.putIfAbsent(name, () => []).add('${dev.key} @${scale}x  $t');
             }
 
             // Text cut off with an ellipsis, ANYWHERE on the screen. Reported
@@ -641,6 +679,37 @@ void main() {
         reason: 'Header text wrapped — see the WRAPPED HEADER TEXT section '
             'above. Header chrome must render on one line at every supported '
             'width and text scale.');
+    if (rowWraps.isNotEmpty) {
+      final lines = <String>[];
+      for (final e in rowWraps.entries) {
+        lines.add('${e.key}  (${e.value.length})');
+        for (final v in e.value.take(4)) {
+          lines.add('    $v');
+        }
+      }
+      // ignore: avoid_print
+      print('\n===== SETTINGS ROW TEXT THAT WRAPPED =====\n'
+          '${lines.join('\n')}\n==========================================');
+    }
+    if (rowCuts.isNotEmpty) {
+      final lines = <String>[];
+      for (final e in rowCuts.entries) {
+        lines.add('${e.key}  (${e.value.length})');
+        for (final v in e.value.take(6)) {
+          lines.add('    $v');
+        }
+      }
+      // ignore: avoid_print
+      print('\n===== SETTINGS ROW TEXT THAT WAS CUT =====\n'
+          '${lines.join('\n')}\n==========================================');
+    }
+    expect(rowWraps, isEmpty,
+        reason: 'Settings row text wrapped past two lines. A row title may run '
+            'to a second line; its status line may not, and neither may run to '
+            'a third. This is the gate that was missing when the three '
+            'screenshots got through — the header scope above does not contain '
+            'row bodies, and a soft wrap throws nothing for `_isOverflow` to '
+            'catch.\n${rowWraps.keys.join(', ')}');
     expect(unrenderable, isEmpty,
         reason: 'Screens could not be constructed at all — see above.');
     // `blank` was collected at :298 and printed, but never asserted — so a
