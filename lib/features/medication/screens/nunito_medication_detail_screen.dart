@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
@@ -494,8 +496,27 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     final headerBg = ext.fillBg(ext.medicine);
     final onHeader = ext.fillFg(ext.medicine);
 
+    // `FlexibleSpaceBar` lays its background out at exactly `expandedHeight`,
+    // so a flat 200 clips the title block at large text. This is the last of
+    // the four collapsing headers still doing that; the other three derive it
+    // (`focus_garden_screen.dart:64` records the 18px clip at 200% that made
+    // them, `aqua_water_dashboard.dart:708`, `water_achievements_screen.dart:82`).
+    //
+    // The arithmetic, so the constant is checkable rather than tuned: 116 is
+    // fixed — 40 of `EdgeInsets.all(gutter)` and a 76pt toolbar band. The rest
+    // is the content row, which is `max(pill, text)`: the pill visual is 56 in
+    // a 12pt-padded box and does NOT scale, while the text is two lines of
+    // headlineMedium (22/28), a 4pt gap and one line of bodyLarge (16/24) —
+    // 2*28 + 4 + 24 = 84 at 1.0x, which is what keeps this at 200 there.
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textBlock = textScaler.scale(28) * 2 + 4 + textScaler.scale(24);
+    // The archived pill is conditional and was never budgeted for at all:
+    // 8 of margin, 8 of vertical padding and a labelSmall line box.
+    final archivedBand =
+        _medicine.isArchived ? 16 + textScaler.scale(16) : 0.0;
+
     return SliverAppBar(
-      expandedHeight: 200,
+      expandedHeight: 116 + math.max(80.0, textBlock) + archivedBand,
       pinned: true,
       backgroundColor: headerBg,
       foregroundColor: onHeader,
