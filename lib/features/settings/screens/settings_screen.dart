@@ -249,7 +249,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           iconColor: ext.mark(ext.brand),
                           title: currentUser?.name ?? 'User',
                           subtitle: currentUser?.email ?? '',
-                          trailing: const SizedBox.shrink(),
+                          // No `trailing: SizedBox.shrink()` any more. It was
+                          // there only to suppress a chevron the row got by
+                          // default; the chevron is now gated on `onTap`, and
+                          // this row has none. The three remaining uses of the
+                          // workaround are radio-style rows that ARE
+                          // interactive and deliberately arrow-free, so theirs
+                          // is still doing real work.
                         ),
                         AppListTile(
                           icon: Symbols.logout_rounded,
