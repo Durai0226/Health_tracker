@@ -21,14 +21,24 @@ class RemindersHubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final periodOn = PeriodReminderService.getConfig().anyEnabled;
-    final bpOn = VitalsReminderService.isEnabled(VitalsReminderService.bp);
-    final sugarOn =
-        VitalsReminderService.isEnabled(VitalsReminderService.glucose);
-    final weightOn =
-        VitalsReminderService.isEnabled(VitalsReminderService.weight);
-    final moodOn = VitalsReminderService.isEnabled(VitalsReminderService.mood);
+    // The status line for a vitals row: the time it fires, or "Off".
+    //
+    // `VitalsReminderService.timeOf` is a synchronous static and this file
+    // already imported the service — it was just never called. The screen was
+    // spending its subtitle on "A daily nudge to measure & log", which is a
+    // gloss on the title, and its trailing on a cramped "On", while the one
+    // fact a reminder row exists to report sat one function call away.
+    String vitalsStatus(VitalsReminderSpec spec) =>
+        VitalsReminderService.isEnabled(spec)
+            ? 'Daily at ${VitalsReminderService.timeOf(spec).format(context)}'
+            : 'Off';
+
+    // Same shape for Period. `getConfig()` was already being called here and
+    // the object thrown away after reading one bool off it.
+    final period = PeriodReminderService.getConfig();
+    final periodStatus = period.anyEnabled
+        ? 'Daily at ${TimeOfDay(hour: period.reminderHour, minute: period.reminderMinute).format(context)}'
+        : 'Off';
 
     void go(Widget dest) =>
         Navigator.push(context, MaterialPageRoute(builder: (_) => dest));
@@ -47,8 +57,7 @@ class RemindersHubScreen extends StatelessWidget {
               children: [
                 SettingsSection(
                   title: 'Your reminders',
-                  footer:
-                      'Turn on gentle nudges for the things you want to stay on top of. Each one respects your notification settings.',
+                  footer: 'Each one respects your notification settings.',
                   children: [
                     // Your own reminders come first: this hub listed ten
                     // per-feature families and not the one the user creates
@@ -56,84 +65,68 @@ class RemindersHubScreen extends StatelessWidget {
                     // only from the Today dashboard card.
                     SettingsTile(
                       icon: Symbols.notifications_active_rounded,
-                      accent: ext.reminders,
                       title: 'Your own reminders',
-                      subtitle: 'Anything you set yourself',
+                      subtitle: 'Ones you set yourself',
                       onTap: () => go(const RemindersScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.medication_rounded,
-                      accent: ext.medicine,
                       title: 'Medicines',
-                      subtitle: 'Dose alarms — set per medicine',
+                      subtitle: 'Set per medicine',
                       onTap: () => go(const NunitoMedicationDashboard()),
                     ),
                     SettingsTile(
                       icon: Symbols.water_drop_rounded,
-                      accent: ext.water,
                       title: 'Water',
-                      subtitle: 'Hydration reminders through the day',
+                      subtitle: 'Through the day',
                       onTap: () => go(const WaterReminderSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.bedtime_rounded,
-                      accent: ext.sleep,
                       title: 'Sleep',
-                      subtitle: 'Bedtime wind-down & wake alarm',
+                      subtitle: 'Bedtime & wake alarm',
                       onTap: () => go(const SleepScheduleSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.directions_walk_rounded,
-                      accent: ext.steps,
                       title: 'Steps',
-                      subtitle: 'A nudge toward your daily goal',
+                      subtitle: 'A nudge toward your goal',
                       onTap: () => go(const StepsGoalSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.favorite_rounded,
-                      accent: ext.medicine,
                       title: 'Blood pressure',
-                      subtitle: 'A daily nudge to measure & log',
-                      value: bpOn ? 'On' : 'Off',
+                      subtitle: vitalsStatus(VitalsReminderService.bp),
                       onTap: () => go(const VitalsReminderSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.bloodtype_rounded,
-                      accent: ext.medicine,
                       title: 'Blood sugar',
-                      subtitle: 'A daily nudge to measure & log',
-                      value: sugarOn ? 'On' : 'Off',
+                      subtitle: vitalsStatus(VitalsReminderService.glucose),
                       onTap: () => go(const VitalsReminderSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.monitor_weight_rounded,
-                      accent: ext.medicine,
                       title: 'Weight',
-                      subtitle: 'A daily nudge to weigh in & log',
-                      value: weightOn ? 'On' : 'Off',
+                      subtitle: vitalsStatus(VitalsReminderService.weight),
                       onTap: () => go(const VitalsReminderSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.mood_rounded,
-                      accent: ext.medicine,
                       title: 'Mood',
-                      subtitle: 'A daily nudge to check in',
-                      value: moodOn ? 'On' : 'Off',
+                      subtitle: vitalsStatus(VitalsReminderService.mood),
                       onTap: () => go(const VitalsReminderSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.self_improvement_rounded,
-                      accent: ext.focus,
                       title: 'Focus',
-                      subtitle: 'Reminders to start a focus session',
+                      subtitle: 'To start a session',
                       onTap: () => go(const FocusRemindersSettingsScreen()),
                     ),
                     SettingsTile(
                       icon: Symbols.calendar_month_rounded,
-                      accent: ext.period,
                       title: 'Period',
-                      subtitle: 'Cycle heads-ups & log nudges',
-                      value: periodOn ? 'On' : 'Off',
+                      subtitle: periodStatus,
                       onTap: () => go(const PeriodReminderSettingsScreen()),
                     ),
                   ],

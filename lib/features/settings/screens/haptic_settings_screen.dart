@@ -54,7 +54,7 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
                         children: [
                           SettingsTile(
                             icon: Symbols.vibration_rounded,
-                            title: 'Haptic Feedback',
+                            title: 'Haptic feedback',
                             switchValue: enabled,
                             onSwitchChanged: (v) => _hapticService.setEnabled(v),
                           ),
@@ -81,32 +81,32 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
                           children: [
                             _featureTile(
                               feature: HapticFeature.medication,
-                              title: 'Medicine Taken',
+                              title: 'Medicine taken',
                               icon: Symbols.medication_rounded,
                             ),
                             _featureTile(
                               feature: HapticFeature.medication,
-                              title: 'Medicine Reminder',
+                              title: 'Medicine reminder',
                               icon: Symbols.alarm_rounded,
                             ),
                             _featureTile(
                               feature: HapticFeature.water,
-                              title: 'Water Added',
+                              title: 'Water added',
                               icon: Symbols.water_drop_rounded,
                             ),
                             _featureTile(
                               feature: HapticFeature.water,
-                              title: 'Water Goal',
+                              title: 'Water goal',
                               icon: Symbols.trophy_rounded,
                             ),
                             _featureTile(
                               feature: HapticFeature.focus,
-                              title: 'Focus Start',
+                              title: 'Focus start',
                               icon: Symbols.self_improvement_rounded,
                             ),
                             _featureTile(
                               feature: HapticFeature.focus,
-                              title: 'Focus Complete',
+                              title: 'Focus done',
                               icon: Symbols.check_circle_rounded,
                             ),
                             _featureTile(

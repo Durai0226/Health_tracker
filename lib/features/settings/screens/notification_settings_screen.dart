@@ -245,7 +245,11 @@ class _NotificationSettingsScreenState
                           children: [
                             SettingsTile(
                               icon: Symbols.lock_rounded,
-                              title: 'Show on Lock Screen',
+                              // "Show on Lock Screen" wanted 3 lines in a
+                              // 134pt column at 320pt. The section is titled
+                              // "Display", so the row does not need to repeat
+                              // that it is about showing something.
+                              title: 'Lock screen',
                               switchValue: _showOnLockScreen,
                               onSwitchChanged: (v) {
                                 setState(() => _showOnLockScreen = v);
@@ -254,7 +258,7 @@ class _NotificationSettingsScreenState
                             ),
                             SettingsTile(
                               icon: Symbols.push_pin_rounded,
-                              title: 'Persistent Notifications',
+                              title: 'Keep on screen',
                               switchValue: _persistentNotification,
                               onSwitchChanged: (v) {
                                 setState(() => _persistentNotification = v);
@@ -263,7 +267,7 @@ class _NotificationSettingsScreenState
                             ),
                             SettingsTile(
                               icon: Symbols.fullscreen_rounded,
-                              title: 'Full-Screen Alerts',
+                              title: 'Full-screen alerts',
                               switchValue: _fullScreenNotification,
                               onSwitchChanged: (v) {
                                 setState(() => _fullScreenNotification = v);
@@ -282,7 +286,7 @@ class _NotificationSettingsScreenState
                           children: [
                             SettingsTile(
                               icon: Symbols.snooze_rounded,
-                              title: 'Enable Snooze',
+                              title: 'Snooze',
                               switchValue: _snoozeEnabled,
                               onSwitchChanged: (v) {
                                 setState(() => _snoozeEnabled = v);

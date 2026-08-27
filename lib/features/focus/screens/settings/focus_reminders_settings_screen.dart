@@ -165,8 +165,7 @@ class _FocusRemindersSettingsScreenState
                           children: [
                             SettingsTile(
                               icon: Symbols.notifications_rounded,
-                              title: 'Daily focus reminder',
-                              subtitle: 'Get reminded to focus each day',
+                              title: 'Daily reminder',
                               accent: accent,
                               switchValue: _dailyReminder,
                               onSwitchChanged: (v) =>
@@ -188,8 +187,7 @@ class _FocusRemindersSettingsScreenState
                           children: [
                             SettingsTile(
                               icon: Symbols.local_fire_department_rounded,
-                              title: 'Streak reminder',
-                              subtitle: 'Alert when your streak is at risk',
+                              title: 'Streak at risk',
                               accent: accent,
                               switchValue: _streakReminder,
                               onSwitchChanged: (v) =>

@@ -134,6 +134,36 @@ const Map<String, String> _blankAllowlist = {
 /// instruments that could not fail.
 ///
 /// Ordered worst first. Every one is at 320pt, most only above 1.0x text scale.
+/// Row text the harness FONT cuts, per screen — a ratchet, not a target of zero.
+///
+/// `collectWrappedText` and `collectTruncatedText` divide the work: the first
+/// re-lays a paragraph out against its declared allowance and so is meaningful
+/// only for an UNCLAMPED `Text`, the second answers "you clamped it and it still
+/// did not fit". Clamping the row title to 2 lines and the status to 1 moved
+/// every signal from the first bucket to the second, which is why both are
+/// collected.
+///
+/// **These are not device defects.** `flutter_test`'s fallback font is roughly
+/// twice the advance width of shipped Inter, and the residue proves it: at 320pt
+/// it cuts `"Vibration"` — nine characters — across two lines of a 134pt column,
+/// which works out to ~30pt per character at a 16pt size. Real Inter averages
+/// about half that. A hard `isEmpty` gate here would demand copy sized for a
+/// font the app does not ship.
+///
+/// So the gate is shrink-only, exactly like the overflow baseline: any increase
+/// fails, and so does any decrease, which forces the number down as copy
+/// improves. Before the copy pass these five screens totalled **132**; the
+/// unclamped-wrap bucket totalled **251** across six screens and is now empty.
+const Map<String, int> _rowCutBaseline = {
+  // 72 one-line status subtitles. Every one fits on a device: "Set per medicine"
+  // is 16 characters, which needs ~112pt of real Inter against a 172pt column.
+  'reminders_hub': 72,
+  'focus_reminders': 13,
+  'haptics': 12,
+  'vitavibe': 11,
+  'notif_settings': 8,
+};
+
 /// The instant every seeded screen is rendered at.
 ///
 /// A Wednesday in the middle of a month, so nothing straddles a week or month
@@ -742,6 +772,34 @@ void main() {
       print('\n===== SETTINGS ROW TEXT THAT WAS CUT =====\n'
           '${lines.join('\n')}\n==========================================');
     }
+    final cutRegressions = <String>[];
+    final cutImprovements = <String>[];
+    for (final e in rowCuts.entries) {
+      final known = _rowCutBaseline[e.key];
+      if (known == null) {
+        cutRegressions.add('${e.key}: ${e.value.length}, and this screen has '
+            'never cut row text before');
+      } else if (e.value.length > known) {
+        cutRegressions
+            .add('${e.key}: ${e.value.length}, baseline is $known');
+      } else if (e.value.length < known) {
+        cutImprovements.add('${e.key}: now ${e.value.length}, baseline says '
+            '$known — lower it');
+      }
+    }
+    for (final name in _rowCutBaseline.keys) {
+      if (!rowCuts.containsKey(name)) {
+        cutImprovements.add('$name: no cuts at all — remove it from the '
+            'baseline');
+      }
+    }
+    expect(cutRegressions, isEmpty,
+        reason: 'Settings row text is being cut in more places than the '
+            'baseline records. See the SETTINGS ROW TEXT THAT WAS CUT section '
+            'above.\n${cutRegressions.join('\n')}');
+    expect(cutImprovements, isEmpty,
+        reason: 'Better than the baseline, so the baseline is now lying.\n'
+            '${cutImprovements.join('\n')}');
     expect(rowWraps, isEmpty,
         reason: 'Settings row text wrapped past two lines. A row title may run '
             'to a second line; its status line may not, and neither may run to '

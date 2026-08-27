@@ -108,18 +108,24 @@ class _VitalsReminderSettingsScreenState
   }) {
     final on = VitalsReminderService.isEnabled(s);
     return [
+      // No subtitle. It used to read 'A daily nudge to measure & log a
+      // reading' — the same 39 characters under all four titles, so four rows
+      // were character-identical below their first line, and every one of them
+      // wrapped to two lines in a 162.6pt column. It also said nothing the
+      // section footer does not say once, and nothing about THIS row's state.
+      //
+      // A switch row's state is the switch. The time lives on the row that
+      // changes it, so it is not printed twice.
       SettingsTile(
         icon: icon,
         accent: acc,
         title: title,
-        subtitle: 'A daily nudge to measure & log a reading',
         switchValue: on,
         onSwitchChanged: (v) => _toggle(s, v),
       ),
       if (on)
         SettingsTile(
           icon: Symbols.schedule_rounded,
-          accent: acc,
           title: 'Reminder time',
           value: VitalsReminderService.timeOf(s).format(context),
           onTap: () => _pickTime(s, acc),
@@ -145,8 +151,8 @@ class _VitalsReminderSettingsScreenState
               children: [
                 SettingsSection(
                   title: 'Measurement reminders',
-                  footer:
-                      'A gentle daily reminder to take and log a reading, so your trends stay complete. Respects your notification settings.',
+                  footer: 'A daily nudge to take and log a reading, so your '
+                      'trends stay complete.',
                   children: [
                     ..._rows(VitalsReminderService.bp,
                         icon: Symbols.favorite_rounded,
@@ -170,14 +176,18 @@ class _VitalsReminderSettingsScreenState
                 if (_syncLoaded)
                   SettingsSection(
                     title: 'Sync',
-                    footer:
-                        'New blood pressure, blood sugar and weight readings you log are shared with $_healthAppName. Mood has no equivalent in $_healthAppName, so it never syncs. Off by default; existing readings are not synced retroactively.',
+                    // Was 218 characters, the longest footer in the app and
+                    // 1.85x the next. Trimmed to the two facts the row cannot
+                    // show: that nothing already logged is sent, and that mood
+                    // is excluded.
+                    footer: 'Off by default, and only new readings — nothing '
+                        'already logged is sent. Mood has no equivalent in '
+                        '$_healthAppName, so it never syncs.',
                     children: [
                       SettingsTile(
                         icon: Symbols.sync_rounded,
                         accent: acc,
                         title: 'Share with $_healthAppName',
-                        subtitle: 'Sync new vitals readings automatically',
                         switchValue: _syncEnabled,
                         onSwitchChanged: _syncToggleBusy ? null : _toggleSync,
                       ),
