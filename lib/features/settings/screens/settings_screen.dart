@@ -443,22 +443,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: _cloudSyncEnabled
                             ? 'Medicines, water and health data sync to your account'
                             : 'Off — your data stays on this device',
-                        trailing: AppSwitch(
-                          value: _cloudSyncEnabled,
-                          onChanged: (v) async {
-                            if (v && !_authService.isAuthenticated) {
-                              context.toastInfo(
-                                  'Sign in with Google to turn on cloud sync.');
-                              return;
-                            }
-                            await CleanStorageService.setCloudSyncEnabled(v);
-                            if (!mounted) return;
-                            setState(() => _cloudSyncEnabled = v);
-                            context.toastSuccess(v
-                                ? 'Cloud sync on'
-                                : 'Cloud sync off — data stays on this device');
-                          },
-                        ),
+                        switchValue: _cloudSyncEnabled,
+                        onSwitchChanged: (v) async {
+                          if (v && !_authService.isAuthenticated) {
+                            context.toastInfo(
+                                'Sign in with Google to turn on cloud sync.');
+                            return;
+                          }
+                          await CleanStorageService.setCloudSyncEnabled(v);
+                          if (!mounted) return;
+                          setState(() => _cloudSyncEnabled = v);
+                          context.toastSuccess(v
+                              ? 'Cloud sync on'
+                              : 'Cloud sync off — data stays on this device');
+                        },
                       ),
                       AppListTile(
                         icon: Symbols.cloud_upload_rounded,
@@ -684,6 +682,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: _hapticService.isEnabled
               ? 'Enabled • ${_getIntensityLabel(_hapticService.globalIntensity)}'
               : 'Disabled',
+          // Navigational only. This row used to push HapticSettingsScreen AND
+          // carry a switch, with one InkWell spanning the full width — so a tap
+          // aimed at the switch that landed a few points off navigated, and a
+          // tap aimed at the row that landed on the switch silently disabled
+          // the feature. A row is one affordance.
+          //
+          // Nothing is lost: HapticSettingsScreen's first row IS this master
+          // toggle (`haptic_settings_screen.dart:55`), and the subtitle above
+          // already states the status, which is where a status belongs.
           onTap: () {
             _hapticService.tap();
             Navigator.push(
@@ -691,13 +698,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const HapticSettingsScreen()),
             );
           },
-          trailing: AppSwitch(
-            value: _hapticService.isEnabled,
-            onChanged: (value) async {
-              await _hapticService.setEnabled(value);
-              setState(() {});
-            },
-          ),
         );
       },
     );
@@ -729,6 +729,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: _vitaVibeService.isEnabled
               ? 'Advanced haptic patterns enabled'
               : 'Advanced vibration patterns',
+          // Same fix as Haptic Feedback above, and this row was the worse of
+          // the two: its trailing was a Row holding a FREE badge AND a switch,
+          // which is also the trailing that could not fit a width constraint
+          // (+12px at 428pt) until the row learned to scale an over-stuffed
+          // trailing down. The master toggle lives on
+          // `vitavibe_settings_screen.dart:79`.
+          //
+          // The FREE badge stays. It is a label, not a control, so it does not
+          // compete with the row's one tap.
           onTap: () {
             _vitaVibeService.tap();
             Navigator.push(
@@ -736,6 +745,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const VitaVibeSettingsScreen()),
             );
           },
+          // Badge AND chevron, spelled out: `AppListTile` renders
+          // `trailing ?? chevron`, so a custom trailing REPLACES the arrow —
+          // and a navigational row with no arrow is the defect this change is
+          // removing, just inverted. Not fixed in the widget because the four
+          // radio-style rows using `trailing: SizedBox.shrink()` are
+          // interactive and deliberately arrow-free.
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -755,14 +770,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              AppSwitch(
-                value: _vitaVibeService.isEnabled,
-                onChanged: (value) async {
-                  await _vitaVibeService.setEnabled(value);
-                  setState(() {});
-                },
-              ),
+              const SizedBox(width: 4),
+              Icon(Symbols.chevron_right_rounded,
+                  size: AppRowMetrics.chevronSize, color: ext.textTertiary),
             ],
           ),
         );

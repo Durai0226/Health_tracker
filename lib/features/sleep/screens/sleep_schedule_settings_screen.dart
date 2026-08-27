@@ -158,12 +158,9 @@ class _SleepScheduleSettingsScreenState
                       title: 'Bedtime reminder',
                       subtitle: _reminderSubtitle(context),
                       accent: sleep,
-                      trailing: AppSwitch(
-                        value: _schedule.reminderEnabled,
-                        onChanged: (v) =>
-                            _update(_schedule.copyWith(reminderEnabled: v)),
-                        accent: sleep,
-                      ),
+                      switchValue: _schedule.reminderEnabled,
+                      onSwitchChanged: (v) =>
+                          _update(_schedule.copyWith(reminderEnabled: v)),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -176,12 +173,9 @@ class _SleepScheduleSettingsScreenState
                           ? 'Rings at ${_schedule.wake.format(context)}'
                           : 'A daily alarm at your wake time',
                       accent: sleep,
-                      trailing: AppSwitch(
-                        value: _schedule.alarmEnabled,
-                        onChanged: (v) =>
-                            _update(_schedule.copyWith(alarmEnabled: v)),
-                        accent: sleep,
-                      ),
+                      switchValue: _schedule.alarmEnabled,
+                      onSwitchChanged: (v) =>
+                          _update(_schedule.copyWith(alarmEnabled: v)),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),

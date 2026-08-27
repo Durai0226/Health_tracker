@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
+import 'app_switch.dart';
 
 /// Flat scaffold on the token background.
 ///
@@ -337,6 +338,23 @@ class EmptyState extends StatelessWidget {
 }
 
 /// Settings/action row: accent icon chip + title + subtitle + trailing.
+///
+/// For a SWITCH row use [switchValue] / [onSwitchChanged] rather than putting an
+/// [AppSwitch] in [trailing]. Four rows did the latter — `settings_screen`'s
+/// "Cloud sync", both of `sleep_schedule_settings_screen`'s, and
+/// `steps_goal_settings_screen`'s "Daily step reminder" — and all four broke the
+/// same two rules:
+///
+///  * **Tapping the row did nothing.** 23 `SettingsTile` switch rows toggle on
+///    row-tap and it is the documented house rule; counting the hand-rolled
+///    copies, 28 rendered rows did not, so the rule was the minority behaviour.
+///  * **A screen reader announced a bare "switch, on"** with no idea what it
+///    governs, because the row and the control were two separate nodes.
+///
+/// Two sites keep `trailing: AppSwitch(...)` deliberately —
+/// `connected_devices_screen` and `app_allow_list_screen` — and their comments
+/// say why: merging the row into one node breaks screen-reader navigation there.
+/// This is additive, so those are untouched.
 class AppListTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -346,6 +364,11 @@ class AppListTile extends StatelessWidget {
   final AccentSwatch? accent;
   final Color? iconColor;
   final Color? titleColor;
+
+  /// A switch row. The widget builds the [AppSwitch], wires the row tap to it
+  /// and merges the semantics.
+  final bool? switchValue;
+  final ValueChanged<bool>? onSwitchChanged;
 
   const AppListTile({
     super.key,
@@ -357,7 +380,13 @@ class AppListTile extends StatelessWidget {
     this.accent,
     this.iconColor,
     this.titleColor,
-  });
+    this.switchValue,
+    this.onSwitchChanged,
+  }) : assert(switchValue == null || trailing == null,
+            'a switch row cannot also supply its own trailing'),
+        assert(switchValue == null || onTap == null,
+            'a row is either navigational or a toggle, never both — one InkWell '
+            'spans the whole row, so a miss-tap does the other thing');
 
   @override
   Widget build(BuildContext context) {
@@ -365,6 +394,18 @@ class AppListTile extends StatelessWidget {
     final s = accent ?? AccentScope.swatchOf(context);
     final tt = Theme.of(context).textTheme;
     final ic = iconColor ?? s.onContainer;
+
+    final isSwitch = switchValue != null;
+    final Widget? switchWidget = isSwitch
+        ? AppSwitch(
+            value: switchValue!, onChanged: onSwitchChanged, accent: accent)
+        : null;
+    // Row-tap toggles, which is the house rule and was the minority behaviour.
+    final VoidCallback? effectiveOnTap = isSwitch
+        ? (onSwitchChanged == null
+            ? null
+            : () => onSwitchChanged!(!switchValue!))
+        : onTap;
 
     // No chevron without an `onTap`.
     //
@@ -376,15 +417,16 @@ class AppListTile extends StatelessWidget {
     // It also retires the `trailing: SizedBox.shrink()` workaround, which four
     // sites used to suppress the arrow and which rendered 14 rows carrying an
     // invisible widget purely to defeat a default.
-    final Widget? effectiveTrailing = trailing ??
+    final Widget? effectiveTrailing = switchWidget ??
+        trailing ??
         (onTap != null
             ? Icon(Symbols.chevron_right_rounded,
                 size: AppRowMetrics.chevronSize, color: ext.textTertiary)
             : null);
-    return Material(
+    Widget row = Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: effectiveOnTap,
         borderRadius: AppRadius.brMd,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: AppRowMetrics.minHeight),
@@ -461,6 +503,12 @@ class AppListTile extends StatelessWidget {
         ),
       ),
     );
+    // One node, announced as title + subtitle + state. WCAG 2.2 SC 4.1.2, and
+    // simply how a settings row should read — the same treatment SettingsTile
+    // applies, scoped the same way (never over a custom `trailing`, which may
+    // hold its own interactive widget).
+    if (isSwitch) row = MergeSemantics(child: row);
+    return row;
   }
 }
 

@@ -291,12 +291,9 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
                         title: 'Daily step reminder',
                         subtitle: 'A gentle evening nudge to move',
                         accent: s,
-                        trailing: AppSwitch(
-                          value: _reminderEnabled,
-                          onChanged: (v) =>
-                              _updateReminder(v, _reminderMinute),
-                          accent: s,
-                        ),
+                        switchValue: _reminderEnabled,
+                        onSwitchChanged: (v) =>
+                            _updateReminder(v, _reminderMinute),
                       ),
                       if (_reminderEnabled) ...[
                         Divider(height: 1, color: ext.outline),
