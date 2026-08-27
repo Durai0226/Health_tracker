@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
@@ -14,7 +13,7 @@ class FocusGardenScreen extends StatelessWidget {
     final focusService = FocusService();
     
     return Scaffold(
-      backgroundColor: AppColors.getBackground(context),
+      backgroundColor: AppColorsExt.of(context).background,
       body: SafeArea(
         child: ListenableBuilder(
           listenable: focusService,
@@ -71,7 +70,7 @@ class FocusGardenScreen extends StatelessWidget {
     return SliverAppBar(
       expandedHeight: expandedHeight,
       pinned: true,
-      backgroundColor: AppColors.getBackground(context),
+      backgroundColor: AppColorsExt.of(context).background,
       leading: IconButton(
         // Announced as just "button" by TalkBack and VoiceOver without this.
         tooltip: 'Back',
@@ -79,7 +78,7 @@ class FocusGardenScreen extends StatelessWidget {
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
+            color: AppColorsExt.of(context).surface,
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Symbols.arrow_back_rounded, size: 20),
@@ -93,7 +92,7 @@ class FocusGardenScreen extends StatelessWidget {
               end: Alignment.bottomCenter,
               colors: [
                 AppColorsExt.of(context).focus.container,
-                AppColors.getBackground(context),
+                AppColorsExt.of(context).background,
               ],
             ),
           ),
@@ -109,7 +108,7 @@ class FocusGardenScreen extends StatelessWidget {
                       // their emoji — those are each species' identity and the
                       // whole point of a garden.
                       Icon(Symbols.park_rounded,
-                          size: 40, color: AppColors.getFocusAccent(context)),
+                          size: 40, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
                       const SizedBox(width: 16),
                       // Flexible so the title block shares the row instead of
                       // pushing past the right edge on narrow phones.
@@ -236,7 +235,7 @@ class FocusGardenScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.getTextPrimary(context),
+                  color: AppColorsExt.of(context).textPrimary,
                 ),
               ),
             ),
@@ -248,7 +247,7 @@ class FocusGardenScreen extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                 ),
               ),
             ),
@@ -314,7 +313,7 @@ class FocusGardenScreen extends StatelessWidget {
               softWrap: false,
               style: TextStyle(
                 fontSize: 10,
-                color: AppColors.getTextSecondary(context),
+                color: AppColorsExt.of(context).textSecondary,
               ),
             ),
           ),

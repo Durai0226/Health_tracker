@@ -200,64 +200,84 @@ void main() {
   });
 
   group('Focus renders in dark mode', () {
-    // `lib/core/constants/app_colors.dart` exposes light-only `static const`
+    // `lib/core/constants/app_colors.dart` exposed light-only `static const`
     // values ALONGSIDE theme-aware `getX(context)` helpers, and five Focus
     // screens reached for the constants. docs/ui-audit.md measured the result at
     // ~1.05:1 contrast — the titles were not "hard to read", they were
-    // invisible. The `get*(context)` form is correct; focus_garden_screen.dart
-    // already uses it.
+    // invisible.
     //
-    // A light-only const is a *bare* member reference: `AppColors.cardBg`, not
-    // `AppColors.getCardBg(context)`. Matching on `\.cardBg\b` would flag the
-    // correct form too, so the pattern requires the member name to follow
-    // `AppColors.` directly.
-    const bannedMembers = [
-      'cardBg',
-      'background',
-      'textPrimary',
-      'textSecondary',
-      'divider',
-      'border',
-    ];
-    List<String> lightOnlyColorHits(String src) {
-      final hits = <String>[];
-      for (final member in bannedMembers) {
-        final bare = RegExp('AppColors\\.$member\\b');
-        for (final _ in bare.allMatches(src)) {
-          hits.add('AppColors.$member');
+    // **That shim no longer exists.** So the guard that scanned Focus files for
+    // bare `AppColors.<const>` references would now pass over any codebase,
+    // including one that reintroduced the file — its matcher would find nothing
+    // because nothing imports it, which is the shape of a green instrument
+    // measuring air.
+    //
+    // Replaced by the stronger claim the deletion makes available: the shim is
+    // gone and nothing may bring it back. That covers the whole app rather than
+    // Focus alone, and it cannot be satisfied vacuously — the assertion is about
+    // a file's absence, which is either true or false.
+    test('the legacy AppColors shim is gone, and nothing imports it', () {
+      final shim = File('lib/core/constants/app_colors.dart');
+      expect(shim.existsSync(), isFalse,
+          reason: 'the light-only palette shim is back. Every colour comes from '
+              'AppColorsExt now; a second palette is how five Focus screens '
+              'ended up at 1.05:1 in dark mode.');
+
+      final importers = <String>[];
+      for (final entity in Directory('lib').listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        final src = entity.readAsStringSync();
+        if (src.contains('constants/app_colors.dart') ||
+            RegExp(r'\bAppColors\b(?!Ext)').hasMatch(
+                src.split('\n').where((l) => !l.trimLeft().startsWith('//')).join('\n'))) {
+          importers.add(entity.path);
         }
       }
-      return hits;
-    }
-
-    test('the matcher flags a bare const and spares the themed getter', () {
-      // Without this, a matcher that silently matches nothing would let the
-      // guard below pass over a screen full of light-only colours. The repo
-      // learned this the hard way in test/support/counting_executor.dart, where
-      // a matcher for the wrong table name made every count zero and the test
-      // passed with the bug deliberately restored.
-      expect(lightOnlyColorHits('color: AppColors.cardBg,'),
-          equals(['AppColors.cardBg']),
-          reason: 'the guard cannot catch what its matcher cannot see');
-      expect(lightOnlyColorHits('color: AppColors.getCardBg(context),'), isEmpty,
-          reason: 'the theme-aware getter is the CORRECT form and must not be '
-              'flagged, or the guard punishes the fix');
-      expect(lightOnlyColorHits('color: ext.textPrimary,'), isEmpty,
-          reason: 'AppColorsExt is theme-aware — only bare AppColors consts are '
-              'the defect');
+      expect(importers, isEmpty,
+          reason: 'these files reference the deleted shim:\n'
+              '${importers.join('\n')}');
     });
 
-    test('no Focus file uses the light-only AppColors constants', () {
+    test('every Focus file that PAINTS reads the theme', () {
+      // The positive form, and it took two attempts to scope. The first version
+      // flagged any file containing the word `Color`, which caught ten model and
+      // service files whose colours are DATA — `focus_plant.dart` storing a
+      // plant's colour, `ambient_sound.dart` storing a swatch. A model holding a
+      // colour is not a screen painting one, and a guard that cannot tell the
+      // difference punishes the thing it is meant to protect.
+      //
+      // Scoped to files that build widgets, which is where a light-only colour
+      // becomes white-on-white.
       final offenders = <String>[];
       for (final f in focusFiles) {
-        for (final hit in lightOnlyColorHits(code(f))) {
-          offenders.add('${f.path}: $hit');
+        final src = code(f);
+        final buildsWidgets = src.contains('Widget build(') ||
+            src.contains('extends StatelessWidget') ||
+            src.contains('extends StatefulWidget');
+        if (!buildsWidgets) continue;
+        if (!src.contains('color:') && !src.contains('Color:')) continue;
+        if (src.contains('AppColorsExt') ||
+            src.contains('ext.') ||
+            src.contains('accent.') ||
+            src.contains('Theme.of(')) {
+          continue;
         }
+        offenders.add(f.path);
       }
       expect(offenders, isEmpty,
-          reason: 'light-only colour constants render white-on-white in dark '
-              'mode. Use the AppColors.getX(context) helpers or AppColorsExt:\n'
-              '${offenders.toSet().join('\n')}');
+          reason: 'these Focus widgets set a colour without reading the theme, '
+              'which is how five of them reached 1.05:1 in dark mode:\n'
+              '${offenders.join('\n')}');
+    });
+
+    test('that scope actually excludes models and includes screens', () {
+      // Without this the narrowing above could have been an excuse: a scope that
+      // excludes everything passes for the same reason the old matcher did.
+      final paths = focusFiles.map((f) => f.path).toList();
+      expect(paths.any((p) => p.contains('/screens/')), isTrue);
+      expect(paths.any((p) => p.contains('/models/')), isTrue,
+          reason: 'the model files must still be IN the scanned set — they are '
+              'skipped by the widget test above, not absent from it');
     });
   });
 

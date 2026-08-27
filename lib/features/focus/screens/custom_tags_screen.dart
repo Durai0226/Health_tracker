@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
-import '../../../core/constants/app_colors.dart';
 import '../models/custom_tag.dart';
 import '../services/tag_service.dart';
 import '../services/focus_service.dart';
@@ -188,7 +187,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                 '${tags.length} tags',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -201,7 +200,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.getCardBg(context),
+              color: AppColorsExt.of(context).surface,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Center(
@@ -211,7 +210,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                     : 'No tags available',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                 ),
               ),
             ),
@@ -293,7 +292,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.getCardBg(context),
+        color: AppColorsExt.of(context).surface,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -351,7 +350,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.getTextSecondary(context),
+                                color: AppColorsExt.of(context).textSecondary,
                               ),
                             ),
                           ],
@@ -380,7 +379,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 10,
-                                color: AppColors.getTextSecondary(context),
+                                color: AppColorsExt.of(context).textSecondary,
                               ),
                             ),
                           ],
@@ -393,7 +392,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: percentage,
-                      backgroundColor: AppColors.getGrey200(context),
+                      backgroundColor: AppColorsExt.of(context).outline,
                       valueColor: AlwaysStoppedAnimation(stat.tagColor),
                       minHeight: 6,
                     ),
@@ -422,7 +421,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
             24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
+            color: AppColorsExt.of(context).surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
@@ -476,7 +475,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                         shape: BoxShape.circle,
                         border: isSelected
                             ? Border.all(
-                                color: AppColors.getTextPrimary(context),
+                                color: AppColorsExt.of(context).textPrimary,
                                 width: 3,
                               )
                             : null,
@@ -509,7 +508,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       decoration: BoxDecoration(
                         color: isSelected
                             ? selectedColor.withOpacity(0.2)
-                            : AppColors.getGrey200(context),
+                            : AppColorsExt.of(context).outline,
                         borderRadius: BorderRadius.circular(12),
                         border: isSelected
                             ? Border.all(color: selectedColor, width: 2)
@@ -564,7 +563,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppColors.getCardBg(context),
+          color: AppColorsExt.of(context).surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
@@ -620,7 +619,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       'Times Used',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.getTextSecondary(context),
+                        color: AppColorsExt.of(context).textSecondary,
                       ),
                     ),
                   ],
@@ -639,7 +638,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       'Type',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.getTextSecondary(context),
+                        color: AppColorsExt.of(context).textSecondary,
                       ),
                     ),
                   ],

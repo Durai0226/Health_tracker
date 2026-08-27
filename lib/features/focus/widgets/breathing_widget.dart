@@ -1,10 +1,10 @@
 import 'dart:async';
 import '../../../core/services/haptic_service.dart';
 import 'package:flutter/material.dart';
+import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../models/breathing_exercise.dart';
-import '../../../core/constants/app_colors.dart';
 
 class BreathingWidget extends StatefulWidget {
   final BreathingPattern pattern;
@@ -224,7 +224,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
           end: Alignment.bottomCenter,
           colors: [
             widget.pattern.color.withOpacity(0.1),
-            AppColors.getCardBg(context),
+            AppColorsExt.of(context).surface,
           ],
         ),
         borderRadius: BorderRadius.circular(32),
@@ -255,8 +255,8 @@ class _BreathingWidgetState extends State<BreathingWidget>
             tooltip: 'Close',
             icon: const Icon(Symbols.close_rounded),
             style: IconButton.styleFrom(
-              backgroundColor: AppColors.getCardBg(context),
-              foregroundColor: AppColors.getTextSecondary(context),
+              backgroundColor: AppColorsExt.of(context).surface,
+              foregroundColor: AppColorsExt.of(context).textSecondary,
             ),
           ),
           Expanded(
@@ -274,7 +274,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
                   '$_completedCycles / ${widget.targetCycles} cycles',
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.getTextSecondary(context),
+                    color: AppColorsExt.of(context).textSecondary,
                   ),
                 ),
               ],
@@ -424,7 +424,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
                   colors: [widget.pattern.color, widget.pattern.color.withOpacity(0.8)],
                 )
               : null,
-          color: isPrimary ? null : AppColors.getGrey200(context),
+          color: isPrimary ? null : AppColorsExt.of(context).outline,
           borderRadius: BorderRadius.circular(20),
           boxShadow: isPrimary
               ? [
@@ -441,7 +441,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
           children: [
             Icon(
               icon,
-              color: isPrimary ? Colors.white : AppColors.getTextSecondary(context),
+              color: isPrimary ? Colors.white : AppColorsExt.of(context).textSecondary,
               size: 24,
             ),
             const SizedBox(width: 8),
@@ -450,7 +450,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: isPrimary ? Colors.white : AppColors.getTextSecondary(context),
+                color: isPrimary ? Colors.white : AppColorsExt.of(context).textSecondary,
               ),
             ),
           ],
@@ -480,7 +480,7 @@ class BreathingPatternCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? pattern.color.withOpacity(0.15) : AppColors.getCardBg(context),
+          color: isSelected ? pattern.color.withOpacity(0.15) : AppColorsExt.of(context).surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? pattern.color : Colors.grey.withOpacity(0.2),
@@ -527,7 +527,7 @@ class BreathingPatternCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? pattern.color : AppColors.getTextPrimary(context),
+                      color: isSelected ? pattern.color : AppColorsExt.of(context).textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -535,7 +535,7 @@ class BreathingPatternCard extends StatelessWidget {
                     pattern.description,
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.getTextSecondary(context),
+                      color: AppColorsExt.of(context).textSecondary,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../../core/design/app_design.dart';
 import '../models/focus_plant.dart';
 
 class PlantAnimationWidget extends StatefulWidget {
@@ -278,11 +279,12 @@ class _PlantAnimationWidgetState extends State<PlantAnimationWidget>
   }
 
   Widget _buildDeadOverlay() {
+    final ext = AppColorsExt.of(context);
     return Container(
       width: widget.size * 0.7,
       height: widget.size * 0.7,
       decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.3),
+        color: ext.surfaceVariant,
         shape: BoxShape.circle,
       ),
       child: const Center(
@@ -310,6 +312,7 @@ class PlantGridItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return GestureDetector(
       onTap: isUnlocked ? onTap : null,
       child: AnimatedContainer(
@@ -318,12 +321,10 @@ class PlantGridItem extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? type.primaryColor.withOpacity(0.2)
-              : Colors.white,
+              : ext.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? type.primaryColor
-                : Colors.grey.withOpacity(0.2),
+            color: isSelected ? type.primaryColor : ext.outline,
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
@@ -343,7 +344,7 @@ class PlantGridItem extends StatelessWidget {
               isUnlocked ? type.emoji : '🔒',
               style: TextStyle(
                 fontSize: 32,
-                color: isUnlocked ? null : Colors.grey,
+                color: isUnlocked ? null : ext.textDisabled,
               ),
             ),
             const SizedBox(height: 4),
@@ -352,7 +353,7 @@ class PlantGridItem extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: isUnlocked ? type.primaryColor : Colors.grey,
+                color: isUnlocked ? type.primaryColor : ext.textDisabled,
               ),
               textAlign: TextAlign.center,
               maxLines: 1,
@@ -363,7 +364,7 @@ class PlantGridItem extends StatelessWidget {
                 '${unlockMinutes}min',
                 style: TextStyle(
                   fontSize: 9,
-                  color: Colors.grey.shade500,
+                  color: ext.textTertiary,
                 ),
               ),
           ],

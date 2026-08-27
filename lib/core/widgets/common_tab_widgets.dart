@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../design/app_design.dart';
 import 'package:flutter/services.dart';
-import '../constants/app_colors.dart';
 
 /// Modern, compact TabBar widget with consistent styling
 class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
@@ -36,7 +35,7 @@ class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.getCardBg(context),
+        color: AppColorsExt.of(context).surface,
         border: Border(
           bottom: BorderSide(
             color: isDark 
@@ -50,7 +49,7 @@ class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
         controller: controller,
         isScrollable: isScrollable,
         labelColor: labelColor ?? AppColorsExt.of(context).mark(AppColorsExt.of(context).brand),
-        unselectedLabelColor: unselectedLabelColor ?? AppColors.getTextSecondary(context),
+        unselectedLabelColor: unselectedLabelColor ?? AppColorsExt.of(context).textSecondary,
         indicatorColor: indicatorColor ??
             AppColorsExt.of(context).mark(AppColorsExt.of(context).brand),
         indicatorWeight: indicatorWeight!,
@@ -116,7 +115,7 @@ class StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: backgroundColor ?? AppColors.getBackground(context),
+      color: backgroundColor ?? AppColorsExt.of(context).background,
       child: tabBar,
     );
   }

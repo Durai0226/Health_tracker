@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import '../../../core/constants/app_colors.dart';
 import '../models/focus_coins.dart';
 import '../services/coins_service.dart';
 
@@ -31,7 +30,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.getBackground(context),
+      backgroundColor: AppColorsExt.of(context).background,
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _coinsService,
@@ -60,7 +59,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   Widget _buildAppBar() {
     return SliverAppBar(
       pinned: true,
-      backgroundColor: AppColors.getBackground(context),
+      backgroundColor: AppColorsExt.of(context).background,
       leading: IconButton(
         // Announced as just "button" by TalkBack and VoiceOver without this.
         tooltip: 'Back',
@@ -68,7 +67,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
+            color: AppColorsExt.of(context).surface,
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Symbols.arrow_back_rounded, size: 20),
@@ -116,7 +115,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Symbols.toll_rounded, size: 30, color: AppColors.getFocusAccent(context)),
+                        Icon(Symbols.toll_rounded, size: 30, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
                         const SizedBox(width: 12),
                         Flexible(
                           child: FittedBox(
@@ -163,7 +162,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   ),
                   child: Column(
                     children: [
-                      Icon(Symbols.park_rounded, size: 22, color: AppColors.getFocusAccent(context)),
+                      Icon(Symbols.park_rounded, size: 22, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
                       const SizedBox(height: 4),
                       FittedBox(
                         fit: BoxFit.scaleDown,
@@ -280,12 +279,12 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
           decoration: BoxDecoration(
             color: isSelected
                 ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
-                : AppColors.getCardBg(context),
+                : AppColorsExt.of(context).surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
                   ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
-                  : AppColors.getGrey200(context),
+                  : AppColorsExt.of(context).outline,
             ),
           ),
           child: Center(
@@ -294,7 +293,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
+                color: isSelected ? Colors.white : AppColorsExt.of(context).textPrimary,
               ),
             ),
           ),
@@ -339,10 +338,10 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.getCardBg(context),
+          color: AppColorsExt.of(context).surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: canAfford ? treeType.color.withOpacity(0.3) : AppColors.getGrey200(context),
+            color: canAfford ? treeType.color.withOpacity(0.3) : AppColorsExt.of(context).outline,
           ),
           boxShadow: [
             BoxShadow(
@@ -371,8 +370,8 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: canAfford
-                    ? AppColors.getTextPrimary(context)
-                    : AppColors.getTextSecondary(context),
+                    ? AppColorsExt.of(context).textPrimary
+                    : AppColorsExt.of(context).textSecondary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -383,8 +382,8 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               style: TextStyle(
                 fontSize: 10,
                 color: canAfford
-                    ? AppColors.getTextSecondary(context)
-                    : AppColors.getTextLight(context),
+                    ? AppColorsExt.of(context).textSecondary
+                    : AppColorsExt.of(context).textTertiary,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -393,7 +392,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: canAfford ? treeType.color.withOpacity(0.1) : AppColors.getGrey100(context),
+                color: canAfford ? treeType.color.withOpacity(0.1) : AppColorsExt.of(context).surfaceVariant,
                 borderRadius: BorderRadius.circular(10),
               ),
               // The chip is only ~72pt wide inside a 320pt-phone tile, so the
@@ -404,7 +403,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Symbols.toll_rounded, size: 14, color: AppColors.getFocusAccent(context)),
+                    Icon(Symbols.toll_rounded, size: 14, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
                     const SizedBox(width: 4),
                     Text(
                       '${treeType.coinCost}',
@@ -415,7 +414,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                         fontWeight: FontWeight.bold,
                         color: canAfford
                             ? treeType.color
-                            : AppColors.getTextSecondary(context),
+                            : AppColorsExt.of(context).textSecondary,
                       ),
                     ),
                   ],
@@ -437,14 +436,14 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Symbols.park_rounded, size: 56, color: AppColors.getTextLight(context)),
+              Icon(Symbols.park_rounded, size: 56, color: AppColorsExt.of(context).textTertiary),
               const SizedBox(height: 16),
               Text(
                 'Your forest is empty',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.getTextPrimary(context),
+                  color: AppColorsExt.of(context).textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -452,7 +451,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 'Redeem coins to grow your garden',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                 ),
               ),
             ],
@@ -474,7 +473,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.getCardBg(context),
+        color: AppColorsExt.of(context).surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -519,7 +518,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   '🪙 ${tree.coinsCost} coins',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.getTextSecondary(context),
+                    color: AppColorsExt.of(context).textSecondary,
                   ),
                 ),
               ],
@@ -532,7 +531,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 _formatDate(tree.plantedAt),
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                 ),
               ),
               const SizedBox(height: 4),
@@ -569,14 +568,14 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Symbols.receipt_long_rounded, size: 56, color: AppColors.getTextLight(context)),
+              Icon(Symbols.receipt_long_rounded, size: 56, color: AppColorsExt.of(context).textTertiary),
               const SizedBox(height: 16),
               Text(
                 'No transactions yet',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.getTextPrimary(context),
+                  color: AppColorsExt.of(context).textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -584,7 +583,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 'Complete focus sessions to earn coins!',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                 ),
               ),
             ],
@@ -608,7 +607,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.getCardBg(context),
+        color: AppColorsExt.of(context).surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -645,7 +644,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   transaction.description,
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.getTextSecondary(context),
+                    color: AppColorsExt.of(context).textSecondary,
                   ),
                 ),
               ],
@@ -671,7 +670,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppColors.getCardBg(context),
+          color: AppColorsExt.of(context).surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
@@ -681,7 +680,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.getGrey300(context),
+                color: AppColorsExt.of(context).outline,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -701,13 +700,13 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: AppColors.getTextSecondary(context),
+                color: AppColorsExt.of(context).textSecondary,
               ),
             ),
             const SizedBox(height: 24),
             Row(
               children: [
-                Icon(Symbols.toll_rounded, size: 22, color: AppColors.getFocusAccent(context)),
+                Icon(Symbols.toll_rounded, size: 22, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
                 const SizedBox(width: 8),
                 Text(
                   '${treeType.coinCost} coins',

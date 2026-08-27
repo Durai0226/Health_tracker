@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../services/focus_service.dart';
@@ -97,15 +96,13 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.getCardBg(context),
+        color: AppColorsExt.of(context).surface,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.getCardShadow(context),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        // `AppShadows.card` rather than a hand-rolled BoxShadow through the
+        // shim's `getCardShadow` — the design system already owns the resting,
+        // card and elevated tiers, and this was the last call into that shim
+        // anywhere in the app.
+        boxShadow: AppShadows.card(context),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +133,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
-                    color: AppColors.getTextSecondary(context),
+                    color: AppColorsExt.of(context).textSecondary,
                   ),
                 ),
               ],
@@ -188,14 +185,14 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.getCardBg(context),
+          color: AppColorsExt.of(context).surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.getBorder(context)),
+          border: Border.all(color: AppColorsExt.of(context).outline),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: AppColors.getTextSecondary(context)),
+            Icon(icon, size: 18, color: AppColorsExt.of(context).textSecondary),
             const SizedBox(width: 6),
             Text(label),
             const SizedBox(width: 8),
@@ -261,7 +258,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                 textAlign: TextAlign.end,
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                 ),
               ),
             ),
@@ -275,7 +272,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           // so the action opens the add dialog directly.
           Container(
             decoration: BoxDecoration(
-              color: AppColors.getCardBg(context),
+              color: AppColorsExt.of(context).surface,
               borderRadius: BorderRadius.circular(20),
             ),
             child: EmptyState(
@@ -327,7 +324,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: EdgeInsets.zero,
       decoration: BoxDecoration(
-        color: AppColors.getCardBg(context),
+        color: AppColorsExt.of(context).surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
@@ -383,12 +380,12 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.getTextSecondary(context),
+                    color: AppColorsExt.of(context).textSecondary,
                   ),
                 ),
                 const SizedBox(width: 4),
                 Icon(Symbols.add_circle_rounded,
-                    size: 20, color: AppColors.getTextSecondary(context)),
+                    size: 20, color: AppColorsExt.of(context).textSecondary),
               ],
             )
           else ...[
@@ -441,7 +438,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
             24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
+            color: AppColorsExt.of(context).surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
@@ -496,7 +493,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? category.color : AppColors.getGrey200(context),
+                        color: isSelected ? category.color : AppColorsExt.of(context).outline,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -508,7 +505,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                             category.name,
                             style: TextStyle(
                               fontSize: 12,
-                              color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
+                              color: isSelected ? Colors.white : AppColorsExt.of(context).textPrimary,
                             ),
                           ),
                         ],

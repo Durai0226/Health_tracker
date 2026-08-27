@@ -3,7 +3,6 @@ import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/audio_service.dart';
 import '../models/ambient_sound.dart';
-import '../../../core/constants/app_colors.dart';
 
 class AmbientSoundSelector extends StatelessWidget {
   final AmbientSoundType selectedSound;
@@ -119,7 +118,7 @@ class AmbientSoundSelector extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.getTextSecondary(context),
+              color: AppColorsExt.of(context).textSecondary,
             ),
           ),
         ),
@@ -142,7 +141,7 @@ class AmbientSoundSelector extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? sound.color : AppColors.getCardBg(context),
+          color: isSelected ? sound.color : AppColorsExt.of(context).surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? sound.color : Colors.grey.withOpacity(0.2),
@@ -170,7 +169,7 @@ class AmbientSoundSelector extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColors.getTextPrimary(context),
+                color: isSelected ? Colors.white : AppColorsExt.of(context).textPrimary,
               ),
             ),
           ],
@@ -204,7 +203,7 @@ class AmbientSoundMiniPlayer extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.getGrey100(context),
+            color: AppColorsExt.of(context).surfaceVariant,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -216,7 +215,7 @@ class AmbientSoundMiniPlayer extends StatelessWidget {
                 'Add Sound',
                 style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.getTextSecondary(context),
+                  color: AppColorsExt.of(context).textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -303,7 +302,7 @@ class SoundCategoryTab extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : AppColors.getTextSecondary(context),
+            color: isSelected ? Colors.white : AppColorsExt.of(context).textSecondary,
           ),
         ),
       ),
