@@ -221,14 +221,31 @@ class WhyThisChip extends StatelessWidget {
           ],
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Symbols.help_rounded, size: 13, color: ext.textTertiary),
-          const SizedBox(width: 4),
-          Text('Why this?',
-              style: tt.labelSmall?.copyWith(color: ext.textTertiary)),
-        ]),
+      // The tap target is 44pt tall; the chip still PAINTS at 20.
+      //
+      // A 13pt glyph in 3pt of padding gave the InkWell a height of 20 — below
+      // WCAG 2.2 SC 2.5.8's 24x24 floor, and this chip is on every insight
+      // surface in the app. It was invisible to the touch-target audit until
+      // that harness was seeded, because an empty database renders no insight
+      // cards for it to measure.
+      //
+      // Expanding the target rather than the chip: the chip is deliberately
+      // quiet secondary chrome and enlarging it would pull attention from the
+      // insight it explains. `Center` keeps the painted size identical.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Center(
+          widthFactor: 1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Symbols.help_rounded, size: 13, color: ext.textTertiary),
+              const SizedBox(width: 4),
+              Text('Why this?',
+                  style: tt.labelSmall?.copyWith(color: ext.textTertiary)),
+            ]),
+          ),
+        ),
       ),
     );
   }

@@ -12,15 +12,20 @@ library;
 /// We report against 44pt, the stricter of the two platform rules that this
 /// app actually ships on, and separately flag anything under the WCAG 24pt
 /// floor as a hard failure rather than a style preference.
+import 'package:clock/clock.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/cupertino.dart' show CupertinoSwitch;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/perf_rating.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tablet_remainder/features/medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
+import 'package:tablet_remainder/core/dev/qa_seed.dart';
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
+import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/audio_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
 import 'package:tablet_remainder/features/focus/services/coins_service.dart';
@@ -55,6 +60,9 @@ const double _appleMin = 44.0;
 const double _wcagMin = 24.0;
 
 final Map<String, Widget Function()> _screens = {
+  // Registered here for the first time too. A screen that is almost entirely
+  // switches is exactly what a tap-target audit is for.
+  'vitals_reminders': () => const VitalsReminderSettingsScreen(),
   // Never registered before, on a screen that is almost entirely controls: a
   // switch per source, plus the row itself as a nav target.
   'connected_devices': () => const ConnectedDevicesScreen(),
@@ -141,6 +149,10 @@ void main() {
   late AppDatabase db;
 
   // screen -> "WidgetType WxH"
+  /// Same instant the responsive sweep pins, for the same reason: the seed
+  /// anchors its history to "now".
+  final seedNow = DateTime(2026, 8, 12, 10, 30);
+
   final small = <String, List<String>>{};
   final belowWcag = <String, List<String>>{};
   /// Screens that threw while building, so their targets were never measured.
@@ -162,6 +174,20 @@ void main() {
     FocusService().resetForTesting();
     CoinsService().resetForTesting();
     TagService().resetForTesting();
+
+    // SEEDED, and pinned. This audit ran against an empty database, so every
+    // list rendered its empty state and every per-row control — the switch on a
+    // connected source, the chevron on a medicine, the chip on a reminder — was
+    // simply absent from the tree it measured. Seeding the sibling sweep found
+    // 234 overflow combinations across eight screens that had been invisible
+    // for the same reason.
+    //
+    // The clock is fixed for the same reason it is fixed there: the seed
+    // anchors its history to "now", so an unpinned run measures a different
+    // screen every day.
+    CleanStorageService.resetForTesting();
+    await CleanStorageService.init();
+    await withClock(Clock.fixed(seedNow), () => seedQaData(force: true));
   });
 
   tearDown(() async {
@@ -169,8 +195,31 @@ void main() {
     await db.close();
   });
 
+  // Three text scales, not one.
+  //
+  // This audit ran at 1.0 only, which is the scale at which a control/label
+  // mismatch is least likely to exist — a fixed-size control beside a label that
+  // doubles is exactly the shape of the defect, and it is structurally invisible
+  // at the default size. 2.0 is the app's clamp (`lib/main.dart:478`, citing
+  // WCAG 1.4.4).
+  const scales = <double>[1.0, 1.3, 2.0];
+
+  // Expected in the 44pt (advisory) column, and not a defect:
+  //
+  //  * **`CupertinoSwitch` / `GestureDetector` at 59x39.** That is Cupertino's
+  //    own size, and Apple ships it. `AppSwitch` pins its LAYOUT box to 60x48 so
+  //    the Material swap was neutral, but a `SizedBox` does not extend a child's
+  //    hit area and wrapping the switch in a second tap recogniser would put two
+  //    of them in one gesture arena. The real target on these rows is the row:
+  //    `SettingsTile` and `AppListTile` both toggle on row-tap and both carry
+  //    `minHeight: 56`.
+  //  * **`period_calendar` day cells at 41x41.** A 7-column month grid on a
+  //    390pt screen cannot give each cell 44pt and still fit; 41 is what the
+  //    grid allows and it clears the WCAG floor comfortably.
+
   for (final entry in _screens.entries) {
-    testWidgets('${entry.key}: tap targets meet 44pt', (tester) async {
+    for (final scale in scales) {
+    testWidgets('${entry.key}: tap targets meet 44pt @${scale}x', (tester) async {
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(390, 844); // a mainstream phone
       addTearDown(tester.view.resetPhysicalSize);
@@ -181,7 +230,13 @@ void main() {
       try {
         await tester.pumpWidget(MaterialApp(
           theme: AppTheme.lightTheme,
-          home: entry.value(),
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: const Size(390, 844),
+              textScaler: TextScaler.linear(scale),
+            ),
+            child: entry.value(),
+          ),
         ));
         await tester.pump(const Duration(milliseconds: 50));
         await tester.pump(const Duration(seconds: 1));
@@ -208,7 +263,12 @@ void main() {
         InkWell,
         GestureDetector,
         IconButton,
+        // `Switch` alone stopped being enough the moment `AppSwitch` moved to
+        // `CupertinoSwitch`: 47 rendered switches vanished from this audit's
+        // view and it went on reporting the same green. Both are listed so the
+        // list survives the next platform swap in either direction.
         Switch,
+        CupertinoSwitch,
         Checkbox,
         Radio,
       ]) {
@@ -240,7 +300,8 @@ void main() {
           final label = _labelUnder(e);
           final desc = '$type ${s.width.toStringAsFixed(0)}'
               'x${s.height.toStringAsFixed(0)}'
-              '${label == null ? '' : " '$label'"}';
+              '${label == null ? '' : " '$label'"}'
+              '${scale == 1.0 ? '' : ' @${scale}x'}';
           if (shortest < _wcagMin) {
             belowWcag.putIfAbsent(entry.key, () => []).add(desc);
           } else if (shortest < _appleMin) {
@@ -258,6 +319,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 8));
     });
+    }
   }
 
   tearDownAll(() {

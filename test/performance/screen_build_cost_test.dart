@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tablet_remainder/features/medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
 import 'package:tablet_remainder/core/dev/qa_seed.dart';
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
@@ -104,6 +105,7 @@ final _screens = <List<dynamic>>[
   ['Biometrics', 'workouts', () => const WorkoutsScreen()],
   ['Biometrics', 'connected_devices', () => const ConnectedDevicesScreen()],
   ['Medication', 'condition_library', () => const ConditionLibraryScreen()],
+  ['Vitals', 'reminders', () => const VitalsReminderSettingsScreen()],
 ];
 
 
@@ -216,6 +218,9 @@ const Map<String, int> _elementBudget = {
   // 630 -> 1243: measured 1081, same cause as Settings/root above — the
   // condition list's rows are one AppListTile in a builder, and a one-line
   // subtitle nearly doubles how many of them fit the viewport.
+  // Measured 697 on first registration + 15%. Was in no harness at all before,
+  // so this is a first measurement rather than a re-baseline.
+  'Vitals/reminders': 801,
   'Medication/condition_library': 1243,
   'Vitals/blood_sugar': 940,
   'Focus/stats': 1328,

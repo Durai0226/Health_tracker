@@ -17,6 +17,7 @@ import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
 import 'package:tablet_remainder/core/widgets/app/app_header.dart';
+import 'package:tablet_remainder/features/medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import 'package:tablet_remainder/core/widgets/app/settings_tile.dart';
 
 import '../support/text_layout.dart';
@@ -158,6 +159,10 @@ const Map<String, int> _rowCutBaseline = {
   // 72 one-line status subtitles. Every one fits on a device: "Set per medicine"
   // is 16 characters, which needs ~112pt of real Inter against a 172pt column.
   'reminders_hub': 72,
+  // Newly registered, so these 13 were always there and simply unmeasured.
+  // All harness-font: it cuts "Blood pressure" — 14 characters — across two
+  // lines of a 134pt column, which real Inter fits on one.
+  'vitals_reminders': 13,
   'focus_reminders': 13,
   'haptics': 12,
   'vitavibe': 11,
@@ -281,6 +286,10 @@ final Map<String, ScreenBuilder> _screens = {
   'settings': () => const SettingsScreen(),
   'haptics': () => const HapticSettingsScreen(),
   'vitavibe': () => const VitaVibeSettingsScreen(),
+  // In NO Dart harness before this, despite a zero-argument const constructor
+  // and eleven SettingsTiles — and it is one of the three screens the redesign
+  // was reported against. Registering it was the entire barrier.
+  'vitals_reminders': () => const VitalsReminderSettingsScreen(),
   'security': () => const SecuritySettingsScreen(),
   'health_privacy': () => const HealthPrivacyScreen(),
   'heart': () => const HeartDashboardScreen(),
@@ -772,6 +781,27 @@ void main() {
       print('\n===== SETTINGS ROW TEXT THAT WAS CUT =====\n'
           '${lines.join('\n')}\n==========================================');
     }
+    // A non-overflow exception during build was recorded and printed and never
+    // asserted, so a screen that threw while rendering exited this harness with
+    // status 0. Pinning the clock already removed one such entry —
+    // `proactive_nudge`'s "No Material widget found", which turned out to be
+    // date-dependent and had been sitting in the overflow baseline as if it were
+    // a layout fact.
+    //
+    // `backup` is allow-listed because it needs a real Firebase app, which a
+    // host-VM test cannot provide. Anything else is a defect.
+    const buildErrorAllowlist = <String, String>{
+      'backup': 'needs a real Firebase app; host VM cannot initialise one',
+    };
+    expect(
+      buildErrors.keys.where((k) => !buildErrorAllowlist.containsKey(k)).toList(),
+      isEmpty,
+      reason: 'Screens threw while building — see the BUILD ERRORS section '
+          'above. If a screen genuinely cannot build in a host VM, add it to '
+          'buildErrorAllowlist WITH A REASON.\n'
+          '${buildErrors.entries.map((e) => '${e.key}: ${e.value}').join('\n')}',
+    );
+
     final cutRegressions = <String>[];
     final cutImprovements = <String>[];
     for (final e in rowCuts.entries) {
