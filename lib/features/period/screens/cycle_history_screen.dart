@@ -17,9 +17,25 @@ class CycleHistoryScreen extends StatelessWidget {
     return AccentScope(
       feature: FeatureAccent.period,
       child: AppScaffold(
-        body: ValueListenableBuilder(
-          valueListenable: PeriodService.listenToDays(),
-          builder: (context, _, _) => _content(context),
+        // AppHeader, and OUTSIDE the scrollable. The header was a hand-rolled
+        // Row inside the ListView — an unsized 18pt arrow in a Material
+        // IconButton beside a `headlineMedium` title, which is one of the four
+        // title sizes the app used for the same role. It also scrolled away,
+        // which no other pushed detail screen in the app does.
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppHeader(
+              title: 'Cycle history',
+              leading: AppHeader.backButton(context),
+            ),
+            Expanded(
+              child: ValueListenableBuilder(
+                valueListenable: PeriodService.listenToDays(),
+                builder: (context, _, _) => _content(context),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -27,7 +43,6 @@ class CycleHistoryScreen extends StatelessWidget {
 
   Widget _content(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
     final cycles = PeriodService.getCycles().reversed.toList();
     final stats = PeriodService.getStats();
 
@@ -35,17 +50,6 @@ class CycleHistoryScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       children: [
         const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Symbols.arrow_back_rounded, size: 18),
-              color: ext.textPrimary,
-            ),
-            Expanded(child: Text('Cycle history', style: tt.headlineMedium)),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
         CycleStatsCard(stats: stats),
         const SizedBox(height: AppSpacing.lg),
         SectionHeader(

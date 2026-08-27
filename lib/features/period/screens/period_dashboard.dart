@@ -72,7 +72,20 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
       feature: FeatureAccent.period,
       child: widget.embedded
           ? _buildBody(context)
-          : AppScaffold(body: _buildBody(context)),
+          // AppHeader, outside the scrollable. The header was a hand-rolled Row
+          // INSIDE the ListView using `tt.displaySmall` — the only 24pt title
+          // in the app, and the fourth distinct size used for this one role.
+          // The `FittedBox(scaleDown)` it needed to survive 200% text goes with
+          // it: at `headlineSmall` the title no longer has to shrink.
+          : AppScaffold(
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _appHeader(context),
+                  Expanded(child: _buildBody(context)),
+                ],
+              ),
+            ),
     );
   }
 
@@ -104,7 +117,6 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
     final mode = settings.trackingMode;
 
     final children = <Widget>[
-      if (!widget.embedded) _header(context),
       const SizedBox(height: AppSpacing.sm),
       _modeSwitcher(mode),
       const SizedBox(height: AppSpacing.lg),
@@ -159,63 +171,30 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
     );
   }
 
-  Widget _header(BuildContext context) {
+  Widget _appHeader(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm),
-      child: Row(
-        children: [
-          // A pushed screen must offer a way back. The Health hub and the Log
-          // sheet both push this one, and its header carried only a
-          // notifications action — so the on-screen chrome was a dead end and
-          // the only way out was the platform gesture. Water and Steps already
-          // did this; Sleep and Period did not.
-          if (Navigator.of(context).canPop()) ...[
-            AppIconButton(
-              icon: Symbols.arrow_back_rounded,
-              filled: false,
-              tooltip: 'Back',
-              accent: ext.period,
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-          ],
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: ext.period.container, borderRadius: AppRadius.brMd),
-            child: Icon(Symbols.calendar_month_rounded,
-                color: ext.period.onContainer, size: 20),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          // Expanded (instead of Text + Spacer) hands the title the leftover
-          // width; scaleDown never enlarges, so at the default text size this
-          // renders exactly as before — at 200% it stops "Cycle" from pushing
-          // the notifications button off a 320pt screen.
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Cycle',
-                maxLines: 1,
-                softWrap: false,
-                style: tt.displaySmall,
-              ),
-            ),
-          ),
-          AppIconButton(
-            icon: Symbols.notifications_rounded,
-            filled: false,
-            accent: ext.period,
-            onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const PeriodReminderSettingsScreen())),
-          ),
-        ],
-      ),
+    return AppHeader(
+      title: 'Cycle',
+      // Conditional, and deliberately so: this screen is both a tab root and a
+      // pushable detail screen, so a leading arrow that is always present would
+      // sometimes do nothing. Its previous absence was the real bug — the Health
+      // hub and the Log sheet both push it, and the header offered only a
+      // notifications action, so the on-screen chrome was a dead end.
+      leading: Navigator.of(context).canPop()
+          ? AppHeader.backButton(context)
+          : null,
+      actions: [
+        AppIconButton(
+          icon: Symbols.notifications_rounded,
+          filled: false,
+          accent: ext.period,
+          tooltip: 'Cycle reminders',
+          onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const PeriodReminderSettingsScreen())),
+        ),
+      ],
     );
   }
 

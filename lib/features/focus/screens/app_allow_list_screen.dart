@@ -43,29 +43,39 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.getBackground(context),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : CustomScrollView(
-                slivers: [
-                  _buildAppBar(),
-                  SliverPadding(
-                    padding: const EdgeInsets.all(24),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        _buildSettingsCard(),
-                        const SizedBox(height: 24),
-                        _buildPresetSection(),
-                        const SizedBox(height: 24),
-                        _buildAllowedAppsSection(),
-                        const SizedBox(height: 100),
-                      ]),
-                    ),
+    // Same conversion as custom_tags_screen: a flat pinned SliverAppBar with a
+    // boxed 20pt arrow and a raw bold `TextStyle`, replaced by a fixed
+    // AppHeader above the sliver body.
+    return AppScaffold(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppHeader(
+            title: 'Distractions',
+            leading: AppHeader.backButton(context),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.all(24),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            _buildSettingsCard(),
+                            const SizedBox(height: 24),
+                            _buildPresetSection(),
+                            const SizedBox(height: 24),
+                            _buildAllowedAppsSection(),
+                            const SizedBox(height: 100),
+                          ]),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddAppDialog,
@@ -76,50 +86,6 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     );
   }
 
-  Widget _buildAppBar() {
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: AppColors.getBackground(context),
-      leading: IconButton(
-        // Announced as just "button" by TalkBack and VoiceOver without this.
-        tooltip: 'Back',
-        onPressed: () => Navigator.pop(context),
-        icon: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Symbols.arrow_back_rounded, size: 20),
-        ),
-      ),
-      title: const Text(
-        'Distractions',
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  /// An honest description of what this list is — and is not.
-  ///
-  /// This card used to hold four switches: "Strict Mode — Only allowed apps can
-  /// be used during focus", "Block Notifications — Silence notifications from
-  /// non-allowed apps", "Show Warning — Display warning when opening blocked
-  /// app", and a "Grace Period — Seconds before tree dies when leaving app"
-  /// dropdown. All four persisted correctly and **enforced nothing**:
-  /// `AppAllowList.isAppAllowed` had no production caller, no app-switch
-  /// detection existed anywhere in the codebase, and the manifest declares none
-  /// of the four permissions blocking would require (`PACKAGE_USAGE_STATS`,
-  /// `AccessibilityService`, `QUERY_ALL_PACKAGES`, `SYSTEM_ALERT_WINDOW`).
-  ///
-  /// Real blocking is not being added, deliberately. On Android it needs the
-  /// AccessibilityService API, a category Google tightened in October 2025 to
-  /// prohibit autonomous action; on iOS it needs Apple's Family Controls
-  /// entitlement, and that API has had regressions open since iOS 26 beta 1 —
-  /// Opal, a well-funded Editors' Choice app, still ships a documented bypass.
-  /// What research consistently shows works instead is friction and
-  /// accountability: naming your distractions up front, and ending a session
-  /// with a deliberate "Give Up" rather than a background heuristic that guesses.
   Widget _buildSettingsCard() {
     return Container(
       padding: const EdgeInsets.all(20),

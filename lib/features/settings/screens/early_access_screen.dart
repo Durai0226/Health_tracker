@@ -16,23 +16,20 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.getBackground(context),
-      appBar: AppBar(
-        title: Text(
-          'Early Access',
-          style: TextStyle(color: AppColors.getTextPrimary(context)),
-        ),
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Symbols.arrow_back_rounded,
-            color: AppColors.getTextPrimary(context),
+    // The last Material `AppBar` on a flat screen. It was also the only header
+    // whose title style was a raw `TextStyle` rather than a theme role, so it
+    // rendered at the default 20pt medium against `headlineSmall` 18/w600
+    // everywhere else, and its `AppColors.*` calls are the legacy shim.
+    return AppScaffold(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppHeader(
+            title: 'Early access',
+            leading: AppHeader.backButton(context),
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: ValueListenableBuilder<bool>(
+          Expanded(
+            child: ValueListenableBuilder<bool>(
         valueListenable: _featureService.notifier,
         builder: (context, _, __) {
           return ListView(
@@ -76,6 +73,9 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
             ],
           );
         },
+            ),
+          ),
+        ],
       ),
     );
   }

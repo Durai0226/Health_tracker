@@ -41,9 +41,23 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
     return AccentScope(
       feature: FeatureAccent.period,
       child: AppScaffold(
-        body: ValueListenableBuilder(
-          valueListenable: PeriodService.listenToDays(),
-          builder: (context, _, _) => _content(context),
+        // Same conversion as cycle_history: the header was a hand-rolled Row
+        // inside the ListView, with an unsized 18pt arrow and a
+        // `headlineMedium` title, and it scrolled away.
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppHeader(
+              title: 'Calendar',
+              leading: AppHeader.backButton(context),
+            ),
+            Expanded(
+              child: ValueListenableBuilder(
+                valueListenable: PeriodService.listenToDays(),
+                builder: (context, _, _) => _content(context),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -57,17 +71,6 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       children: [
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Symbols.arrow_back_rounded, size: 18),
-              color: ext.textPrimary,
-            ),
-            Expanded(child: Text('Calendar', style: tt.headlineMedium)),
-          ],
-        ),
         const SizedBox(height: AppSpacing.sm),
         Row(
           children: [

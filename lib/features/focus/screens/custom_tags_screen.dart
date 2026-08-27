@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/custom_tag.dart';
 import '../services/tag_service.dart';
@@ -36,64 +37,54 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.getBackground(context),
-      body: SafeArea(
-        child: ListenableBuilder(
-          listenable: _tagService,
-          builder: (context, _) {
-            return CustomScrollView(
-              slivers: [
-                _buildAppBar(),
-                SliverPadding(
-                  padding: const EdgeInsets.all(24),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildTagStats(),
-                      const SizedBox(height: 24),
-                      _buildTagsSection('Default Tags', _tagService.defaultTags),
-                      const SizedBox(height: 24),
-                      _buildTagsSection('Custom Tags', _tagService.customTags),
-                      const SizedBox(height: 24),
-                      _buildTagStatistics(),
-                      const SizedBox(height: 100),
-                    ]),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+    // The header was a flat pinned SliverAppBar with a boxed 20pt arrow and a
+    // raw `TextStyle(fontWeight: bold)` title — a fifth header grammar, and one
+    // of the two screens still styling chrome through the legacy `AppColors`
+    // shim. Converted to the pattern 51 other screens already use: a fixed
+    // AppHeader above the sliver body, which keeps the pinned behaviour it had.
+    return AppScaffold(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppHeader(
+            title: 'Focus tags',
+            leading: AppHeader.backButton(context),
+          ),
+          Expanded(
+            child: ListenableBuilder(
+              listenable: _tagService,
+              builder: (context, _) {
+                return CustomScrollView(
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.all(24),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          _buildTagStats(),
+                          const SizedBox(height: 24),
+                          _buildTagsSection(
+                              'Default Tags', _tagService.defaultTags),
+                          const SizedBox(height: 24),
+                          _buildTagsSection(
+                              'Custom Tags', _tagService.customTags),
+                          const SizedBox(height: 24),
+                          _buildTagStatistics(),
+                          const SizedBox(height: 100),
+                        ]),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateTagDialog,
         backgroundColor: AppColors.primary,
         icon: const Icon(Symbols.add_rounded, color: Colors.white),
         label: const Text('Create Tag', style: TextStyle(color: Colors.white)),
-      ),
-    );
-  }
-
-  Widget _buildAppBar() {
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: AppColors.getBackground(context),
-      leading: IconButton(
-        // Announced as just "button" by TalkBack and VoiceOver without this.
-        tooltip: 'Back',
-        onPressed: () => Navigator.pop(context),
-        icon: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.getCardBg(context),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Symbols.arrow_back_rounded, size: 20),
-        ),
-      ),
-      title: const Text(
-        'Focus Tags',
-        style: TextStyle(fontWeight: FontWeight.bold),
       ),
     );
   }
