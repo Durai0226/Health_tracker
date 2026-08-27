@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 
 import '../database/app_database.dart' as db;
@@ -92,7 +93,14 @@ Future<void> _seedQaData({
   }
 
   final days = profile == SeedProfile.heavy ? 365 : 30;
-  final now = DateTime.now();
+  // `clock.now()`, not `DateTime.now()`, and this one is load-bearing for the
+  // harnesses rather than for the app. The seeded history is anchored here, so
+  // with the wall clock every rendered date label, bar width and row count moves
+  // when the day rolls over — which made the responsive sweep's overflow
+  // baseline drift on its own. `water_stats` read 48 one day and 53 the next
+  // with no code change between them, and I spent a full bisection on it.
+  // Under `withClock` the seed is reproducible.
+  final now = clock.now();
 
   await _seedSteps(now, days);
   await _seedSleep(now, days);

@@ -2,6 +2,7 @@
 library;
 
 import 'package:drift/native.dart';
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -133,27 +134,54 @@ const Map<String, String> _blankAllowlist = {
 /// instruments that could not fail.
 ///
 /// Ordered worst first. Every one is at 320pt, most only above 1.0x text scale.
+/// The instant every seeded screen is rendered at.
+///
+/// A Wednesday in the middle of a month, so nothing straddles a week or month
+/// boundary by accident. The value itself does not matter; that it is FIXED
+/// does. `qa_seed.dart` anchors its history to "now", so under the wall clock
+/// every date label, weekday strip and bar width in the baseline below moves
+/// when the day rolls over — `water_stats` read 48 one day and 53 the next with
+/// no code change, and the gate called it a regression.
+final DateTime _seedNow = DateTime(2026, 8, 12, 10, 30);
+
 const Map<String, int> _seededOverflowBaseline = {
+  // ## Re-measured under a PINNED clock
+  //
+  // Every number below moved when the sweep stopped reading the wall clock, and
+  // all of them moved DOWN. `qa_seed.dart` anchors its history to "now", so the
+  // rendered date labels, weekday strips and bar widths — and therefore the
+  // widths that overflow — depended on which day the suite happened to run.
+  //
+  //                    wall clock (Aug 27)   pinned (Aug 12)
+  //   water_stats                       53                28
+  //   home                               1                 0
+  //   proactive_nudge                    2                 0
+  //
+  // `water_stats` is the one that cost time: it read 48 on Aug 26, 53 on Aug 27,
+  // and I bisected my own commits looking for the regression before checking the
+  // date. The gate reported a Tuesday as a defect.
+  //
+  // `proactive_nudge` is the more interesting entry, because its two
+  // "overflows" were a **build error** — "No Material widget found" — and under
+  // the pinned clock the screen builds. A date-dependent crash, sitting in a
+  // baseline as if it were a layout fact.
   'sleep_history': 90,
   'water_dashboard': 56,
-  // 48, not the 41 I first recorded. The original figure was measured on a run
-  // that was itself broken: StepActivityRing was still throwing an UNCAUGHT
-  // framework exception at that point ("Multiple exceptions (5) were detected"),
-  // and captures after it were lost. Re-measured twice, identically, once the
-  // sweep ran clean. Not a regression in the water screen — a bad baseline.
-  'water_stats': 48,
+  // 28 under the pinned clock. Previously 48, and before that 41 — the 41 was
+  // measured on a run that was itself broken (StepActivityRing was throwing an
+  // uncaught framework exception, so captures after it were lost). Three
+  // different numbers for one screen, none of them a code change.
+  'water_stats': 28,
   'focus_stats': 26,
   'period': 18,
-  // proactive_nudge's two are the "No Material widget found" artifact described
-  // in _blankAllowlist, not a layout at all.
-  'proactive_nudge': 2,
-  // One combination each, all at the 320pt floor. `home` is the one that should
-  // go first: it is the app's primary screen and it overflows at **1.0x**, i.e.
-  // at the default text size, not only under Dynamic Type.
-  'home': 1, // 320 @1.0x, right +52px
-  // glucose is gone: its one combination was "inside AppHeader's own layout",
-  // and the header redesign fixed it. Surfaced by the shrink-only side of this
-  // gate, which fails when a screen does BETTER than its record.
+  // `home` and `proactive_nudge` are gone, and `home` is worth noting: it was
+  // the entry flagged as most urgent because the app's primary screen
+  // overflowed at 1.0x, i.e. at the DEFAULT text size. It only did so on
+  // certain dates.
+  //
+  // glucose went earlier, fixed by the header redesign. Both were surfaced by
+  // the shrink-only side of this gate, which fails when a screen does BETTER
+  // than its record.
   'weight': 1, // 320 @2.0x, right +26px
 };
 
@@ -345,7 +373,13 @@ void main() {
     // file this harness had declared clean across 48 device/scale combinations.
     CleanStorageService.resetForTesting();
     await CleanStorageService.init();
-    await seedQaData(force: true);
+    // Pinned, because the baseline below is a set of exact counts and the seed
+    // anchors its history to "now". With the wall clock, every date label and
+    // bar width shifts when the day rolls over: `water_stats` measured 48 one
+    // day and 53 the next with no code change in between, and the gate reported
+    // it as a regression. A baseline that moves on its own cannot tell a
+    // regression from a Tuesday.
+    await withClock(Clock.fixed(_seedNow), () => seedQaData(force: true));
   });
 
   tearDown(() async => db.close());
@@ -354,6 +388,10 @@ void main() {
     final name = screenEntry.key;
 
     testWidgets('$name fits every supported phone', (tester) async {
+      // The screens read the clock too — anything showing "today", a weekday
+      // strip or a relative time. Pinning the pump as well as the seed is what
+      // makes the two agree.
+      await withClock(Clock.fixed(_seedNow), () async {
       for (final dev in _devices.entries) {
         for (final scale in _textScales) {
           final size = dev.value;
@@ -485,8 +523,9 @@ void main() {
 
           // Reset so the next combination starts clean.
           await tester.pumpWidget(const SizedBox.shrink());
+          }
         }
-      }
+      });
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
     });
