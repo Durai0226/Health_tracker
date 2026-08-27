@@ -207,30 +207,52 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Enable for this feature.
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: ext.surfaceVariant,
-                    borderRadius: AppRadius.brMd,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Enable for this feature',
-                          style:
-                              tt.titleLarge?.copyWith(color: ext.textPrimary),
+                //
+                // Not a `SettingsTile`: this is a sheet row, and the settings
+                // row anatomy would add a 36pt icon chip it has no icon for.
+                // What it DOES take from the house rule is the part that is
+                // about behaviour rather than looks — the whole row toggles,
+                // and it is one semantics node so the switch is announced with
+                // what it governs instead of as a bare "switch, on".
+                MergeSemantics(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        _hapticService.setFeatureEnabled(feature, !isEnabled);
+                        setSheetState(() {});
+                      },
+                      borderRadius: AppRadius.brMd,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: ext.surfaceVariant,
+                          borderRadius: AppRadius.brMd,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Enable for this feature',
+                                style: tt.titleLarge
+                                    ?.copyWith(color: ext.textPrimary),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: AppRowMetrics.trailingGap),
+                            AppSwitch(
+                              value: isEnabled,
+                              onChanged: (v) {
+                                _hapticService.setFeatureEnabled(feature, v);
+                                setSheetState(() {});
+                              },
+                            ),
+                          ],
                         ),
                       ),
-                      AppSwitch(
-                        value: isEnabled,
-                        onChanged: (v) {
-                          _hapticService.setFeatureEnabled(feature, v);
-                          setSheetState(() {});
-                        },
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 if (isEnabled) ...[

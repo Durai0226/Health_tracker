@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/feature_flag_service.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 
 class EarlyAccessScreen extends StatefulWidget {
@@ -33,42 +32,37 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
         valueListenable: _featureService.notifier,
         builder: (context, _, __) {
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.md,
+                AppSpacing.gutter, AppSpacing.xl),
             children: [
-              _buildWarningCard(),
-              const SizedBox(height: 24),
-              Text(
-                'Experimental features',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.getTextSecondary(context),
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildFeatureToggle(
-                key: FeatureFlagService.keyAdvancedRepeat,
-                title: 'Advanced Repeat Options',
-                description: 'Enable complex recurrence rules (e.g., "Every 2nd Tuesday").',
-                icon: Symbols.update_rounded,
-                color: Colors.blue,
-              ),
-              const SizedBox(height: 12),
-              _buildFeatureToggle(
-                key: FeatureFlagService.keyPremiumThemes,
-                title: 'Premium Themes',
-                description: 'Unlock additional color themes and layouts.',
-                icon: Symbols.palette_rounded,
-                color: Colors.purple,
-              ),
-              const SizedBox(height: 12),
-              _buildFeatureToggle(
-                key: FeatureFlagService.keyBetaFeatures,
-                title: 'Beta Features',
-                description: 'Opt in to the latest beta features (may be unstable).',
-                icon: Symbols.science_rounded,
-                color: Colors.orange,
+              // The hand-rolled "Heads up!" card and the hand-rolled
+              // "EXPERIMENTAL FEATURES" caption both went: the section supplies
+              // a caption and a footer, and all three said the same thing in
+              // three different type treatments — a 12pt bold letter-spaced
+              // caption, a bold orange heading, and a 13pt body line.
+              SettingsSection(
+                title: 'Experimental',
+                footer: 'These can change, break or disappear at any time.',
+                children: [
+                  _flag(
+                    key: FeatureFlagService.keyAdvancedRepeat,
+                    icon: Symbols.update_rounded,
+                    title: 'Advanced repeat options',
+                    subtitle: 'Complex recurrence rules',
+                  ),
+                  _flag(
+                    key: FeatureFlagService.keyPremiumThemes,
+                    icon: Symbols.palette_rounded,
+                    title: 'Premium themes',
+                    subtitle: 'Extra colour themes',
+                  ),
+                  _flag(
+                    key: FeatureFlagService.keyBetaFeatures,
+                    icon: Symbols.science_rounded,
+                    title: 'Beta features',
+                    subtitle: 'May be unstable',
+                  ),
+                ],
               ),
             ],
           );
@@ -80,113 +74,35 @@ class _EarlyAccessScreenState extends State<EarlyAccessScreen> {
     );
   }
 
-  Widget _buildWarningCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Symbols.warning_amber_rounded, color: Colors.orange),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Heads up!',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'These features are in early development and might change, break, or disappear at any time.',
-                  style: TextStyle(
-                    color: AppColors.getTextPrimary(context),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildFeatureToggle({
+
+  /// One feature flag, on the shared row.
+  ///
+  /// This was a hand-rolled card per flag: its own `Container` with a 20pt
+  /// radius and a hand-written shadow, a 10pt-padded 24pt glyph in a
+  /// hardcoded `Colors.blue` / `.purple` / `.orange` wash, `fontSize: 16` and
+  /// `fontSize: 13` literals, and three `AppColors.*` calls through the legacy
+  /// shim. It also did not toggle on a row tap and announced its switch as a
+  /// bare "switch, on".
+  ///
+  /// `SettingsTile` supplies all of that, and the per-flag colour goes on
+  /// purpose — its doc calls the neutral chip "the fix for the per-row colour
+  /// zoo", and three unrelated hues on three rows is that zoo.
+  Widget _flag({
     required String key,
-    required String title,
-    required String description,
     required IconData icon,
-    required Color color,
-  }) {
-    final isEnabled = _featureService.isEnabled(key);
+    required String title,
+    required String subtitle,
+  }) =>
+      SettingsTile(
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
+        switchValue: _featureService.isEnabled(key),
+        onSwitchChanged: (v) async {
+          await _featureService.setEnabled(key, v);
+          if (mounted) setState(() {});
+        },
+      );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.getCardBg(context),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.getTextPrimary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.getTextSecondary(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            AppSwitch(
-              value: isEnabled,
-              onChanged: (value) async {
-                await _featureService.setEnabled(key, value);
-                setState(() {}); // Rebuild to update UI (notifier handles it too but safe to setState)
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

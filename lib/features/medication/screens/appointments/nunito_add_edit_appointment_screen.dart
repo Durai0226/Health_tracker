@@ -257,32 +257,22 @@ class _NunitoAddEditAppointmentScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: accent.container,
-                                  borderRadius: AppRadius.brSm,
-                                ),
-                                child: Icon(Symbols.notifications_rounded,
-                                    color: accent.onContainer, size: 20),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text('Reminder',
-                                    style: tt.titleLarge
-                                        ?.copyWith(color: ext.textPrimary)),
-                              ),
-                              AppSwitch(
-                                value: _reminderEnabled,
-                                onChanged: (v) {
-                                  _hapticService.toggle();
-                                  setState(() => _reminderEnabled = v);
-                                },
-                                accent: accent,
-                              ),
-                            ],
+                          // Was a hand-rolled copy of AppListTile: the same
+                          // 8pt-padded 20pt glyph, the same 14pt gap, the same
+                          // titleLarge — and no row tap, and two semantics
+                          // nodes. Eighty-two lines below it in this same file
+                          // sat another copy that DID toggle on row tap,
+                          // identical in shape. That is what a shared row is
+                          // for.
+                          AppListTile(
+                            icon: Symbols.notifications_rounded,
+                            title: 'Reminder',
+                            accent: accent,
+                            switchValue: _reminderEnabled,
+                            onSwitchChanged: (v) {
+                              _hapticService.toggle();
+                              setState(() => _reminderEnabled = v);
+                            },
                           ),
                           if (_reminderEnabled) ...[
                             const SizedBox(height: AppSpacing.md),

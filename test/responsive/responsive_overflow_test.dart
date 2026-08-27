@@ -163,6 +163,12 @@ const Map<String, int> _rowCutBaseline = {
   // All harness-font: it cuts "Blood pressure" — 14 characters — across two
   // lines of a 134pt column, which real Inter fits on one.
   'vitals_reminders': 13,
+  // Newly VISIBLE to this gate rather than newly broken: `early_access` had no
+  // SettingsTiles at all until its three hand-rolled feature-flag cards were
+  // migrated onto the shared row, so the scope finder matched nothing there.
+  // All harness-font — it cuts "May be unstable", fifteen characters, on one
+  // line of a 134pt column.
+  'early_access': 55,
   'focus_reminders': 13,
   'haptics': 12,
   'vitavibe': 11,
