@@ -37,6 +37,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     // The header was a flat pinned SliverAppBar with a boxed 20pt arrow and a
     // raw `TextStyle(fontWeight: bold)` title — a fifth header grammar, and one
     // of the two screens still styling chrome through the legacy `AppColors`
@@ -82,9 +83,10 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateTagDialog,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Symbols.add_rounded, color: Colors.white),
-        label: const Text('Create Tag', style: TextStyle(color: Colors.white)),
+        backgroundColor: ext.fillBg(ext.brand),
+        icon: Icon(Symbols.add_rounded, color: ext.fillFg(ext.brand)),
+        label: Text('Create tag',
+            style: TextStyle(color: ext.fillFg(ext.brand))),
       ),
     );
   }
@@ -668,7 +670,9 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
               Navigator.pop(context);
               _tagService.deleteTag(tag.id);
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(
+                foregroundColor: AppColorsExt.of(context).mark(
+                    AppColorsExt.of(context).error)),
             child: const Text('Delete'),
           ),
         ],

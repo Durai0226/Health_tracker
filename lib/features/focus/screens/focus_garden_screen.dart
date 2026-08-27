@@ -92,7 +92,7 @@ class FocusGardenScreen extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                AppColors.primary.withOpacity(0.15),
+                AppColorsExt.of(context).focus.container,
                 AppColors.getBackground(context),
               ],
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/audio_service.dart';
 import '../models/ambient_sound.dart';
@@ -292,7 +293,9 @@ class SoundCategoryTab extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
+          color: isSelected
+              ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(

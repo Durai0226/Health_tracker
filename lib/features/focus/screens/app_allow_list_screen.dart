@@ -43,6 +43,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     // Same conversion as custom_tags_screen: a flat pinned SliverAppBar with a
     // boxed 20pt arrow and a raw bold `TextStyle`, replaced by a fixed
     // AppHeader above the sliver body.
@@ -79,14 +80,20 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddAppDialog,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Symbols.add_rounded, color: Colors.white),
-        label: const Text('Add App', style: TextStyle(color: Colors.white)),
+        // A FAB is a filled control, so `fillBg`/`fillFg` — the pair that is
+        // already measured AA-safe in both themes. `AppColors.primary` is the
+        // LIGHT teal, which on the dark surface gives ~3.9:1 where the dark
+        // token gives 7.07:1.
+        backgroundColor: ext.fillBg(ext.brand),
+        icon: Icon(Symbols.add_rounded, color: ext.fillFg(ext.brand)),
+        label: Text('Add app',
+            style: TextStyle(color: ext.fillFg(ext.brand))),
       ),
     );
   }
 
   Widget _buildSettingsCard() {
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -106,11 +113,11 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: ext.brand.container,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Symbols.info_rounded,
-                color: AppColors.primary, size: 20),
+            child: Icon(Symbols.info_rounded,
+                color: ext.brand.onContainer, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -175,6 +182,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
   /// scale with the text, and was read aloud by a screen reader as its Unicode
   /// name in front of the words that matter.
   Widget _buildPresetChip(IconData icon, String label, List<AllowedApp> apps) {
+    final ext = AppColorsExt.of(context);
     return GestureDetector(
       onTap: () => _addPresetApps(apps),
       child: Container(
@@ -191,7 +199,8 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
             const SizedBox(width: 6),
             Text(label),
             const SizedBox(width: 8),
-            const Icon(Symbols.add_circle_rounded, size: 18, color: AppColors.primary),
+            Icon(Symbols.add_circle_rounded,
+                size: 18, color: ext.mark(ext.brand)),
           ],
         ),
       ),
@@ -312,6 +321,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
   }
 
   Widget _buildAppCard(AllowedApp app, int index) {
+    final ext = AppColorsExt.of(context);
     final logging = _sessionRunning;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -406,7 +416,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                 });
                 _saveData();
               },
-              icon: const Icon(Symbols.delete_rounded, color: AppColors.error),
+              icon: Icon(Symbols.delete_rounded, color: ext.mark(ext.error)),
             ),
           ],
             ],
@@ -417,6 +427,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
   }
 
   void _showAddAppDialog() {
+    final ext = AppColorsExt.of(context);
     final nameController = TextEditingController();
     AppCategory selectedCategory = AppCategory.productivity;
 
@@ -529,7 +540,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: ext.fillBg(ext.brand),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

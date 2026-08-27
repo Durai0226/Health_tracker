@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/focus_coins.dart';
@@ -277,10 +278,14 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : AppColors.getCardBg(context),
+            color: isSelected
+                ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
+                : AppColors.getCardBg(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? AppColors.primary : AppColors.getGrey200(context),
+              color: isSelected
+                  ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
+                  : AppColors.getGrey200(context),
             ),
           ),
           child: Center(

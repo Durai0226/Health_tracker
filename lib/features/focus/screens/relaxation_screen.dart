@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
@@ -665,14 +666,14 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
                 icon: Symbols.spa_rounded,
                 value: '${stats.completedSessions}',
                 label: 'Sessions',
-                color: AppColors.success,
+                color: AppColorsExt.of(context).mark(AppColorsExt.of(context).success),
               ),
               const SizedBox(width: 12),
               _buildStatItem(
                 icon: Symbols.trending_up_rounded,
                 value: '${(stats.completionRate * 100).toInt()}%',
                 label: 'Completion',
-                color: AppColors.warning,
+                color: AppColorsExt.of(context).mark(AppColorsExt.of(context).warning),
               ),
             ],
           ),
@@ -1068,24 +1069,25 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.error.withOpacity(0.1),
+          color: AppColorsExt.of(context).error.container,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Symbols.close_rounded,
-              color: AppColors.error,
+              color: AppColorsExt.of(context)
+                  .mark(AppColorsExt.of(context).error),
               size: 20,
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Text(
               'Abandon Session',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: AppColors.error,
+                color: AppColorsExt.of(context).mark(AppColorsExt.of(context).error),
               ),
             ),
           ],
@@ -1155,7 +1157,9 @@ class _RelaxationScreenState extends State<RelaxationScreen> with TickerProvider
               _relaxationService.abandonSession();
               context.toastWarning('Session ended');
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(
+                foregroundColor: AppColorsExt.of(context)
+                    .mark(AppColorsExt.of(context).error)),
             child: const Text('End Session'),
           ),
         ],

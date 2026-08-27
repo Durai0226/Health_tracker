@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../design/app_design.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 
@@ -31,7 +32,7 @@ class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AppColors.isDark(context);
+    final isDark = AppColorsExt.of(context).isDark;
 
     return Container(
       decoration: BoxDecoration(
@@ -39,7 +40,7 @@ class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
         border: Border(
           bottom: BorderSide(
             color: isDark 
-                ? AppColors.darkBorder.withOpacity(0.3)
+                ? AppColorsExt.of(context).outline
                 : Colors.grey.withOpacity(0.1),
             width: 1,
           ),
@@ -48,9 +49,10 @@ class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
       child: TabBar(
         controller: controller,
         isScrollable: isScrollable,
-        labelColor: labelColor ?? AppColors.primary,
+        labelColor: labelColor ?? AppColorsExt.of(context).mark(AppColorsExt.of(context).brand),
         unselectedLabelColor: unselectedLabelColor ?? AppColors.getTextSecondary(context),
-        indicatorColor: indicatorColor ?? AppColors.primary,
+        indicatorColor: indicatorColor ??
+            AppColorsExt.of(context).mark(AppColorsExt.of(context).brand),
         indicatorWeight: indicatorWeight!,
         indicatorSize: indicatorSize ?? TabBarIndicatorSize.tab,
         labelPadding: labelPadding ?? const EdgeInsets.symmetric(horizontal: 16),
