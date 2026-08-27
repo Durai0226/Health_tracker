@@ -894,11 +894,16 @@ class _FocusScreenState extends State<FocusScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       child: SettingsSection(
+        // The row's subtitle used to read 'A short breathing exercise before
+        // the timer' under a title reading 'Start with a few breaths' — the
+        // same sentence twice, and 42 characters into a 134pt column. The one
+        // fact it carried that the title did not is WHEN, which the footer now
+        // states once.
+        footer: 'Runs before the timer starts.',
         children: [
           SettingsTile(
             icon: Symbols.air_rounded,
             title: 'Start with a few breaths',
-            subtitle: 'A short breathing exercise before the timer',
             accent: ext.focus,
             switchValue: _focusService.breathingPreroll,
             onSwitchChanged: (v) {

@@ -90,13 +90,20 @@ class _PeriodReminderSettingsScreenState
               children: [
                 SettingsSection(
                   title: 'Reminders',
+                  // The footer carries the two things a one-line status cannot:
+                  // the medical qualifier that used to sit in the Fertile
+                  // window row's subtitle — where the clamp truncated it, which
+                  // is not a thing to truncate — and the reason logging matters.
+                  footer: 'Fertile-window dates are an estimate, not medical '
+                      'advice. Logging your actual start sharpens future '
+                      'predictions.',
                   children: [
                     SettingsTile(
                       icon: Symbols.event_upcoming_rounded,
                       accent: acc,
                       title: 'Cycle coming up',
                       subtitle:
-                          'A heads-up ~${_plural(_cfg.daysBefore, 'day')} before your predicted start',
+                          '~${_plural(_cfg.daysBefore, 'day')} before your start',
                       switchValue: _cfg.periodSoonEnabled,
                       onSwitchChanged: (v) =>
                           _update(_cfg.copyWith(periodSoonEnabled: v)),
@@ -114,7 +121,7 @@ class _PeriodReminderSettingsScreenState
                       accent: acc,
                       title: 'PMS heads-up',
                       subtitle:
-                          'A gentle note ~${_plural(_cfg.pmsDaysBefore, 'day')} before',
+                          '~${_plural(_cfg.pmsDaysBefore, 'day')} before',
                       switchValue: _cfg.pmsEnabled,
                       onSwitchChanged: (v) =>
                           _update(_cfg.copyWith(pmsEnabled: v)),
@@ -123,8 +130,7 @@ class _PeriodReminderSettingsScreenState
                       icon: Symbols.edit_calendar_rounded,
                       accent: acc,
                       title: 'Time to log',
-                      subtitle:
-                          'A nudge on your predicted start — logging sharpens future predictions',
+                      subtitle: 'On your predicted start',
                       switchValue: _cfg.logReminderEnabled,
                       onSwitchChanged: (v) =>
                           _update(_cfg.copyWith(logReminderEnabled: v)),
@@ -134,7 +140,6 @@ class _PeriodReminderSettingsScreenState
                         icon: Symbols.spa_rounded,
                         accent: acc,
                         title: 'Fertile window',
-                        subtitle: 'An estimate — not medical advice',
                         switchValue: _cfg.fertileEnabled,
                         onSwitchChanged: (v) =>
                             _update(_cfg.copyWith(fertileEnabled: v)),

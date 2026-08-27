@@ -114,6 +114,12 @@ class HealthSourceDetailScreen extends StatelessWidget {
         // ---- Controls ----------------------------------------------------
         SettingsSection(
           title: 'This source',
+          // 'When two sources have the same reading for a day, use this one.'
+          // was a 62-character explanation in a switch row's status line, so
+          // the clamp cut it mid-sentence. It explains the control rather than
+          // reporting its state, which is what a footer is for.
+          footer: 'When two sources report the same day, the preferred one '
+              'wins.',
           children: [
             SettingsTile(
               icon: Symbols.check_circle_rounded,
@@ -128,8 +134,7 @@ class HealthSourceDetailScreen extends StatelessWidget {
             SettingsTile(
               icon: Symbols.push_pin_rounded,
               title: 'Prefer this device',
-              subtitle: 'When two sources have the same reading for a day, '
-                  'use this one.',
+              subtitle: s.priority > 0 ? 'Preferred' : 'Not preferred',
               switchValue: s.priority > 0,
               onSwitchChanged: busy ? null : (v) => controller.setPinned(s, v),
             ),

@@ -403,17 +403,24 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
       const SizedBox(height: AppSpacing.xl),
       SettingsSection(
         title: 'Background sync',
-        footer: 'Asks for one more Health Connect permission. Without it your '
-            'data still updates every time you open DlyMinder.',
+        // Both explanations live here now. The row's subtitle was carrying 95
+        // characters of them into a 134pt one-line slot, so the clamp cut it —
+        // and the wording is deliberate: an earlier version said "your steps
+        // and sleep stay current", but the worker reads steps only and writes a
+        // snapshot the app merges on next open, so "sleep" was wrong and
+        // "current" overstated it. That precision is worth keeping, and a footer
+        // is where a sentence can be precise.
+        footer: 'Checks your step count periodically, so it is already up to '
+            'date next time you open DlyMinder. Asks for one more Health '
+            'Connect permission; without it your data still updates every time '
+            'you open the app.',
         children: [
           SettingsTile(
             icon: Symbols.sync_rounded,
-            title: 'Keep syncing in the background',
-            // The old copy said "your steps and sleep stay current". The worker
-            // reads steps only, and what it writes is a snapshot the app merges
-            // on next open — so "sleep" was wrong and "current" overstated it.
-            subtitle: 'Checks your step count periodically so it is already '
-                'up to date next time you open DlyMinder.',
+            // The section is already titled "Background sync", so the row does
+            // not need to say it again.
+            title: 'Keep syncing',
+            subtitle: state.backgroundEnabled ? 'On' : 'Off',
             switchValue: state.backgroundEnabled,
             onSwitchChanged: _controller.setBackgroundSync,
             accent: ext.brand,
