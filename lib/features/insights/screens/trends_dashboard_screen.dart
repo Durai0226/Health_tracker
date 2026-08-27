@@ -124,7 +124,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
             // No back arrow on the root tab — there would be nothing to pop.
             leading: widget.isRoot
                 ? null
-                : AppHeader.backButton(context, accent: ext.brand),
+                : AppHeader.backButton(context),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(

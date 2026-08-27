@@ -59,7 +59,7 @@ class _ConditionDetailScreenState extends State<ConditionDetailScreen> {
         children: [
           AppHeader(
             title: condition.name,
-            leading: AppHeader.backButton(context, accent: accent),
+            leading: AppHeader.backButton(context),
           ),
           Expanded(
             child: ListView(

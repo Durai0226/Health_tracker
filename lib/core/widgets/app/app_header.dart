@@ -147,12 +147,12 @@ class AppHeader extends StatelessWidget {
   /// The tooltip is not decoration either. It was set on 8 of 41 hand-rolled
   /// back buttons, so roughly 33 of them announced to a screen reader as an
   /// unlabelled button.
-  static Widget backButton(
-    BuildContext context, {
-    @Deprecated('The back arrow is chrome and is always neutral. This is kept '
-        'only so migrating call sites need not edit their argument lists.')
-    AccentSwatch? accent,
-  }) =>
+  /// No `accent`. There was one, deprecated, so migrating call sites did not
+  /// have to edit their argument lists in the same commit — and six of them
+  /// then kept passing it, which is exactly what a soft-deprecated parameter
+  /// invites. The arrow is chrome and is unconditionally neutral, so an accent
+  /// argument that silently does nothing is worse than a compile error.
+  static Widget backButton(BuildContext context) =>
       Builder(
         builder: (context) => AppIconButton(
           icon: Symbols.arrow_back_rounded,

@@ -239,14 +239,13 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final accent = ext.brand;
 
     return AppScaffold(
       body: Column(
         children: [
           AppHeader(
             title: 'Weekly recap',
-            leading: AppHeader.backButton(context, accent: accent),
+            leading: AppHeader.backButton(context),
             bottom: Container(height: 1, color: ext.outline),
           ),
           Expanded(

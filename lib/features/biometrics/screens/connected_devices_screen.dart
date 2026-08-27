@@ -81,7 +81,6 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
 
     return AccentScope(
       feature: FeatureAccent.brand,
@@ -90,7 +89,7 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
           children: [
             AppHeader(
               title: 'Connected devices',
-              leading: AppHeader.backButton(context, accent: ext.brand),
+              leading: AppHeader.backButton(context),
             ),
             Expanded(
               child: ValueListenableBuilder<ConnectedDevicesState>(

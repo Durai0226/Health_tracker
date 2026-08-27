@@ -28,7 +28,6 @@ class HealthSourceDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
 
     return AccentScope(
       feature: FeatureAccent.brand,
@@ -47,7 +46,7 @@ class HealthSourceDetailScreen extends StatelessWidget {
               children: [
                 AppHeader(
                   title: source?.displayName ?? 'Device',
-                  leading: AppHeader.backButton(context, accent: ext.brand),
+                  leading: AppHeader.backButton(context),
                 ),
                 Expanded(
                   child: source == null

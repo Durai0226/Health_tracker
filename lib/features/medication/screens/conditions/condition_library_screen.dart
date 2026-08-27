@@ -95,7 +95,7 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
         children: [
           AppHeader(
             title: 'Condition library',
-            leading: AppHeader.backButton(context, accent: accent),
+            leading: AppHeader.backButton(context),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
