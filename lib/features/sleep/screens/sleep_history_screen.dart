@@ -57,7 +57,7 @@ class SleepHistoryScreen extends StatelessWidget {
           builder: (context, _, _) {
             final sessions = SleepService.getAllSessions();
             return ListView(
-              padding: const EdgeInsets.only(bottom: 100),
+              padding: EdgeInsets.only(bottom: AppInsets.underNav(context)),
               children: [
                 AppHeader(
                   title: 'Sleep history',

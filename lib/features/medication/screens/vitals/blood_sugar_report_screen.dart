@@ -96,8 +96,9 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
             child: _loading
                 ? Center(child: CircularProgressIndicator(color: ext.mark(accent)))
                 : ListView(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
-                        AppSpacing.sm, AppSpacing.gutter, AppSpacing.huge),
+                    padding: EdgeInsets.fromLTRB(AppSpacing.gutter,
+                        AppSpacing.sm, AppSpacing.gutter,
+                        AppInsets.pushed(context)),
                     children: [
                       SegmentedToggle(
                         index: _windowIndex,

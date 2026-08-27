@@ -369,8 +369,8 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
       color: ext.brand.base,
       onRefresh: _reload,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
-            AppSpacing.gutter, AppSpacing.huge),
+        padding: EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
+            AppSpacing.gutter, AppInsets.pushed(context)),
         itemCount: cards.length,
         separatorBuilder: (_, i) => const SizedBox(height: AppSpacing.lg),
         itemBuilder: (_, i) => cards[i],

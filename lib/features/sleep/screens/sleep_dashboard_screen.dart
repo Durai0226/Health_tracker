@@ -398,7 +398,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     }
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 100),
+      padding: EdgeInsets.only(bottom: AppInsets.underNav(context)),
       children: [
         if (!widget.embedded) ...[
           AppHeader(

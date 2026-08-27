@@ -313,8 +313,8 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
       color: accent.base,
       onRefresh: () async => _reload(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
-            AppSpacing.gutter, AppSpacing.huge),
+        padding: EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
+            AppSpacing.gutter, AppInsets.pushed(context)),
         children: [
           // ---- Tier 1 — one figure, no chart at all. ---------------------
           _cover(ext, r),

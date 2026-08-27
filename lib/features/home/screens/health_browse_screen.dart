@@ -97,8 +97,8 @@ class HealthBrowseScreen extends StatelessWidget {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
-                  AppSpacing.lg, AppSpacing.gutter, AppSpacing.huge),
+              padding: EdgeInsets.fromLTRB(AppSpacing.gutter,
+                  AppSpacing.lg, AppSpacing.gutter, AppInsets.pushed(context)),
               children: [
                 _trendsCard(context, ext, tt),
                 const SizedBox(height: AppSpacing.md),
