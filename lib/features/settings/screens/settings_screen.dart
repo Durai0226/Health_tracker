@@ -196,7 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: AppScaffold(
         body: Column(
           children: [
-            AppHeader(title: 'Settings', accent: ext.brand),
+            AppHeader(title: 'Settings'),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(
