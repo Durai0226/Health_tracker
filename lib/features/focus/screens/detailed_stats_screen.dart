@@ -347,7 +347,23 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
           Text('Focus Time Trend', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.lg),
           if (data.any((d) => d.value > 0))
-            SizedBox(height: 150, child: _buildBarChart(ext, data))
+            // Derived, not 150. The column inside is a bar of up to 120, an
+            // 8pt gap and a label — 120 + 8 + 16 = 144 at the default text
+            // size, so a fixed 150 left 6pt of slack and the label only had to
+            // take a second line to overflow it. That is what the 26 baselined
+            // combinations on this screen were: +10px at 1.0x, +74px at 2.0x.
+            SizedBox(
+                //
+                // `ceilToDouble` and +2, because a bare `scale(16)` left the
+                // box 0.200px short at 1.3x: Flutter rounds a paragraph's line
+                // box UP from the scaled font metrics, so a derived band has to
+                // round the same way. Eight combinations survived on that fifth
+                // of a pixel.
+                height: _kBarMax +
+                    AppSpacing.sm +
+                    MediaQuery.textScalerOf(context).scale(16).ceilToDouble() +
+                    2,
+                child: _buildBarChart(ext, data))
           else
             _buildChartEmptyState(ext),
         ],
@@ -372,6 +388,10 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
     );
   }
 
+  /// The tallest a bar may draw. The box that holds the chart is derived from
+  /// this, so the two cannot drift apart.
+  static const double _kBarMax = 120;
+
   Widget _buildBarChart(AppColorsExt ext, List<_ChartData> data) {
     final tt = Theme.of(context).textTheme;
     final maxValue = data.map((d) => d.value).reduce((a, b) => a > b ? a : b);
@@ -379,22 +399,27 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: data.map((d) {
-        final height = maxValue > 0 ? (d.value / maxValue) * 120 : 0.0;
+        final height = maxValue > 0 ? (d.value / maxValue) * _kBarMax : 0.0;
         return Expanded(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Container(
-                height: height.clamp(4.0, 120.0),
+                height: height.clamp(4.0, _kBarMax),
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
                   color: ext.focus.base.withOpacity(0.7),
                   borderRadius: AppRadius.brSm,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
+              // One line. An axis label is "Mon" or "W1"; wrapping one is what
+              // pushed the column past its box in the first place.
               Text(d.label,
-                  style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis),
             ],
           ),
         );

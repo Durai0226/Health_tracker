@@ -76,13 +76,26 @@ class PredictionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Was `[Text, Spacer, _ConfidenceMeter]` — three non-flex children
+          // plus a Spacer, which absorbs slack but cannot create any. It
+          // overflowed by 61px at 320pt at the DEFAULT text size, and 325px at
+          // 2.0x, and accounted for most of this screen's baselined
+          // combinations.
+          //
+          // `Expanded` on the eyebrow gives it a bound; `Flexible` on the meter
+          // lets its label ellipsise. The Spacer goes because `Expanded` already
+          // pushes the meter right.
           Row(
             children: [
-              Text('PREDICTION',
-                  style: tt.labelSmall
-                      ?.copyWith(color: ext.textTertiary, letterSpacing: 0.6)),
-              const Spacer(),
-              _ConfidenceMeter(confidence: p.confidence),
+              Expanded(
+                child: Text('PREDICTION',
+                    style: tt.labelSmall?.copyWith(
+                        color: ext.textTertiary, letterSpacing: 0.6),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(child: _ConfidenceMeter(confidence: p.confidence)),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -188,12 +201,25 @@ class _MetricRow extends StatelessWidget {
         ),
         if (trailing != null) ...[
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            trailing!,
-            textAlign: TextAlign.right,
-            style: tt.labelLarge?.copyWith(
-              color: trailingColor ?? ext.textSecondary,
-              fontWeight: FontWeight.w700,
+          // Non-flex before this, so it took its intrinsic width and squeezed
+          // the Expanded text column until the Row overflowed — 12px at 1.3x,
+          // 121px at 2.0x. `Flexible` bounds it; one line and scaleDown because
+          // a trailing figure like "in 4 days" broken across two lines reads as
+          // a fault rather than as wrapping.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                trailing!,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                softWrap: false,
+                style: tt.labelLarge?.copyWith(
+                  color: trailingColor ?? ext.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ],
@@ -237,8 +263,14 @@ class _ConfidenceMeter extends StatelessWidget {
             ),
           ),
         const SizedBox(width: 6),
-        Text(confidence.label,
-            style: tt.labelSmall?.copyWith(color: ext.textSecondary)),
+        // Flexible + ellipsis: the three bars are fixed at 4pt each and must
+        // stay legible, so the label is the part that gives way.
+        Flexible(
+          child: Text(confidence.label,
+              style: tt.labelSmall?.copyWith(color: ext.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ),
       ],
     );
   }

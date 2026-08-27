@@ -384,19 +384,38 @@ class _WeightHero extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(valueLabel,
-                        style: tt.headlineSmall?.copyWith(
-                            color: ext.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5)),
-                    const SizedBox(width: 4),
-                    Text(unitLabel,
-                        style: tt.labelMedium?.copyWith(color: ext.textTertiary)),
-                  ],
+                // Both children were non-flex, so the value and its unit took
+                // their intrinsic widths and the row overflowed by 26px at
+                // 320pt / 2.0x — the last entry in this screen's overflow
+                // baseline.
+                //
+                // The pair is scaled TOGETHER rather than the number being
+                // ellipsised or the unit dropped: "72.4" clipped to "72." is a
+                // wrong reading, and a hero figure without its unit is worse.
+                // `scaleDown` never enlarges, so at every size below the
+                // squeeze this renders exactly as before.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(valueLabel,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: tt.headlineSmall?.copyWith(
+                              color: ext.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5)),
+                      const SizedBox(width: 4),
+                      Text(unitLabel,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: tt.labelMedium
+                              ?.copyWith(color: ext.textTertiary)),
+                    ],
+                  ),
                 ),
                 if (deltaLabel != null) ...[
                   const SizedBox(height: 4),

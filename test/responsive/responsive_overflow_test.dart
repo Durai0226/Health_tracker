@@ -206,15 +206,23 @@ const Map<String, int> _seededOverflowBaseline = {
   // "overflows" were a **build error** — "No Material widget found" — and under
   // the pinned clock the screen builds. A date-dependent crash, sitting in a
   // baseline as if it were a layout fact.
-  'sleep_history': 90,
+  // sleep_history is gone. All 90 were one non-flex trailing column in
+  // `_HistoryRow`, repeated once per logged night — three distinct shapes, thirty
+  // rows. It was the largest entry in this baseline.
   'water_dashboard': 56,
   // 28 under the pinned clock. Previously 48, and before that 41 — the 41 was
   // measured on a run that was itself broken (StepActivityRing was throwing an
   // uncaught framework exception, so captures after it were lost). Three
   // different numbers for one screen, none of them a code change.
   'water_stats': 28,
-  'focus_stats': 26,
-  'period': 18,
+  // focus_stats is gone. `SizedBox(height: 150)` around a column of a 120pt bar,
+  // an 8pt gap and a label: 6pt of slack, so the label taking a second line
+  // overflowed it. Derived from the bar max plus the scaled label band — and the
+  // band has to `ceilToDouble` + 2, because Flutter rounds a line box UP from
+  // the scaled metrics and eight combinations survived on 0.200px.
+  // period is gone too. Two widgets in `PredictionCard`: a `[Text, Spacer,
+  // meter]` row with three non-flex children (61px at the DEFAULT text size),
+  // and `_MetricRow`'s non-flex trailing figure.
   // `home` and `proactive_nudge` are gone, and `home` is worth noting: it was
   // the entry flagged as most urgent because the app's primary screen
   // overflowed at 1.0x, i.e. at the DEFAULT text size. It only did so on
@@ -223,7 +231,8 @@ const Map<String, int> _seededOverflowBaseline = {
   // glucose went earlier, fixed by the header redesign. Both were surfaced by
   // the shrink-only side of this gate, which fails when a screen does BETTER
   // than its record.
-  'weight': 1, // 320 @2.0x, right +26px
+  // weight is gone: one baseline-aligned Row whose value and unit were both
+  // non-flex. The pair now scales together rather than the number being cut.
 };
 
 /// Phone sizes this app must support, in LOGICAL pixels (portrait).

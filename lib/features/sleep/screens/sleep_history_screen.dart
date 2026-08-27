@@ -197,19 +197,40 @@ class _HistoryRow extends StatelessWidget {
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${session.efficiencyPercent}%',
-                style: tt.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: kTabular,
-                ),
+          // The 90 baselined overflow combinations on this screen were all this
+          // one column, repeated once per logged night: non-flex, so it took its
+          // intrinsic width first and pushed the row over by 64px at 320pt /
+          // 2.0x. Three distinct shapes, thirty rows.
+          //
+          // Same treatment `SettingsTile` gives a trailing value, and for the
+          // reason written down there: a trailing figure must stay on one line
+          // and shrink to fit, because breaking "efficiency" mid-word reads as a
+          // rendering fault. `scaleDown` never enlarges, so at the default text
+          // size this renders exactly as before.
+          const SizedBox(width: AppSpacing.md),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${session.efficiencyPercent}%',
+                    style: tt.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: kTabular,
+                    ),
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                  Text('efficiency',
+                      style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                      maxLines: 1,
+                      softWrap: false),
+                ],
               ),
-              Text('efficiency',
-                  style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
-            ],
+            ),
           ),
         ],
       ),
