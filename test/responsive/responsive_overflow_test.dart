@@ -185,55 +185,31 @@ const Map<String, int> _rowCutBaseline = {
 /// no code change, and the gate called it a regression.
 final DateTime _seedNow = DateTime(2026, 8, 12, 10, 30);
 
-const Map<String, int> _seededOverflowBaseline = {
-  // ## Re-measured under a PINNED clock
-  //
-  // Every number below moved when the sweep stopped reading the wall clock, and
-  // all of them moved DOWN. `qa_seed.dart` anchors its history to "now", so the
-  // rendered date labels, weekday strips and bar widths — and therefore the
-  // widths that overflow — depended on which day the suite happened to run.
-  //
-  //                    wall clock (Aug 27)   pinned (Aug 12)
-  //   water_stats                       53                28
-  //   home                               1                 0
-  //   proactive_nudge                    2                 0
-  //
-  // `water_stats` is the one that cost time: it read 48 on Aug 26, 53 on Aug 27,
-  // and I bisected my own commits looking for the regression before checking the
-  // date. The gate reported a Tuesday as a defect.
-  //
-  // `proactive_nudge` is the more interesting entry, because its two
-  // "overflows" were a **build error** — "No Material widget found" — and under
-  // the pinned clock the screen builds. A date-dependent crash, sitting in a
-  // baseline as if it were a layout fact.
-  // sleep_history is gone. All 90 were one non-flex trailing column in
-  // `_HistoryRow`, repeated once per logged night — three distinct shapes, thirty
-  // rows. It was the largest entry in this baseline.
-  'water_dashboard': 56,
-  // 28 under the pinned clock. Previously 48, and before that 41 — the 41 was
-  // measured on a run that was itself broken (StepActivityRing was throwing an
-  // uncaught framework exception, so captures after it were lost). Three
-  // different numbers for one screen, none of them a code change.
-  'water_stats': 28,
-  // focus_stats is gone. `SizedBox(height: 150)` around a column of a 120pt bar,
-  // an 8pt gap and a label: 6pt of slack, so the label taking a second line
-  // overflowed it. Derived from the bar max plus the scaled label band — and the
-  // band has to `ceilToDouble` + 2, because Flutter rounds a line box UP from
-  // the scaled metrics and eight combinations survived on 0.200px.
-  // period is gone too. Two widgets in `PredictionCard`: a `[Text, Spacer,
-  // meter]` row with three non-flex children (61px at the DEFAULT text size),
-  // and `_MetricRow`'s non-flex trailing figure.
-  // `home` and `proactive_nudge` are gone, and `home` is worth noting: it was
-  // the entry flagged as most urgent because the app's primary screen
-  // overflowed at 1.0x, i.e. at the DEFAULT text size. It only did so on
-  // certain dates.
-  //
-  // glucose went earlier, fixed by the header redesign. Both were surfaced by
-  // the shrink-only side of this gate, which fails when a screen does BETTER
-  // than its record.
-  // weight is gone: one baseline-aligned Row whose value and unit were both
-  // non-flex. The pair now scales together rather than the number being cut.
-};
+/// **Empty, and it must stay empty.**
+///
+/// This began at six screens and 219 device/text-scale combinations. Every one
+/// is fixed. The gate is shrink-only in both directions, so adding an entry here
+/// is a deliberate act that has to be argued for, and a screen that starts
+/// overflowing fails immediately rather than being absorbed.
+///
+/// All 219 were two defects wearing different clothes:
+///
+///  1. **A non-flex child in a `Row`.** Often with a `Spacer`, which absorbs
+///     slack but cannot create any — `PredictionCard`'s eyebrow and
+///     `AquaTimelineList`'s "View all" row were the same three-child shape.
+///     Bounding the outer widget is usually not enough: a badge made `Flexible`
+///     still overflowed until the label INSIDE it could ellipsise.
+///  2. **A fixed height around text that scales.** `SizedBox(height: 150)` over
+///     a 120pt bar and a label; `height: 80` over a 60pt bar; a circular gauge
+///     whose readout outgrew its disc. The fix is `minHeight`, except where the
+///     box is genuinely a circle, where the CONTENT has to scale down instead.
+///
+/// Two traps worth remembering. Deriving an exact height from `fontSize x a
+/// guessed multiplier` made `water_stats` worse (28 -> 36) — a paragraph's band
+/// is not that. And `focus_stats` kept eight combinations alive on **0.200px**,
+/// because Flutter rounds a line box UP from the scaled metrics and the
+/// derivation rounded down.
+const Map<String, int> _seededOverflowBaseline = <String, int>{};
 
 /// Phone sizes this app must support, in LOGICAL pixels (portrait).
 /// 320x568 is the floor (iPhone SE 1st gen / small Android); 428x926 the

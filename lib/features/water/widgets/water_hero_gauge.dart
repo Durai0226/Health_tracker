@@ -56,8 +56,19 @@ class WaterHeroGauge extends StatelessWidget {
                     discBg: ext.isDark ? ext.surfaceVariant : s.container.withOpacity(0.35),
                   ),
                 ),
-                // Center readout
-                Column(
+                // Center readout.
+                //
+                // Inside a `FittedBox(scaleDown)` because this box is a CIRCLE:
+                // the gauge cannot grow to fit its text the way a list row can,
+                // so at 2.0x the readout ran 26px past the disc. Padding the
+                // inset to ~62% of the diameter keeps the block inside the ring
+                // rather than merely inside the square. `scaleDown` never
+                // enlarges, so the default rendering is untouched.
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: size * 0.19),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(

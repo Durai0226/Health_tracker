@@ -467,8 +467,21 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          SizedBox(
-            height: 80,
+          // `minHeight`, never a fixed height. Each hour column is a bar of up
+          // to 60, a 4pt gap and an hour label — only the bar is fixed, so the
+          // label growing was all it took to overflow a flat 80: +6px at 1.0x
+          // and +30px at 2.0x, which is every one of this screen's 28 baselined
+          // combinations.
+          //
+          // Worth recording how long it took to find. The creator chain named a
+          // `SizedBox > Row > Expanded > Column`, and this screen has TWO fixed
+          // boxes around bar charts. I fixed the other one first — the 160pt
+          // weekly chart — took the count from 28 to 36, and had to restore the
+          // file from a backup to get back to a known state. The probe that
+          // printed the real `debugCreator` chain took two minutes and would
+          // have skipped all of it.
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 80),
             child: Row(
               children: List.generate(24, (hour) {
                 final amount = hourlyData[hour] ?? 0;

@@ -100,13 +100,22 @@ class AquaTimelineList extends StatelessWidget {
             ),
           ),
         ),
+        // `mainAxisSize.min` plus `Flexible` on the label. Centred is not the
+        // same as bounded: both children were non-flex, so at 2.0x
+        // "View all 47 entries" ran 250px past a 320pt row. The 12pt chevron
+        // is the one part that must not shrink — it is the affordance.
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              'View all ${logs.length} entries',
-              style: AquaTheme.labelMedium.copyWith(
-                color: AquaTheme.waterPrimary,
+            Flexible(
+              child: Text(
+                'View all ${logs.length} entries',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AquaTheme.labelMedium.copyWith(
+                  color: AquaTheme.waterPrimary,
+                ),
               ),
             ),
             const SizedBox(width: 4),
@@ -256,16 +265,33 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // `[Text, Spacer, badge]` — three non-flex children
+                        // plus a Spacer, which absorbs slack but cannot create
+                        // any. It overflowed by 34px at 320pt at the DEFAULT
+                        // text size and 226px at 2.0x, once per logged drink,
+                        // which was most of this screen's baselined
+                        // combinations.
+                        //
+                        // Identical in shape to `PredictionCard`'s eyebrow row,
+                        // fixed the same way: `Expanded` bounds the amount and
+                        // `Flexible` lets the badge give way. The badge is the
+                        // right thing to sacrifice — "Logged" is decoration
+                        // beside the figure the row exists to report.
                         Row(
                           children: [
-                            Text(
-                              '+${widget.log.amountMl} ml',
-                              style: AquaTheme.heading3.copyWith(
-                                color: AquaTheme.getTextPrimary(context),
+                            Expanded(
+                              child: Text(
+                                '+${widget.log.amountMl} ml',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AquaTheme.heading3.copyWith(
+                                  color: AquaTheme.getTextPrimary(context),
+                                ),
                               ),
                             ),
-                            const Spacer(),
-                            Container(
+                            const SizedBox(width: AquaTheme.spacingS),
+                            Flexible(
+                              child: Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
                                 vertical: 4,
@@ -283,14 +309,24 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                                     color: AquaTheme.success,
                                   ),
                                   const SizedBox(width: 4),
-                                  Text(
-                                    'Logged',
-                                    style: AquaTheme.caption.copyWith(
-                                      color: AquaTheme.success,
-                                      fontWeight: FontWeight.w600,
+                                  // The 12pt tick stays; the word gives way.
+                                  // Bounding the badge alone was not enough —
+                                  // its own inner Row still could not shrink,
+                                  // so the overflow moved from 34px to 9.8px
+                                  // and stayed.
+                                  Flexible(
+                                    child: Text(
+                                      'Logged',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AquaTheme.caption.copyWith(
+                                        color: AquaTheme.success,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
                                 ],
+                              ),
                               ),
                             ),
                           ],
