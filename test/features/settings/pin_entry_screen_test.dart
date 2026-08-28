@@ -11,9 +11,11 @@ import 'package:tablet_remainder/features/settings/screens/pin_entry_screen.dart
 
 /// Unlock-mode coverage: a correct PIN calls the success path (and actually
 /// unlocks [AppLockService]); an incorrect PIN shows an inline error and
-/// leaves the app locked. Biometrics are left untouched — `biometricPreferred`
-/// defaults to false, so [PinEntryScreen] never reaches the (unmockable in a
-/// headless test) `local_auth` plugin channel.
+/// leaves the app locked. Biometrics are left off here — `biometricPreferred`
+/// defaults to false. They are NOT unmockable, as this comment used to claim:
+/// `LocalAuthPlatform.instance` has a setter, and
+/// `pin_entry_biometrics_test.dart` drives the whole prompt lifecycle through
+/// `test/support/fake_local_auth_platform.dart`.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late AppDatabase db;

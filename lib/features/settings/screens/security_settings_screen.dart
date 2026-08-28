@@ -38,9 +38,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   /// (turning app lock off, changing the PIN).
   Future<bool> _confirmIdentity() async {
     if (_canBiometrics && _service.isBiometricPreferred) {
-      final ok = await _service.authenticateWithBiometrics(
+      final outcome = await _service.authenticateWithBiometrics(
           reason: 'Confirm to continue');
-      if (ok) return true;
+      // Only a success from THIS call counts. Anything else — including
+      // `busy`, which means some other screen's prompt is up — falls back to
+      // the PIN rather than being treated as identity confirmed.
+      if (outcome == BiometricOutcome.success) return true;
     }
     if (!mounted) return false;
     final result = await Navigator.push<bool>(
@@ -48,6 +51,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       MaterialPageRoute(
         builder: (routeContext) => PinEntryScreen(
           mode: PinEntryMode.unlock,
+          // We just prompted and were refused or cancelled. Prompting again
+          // 300ms later is what collided with the session still in flight.
+          autoPromptBiometrics: false,
           onSuccess: () => Navigator.of(routeContext).pop(true),
         ),
       ),

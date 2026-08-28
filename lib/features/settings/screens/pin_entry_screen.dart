@@ -36,18 +36,27 @@ class PinEntryScreen extends StatefulWidget {
   /// "Change PIN" vs the default "Set a PIN".
   final String? setupTitle;
 
+  /// Whether to raise the biometric prompt automatically on first build.
+  ///
+  /// `false` when the caller has JUST prompted and been refused — Settings'
+  /// identity check falls through to this screen after its own attempt, and
+  /// prompting again 300ms later collided with the still-live session.
+  final bool autoPromptBiometrics;
+
   const PinEntryScreen({
     super.key,
     required this.mode,
     this.onSuccess,
     this.setupTitle,
+    this.autoPromptBiometrics = true,
   });
 
   @override
   State<PinEntryScreen> createState() => _PinEntryScreenState();
 }
 
-class _PinEntryScreenState extends State<PinEntryScreen> {
+class _PinEntryScreenState extends State<PinEntryScreen>
+    with WidgetsBindingObserver {
   final _service = AppLockService();
 
   String _entered = '';
@@ -56,12 +65,46 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
   bool _busy = false;
   bool _biometricAvailable = false;
 
+  /// Its own flag, NOT [_busy]. `_busy` disables the keypad, and the keypad
+  /// must stay usable while a prompt is up — the PIN is the fallback this whole
+  /// feature promises. Before this the auto-fire and the button could overlap:
+  /// `_tryBiometrics` read `_busy` and never set it.
+  bool _biometricInFlight = false;
+
+  /// Set when the prompt was cancelled by a pause, so [didChangeAppLifecycleState]
+  /// can re-offer it exactly once on resume — the one thing `stickyAuth` used
+  /// to do for us, without the process-wide flag it left behind.
+  bool _reofferOnResume = false;
+
   bool get _isSetup => widget.mode == PinEntryMode.setup;
 
   @override
   void initState() {
     super.initState();
-    if (!_isSetup) _loadBiometricAvailability();
+    if (!_isSetup) {
+      WidgetsBinding.instance.addObserver(this);
+      _loadBiometricAvailability();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (!_isSetup) {
+      WidgetsBinding.instance.removeObserver(this);
+      // A session must not outlive the screen that started it. When the alarm
+      // route suppressed this overlay mid-prompt, the prompt's success landed
+      // on a disposed widget and nobody unlocked.
+      if (_biometricInFlight) _service.cancelBiometrics();
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!_reofferOnResume || _biometricInFlight || !mounted) return;
+    _reofferOnResume = false;
+    _tryBiometrics();
   }
 
   Future<void> _loadBiometricAvailability() async {
@@ -69,7 +112,7 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
     final can = await _service.canUseBiometrics();
     if (!mounted) return;
     setState(() => _biometricAvailable = can);
-    if (can) {
+    if (can && widget.autoPromptBiometrics) {
       // Give the screen a beat to render before the OS prompt steals focus.
       await Future.delayed(const Duration(milliseconds: 300));
       if (mounted) _tryBiometrics();
@@ -77,9 +120,25 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
   }
 
   Future<void> _tryBiometrics() async {
-    if (_busy) return;
-    final ok = await _service.authenticateWithBiometrics();
-    if (ok && mounted) _handleUnlockSuccess();
+    if (_biometricInFlight) return;
+    setState(() => _biometricInFlight = true);
+    final outcome = await _service.authenticateWithBiometrics();
+    if (!mounted) return;
+    setState(() {
+      _biometricInFlight = false;
+      // Cancelled by the user or by a pause — re-offer once when we come back.
+      // A user who backed out deliberately gets one more prompt after they
+      // return from wherever they went, which is what sticky did too.
+      _reofferOnResume = outcome == BiometricOutcome.cancelled;
+      if (outcome.deservesMessage) {
+        _error = switch (outcome) {
+          BiometricOutcome.lockedOut =>
+            'Too many attempts — use your PIN for now',
+          _ => 'Biometrics unavailable — use your PIN',
+        };
+      }
+    });
+    if (outcome == BiometricOutcome.success) _handleUnlockSuccess();
   }
 
   void _onDigit(String digit) {
@@ -248,7 +307,7 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   TextButton.icon(
                     key: const Key('pinBiometricButton'),
-                    onPressed: _busy ? null : _tryBiometrics,
+                    onPressed: (_busy || _biometricInFlight) ? null : _tryBiometrics,
                     icon: Icon(Symbols.fingerprint_rounded,
                         color: ext.mark(ext.brand)),
                     label: Text('Use biometrics',

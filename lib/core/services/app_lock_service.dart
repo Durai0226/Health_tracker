@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter/widgets.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -38,6 +39,21 @@ class AppLockService with WidgetsBindingObserver {
   static const Duration gracePeriod = Duration(seconds: 30);
 
   final LocalAuthentication _localAuth = LocalAuthentication();
+
+  /// The one biometric session that may be in flight, app-wide.
+  ///
+  /// `local_auth_android` keeps a process-wide `authInProgress` flag and answers
+  /// every `authenticate()` made while it is set with
+  /// `PlatformException('auth_in_progress')`. Two callers in this app can race
+  /// for it — the lock gate's auto-prompt and Settings' identity check — so
+  /// the service owns the session and a second caller is told [BiometricOutcome.busy]
+  /// rather than being allowed to start a prompt that will be refused.
+  ///
+  /// Deliberately NOT shared between callers: a success belongs to whoever
+  /// started it. When Settings' session completed over the gate, the gate stayed
+  /// locked and Settings ran `disableLock()` — App Lock switched off behind a
+  /// PIN pad that never went away.
+  Future<BiometricOutcome>? _inFlight;
 
   bool _isInitialized = false;
   bool _observerRegistered = false;
@@ -87,6 +103,12 @@ class AppLockService with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
+      // Not while our own prompt is up. On stock Android BiometricPrompt does
+      // not pause the host activity, so this never fires; on an OEM whose
+      // prompt IS an activity it does — and a user who fumbled the sensor for
+      // 30s was re-locked the instant they succeeded, because the grace period
+      // had been ticking against a pause the app itself caused.
+      if (_inFlight != null) return;
       _lastBackgroundedAt = DateTime.now();
       return;
     }
@@ -262,20 +284,87 @@ class AppLockService with WidgetsBindingObserver {
     }
   }
 
-  /// Prompts the OS biometric UI. `biometricOnly: true` so a failure here
-  /// never silently falls back to the device's OWN pin/pattern — this app's
-  /// PIN screen stays the fallback shown underneath.
-  Future<bool> authenticateWithBiometrics(
-      {String reason = 'Unlock DailyMinder'}) async {
+  /// Prompts the OS biometric UI and says what happened, not just whether.
+  ///
+  /// ## Why the options changed
+  ///
+  /// This used to pass `stickyAuth: true` inside `try { } catch (e) { return
+  /// false; }`, and that combination is the whole bug the user reported as
+  /// "biometrics work once, then never again".
+  ///
+  /// Sticky auth asks the plugin to re-show the prompt after a transient pause.
+  /// To do that, `local_auth_android`'s `AuthenticationHelper` SWALLOWS
+  /// `ERROR_CANCELED` while the activity is paused — no completion, no
+  /// `stop()` — and re-creates a prompt on every resume. Its process-wide
+  /// `authInProgress` flag therefore stays set until that re-shown prompt
+  /// delivers a terminal result. If it never does (the session's owner is gone,
+  /// or on OEMs whose prompt is itself an activity, so every cancel arrives
+  /// "while paused"), every later `authenticate()` from any screen is refused
+  /// with `auth_in_progress`, which the catch-all turned into a silent `false`.
+  ///
+  /// `stopAuthentication()` is not a way out: in 1.0.56 it cancels only the
+  /// ORIGINAL prompt and never removes the lifecycle observer, so the
+  /// re-created prompts are untouchable and the observer re-prompts forever.
+  ///
+  /// With `stickyAuth: false` the swallow branch is never taken: a pause
+  /// delivers `ERROR_CANCELED` → completion → `stop()`, the flag clears, and
+  /// the observer is removed. `PinEntryScreen` re-offers the prompt once on the
+  /// next resume, which is the only thing sticky bought us.
+  ///
+  /// `biometricOnly: true` stays: a biometric failure must fall back to THIS
+  /// app's PIN screen, never to the device's own credential.
+  Future<BiometricOutcome> authenticateWithBiometrics(
+      {String reason = 'Unlock DailyMinder'}) {
+    final pending = _inFlight;
+    if (pending != null) {
+      // Refuse to start a second prompt. The plugin would refuse it anyway,
+      // and telling the caller WHY lets the UI leave the PIN pad usable
+      // instead of showing nothing.
+      return Future.value(BiometricOutcome.busy);
+    }
+    final run = _authenticate(reason);
+    _inFlight = run;
+    return run.whenComplete(() {
+      if (identical(_inFlight, run)) _inFlight = null;
+    });
+  }
+
+  Future<BiometricOutcome> _authenticate(String reason) async {
     try {
-      return await _localAuth.authenticate(
+      final ok = await _localAuth.authenticate(
         localizedReason: reason,
-        options:
-            const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: false,
+        ),
       );
+      return ok ? BiometricOutcome.success : BiometricOutcome.cancelled;
+    } on PlatformException catch (e) {
+      debugPrint('AppLockService: biometric prompt failed: ${e.code} ${e.message}');
+      return switch (e.code) {
+        'auth_in_progress' => BiometricOutcome.busy,
+        'NotAvailable' || 'NotEnrolled' || 'PasscodeNotSet' =>
+          BiometricOutcome.unavailable,
+        'LockedOut' || 'PermanentlyLockedOut' => BiometricOutcome.lockedOut,
+        _ => BiometricOutcome.error,
+      };
     } catch (e) {
-      debugPrint('AppLockService: biometric authentication failed: $e');
-      return false;
+      debugPrint('AppLockService: biometric prompt threw: $e');
+      return BiometricOutcome.error;
+    }
+  }
+
+  /// Cancels an in-flight prompt. Called when the screen that started it goes
+  /// away, so a session never outlives its owner.
+  ///
+  /// Safe only because sticky auth is off: the non-sticky cancel path in the
+  /// plugin completes the session AND removes its lifecycle observer.
+  Future<void> cancelBiometrics() async {
+    if (_inFlight == null) return;
+    try {
+      await _localAuth.stopAuthentication();
+    } catch (e) {
+      debugPrint('AppLockService: stopAuthentication failed: $e');
     }
   }
 
@@ -310,6 +399,35 @@ class AppLockService with WidgetsBindingObserver {
     }
     _isInitialized = false;
     _lastBackgroundedAt = null;
+    _inFlight = null;
     isLockedNotifier.value = false;
   }
+}
+
+/// What a biometric prompt actually did. A `bool` collapsed "the user backed
+/// out" with "the plugin refused to start" and "there is no sensor", and only
+/// the first of those is something the UI should stay silent about.
+enum BiometricOutcome {
+  success,
+
+  /// The user dismissed the prompt, or the OS cancelled it (a pause).
+  cancelled,
+
+  /// No hardware, nothing enrolled, or no device credential set.
+  unavailable,
+
+  /// Too many failed attempts at the OS level.
+  lockedOut,
+
+  /// A prompt is already in flight — ours or one the plugin still thinks is.
+  busy,
+
+  /// Anything else, logged with its code.
+  error;
+
+  /// Whether the PIN screen should say something. Silence for a cancel is
+  /// right — the user knows they cancelled — but silence for "no sensor" leaves
+  /// them tapping a button that does nothing.
+  bool get deservesMessage =>
+      this == unavailable || this == lockedOut || this == error;
 }
