@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/database/app_database.dart' as db;
 import '../../../core/services/clean_storage_service.dart';
+import 'package:clock/clock.dart';
+
 import '../models/reminder_model.dart';
+import 'reminder_adherence.dart';
 
 /// Live reminder state, so a screen no longer has to guess when to reload.
 ///
@@ -51,6 +54,35 @@ class ReminderService extends ChangeNotifier {
   /// "not loaded yet", which an empty list alone cannot.
   bool get isLoaded => _loaded;
   bool _loaded = false;
+
+  /// How the last [days] of reminders actually went.
+  ///
+  /// Reads the occurrence log — the table that exists precisely so this question
+  /// has an answer, and which nothing had asked until now. Every rule lives in
+  /// `ReminderAdherence`; this only supplies the window and the rows.
+  ///
+  /// Null when there is nothing to report. A day nobody resolved anything on is
+  /// excluded rather than scored zero, so a user who has not opened the app gets
+  /// silence instead of a 0% that would be measuring app-opening.
+  Future<ReminderAdherenceSummary?> adherence({int days = 30}) async {
+    final now = clock.now();
+    final to = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    final from = to.subtract(Duration(days: days));
+    final rows =
+        await db.AppDatabase.instance.remindersDao.occurrencesBetween(from, to);
+    if (rows.isEmpty) return null;
+
+    final pdc = ReminderAdherence.proportionOfDaysCovered(rows);
+    if (pdc == null) return null;
+
+    return ReminderAdherenceSummary(
+      proportionOfDaysCovered: pdc,
+      proportionOfOccurrencesDone:
+          ReminderAdherence.proportionOfOccurrencesDone(rows),
+      daysCounted: ReminderAdherence.byDay(rows).length,
+      streak: ReminderAdherence.streak(rows, today: now),
+    );
+  }
 
   /// Begin watching. Idempotent — safe to call from more than one entry point.
   Future<void> start() async {

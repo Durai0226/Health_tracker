@@ -9,6 +9,7 @@ import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
 import '../utils/reminder_helper.dart';
 import 'add_reminder_screen.dart';
+import '../services/reminder_adherence.dart';
 import '../services/reminder_service.dart';
 
 /// The Reminders destination — Calm Clarity, dark-aware, lists real reminders.
@@ -72,6 +73,86 @@ class _RemindersScreenState extends State<RemindersScreen> {
     final all = source.toList()
       ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     setState(() => _reminders = all);
+    _loadAdherence();
+  }
+
+  ReminderAdherenceSummary? _adherence;
+
+  Future<void> _loadAdherence() async {
+    final a = await ReminderService.instance.adherence();
+    if (mounted) setState(() => _adherence = a);
+  }
+
+  /// How the last 30 days actually went.
+  ///
+  /// The occurrence log was built to make this answerable and nothing had ever
+  /// asked. `ReminderAdherence` was written to answer it and had no caller.
+  ///
+  /// Renders nothing at all when there is nothing to say — a day on which the
+  /// user resolved nothing is excluded rather than scored zero, so somebody who
+  /// has not opened the app in a week gets silence instead of a 0% that would
+  /// be measuring app-opening rather than adherence.
+  Widget _adherenceCard(AppColorsExt ext) {
+    final a = _adherence;
+    if (a == null) return const SizedBox.shrink();
+    final tt = Theme.of(context).textTheme;
+    final pct = (a.proportionOfDaysCovered * 100).round();
+    final accent = a.isAdherent ? ext.success : ext.warning;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 0),
+      child: AppCard(
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: accent.container,
+                borderRadius: AppRadius.brMd,
+              ),
+              child: Icon(Symbols.event_available_rounded,
+                  size: 20, color: accent.onContainer),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('$pct% of days fully covered',
+                      style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
+                  const SizedBox(height: 2),
+                  // The denominator, stated. Days nobody resolved anything on
+                  // are not in it, so "30 days" would be a lie.
+                  Text(
+                    'across ${a.daysCounted} '
+                    '${a.daysCounted == 1 ? 'day' : 'days'} with something due'
+                    '${a.streak.current > 0 ? ' · ${a.streak.current}-day streak' : ''}',
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // Only when the two rates disagree, which is the case a
+                  // single figure hides: three of four reminders every day is
+                  // 75% of occurrences and 0% of days covered.
+                  if (a.ratesDisagree) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'You did '
+                      '${((a.proportionOfOccurrencesDone ?? 0) * 100).round()}% '
+                      'of individual reminders — most of them, most days',
+                      style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _loadCategories() async {
@@ -389,6 +470,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 ),
               ],
             ),
+            if (_reminders.isNotEmpty) _adherenceCard(ext),
             if (_reminders.isNotEmpty) _searchRow(ext),
             if (_reminders.isNotEmpty) _filterBar(ext),
             Expanded(

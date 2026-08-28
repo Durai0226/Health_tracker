@@ -44,6 +44,41 @@ class ReminderDay {
 ///   honest, and an adherence figure that punishes honesty teaches people to
 ///   stop being honest. A day whose only occurrences were skipped drops out of
 ///   both numerator and denominator.
+/// What a surface needs to report how the last N days went.
+///
+/// Both rates on purpose. `proportionOfDaysCovered` is all-or-nothing per day —
+/// the clinical convention, and the one with the ≥80% threshold behind it — while
+/// `proportionOfOccurrencesDone` counts individual occurrences. A user who does
+/// three of four reminders every single day scores 75% on the second and **0%**
+/// on the first, and both are true about different things. Where they disagree,
+/// the disagreement is the insight.
+class ReminderAdherenceSummary {
+  const ReminderAdherenceSummary({
+    required this.proportionOfDaysCovered,
+    required this.proportionOfOccurrencesDone,
+    required this.daysCounted,
+    required this.streak,
+  });
+
+  final double proportionOfDaysCovered;
+  final double? proportionOfOccurrencesDone;
+
+  /// The denominator, so a surface can state it rather than showing a bare
+  /// percentage. Days with nothing resolved are not in here.
+  final int daysCounted;
+
+  final StreakResult streak;
+
+  bool get isAdherent => ReminderAdherence.isAdherent(proportionOfDaysCovered);
+
+  /// True when the two rates tell materially different stories — the
+  /// "most of them, most days" pattern that a single figure hides.
+  bool get ratesDisagree {
+    final per = proportionOfOccurrencesDone;
+    return per != null && (per - proportionOfDaysCovered).abs() >= 0.15;
+  }
+}
+
 class ReminderAdherence {
   const ReminderAdherence._();
 
