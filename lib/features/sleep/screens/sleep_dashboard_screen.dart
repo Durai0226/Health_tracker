@@ -362,6 +362,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
           targetMinutes: schedule.targetMinutes,
         ))
         ..add(_buildBestNight(context))
+        ..add(_buildBedtimeGuidance(context))
         ..add(const SizedBox(height: AppSpacing.lg))
         ..add(_coachCard(context, lastNight, debt, regularity, schedule))
         ..add(const SizedBox(height: AppSpacing.lg))
@@ -542,6 +543,64 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         sublabel: 'Most rested · ${_dateLabel(best.wakeTime)}',
         isNew: isNew,
         accent: AppColorsExt.of(context).sleep,
+      ),
+    );
+  }
+
+  /// What the user's best nights had in common, as a bedtime they can act on.
+  ///
+  /// The card above this one reports the single top-scoring night, which is an
+  /// anecdote. This is the pattern behind it — and it deliberately says nothing
+  /// at all rather than guessing: `BedtimeGuidance` returns null below seven
+  /// scored nights, for a shift under twenty minutes, or when the best nights
+  /// are not measurably better than the rest. All three of those would otherwise
+  /// produce a confident sentence with nothing behind it.
+  Widget _buildBedtimeGuidance(BuildContext context) {
+    final g = SleepService.bedtimeGuidance();
+    if (g == null) return const SizedBox.shrink();
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final t = TimeOfDay(hour: g.bedMinutes ~/ 60, minute: g.bedMinutes % 60);
+    final mins = g.shiftMinutes.abs();
+    final when = g.isEarlier ? 'earlier' : 'later';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: AppCard(
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: ext.sleep.container,
+                borderRadius: AppRadius.brMd,
+              ),
+              child: Icon(Symbols.bedtime_rounded,
+                  size: 20, color: ext.sleep.onContainer),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Your best nights started around '
+                      '${t.format(context)}',
+                      style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
+                  const SizedBox(height: 2),
+                  // The denominator, stated. "Try going to bed earlier" is
+                  // advice; "your five best-scoring nights averaged 40 minutes
+                  // earlier" is a fact the reader can check against their own
+                  // log and disagree with.
+                  Text(
+                    '$mins min $when than usual, across your '
+                    '${g.sampleCount} best-scoring nights',
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

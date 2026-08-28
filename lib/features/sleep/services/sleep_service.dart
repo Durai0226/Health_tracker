@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:uuid/uuid.dart';
+import 'package:tablet_remainder/core/health/bedtime_guidance.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' as db;
 import 'package:tablet_remainder/core/database/daos/sleep_dao.dart';
 import 'package:tablet_remainder/core/database/daos/steps_dao.dart';
@@ -136,6 +137,31 @@ class SleepService {
       if (best == null || s.sleepScore > best.sleepScore) best = s;
     }
     return best;
+  }
+
+  /// The bedtime this user's best-scoring nights had in common.
+  ///
+  /// [getBestNight] returns the single top-scoring night, which is an anecdote —
+  /// one good night tells you nothing you can act on. `BedtimeGuidance` looks at
+  /// the best FIVE and reports what they shared, which is a pattern.
+  ///
+  /// Nights with no score are excluded rather than treated as zero: an
+  /// unscored night is unmeasured, not bad, and scoring it zero would drag the
+  /// "rest" average down and manufacture a gap that isn't there.
+  ///
+  /// Returns null whenever the engine has nothing trustworthy to say — under 7
+  /// nights, a shift under 20 minutes, or best nights that are not measurably
+  /// better than the others.
+  static BedtimeSuggestion? bedtimeGuidance({int nights = 30}) {
+    final scored = getAllSessions()
+        .take(nights)
+        .where((s) => s.sleepScore > 0)
+        .map((s) => BedtimeNight(
+              bedMinutes: s.bedtime.hour * 60 + s.bedtime.minute,
+              score: s.sleepScore,
+            ))
+        .toList();
+    return BedtimeGuidance.fromBestNights(scored);
   }
 
   /// The last 7 nights (oldest → newest) for the trend chart, with gaps as
