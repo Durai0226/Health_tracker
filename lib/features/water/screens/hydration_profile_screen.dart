@@ -5,6 +5,11 @@ import '../../../core/design/app_colors_ext.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/hydration_profile.dart';
 import '../services/water_service.dart';
+import '../services/hydration_health_sync.dart';
+import '../services/hydration_weather_service.dart';
+import '../../../core/health/hydration_goal.dart';
+import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
+import '../../../core/services/health_data_service.dart';
 
 /// Hydration Profile Screen - Calculate personalized water goal
 class HydrationProfileScreen extends StatefulWidget {
@@ -116,19 +121,22 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    return Scaffold(
-      backgroundColor: ext.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Hydration Profile'),
-      ),
-      body: SingleChildScrollView(
+    return AppScaffold(
+      // AppHeader. These three were the last Material `AppBar`s in the app, and
+      // the reason `AppBarTheme.systemOverlayStyle` had to exist: their
+      // `backgroundColor: Colors.transparent` made Flutter read the bar's
+      // luminance as 0, resolve it as dark, and paint WHITE status-bar glyphs
+      // over a light scaffold. `AppScaffold` declares the overlay style for
+      // every screen now, so the workaround and the bar can both go.
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppHeader(
+            title: 'Hydration profile',
+            leading: AppHeader.backButton(context),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

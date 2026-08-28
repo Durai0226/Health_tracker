@@ -1,11 +1,14 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_colors_ext.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
+import '../widgets/aqua_shimmer.dart';
 import 'water_history_edit_screen.dart';
 
 /// Calendar History Screen - View past water intake by date
@@ -21,71 +24,118 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
   DateTime? _selectedDate;
   DailyWaterData? _selectedDayData;
 
+  /// The rendered month, keyed by day-of-month.
+  ///
+  /// This used to be read inline inside `_buildCalendarGrid()` via the
+  /// cache-only `WaterService.getDataForRange`. Because the service only warms
+  /// [WaterService.warmCacheWindow] (90 days) at start-up, paging back more than
+  /// ~3 months rendered a calendar of empty cells for data that was sitting in
+  /// Drift the whole time. `ensureRangeLoaded` existed for exactly this and had
+  /// no production callers. A build method cannot await, so the read is hoisted
+  /// into state.
+  Map<int, DailyWaterData> _monthData = const {};
+  bool _loadingMonth = true;
+
   @override
   void initState() {
     super.initState();
-    _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
-    _selectedDate = DateTime.now();
-    _loadSelectedDayData();
+    final now = clock.now();
+    _selectedMonth = DateTime(now.year, now.month);
+    _selectedDate = now;
+    _loadMonth();
   }
 
-  void _loadSelectedDayData() {
-    if (_selectedDate != null) {
-      _selectedDayData = WaterService.getDataForDate(_selectedDate!);
-    }
+  /// Pull the month in from Drift, then read it synchronously.
+  Future<void> _loadMonth() async {
+    final first = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+    // Day 0 of the next month is the last day of this one.
+    final last = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
+
+    setState(() => _loadingMonth = true);
+    await WaterService.ensureRangeLoaded(first, last);
+    if (!mounted) return;
+
+    final data = {
+      for (final day in WaterService.getDataForRange(first, last))
+        day.date.day: day,
+    };
+    setState(() {
+      _monthData = data;
+      _loadingMonth = false;
+      if (_selectedDate != null) _selectedDayData = _dayFor(_selectedDate!);
+    });
+  }
+
+  DailyWaterData? _dayFor(DateTime date) =>
+      date.year == _selectedMonth.year && date.month == _selectedMonth.month
+          ? _monthData[date.day]
+          : WaterService.getDataForDate(date);
+
+  Future<void> _loadSelectedDayData() async {
+    final date = _selectedDate;
+    if (date == null) return;
+    // Reads disk when the day is outside the warm cache.
+    final loaded = await WaterService.loadDataForDate(date);
+    if (!mounted) return;
+    setState(() => _selectedDayData = loaded ?? _dayFor(date));
   }
 
   void _changeMonth(int delta) {
     setState(() {
-      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta);
+      _selectedMonth =
+          DateTime(_selectedMonth.year, _selectedMonth.month + delta);
       _selectedDate = null;
       _selectedDayData = null;
+      _monthData = const {};
     });
+    _loadMonth();
   }
 
   void _selectDate(DateTime date) {
     HapticFeedback.selectionClick();
     setState(() {
       _selectedDate = date;
-      _loadSelectedDayData();
+      _selectedDayData = _dayFor(date);
     });
+    _loadSelectedDayData();
   }
 
   Future<void> _openHistoryEdit() async {
     if (_selectedDate == null) return;
-    
+
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => WaterHistoryEditScreen(date: _selectedDate!),
       ),
     );
-    
-    if (result == true) {
-      _loadSelectedDayData();
-      setState(() {});
-    }
+
+    // Reload regardless of the pop value: the edit screen's own back button
+    // pops with null, so an edit made and then dismissed that way used to leave
+    // the calendar showing stale numbers.
+    if (!mounted) return;
+    await _loadMonth();
+    if (result == true && mounted) await _loadSelectedDayData();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    return Scaffold(
-      backgroundColor: ext.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('History'),
-      ),
-      // The month selector + 6-week grid + day details are taller than a
-      // 320x568 viewport (and far taller once Dynamic Type is scaled up), so
-      // the page scrolls instead of squeezing the details card into whatever
-      // is left over.
-      body: SingleChildScrollView(
+    return AppScaffold(
+      // AppHeader. These three were the last Material `AppBar`s in the app, and
+      // the reason `AppBarTheme.systemOverlayStyle` had to exist: their
+      // `backgroundColor: Colors.transparent` made Flutter read the bar's
+      // luminance as 0, resolve it as dark, and paint WHITE status-bar glyphs
+      // over a light scaffold. `AppScaffold` declares the overlay style for
+      // every screen now, so the workaround and the bar can both go.
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppHeader(
+            title: 'History',
+            leading: AppHeader.backButton(context),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
         child: Column(
           children: [
             _buildMonthSelector(),

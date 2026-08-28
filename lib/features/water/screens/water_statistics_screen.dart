@@ -1,13 +1,16 @@
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../../../core/design/app_colors_ext.dart';
 import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
+import '../widgets/aqua_shimmer.dart';
 
 /// Advanced Statistics Screen with charts and insights
 class WaterStatisticsScreen extends StatefulWidget {
@@ -44,32 +47,37 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
         _selectedMonth = 12;
         _selectedYear--;
       }
-      _loadStats();
+      _readStats();
     });
+    _loadStats();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    return Scaffold(
-      backgroundColor: ext.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Statistics'),
-        actions: [
-          IconButton(
-            icon: const Icon(Symbols.file_download_rounded),
-            onPressed: _exportData,
-            tooltip: 'Export Data',
+    return AppScaffold(
+      // The last Material `AppBar` in the app. All three water bars set
+      // `backgroundColor: Colors.transparent`, which is what made Flutter read
+      // their luminance as 0 and paint white status-bar glyphs over a light
+      // scaffold — the defect `AppBarTheme.systemOverlayStyle` was added for.
+      // `AppScaffold` declares the overlay style for every screen now.
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppHeader(
+            title: 'Statistics',
+            leading: AppHeader.backButton(context),
+            actions: [
+              AppIconButton(
+                icon: Symbols.file_download_rounded,
+                filled: false,
+                accent: AppColorsExt.of(context).water,
+                tooltip: 'Export data',
+                onPressed: _exportData,
+              ),
+            ],
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
+          Expanded(
+            child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
