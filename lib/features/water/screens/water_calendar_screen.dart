@@ -135,6 +135,10 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
             leading: AppHeader.backButton(context),
           ),
           Expanded(
+            // The month selector + 6-week grid + day details are taller than a
+            // 320x568 viewport (and far taller once Dynamic Type is scaled up),
+            // so the page scrolls instead of squeezing the details card into
+            // whatever is left over.
             child: SingleChildScrollView(
         child: Column(
           children: [
@@ -143,6 +147,9 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
             if (_selectedDate != null) _buildDayDetails(),
           ],
         ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -209,12 +216,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
     final startWeekday = firstDayOfMonth.weekday;
     final daysInMonth = lastDayOfMonth.day;
 
-    // Get data for the month
-    final monthData = WaterService.getDataForRange(firstDayOfMonth, lastDayOfMonth);
-    final dataMap = <int, DailyWaterData>{};
-    for (final day in monthData) {
-      dataMap[day.date.day] = day;
-    }
+    final dataMap = _monthData;
 
     final goal = WaterService.getDailyGoal();
     final dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -273,9 +275,23 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
               itemCount: 42, // 6 weeks
               itemBuilder: (context, index) {
                 final dayOffset = index - (startWeekday - 1);
-              
+
                 if (dayOffset < 0 || dayOffset >= daysInMonth) {
                   return const SizedBox.shrink();
+                }
+
+                // Paging to a month older than the warm cache is a real disk
+                // read. Without a placeholder the grid rendered as a wall of
+                // empty cells first, which is indistinguishable from "you drank
+                // nothing that month".
+                if (_loadingMonth) {
+                  return const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: AquaShimmer(
+                      child: AquaSkeletonBox(
+                          height: double.infinity, shape: BoxShape.circle),
+                    ),
+                  );
                 }
               
                 final day = dayOffset + 1;
