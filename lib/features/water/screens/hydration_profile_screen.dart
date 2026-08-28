@@ -581,28 +581,57 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     final ext = AppColorsExt.of(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: value ? ext.mark(ext.water).withOpacity(0.12) : ext.surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary),
+    // Two fixes, and the first is the worst instance of it in the app.
+    //
+    // The OFF background was `ext.surfaceVariant` — the same token the switch's
+    // own off track uses. Control and background were byte-identical, 1.000:1,
+    // with only a sub-1.3:1 outline between them. `surface` puts the track back
+    // on a different colour, and the switch's outline (now `textTertiary`, at
+    // 3.78:1) carries the boundary.
+    //
+    // Second: the whole row toggles, and it is one semantics node. That is the
+    // house rule 23 SettingsTile rows follow, and these six did not. Not
+    // migrated to `SettingsTile` itself because the leading here is an EMOJI,
+    // and that widget takes an `IconData`.
+    return MergeSemantics(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => onChanged(!value),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: value
+                  ? ext.mark(ext.water).withOpacity(0.12)
+                  : ext.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: value ? Colors.transparent : ext.outline),
+            ),
+            child: Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 24)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500, color: ext.textPrimary),
+                  ),
+                ),
+                const SizedBox(width: AppRowMetrics.trailingGap),
+                AppSwitch(
+                  value: value,
+                  onChanged: onChanged,
+                  accent: ext.water,
+                ),
+              ],
             ),
           ),
-          AppSwitch(
-            value: value,
-            onChanged: onChanged,
-            accent: ext.water,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -615,14 +644,26 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
       icon: Symbols.tune_rounded,
       child: Column(
         children: [
-          Row(
+          // Row-tap toggles, one semantics node — the same rule applied to the
+          // toggle rows above.
+          MergeSemantics(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => setState(() => _profile = _profile
+                    .copyWith(useCustomGoal: !_profile.useCustomGoal)),
+                borderRadius: AppRadius.brSm,
+                child: Row(
             children: [
               Expanded(
                 child: Text(
                   'Use custom goal instead of calculated',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: ext.textSecondary),
                 ),
               ),
+              const SizedBox(width: AppRowMetrics.trailingGap),
               AppSwitch(
                 value: _profile.useCustomGoal,
                 onChanged: (value) {

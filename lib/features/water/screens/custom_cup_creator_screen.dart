@@ -530,10 +530,27 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     );
   }
 
+  void _setMultiIngredient(bool v) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _isMultiIngredient = v;
+      if (!v) _ingredients.clear();
+    });
+  }
+
   Widget _buildMultiIngredientCard(AppColorsExt ext, AccentSwatch water) {
     final tt = Theme.of(context).textTheme;
+    // Row-tap toggles, one semantics node. Extracted to `_setMultiIngredient`
+    // so the row and the switch cannot drift into doing different things —
+    // which is the failure a row-tap handler duplicated inline invites.
     return AppCard(
-      child: Row(
+      child: MergeSemantics(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _setMultiIngredient(!_isMultiIngredient),
+            borderRadius: AppRadius.brMd,
+            child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
@@ -556,18 +573,16 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
               ],
             ),
           ),
+          const SizedBox(width: AppRowMetrics.trailingGap),
           AppSwitch(
             value: _isMultiIngredient,
-            onChanged: (v) {
-              HapticFeedback.selectionClick();
-              setState(() {
-                _isMultiIngredient = v;
-                if (!v) _ingredients.clear();
-              });
-            },
+            onChanged: _setMultiIngredient,
             accent: water,
           ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }

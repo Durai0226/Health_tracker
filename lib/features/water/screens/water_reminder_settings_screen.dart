@@ -212,10 +212,99 @@ class _WaterReminderSettingsScreenState
     );
   }
 
+  /// Reminder reliability.
+  ///
+  /// The single most-cited one-star complaint against every app in this
+  /// category is reminders that silently stop firing — verbatim from reviews:
+  /// "never sends any notification in a timely manner", "half of the times
+  /// notifications are skipped", "I bought the premium version and wanted it to
+  /// nag me incessantly but alas no nagging at all". The cause on Android is
+  /// almost always OEM battery management (Samsung, Xiaomi, OnePlus) putting the
+  /// app to sleep.
+  ///
+  /// `BatteryOptimizationService` was fully written — check, request, and an
+  /// explanatory dialog — and had **zero callers anywhere in the app**. The
+  /// remedy for the top complaint in the category was sitting unused. This is
+  /// the one screen where it belongs: shown only when the exemption is missing,
+  /// so it is not nagging in itself.
+  Widget _buildReliabilityCard(AppColorsExt ext) {
+    if (!Platform.isAndroid || _batteryExempt == null || _batteryExempt!) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Symbols.battery_alert_rounded,
+                    color: ext.mark(ext.warning), size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text('Reminders may not arrive',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(color: ext.textPrimary)),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Android is allowed to put this app to sleep, which is the usual '
+              'reason hydration reminders go quiet after a few days. Letting it '
+              'run in the background fixes it.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: ext.textSecondary),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppButton(
+              label: 'Allow background running',
+              variant: AppButtonVariant.secondary,
+              fullWidth: true,
+              onPressed: _requestBatteryExemption,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkBatteryExemption() async {
+    final ok =
+        await BatteryOptimizationService().isIgnoringBatteryOptimizations();
+    if (mounted) setState(() => _batteryExempt = ok);
+  }
+
+  Future<void> _requestBatteryExemption() async {
+    await BatteryOptimizationService().requestDisableBatteryOptimization();
+    // Re-query rather than trusting the request's result: the user may have
+    // dismissed the system sheet.
+    await _checkBatteryExemption();
+    if (!mounted) return;
+    if (_batteryExempt == true) {
+      context.toastSuccess('Reminders can now run in the background');
+    }
+  }
+
   Widget _buildEnableCard(AppColorsExt ext) {
     final s = ext.water;
+    // Row-tap toggles, one semantics node — the rule 23 SettingsTile rows
+    // already follow. Kept hand-rolled rather than migrated because these two
+    // sit in a screen with its own card grammar; what they take from the shared
+    // row is the behaviour, not the anatomy.
     return AppCard(
-      child: Row(
+      child: MergeSemantics(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => setState(() => _isEnabled = !_isEnabled),
+            borderRadius: AppRadius.brMd,
+            child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
@@ -244,12 +333,16 @@ class _WaterReminderSettingsScreenState
               ],
             ),
           ),
+          const SizedBox(width: AppRowMetrics.trailingGap),
           AppSwitch(
             value: _isEnabled,
             onChanged: (val) => setState(() => _isEnabled = val),
             accent: s,
           ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -480,7 +573,12 @@ class _WaterReminderSettingsScreenState
   }) {
     final s = ext.water;
     final tt = Theme.of(context).textTheme;
-    return Padding(
+    return MergeSemantics(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => onChanged(!value),
+          child: Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg, vertical: AppSpacing.md),
       child: Row(
@@ -506,12 +604,16 @@ class _WaterReminderSettingsScreenState
               ],
             ),
           ),
+          const SizedBox(width: AppRowMetrics.trailingGap),
           AppSwitch(
             value: value,
             onChanged: onChanged,
             accent: s,
           ),
         ],
+      ),
+          ),
+        ),
       ),
     );
   }
