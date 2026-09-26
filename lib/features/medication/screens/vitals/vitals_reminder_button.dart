@@ -82,8 +82,7 @@ class _VitalsReminderButtonState extends State<VitalsReminderButton> {
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    context.toastSuccess(msg);
   }
 
   @override
@@ -92,6 +91,11 @@ class _VitalsReminderButtonState extends State<VitalsReminderButton> {
       icon: _enabled ? Symbols.alarm_on_rounded : Symbols.alarm_add_rounded,
       filled: _enabled,
       accent: widget.accent,
+      // Two different actions behind one glyph, so the state has to be spoken:
+      // on, this turns the reminder OFF; off, it asks for a time.
+      tooltip: _enabled
+          ? 'Daily reminder on — tap to turn off'
+          : 'Remind me daily to measure',
       onPressed: _toggle,
     );
   }

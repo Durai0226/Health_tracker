@@ -143,17 +143,22 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
           ],
         );
 
+    final period = PeriodTheme.phaseSwatch(ext, CyclePhase.menstrual);
+
     return AppCard(
       child: Wrap(
         spacing: AppSpacing.lg,
         runSpacing: AppSpacing.sm,
         children: [
-          item(ext.mark(PeriodTheme.phaseSwatch(ext, CyclePhase.menstrual)),
-              'Period'),
+          // Two flow entries, not one. The heatmap used to grade bleeding days
+          // by opacity across four levels and this legend named none of them,
+          // so the shading was undecodable. It now paints two AA-verified
+          // tiers, and both have a key here; the exact level is in the cell's
+          // spoken label.
+          item(period.container, 'Spotting / light'),
+          item(ext.fillBg(period), 'Medium / heavy'),
           item(PeriodTheme.fertileSwatch(ext).container, 'Fertile window'),
-          item(ext.mark(PeriodTheme.phaseSwatch(ext, CyclePhase.menstrual)),
-              'Predicted',
-              outline: true),
+          item(ext.mark(period), 'Predicted', outline: true),
           item(ext.mark(ext.focus), 'Symptoms logged'),
         ],
       ),

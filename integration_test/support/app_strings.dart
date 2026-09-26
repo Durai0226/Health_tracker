@@ -83,9 +83,9 @@ const kUndo = 'Undo'; // diary_screen.dart:57, app_shell.dart:99, and others
 const kWaterTodayLog = "Today's Log"; // aqua_water_dashboard.dart:563
 
 // ── Medication: dose actions ──────────────────────────────────────────────
-const kMedsTakeNow = 'Take Now'; // nunito_medication_dashboard.dart:1276
+const kMedsTakeNow = 'Take now'; // nunito_medication_dashboard.dart:1276
 const kMedsTake = 'Take'; // nunito_medication_dashboard.dart:1276
-const kMedsTakeMedication = 'Take Medication'; // nunito_take_medication_sheet.dart:784
+const kMedsTakeMedication = 'Take medicine'; // nunito_take_medication_sheet.dart:800
 const kMedsSkip = 'Skip'; // nunito_take_medication_sheet.dart:809
 
 // ── Vitals: blood pressure ────────────────────────────────────────────────
@@ -108,13 +108,17 @@ const kReminderTitleField = 'Title'; // add_reminder_screen.dart:392
 const kRepeatEveryDay = 'Every Day'; // add_reminder_screen.dart:466
 
 // ── Add-medication wizard ─────────────────────────────────────────────────
+// Copy here says "medicine", not "medication": one feature used both, sometimes
+// on the same screen ("Delete Medication" then a "Medicine archived" toast).
+// These constants track the UI, so a rename lands here too — that is what this
+// registry is for.
 const kWizStep1 =
-    'What medication are you adding?'; // nunito_add_medication_flow.dart:904
-const kWizNameField = 'Medication Name'; // :910
+    'What medicine are you adding?'; // nunito_add_medication_flow.dart:906
+const kWizNameField = 'Medicine name'; // :912
 const kWizStep2 = 'How much do you take?'; // :1419
 const kWizStep3 = 'When do you take it?'; // :1748
 const kWizContinue = 'Continue'; // :3180
-const kWizAddMedication = 'Add Medication'; // :3179
+const kWizAddMedication = 'Add medicine'; // :3182
 const kWizInteraction = 'Possible drug interaction'; // :550
 const kWizSaveAnyway = 'Save anyway'; // :568
 const kWizCancel = 'Cancel'; // :563
@@ -129,7 +133,7 @@ const kFocusStart = 'Start Focus'; // focus_screen.dart:504
 const kFocusStartPomodoro = 'Start Pomodoro'; // focus_screen.dart:503
 const kFocusPause = 'Pause'; // focus_screen.dart:523
 const kFocusResume = 'Resume'; // focus_screen.dart:523
-const kFocusGiveUp = 'Give Up'; // focus_screen.dart:544
+const kFocusGiveUp = 'Give up'; // focus_screen.dart:544
 const kFocusSetupRow = 'Session setup'; // focus_screen.dart:672
 const kFocusMoreHeader = 'More'; // focus_screen.dart:1520
 const kFocusGridBreathing = 'Breathing'; // focus_screen.dart:1534
@@ -145,9 +149,9 @@ const kStatsTitle = 'Statistics'; // detailed_stats_screen.dart:117
 
 // Focus dialogs and sheet sections.
 const kFocusSessionLocked = 'Session Locked'; // focus_screen.dart:1868
-const kFocusStayFocused = 'Stay Focused'; // focus_screen.dart:1889
+const kFocusStayFocused = 'Stay focused'; // focus_screen.dart:1889
 const kFocusGiveUpTitle = 'Give up?'; // focus_screen.dart:1825
-const kFocusKeepGoing = 'Keep Going'; // focus_screen.dart:1827
+const kFocusKeepGoing = 'Keep going'; // focus_screen.dart:1827
 const kFocusSheetActivity = 'Activity'; // focus_screen.dart (activity selector)
 const kFocusSheetPlant = 'Choose Plant'; // focus_screen.dart (plant selector)
 const kFocusSheetSound = 'Ambient Sound'; // focus_screen.dart (sound selector)

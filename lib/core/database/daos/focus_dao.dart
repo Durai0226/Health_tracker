@@ -82,7 +82,7 @@ class FocusDao extends DatabaseAccessor<AppDatabase> with _$FocusDaoMixin {
   Future<void> upsertRaw(Map<String, dynamic> json) async {
     try {
       await into(focusSessions)
-          .insertOnConflictUpdate(FocusSessionRow.fromJson(json));
+          .insertOnConflictUpdate(FocusSessionRow.fromJson(json).toCompanion(false));
     } catch (e) {
       debugPrint('Skipping unreadable cloud focus session: $e');
     }

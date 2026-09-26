@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -5,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/app_lock_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
+import '../../../core/constants/app_strings.dart';
 
 /// How many digits a PIN must be. Fixed app-wide so the keypad, the dot
 /// indicator, and the auto-submit-on-last-digit logic all agree.
@@ -76,6 +79,15 @@ class _PinEntryScreenState extends State<PinEntryScreen>
   /// to do for us, without the process-wide flag it left behind.
   bool _reofferOnResume = false;
 
+  /// What is left of [AppLockService.remainingLockout], mirrored into state so
+  /// [_lockoutTicker] can count it down. `Duration.zero` means entry is open.
+  Duration _lockout = Duration.zero;
+
+  /// Ticks once a second for as long as a lockout is in force, and only then.
+  Timer? _lockoutTicker;
+
+  bool get _lockedOut => _lockout > Duration.zero;
+
   bool get _isSetup => widget.mode == PinEntryMode.setup;
 
   @override
@@ -84,11 +96,15 @@ class _PinEntryScreenState extends State<PinEntryScreen>
     if (!_isSetup) {
       WidgetsBinding.instance.addObserver(this);
       _loadBiometricAvailability();
+      // A lockout survives the screen: it is persisted, so it is already in
+      // force on the first build after a relaunch.
+      _syncLockout();
     }
   }
 
   @override
   void dispose() {
+    _lockoutTicker?.cancel();
     if (!_isSetup) {
       WidgetsBinding.instance.removeObserver(this);
       // A session must not outlive the screen that started it. When the alarm
@@ -102,9 +118,52 @@ class _PinEntryScreenState extends State<PinEntryScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
-    if (!_reofferOnResume || _biometricInFlight || !mounted) return;
+    if (!mounted) return;
+    // Timers are throttled or stopped outright while backgrounded, so the
+    // countdown can be minutes stale by the time we are looked at again.
+    _syncLockout();
+    if (!_reofferOnResume || _biometricInFlight) return;
     _reofferOnResume = false;
     _tryBiometrics();
+  }
+
+  /// Re-reads [AppLockService.remainingLockout] and keeps [_lockoutTicker]
+  /// running for exactly as long as one is in force.
+  ///
+  /// Nothing outside the service read `remainingLockout` before, and
+  /// [AppLockService.verifyPin] refuses outright while locked out — so the
+  /// CORRECT PIN came back `false` and this screen told the user 'Incorrect
+  /// PIN' for up to 30 minutes, with nothing to say what to wait for.
+  void _syncLockout() {
+    final remaining = _service.remainingLockout;
+    if (remaining <= Duration.zero) {
+      _lockoutTicker?.cancel();
+      _lockoutTicker = null;
+      // Only clear the message we put there ourselves.
+      if (_lockedOut) {
+        setState(() {
+          _lockout = Duration.zero;
+          _error = null;
+        });
+      }
+      return;
+    }
+    _lockoutTicker ??=
+        Timer.periodic(const Duration(seconds: 1), (_) => _syncLockout());
+    setState(() {
+      _lockout = remaining;
+      _error = _lockoutMessage(remaining);
+    });
+  }
+
+  /// 'Too many attempts — try again in 4m 59s'. Seconds are rounded UP so the
+  /// countdown never reads 0s while entry is still refused.
+  String _lockoutMessage(Duration remaining) {
+    final total = (remaining.inMilliseconds / 1000).ceil();
+    final minutes = total ~/ 60;
+    final seconds = total % 60;
+    return 'Too many attempts — try again in '
+        '${minutes > 0 ? '${minutes}m ${seconds}s' : '${seconds}s'}';
   }
 
   Future<void> _loadBiometricAvailability() async {
@@ -142,7 +201,10 @@ class _PinEntryScreenState extends State<PinEntryScreen>
   }
 
   void _onDigit(String digit) {
-    if (_busy || _entered.length >= kPinLength) return;
+    // Nothing typed during a lockout can be right — verifyPin refuses every
+    // PIN while one stands — so take the keypad out of service rather than
+    // answer the user with 'Incorrect PIN' for a PIN that is correct.
+    if (_busy || _lockedOut || _entered.length >= kPinLength) return;
     HapticFeedback.selectionClick();
     setState(() {
       _entered += digit;
@@ -192,13 +254,17 @@ class _PinEntryScreenState extends State<PinEntryScreen>
   void _submitUnlock() {
     if (_service.verifyPin(_entered)) {
       _handleUnlockSuccess();
-    } else {
-      HapticFeedback.heavyImpact();
-      setState(() {
-        _error = 'Incorrect PIN';
-        _entered = '';
-      });
+      return;
     }
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _error = 'Incorrect PIN';
+      _entered = '';
+    });
+    // That miss may have been the one that armed the lockout, and the attempt
+    // AFTER it would be refused whatever the user types — so the message stops
+    // blaming their typing from here on.
+    _syncLockout();
   }
 
   void _handleUnlockSuccess() {
@@ -210,11 +276,15 @@ class _PinEntryScreenState extends State<PinEntryScreen>
     final confirmed = await ConfirmationBottomSheet.show(
       context: context,
       title: 'Reset PIN & erase data?',
-      message: "There's no way to recover a forgotten PIN — DailyMinder "
-          'never stores it, only a one-way hash. Continuing permanently '
-          'erases every medicine, reminder, water, sleep, period, step and '
-          'vitals record on this device, then turns App Lock off. This '
-          'cannot be undone.',
+      // Sign-out is named because resetForgottenPin() severs the cloud before
+      // it wipes anything — otherwise the next sync would download the erased
+      // data straight back. A signed-in user must not discover that after the
+      // fact, on the one screen whose whole job is informed consent.
+      message: "There's no way to recover a forgotten PIN — ${AppStrings.productName} "
+          'never stores it, only a one-way hash. Continuing signs you out, '
+          'permanently erases every medicine, reminder, water, sleep, period, '
+          'step and vitals record on this device, then turns App Lock off. '
+          'This cannot be undone.',
       confirmText: 'Erase everything',
       icon: Symbols.warning_amber_rounded,
       isDangerous: true,
@@ -222,7 +292,25 @@ class _PinEntryScreenState extends State<PinEntryScreen>
     if (confirmed != true || !mounted) return;
 
     setState(() => _busy = true);
-    await _service.resetForgottenPin();
+    try {
+      await _service.resetForgottenPin();
+    } catch (e) {
+      // `clearAllPersistentData` rethrows on purpose — its doc says the error
+      // is "rethrown for the caller to surface" — and resetForgottenPin's
+      // `finally` has already turned the lock off by the time it arrives, so
+      // the overlay dismisses itself either way. Caught nowhere, that read as
+      // a completed erase: no success toast, no error, just the app.
+      debugPrint('PIN reset could not finish erasing: $e');
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _entered = '';
+        _error = null;
+      });
+      context.toastError('PIN reset, but some data could not be erased. '
+          'Try Settings → Delete all data.');
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -247,10 +335,10 @@ class _PinEntryScreenState extends State<PinEntryScreen>
           : (widget.setupTitle ?? 'Set a PIN');
       subtitle = confirming
           ? 'Enter it once more to confirm'
-          : 'Choose a $kPinLength-digit PIN to protect DailyMinder';
+          : 'Choose a $kPinLength-digit PIN to protect ${AppStrings.productName}';
     } else {
       title = 'Enter your PIN';
-      subtitle = 'DailyMinder is locked';
+      subtitle = '${AppStrings.productName} is locked';
     }
 
     return AccentScope(
@@ -291,12 +379,17 @@ class _PinEntryScreenState extends State<PinEntryScreen>
                 const SizedBox(height: AppSpacing.xl),
                 _buildDots(ext),
                 const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  height: 20,
+                // A minimum, not a fixed height: the message is a whole
+                // sentence while a lockout counts down, and even the short
+                // 'Incorrect PIN' is taller than 20 logical pixels once the
+                // text scale is up. At exactly 20 both were cropped.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 20),
                   child: _error == null
-                      ? null
+                      ? const SizedBox(width: double.infinity)
                       : Text(
                           _error!,
+                          textAlign: TextAlign.center,
                           style:
                               tt.bodyMedium?.copyWith(color: ext.mark(ext.error)),
                         ),
@@ -406,7 +499,7 @@ class _PinEntryScreenState extends State<PinEntryScreen>
         shape: const CircleBorder(),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: _busy ? null : onTap,
+          onTap: (_busy || _lockedOut) ? null : onTap,
           child: SizedBox(width: 72, height: 72, child: Center(child: child)),
         ),
       ),

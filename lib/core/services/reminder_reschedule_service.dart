@@ -33,6 +33,31 @@ class ReminderFamily {
   final Future<int> Function() rearm;
 }
 
+/// What one [ReminderRescheduleService.rearmFamilies] pass actually achieved.
+///
+/// Returned rather than only logged: a pass that re-armed nothing and a pass
+/// that re-armed everything printed different debug lines and were otherwise
+/// indistinguishable to any caller — and to any test.
+class RescheduleOutcome {
+  const RescheduleOutcome({
+    required this.armed,
+    required this.failed,
+    required this.attempted,
+  });
+
+  /// Reminders re-armed, summed across the families that succeeded.
+  final int armed;
+
+  /// Families that threw. Their reminders are NOT armed.
+  final int failed;
+
+  /// Families tried.
+  final int attempted;
+
+  /// Families that completed without throwing.
+  int get succeeded => attempted - failed;
+}
+
 class ReminderRescheduleService {
   /// The families rebuilt by [rescheduleAllReminders], in order.
   ///
@@ -73,10 +98,54 @@ class ReminderRescheduleService {
   /// family's reminders and losing all of them.
   static Future<void> rescheduleAllReminders() async {
     debugPrint('🔄 Rescheduling all reminders...');
+
+    // Close out past-due doses nobody answered, BEFORE anything reports on
+    // them — the same denominator problem as `reconcileMissedReminders` below.
+    //
+    // Its only other caller is the Medication dashboard's load, so a user who
+    // takes doses from the notification and never opens that tab accumulated
+    // no `missed` rows at all: the streak, the adherence card, the report and
+    // the CSV export every one of them read 100%. Running it here means it
+    // happens at every app start and on an exact-alarm grant instead.
+    //
+    // Deliberately outside the family loop and separately guarded: it arms
+    // nothing, and a reconcile failure must never stop reminders being
+    // re-armed.
+    try {
+      await MedicineCleanStorageService.reconcileMissedDoses();
+    } catch (e) {
+      debugPrint('⚠️ Missed-dose reconciliation failed: $e');
+    }
+
+    final outcome = await rearmFamilies(_families);
+
+    debugPrint('✓ Rescheduled ${outcome.armed} reminders across '
+        '${outcome.succeeded}/${outcome.attempted} families');
+    if (outcome.failed > 0) {
+      debugPrint('⚠️ ${outcome.failed} reminder families failed to reschedule');
+    }
+  }
+
+  /// Re-arm each of [families], isolating every one from the others.
+  ///
+  /// Split out of [rescheduleAllReminders] so the isolation can be *driven*
+  /// rather than grepped. It used to be asserted by slicing this file's own
+  /// source and checking it contained the substrings `try {`, `catch (e)` and
+  /// `failed++` — which passes on a `try` whose `catch` rethrows, passes on a
+  /// `failed++` in an unrelated branch, and fails on a rename that changed
+  /// nothing. `rescheduleAllReminders` itself cannot be called headlessly
+  /// because all six real families reach a platform channel or the database;
+  /// this takes the families as an argument, so a test supplies its own.
+  ///
+  /// One family throwing must never stop the rest. That is the difference
+  /// between losing one family's reminders and losing every reminder in the app.
+  @visibleForTesting
+  static Future<RescheduleOutcome> rearmFamilies(
+      List<ReminderFamily> families) async {
     var armed = 0;
     var failed = 0;
 
-    for (final family in _families) {
+    for (final family in families) {
       try {
         final n = await family.rearm();
         armed += n;
@@ -87,11 +156,8 @@ class ReminderRescheduleService {
       }
     }
 
-    debugPrint('✓ Rescheduled $armed reminders across '
-        '${_families.length - failed}/${_families.length} families');
-    if (failed > 0) {
-      debugPrint('⚠️ $failed reminder families failed to reschedule');
-    }
+    return RescheduleOutcome(
+        armed: armed, failed: failed, attempted: families.length);
   }
 
   /// Unscoped by profile on purpose: every profile's reminders must be
@@ -148,6 +214,18 @@ class ReminderRescheduleService {
     // Runs here rather than on a timer because this pass already runs at every
     // app start and on an exact-alarm grant, and a miss does not need to be
     // recorded the instant it happens — only before anything reports on it.
+    //
+    // ORDER MATTERS. The sweep only rewrites rows `pendingBefore` returns, and
+    // nothing ever created a `pending` row — `recordReminderOutcome`'s single
+    // production caller is the in-app tick, which writes `done`, and the alarm
+    // isolate has no Drift connection. So the sweep always found zero rows and
+    // the comment above described a denominator that did not exist: the card
+    // read "100% of days fully covered" for someone who had ignored a daily
+    // reminder for a month and ticked it once.
+    //
+    // Deriving the due occurrences first gives the sweep something to write
+    // off. It is insert-if-absent, so it can never overwrite a tick.
+    await CleanStorageService.recordDueReminderOccurrences();
     await CleanStorageService.reconcileMissedReminders();
 
     final reminders = await CleanStorageService.getAllReminders();
@@ -158,8 +236,25 @@ class ReminderRescheduleService {
       if (reminder.isCompleted && reminder.repeatType == RepeatType.none) {
         continue;
       }
+      // Paused means paused. `isPaused` is stored and cloud-synced, and
+      // ReminderHelper has always honoured it; this loop did not, so a paused
+      // reminder was re-armed on every launch. `arm` disarms it for us.
+      if (reminder.isPaused) {
+        await alarm.disarm(
+          id: reminder.notificationSlot,
+          repeatType: reminder.repeatType,
+          customDays: reminder.customDays,
+        );
+        continue;
+      }
       // A one-off whose time has passed has nothing left to fire.
+      //
+      // `recurrenceRule == null` is load-bearing: Smart Add writes an RRULE
+      // with `repeat` left at `none`, so this skip was silently retiring every
+      // rule-based reminder the moment its FIRST instant passed. "Water the
+      // plants every 3 days" fired once and then sat under Overdue forever.
       if (reminder.repeatType == RepeatType.none &&
+          reminder.recurrenceRule == null &&
           reminder.scheduledTime.isBefore(now)) {
         continue;
       }
@@ -174,19 +269,13 @@ class ReminderRescheduleService {
         final stored = reminder.notificationId == null
             ? await CleanStorageService.saveReminderAllocatingId(reminder)
             : reminder;
-        final ok = await alarm.arm(ReminderArmRequest(
-          reminderId: stored.id,
-          escalation: stored.escalation,
-          id: stored.notificationSlot,
-          title: stored.title,
-          body: stored.body,
-          scheduledTime: stored.scheduledTime,
-          repeatType: stored.repeatType,
-          customDays: stored.customDays,
-          snoozeDuration: stored.snoozeDuration,
-          sound: stored.sound,
-          priority: stored.priority,
-        ));
+        // Resolves the RRULE / endsAt / isPaused the six-value RepeatType
+        // cannot express. Null means there is nothing left to arm — the
+        // reminder is paused, past its end date, or its rule has run out — and
+        // the disarm above has already taken it off the OS.
+        final request = ReminderArmRequest.forNextOccurrence(stored);
+        if (request == null) continue;
+        final ok = await alarm.arm(request);
         if (ok) armed++;
       } catch (e) {
         debugPrint('⚠️ Re-arming reminder "${reminder.title}" failed: $e');
@@ -269,7 +358,7 @@ class ReminderRescheduleService {
     );
 
     return notif.scheduleWaterReminderTimes(
-      _pruneToRemainingNeed(times,
+      _pruneToRemainingNeedFromWorld(times,
           bedHour: bedHour,
           bedMinute: bedMinute,
           // The user's real waking window, so pacing is measured against
@@ -301,26 +390,62 @@ class ReminderRescheduleService {
   ///
   /// Only slots still ahead of `now` are considered — a slot at 09:00 is not a
   /// candidate at 4pm.
-  static List<int> _pruneToRemainingNeed(
+  /// Reads the world, then hands the decision to [pruneToRemainingNeed].
+  ///
+  /// W-15 — this used to be one private method that BOTH fetched its inputs
+  /// (`WaterService.getTodayData()`, `clock.now()`,
+  /// `WaterService.typicalDrinkMl()`) and decided which slots survive. Nothing
+  /// could test the decision without standing up the whole water service, so
+  /// nothing did: the evenly-spaced-subset maths, the ahead-of-pace decrement
+  /// and the floor-at-one were all unexercised. Splitting the read from the
+  /// rule is the whole fix; the rule below is pure and directly testable.
+  static List<int> _pruneToRemainingNeedFromWorld(
     List<int> times, {
     required int bedHour,
     required int bedMinute,
     int wakeMinutes = 7 * 60,
   }) {
     if (times.isEmpty) return times;
-
     final today = WaterService.getTodayData();
-    final remaining = today.dailyGoalMl - today.effectiveHydrationMl;
+    final now = clock.now();
+    return pruneToRemainingNeed(
+      times,
+      goalMl: today.dailyGoalMl,
+      intakeMl: today.effectiveHydrationMl,
+      nowMinutes: now.hour * 60 + now.minute,
+      typicalDrinkMl: WaterService.typicalDrinkMl(),
+      bedHour: bedHour,
+      bedMinute: bedMinute,
+      wakeMinutes: wakeMinutes,
+    );
+  }
+
+  /// Which of [times] (minutes since midnight) still deserve a nudge.
+  ///
+  /// Pure: every input is a parameter, so a test can put the user at 8pm with
+  /// 800 ml to go without a database, a clock or a service singleton.
+  @visibleForTesting
+  static List<int> pruneToRemainingNeed(
+    List<int> times, {
+    required int goalMl,
+    required int intakeMl,
+    required int nowMinutes,
+    required int typicalDrinkMl,
+    required int bedHour,
+    required int bedMinute,
+    int wakeMinutes = 7 * 60,
+  }) {
+    if (times.isEmpty) return times;
+
+    final remaining = goalMl - intakeMl;
     if (remaining <= 0) return const [];
 
-    final now = clock.now();
-    final nowMinutes = now.hour * 60 + now.minute;
     final future = times.where((t) => t > nowMinutes).toList();
     // Everything left today has passed; the times still need to be registered
     // because they repeat daily, so leave the schedule alone.
     if (future.isEmpty) return times;
 
-    final drink = WaterService.typicalDrinkMl();
+    final drink = typicalDrinkMl;
     var needed = (remaining / (drink <= 0 ? 250 : drink)).ceil();
 
     // Pace, not just total.
@@ -336,8 +461,8 @@ class ReminderRescheduleService {
     // every remaining slot, because that is the case where nagging is the point.
     try {
       final pace = HydrationPacer.compute(
-        intakeMl: today.effectiveHydrationMl,
-        goalMl: today.dailyGoalMl,
+        intakeMl: intakeMl,
+        goalMl: goalMl,
         nowMinutes: nowMinutes,
         wakeMinutes: wakeMinutes,
         sleepMinutes: bedHour * 60 + bedMinute,

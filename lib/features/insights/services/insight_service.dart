@@ -7,6 +7,7 @@ import '../../../core/health/refill_predictor.dart';
 import '../../../core/health/hydration_pacer.dart';
 import '../../../core/health/focus_insights.dart';
 import '../../../core/health/correlation_engine.dart';
+import 'package:tablet_remainder/core/health/cycle_hydration_insight.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/vitals_storage_service.dart';
 import '../../water/services/water_service.dart';
@@ -15,6 +16,8 @@ import '../../period/services/period_service.dart';
 import '../../period/models/cycle_prediction.dart';
 import '../../steps/services/step_service.dart';
 import '../../sleep/services/sleep_service.dart';
+import '../../../core/utils/calendar_day.dart';
+import 'package:clock/clock.dart';
 
 /// Gathers the top deterministic insight from every feature and returns them
 /// ranked (urgent → good) for the Insights hub / proactive nudges. Reads the
@@ -47,17 +50,36 @@ class InsightService {
     //
     // Reads are best-effort: a failure in one table must not take the whole
     // insight set down, which is why each is caught independently.
+    // BOUNDED to the last 180 days, not the whole table.
+    //
+    // `medicine_logs` gains a row per scheduled slot per day and is never
+    // pruned, so `getAllLogs()` grew without limit — every row mapped to a
+    // domain object, deduped and turned into a DoseEvent list, on the UI
+    // isolate, on the first frame of the tab the user landed on. A year of
+    // three-times-daily medicines is ~1,100 rows before any of that starts.
+    //
+    // 180 days is not arbitrary: `getStreakResult` already caps its own walk
+    // there, so the streak these logs feed cannot see further back anyway, and
+    // adherence and the refill consumption rate are both recent-behaviour
+    // signals. Anything that genuinely needs lifetime history reads it itself.
+    final insightWindowStart = dayOffset(clock.now(), -180);
     final allBp = await _tryList(VitalsStorageService.getAllBp);
-    final allLogsRaw = await _tryList(MedicineCleanStorageService.getAllLogs);
+    final allLogsRaw = await _tryList(
+      () => MedicineCleanStorageService.getLogsForDateRange(
+          insightWindowStart, clock.now()),
+    );
 
     // Water — today's intake vs goal + pace + streak.
     try {
       final t = WaterService.getTodayData();
       final now = DateTime.now();
+      final w = WaterService.wakingWindow();
       final pace = HydrationPacer.compute(
         intakeMl: t.effectiveHydrationMl,
         goalMl: t.dailyGoalMl,
         nowMinutes: now.hour * 60 + now.minute,
+        wakeMinutes: w.wakeMinutes,
+        sleepMinutes: w.sleepMinutes,
       );
       out.add(InsightEngine.water(
         intakeMl: t.effectiveHydrationMl,
@@ -89,6 +111,8 @@ class InsightService {
       // `SleepService.getAllSessions()` are already in memory, which is why this
       // sits inside the existing try rather than getting its own.
       out.add(CorrelationEngine.focusVsSleep(_focusVsSleepDays(fs)));
+      out.add(
+          CorrelationEngine.hydrationVsSleep(_hydrationVsSleepDays()));
     } catch (_) {}
 
     // Vitals — BP + glucose pattern detection.
@@ -179,6 +203,15 @@ class InsightService {
       ));
     } catch (_) {}
 
+    // Hydration x cycle phase. Context, not a target change — see
+    // CycleHydrationInsight for why no millilitres are invented here.
+    try {
+      out.add(CycleHydrationInsight.forPhase(
+        PeriodService.getPrediction().phaseToday,
+        isRestricted: WaterService.isFluidRestricted,
+      ));
+    } catch (_) {}
+
     // Period — next-period / fertile-window estimate / irregular / late.
     try {
       final p = PeriodService.getPrediction();
@@ -243,15 +276,19 @@ class InsightService {
     } catch (_) {}
 
     // Water & Steps week-over-week trend — the last 7 complete days vs the 7
-    // before them (today excluded so a partial day never skews it). Needs ≥3
-    // logged days in each window to count as a real trend.
+    // before them (today excluded so a partial day never skews it). Each window
+    // yields [total, loggedDays] and BOTH go to the engine: it divides one by
+    // the other, so a week with more days logged no longer reads as a week with
+    // better behaviour. The minimum sample is the engine's
+    // `InsightEngine.minTrendLoggedDays`, not a literal repeated here — a second
+    // copy of the number is how the two drift apart.
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       List<int> waterWindow(int startAgo, int endAgoExclusive) {
         var total = 0, days = 0;
         for (var i = startAgo; i < endAgoExclusive; i++) {
-          final d = WaterService.getDataForDate(today.subtract(Duration(days: i)));
+          final d = WaterService.getDataForDate(dayOffset(today, -i));
           final ml = d?.effectiveHydrationMl ?? 0;
           if (ml > 0) {
             total += ml;
@@ -262,16 +299,16 @@ class InsightService {
       }
       final tw = waterWindow(1, 8);
       final lw = waterWindow(8, 15);
-      if (tw[1] >= 3 && lw[1] >= 3) {
-        out.add(InsightEngine.trend(
-          feature: InsightFeature.water,
-          id: 'water_trend',
-          label: 'water',
-          thisWeek: tw[0],
-          lastWeek: lw[0],
-          higherIsBetter: true,
-        ));
-      }
+      out.add(InsightEngine.trend(
+        feature: InsightFeature.water,
+        id: 'water_trend',
+        label: 'water',
+        thisWeek: tw[0],
+        lastWeek: lw[0],
+        thisWeekDays: tw[1],
+        lastWeekDays: lw[1],
+        higherIsBetter: true,
+      ));
     } catch (_) {}
     try {
       final now = DateTime.now();
@@ -279,7 +316,7 @@ class InsightService {
       List<int> stepWindow(int startAgo, int endAgoExclusive) {
         var total = 0, days = 0;
         for (var i = startAgo; i < endAgoExclusive; i++) {
-          final d = StepService.getDataForDate(today.subtract(Duration(days: i)));
+          final d = StepService.getDataForDate(dayOffset(today, -i));
           final s = d?.effectiveSteps ?? 0;
           if (s > 0) {
             total += s;
@@ -290,16 +327,16 @@ class InsightService {
       }
       final tw = stepWindow(1, 8);
       final lw = stepWindow(8, 15);
-      if (tw[1] >= 3 && lw[1] >= 3) {
-        out.add(InsightEngine.trend(
-          feature: InsightFeature.steps,
-          id: 'steps_trend',
-          label: 'steps',
-          thisWeek: tw[0],
-          lastWeek: lw[0],
-          higherIsBetter: true,
-        ));
-      }
+      out.add(InsightEngine.trend(
+        feature: InsightFeature.steps,
+        id: 'steps_trend',
+        label: 'steps',
+        thisWeek: tw[0],
+        lastWeek: lw[0],
+        thisWeekDays: tw[1],
+        lastWeekDays: lw[1],
+        higherIsBetter: true,
+      ));
     } catch (_) {}
 
     // Cross-cutting — mood/BP vs same-day medication adherence. Both need a
@@ -308,7 +345,7 @@ class InsightService {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       const lookbackDays = 30;
-      final start = today.subtract(const Duration(days: lookbackDays - 1));
+      final start = dayOffset(today, -(lookbackDays - 1));
 
       // ONE pair of queries for the whole window. This used to await
       // getDailySummaryAsync per day — 30 iterations x 2 round trips (logs +
@@ -360,6 +397,33 @@ class InsightService {
           }
           out.add(CorrelationEngine.bloodPressureVsAdherence(bpDays));
         } catch (_) {}
+
+        try {
+          // Hydration against that day's adherence. Days with nothing logged
+          // are excluded, not zeroed — a zero would measure app-opening, not
+          // drinking.
+          //
+          // The two fields are read for two different questions, deliberately:
+          // `totalIntakeMl` answers "did anything get logged", and
+          // `effectiveHydrationMl` is the value compared. Gating on the
+          // effective figure instead would drop the day a heavy drinker nets a
+          // negative — the day this insight most needs to see — and every other
+          // water surface (the trend window above, trends_data_service, the
+          // weekly stats) already reports the effective figure.
+          final waterDays = <DayMetric>[];
+          for (final entry in adherentByDay.entries) {
+            final date = DateTime.tryParse(entry.key);
+            if (date == null) continue;
+            final day = WaterService.getDataForDate(date);
+            if (day == null || day.totalIntakeMl <= 0) continue;
+            waterDays.add(DayMetric(
+              day: date,
+              adherent: entry.value,
+              value: day.effectiveHydrationMl.toDouble(),
+            ));
+          }
+          out.add(CorrelationEngine.hydrationVsAdherence(waterDays));
+        } catch (_) {}
       }
     } catch (_) {}
 
@@ -368,6 +432,50 @@ class InsightService {
 
   static String _dayKey(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Days grouped by whether that night's sleep beat the user's own median,
+  /// with the day's total water intake as the metric.
+  ///
+  /// Mirrors [_focusVsSleepDays] exactly, and for the same reasons:
+  ///
+  ///  * **The user's own median**, not a 7-hour constant — a six-hour sleeper is
+  ///    not "deprived" against their own baseline.
+  ///  * **`SleepSession.dateKey` is the WAKE-UP date**, so the night that ended
+  ///    on the 15th is paired with the 15th's drinking. Keying off bedtime would
+  ///    be off by one for every night that crosses midnight, i.e. all of them,
+  ///    and would silently reverse the arrow.
+  ///  * **Days with no water logged are excluded.** A zero would make this a
+  ///    measure of whether the user opened the app. The exclusion tests
+  ///    `totalIntakeMl` — "was anything logged" — while the value compared is
+  ///    `effectiveHydrationMl`, so an alcohol-heavy day stays in the sample at
+  ///    the hydration it actually delivered instead of at its volume.
+  static List<GroupedDay> _hydrationVsSleepDays() {
+    final nights = SleepService.getAllSessions();
+    if (nights.length < CorrelationResult.minPerGroup * 2) return const [];
+
+    final asleepByDay = <String, int>{
+      for (final n in nights) n.dateKey: n.asleepMinutes,
+    };
+    final values = asleepByDay.values.toList()..sort();
+    final mid = values.length ~/ 2;
+    final median = values.length.isOdd
+        ? values[mid]
+        : ((values[mid - 1] + values[mid]) / 2).round();
+
+    final out = <GroupedDay>[];
+    asleepByDay.forEach((key, slept) {
+      final date = DateTime.tryParse(key);
+      if (date == null) return;
+      final day = WaterService.getDataForDate(date);
+      if (day == null || day.totalIntakeMl <= 0) return;
+      out.add(GroupedDay(
+        day: date,
+        inGroup: slept >= median,
+        value: day.effectiveHydrationMl.toDouble(),
+      ));
+    });
+    return out;
+  }
 
   /// Days the user ATTEMPTED a focus session, grouped by whether the preceding
   /// night beat their own median, with that day's completion rate as the metric.

@@ -1,6 +1,5 @@
 import 'package:clock/clock.dart';
 import 'package:drift/native.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
@@ -8,7 +7,6 @@ import 'package:tablet_remainder/core/services/audio_service.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/features/focus/models/focus_achievement.dart';
 import 'package:tablet_remainder/features/focus/models/focus_coins.dart';
-import 'package:tablet_remainder/features/focus/models/focus_session.dart';
 import 'package:tablet_remainder/features/focus/services/coins_service.dart';
 import 'package:tablet_remainder/features/focus/services/focus_service.dart';
 import 'package:tablet_remainder/features/focus/services/focus_session_alarm.dart';

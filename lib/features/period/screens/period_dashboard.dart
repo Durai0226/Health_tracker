@@ -16,6 +16,8 @@ import '../widgets/prediction_card.dart';
 import 'cycle_history_screen.dart';
 import 'period_calendar_screen.dart';
 import '../../../core/health/coach_text.dart';
+import '../../../core/utils/calendar_day.dart';
+import '../../../core/constants/app_strings.dart';
 
 /// The headline Period feature screen. In [embedded] mode the Health hub owns
 /// the header, so this drops its own app bar and background.
@@ -223,7 +225,7 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
 
     int? dayIndex(DateTime? d) {
       if (d == null || p.lastPeriodStart == null) return null;
-      return d.difference(p.lastPeriodStart!).inDays;
+      return calendarDaysBetween(p.lastPeriodStart!, d);
     }
 
     final confVal = switch (p.confidence) {
@@ -449,7 +451,7 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
       accent: ext.period,
       title: 'Start tracking your cycle',
       message:
-          'Log the first day of your period and DailyMinder will learn your '
+          'Log the first day of your period and ${AppStrings.productName} will learn your '
           'rhythm — predicting your next period, phases and fertile window with '
           'an honest confidence score.',
       action: AppButton(

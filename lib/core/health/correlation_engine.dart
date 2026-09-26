@@ -231,4 +231,99 @@ class CorrelationEngine {
       rank: 38,
     );
   }
+
+  /// Minimum difference in mean daily hydration (ml) worth calling a pattern.
+  ///
+  /// 200 ml is under one glass. Below that the "finding" is noise dressed as
+  /// advice, which is the failure mode this whole file is written to avoid.
+  static const double _hydrationMeaningfulDeltaMl = 200;
+
+  /// Hydration against sleep duration.
+  ///
+  /// [days] carries each day's HYDRATION in millilitres — volume after each
+  /// drink's hydration percentage, so a night on beer counts against the day
+  /// rather than for it — grouped by whether that night's sleep was above the
+  /// user's own median. Not raw intake: "you drink less" would otherwise be
+  /// printed over a day whose volume was high and whose hydration was negative.
+  ///
+  /// The direction worth surfacing is short-sleep-with-less-fluid, and the
+  /// literature runs the other way round from the intuition: Rosinger et al.
+  /// (SLEEP 2019) found SHORT SLEEP PREDICTS DEHYDRATION — 6 hours versus 8
+  /// gave an adjusted odds ratio of 1.59 (95% CI 1.25–2.03) for inadequate
+  /// hydration across NHANES (n=4,680 and n=9,559) and 1.42 (1.26–1.60) in the
+  /// Chinese Kailuan cohort (n=11,903). The proposed mechanism is vasopressin
+  /// released late in the sleep cycle that a shortened night cuts off.
+  ///
+  /// So the framing is "your short nights come with less fluid", not a claim
+  /// that drinking more will fix anyone's sleep.
+  static Insight? hydrationVsSleep(List<GroupedDay> days) {
+    final r = compareGroups(days);
+    if (r == null || !r.hasEnoughData) return null;
+    // Only the expected direction: more fluid on longer-sleep days.
+    if (r.delta < _hydrationMeaningfulDeltaMl) return null;
+    if (r.inGroupMean <= r.outGroupMean) return null;
+
+    String ml(double v) => '${v.round()}ml';
+    final total = r.inGroupCount + r.outGroupCount;
+
+    return Insight(
+      id: 'correlation_hydration_sleep',
+      feature: InsightFeature.crossCutting,
+      severity: InsightSeverity.info,
+      title: 'You hydrate less on your shorter nights',
+      detail: 'Across $total days your hydration averaged ${ml(r.inGroupMean)} '
+          'after your longer nights and ${ml(r.outGroupMean)} after your '
+          'shorter ones. Population studies find short sleep and low hydration '
+          'travel together — it is worth a glass with breakfast on a rough '
+          'morning, not a reason to worry.',
+      metric: ml(r.delta),
+      why: 'Mean hydration on ${r.inGroupCount} longer-sleep days: '
+          '${ml(r.inGroupMean)}, vs ${ml(r.outGroupMean)} on ${r.outGroupCount} '
+          'shorter-sleep days. Split at your own median sleep duration. '
+          'Reference: Rosinger 2019, SLEEP 42(2) — 6h vs 8h sleep, adjusted OR '
+          '1.59 for inadequate hydration.',
+      // Alongside the other cross-cutting pattern insights.
+      rank: 37,
+    );
+  }
+
+  /// Hydration against medication adherence.
+  ///
+  /// No mechanism is claimed — this is a "these land on the same days"
+  /// observation, and the honest use of it is as a shared-routine signal: the
+  /// two habits tend to rise and fall together because they are both part of
+  /// the same morning.
+  static Insight? hydrationVsAdherence(List<DayMetric> days) {
+    final r = correlateWithAdherence(days);
+    if (r == null || !r.hasEnoughData) return null;
+
+    // NOTE the sign: [AdherenceCorrelation.delta] is
+    // `nonAdherentMean - adherentMean`, because every other metric on it is one
+    // where the NON-adherent day is worse (mood, blood pressure). Hydration is
+    // the opposite — more is the good direction — so `delta` is negative for the
+    // pattern we want and reusing it directly would mean this insight could
+    // never fire. Compute the difference in the direction that matters here.
+    final excessMl = r.adherentMean - r.nonAdherentMean;
+    if (excessMl < _hydrationMeaningfulDeltaMl) return null;
+
+    String ml(double v) => '${v.round()}ml';
+    final total = r.adherentCount + r.nonAdherentCount;
+
+    return Insight(
+      id: 'correlation_hydration_adherence',
+      feature: InsightFeature.crossCutting,
+      severity: InsightSeverity.info,
+      title: 'Your hydration and your doses rise and fall together',
+      detail: 'Over $total logged days your hydration averaged '
+          '${ml(r.adherentMean)} on days you took every dose and '
+          '${ml(r.nonAdherentMean)} on days you missed one. Neither causes '
+          'the other — they are both part of the same routine, which is '
+          'useful if you want to anchor one to the other.',
+      metric: ml(excessMl),
+      why: 'Mean hydration on ${r.adherentCount} fully-adherent days: '
+          '${ml(r.adherentMean)}, vs ${ml(r.nonAdherentMean)} on '
+          '${r.nonAdherentCount} days with a missed dose.',
+      rank: 36,
+    );
+  }
 }

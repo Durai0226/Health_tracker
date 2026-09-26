@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../models/custom_tag.dart';
 import '../services/tag_service.dart';
 import '../services/focus_service.dart';
@@ -69,7 +70,10 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                               'Custom Tags', _tagService.customTags),
                           const SizedBox(height: 24),
                           _buildTagStatistics(),
-                          const SizedBox(height: 100),
+                          // Was a magic SizedBox(height: 100) — a tab-root
+                          // constant on a pushed screen, and it never added the
+                          // gesture-bar inset.
+                          SizedBox(height: AppInsets.pushed(context)),
                         ]),
                       ),
                     ),
@@ -80,12 +84,15 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreateTagDialog,
-        backgroundColor: ext.fillBg(ext.brand),
-        icon: Icon(Symbols.add_rounded, color: ext.fillFg(ext.brand)),
-        label: Text('Create tag',
-            style: TextStyle(color: ext.fillFg(ext.brand))),
+      // AppFab, not a raw FloatingActionButton.extended: the raw one re-declared
+      // the fill pair by hand and lost `heroTag: null` (the multiple-heroes
+      // guard), the brLg shape, labelLarge text and the medium-impact haptic. It
+      // also read brand-teal on a Focus screen; the accent is the feature's.
+      floatingActionButton: AppFab(
+        icon: Symbols.add_rounded,
+        label: 'Create tag',
+        accent: ext.focus,
+        onPressed: _showCreateTagSheet,
       ),
     );
   }
@@ -95,18 +102,17 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
     final customCount = _tagService.customTags.length;
     final totalUsage = tags.fold(0, (sum, t) => sum + t.usageCount);
 
+    final ext = AppColorsExt.of(context);
+    final fg = ext.fillFg(ext.focus);
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF9C27B0),
-            Color(0xFF7B1FA2),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(28),
+        // Was a hardcoded #9C27B0 → #7B1FA2 gradient with white labels: not a
+        // contrast defect (6.30:1) but a hue that exists nowhere in the palette,
+        // on a Focus screen whose accent is violet. The fill pair is the
+        // measured one — 5.70:1 light, 5.60:1 dark.
+        color: ext.fillBg(ext.focus),
+        borderRadius: AppRadius.brCard,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -114,9 +120,9 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
           // Each stat takes an equal share so the 3-up row can never run past
           // the card edge on a narrow phone or at large text sizes.
           Expanded(child: _buildStatItem(Symbols.label_rounded, '${tags.length}', 'Total Tags')),
-          Container(width: 1, height: 50, color: Colors.white24),
+          Container(width: 1, height: 50, color: fg.withOpacity(0.4)),
           Expanded(child: _buildStatItem(Symbols.auto_awesome_rounded, '$customCount', 'Custom')),
-          Container(width: 1, height: 50, color: Colors.white24),
+          Container(width: 1, height: 50, color: fg.withOpacity(0.4)),
           Expanded(child: _buildStatItem(Symbols.insights_rounded, '$totalUsage', 'Total Uses')),
         ],
       ),
@@ -128,10 +134,13 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
   /// The tag emoji further down the screen stay as they are — those are the
   /// user's own choice, persisted, and the whole point of the picker.
   Widget _buildStatItem(IconData icon, String value, String label) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final fg = ext.fillFg(ext.focus);
     return Column(
       children: [
-        Icon(icon, size: 22, color: Colors.white),
-        const SizedBox(height: 8),
+        Icon(icon, size: 22, color: fg),
+        const SizedBox(height: AppSpacing.sm),
         // scaleDown never enlarges, so the default rendering is unchanged and
         // only genuinely-too-wide values shrink to fit their column.
         FittedBox(
@@ -140,11 +149,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
             value,
             maxLines: 1,
             softWrap: false,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+            style: tt.displaySmall?.copyWith(color: fg),
           ),
         ),
         FittedBox(
@@ -153,10 +158,7 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
             label,
             maxLines: 1,
             softWrap: false,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.white.withOpacity(0.8),
-            ),
+            style: tt.bodySmall?.copyWith(color: fg),
           ),
         ),
       ],
@@ -173,52 +175,48 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Flexible(
               child: Text(
                 '${tags.length} tags',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColorsExt.of(context).textSecondary,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColorsExt.of(context).textSecondary,
+                    ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         if (tags.isEmpty)
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(AppSpacing.xl),
             decoration: BoxDecoration(
               color: AppColorsExt.of(context).surface,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: AppRadius.brCard,
             ),
             child: Center(
               child: Text(
-                title == 'Custom Tags' 
-                    ? 'Create your first custom tag!'
+                title == 'Custom Tags'
+                    ? 'Create your first custom tag'
                     : 'No tags available',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColorsExt.of(context).textSecondary,
-                ),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColorsExt.of(context).textSecondary,
+                    ),
               ),
             ),
           )
         else
           Wrap(
-            spacing: 12,
-            runSpacing: 12,
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
             children: tags.map((tag) => _buildTagChip(tag)).toList(),
           ),
       ],
@@ -226,22 +224,25 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
   }
 
   Widget _buildTagChip(FocusTag tag) {
+    final tt = Theme.of(context).textTheme;
     return GestureDetector(
       onTap: () => _showTagDetails(tag),
       onLongPress: tag.isDefault ? null : () => _showDeleteConfirmation(tag),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           color: tag.color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.brLg,
           border: Border.all(color: tag.color.withOpacity(0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (tag.emoji != null) ...[
+              // emoji-content-ok: the user's own persisted choice from the picker
               Text(tag.emoji!, style: const TextStyle(fontSize: 18)),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
             ],
             // The chip lives in a Wrap, so its width is bounded by the row.
             // Flexible lets a long tag name ellipsize instead of pushing the
@@ -251,26 +252,23 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                 tag.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                style: tt.labelLarge?.copyWith(
                   color: _readableTagColor(context, tag.color),
                 ),
               ),
             ),
             if (tag.usageCount > 0) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
                 decoration: BoxDecoration(
                   color: tag.color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppRadius.brSm,
                 ),
                 child: Text(
                   '${tag.usageCount}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                  style: tt.labelSmall?.copyWith(
                     color: _readableTagColor(context, tag.color),
                   ),
                 ),
@@ -283,35 +281,31 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
   }
 
   Widget _buildTagStatistics() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final stats = _tagService.calculateTagStatistics(_focusService.sessions);
-    
+
     if (stats.isEmpty) {
       return const SizedBox();
     }
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       decoration: BoxDecoration(
-        color: AppColorsExt.of(context).surface,
-        borderRadius: BorderRadius.circular(24),
+        color: ext.surface,
+        borderRadius: AppRadius.brSheet,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Tag Usage Statistics',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
+          Text('Tag Usage Statistics', style: tt.headlineSmall),
+          const SizedBox(height: AppSpacing.lg),
           ...stats.take(5).map((stat) {
             final maxMins = stats.first.totalMinutes;
             final percentage = maxMins > 0 ? stat.totalMinutes / maxMins : 0.0;
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: Column(
                 children: [
                   Row(
@@ -321,16 +315,17 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                         height: 36,
                         decoration: BoxDecoration(
                           color: stat.tagColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: AppRadius.brSm,
                         ),
                         child: Center(
+                          // emoji-content-ok: the tag's own persisted glyph
                           child: Text(
                             _tagService.getTagById(stat.tagId)?.emoji ?? '🏷️',
                             style: const TextStyle(fontSize: 16),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,24 +334,19 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                               stat.tagName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: tt.titleSmall,
                             ),
                             Text(
                               '${stat.sessionCount} sessions',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColorsExt.of(context).textSecondary,
-                              ),
+                              style: tt.bodySmall
+                                  ?.copyWith(color: ext.textSecondary),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpacing.sm),
                       // Trailing totals share the row instead of running off the
                       // card: they shrink and ellipsize at large text sizes.
                       Flexible(
@@ -367,19 +357,20 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                               '${stat.totalHours}h ${stat.totalMinutes % 60}m',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: stat.tagColor,
+                              // Same reason as the chip label: a persisted tag
+                              // hue can be #CDDC39, which measures 1.55:1 as
+                              // text on the card.
+                              style: tt.labelLarge?.copyWith(
+                                color: _readableTagColor(context, stat.tagColor),
                               ),
                             ),
                             Text(
                               'avg ${stat.averageSessionMinutes.toStringAsFixed(0)}m',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: AppColorsExt.of(context).textSecondary,
+                              style: tt.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w400,
+                                color: ext.textSecondary,
                               ),
                             ),
                           ],
@@ -387,12 +378,12 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.sm),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: AppRadius.brSm,
                     child: LinearProgressIndicator(
                       value: percentage,
-                      backgroundColor: AppColorsExt.of(context).outline,
+                      backgroundColor: ext.surfaceVariant,
                       valueColor: AlwaysStoppedAnimation(stat.tagColor),
                       minHeight: 6,
                     ),
@@ -406,96 +397,83 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
     );
   }
 
-  void _showCreateTagDialog() {
+  /// Create-tag sheet, routed through [AppBottomSheet].
+  ///
+  /// The hand-rolled version set `backgroundColor: transparent`, drew its own
+  /// 28pt top corners (the theme's `topSheet` is 24) and its own grab handle in
+  /// `Colors.grey.shade300` — which measures **1.32:1** on the light surface,
+  /// i.e. invisible, and 3.6:1 on the dark one, i.e. a bright bar where the
+  /// theme's `dragHandleColor` is a quiet one. AppBottomSheet owns all three,
+  /// plus the keyboard inset and the Material that lets rows ink.
+  void _showCreateTagSheet() {
     final nameController = TextEditingController();
     Color selectedColor = FocusTag.availableColors.first;
     String? selectedEmoji;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: EdgeInsets.fromLTRB(
-            24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          decoration: BoxDecoration(
-            color: AppColorsExt.of(context).surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
+    AppBottomSheet.show(
+      context,
+      title: 'Create Custom Tag',
+      icon: Symbols.label_rounded,
+      accent: AppColorsExt.of(context).focus,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setModalState) {
+          final ext = AppColorsExt.of(sheetContext);
+          final tt = Theme.of(sheetContext).textTheme;
+          return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Create Custom Tag',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 24),
               TextField(
                 controller: nameController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Tag Name',
                   hintText: 'e.g., Deep Work',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: AppRadius.brMd),
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Color',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.gutter),
+              Text('Color', style: tt.titleSmall),
+              const SizedBox(height: AppSpacing.md),
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
                 children: FocusTag.availableColors.map((color) {
                   final isSelected = selectedColor == color;
-                  return GestureDetector(
-                    onTap: () => setModalState(() => selectedColor = color),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: isSelected
-                            ? Border.all(
-                                color: AppColorsExt.of(context).textPrimary,
-                                width: 3,
-                              )
+                  return Semantics(
+                    button: true,
+                    selected: isSelected,
+                    label: 'Tag colour',
+                    child: GestureDetector(
+                      onTap: () => setModalState(() => selectedColor = color),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: isSelected
+                              ? Border.all(color: ext.textPrimary, width: 3)
+                              : null,
+                        ),
+                        // The tick sits on twelve different user hues — some of
+                        // them #CDDC39 — so it takes the ring colour, which is
+                        // `textPrimary` against the app's own text contrast,
+                        // rather than a fixed white at 1.55:1.
+                        child: isSelected
+                            ? Icon(Symbols.check_rounded,
+                                color: ext.textPrimary, size: 20)
                             : null,
                       ),
-                      child: isSelected
-                          ? const Icon(Symbols.check_rounded, color: Colors.white, size: 20)
-                          : null,
                     ),
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Emoji (Optional)',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.gutter),
+              Text('Emoji (Optional)', style: tt.titleSmall),
+              const SizedBox(height: AppSpacing.md),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
                 children: FocusTag.availableEmojis.map((emoji) {
                   final isSelected = selectedEmoji == emoji;
                   return GestureDetector(
@@ -508,76 +486,56 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                       decoration: BoxDecoration(
                         color: isSelected
                             ? selectedColor.withOpacity(0.2)
-                            : AppColorsExt.of(context).outline,
-                        borderRadius: BorderRadius.circular(12),
+                            : ext.surfaceVariant,
+                        borderRadius: AppRadius.brMd,
                         border: isSelected
                             ? Border.all(color: selectedColor, width: 2)
                             : null,
                       ),
                       child: Center(
+                        // emoji-content-ok: this IS the picker — the glyph the
+                        // user is choosing and the app persists
                         child: Text(emoji, style: const TextStyle(fontSize: 20)),
                       ),
                     ),
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (nameController.text.isEmpty) return;
-                    
-                    await _tagService.createTag(
-                      name: nameController.text,
-                      colorValue: selectedColor.value,
-                      emoji: selectedEmoji,
-                    );
-                    
-                    if (mounted) Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: selectedColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Text(
-                    'Create Tag',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ),
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                label: 'Create tag',
+                fullWidth: true,
+                accent: ext.focus,
+                onPressed: () async {
+                  if (nameController.text.isEmpty) return;
+
+                  await _tagService.createTag(
+                    name: nameController.text,
+                    colorValue: selectedColor.value,
+                    emoji: selectedEmoji,
+                  );
+
+                  if (mounted) Navigator.pop(sheetContext);
+                },
               ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     ).whenComplete(nameController.dispose); // dispose the sheet controller
   }
 
   void _showTagDetails(FocusTag tag) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColorsExt.of(context).surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
+    AppBottomSheet.show(
+      context,
+      accent: AppColorsExt.of(context).focus,
+      builder: (sheetContext) {
+        final ext = AppColorsExt.of(sheetContext);
+        final tt = Theme.of(sheetContext).textTheme;
+        final tagFg = _readableTagColor(sheetContext, tag.color);
+        return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
             Container(
               width: 80,
               height: 80,
@@ -586,96 +544,66 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child: Text(
-                  tag.emoji ?? '🏷️',
-                  style: const TextStyle(fontSize: 36),
-                ),
+                child: Text(tag.emoji ?? '🏷️', // emoji-content-ok: the tag's own persisted glyph
+                    style: const TextStyle(fontSize: 36)),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               tag.name,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: _readableTagColor(context, tag.color),
-              ),
+              textAlign: TextAlign.center,
+              style: tt.displaySmall?.copyWith(color: tagFg),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 Column(
                   children: [
-                    Text(
-                      '${tag.usageCount}',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: _readableTagColor(context, tag.color),
-                      ),
-                    ),
-                    Text(
-                      'Times Used',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColorsExt.of(context).textSecondary,
-                      ),
-                    ),
+                    Text('${tag.usageCount}',
+                        style: tt.displayMedium?.copyWith(color: tagFg)),
+                    Text('Times Used',
+                        style:
+                            tt.bodySmall?.copyWith(color: ext.textSecondary)),
                   ],
                 ),
                 Column(
                   children: [
-                    Text(
-                      tag.isDefault ? 'Default' : 'Custom',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: _readableTagColor(context, tag.color),
-                      ),
-                    ),
-                    Text(
-                      'Type',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColorsExt.of(context).textSecondary,
-                      ),
-                    ),
+                    Text(tag.isDefault ? 'Default' : 'Custom',
+                        style: tt.headlineSmall?.copyWith(color: tagFg)),
+                    Text('Type',
+                        style:
+                            tt.bodySmall?.copyWith(color: ext.textSecondary)),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 24),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
-  void _showDeleteConfirmation(FocusTag tag) {
-    showDialog(
+  /// Tag deletion, asked in the app's one confirmation grammar.
+  ///
+  /// This was a raw [AlertDialog] — the second way this app had of asking a
+  /// question, on the screen whose only destructive action it guarded.
+  /// `showDelete` is the same question: `itemName: 'Tag'` reproduces the
+  /// "Delete Tag?" title verbatim and `customMessage` keeps the tag's own name
+  /// in the body, where the generic copy would have dropped it. Cancel stays on
+  /// the left, the destructive button on the right, and the dialog was
+  /// barrier-dismissible, so the sheet's dismissal matches it.
+  ///
+  /// No `mounted` gate between the answer and the delete: nothing after the
+  /// await touches a [BuildContext], and gating a confirmed destructive action
+  /// on the screen still being alive is how a "yes" silently becomes a no-op.
+  Future<void> _showDeleteConfirmation(FocusTag tag) async {
+    final confirmed = await ConfirmationBottomSheet.showDelete(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Tag?'),
-        content: Text('Are you sure you want to delete "${tag.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _tagService.deleteTag(tag.id);
-            },
-            style: TextButton.styleFrom(
-                foregroundColor: AppColorsExt.of(context).mark(
-                    AppColorsExt.of(context).error)),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      itemName: 'Tag',
+      customMessage: 'Are you sure you want to delete "${tag.name}"?',
     );
+    if (confirmed != true) return;
+    await _tagService.deleteTag(tag.id);
   }
 }

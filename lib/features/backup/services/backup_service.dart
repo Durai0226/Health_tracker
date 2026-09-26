@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../../../core/constants/app_strings.dart';
 
 class BackupService {
   
@@ -44,7 +45,7 @@ class BackupService {
   /// Share the backup file using system share sheet
   Future<void> shareBackup(File file) async {
     // ignore: deprecated_member_use
-    await Share.shareXFiles([XFile(file.path)], text: 'DailyMinder Backup');
+    await Share.shareXFiles([XFile(file.path)], text: '${AppStrings.productName} Backup');
   }
 
   /// Allow user to pick a backup file and restore data.

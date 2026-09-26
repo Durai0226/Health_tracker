@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/background_alarm_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 
 /// Notifications settings — an Apple-tier, instant-apply grouped-settings list.
@@ -113,12 +113,11 @@ class _NotificationSettingsScreenState
         notificationSound: _notificationSound,
       );
 
+      // saveUserSettings mirrors every alarm-isolate key itself now (see
+      // CleanStorageService.mirrorSettingsForAlarmIsolate). This used to mirror
+      // two of them here by hand and miss `max_snooze_count` entirely, so the
+      // snooze cap the alarm isolate enforced was never the one the user chose.
       await CleanStorageService.saveUserSettings(settings);
-
-      // Sync snooze settings to SharedPreferences for background alarm service
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('snooze_interval_minutes', _snoozeMinutes);
-      await prefs.setBool('snooze_enabled', _snoozeEnabled);
 
       if (mounted) {
         // Quiet, non-blocking "Saved" affordance in the header — fades away.
@@ -130,6 +129,16 @@ class _NotificationSettingsScreenState
       }
     } catch (e) {
       debugPrint('Error saving settings: $e');
+      // Silence here is indistinguishable from success: the switch stays where
+      // the user put it, and the only other signal — the "Saved" check — just
+      // never appears. Reachable, not theoretical: `getUserSettings()` casts
+      // every stored value, and a restored backup can leave a non-int in an
+      // int preference, at which point EVERY save on this screen throws and
+      // the user is never told any of them were lost.
+      if (!mounted) return;
+      _savedTimer?.cancel();
+      setState(() => _showSaved = false);
+      context.toastError("Couldn't save that change. Try again.");
     }
   }
 
@@ -144,7 +153,9 @@ class _NotificationSettingsScreenState
       await NotificationService().showImmediateNotification(
         title: '🔔 Test Notification',
         body: 'Your notifications are working correctly!',
-        channelId: 'test_channel',
+        // Alarm-grade on purpose: this button exists to prove the alarm path
+        // works end to end, so it must exercise that path and not a nudge.
+        kind: ReminderKind.alarm,
       );
 
       if (mounted) {

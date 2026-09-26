@@ -17,9 +17,11 @@ HydrationProfile prof({
   bool breastfeeding = false,
   int custom = 2500,
   bool useCustom = false,
+  int? age,
 }) =>
     HydrationProfile(
       id: 'p',
+      age: age,
       weightKg: weight,
       isMale: isMale,
       activityLevel: activity,
@@ -31,13 +33,25 @@ HydrationProfile prof({
     );
 
 void main() {
+  // The goal formula moved to HydrationGoalCalculator, which is asserted
+  // against the published IOM/EFSA/ACSM figures in
+  // test/health/hydration_goal_test.dart. These tests cover the *profile's*
+  // side of it: that the enums map through, and that the behaviours this file
+  // has always guarded still hold.
   group('calculatedGoalMl', () {
-    test('weight × moderate activity/climate (male)', () {
-      // 70*33=2310 ×1.1 (moderate activity) ×1.0 (moderate climate) = 2541
-      expect(prof(weight: 70).calculatedGoalMl, 2541);
+    test('a moderate male sits on the IOM adult baseline plus sweat', () {
+      // Baseline 2960 ml of drinks (3.7 L total water x 80% from beverages),
+      // plus replacement for activity above what that baseline assumes.
+      // The old answer was 2541, from `70*33*1.1` — a formula with no source.
+      final g = prof(weight: 70).calculatedGoalMl;
+      expect(g, greaterThan(2960));
+      expect(g, lessThan(3500));
     });
-    test('null weight → default 2500', () {
-      expect(prof(weight: null).calculatedGoalMl, 2500);
+    test('a missing weight still yields a real target, not a magic 2500', () {
+      // Weight is not the basis of the goal any more, so its absence is not a
+      // reason to fall back to a made-up number.
+      expect(prof(weight: null).calculatedGoalMl,
+          prof(weight: 70).calculatedGoalMl);
     });
     test('clamps to the 5000 ceiling', () {
       expect(
@@ -48,8 +62,26 @@ void main() {
               .calculatedGoalMl,
           5000);
     });
-    test('never below 1500 (negative weight clamps, no crash)', () {
-      expect(prof(weight: -50).calculatedGoalMl, 1500);
+    test('a garbage weight cannot produce a garbage goal', () {
+      final g = prof(weight: -50).calculatedGoalMl;
+      expect(g, greaterThanOrEqualTo(1200));
+      expect(g, lessThanOrEqualTo(5000));
+    });
+    test('the goal is NOT reduced for older adults (regression)', () {
+      // The old formula applied *0.95 over 65. IOM holds the adult figure flat
+      // through >70y; what declines with age is thirst sensitivity, not need.
+      expect(prof(weight: 70, age: 70).calculatedGoalMl,
+          prof(weight: 70, age: 30).calculatedGoalMl);
+    });
+    test('a hotter climate band raises the goal', () {
+      expect(prof(weight: 70, climate: ClimateType.veryHot).calculatedGoalMl,
+          greaterThan(prof(weight: 70, climate: ClimateType.cold).calculatedGoalMl));
+    });
+    test('a harder activity band raises the goal', () {
+      expect(
+          prof(weight: 70, activity: ActivityLevel.veryActive).calculatedGoalMl,
+          greaterThan(
+              prof(weight: 70, activity: ActivityLevel.sedentary).calculatedGoalMl));
     });
   });
 
@@ -73,7 +105,8 @@ void main() {
       expect(prof(weight: 70, custom: 3000, useCustom: true).effectiveGoalMl, 3000);
     });
     test('custom off → returns calculated (custom ignored)', () {
-      expect(prof(weight: 70, custom: 3000, useCustom: false).effectiveGoalMl, 2541);
+      expect(prof(weight: 70, custom: 3000, useCustom: false).effectiveGoalMl,
+          prof(weight: 70).calculatedGoalMl);
     });
   });
 

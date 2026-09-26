@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
+import '../utils/step_format.dart';
 
 /// One bar's data in the weekly chart.
 class StepDayBar {
@@ -49,8 +50,18 @@ class StepWeeklyChart extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('This week', style: tt.titleLarge),
-              const Spacer(),
+              // Expanded, not a bare Text + Spacer.
+              //
+              // Both children are text that grows with Dynamic Type, so at
+              // 1.3x the title and the goal badge together outran the card
+              // (+20px at 375pt, +37px at 428pt/2.0x). The title is the half
+              // that can yield: it is a fixed, known string, whereas the badge
+              // carries a number the user needs to read in full.
+              Expanded(
+                child: Text('This week',
+                    style: tt.titleLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -58,7 +69,7 @@ class StepWeeklyChart extends StatelessWidget {
                   borderRadius: AppRadius.brFull,
                 ),
                 child: Text(
-                  'Goal ${_short(goalSteps)}',
+                  'Goal ${formatCompactSteps(goalSteps)}',
                   style: tt.labelSmall?.copyWith(
                     color: ext.steps.onContainer,
                     fontWeight: FontWeight.w700,
@@ -118,14 +129,6 @@ class StepWeeklyChart extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _short(int n) {
-    if (n >= 1000) {
-      final k = n / 1000.0;
-      return '${k.toStringAsFixed(k >= 10 ? 0 : 1)}k';
-    }
-    return '$n';
   }
 }
 

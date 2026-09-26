@@ -68,12 +68,7 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
     if (amount == null) return;
     await MedicineCleanStorageService.refillStock(m.id, amount);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('Added $amount to ${m.name}'),
-        behavior: SnackBarBehavior.floating,
-      ));
+    context.toastSuccess('Added $amount to ${m.name}');
     await _load();
   }
 

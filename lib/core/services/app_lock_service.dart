@@ -8,7 +8,10 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter/widgets.dart';
 import 'package:local_auth/local_auth.dart';
 
+import 'auth_service.dart';
 import 'clean_storage_service.dart';
+import 'package:clock/clock.dart';
+import '../../core/constants/app_strings.dart';
 
 /// App-wide PIN + optional biometric lock.
 ///
@@ -58,11 +61,14 @@ class AppLockService with WidgetsBindingObserver {
   bool _isInitialized = false;
   bool _observerRegistered = false;
 
-  /// Set when the app is paused; cleared by nothing (only overwritten by the
-  /// NEXT pause) — [didChangeAppLifecycleState] reads it on the matching
-  /// resume to decide whether the grace period has elapsed. Staying `null`
-  /// for this whole process (i.e. the app was never backgrounded) is exactly
-  /// the "cold start" case, which [init] already locks eagerly.
+  /// Set when the app is paused, and cleared once that pause has been acted
+  /// on — by [lock] and by [unlock], so one pause can never justify a second
+  /// re-lock (see [unlock] for the loop that made this necessary).
+  /// [didChangeAppLifecycleState] reads it on the matching resume to decide
+  /// whether the grace period has elapsed. `null` therefore means "no
+  /// unhandled pause to measure against"; staying `null` for a whole process
+  /// (i.e. the app was never backgrounded) is the "cold start" case, which
+  /// [init] already locks eagerly.
   DateTime? _lastBackgroundedAt;
 
   /// Transient runtime lock state for the current process. `true` means
@@ -109,7 +115,7 @@ class AppLockService with WidgetsBindingObserver {
       // 30s was re-locked the instant they succeeded, because the grace period
       // had been ticking against a pause the app itself caused.
       if (_inFlight != null) return;
-      _lastBackgroundedAt = DateTime.now();
+      _lastBackgroundedAt = clock.now();
       return;
     }
     if (state != AppLifecycleState.resumed) return;
@@ -120,7 +126,7 @@ class AppLockService with WidgetsBindingObserver {
     // cold-start check; a resume with nothing to compare against is not the
     // "backgrounded too long" case this method exists to catch.
     if (last == null) return;
-    if (DateTime.now().difference(last) > gracePeriod) {
+    if (clock.now().difference(last) > gracePeriod) {
       lock();
     }
   }
@@ -128,11 +134,24 @@ class AppLockService with WidgetsBindingObserver {
   /// Engages the overlay (no-op when lock isn't enabled).
   void lock() {
     if (!isLockEnabled) return;
+    // The pause that justified this lock has now been acted on. Leaving it set
+    // means the NEXT resume re-measures against the same instant — see unlock().
+    _lastBackgroundedAt = null;
     isLockedNotifier.value = true;
   }
 
   /// Dismisses the overlay. Does not touch whether lock is enabled.
   void unlock() {
+    // Clearing here is what stops a successful unlock being undone.
+    //
+    // `_lastBackgroundedAt` was only ever set, never cleared, so on an OEM whose
+    // biometric prompt is its own activity: background at T0 -> resume late ->
+    // lock() -> our prompt raises -> `paused` fires but the _inFlight guard
+    // returns, so T0 SURVIVES -> the user authenticates -> `resumed` fires and
+    // measures against T0, which is by definition already past the grace period
+    // -> lock() again, racing this very call. The guard stopped the timestamp
+    // being refreshed; it did nothing about the stale one.
+    _lastBackgroundedAt = null;
     isLockedNotifier.value = false;
   }
 
@@ -194,7 +213,7 @@ class AppLockService with WidgetsBindingObserver {
     final until =
         (CleanStorageService.getAppPreference(keyLockedUntil) as num?)?.toInt();
     if (until == null) return Duration.zero;
-    final ms = until - DateTime.now().millisecondsSinceEpoch;
+    final ms = until - clock.now().millisecondsSinceEpoch;
     return ms > 0 ? Duration(milliseconds: ms) : Duration.zero;
   }
 
@@ -233,10 +252,17 @@ class AppLockService with WidgetsBindingObserver {
     return ok;
   }
 
+  /// One batched write, not two awaited ones — and that is load-bearing, not
+  /// tidiness. [CleanStorageService.setAppPreferences] fills the preference
+  /// cache synchronously before it touches the database, so by the time
+  /// [verifyPin] returns to its caller [remainingLockout] is already true of
+  /// the world. Written as a write, an await, then a second write, the lockout
+  /// a miss had just armed did not exist yet for the screen that had to
+  /// announce it: it became visible only on the attempt AFTER it.
   Future<void> _recordAttempt({required bool success}) async {
     if (success) {
-      await CleanStorageService.setAppPreference(keyFailedAttempts, 0);
-      await CleanStorageService.setAppPreference(keyLockedUntil, 0);
+      await CleanStorageService.setAppPreferences(
+          {keyFailedAttempts: 0, keyLockedUntil: 0});
       return;
     }
     final failures =
@@ -244,20 +270,35 @@ class AppLockService with WidgetsBindingObserver {
                     ?.toInt() ??
                 0) +
             1;
-    await CleanStorageService.setAppPreference(keyFailedAttempts, failures);
     final lockout = lockoutFor(failures);
-    if (lockout > Duration.zero) {
-      await CleanStorageService.setAppPreference(
-        keyLockedUntil,
-        DateTime.now().add(lockout).millisecondsSinceEpoch,
-      );
-    }
+    await CleanStorageService.setAppPreferences({
+      keyFailedAttempts: failures,
+      if (lockout > Duration.zero)
+        keyLockedUntil: clock.now().add(lockout).millisecondsSinceEpoch,
+    });
   }
 
-  /// Turns app lock off. The caller is responsible for verifying the current
-  /// PIN/biometric first — this method itself does not re-check identity.
+  /// Turns app lock off and forgets the PIN along with it. The caller is
+  /// responsible for verifying the current PIN/biometric first — this method
+  /// itself does not re-check identity.
+  ///
+  /// The salt/hash have to go, not just the enabled flag. [hasPinSet] is what
+  /// `AuthService.signOut()` consults to decide whether to re-arm the lock on
+  /// the way out, and a PIN left on disk made that `true` forever — so a user
+  /// who had deliberately turned App Lock OFF was silently locked behind it
+  /// again by signing out. Nothing is lost by forgetting it: the only way back
+  /// on is the switch in App lock settings, and that already pushes PIN setup
+  /// rather than reusing whatever was stored.
   Future<void> disableLock() async {
     await CleanStorageService.setAppPreference(keyLockEnabled, false);
+    await CleanStorageService.removeAppPreference(keyPinSalt);
+    await CleanStorageService.removeAppPreference(keyPinHash);
+    await CleanStorageService.setAppPreference(keyBiometricPreferred, false);
+    // A lockout is counted against a specific PIN. Left standing it outlives
+    // the PIN it punished and blocks the NEXT one — which is precisely the
+    // user who just came through "Forgot PIN" after failing repeatedly.
+    await CleanStorageService.setAppPreference(keyFailedAttempts, 0);
+    await CleanStorageService.setAppPreference(keyLockedUntil, 0);
     isLockedNotifier.value = false;
   }
 
@@ -314,7 +355,7 @@ class AppLockService with WidgetsBindingObserver {
   /// `biometricOnly: true` stays: a biometric failure must fall back to THIS
   /// app's PIN screen, never to the device's own credential.
   Future<BiometricOutcome> authenticateWithBiometrics(
-      {String reason = 'Unlock DailyMinder'}) {
+      {String reason = 'Unlock ${AppStrings.productName}'}) {
     final pending = _inFlight;
     if (pending != null) {
       // Refuse to start a second prompt. The plugin would refuse it anyway,
@@ -370,19 +411,37 @@ class AppLockService with WidgetsBindingObserver {
 
   // ---- Forgot PIN (no server-side recovery for a local PIN) ----
 
-  /// The only way out of a forgotten PIN: wipes all local app data via the
-  /// same path Settings' "Delete all data" uses, then clears the PIN itself
-  /// and turns app lock off, so the user is never left stuck behind a locked
-  /// overlay with no way back in. Callers MUST have already shown the user a
-  /// clear, explicit warning before calling this — it is irreversible.
+  /// The only way out of a forgotten PIN: signs out, wipes all local app data
+  /// via the same path Settings' "Delete all data" uses, then clears the PIN
+  /// itself and turns app lock off, so the user is never left stuck behind a
+  /// locked overlay with no way back in. Callers MUST have already shown the
+  /// user a clear, explicit warning before calling this — it is irreversible.
+  ///
+  /// The sign-out is not incidental. Wiping alone left the user signed in with
+  /// cloud sync still on, so `main.dart`'s next `syncUserData` pass downloaded
+  /// everything this method had just destroyed — onto a device whose App Lock
+  /// is now off. The erase the user asked for undid itself and handed the data
+  /// back unprotected. `AuthService.signOut()` is what turns cloud sync off.
   Future<void> resetForgottenPin() async {
+    // Sever the cloud FIRST, before a single local row is deleted: if the wipe
+    // below fails half-way, there must no longer be a synced copy able to
+    // restore the remainder. signOut() re-arms the lock while a PIN still
+    // exists — the `finally` below is what settles the final state.
+    try {
+      await AuthService().signOut();
+    } catch (e) {
+      // A sign-out failure must never strand someone behind a PIN they have
+      // forgotten, so this is not rethrown. Cloud sync is the part that has to
+      // be off either way; set it directly.
+      debugPrint('AppLockService: sign-out during PIN reset failed: $e');
+      await CleanStorageService.setCloudSyncEnabled(false);
+    }
     try {
       await CleanStorageService.clearAllData();
       await CleanStorageService.clearAllPersistentData();
     } finally {
-      await CleanStorageService.removeAppPreference(keyPinSalt);
-      await CleanStorageService.removeAppPreference(keyPinHash);
-      await CleanStorageService.setAppPreference(keyBiometricPreferred, false);
+      // disableLock() also forgets the PIN, the biometric preference and any
+      // standing lockout — see its doc comment.
       await disableLock();
     }
   }

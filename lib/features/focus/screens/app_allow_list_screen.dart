@@ -60,15 +60,16 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                 : CustomScrollView(
                     slivers: [
                       SliverPadding(
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.all(AppSpacing.xl),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
                             _buildSettingsCard(),
-                            const SizedBox(height: 24),
-                            _buildPresetSection(),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppSpacing.xl),
                             _buildAllowedAppsSection(),
-                            const SizedBox(height: 100),
+                            // Was a magic SizedBox(height: 100) — the tab-root
+                            // constant on a pushed screen, and it never added
+                            // the gesture-bar inset.
+                            SizedBox(height: AppInsets.pushed(context)),
                           ]),
                         ),
                       ),
@@ -77,27 +78,30 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      // AppFab, not a raw FloatingActionButton.extended. The raw one re-declared
+      // the fill pair by hand and lost what AppFab owns: `heroTag: null` (this
+      // shell keeps several FAB screens alive in an IndexedStack, and a shared
+      // tag throws "multiple heroes share the same tag" on a push), the brLg
+      // shape, labelLarge text, and the medium-impact haptic. The accent is the
+      // FEATURE's — brand teal on a Focus screen is the one colour AccentScope
+      // exists to prevent.
+      floatingActionButton: AppFab(
+        icon: Symbols.add_rounded,
+        label: 'Add app',
+        accent: ext.focus,
         onPressed: _showAddAppDialog,
-        // A FAB is a filled control, so `fillBg`/`fillFg` — the pair that is
-        // already measured AA-safe in both themes. `AppColors.primary` is the
-        // LIGHT teal, which on the dark surface gives ~3.9:1 where the dark
-        // token gives 7.07:1.
-        backgroundColor: ext.fillBg(ext.brand),
-        icon: Icon(Symbols.add_rounded, color: ext.fillFg(ext.brand)),
-        label: Text('Add app',
-            style: TextStyle(color: ext.fillFg(ext.brand))),
       ),
     );
   }
 
   Widget _buildSettingsCard() {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       decoration: BoxDecoration(
-        color: AppColorsExt.of(context).surface,
-        borderRadius: BorderRadius.circular(24),
+        color: ext.surface,
+        borderRadius: AppRadius.brSheet,
         // `AppShadows.card` rather than a hand-rolled BoxShadow through the
         // shim's `getCardShadow` — the design system already owns the resting,
         // card and elevated tiers, and this was the last call into that shim
@@ -110,30 +114,26 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: ext.brand.container,
-              borderRadius: BorderRadius.circular(12),
+              color: ext.focus.container,
+              borderRadius: AppRadius.brMd,
             ),
             child: Icon(Symbols.info_rounded,
-                color: ext.brand.onContainer, size: 20),
+                color: ext.focus.onContainer, size: 20),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'This is your own list',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
+                Text('This is your own list', style: tt.titleSmall),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
                   'DlyMinder does not block or monitor other apps. Writing down '
                   'what pulls you away makes it easier to notice when it happens '
                   '— and your session only ends when you tap Give Up.',
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: tt.bodySmall?.copyWith(
                     height: 1.4,
-                    color: AppColorsExt.of(context).textSecondary,
+                    color: ext.textSecondary,
                   ),
                 ),
               ],
@@ -144,86 +144,16 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     );
   }
 
-
-  Widget _buildPresetSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Quick Add Presets',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildPresetChip(Symbols.insights_rounded, 'Productivity', PresetAllowList.getProductivityApps()),
-              const SizedBox(width: 12),
-              _buildPresetChip(Symbols.school_rounded, 'Education', PresetAllowList.getEducationApps()),
-              const SizedBox(width: 12),
-              _buildPresetChip(Symbols.music_note_rounded, 'Music', PresetAllowList.getMusicApps()),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// A preset chip. The leading glyph is an icon, not part of the label string.
-  ///
-  /// Baking an emoji into the label meant it could not be tinted, could not
-  /// scale with the text, and was read aloud by a screen reader as its Unicode
-  /// name in front of the words that matter.
-  Widget _buildPresetChip(IconData icon, String label, List<AllowedApp> apps) {
-    final ext = AppColorsExt.of(context);
-    return GestureDetector(
-      onTap: () => _addPresetApps(apps),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColorsExt.of(context).surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColorsExt.of(context).outline),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: AppColorsExt.of(context).textSecondary),
-            const SizedBox(width: 6),
-            Text(label),
-            const SizedBox(width: 8),
-            Icon(Symbols.add_circle_rounded,
-                size: 18, color: ext.mark(ext.brand)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _addPresetApps(List<AllowedApp> apps) {
-    final existingIds = _allowList.apps.map((a) => a.id).toSet();
-    final newApps = apps.where((a) => !existingIds.contains(a.id)).toList();
-    
-    if (newApps.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All apps from this preset are already added')),
-      );
-      return;
-    }
-
-    setState(() {
-      _allowList = _allowList.copyWith(apps: [..._allowList.apps, ...newApps]);
-    });
-    _saveData();
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added ${newApps.length} apps')),
-    );
-  }
+  // The "Quick Add Presets" strip lived here and is gone.
+  //
+  // It offered to bulk-add Notion, Todoist, Duolingo, Khan Academy and Spotify
+  // — `PresetAllowList`, a vestige of when this screen was an ALLOW list of apps
+  // you were permitted to open. The screen now says, in its own settings card,
+  // that it is a list of what pulls you away. A one-tap button that files Khan
+  // Academy under distractions contradicts the sentence directly above it, and
+  // it seeds the list with six apps the user never named — which is the
+  // opposite of the noticing this screen is for. `PresetAllowList` itself is in
+  // `models/` and is left alone; nothing renders it now.
 
   Widget _buildAllowedAppsSection() {
     return Column(
@@ -238,33 +168,29 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Flexible(
+            Flexible(
               child: Text(
                 'Your list',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Flexible(
               child: Text(
                 '${_allowList.apps.length} listed',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.end,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColorsExt.of(context).textSecondary,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColorsExt.of(context).textSecondary,
+                    ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         if (_allowList.apps.isEmpty)
           // Was a hand-rolled card reading 'No apps added yet' with nothing to
           // tap, on a screen whose entire purpose is adding things. Unlike the
@@ -273,7 +199,7 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
           Container(
             decoration: BoxDecoration(
               color: AppColorsExt.of(context).surface,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: AppRadius.brCard,
             ),
             child: EmptyState(
               icon: Symbols.phone_iphone_rounded,
@@ -319,19 +245,25 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
 
   Widget _buildAppCard(AllowedApp app, int index) {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final logging = _sessionRunning;
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: EdgeInsets.zero,
       decoration: BoxDecoration(
-        color: AppColorsExt.of(context).surface,
-        borderRadius: BorderRadius.circular(16),
+        color: ext.surface,
+        borderRadius: AppRadius.brLg,
       ),
-      child: InkWell(
-        onTap: logging ? () => _logDistraction(app) : null,
-        borderRadius: BorderRadius.circular(16),
+      // The whole row is tappable only WHILE a session is running, when tapping
+      // it is the tally. At rest it wrapped an InkWell with a null onTap, which
+      // is a row that ripples nowhere: it looks tappable, is tapped, and does
+      // nothing. Off-session the row is a list item with its own delete button,
+      // so it simply is not a tappable.
+      child: _RowShell(
+        tappable: logging,
+        onTap: () => _logDistraction(app),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
         children: [
           Container(
@@ -339,30 +271,26 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
             height: 44,
             decoration: BoxDecoration(
               color: app.category.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.brMd,
             ),
             child: Center(
+              // emoji-content-ok: one glyph per category, and the add sheet's
+              // picker shows the same one beside the name the user chose
               child: Text(app.category.emoji, style: const TextStyle(fontSize: 20)),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  app.name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text(app.name, style: tt.titleSmall),
+                // The category name reads in a text token, not `category.color`
+                // — that palette includes #FF9800 (2.11:1) and #CDDC39-class
+                // hues, and it is already carrying the badge tint beside it.
                 Text(
                   app.category.name,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: app.category.color,
-                  ),
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                 ),
               ],
             ),
@@ -375,31 +303,29 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Pulled me away',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColorsExt.of(context).textSecondary,
+                Flexible(
+                  child: Text(
+                    'Pulled me away',
+                    maxLines: 2,
+                    style: tt.labelMedium?.copyWith(color: ext.textSecondary),
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: AppSpacing.xs),
                 Icon(Symbols.add_circle_rounded,
-                    size: 20, color: AppColorsExt.of(context).textSecondary),
+                    size: 20, color: ext.textSecondary),
               ],
             )
           else ...[
-            AppSwitch(
-              value: app.isAllowed,
-              onChanged: (value) {
-                setState(() {
-                  final updatedApps = List<AllowedApp>.from(_allowList.apps);
-                  updatedApps[index] = app.copyWith(isAllowed: value);
-                  _allowList = _allowList.copyWith(apps: updatedApps);
-                });
-                _saveData();
-              },
-            ),
+            // The `isAllowed` switch that sat here is gone.
+            //
+            // Nothing read it. `AppAllowList.allowedApps` / `blockedApps` are
+            // the only consumers of the flag and neither getter has a caller
+            // anywhere in `lib/`, so toggling it changed a persisted boolean and
+            // nothing else — on a screen that says in its own words that the app
+            // does not block anything. A control that looks like it governs
+            // whether an app is permitted, on a screen that cannot permit or
+            // forbid anything, is worse than no control. The field stays on the
+            // model (it is in persisted JSON); it is simply not offered.
             IconButton(
               // Destructive and icon-only: announced as just "button" without
               // this. The a11y sweep never saw it because a fresh install has no
@@ -423,89 +349,77 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
     );
   }
 
+  /// Add-a-distraction sheet, routed through [AppBottomSheet].
+  ///
+  /// The hand-rolled version set `backgroundColor: transparent`, drew its own
+  /// 28pt top corners (the theme's `topSheet` is 24) and its own grab handle in
+  /// `Colors.grey.shade300` — **1.32:1** on the light surface, i.e. invisible,
+  /// and a bright bar on the dark one. AppBottomSheet already owns the handle
+  /// (`dragHandleColor`), the radius, the keyboard inset and the Material that
+  /// lets rows ink.
   void _showAddAppDialog() {
-    final ext = AppColorsExt.of(context);
     final nameController = TextEditingController();
     AppCategory selectedCategory = AppCategory.productivity;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: EdgeInsets.fromLTRB(
-            24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          decoration: BoxDecoration(
-            color: AppColorsExt.of(context).surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
+    AppBottomSheet.show(
+      context,
+      title: 'Add a distraction',
+      icon: Symbols.phone_iphone_rounded,
+      accent: AppColorsExt.of(context).focus,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setModalState) {
+          final ext = AppColorsExt.of(sheetContext);
+          final tt = Theme.of(sheetContext).textTheme;
+          return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Add a distraction',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 24),
               TextField(
                 controller: nameController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'App Name',
                   hintText: 'e.g., Spotify',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: AppRadius.brMd),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'Category',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Category', style: tt.titleSmall),
+              const SizedBox(height: AppSpacing.md),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
                 children: AppCategory.values.map((category) {
                   final isSelected = selectedCategory == category;
                   return GestureDetector(
-                    onTap: () => setModalState(() => selectedCategory = category),
+                    onTap: () =>
+                        setModalState(() => selectedCategory = category),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                       decoration: BoxDecoration(
-                        color: isSelected ? category.color : AppColorsExt.of(context).outline,
-                        borderRadius: BorderRadius.circular(10),
+                        // Selected used to fill with `category.color` and put
+                        // white on it — 2.11:1 for entertainment's #FF9800 and
+                        // 2.35:1 for social's #4CAF50. The Focus fill pair is
+                        // 5.70:1 light / 5.60:1 dark, and the category still
+                        // reads by its own glyph.
+                        color: isSelected
+                            ? ext.fillBg(ext.focus)
+                            : ext.surfaceVariant,
+                        borderRadius: AppRadius.brSm,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // emoji-content-ok: the category glyph the row in the
+                          // list will carry, shown here so the choice matches
                           Text(category.emoji),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: AppSpacing.xs),
                           Text(
                             category.name,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isSelected ? Colors.white : AppColorsExt.of(context).textPrimary,
+                            style: tt.labelMedium?.copyWith(
+                              color: isSelected
+                                  ? ext.fillFg(ext.focus)
+                                  : ext.textPrimary,
                             ),
                           ),
                         ],
@@ -514,45 +428,63 @@ class _AppAllowListScreenState extends State<AppAllowListScreen> {
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (nameController.text.isEmpty) return;
-                    
-                    final newApp = AllowedApp(
-                      id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-                      name: nameController.text,
-                      category: selectedCategory,
-                      addedAt: DateTime.now(),
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                label: 'Add app',
+                fullWidth: true,
+                accent: ext.focus,
+                onPressed: () {
+                  if (nameController.text.isEmpty) return;
+
+                  final newApp = AllowedApp(
+                    id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+                    name: nameController.text,
+                    category: selectedCategory,
+                    addedAt: DateTime.now(),
+                  );
+
+                  setState(() {
+                    _allowList = _allowList.copyWith(
+                      apps: [..._allowList.apps, newApp],
                     );
-                    
-                    setState(() {
-                      _allowList = _allowList.copyWith(
-                        apps: [..._allowList.apps, newApp],
-                      );
-                    });
-                    _saveData();
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ext.fillBg(ext.brand),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Text(
-                    'Add App',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
+                  });
+                  _saveData();
+                  Navigator.pop(sheetContext);
+                },
               ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     ).whenComplete(nameController.dispose); // dispose the sheet controller
+  }
+}
+
+/// An InkWell when there is something to tap, and nothing when there is not.
+///
+/// `InkWell(onTap: null)` is not a disabled control — it is a control-shaped
+/// wrapper with no feedback of any kind, which is the exact shape the dead-tap
+/// gate in `focus_conformance_test.dart` exists to catch. Making the wrapper
+/// itself conditional keeps the row identical in both states and removes the
+/// affordance rather than leaving it inert.
+class _RowShell extends StatelessWidget {
+  final bool tappable;
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _RowShell({
+    required this.tappable,
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!tappable) return child;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.brLg,
+      child: child,
+    );
   }
 }

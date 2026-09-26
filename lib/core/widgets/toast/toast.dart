@@ -1,38 +1,35 @@
-/// Premium Toast Notification System
-/// 
-/// A modern 2025/2026 toast notification system with:
-/// - Glassmorphism effects with backdrop blur
-/// - Feature-specific theming (Aqua, Nunito, Focus, Finance, etc.)
-/// - Particle animations for celebrations
-/// - Shimmer border effects
-/// - Haptic feedback integration
-/// - Swipe-to-dismiss gestures
-/// - Auto-dismiss with progress indicator
-/// 
+/// The celebration toast used by Focus.
+///
+/// This is NOT the app's general toast kit — that is `showAppToast` /
+/// `context.toastSuccess(...)` in `core/widgets/app/app_toast.dart`, which is
+/// what every other feature uses and what new code should use. This overlay
+/// system exists for one thing the flat kit deliberately does not do: the
+/// particle/shimmer celebration Focus shows when a session completes.
+///
+/// It once carried eleven feature-specific variants (Aqua, Nunito, Finance,
+/// Exam, Notes…), several for features this app does not have. Only
+/// [FocusToast] was ever called, so the other ten were deleted; the header
+/// above used to advertise them, which is why this note is explicit about the
+/// boundary.
+///
 /// Usage:
 /// ```dart
-/// // Basic usage
-/// ToastService.success(context, title: 'Saved!', message: 'Your changes have been saved.');
-/// 
-/// // Feature-specific
-/// AquaToast.hydrationLogged(context, amount: 250);
-/// NunitoToast.medicationTaken(context, medicineName: 'Vitamin D');
 /// FocusToast.sessionComplete(context, minutes: 25);
-/// 
-/// // With action
+///
+/// // With an action
 /// ToastService.show(
 ///   context,
 ///   type: ToastType.info,
 ///   title: 'Reminder',
 ///   message: 'Time for your medication',
 ///   action: ToastAction(
-///     label: 'Take Now',
+///     label: 'Take now',
 ///     onPressed: () => takeMedication(),
 ///   ),
 /// );
 /// ```
 
-// Premium Toast Notification System Library
+// Focus celebration toast library
 
 // Core exports
 export 'toast_theme.dart';
@@ -43,16 +40,6 @@ export 'toast_overlay.dart';
 export 'toast_service.dart';
 
 // Feature-specific toasts
-export 'feature_toasts/aqua_toast.dart';
-export 'feature_toasts/nunito_toast.dart';
 export 'feature_toasts/focus_toast.dart';
-export 'feature_toasts/finance_toast.dart';
-export 'feature_toasts/habit_toast.dart';
-export 'feature_toasts/mood_toast.dart';
-export 'feature_toasts/exam_toast.dart';
-export 'feature_toasts/fitness_toast.dart';
-export 'feature_toasts/notes_toast.dart';
-export 'feature_toasts/period_toast.dart';
-export 'feature_toasts/reminder_toast.dart';
 
 // Demo/Testing

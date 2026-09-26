@@ -1,14 +1,17 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
-import '../../../core/design/app_design.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/health/insight_engine.dart';
 import '../../../core/health/hydration_pacer.dart';
 import '../../../core/widgets/app/insight_kit.dart';
 import '../../../core/widgets/app/tip_card.dart';
 import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
+import 'package:tablet_remainder/core/health/medication_hydration.dart';
+import '../services/medication_hydration_service.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/water_hero_gauge.dart';
 import '../widgets/aqua_shimmer.dart';
@@ -29,6 +32,7 @@ import 'water_achievements_screen.dart';
 import 'hydration_profile_screen.dart';
 import 'caffeine_insights_screen.dart';
 import '../../../core/health/coach_text.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// Modern Aqua Water Dashboard
 /// Features: Animated droplet, dynamic beverage gradients, glassmorphism
@@ -116,28 +120,40 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   /// [showLoading] gates the full-screen shimmer skeleton. Only the first load
   /// (from initState) shows it; post-add/undo/return refreshes update data in
   /// place so the skeleton doesn't flash over the content on every tap.
+  /// Fluid guidance driven by what the user is taking. Empty for almost
+  /// everyone, which is why it is only rendered when it has something to say.
+  MedicationHydrationAdvice _medAdvice = MedicationHydrationAdvice.empty;
+
   Future<void> _loadData({bool showLoading = false}) async {
     if (showLoading) setState(() => _isLoading = true);
 
     try {
       await WaterService.init();
       final todayData = WaterService.getTodayData();
-      final goal = WaterService.getDailyGoal();
+      // Today's STORED goal — the number every gauge on this screen already
+      // renders from `todayData.dailyGoalMl`, and the one `goalReached` is
+      // judged against. `_dailyGoal` feeds the quick-goal sheet and the
+      // pre-load placeholder, so reading the profile here offered to "keep" a
+      // figure that was nowhere on screen once the weather had moved the day.
+      final goal = WaterService.goalForDay(todayData);
 
       // Build week data
       final weekData = <DayProgress>[];
       final now = DateTime.now();
-      final weekStart = now.subtract(Duration(days: now.weekday - 1));
+      final weekStart = startOfWeek(now);
 
       for (int i = 0; i < 7; i++) {
-        final date = weekStart.add(Duration(days: i));
+        final date = dayOffset(weekStart, i);
         if (date.isAfter(now)) break;
 
         final dayData = WaterService.getDataForDate(date);
         weekData.add(DayProgress(
           date: date,
           intakeMl: dayData?.effectiveHydrationMl ?? 0,
-          goalMl: goal,
+          // Each day carries the goal it was actually measured against — see
+          // WaterService.goalForDay. Passing today's goal for all seven made
+          // "Goals Hit n/7" move whenever the user edited their goal.
+          goalMl: WaterService.goalForDay(dayData),
         ));
       }
 
@@ -149,6 +165,14 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           _isLoading = false;
         });
       }
+
+      // Reads the medicine list, so it must not block the water numbers — and
+      // it was awaited above them, which is how "+" ended up waiting on a
+      // medicine read before the Undo toast appeared. The advice card is empty
+      // for almost everyone and never part of the gauge, so it lands in a
+      // second frame of its own.
+      final medAdvice = await MedicationHydrationService.current();
+      if (mounted) setState(() => _medAdvice = medAdvice);
     } catch (e) {
       debugPrint('Error loading water data: $e');
       if (mounted) setState(() => _isLoading = false);
@@ -175,7 +199,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       // addWaterLog computes effective hydration / caffeine / alcohol from the
       // BeverageType, so beer/energy drinks are recorded correctly. It returns
       // the updated day whose last log is the one we just added — capture its
-      // id so the SnackBar can undo it.
+      // id so the toast can undo it.
       final updated = await WaterService.addWaterLog(
         amountMl: amountMl,
         beverage: beverage,
@@ -188,47 +212,70 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
 
       if (mounted) {
         HapticFeedback.mediumImpact();
-        // The SnackBar reads as the water app, not the beverage — keep the
-        // chrome on the single water accent.
-        final water = AquaTheme.getBeverage('water');
+        showAppToast(
+          context,
+          // The old SnackBar led with the beverage glyph (a Row of
+          // `beverage.emoji` and the text), so coffee and beer confirmed as
+          // themselves. The kit's content is a String, so the glyph rides in
+          // the message — exactly how the achievement toast below carries
+          // `first.emoji`.
+          '${beverage.emoji} +${amountMl}ml ${beverage.name}',
+          variant: AppToastVariant.success,
+          duration: const Duration(seconds: 3),
+          action: addedLogId == null
+              ? null
+              : AppToastAction(
+                  label: 'Undo',
+                  onPressed: () async {
+                    HapticFeedback.lightImpact();
+                    await WaterService.removeWaterLog(addedLogId);
+                    await _loadData();
+                  },
+                ),
+        );
 
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  Text(beverage.emoji, style: const TextStyle(fontSize: 20)),
-                  const SizedBox(width: 12),
-                  Text(
-                    '+${amountMl}ml ${beverage.name}',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-              backgroundColor: water.primary,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-              ),
-              duration: const Duration(seconds: 3),
-              // Without this, SnackBar.persist defaults to `action != null`
-              // (SDK snack_bar.dart) so the Undo action would keep the toast on
-              // screen forever. Keep Undo but let it auto-dismiss after 3s.
-              persist: false,
-              action: addedLogId == null
-                  ? null
-                  : SnackBarAction(
-                      label: 'Undo',
-                      textColor: Colors.white,
-                      onPressed: () async {
-                        HapticFeedback.lightImpact();
-                        await WaterService.removeWaterLog(addedLogId);
-                        await _loadData();
-                      },
-                    ),
+        // Celebrate anything that just unlocked. `_lastNewlyUnlocked` has been
+        // filled on every single log since the achievements system shipped and
+        // `consumeNewlyUnlockedAchievements()` had zero callers — the unlock
+        // moment, which is the entire emotional payoff of a 21-badge system,
+        // was computed and discarded. The user could only ever find out by
+        // navigating to the Awards screen and noticing a badge had changed
+        // colour.
+        final unlocked = WaterService.consumeNewlyUnlockedAchievements();
+        if (unlocked.isNotEmpty && mounted) {
+          // One toast even if several land together, so a milestone day does
+          // not become a stack of interruptions.
+          final first = unlocked.first;
+          final more = unlocked.length - 1;
+          context.toastSuccess(
+            more > 0
+                ? '${first.emoji} ${first.title} unlocked, +$more more'
+                : '${first.emoji} ${first.title} unlocked',
+            action: AppToastAction(
+              label: 'View',
+              onPressed: _navigateToAchievements,
             ),
           );
+        }
+
+        // Over-hydration guardrail. This app — like every other in the
+        // category — was built entirely around "more is better", and its
+        // achievements actively reward volume. Maximal renal free-water
+        // clearance is ~800-1000 ml/h, and drinking past it is the mechanism
+        // behind exercise-associated hyponatremia. IOM's stated reason for
+        // setting no upper limit on water is that healthy kidneys cope with
+        // "more than 0.7 L per hour" — which is an upper bound, quietly put.
+        //
+        // Deliberately shown AFTER the confirmation and as information, not an
+        // interruption: the drink is already logged, nothing is blocked, and
+        // this is not a diagnosis.
+        if (WaterService.isDrinkingTooFast()) {
+          final hourMl = WaterService.intakeInLastHourMl();
+          context.toastWarning(
+            'That is ${hourMl}ml in the last hour. Your kidneys clear about '
+            '1 litre an hour — it is worth easing off for a while.',
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error adding water: $e');
@@ -270,8 +317,6 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
 
   void _showGoalDialog() {
     int newGoal = _dailyGoal;
-    // Goal editing is a chrome/header CTA — keep it on the water accent.
-    final beverage = AquaTheme.getBeverage('water');
 
     showModalBottomSheet(
       context: context,
@@ -298,8 +343,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+                  color: AppColorsExt.of(context).outline,
+                  borderRadius: AppRadius.brSm,
                 ),
               ),
               const SizedBox(height: AquaTheme.spacingL),
@@ -310,64 +355,29 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                     ),
               ),
               const SizedBox(height: AquaTheme.spacingXL),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      setModalState(() {
-                        newGoal = (newGoal - 250).clamp(500, 5000);
-                      });
-                    },
-                    icon: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: beverage.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Symbols.remove_rounded, color: beverage.primary),
-                    ),
-                  ),
-                  const SizedBox(width: AquaTheme.spacingL),
-                  Column(
-                    children: [
-                      ShaderMask(
-                        shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
-                        child: Text(
-                          '${newGoal}ml',
-                          style: Theme.of(context)
-                              .textTheme
-                              .displayLarge
-                              ?.copyWith(color: Colors.white),
-                        ),
-                      ),
-                      Text(
-                        '${(newGoal / 250).round()} glasses',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AquaTheme.getTextSecondary(context),
-                            ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: AquaTheme.spacingL),
-                  IconButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      setModalState(() {
-                        newGoal = (newGoal + 250).clamp(500, 5000);
-                      });
-                    },
-                    icon: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: beverage.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Symbols.add_rounded, color: beverage.primary),
-                    ),
-                  ),
-                ],
+              // AppStepper: the shared -/+ control. This was the third copy of
+              // it in the water feature alone.
+              AppStepper(
+                value: '${newGoal}ml',
+                subLabel: '${(newGoal / 250).round()} glasses',
+                valueStyle: Theme.of(context).textTheme.displayLarge,
+                accent: AppColorsExt.of(context).water,
+                decrementTooltip: 'Decrease goal by 250 ml',
+                incrementTooltip: 'Increase goal by 250 ml',
+                onDecrement: newGoal <= 500
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        setModalState(
+                            () => newGoal = (newGoal - 250).clamp(500, 5000));
+                      },
+                onIncrement: newGoal >= 5000
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        setModalState(
+                            () => newGoal = (newGoal + 250).clamp(500, 5000));
+                      },
               ),
               const SizedBox(height: AquaTheme.spacingXL),
               GestureDetector(
@@ -400,25 +410,22 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-                    gradient: beverage.gradient,
-                    borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-                    boxShadow: [
-                      BoxShadow(
-                        color: beverage.primary.withOpacity(0.4),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
+                    color: AppColorsExt.of(context).fillBg(
+                        AppColorsExt.of(context).water),
+                    borderRadius: AppRadius.brMd,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Symbols.check_rounded, color: Colors.white),
+                      Icon(Symbols.check_rounded,
+                          color: AppColorsExt.of(context)
+                              .fillFg(AppColorsExt.of(context).water)),
                       const SizedBox(width: 8),
                       Text(
                         'Save Goal',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: Colors.white,
+                              color: AppColorsExt.of(context)
+                                  .fillFg(AppColorsExt.of(context).water),
                               fontWeight: FontWeight.w600,
                             ),
                       ),
@@ -547,14 +554,26 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           icon: Symbols.water_drop_rounded,
                           accent: AppColorsExt.of(context).water,
                           text: const CoachText().hydrationTip(
-                            intakeMl: todayData.effectiveHydrationMl,
+                            // Under a fluid restriction the number that matters
+                            // is the raw volume swallowed, not our
+                            // hydration-adjusted figure — a clinician's limit is
+                            // about litres of liquid.
+                            intakeMl: WaterService.isFluidRestricted
+                                ? todayData.totalIntakeMl
+                                : todayData.effectiveHydrationMl,
                             goalMl: todayData.dailyGoalMl,
                             streakDays: WaterService.getCurrentStreak(),
-                            hour: DateTime.now().hour,
+                            hour: clock.now().hour,
+                            isRestricted: WaterService.isFluidRestricted,
+                            wakeMinutes:
+                                WaterService.wakingWindow().wakeMinutes,
+                            sleepMinutes:
+                                WaterService.wakingWindow().sleepMinutes,
                           ),
                         ),
                         _buildWaterInsight(
                             todayData.effectiveHydrationMl, todayData.dailyGoalMl),
+                        _buildMedicationAdvice(),
 
                         const SizedBox(height: AquaTheme.spacingXL),
 
@@ -588,7 +607,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         // Quick access menu
                         _buildQuickAccessMenu(water, isDark),
                         
-                        const SizedBox(height: 100),
+                        SizedBox(height: AppInsets.underNav(context)),
                       ],
                     ),
                   ),
@@ -660,7 +679,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
               decoration: BoxDecoration(
                 color: AquaTheme.getCardBg(context),
                 shape: BoxShape.circle,
-                boxShadow: AquaTheme.subtleShadow,
+                boxShadow: AppShadows.card(context),
               ),
               child: Icon(
                 Symbols.arrow_back_rounded,
@@ -727,15 +746,23 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                                 'Hydration',
                                 maxLines: 1,
                                 softWrap: false,
-                                style: tt.displayMedium
-                                    ?.copyWith(color: Colors.white),
+                                // The ShaderMask replaces this colour outright;
+                                // it only has to be fully opaque. `fillFg` says
+                                // that without a raw literal.
+                                style: tt.displayMedium?.copyWith(
+                                    color: AppColorsExt.of(context)
+                                        .fillFg(AppColorsExt.of(context).water)),
                               ),
                             ),
                           ),
                         ),
                         if (streak > 0) ...[
                           const SizedBox(width: AquaTheme.spacingS),
-                          AquaStreakBadge(streak: streak),
+                          AquaStreakBadge(
+                            streak: streak,
+                            gracesRemaining:
+                                WaterService.getStreakResult().gracesRemaining,
+                          ),
                         ],
                       ],
                     ),
@@ -779,14 +806,14 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AquaTheme.getCardBg(context).withOpacity(0.9),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: AquaTheme.subtleShadow,
+              color: AppColorsExt.of(context).surface,
+              borderRadius: AppRadius.brMd,
+              boxShadow: AppShadows.card(context),
             ),
             child: Icon(
               icon,
               size: 20,
-              color: beverage.primary,
+              color: AppColorsExt.of(context).mark(AppColorsExt.of(context).water),
             ),
           ),
         ),
@@ -872,7 +899,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   /// The exact style `_buildFeatureCard` renders its label with — shared so the
   /// measurement in [_featureTileExtent] can never drift from what is painted.
   TextStyle get _featureLabelStyle =>
-      AquaTheme.caption.copyWith(fontWeight: FontWeight.w600);
+      Theme.of(context).textTheme.labelSmall!.copyWith(fontWeight: FontWeight.w600);
 
   /// Height a "More Features" tile actually needs: the icon chip, the gap, and
   /// however many lines the longest label takes at [tileWidth]. Measured rather
@@ -922,7 +949,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     required BeverageThemeData water,
     required VoidCallback onTap,
   }) {
-    final isDark = AquaTheme.isDark(context);
+    final ext = AppColorsExt.of(context);
 
     return Semantics(
       button: true,
@@ -935,13 +962,10 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       },
       child: Container(
         decoration: BoxDecoration(
-          color: AquaTheme.getCardBg(context),
-          borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-          border: Border.all(
-            color: water.primary.withOpacity(isDark ? 0.18 : 0.12),
-            width: 1,
-          ),
-          boxShadow: AquaTheme.subtleShadow,
+          color: ext.surface,
+          borderRadius: AppRadius.brLg,
+          border: Border.all(color: ext.outline, width: 1),
+          boxShadow: AppShadows.card(context),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -949,16 +973,15 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: water.primary.withOpacity(isDark ? 0.18 : 0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: ext.water.container,
+                borderRadius: AppRadius.brMd,
               ),
-              child: Icon(icon, color: water.primary, size: 22),
+              child: Icon(icon, color: ext.water.onContainer, size: 22),
             ),
             const SizedBox(height: 8),
             Text(
               label,
-              style: _featureLabelStyle
-                  .copyWith(color: AquaTheme.getTextPrimary(context)),
+              style: _featureLabelStyle.copyWith(color: ext.textPrimary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1031,10 +1054,86 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
 
   /// Deterministic hydration insight (streak / behind-pace), surfaced as an
   /// InsightCard beneath the tips.
+  /// Fluid guidance tied to the user's medicines.
+  ///
+  /// Nothing else in this category can show this: a pure hydration app does not
+  /// know what you take, and the "medicine + water reminder" apps on the stores
+  /// keep the two features entirely separate. Rendered only when a rule
+  /// actually matched, so it is invisible for most people rather than another
+  /// empty card.
+  ///
+  /// Framed as "worth knowing", with the drug named and the source given —
+  /// never as an instruction. The decision belongs to the user and whoever
+  /// prescribed the drug.
+  Widget _buildMedicationAdvice() {
+    if (_medAdvice.isEmpty) return const SizedBox.shrink();
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+
+    final lines = <MedicationHydrationRule>[
+      ..._medAdvice.increases,
+      ..._medAdvice.cautions,
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AquaTheme.spacingM),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: ext.surface,
+          borderRadius: AppRadius.brCard,
+          border: Border.all(color: ext.outline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Symbols.medication_rounded,
+                    size: 18, color: ext.mark(ext.medicine)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Because of your medicines',
+                    style: tt.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: ext.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            for (final rule in lines) ...[
+              Text(rule.advice,
+                  style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
+              const SizedBox(height: 2),
+              Text(rule.source,
+                  style: tt.labelSmall?.copyWith(color: ext.textSecondary)),
+              const SizedBox(height: 10),
+            ],
+            Text(
+              'General guidance, not advice for you personally — your '
+              'clinician’s instructions come first.',
+              style: tt.labelSmall?.copyWith(color: ext.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWaterInsight(int intakeMl, int goalMl) {
-    final now = DateTime.now();
+    final now = clock.now();
+    final w = WaterService.wakingWindow();
     final pace = HydrationPacer.compute(
-        intakeMl: intakeMl, goalMl: goalMl, nowMinutes: now.hour * 60 + now.minute);
+      intakeMl: intakeMl,
+      goalMl: goalMl,
+      nowMinutes: now.hour * 60 + now.minute,
+      wakeMinutes: w.wakeMinutes,
+      sleepMinutes: w.sleepMinutes,
+    );
     final insight = InsightEngine.water(
       intakeMl: intakeMl,
       goalMl: goalMl,

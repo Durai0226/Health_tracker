@@ -216,11 +216,26 @@ class AppHeader extends StatelessWidget {
   /// of the shipped Nunito/Inter (docs/ux-review.md:245); on a device these are
   /// roughly half. The ellipsis remains as the last resort, and the test asserts
   /// it never actually fires for any title the app ships.
-  Widget _titleText(BuildContext context, TextTheme tt) => Text(
-        title,
-        style: tt.headlineSmall,
-        maxLines: (2 * MediaQuery.textScalerOf(context).scale(1.0)).ceil() + 1,
-        overflow: TextOverflow.ellipsis,
+  ///
+  /// **It is a heading, not body text.** `header: true` is what puts the screen
+  /// title in VoiceOver's rotor and TalkBack's heading navigation; without it
+  /// the one string that says which screen you are on announces exactly like
+  /// the rows below it, and a screen-reader user arriving on a pushed screen
+  /// has nothing to land on. `SectionHeader` (primitives.dart) already does
+  /// this for section titles, so the shapes match: the `Text` stays INSIDE the
+  /// `Semantics` so the header node carries the title as its label rather than
+  /// sitting beside it as an empty landmark. Inside the shared widget, so it is
+  /// one change for every header in the app rather than 69 call sites that
+  /// mostly would not get it.
+  Widget _titleText(BuildContext context, TextTheme tt) => Semantics(
+        header: true,
+        child: Text(
+          title,
+          style: tt.headlineSmall,
+          maxLines:
+              (2 * MediaQuery.textScalerOf(context).scale(1.0)).ceil() + 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       );
 
   /// [leading] sits in a `Row` as a non-flex child, so it is handed unbounded

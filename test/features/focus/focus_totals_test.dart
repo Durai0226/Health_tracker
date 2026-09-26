@@ -98,11 +98,16 @@ void main() {
   });
 
   group('a deleted tag stops collecting minutes', () {
-    test('the breakdown skips tags that no longer exist', () async {
-      // `TagService.deleteTag` scrubs its own session→tag map, but the `tagIds`
-      // copied onto each FocusSession is history and stays. Nothing filtered it, so
-      // the Statistics tag breakdown rendered a deleted tag's raw id as a row and
-      // kept attributing minutes to it.
+    test('the rendered breakdown drops a deleted tag, history keeps it',
+        () async {
+      // This asserts the path the UI actually reads. Both Statistics screens
+      // call TagService.calculateTagStatistics, which projects its rows over
+      // the LIVE tag list, so a deleted id cannot reach the screen from there.
+      //
+      // An earlier version of this test asserted on DailyFocusStats.minutesByTag
+      // instead — a field nothing renders — and so passed while proving nothing
+      // about the screen. The session's own tagIds are history and must NOT be
+      // rewritten; that is checked here too.
       SharedPreferences.setMockInitialValues({});
       // TagService.createTag persists, and CleanStorageService writes through to
       // Drift — which needs the in-memory database, not path_provider.
@@ -128,20 +133,28 @@ void main() {
         tagIds: [created.id],
       );
 
+      await tags.tagSession(tagged.id, [created.id]);
+
+      // Sanity: while the tag exists it is attributed, so the negative half
+      // below cannot pass merely because nothing was ever counted.
+      final before = tags.calculateTagStatistics([tagged]);
+      expect(before.map((s) => s.tagId), contains(created.id));
+      expect(before.firstWhere((s) => s.tagId == created.id).totalMinutes, 25);
+
+      await tags.deleteTag(created.id);
+
+      final after = tags.calculateTagStatistics([tagged]);
+      expect(after.map((s) => s.tagId), isNot(contains(created.id)),
+          reason: 'a tag the user deleted must not appear in the breakdown '
+              'the Statistics screens render');
+
+      // And the session is still honest about what it was tagged at the time.
       final stats = StatsService();
       stats.resetForTesting();
       stats.buildFromSessions([tagged]);
       expect(stats.dailyStats.single.minutesByTag[created.id], 25,
-          reason: 'sanity: a live tag is attributed');
-
-      await tags.deleteTag(created.id);
-      stats.resetForTesting();
-      stats.buildFromSessions([tagged]);
-
-      expect(stats.dailyStats.single.minutesByTag, isEmpty,
-          reason: 'a tag the user deleted must not keep appearing in the '
-              'breakdown, and the session history must not be rewritten to '
-              'achieve that');
+          reason: 'session history must not be rewritten to achieve the above; '
+              'nothing renders this map');
     });
   });
 

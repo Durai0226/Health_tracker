@@ -1,6 +1,8 @@
 import 'medicine_enums.dart';
 import 'medicine_schedule.dart';
 import 'drug_interaction.dart';
+import 'package:clock/clock.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// Enhanced Medicine model with all premium features like Medisafe/Apple Health
 class EnhancedMedicine {
@@ -122,15 +124,26 @@ class EnhancedMedicine {
     return currentStock! <= lowStockThreshold!;
   }
 
+  /// Expired only once the expiry DATE has fully passed.
+  ///
+  /// Was `DateTime.now().isAfter(expiryDate)`, which is true from 00:00:01 on
+  /// the expiry date itself — so a medicine labelled "use by 30 Aug" read as
+  /// expired for the whole of 30 Aug, the last day it is actually good for.
   bool get isExpired {
     if (expiryDate == null) return false;
-    return DateTime.now().isAfter(expiryDate!);
+    return calendarDaysBetween(clock.now(), expiryDate!) < 0;
   }
 
+  /// Within 30 calendar days of expiry, expiry day included.
+  ///
+  /// The elapsed-time `.inDays` this replaced truncated toward zero, so the
+  /// expiry day itself gave 0 and fell out of the `> 0` guard: the medicine
+  /// was neither "expiring soon" nor yet "expired" on the one day the user
+  /// most needed to be told.
   bool get isExpiringSoon {
     if (expiryDate == null) return false;
-    final daysUntilExpiry = expiryDate!.difference(DateTime.now()).inDays;
-    return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
+    final daysUntilExpiry = calendarDaysBetween(clock.now(), expiryDate!);
+    return daysUntilExpiry <= 30 && daysUntilExpiry >= 0;
   }
 
   bool get isPRN => schedule.isPRN;
@@ -149,11 +162,10 @@ class EnhancedMedicine {
     // everyXHours (interval fan-out) and for specificDays / everyXDays / cyclical
     // (off-days), over- or under-estimating the runway.
     const window = 28;
-    final now = DateTime.now();
-    final base = DateTime(now.year, now.month, now.day);
+    final base = startOfDay(clock.now());
     var slotCount = 0;
     for (var i = 0; i < window; i++) {
-      slotCount += schedule.getScheduledTimesForDate(base.add(Duration(days: i))).length;
+      slotCount += schedule.getScheduledTimesForDate(dayOffset(base, i)).length;
     }
     if (slotCount == 0) return -1;
     final unitsPerDay = (slotCount * dosageAmount) / window;

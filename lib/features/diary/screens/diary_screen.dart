@@ -46,20 +46,17 @@ class _DiaryScreenState extends State<DiaryScreen> {
   }
 
   Future<void> _delete(DiaryEntry e) async {
-    final messenger = ScaffoldMessenger.of(context);
     await DiaryStorageService.delete(e.id);
     _load();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Entry deleted'),
-        persist: false,
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () async {
-            await DiaryStorageService.save(e);
-            _load();
-          },
-        ),
+    if (!mounted) return;
+    context.toastSuccess(
+      'Entry deleted',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await DiaryStorageService.save(e);
+          _load();
+        },
       ),
     );
   }

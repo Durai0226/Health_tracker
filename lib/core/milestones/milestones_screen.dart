@@ -7,16 +7,44 @@ import 'milestones_service.dart';
 /// A calm, private shelf of earned + not-yet milestones. Optionally filtered to
 /// one [feature] ('steps' | 'sleep'); null shows both. No points, no ranking —
 /// just a quiet record of what you've done, kept on-device.
-class MilestonesScreen extends StatelessWidget {
+class MilestonesScreen extends StatefulWidget {
   final String? feature;
   final AccentSwatch Function(AppColorsExt) accentOf;
 
   const MilestonesScreen({super.key, this.feature, required this.accentOf});
 
   @override
+  State<MilestonesScreen> createState() => _MilestonesScreenState();
+}
+
+class _MilestonesScreenState extends State<MilestonesScreen> {
+  /// Evaluated once per visit, not once per build.
+  ///
+  /// `MilestonesService.sync()` was called inline in `build`, so every rebuild
+  /// the route saw — a theme change, a parent `setState` — handed the
+  /// `FutureBuilder` a brand-new future and started the whole evaluation
+  /// again: the full catalog, `StepService.getBestDay()`, `getStreakResult()`,
+  /// every sleep session, the regularity index, and a persisted write whenever
+  /// something is freshly earned.
+  ///
+  /// It did NOT flash a spinner — `FutureBuilder` keeps the previous snapshot's
+  /// data across a future swap — which is precisely why this went unnoticed:
+  /// the shelf looked fine and did the work anyway.
+  ///
+  /// [MilestonesScreen.feature] only filters the awaited list, so changing it
+  /// needs no refetch.
+  late Future<({List<Milestone> all, List<Milestone> newlyEarned})> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = MilestonesService.sync();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final accent = accentOf(ext);
+    final accent = widget.accentOf(ext);
     return AppScaffold(
       body: Column(
         children: [
@@ -26,14 +54,14 @@ class MilestonesScreen extends StatelessWidget {
           ),
           Expanded(
             child: FutureBuilder<({List<Milestone> all, List<Milestone> newlyEarned})>(
-              future: MilestonesService.sync(),
+              future: _future,
               builder: (context, snap) {
                 if (!snap.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 var items = snap.data!.all;
-                if (feature != null) {
-                  items = items.where((m) => m.feature == feature).toList();
+                if (widget.feature != null) {
+                  items = items.where((m) => m.feature == widget.feature).toList();
                 }
                 final earnedCount = items.where((m) => m.earned).length;
                 return ListView(

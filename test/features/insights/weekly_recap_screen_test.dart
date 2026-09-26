@@ -17,6 +17,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
+import 'package:tablet_remainder/core/utils/calendar_day.dart';
+import 'package:tablet_remainder/features/focus/models/focus_plant.dart';
+import 'package:tablet_remainder/features/focus/models/focus_session.dart';
+import 'package:tablet_remainder/features/focus/services/focus_service.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:tablet_remainder/core/widgets/app/insight_kit.dart' show KpiCell;
 import 'package:tablet_remainder/features/insights/screens/weekly_recap_screen.dart';
@@ -268,6 +272,137 @@ void main() {
     // 0% would say the user took nothing.
     expect(all.any((t) => t == '0%'), isFalse);
     expect(all.any((t) => t.contains('Nothing logged yet this week')), isTrue);
+  });
+
+  // ------------------------------------------- the cover vs. the cards
+
+  /// A week with water, steps, sleep and weight logged and NO medicines.
+  ///
+  /// The hero is medicine-only — `WeeklyRecapService._hero` reads dose
+  /// summaries and nothing else — so this is the ordinary shape of a week for
+  /// anybody who tracks health without tracking pills: no hero figure, and a
+  /// full run of day-by-day cards underneath it.
+  WeeklyRecap weekWithoutDoses({Set<String> failedSources = const {}}) {
+    final days = [
+      for (var i = 0; i < 7; i++) dayOffset(DateTime(2026, 8, 20), i),
+    ];
+    TrendSeries s(double v, {double? goal}) =>
+        TrendSeries([for (final d in days) TrendPoint(d, v)], goal: goal);
+
+    return WeeklyRecap(
+      bundle: TrendsBundle(
+        range: TrendRange.d7,
+        adherence: const TrendSeries([]),
+        water: s(2100, goal: 2500),
+        steps: s(8200, goal: 10000),
+        sleep: s(7.2, goal: 8),
+        focus: const TrendSeries([]),
+        bloodPressure: const TrendSeries([]),
+        glucose: const TrendSeries([]),
+        glucoseTir: GlucoseTir.empty,
+        weight: s(70.5),
+        period: const TrendSeries([]),
+        cycle: null,
+      ),
+      // What `_hero` returns when no day had a dose due or taken.
+      hero: const RecapHero(kind: RecapHeroKind.daysLogged),
+      highlights: const [],
+      from: DateTime(2026, 8, 20),
+      to: DateTime(2026, 8, 26),
+      failedSources: failedSources,
+    );
+  }
+
+  Future<void> pumpCover(WidgetTester tester, WeeklyRecap r,
+      {required bool hasCards}) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.lightTheme,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => WeeklyRecapScreen.coverFor(
+              context, AppColorsExt.of(context), r,
+              hasCards: hasCards),
+        ),
+      ),
+    ));
+    await tester.pump();
+  }
+
+  group('the cover never contradicts the cards below it', () {
+    testWidgets('a week with cards is not called an empty week',
+        (tester) async {
+      final r = weekWithoutDoses();
+      final cards = WeeklyRecapScreen.cardsFor(AppColorsExt.light, r);
+      // Without this the assertions below are about a screen with nothing on
+      // it, which is the state that was never broken.
+      expect(cards, isNotEmpty,
+          reason: 'the fixture must produce day-by-day cards');
+      expect(r.hero.hasValue, isFalse,
+          reason: 'the medicine-only hero is what has no figure');
+
+      await pumpCover(tester, r, hasCards: cards.isNotEmpty);
+
+      expect(find.textContaining('Nothing logged yet this week'), findsNothing,
+          reason: 'that sentence rendered directly above ${cards.length} '
+              'populated cards — the screen disagreeing with itself inside one '
+              'viewport');
+      expect(find.text('No doses to report this week.'), findsOneWidget);
+    });
+
+    testWidgets('a genuinely empty week still says so', (tester) async {
+      await pumpCover(tester, weekWithoutDoses(), hasCards: false);
+      expect(find.text('Nothing logged yet this week.'), findsOneWidget);
+      expect(find.textContaining('history is still here'), findsOneWidget);
+    });
+
+    testWidgets('a failed adherence read is not reported as a quiet week',
+        (tester) async {
+      // A throw is not a zero. The partial banner already names what failed;
+      // the cover must not turn it into a claim about the user's week.
+      await pumpCover(tester, weekWithoutDoses(failedSources: {'adherence'}),
+          hasCards: true);
+      expect(find.textContaining('Nothing logged yet this week'), findsNothing);
+      expect(find.textContaining("couldn't be loaded"), findsOneWidget);
+    });
+
+    /// The three above pump [WeeklyRecapScreen.coverFor] directly, so they pin
+    /// the COPY but not the argument the screen feeds it. This one pumps the
+    /// real screen against a real database, which is the only thing that can
+    /// catch `hasCards:` being wired to the wrong value — and that wiring is
+    /// the whole of the bug: the sentence was never wrong on its own, only
+    /// wrong about what was underneath it.
+    ///
+    /// Focus is the seedable series here: `FocusService` is a process
+    /// singleton with an import seam, while water, steps and sleep all need
+    /// their own stores warmed first.
+    testWidgets('the real screen agrees with its own cards', (tester) async {
+      await FocusService().reloadSessionsFromDb();
+      await FocusService().importSessionsJson([
+        for (var i = 0; i < 3; i++)
+          FocusSession(
+            id: 'recap-focus-$i',
+            startedAt: DateTime(2026, 8, 23 + i, 9, 0),
+            completedAt: DateTime(2026, 8, 23 + i, 9, 45),
+            targetMinutes: 45,
+            actualMinutes: 45,
+            wasCompleted: true,
+            activityType: FocusActivityType.values.first,
+            plantType: PlantType.values.first,
+          ).toJson(),
+      ]);
+
+      await withClock(Clock.fixed(fixedNow), () => pump(tester));
+
+      // No medicines were seeded, so the hero has no figure — the branch the
+      // sentence lives in. Without a card below it the assertion that follows
+      // would be about the empty week, which was never broken.
+      expect(find.text('Focus'), findsOneWidget,
+          reason: 'the seed must reach a day-by-day card');
+      expect(find.textContaining('Nothing logged yet this week'), findsNothing,
+          reason: 'the cover claimed an empty week directly above a populated '
+              'one');
+      expect(find.text('No doses to report this week.'), findsOneWidget);
+    });
   });
 
   // --------------------------------------------------- the disclaimer stays

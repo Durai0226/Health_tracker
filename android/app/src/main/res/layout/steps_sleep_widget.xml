@@ -80,6 +80,75 @@
         android:layout_marginBottom="10dp"
         android:background="@color/widget_divider" />
 
+    <!-- Water row. The button is the whole point of this widget existing for
+         hydration: every competing app lets you log a drink from the home
+         screen, and needing to open the app to record a glass of water is the
+         friction that makes people stop logging. Button IS in the RemoteViews
+         supported set (see the header note). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:textSize="18sp"
+            android:text="💧" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/water_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/widget_text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                tools:text="1,250 / 2,960 ml" />
+
+            <ProgressBar
+                android:id="@+id/water_progress"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="4dp"
+                android:max="100"
+                android:progress="0"
+                android:progressTint="@color/widget_accent"
+                android:progressBackgroundTint="@color/widget_progress_track" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/water_add"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="48dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:background="@drawable/widget_background"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:text="+250" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="10dp"
+        android:background="@color/widget_divider" />
+
     <!-- Sleep row -->
     <LinearLayout
         android:layout_width="match_parent"

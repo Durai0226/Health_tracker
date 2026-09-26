@@ -68,9 +68,9 @@ void main() {
 
     // The details expander pushes the primary action below the fold in the
     // test viewport — scroll it into view before tapping.
-    await tester.ensureVisible(find.text('Take Medication'));
+    await tester.ensureVisible(find.text('Take medicine'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Take Medication'));
+    await tester.tap(find.text('Take medicine'));
     await tester.pumpAndSettle();
 
     final logs = await MedicineCleanStorageService.getLogsForMedicine(medicine.id);
@@ -84,7 +84,7 @@ void main() {
     await MedicineCleanStorageService.addMedicine(medicine);
     await pumpSheet(tester, medicine);
 
-    await tester.tap(find.text('Take Medication'));
+    await tester.tap(find.text('Take medicine'));
     await tester.pumpAndSettle();
 
     final logs = await MedicineCleanStorageService.getLogsForMedicine(medicine.id);

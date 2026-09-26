@@ -6,7 +6,7 @@ import '../../../core/widgets/app/app_widgets.dart';
 /// Calm Clarity hydration hero — a bold progress ring around a gentle wave-fill
 /// disc, with the amount centered. Always in the water accent (never tinted by
 /// the selected beverage), no floating emoji, no glass. Animates on value change
-/// only. Replaces the old teardrop `AquaDropletWidget`.
+/// only. Replaces an older teardrop gauge, now deleted.
 class WaterHeroGauge extends StatelessWidget {
   final double progress; // 0..1
   final int currentMl;
@@ -90,7 +90,13 @@ class WaterHeroGauge extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                       decoration: BoxDecoration(
-                        color: reached ? ext.success.base : s.strong,
+                        // `fillBg`/`fillFg`, not `success.base`/`s.strong`
+                        // with a hardcoded white: on light `success.base`
+                        // (#10B981) takes white to 2.20:1, and this pill is
+                        // the gauge's readout.
+                        color: reached
+                            ? ext.fillBg(ext.success)
+                            : ext.fillBg(s),
                         borderRadius: AppRadius.brFull,
                       ),
                       child: Row(
@@ -99,17 +105,24 @@ class WaterHeroGauge extends StatelessWidget {
                           Icon(
                             reached ? Symbols.check_rounded : Symbols.local_drink_rounded,
                             size: 13,
-                            color: Colors.white,
+                            color: reached
+                                ? ext.fillFg(ext.success)
+                                : ext.fillFg(s),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             reached ? 'Goal reached' : '$pct%',
-                            style: tt.labelSmall?.copyWith(color: Colors.white),
+                            style: tt.labelSmall?.copyWith(
+                                color: reached
+                                    ? ext.fillFg(ext.success)
+                                    : ext.fillFg(s)),
                           ),
                         ],
                       ),
                     ),
                   ],
+                    ),
+                  ),
                 ),
               ],
             );

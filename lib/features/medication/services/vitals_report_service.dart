@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../../core/health/vitals_analyzer.dart';
 import '../models/blood_pressure_reading.dart';
 import '../models/glucose_reading.dart';
+import '../../../core/constants/app_strings.dart';
 
 /// Doctor-ready PDF exports for the vitals trackers. Pure Dart (the `pdf`
 /// package needs no Flutter bindings) so it is unit-testable headlessly; the UI
@@ -148,7 +149,7 @@ class VitalsReportService {
     return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
       pw.Text(title, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),
-      pw.Text('DailyMinder', style: const pw.TextStyle(fontSize: 11, color: PdfColors.teal700)),
+      pw.Text(AppStrings.productName, style: const pw.TextStyle(fontSize: 11, color: PdfColors.teal700)),
       pw.SizedBox(height: 10),
       pw.Row(children: [
         if (patient != null && patient.trim().isNotEmpty)

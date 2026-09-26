@@ -24,8 +24,35 @@ class StepsDao extends DatabaseAccessor<AppDatabase> with _$StepsDaoMixin {
   Future<void> saveDay(StepDailyDataCompanion row) =>
       into(stepDailyData).insertOnConflictUpdate(row);
 
-  Future<void> deleteDay(String id) =>
-      (delete(stepDailyData)..where((t) => t.id.equals(id))).go();
+  /// Every step day in [from]..[to], INCLUDING tombstoned ones.
+  ///
+  /// The shape cloud sync needs: `getDayRange` filters `deletedAt IS NULL`, and
+  /// a syncer that cannot see a tombstone reads the row as "missing on this
+  /// device" and downloads the deleted day straight back.
+  Future<List<StepDayRow>> getDayRangeIncludingDeleted(
+      DateTime from, DateTime to) {
+    return (select(stepDailyData)
+          ..where((t) => t.date.isBetweenValues(from, to))
+          ..orderBy([(t) => OrderingTerm.asc(t.date)]))
+        .get();
+  }
+
+  /// Soft delete, mirroring [SleepDao.deleteSession].
+  ///
+  /// A hard delete cannot propagate: the next sync sees the id present in
+  /// Firestore and absent locally, and restores it. `updatedAt` is bumped so
+  /// the deletion wins the LWW comparison and `synced` is cleared so the row
+  /// is re-uploaded.
+  Future<void> deleteDay(String id) async {
+    final now = DateTime.now();
+    await (update(stepDailyData)..where((t) => t.id.equals(id))).write(
+      StepDailyDataCompanion(
+        deletedAt: Value(now),
+        updatedAt: Value(now),
+        synced: const Value(false),
+      ),
+    );
+  }
 
   // ============ MANUAL ENTRIES ============
   /// Manual entries for MANY days in one query, bucketed by day id.
@@ -58,8 +85,17 @@ class StepsDao extends DatabaseAccessor<AppDatabase> with _$StepsDaoMixin {
   Future<void> addManualEntry(StepManualEntriesCompanion row) =>
       into(stepManualEntries).insertOnConflictUpdate(row);
 
-  Future<void> deleteManualEntry(String id) =>
-      (delete(stepManualEntries)..where((t) => t.id.equals(id))).go();
+  /// Soft delete — see [deleteDay].
+  Future<void> deleteManualEntry(String id) async {
+    final now = DateTime.now();
+    await (update(stepManualEntries)..where((t) => t.id.equals(id))).write(
+      StepManualEntriesCompanion(
+        deletedAt: Value(now),
+        updatedAt: Value(now),
+        synced: const Value(false),
+      ),
+    );
+  }
 
   // ============ PROFILE (single row) ============
   Future<HealthProfileRow?> getProfile() {

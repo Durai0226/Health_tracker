@@ -15,13 +15,36 @@ class ReminderHelper {
   /// legacy [RepeatType] enum and an RFC 5545 rule, and — critically — steps by
   /// CALENDAR day rather than by a 24-hour `Duration`, so an 08:00 reminder is
   /// still 08:00 on the far side of a DST transition.
-  static DateTime? nextOccurrenceOrNull(Reminder reminder) {
-    if (reminder.isPaused) return null;
+  static DateTime? nextOccurrenceOrNull(Reminder reminder) =>
+      nextOccurrenceFrom(
+        scheduledTime: reminder.scheduledTime,
+        repeatType: reminder.repeatType,
+        customDays: reminder.customDays,
+        recurrenceRule: reminder.recurrenceRule,
+        endsAt: reminder.endsAt,
+        isPaused: reminder.isPaused,
+      );
+
+  /// The same rule, from the primitive fields.
+  ///
+  /// Exists because the OS-scheduling seam (`ReminderAlarm.arm`) receives a
+  /// [ReminderArmRequest], not a whole [Reminder], and duplicating the
+  /// resolution there is how the two would drift. Everything that decides
+  /// "when does this fire next" now goes through this one function.
+  static DateTime? nextOccurrenceFrom({
+    required DateTime scheduledTime,
+    required RepeatType repeatType,
+    List<int>? customDays,
+    String? recurrenceRule,
+    DateTime? endsAt,
+    bool isPaused = false,
+  }) {
+    if (isPaused) return null;
 
     final recurrence = ReminderRecurrence.parse(
-      reminder.recurrenceRule,
-      fallback: reminder.repeatType,
-      fallbackDays: reminder.customDays,
+      recurrenceRule,
+      fallback: repeatType,
+      fallbackDays: customDays,
     );
     if (!recurrence.repeats) return null;
 
@@ -31,11 +54,11 @@ class ReminderHelper {
     // only assert invariants, never an actual instant.
     final now = clock.now();
     final next = recurrence.nextAfter(
-      start: reminder.scheduledTime,
-      after: now.isAfter(reminder.scheduledTime) ? now : reminder.scheduledTime,
+      start: scheduledTime,
+      after: now.isAfter(scheduledTime) ? now : scheduledTime,
     );
     if (next == null) return null;
-    if (reminder.endsAt != null && next.isAfter(reminder.endsAt!)) return null;
+    if (endsAt != null && next.isAfter(endsAt)) return null;
     return next;
   }
 

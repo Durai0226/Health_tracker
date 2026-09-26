@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import '../../../core/health/focus_insights.dart';
 import '../../../core/health/insight_engine.dart';
@@ -298,17 +299,19 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
 
     switch (_selectedPeriod) {
       case StatsPeriod.daily:
-        final pattern = _statsService.productivityPattern;
-        if (pattern == null) {
-          data = [];
-        } else {
-          data = List.generate(24, (hour) {
-            return _ChartData(
-              label: hour % 6 == 0 ? '${hour}h' : '',
-              value: (pattern.minutesByHour[hour] ?? 0).toDouble(),
-            );
-          });
-        }
+        // TODAY, bucketed by hour. This used to plot
+        // `productivityPattern.minutesByHour`, and `ProductivityPattern.analyze`
+        // builds that from the WHOLE session history with no date filter — so
+        // the segment labelled Day drew every session ever recorded, and a day
+        // with nothing on it still showed last week's bars.
+        final byHour = _statsService.minutesByHourForDay(
+            clock.now(), _focusService.sessions);
+        data = List.generate(24, (hour) {
+          return _ChartData(
+            label: hour % 6 == 0 ? '${hour}h' : '',
+            value: (byHour[hour] ?? 0).toDouble(),
+          );
+        });
         break;
       case StatsPeriod.weekly:
         final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -454,14 +457,20 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
             const SizedBox(height: AppSpacing.lg),
             ...sortedEntries.map((entry) {
               final percentage = total > 0 ? entry.value / total : 0.0;
-              final colors = [
-                ext.focus.base,
-                ext.info.base,
-                ext.success.base,
-                ext.warning.base,
-                ext.error.base,
+              // `base` is documented as a FILL, never a mark: measured as text
+              // on the card, `warning.base` (#F59E0B) is 2.15:1 and
+              // `success.base` 2.54:1. The bar takes `chartMark` (the validated
+              // plot-surface value) and the minute count takes `mark`.
+              final swatches = [
+                ext.focus,
+                ext.info,
+                ext.success,
+                ext.warning,
+                ext.error,
               ];
-              final color = colors[entry.key.index % colors.length];
+              final swatch = swatches[entry.key.index % swatches.length];
+              final color = ext.chartMark(swatch);
+              final labelColor = ext.mark(swatch);
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -483,14 +492,14 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                           '${entry.value} min',
                           style: tt.bodyMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: color,
+                            color: labelColor,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: AppRadius.brFull,
                       child: LinearProgressIndicator(
                         value: percentage,
                         backgroundColor: ext.surfaceVariant,
@@ -572,7 +581,7 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
                     ),
                     const SizedBox(height: 8),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: AppRadius.brFull,
                       child: LinearProgressIndicator(
                         value: percentage,
                         backgroundColor: ext.surfaceVariant,
@@ -634,11 +643,13 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
             const SizedBox(height: AppSpacing.md),
             Text('Hourly Distribution',
                 style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 60,
-              child: _buildHourlyHeatmap(ext, pattern),
-            ),
+            const SizedBox(height: AppSpacing.md),
+            // No fixed height around it any more. The bars are a fixed 40 but
+            // the hour axis underneath them is TEXT, so a `SizedBox(height: 60)`
+            // overflowed by 2px at 1.3x and 12px at 2.0x — the same
+            // fixed-box-around-scaling-text shape the responsive harness has
+            // caught a hundred times. The Column measures itself.
+            _buildHourlyHeatmap(ext, pattern),
           ],
         ),
       ),
@@ -647,7 +658,6 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
 
   Widget _buildPatternCard(
       IconData icon, String label, String value, AccentSwatch accent) {
-    final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -660,7 +670,10 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
         children: [
           Icon(icon, size: 22, color: accent.onContainer),
           const SizedBox(height: 8),
-          Text(label, style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+          // `onContainer`, not `textSecondary`: the label sits ON the tinted
+          // card, which is what the container pair was measured against.
+          // textSecondary there read 3.43:1 on dark ("Peak Hour").
+          Text(label, style: tt.bodySmall?.copyWith(color: accent.onContainer)),
           Text(
             value,
             style: tt.titleLarge?.copyWith(color: accent.onContainer),
@@ -670,42 +683,61 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
     );
   }
 
+  /// 24 hour cells, with the hour labels on an axis BELOW them.
+  ///
+  /// They used to sit inside every sixth cell at `fontSize: 8` — three points
+  /// under the type scale's 11pt floor, and unavoidably so: a cell is a
+  /// twenty-fourth of the card, about 11pt wide on a 320pt phone, which is
+  /// narrower than "18" at the floor size. A number that cannot be set at a
+  /// legible size inside the mark belongs beside it, which is also where a chart
+  /// axis goes. Four labels across the full width have room at `labelSmall`, and
+  /// the cells lose their two-way foreground contrast problem with them.
   Widget _buildHourlyHeatmap(AppColorsExt ext, ProductivityPattern pattern) {
+    final tt = Theme.of(context).textTheme;
     final maxValue = pattern.minutesByHour.values.isEmpty
         ? 1
         : pattern.minutesByHour.values.reduce((a, b) => a > b ? a : b);
 
-    return Row(
-      children: List.generate(24, (hour) {
-        final value = pattern.minutesByHour[hour] ?? 0;
-        final intensity = maxValue > 0 ? value / maxValue : 0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: List.generate(24, (hour) {
+            final value = pattern.minutesByHour[hour] ?? 0;
+            final intensity = maxValue > 0 ? value / maxValue : 0;
 
-        return Expanded(
-          child: Container(
-            height: 40,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
-            decoration: BoxDecoration(
-              color: value > 0
-                  ? ext.focus.base.withOpacity(intensity.clamp(0.15, 1.0).toDouble())
-                  : ext.surfaceVariant,
-              borderRadius: AppRadius.brSm,
-            ),
-            child: hour % 6 == 0
-                ? Center(
-                    child: Text(
-                      '$hour',
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: intensity > 0.5
-                            ? ext.focus.on
-                            : ext.textSecondary,
-                      ),
-                    ),
-                  )
-                : null,
-          ),
-        );
-      }),
+            return Expanded(
+              child: Container(
+                height: 40,
+                margin: const EdgeInsets.symmetric(horizontal: 1),
+                decoration: BoxDecoration(
+                  color: value > 0
+                      ? ext
+                          .chartMark(ext.focus)
+                          .withOpacity(intensity.clamp(0.15, 1.0).toDouble())
+                      : ext.surfaceVariant,
+                  borderRadius: AppRadius.brSm,
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          // Each label owns a 6-hour span and is aligned to that span's start,
+          // so it sits over the cell it names.
+          children: List.generate(4, (i) {
+            return Expanded(
+              child: Text(
+                '${i * 6}:00',
+                style: tt.labelSmall?.copyWith(color: ext.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }),
+        ),
+      ],
     );
   }
 

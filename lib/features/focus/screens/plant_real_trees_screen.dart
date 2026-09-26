@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../models/focus_coins.dart';
 import '../services/coins_service.dart';
 
@@ -41,7 +41,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 SliverToBoxAdapter(child: _buildCoinsHeader()),
                 SliverToBoxAdapter(child: _buildTabBar()),
                 SliverPadding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(AppSpacing.xl),
                   sliver: _selectedTab == 0
                       ? _buildTreeShop()
                       : _selectedTab == 1
@@ -65,42 +65,41 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
         tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
         icon: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(AppSpacing.sm),
           decoration: BoxDecoration(
             color: AppColorsExt.of(context).surface,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.brMd,
           ),
           child: const Icon(Symbols.arrow_back_rounded, size: 20),
         ),
       ),
-      title: const Text(
+      title: Text(
         'Garden Shop',
-        style: TextStyle(fontWeight: FontWeight.bold),
+        style: Theme.of(context).textTheme.headlineSmall,
       ),
     );
   }
 
+  /// The coin balance, on the AA-verified `steps` fill pair.
+  ///
+  /// `steps` rather than `focus`: this header is green because the reward is a
+  /// tree, and the Focus violet on a green card was what produced the previous
+  /// mismatch (violet coin icons on a hardcoded #4CAF50). The two inner panels
+  /// are OUTLINED rather than filled with translucent white on purpose — a
+  /// white@0.15 wash lifts the ground under its own labels to 3.82:1, where the
+  /// solid fill leaves every label at the pair's measured 5.02:1 (light) /
+  /// 8.55:1 (dark).
   Widget _buildCoinsHeader() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final fg = ext.fillFg(ext.steps);
     return Container(
-      margin: const EdgeInsets.all(24),
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF4CAF50),
-            Color(0xFF2E7D32),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF4CAF50).withOpacity(0.4),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        color: ext.fillBg(ext.steps),
+        borderRadius: AppRadius.brCard,
+        boxShadow: AppShadows.card(context),
       ),
       child: Column(
         children: [
@@ -115,8 +114,8 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Symbols.toll_rounded, size: 30, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
-                        const SizedBox(width: 12),
+                        Icon(Symbols.toll_rounded, size: 30, color: fg),
+                        const SizedBox(width: AppSpacing.md),
                         Flexible(
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
@@ -125,17 +124,13 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                               '${_coinsService.totalCoins}',
                               maxLines: 1,
                               softWrap: false,
-                              style: const TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                              style: tt.displayMedium?.copyWith(color: fg),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.xs),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
@@ -143,38 +138,31 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                         'Available Coins',
                         maxLines: 1,
                         softWrap: false,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
+                        style: tt.bodyMedium?.copyWith(color: fg),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.md),
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: AppRadius.brLg,
+                    border: Border.all(color: fg.withOpacity(0.4)),
                   ),
                   child: Column(
                     children: [
-                      Icon(Symbols.park_rounded, size: 22, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
-                      const SizedBox(height: 4),
+                      Icon(Symbols.park_rounded, size: 22, color: fg),
+                      const SizedBox(height: AppSpacing.xs),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
                           '${_coinsService.treesPlanted}',
                           maxLines: 1,
                           softWrap: false,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                          style: tt.headlineMedium?.copyWith(color: fg),
                         ),
                       ),
                       FittedBox(
@@ -183,10 +171,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                           'Trees Planted',
                           maxLines: 1,
                           softWrap: false,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.white.withOpacity(0.8),
-                          ),
+                          style: tt.labelSmall?.copyWith(color: fg),
                         ),
                       ),
                     ],
@@ -195,12 +180,12 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.gutter),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppRadius.brLg,
+              border: Border.all(color: fg.withOpacity(0.4)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -209,7 +194,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   child: _buildImpactStat(
                       '${_coinsService.coins.coinsSpentOnTrees}', 'Coins Spent'),
                 ),
-                Container(width: 1, height: 30, color: Colors.white24),
+                Container(width: 1, height: 30, color: fg.withOpacity(0.4)),
                 Expanded(
                   child: _buildImpactStat(
                       '${_coinsService.lifetimeCoins}', 'Lifetime Coins'),
@@ -223,6 +208,9 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   }
 
   Widget _buildImpactStat(String value, String label) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    final fg = ext.fillFg(ext.steps);
     return Column(
       children: [
         FittedBox(
@@ -231,11 +219,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             value,
             maxLines: 1,
             softWrap: false,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+            style: tt.headlineSmall?.copyWith(color: fg),
           ),
         ),
         FittedBox(
@@ -244,10 +228,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             label,
             maxLines: 1,
             softWrap: false,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.white.withOpacity(0.7),
-            ),
+            style: tt.bodySmall?.copyWith(color: fg),
           ),
         ),
       ],
@@ -256,13 +237,13 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
 
   Widget _buildTabBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Row(
         children: [
           _buildTab('Shop', 0),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           _buildTab('My Forest', 1),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           _buildTab('History', 2),
         ],
       ),
@@ -270,30 +251,29 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   }
 
   Widget _buildTab(String label, int index) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final isSelected = _selectedTab == index;
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _selectedTab = index),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          // 14 + 16 (labelLarge line box) + 14 = 44. At AppSpacing.md this
+          // measured 42x42 — under the Apple HIG comfort minimum, on the
+          // control that switches the whole screen.
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: isSelected
-                ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
-                : AppColorsExt.of(context).surface,
-            borderRadius: BorderRadius.circular(12),
+            color: isSelected ? ext.fillBg(ext.focus) : ext.surface,
+            borderRadius: AppRadius.brMd,
             border: Border.all(
-              color: isSelected
-                  ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
-                  : AppColorsExt.of(context).outline,
+              color: isSelected ? ext.fillBg(ext.focus) : ext.outline,
             ),
           ),
           child: Center(
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColorsExt.of(context).textPrimary,
+              style: tt.labelLarge?.copyWith(
+                color: isSelected ? ext.fillFg(ext.focus) : ext.textPrimary,
               ),
             ),
           ),
@@ -331,69 +311,67 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   }
 
   Widget _buildTreeCard(RealTreeType treeType) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final canAfford = _coinsService.canAfford(treeType);
-    
+
     return GestureDetector(
-      onTap: canAfford ? () => _showPlantConfirmation(treeType) : null,
+      onTap: canAfford
+          ? () => _showPlantConfirmation(treeType)
+          // Was a null onTap: a tile the user can see, wants, and taps, that
+          // does nothing at all. Say what it costs instead.
+          : () => context.toastInfo(
+                '${treeType.name} costs ${treeType.coinCost} coins — you have '
+                '${_coinsService.totalCoins}. Finish a focus session to earn more.',
+              ),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: AppColorsExt.of(context).surface,
-          borderRadius: BorderRadius.circular(20),
+          color: ext.surface,
+          borderRadius: AppRadius.brCard,
           border: Border.all(
-            color: canAfford ? treeType.color.withOpacity(0.3) : AppColorsExt.of(context).outline,
+            color: canAfford ? treeType.color.withOpacity(0.3) : ext.outline,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          boxShadow: AppShadows.resting(context),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: Text(
-                treeType.emoji,
-                style: TextStyle(
-                  fontSize: 48,
-                  color: canAfford ? null : Colors.grey,
-                ),
+              child: Opacity(
+                opacity: canAfford ? 1 : 0.4,
+                // emoji-content-ok: the species IS the product being bought
+                child: Text(treeType.emoji, style: const TextStyle(fontSize: 48)),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Text(
               treeType.name,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: canAfford
-                    ? AppColorsExt.of(context).textPrimary
-                    : AppColorsExt.of(context).textSecondary,
+              style: tt.titleSmall?.copyWith(
+                color: canAfford ? ext.textPrimary : ext.textSecondary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               treeType.description,
-              style: TextStyle(
-                fontSize: 10,
-                color: canAfford
-                    ? AppColorsExt.of(context).textSecondary
-                    : AppColorsExt.of(context).textTertiary,
+              style: tt.labelSmall?.copyWith(
+                fontWeight: FontWeight.w400,
+                color: canAfford ? ext.textSecondary : ext.textTertiary,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             const Spacer(),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               decoration: BoxDecoration(
-                color: canAfford ? treeType.color.withOpacity(0.1) : AppColorsExt.of(context).surfaceVariant,
-                borderRadius: BorderRadius.circular(10),
+                color: canAfford
+                    ? treeType.color.withOpacity(0.1)
+                    : ext.surfaceVariant,
+                borderRadius: AppRadius.brSm,
               ),
               // The chip is only ~72pt wide inside a 320pt-phone tile, so the
               // coin + price pair scales down together rather than spilling.
@@ -403,18 +381,25 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Symbols.toll_rounded, size: 14, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
-                    const SizedBox(width: 4),
+                    // The price reads in a TOKEN colour, not the species tint.
+                    // `RealTreeType.color` is decoration — Cherry's #F8BBD9
+                    // measures 1.31:1 as text on the card surface — so the tint
+                    // stays on the chip fill and the number takes `mark(steps)`
+                    // (5.02:1 light / 8.03:1 dark).
+                    Icon(Symbols.toll_rounded,
+                        size: 14,
+                        color: canAfford
+                            ? ext.mark(ext.steps)
+                            : ext.textSecondary),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(
                       '${treeType.coinCost}',
                       maxLines: 1,
                       softWrap: false,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                      style: tt.labelLarge?.copyWith(
                         color: canAfford
-                            ? treeType.color
-                            : AppColorsExt.of(context).textSecondary,
+                            ? ext.mark(ext.steps)
+                            : ext.textSecondary,
                       ),
                     ),
                   ],
@@ -437,22 +422,17 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Symbols.park_rounded, size: 56, color: AppColorsExt.of(context).textTertiary),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 'Your forest is empty',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColorsExt.of(context).textPrimary,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 'Redeem coins to grow your garden',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColorsExt.of(context).textSecondary,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColorsExt.of(context).textSecondary,
+                    ),
               ),
             ],
           ),
@@ -469,18 +449,15 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   }
 
   Widget _buildPlantedTreeCard(RealTreePlanting tree) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColorsExt.of(context).surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-          ),
-        ],
+        color: ext.surface,
+        borderRadius: AppRadius.brCard,
+        boxShadow: AppShadows.resting(context),
       ),
       child: Row(
         children: [
@@ -489,37 +466,40 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             height: 60,
             decoration: BoxDecoration(
               color: tree.treeType.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppRadius.brLg,
             ),
             child: Center(
+              // emoji-content-ok: the species the user redeemed
               child: Text(tree.treeType.emoji, style: const TextStyle(fontSize: 28)),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  tree.treeType.name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                Text(tree.treeType.name, style: tt.titleLarge),
+                const SizedBox(height: AppSpacing.xs),
                 // The two lines that used to sit here rendered
                 // `tree.location` and `tree.partnerOrganization` as fact. Both
                 // were fabricated at redemption time — the location by
                 // `Random()` from eight countries, the partner hardcoded to a
                 // real charity with no agreement in place. Replaced with the one
                 // thing the app actually knows about this record.
-                Text(
-                  '🪙 ${tree.coinsCost} coins',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColorsExt.of(context).textSecondary,
-                  ),
+                Row(
+                  children: [
+                    Icon(Symbols.toll_rounded,
+                        size: 14, color: ext.mark(ext.steps)),
+                    const SizedBox(width: AppSpacing.xs),
+                    Flexible(
+                      child: Text(
+                        '${tree.coinsCost} coins',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -529,27 +509,21 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             children: [
               Text(
                 _formatDate(tree.plantedAt),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColorsExt.of(context).textSecondary,
-                ),
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: ext.steps.container,
+                  borderRadius: AppRadius.brSm,
                 ),
                 // Was a hardcoded '🌱 Growing' badge on every row — a live
                 // status for a tree that does not exist anywhere.
-                child: const Text(
-                  '🌱 In your garden',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF4CAF50),
-                  ),
+                child: Text(
+                  'In your garden',
+                  style: tt.labelSmall?.copyWith(color: ext.steps.onContainer),
                 ),
               ),
             ],
@@ -569,22 +543,17 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Symbols.receipt_long_rounded, size: 56, color: AppColorsExt.of(context).textTertiary),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 'No transactions yet',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColorsExt.of(context).textPrimary,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Text(
-                'Complete focus sessions to earn coins!',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColorsExt.of(context).textSecondary,
-                ),
+                'Complete focus sessions to earn coins',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColorsExt.of(context).textSecondary,
+                    ),
               ),
             ],
           ),
@@ -600,15 +569,44 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
     );
   }
 
+  /// A Material Symbol per transaction kind.
+  ///
+  /// The badge used `CoinTransactionType.emoji` at 20pt inside a tinted
+  /// container — chrome by the emoji guard's own definition, so it could not
+  /// take the badge colour and rendered differently on every OS. The mapping
+  /// lives here rather than on the enum because `focus_coins.dart` is a model
+  /// and has no business importing an icon set.
+  IconData _transactionIcon(CoinTransactionType type) {
+    switch (type) {
+      case CoinTransactionType.earned:
+        return Symbols.savings_rounded;
+      case CoinTransactionType.spent:
+        return Symbols.park_rounded;
+      case CoinTransactionType.bonus:
+        return Symbols.redeem_rounded;
+      case CoinTransactionType.streakBonus:
+        return Symbols.local_fire_department_rounded;
+      case CoinTransactionType.achievementBonus:
+        return Symbols.trophy_rounded;
+      case CoinTransactionType.referralBonus:
+        return Symbols.group_rounded;
+    }
+  }
+
   Widget _buildTransactionCard(CoinTransaction transaction) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final isEarned = transaction.type != CoinTransactionType.spent;
-    
+    // Earned/spent is the only distinction this row makes, so it takes the two
+    // semantic swatches rather than a hardcoded green/blue pair.
+    final swatch = isEarned ? ext.steps : ext.info;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColorsExt.of(context).surface,
-        borderRadius: BorderRadius.circular(16),
+        color: ext.surface,
+        borderRadius: AppRadius.brLg,
       ),
       child: Row(
         children: [
@@ -616,158 +614,107 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: isEarned 
-                  ? const Color(0xFF4CAF50).withOpacity(0.1)
-                  : const Color(0xFF2196F3).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: swatch.container,
+              borderRadius: AppRadius.brMd,
             ),
             child: Center(
-              child: Text(
-                transaction.type.emoji,
-                style: const TextStyle(fontSize: 20),
-              ),
+              child: Icon(_transactionIcon(transaction.type),
+                  size: 22, color: swatch.onContainer),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  transaction.type.name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text(transaction.type.name, style: tt.titleSmall),
                 Text(
                   transaction.description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColorsExt.of(context).textSecondary,
-                  ),
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
           Text(
             '${isEarned ? '+' : '-'}${transaction.amount}',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isEarned ? const Color(0xFF4CAF50) : const Color(0xFF2196F3),
-            ),
+            style: tt.titleLarge?.copyWith(color: ext.mark(swatch)),
           ),
         ],
       ),
     );
   }
 
+  /// Confirm a redemption.
+  ///
+  /// Routed through [AppBottomSheet] rather than a hand-drawn sheet: the sheet
+  /// used `backgroundColor: transparent` with its own 28pt corners and its own
+  /// grab handle, so it carried neither the theme's `topSheet` radius (24) nor
+  /// its `dragHandleColor`.
   void _showPlantConfirmation(RealTreeType treeType) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColorsExt.of(context).surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
+    AppBottomSheet.show(
+      context,
+      accent: AppColorsExt.of(context).steps,
+      builder: (sheetContext) {
+        final ext = AppColorsExt.of(sheetContext);
+        final tt = Theme.of(sheetContext).textTheme;
+        return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColorsExt.of(context).outline,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
+            // emoji-content-ok: the species being redeemed, shown at hero size
             Text(treeType.emoji, style: const TextStyle(fontSize: 64)),
-            const SizedBox(height: 16),
-            Text(
-              'Add a ${treeType.name}?',
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Add a ${treeType.name}?',
+                textAlign: TextAlign.center, style: tt.headlineMedium),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               treeType.description,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColorsExt.of(context).textSecondary,
-              ),
+              style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Symbols.toll_rounded, size: 22, color: AppColorsExt.of(context).mark(AppColorsExt.of(context).focus)),
-                const SizedBox(width: 8),
+                Icon(Symbols.toll_rounded, size: 22, color: ext.mark(ext.steps)),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   '${treeType.coinCost} coins',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: treeType.color,
-                  ),
+                  style: tt.headlineSmall?.copyWith(color: ext.mark(ext.steps)),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text('Cancel'),
+                  child: AppButton(
+                    label: 'Cancel',
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => Navigator.pop(sheetContext),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: AppSpacing.lg),
                 Expanded(
-                  child: ElevatedButton(
+                  child: AppButton(
+                    label: 'Add to garden',
+                    accent: ext.steps,
                     onPressed: () async {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       final success =
                           await _coinsService.redeemGardenTree(treeType);
                       if (success && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('🌱 ${treeType.name} added to your garden'),
-                            backgroundColor: const Color(0xFF4CAF50),
-                          ),
-                        );
+                        context.toastSuccess(
+                            '${treeType.name} added to your garden');
                       }
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: treeType.color,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text(
-                      'Add to Garden 🌱',
-                      style: TextStyle(color: Colors.white),
-                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 

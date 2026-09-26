@@ -1,9 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
-import '../../../core/design/app_colors_ext.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/common_tab_widgets.dart';
 import '../models/water_achievement.dart';
 import '../services/water_service.dart';
@@ -36,12 +34,25 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    return Scaffold(
-      backgroundColor: ext.background,
+    return AppScaffold(
       body: CustomScrollView(
         slivers: [
-          _buildAppBar(),
+          // This was the last chunky solid-colour `SliverAppBar` in the app: a
+          // teal bar with its own gradient, a raw untooltipped `IconButton`, a
+          // bold white title and an amber trophy on teal (3.29:1).
+          //
+          // The old bar was `pinned: true`, so this DOES change behaviour: the
+          // title no longer sticks to the top on scroll. That is deliberate and
+          // is the point of the conversion — `AppHeader`'s contract is that a
+          // header belongs in the scroll body and scrolls away, which is how
+          // the other 67 screens using it behave. A single screen keeping a
+          // sticky title is the inconsistency, not the fix.
+          SliverToBoxAdapter(
+            child: AppHeader(
+              title: 'Achievements',
+              leading: AppHeader.backButton(context),
+            ),
+          ),
           SliverToBoxAdapter(child: _buildStatsHeader()),
           SliverPersistentHeader(
             pinned: true,
@@ -67,105 +78,20 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
     );
   }
 
-  Widget _buildAppBar() {
-    final ext = AppColorsExt.of(context);
-    // Saturated teal that keeps white text readable in both themes.
-    final headerTeal = ext.isDark ? ext.water.container : ext.water.strong;
-    final textScaler = MediaQuery.textScalerOf(context);
-    // FlexibleSpaceBar pins its title 16pt above the bottom of the header and
-    // blows it up by expandedTitleScale (1.5x), so the bottom `titleBand` logical
-    // px belong to the title alone. The trophy count used to be centred in the
-    // WHOLE header behind a hard `EdgeInsets.only(top: 40)`, which parked it
-    // right on top of that band (they overlapped by ~2pt on a 375pt phone).
-    // Reserving the band and bottom-anchoring the count above it keeps the two
-    // lines a single stacked block at every text scale.
-    final titleBand = textScaler.scale(22) * 1.5 + 24; // 22 = titleLarge line box
-    final countBand = math.max(40.0, textScaler.scale(24) * 1.4) + 24;
-    return SliverAppBar(
-      expandedHeight: titleBand + countBand,
-      floating: false,
-      pinned: true,
-      backgroundColor: headerTeal,
-      leading: IconButton(
-        icon: const Icon(Symbols.arrow_back_rounded, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        // Centre both lines on the same axis, explicitly: the platform default
-        // left-aligns the title at start:72 (Android/desktop) while the count
-        // below it is centred, so the block read as two mis-centred fragments.
-        centerTitle: true,
-        titlePadding:
-            const EdgeInsetsDirectional.only(start: 16, end: 16, bottom: 16),
-        title: const FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            'Achievements',
-            maxLines: 1,
-            softWrap: false,
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-        ),
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                headerTeal,
-                headerTeal.withOpacity(0.75),
-              ],
-            ),
-          ),
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.only(left: 16, right: 16, bottom: titleBand),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Symbols.emoji_events_rounded, color: Colors.amber, size: 32),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${_userAchievements.unlockedAchievements.length}/${_userAchievements.achievements.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatsHeader() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.amber.shade400,
-            Colors.orange.shade400,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.amber.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    // DS-01. What was here: an amber-400 -> orange-400 gradient (#FFCA28 ->
+    // #FFA726) with an amber glow, white 18pt values on it (1.53:1 and
+    // 1.94:1 against those two stops), white-at-80% 11pt labels (worse still)
+    // and a white progress bar. `fillBg`/`fillFg` is the palette's AA-verified filled-
+    // control pair — the same one every primary button uses — so the card can
+    // stay amber and the text on it can be read.
+    final fill = ext.fillBg(ext.reminders);
+    final onFill = ext.fillFg(ext.reminders);
+    return AppCard(
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      color: fill,
       child: Column(
         children: [
           Row(
@@ -173,36 +99,50 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
             children: [
               Expanded(
                 child: _buildStatItem(
+                  icon: Symbols.emoji_events_rounded,
+                  value: '${_userAchievements.unlockedAchievements.length}'
+                      '/${_userAchievements.achievements.length}',
+                  label: 'Unlocked',
+                  onFill: onFill,
+                ),
+              ),
+              _StatDivider(color: onFill),
+              Expanded(
+                child: _buildStatItem(
                   icon: Symbols.stars_rounded,
                   value: '${_userAchievements.totalPoints}',
                   label: 'Total Points',
+                  onFill: onFill,
                 ),
               ),
-              Container(width: 1, height: 50, color: Colors.white24),
-              Expanded(
-                child: _buildStatItem(
-                  icon: Symbols.trending_up_rounded,
-                  value: 'Level ${_userAchievements.level}',
-                  label: '${_userAchievements.pointsToNextLevel} to next',
-                ),
-              ),
-              Container(width: 1, height: 50, color: Colors.white24),
+              _StatDivider(color: onFill),
               Expanded(
                 child: _buildStatItem(
                   icon: Symbols.local_fire_department_rounded,
                   value: '${_userAchievements.currentStreak}',
                   label: 'Day Streak',
+                  onFill: onFill,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
+          // The level line the trophy count used to sit in the app bar for.
+          Text(
+            'Level ${_userAchievements.level} · '
+            '${_userAchievements.pointsToNextLevel} to next',
+            textAlign: TextAlign.center,
+            style: tt.bodySmall?.copyWith(color: onFill),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: AppRadius.brSm,
             child: LinearProgressIndicator(
               value: (_userAchievements.totalPoints % 100) / 100,
-              backgroundColor: Colors.white24,
-              valueColor: const AlwaysStoppedAnimation(Colors.white),
+              // A track derived from the foreground, so it reads on the fill in
+              // both themes rather than being a hardcoded `Colors.white24`.
+              backgroundColor: onFill.withOpacity(0.35),
+              valueColor: AlwaysStoppedAnimation(onFill),
               minHeight: 8,
             ),
           ),
@@ -215,22 +155,20 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
     required IconData icon,
     required String value,
     required String label,
+    required Color onFill,
   }) {
+    final tt = Theme.of(context).textTheme;
     return Column(
       children: [
-        Icon(icon, color: Colors.white, size: 28),
-        const SizedBox(height: 8),
+        Icon(icon, color: onFill, size: 28),
+        const SizedBox(height: AppSpacing.sm),
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             value,
             maxLines: 1,
             softWrap: false,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: tt.headlineSmall?.copyWith(color: onFill),
           ),
         ),
         Text(
@@ -238,10 +176,9 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 11,
-          ),
+          // bodySmall (12) rather than the old 11-at-80%-alpha: the label is
+          // the half of the pair that was hardest to read.
+          style: tt.bodySmall?.copyWith(color: onFill),
         ),
       ],
     );
@@ -261,23 +198,18 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
 
   Widget _buildAchievementList(List<WaterAchievement> achievements) {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     if (achievements.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Symbols.emoji_events_rounded,
-              size: 64,
-              color: ext.textSecondary.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
+            Icon(Symbols.emoji_events_rounded,
+                size: 64, color: ext.textTertiary),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               'No achievements yet',
-              style: TextStyle(
-                color: ext.textSecondary,
-                fontSize: 16,
-              ),
+              style: tt.bodyLarge?.copyWith(color: ext.textSecondary),
             ),
           ],
         ),
@@ -296,16 +228,10 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
-              child: Text(
-                _getTypeLabel(entry.key),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: ext.textPrimary,
-                ),
-              ),
+            SectionHeader(
+              title: _getTypeLabel(entry.key),
+              icon: _typeIcon(entry.key),
+              accent: ext.reminders,
             ),
             ...entry.value.map((a) => _buildAchievementCard(a)),
             const SizedBox(height: 8),
@@ -318,30 +244,72 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
   String _getTypeLabel(AchievementType type) {
     switch (type) {
       case AchievementType.streak:
-        return '🔥 Streaks';
+        return 'Streaks';
       case AchievementType.totalVolume:
-        return '💧 Total Volume';
+        return 'Total Volume';
       case AchievementType.variety:
-        return '🎨 Variety';
+        return 'Variety';
       case AchievementType.earlyBird:
-        return '🌅 Early Bird';
+        return 'Early Bird';
       case AchievementType.perfectWeek:
-        return '⭐ Perfect Week';
+        return 'Perfect Week';
       case AchievementType.perfectMonth:
-        return '⭐ Perfect Month';
+        return 'Perfect Month';
       case AchievementType.overachiever:
-        return '🚀 Overachiever';
+        return 'Overachiever';
       case AchievementType.caffeineControl:
-        return '☯️ Caffeine Control';
+        return 'Caffeine Control';
       case AchievementType.socialDrinker:
-        return '🧘 Alcohol-Free';
+        return 'Alcohol-Free';
       default:
-        return '🏆 Achievements';
+        return 'Achievements';
     }
   }
 
+  /// DS-17: the group heading's leading glyph. These labels used to carry the
+  /// emoji INSIDE the string ('🔥 Streaks', '☯️ Caffeine Control'), which put
+  /// decoration in the accessibility label as well as on screen — a screen
+  /// reader announced the codepoint's name before the heading. [SectionHeader]
+  /// takes an `IconData` and paints it in the accent chip every other section
+  /// heading in the app uses.
+  IconData _typeIcon(AchievementType type) {
+    switch (type) {
+      case AchievementType.streak:
+        return Symbols.local_fire_department_rounded;
+      case AchievementType.totalVolume:
+        return Symbols.water_drop_rounded;
+      case AchievementType.variety:
+        return Symbols.palette_rounded;
+      case AchievementType.earlyBird:
+        return Symbols.wb_twilight_rounded;
+      case AchievementType.perfectWeek:
+      case AchievementType.perfectMonth:
+        return Symbols.star_rounded;
+      case AchievementType.overachiever:
+        return Symbols.rocket_launch_rounded;
+      case AchievementType.caffeineControl:
+        return Symbols.coffee_rounded;
+      case AchievementType.socialDrinker:
+        return Symbols.no_drinks_rounded;
+      case AchievementType.consistency:
+        return Symbols.event_repeat_rounded;
+      case AchievementType.nightOwl:
+        return Symbols.bedtime_rounded;
+    }
+  }
+
+  /// The badge art for one achievement.
+  ///
+  /// The model carries an `emoji` per achievement, rendered at 28pt inside a
+  /// 56pt tinted tile and at 40pt in the detail sheet — badge-sized chrome in a
+  /// decorated container, which is the definition DS-17 draws the line at. It
+  /// is derived from the achievement's TYPE, so a Symbol keyed off the same
+  /// enum carries exactly the same information in the app's own icon font.
+  IconData _achievementIcon(WaterAchievement a) => _typeIcon(a.type);
+
   Widget _buildAchievementCard(WaterAchievement achievement) {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final isUnlocked = achievement.isUnlocked;
 
     return GestureDetector(
@@ -350,23 +318,17 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
         _showAchievementDetails(achievement);
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: isUnlocked ? ext.surface : ext.surfaceVariant,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.brCard,
+          // An amber hairline still marks "unlocked", but the amber GLOW is
+          // gone: the card now casts the same shadow as every AppCard.
           border: isUnlocked
-              ? Border.all(color: Colors.amber.shade300, width: 2)
+              ? Border.all(color: ext.mark(ext.warning), width: 2)
               : null,
-          boxShadow: isUnlocked
-              ? [
-                  BoxShadow(
-                    color: Colors.amber.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
+          boxShadow: isUnlocked ? AppShadows.card(context) : null,
         ),
         child: Row(
           // The details column is taller than the 56pt icon tile, so the default
@@ -380,21 +342,24 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
               height: 56,
               decoration: BoxDecoration(
                 color: isUnlocked
-                    ? Colors.amber.shade100
+                    ? ext.reminders.container
                     : ext.surfaceVariant,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: AppRadius.brMd,
               ),
               child: Center(
-                child: Text(
-                  isUnlocked ? achievement.emoji : '🔒',
-                  style: TextStyle(
-                    fontSize: 28,
-                    color: isUnlocked ? null : Colors.grey,
-                  ),
+                child: Icon(
+                  isUnlocked
+                      ? _achievementIcon(achievement)
+                      : Symbols.lock_rounded,
+                  size: 28,
+                  color: isUnlocked
+                      ? ext.reminders.onContainer
+                      : ext.textTertiary,
+                  applyTextScaling: false,
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.lg),
             // Details
             Expanded(
               child: Column(
@@ -406,20 +371,20 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                       Expanded(
                         child: Text(
                           achievement.title,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
+                          style: tt.titleMedium?.copyWith(
                             color: isUnlocked
                                 ? ext.textPrimary
                                 : ext.textSecondary,
                           ),
                         ),
                       ),
-                      Text(
-                        achievement.tierEmoji,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      const SizedBox(width: 8),
+                      // emoji-content-ok: the tier medal (🥉/🥈/🥇/💎) is the
+                      // rank itself, rendered inline at body size rather than
+                      // as a badge in a decorated container — and unlike the
+                      // achievement art it is not derivable from an enum the
+                      // icon font has a glyph for.
+                      Text(achievement.tierEmoji, style: tt.bodyLarge),
+                      const SizedBox(width: AppSpacing.sm),
                       // Points badge. It lives INSIDE the details column rather
                       // than beside it so that it shares a right edge with the
                       // progress counter two rows below — as a sibling of the
@@ -429,33 +394,32 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                       _buildPointsBadge(achievement, isUnlocked),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     achievement.description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: ext.textSecondary,
-                    ),
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.sm),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         flex: 3,
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: AppRadius.brSm,
                           child: LinearProgressIndicator(
                             value: achievement.progress,
                             backgroundColor: ext.surfaceVariant,
                             valueColor: AlwaysStoppedAnimation(
-                              isUnlocked ? Colors.amber : ext.water.base,
+                              isUnlocked
+                                  ? ext.chartMark(ext.warning)
+                                  : ext.chartMark(ext.water),
                             ),
                             minHeight: 6,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppSpacing.md),
                       // "0/1000000" at large text sizes is wider than the whole
                       // column on a 320pt phone, so the counter is flexible and
                       // scales down rather than shoving the bar out of the row.
@@ -468,10 +432,10 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
                             '${achievement.currentValue}/${achievement.targetValue}',
                             maxLines: 1,
                             softWrap: false,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
+                            style: tt.labelMedium?.copyWith(
+                              color: isUnlocked
+                                  ? ext.mark(ext.warning)
+                                  : ext.textSecondary,
                             ),
                           ),
                         ),
@@ -492,196 +456,126 @@ class _WaterAchievementsScreenState extends State<WaterAchievementsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isUnlocked ? Colors.amber.shade100 : ext.surfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        color: isUnlocked ? ext.reminders.container : ext.surfaceVariant,
+        borderRadius: AppRadius.brSm,
       ),
       child: Text(
         '+${achievement.points}',
         maxLines: 1,
         softWrap: false,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: isUnlocked ? Colors.amber.shade700 : ext.textSecondary,
-          fontSize: 12,
-        ),
+        // `onContainer` on `container`, not `amber.shade700` on the raw
+        // surface — that pairing measured 2.04:1 on light.
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: isUnlocked
+                  ? ext.reminders.onContainer
+                  : ext.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }
 
   void _showAchievementDetails(WaterAchievement achievement) {
-    final ext = AppColorsExt.of(context);
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: ext.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
+    AppBottomSheet.show(
+      context,
+      title: achievement.title,
+      icon: _achievementIcon(achievement),
+      accent: AppColorsExt.of(context).reminders,
+      builder: (ctx) {
+        final ext = AppColorsExt.of(ctx);
+        final tt = Theme.of(ctx).textTheme;
+        return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: ext.outline,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: achievement.isUnlocked
-                    ? Colors.amber.shade100
-                    : ext.surfaceVariant,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Center(
-                child: Text(
-                  achievement.emoji,
-                  style: const TextStyle(fontSize: 40),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  achievement.tierEmoji,
-                  style: const TextStyle(fontSize: 24),
-                ),
-                const SizedBox(width: 8),
+                // emoji-content-ok: the tier medal, as in the row above.
+                Text(achievement.tierEmoji, style: tt.bodyLarge),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   achievement.tierName,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: ext.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              achievement.title,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: ext.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               achievement.description,
-              style: TextStyle(
-                color: ext.textSecondary,
-                fontSize: 14,
-              ),
+              style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                color: ext.water.base.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(16),
+                color: ext.water.container,
+                borderRadius: AppRadius.brLg,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Column(
-                    children: [
-                      Text(
-                        '${achievement.currentValue}',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: ext.mark(ext.water),
-                        ),
-                      ),
-                      Text(
-                        'Current',
-                        style: TextStyle(
-                          color: ext.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: ext.mark(ext.water).withOpacity(0.3),
-                  ),
-                  Column(
-                    children: [
-                      Text(
-                        '${achievement.targetValue}',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: ext.mark(ext.water),
-                        ),
-                      ),
-                      Text(
-                        'Target',
-                        style: TextStyle(
-                          color: ext.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: ext.mark(ext.water).withOpacity(0.3),
-                  ),
-                  Column(
-                    children: [
-                      Text(
-                        '+${achievement.points}',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber,
-                        ),
-                      ),
-                      Text(
-                        'Points',
-                        style: TextStyle(
-                          color: ext.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
+                  _sheetStat(ctx, '${achievement.currentValue}', 'Current',
+                      ext.water.onContainer),
+                  _sheetDivider(ext.water.onContainer),
+                  _sheetStat(ctx, '${achievement.targetValue}', 'Target',
+                      ext.water.onContainer),
+                  _sheetDivider(ext.water.onContainer),
+                  // Points was raw amber (#FFC107) as 24pt bold text on
+                  // the surface: 1.79:1 on white. On this water container it
+                  // reads in the container's own AA-verified foreground, and
+                  // the amber lives in the badge on the row instead.
+                  _sheetStat(ctx, '+${achievement.points}', 'Points',
+                      ext.water.onContainer),
                 ],
               ),
             ),
             if (achievement.isUnlocked && achievement.unlockedAt != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 'Unlocked on ${_formatDate(achievement.unlockedAt!)}',
-                style: TextStyle(
-                  color: Colors.amber.shade700,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: tt.labelLarge?.copyWith(color: ext.mark(ext.warning)),
               ),
             ],
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
+
+  Widget _sheetStat(
+      BuildContext context, String value, String label, Color color) {
+    final tt = Theme.of(context).textTheme;
+    return Column(
+      children: [
+        Text(value, style: tt.displaySmall?.copyWith(color: color)),
+        Text(label, style: tt.bodySmall?.copyWith(color: color)),
+      ],
+    );
+  }
+
+  Widget _sheetDivider(Color color) => Container(
+        width: 1,
+        height: 40,
+        color: color.withOpacity(0.3),
+      );
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
+}
+
+/// The hairline between two stats on the amber fill. Derived from the fill's
+/// own foreground so it is visible in both themes — it used to be a hardcoded
+/// `Colors.white24`, which is invisible on the light-mode amber.
+class _StatDivider extends StatelessWidget {
+  final Color color;
+  const _StatDivider({required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 50,
+        color: color.withOpacity(0.35),
+      );
 }

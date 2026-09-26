@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 
 import '../models/cycle_prediction.dart';
+import '../../../core/constants/app_strings.dart';
 
 const List<String> _kMonths = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -45,7 +46,7 @@ class PredictionCard extends StatelessWidget {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Text(
-                'Log a few more cycles and DailyMinder will estimate your next '
+                'Log a few more cycles and ${AppStrings.productName} will estimate your next '
                 'period and fertile window here.',
                 style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
               ),
@@ -88,11 +89,8 @@ class PredictionCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('PREDICTION',
-                    style: tt.labelSmall?.copyWith(
-                        color: ext.textTertiary, letterSpacing: 0.6),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                child: const AppEyebrow('PREDICTION',
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(width: AppSpacing.sm),
               Flexible(child: _ConfidenceMeter(confidence: p.confidence)),

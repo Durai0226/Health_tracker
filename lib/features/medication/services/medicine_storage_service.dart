@@ -13,9 +13,11 @@ import '../models/dependent_profile.dart';
 import '../models/medicine_enums.dart';
 import '../models/clinic.dart';
 import '../../../core/health/streak_engine.dart';
+import '../../../core/utils/calendar_day.dart';
 import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/dose_action_queue.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/background_alarm_service.dart';
 import 'appointment_reminder_service.dart';
 import 'reminder_window_nudges.dart';
 import 'vitals_storage_service.dart';
@@ -82,6 +84,7 @@ class MedicineCleanStorageService {
       updatedAt: data.updatedAt,
       isActive: data.isActive,
       isArchived: data.isArchived,
+      reminderEnabled: data.reminderEnabled,
       notes: data.notes,
       healthCategories: data.healthCategoriesJson != null 
           ? (jsonDecode(data.healthCategoriesJson!) as List).map((e) => HealthCategory.values[e]).toList()
@@ -109,7 +112,7 @@ class MedicineCleanStorageService {
       strengthText: drift.Value(medicine.strength), // The real strength string
 
       scheduleJson: drift.Value(jsonEncode(medicine.schedule.toJson())),
-      startDate: drift.Value(medicine.schedule.startDate ?? DateTime.now()), // Required field
+      startDate: drift.Value(medicine.schedule.startDate ?? clock.now()), // Required field
       endDate: drift.Value(medicine.schedule.endDate),
       colorIndex: drift.Value(medicine.color?.index ?? 0),
       shapeIndex: drift.Value(medicine.shape?.index ?? 0),
@@ -125,9 +128,10 @@ class MedicineCleanStorageService {
       pharmacyId: drift.Value(medicine.pharmacyId),
       dependentId: drift.Value(medicine.dependentId),
       createdAt: drift.Value(medicine.createdAt),
-      updatedAt: drift.Value(medicine.updatedAt ?? DateTime.now()),
+      updatedAt: drift.Value(medicine.updatedAt ?? clock.now()),
       isActive: drift.Value(medicine.isActive),
       isArchived: drift.Value(medicine.isArchived),
+      reminderEnabled: drift.Value(medicine.reminderEnabled),
       notes: drift.Value(medicine.notes),
       healthCategoriesJson: drift.Value(medicine.healthCategories != null 
           ? jsonEncode(medicine.healthCategories!.map((e) => e.index).toList()) 
@@ -233,7 +237,7 @@ class MedicineCleanStorageService {
       getMedicinesForDependent(dependentId);
 
   static Future<List<EnhancedMedicine>> getActiveMedicinesForTodayAsync() async {
-    final today = DateTime.now();
+    final today = clock.now();
     final meds = await getAllMedicines();
     return meds.where((m) => m.schedule.isActiveOnDate(today)).toList();
   }
@@ -256,7 +260,7 @@ class MedicineCleanStorageService {
     int daysAhead = 30,
     bool scopeToActiveProfile = true,
   }) async {
-    final cutoff = DateTime.now().add(Duration(days: daysAhead));
+    final cutoff = clock.now().add(Duration(days: daysAhead));
     final meds =
         await getAllMedicines(scopeToActiveProfile: scopeToActiveProfile);
     return meds.where((m) {
@@ -339,7 +343,10 @@ class MedicineCleanStorageService {
         await NotificationService().showImmediateNotification(
           title: 'Refill ${med.name}',
           body: 'Only ${updated.currentStock} left — time to restock.',
-          channelId: 'refill',
+          // Was `channelId: 'refill'` — not a channel that exists, and
+          // _notificationDetails ignored it anyway, so "you're running low" rang
+          // as a full-screen alarm. Nothing here is time-critical.
+          kind: ReminderKind.gentle,
         );
       }
     }
@@ -480,10 +487,31 @@ class MedicineCleanStorageService {
       dependentId: medicine?.dependentId,
       vitals: vitals,
     );
+    // Was this exact slot ALREADY recorded as taken?
+    //
+    // `addLog` is an upsert on `doseLogId(medicineId, scheduledTime)`, so a
+    // second take of the same slot replaces one log row — but the stock
+    // decrement below is unconditional, so it ran twice. That happens on
+    // ordinary paths: taking a dose in-app and then the queue draining the
+    // notification action for the same slot, or Take on the full-screen alarm
+    // followed by Take in the app. Two tablets left the tracked count for one
+    // tablet actually swallowed, which drifts the refill date early and can
+    // trigger a refill alert that is not real.
+    //
+    // Read BEFORE the upsert overwrites it.
+    final prior = await getLog(doseLogId(medicineId, scheduledTime));
+    final alreadyCounted = prior?.countsAsTaken ?? false;
+    final priorAmount = prior?.dosageTaken ?? 0;
+
     await addLog(log);
     await _markDoseResolved(medicineId, scheduledTime);
 
-    // Update stock if tracked
+    // Update stock if tracked. When the slot was already counted, give back
+    // what the previous record removed first, so the net effect of re-taking a
+    // slot is the difference — not a second full decrement.
+    if (alreadyCounted && priorAmount > 0) {
+      await restoreStock(medicineId, priorAmount);
+    }
     await reduceStock(medicineId, dosageTaken);
 
     return log;
@@ -564,7 +592,7 @@ class MedicineCleanStorageService {
   /// instead of only whatever was active at the moment a dose went missed.
   static Future<void> reconcileMissedDoses({int lookbackDays = 14}) async {
     const graceHours = 3;
-    final now = DateTime.now();
+    final now = clock.now();
     final graceCutoff = now.subtract(const Duration(hours: graceHours));
     final startDate = now.subtract(Duration(days: lookbackDays));
     final startDay = DateTime(startDate.year, startDate.month, startDate.day);
@@ -589,7 +617,7 @@ class MedicineCleanStorageService {
 
       for (var day = startDay;
           !day.isAfter(today);
-          day = day.add(const Duration(days: 1))) {
+          day = dayOffset(day, 1)) {
         if (day.isBefore(createdDay)) continue;
 
         final slots = med.schedule.getScheduledTimesForDate(day);
@@ -664,14 +692,16 @@ class MedicineCleanStorageService {
         final key = 'expiry_notified_${med.id}_${expiry.millisecondsSinceEpoch}';
         if (prefs.getBool(key) ?? false) continue;
 
-        final daysLeft = expiry.difference(now).inDays;
+        final daysLeft = calendarDaysBetween(now, expiry);
         final body = med.isExpired
             ? '${med.name} has expired — check before your next dose.'
             : '${med.name} expires in $daysLeft day${daysLeft == 1 ? '' : 's'}.';
         final ok = await NotificationService().showImmediateNotification(
           title: med.isExpired ? 'Medicine expired' : 'Medicine expiring soon',
           body: body,
-          channelId: 'medicine_channel',
+          // `medicine_channel` is alarm-configured, and an expiry notice is a
+          // heads-up, not a dose.
+          kind: ReminderKind.gentle,
         );
         if (ok) await prefs.setBool(key, true);
       }
@@ -779,6 +809,17 @@ class MedicineCleanStorageService {
       skipNote: skipNote,
       dependentId: medicine?.dependentId,
     );
+
+    // Skipping a slot that was previously recorded as TAKEN must give the stock
+    // back. `addLog` upserts, so the log row correctly becomes a skip — but
+    // without this the units the take removed stayed removed, and the patient's
+    // count was permanently short by one dose. Reachable from the ordinary
+    // "took it, then corrected myself" path.
+    final prior = await getLog(doseLogId(medicineId, scheduledTime));
+    if ((prior?.countsAsTaken ?? false) && (prior!.dosageTaken) > 0) {
+      await restoreStock(medicineId, prior.dosageTaken);
+    }
+
     await addLog(log);
     await _markDoseResolved(medicineId, scheduledTime);
     return log;
@@ -1356,7 +1397,7 @@ class MedicineCleanStorageService {
   static Future<DailyMedicineSummary> getDailySummaryAsync(DateTime date) async {
     final logs = await getLogsForDate(date);
     final medicines = await getAllMedicines();
-    return _summaryFor(date, logs, medicines, DateTime.now());
+    return _summaryFor(date, logs, medicines, clock.now());
   }
 
   /// The same summary over ALREADY-FETCHED rows.
@@ -1398,7 +1439,7 @@ class MedicineCleanStorageService {
       DateTime(to.year, to.month, to.day, 23, 59, 59, 999),
     );
     final medicines = await getAllMedicines();
-    final now = DateTime.now();
+    final now = clock.now();
 
     // Bucket once, then reuse — avoids rescanning the whole log list per day.
     final byDay = <String, List<MedicineLog>>{};
@@ -1531,6 +1572,31 @@ class MedicineCleanStorageService {
   static String _slotKey(String medicineId, DateTime slot) =>
       '$medicineId@${slot.year}-${slot.month}-${slot.day}-${slot.hour}-${slot.minute}';
 
+  /// How far back [getStreakResult] will ever look, in calendar days.
+  static const int streakWindowDays = 180;
+
+  /// First calendar day [getStreakResult] examines for [medicines] at [now]:
+  /// the earliest eligible medicine's creation day, floored at
+  /// [streakWindowDays] ago.
+  ///
+  /// Public so a caller that needs a DIFFERENT log window as well can size one
+  /// ranged read covering both. The adherence report does exactly that — its
+  /// selected period is 7, 30 or 365 days, and for the first two the streak
+  /// reaches further back than the period does, so without this bound the
+  /// screen could only share a read by over-reading to 180 days every time.
+  static DateTime streakWindowStart(
+      List<EnhancedMedicine> medicines, DateTime now) {
+    final today = startOfDay(now);
+    var earliest = today;
+    for (final m in medicines) {
+      if (!m.isActive || m.isArchived || m.schedule.isPRN) continue;
+      final c = startOfDay(m.createdAt);
+      if (c.isBefore(earliest)) earliest = c;
+    }
+    final floor = dayOffset(today, -streakWindowDays);
+    return earliest.isBefore(floor) ? floor : earliest;
+  }
+
   /// Forgiving adherence streak via the shared [StreakEngine].
   ///
   /// A day counts as "completed" when **every due (non-PRN) dose that day was
@@ -1539,8 +1605,16 @@ class MedicineCleanStorageService {
   /// engine forgives one missed day per rolling week. This replaces the old
   /// naive "any dose taken that day" counter (which overstated adherence and
   /// hard-reset on a single gap). Single source of truth for the whole app.
-  static Future<StreakResult> getStreakResult() async {
-    final medicines = await getAllMedicines();
+  ///
+  /// Pass [medicines] and/or [logs] when the caller already holds them — the
+  /// adherence report loads both, then called this, which read both again.
+  /// [logs] may cover MORE than [streakWindowStart] onwards; anything before
+  /// that bound is filtered out here.
+  static Future<StreakResult> getStreakResult({
+    List<EnhancedMedicine>? medicines,
+    List<MedicineLog>? logs,
+  }) async {
+    medicines ??= await getAllMedicines();
     final active = medicines
         .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
         .toList();
@@ -1549,17 +1623,11 @@ class MedicineCleanStorageService {
           current: 0, longest: 0, usedGrace: false, atRisk: false);
     }
 
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
 
     // Window: from the earliest medicine's creation day, bounded to ~180 days.
-    var earliest = today;
-    for (final m in active) {
-      final c = DateTime(m.createdAt.year, m.createdAt.month, m.createdAt.day);
-      if (c.isBefore(earliest)) earliest = c;
-    }
-    final floor = today.subtract(const Duration(days: 180));
-    if (earliest.isBefore(floor)) earliest = floor;
+    final earliest = streakWindowStart(active, now);
 
     // Keys of slots that were actually taken.
     //
@@ -1575,17 +1643,19 @@ class MedicineCleanStorageService {
     // [getAdherenceStats], which already does this. Without it a PRN or
     // ARCHIVED medicine logged at 08:00 marked the 08:00 statin as taken.
     final eligibleIds = active.map((m) => m.id).toSet();
-    final logs = await getLogsForDateRange(earliest, now);
+    final source = logs ?? await getLogsForDateRange(earliest, now);
     final takenKeys = <String>{};
-    for (final l in logs.where(
-        (l) => l.countsAsTaken && eligibleIds.contains(l.medicineId))) {
+    for (final l in source.where((l) =>
+        l.countsAsTaken &&
+        eligibleIds.contains(l.medicineId) &&
+        !l.scheduledTime.isBefore(earliest))) {
       takenKeys.add(_slotKey(l.medicineId, l.scheduledTime));
     }
 
     final completed = <DateTime>{};
     for (var day = earliest;
         !day.isAfter(today);
-        day = day.add(const Duration(days: 1))) {
+        day = dayOffset(day, 1)) {
       var due = 0;
       var taken = 0;
       for (final m in active) {
@@ -1610,9 +1680,13 @@ class MedicineCleanStorageService {
   }
 
   /// Consecutive (forgiving, all-due) adherence streak. Sourced from
-  /// [getStreakResult] so every caller shares one definition.
-  static Future<int> getCurrentStreak() async =>
-      (await getStreakResult()).current;
+  /// [getStreakResult] so every caller shares one definition — [medicines] and
+  /// [logs] are forwarded to it.
+  static Future<int> getCurrentStreak({
+    List<EnhancedMedicine>? medicines,
+    List<MedicineLog>? logs,
+  }) async =>
+      (await getStreakResult(medicines: medicines, logs: logs)).current;
 
   /// Adherence over the last [days].
   ///
@@ -1621,13 +1695,17 @@ class MedicineCleanStorageService {
   /// schedule builder, each of which re-read the same table. Measured, that
   /// screen read `enhanced_medicines` six times for one open, and every call
   /// re-maps each row and re-decodes its schedule JSON.
+  ///
+  /// Pass [logs] for the same reason. They may cover more than the last [days]
+  /// — the trailing window is re-applied here regardless.
   static Future<Map<String, dynamic>> getAdherenceStats({
     int days = 30,
     List<EnhancedMedicine>? medicines,
+    List<MedicineLog>? logs,
   }) async {
-    final now = DateTime.now();
+    final now = clock.now();
     final startDate = now.subtract(Duration(days: days));
-    final logs = await getLogsForDateRange(startDate, now);
+    final source = logs ?? await getLogsForDateRange(startDate, now);
     medicines ??= await getAllMedicines();
 
     // Scope the numerator to the same population as the scheduled denominator
@@ -1642,8 +1720,16 @@ class MedicineCleanStorageService {
     // missed-dose id fix can hold both a `missed` and a `taken` row for the
     // same slot, which double-counted here and could push `total` past the
     // scheduled denominator.
-    final scoped =
-        dedupeByDose(logs.where((l) => eligibleIds.contains(l.medicineId)));
+    //
+    // The window bound is applied here rather than left to the query, because
+    // a caller-supplied [logs] may reach further back than [days] (the
+    // adherence report shares ONE read between this and the streak, whose
+    // window is the longer of the two) — and it must not be counted against a
+    // denominator that only covers the last [days].
+    final scoped = dedupeByDose(source.where((l) =>
+        eligibleIds.contains(l.medicineId) &&
+        !l.scheduledTime.isBefore(startDate) &&
+        !l.scheduledTime.isAfter(now)));
     final taken = scoped.where((l) => l.countsAsTaken).length;
     final skipped = scoped.where((l) => l.isSkipped).length;
     final missed = scoped.where((l) => l.isMissed).length;
@@ -1663,7 +1749,7 @@ class MedicineCleanStorageService {
           med.createdAt.year, med.createdAt.month, med.createdAt.day);
       for (var day = startDay;
           !day.isAfter(today);
-          day = day.add(const Duration(days: 1))) {
+          day = dayOffset(day, 1)) {
         if (day.isBefore(createdDay)) continue;
         final slots = med.schedule.getScheduledTimesForDate(day);
         for (final slot in slots) {
@@ -1705,7 +1791,7 @@ class MedicineCleanStorageService {
     EnhancedMedicine? medicine,
     List<MedicineLog>? allLogs,
   }) async {
-    final now = DateTime.now();
+    final now = clock.now();
     final startDate = now.subtract(Duration(days: days));
     medicine ??= await getMedicine(medicineId);
 
@@ -1733,7 +1819,7 @@ class MedicineCleanStorageService {
           medicine.createdAt.month, medicine.createdAt.day);
       for (var day = startDay;
           !day.isAfter(today);
-          day = day.add(const Duration(days: 1))) {
+          day = dayOffset(day, 1)) {
         if (day.isBefore(createdDay)) continue;
         final slots = medicine.schedule.getScheduledTimesForDate(day);
         for (final slot in slots) {

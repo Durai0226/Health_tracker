@@ -136,8 +136,8 @@ class _NunitoAddEditAppointmentScreenState
       debugPrint('Error saving appointment: $e');
       _hapticService.error();
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        context.toastError(
+            'Could not save this appointment. Please try again.');
       }
     }
     if (mounted) setState(() => _isSaving = false);
@@ -160,6 +160,7 @@ class _NunitoAddEditAppointmentScreenState
                 icon: Symbols.close_rounded,
                 filled: false,
                 accent: accent,
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [

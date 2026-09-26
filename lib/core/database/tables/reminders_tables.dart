@@ -86,6 +86,8 @@ class Reminders extends Table {
 /// as `MedicineCleanStorageService.doseLogId` — so writing an outcome is an
 /// idempotent upsert. Two "done" taps on the same occurrence, or a background
 /// action drained twice, cannot produce two rows.
+@TableIndex(name: 'idx_occ_reminder', columns: {#reminderId})
+@TableIndex(name: 'idx_occ_scheduled', columns: {#scheduledFor})
 class ReminderOccurrences extends Table {
   TextColumn get id => text()();
 

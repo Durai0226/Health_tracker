@@ -8,13 +8,16 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart';
 import '../../../core/widgets/app/app_widgets.dart';
-import '../../../core/services/notification_service.dart';
 import '../../../core/health/adaptive_timing.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../services/reminder_insights.dart';
 import '../models/reminder_category_model.dart';
 import '../models/reminder_model.dart';
 import 'category_management_screen.dart';
+import '../services/reminder_alarm.dart';
+import 'package:clock/clock.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../../core/utils/calendar_day.dart';
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminder;
@@ -62,7 +65,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _bodyController = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = clock.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   RepeatType _repeatType = RepeatType.none;
   List<int> _customDays = [];
@@ -150,7 +153,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
     // If creating new reminder, default time to next hour
     if (widget.reminder == null) {
-      final now = DateTime.now();
+      final now = clock.now();
       // Roll into the next day when created after 23:00 (hour 24 is invalid and
       // asserts in TimeOfDay).
       final next = now.add(const Duration(hours: 1));
@@ -215,12 +218,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     } catch (e) {
       debugPrint('Pick sound error: $e');
       if (mounted) {
-        final ext = AppColorsExt.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: ext.error.base,
-          content: Text('Could not open audio files: $e',
-              style: TextStyle(color: ext.error.on)),
-        ));
+        context.toastError('Could not open audio files: $e');
       }
     }
   }
@@ -251,12 +249,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       debugPrint('Sound preview error: $e');
       if (mounted) {
         setState(() => _isPlayingPreview = false);
-        final ext = AppColorsExt.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: ext.error.base,
-          content: Text('Could not play this audio file.',
-              style: TextStyle(color: ext.error.on)),
-        ));
+        context.toastError('Could not play this audio file.');
       }
     }
   }
@@ -284,8 +277,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Future<void> _selectDate() async {
-    final lastDate = DateTime.now().add(const Duration(days: 365));
-    final defaultFirst = DateTime.now().subtract(const Duration(days: 1));
+    // shiftCalendarDays, not add(Duration(days:)): a civil day is 23 or 25
+    // hours, so a year of absolute Durations lands a day out across a DST
+    // boundary — and these are the picker's bounds, which an overdue reminder
+    // is already compared against below.
+    final lastDate = shiftCalendarDays(clock.now(), 365);
+    final defaultFirst = shiftCalendarDays(clock.now(), -1);
     // An overdue reminder's date can be before defaultFirst; showDatePicker
     // asserts if initialDate < firstDate, so widen firstDate to include it and
     // clamp initialDate into [firstDate, lastDate] as a safety net.
@@ -321,13 +318,38 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final scheduledDateTime = DateTime(
+      var scheduledDateTime = DateTime(
         _selectedDate.year,
         _selectedDate.month,
         _selectedDate.day,
         _selectedTime.hour,
         _selectedTime.minute,
       );
+
+      // A ONE-OFF set in the past fires the instant it is saved.
+      //
+      // There was no validation at all: pick 14:00 when it is already 16:00 and
+      // `zonedSchedule`/`oneShotAt` deliver immediately, so the reminder rings
+      // while the user is still looking at the screen they created it on and is
+      // then gone. Rolling it to the same time tomorrow is what the user
+      // almost certainly meant; the alternative — refusing to save — loses the
+      // rest of their input.
+      var rolledForward = false;
+      final oneOff = _repeatType == RepeatType.none && _recurrenceRule == null;
+      if (oneOff && scheduledDateTime.isBefore(clock.now())) {
+        // Keep the CHOSEN clock time and move it to the next date on which it
+        // is still ahead — today if the time has not passed yet, otherwise
+        // tomorrow. `shiftCalendarDays` preserves the wall clock across a DST
+        // transition, where `add(Duration(days: 1))` would shift it by an hour.
+        final now = clock.now();
+        var candidate = DateTime(now.year, now.month, now.day,
+            _selectedTime.hour, _selectedTime.minute);
+        if (!candidate.isAfter(now)) {
+          candidate = shiftCalendarDays(candidate, 1);
+        }
+        scheduledDateTime = candidate;
+        rolledForward = true;
+      }
 
       final reminderId = widget.reminder?.id ?? const Uuid().v4();
 
@@ -363,34 +385,57 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       final saved =
           await CleanStorageService.saveReminderAllocatingId(reminder);
 
-      await NotificationService().scheduleGenericReminder(
-        id: saved.notificationSlot,
-        title: saved.title,
-        body: saved.body,
-        scheduledTime: scheduledDateTime,
-        repeatType: saved.repeatType,
-        customDays: saved.customDays,
-        snoozeDuration: saved.snoozeDuration,
-        sound: saved.sound,
-        priority: saved.priority,
-        payload: saved.noteId != null ? 'note:${saved.noteId}' : null,
-      );
+      // Through the ReminderAlarm seam, not straight at NotificationService.
+      //
+      // `arm`/`disarm` are the only place the +2000 follow-up alarm is armed
+      // and cancelled, and they were called ONLY from the app-start re-arm
+      // pass. So an Insistent reminder created here got no follow-up until the
+      // next launch, and editing one left the previously-armed follow-up
+      // pointing at the old schedule. Going through the seam also applies the
+      // recurrence rule (see ReminderArmRequest.forNextOccurrence) instead of
+      // the raw RepeatType.
+      final request = ReminderArmRequest.forNextOccurrence(saved);
+      if (request == null) {
+        // Paused, or already past its end date — make sure nothing is armed.
+        await const NotificationReminderAlarm().disarm(
+          id: saved.notificationSlot,
+          repeatType: saved.repeatType,
+          customDays: saved.customDays,
+        );
+        if (mounted) Navigator.pop(context);
+        return;
+      }
 
-      if (mounted) {
-        Navigator.pop(context);
+      final armed = await const NotificationReminderAlarm().arm(request);
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      // The reminder IS saved either way — it is in the list and the re-arm
+      // pass will retry at the next launch. What must not happen is popping in
+      // silence when the OS refused to schedule it, which is what
+      // `scheduleGenericReminder` returning an unconditional `true` used to
+      // cause with SCHEDULE_EXACT_ALARM revoked.
+      if (!armed) {
+        context.toastWarning(
+          'Saved, but it could not be scheduled — check notification and '
+          'alarm permissions.',
+          action: AppToastAction(
+            label: 'Open settings',
+            onPressed: () => openAppSettings(),
+          ),
+        );
+      } else if (rolledForward) {
+        final t = TimeOfDay.fromDateTime(scheduledDateTime);
+        final when = DateUtils.isSameDay(scheduledDateTime, clock.now())
+            ? 'today'
+            : 'tomorrow';
+        context.toastInfo(
+            'That time had passed — set for $when at ${t.format(context)}.');
       }
     } catch (e) {
       if (mounted) {
-        final ext = AppColorsExt.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: ext.error.base,
-            content: Text(
-              'Error saving reminder: $e',
-              style: TextStyle(color: ext.error.on),
-            ),
-          ),
-        );
+        context.toastError('Error saving reminder: $e');
       }
     } finally {
       if (mounted) {
@@ -417,6 +462,10 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
               title: isEditing ? 'Edit Reminder' : 'New Reminder',
               leading: IconButton(
                 icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
+                // An ✕ announces as a bare "button" without this — and the
+                // control that discards a half-filled form is the last one
+                // that should be unnamed.
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
               // Single Save affordance — the primary "Create Reminder" / "Save
@@ -439,8 +488,14 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         hint: 'What needs to be done?',
                         accent: rem,
                         textCapitalization: TextCapitalization.sentences,
-                        validator: (value) =>
-                            value == null || value.isEmpty ? 'Please enter a title' : null,
+                        // `trim()`, not `isEmpty`: the title is stored as
+                        // `_titleController.text.trim()`, so a whitespace-only
+                        // entry passed validation and then saved a reminder with
+                        // an EMPTY title — a blank row in the list and a blank
+                        // heading on the notification.
+                        validator: (value) => value == null || value.trim().isEmpty
+                            ? 'Please enter a title'
+                            : null,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       AppTextField(
@@ -549,7 +604,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                       if (_repeatType == RepeatType.custom) ...[
                         const SizedBox(height: AppSpacing.md),
                         Wrap(
-                          spacing: AppSpacing.sm,
+                          // xs, not sm: each toggle now carries 2pt of hit box
+                          // on every side of its 40pt circle (see
+                          // _buildDayToggle), so 4pt here leaves the SAME 8pt
+                          // gap between circles while the seven 44pt targets
+                          // still fit a 390pt phone inside the gutters.
+                          spacing: AppSpacing.xs,
                           runSpacing: AppSpacing.sm,
                           children: [
                             _buildDayToggle('M', 1),
@@ -869,12 +929,26 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                                 color: ext.surface,
                                 shape: const CircleBorder(),
                                 clipBehavior: Clip.antiAlias,
-                                child: InkWell(
-                                  onTap: _removeImage,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(6),
-                                    child: Icon(Symbols.close_rounded,
-                                        color: ext.mark(ext.error), size: 20),
+                                // Named, because the ✕ is the only thing in
+                                // here and an unnamed icon announces as a bare
+                                // "button". NOT `excludeSemantics: true`: that
+                                // drops the InkWell's own node — tap action and
+                                // all — and leaves a node a screen reader can
+                                // read out but cannot activate. Without it the
+                                // annotation merges INTO the InkWell's node, so
+                                // the name and the tap live together. Same
+                                // reason [_buildDayToggle] excludes at the
+                                // [Text] instead.
+                                child: Semantics(
+                                  button: true,
+                                  label: 'Remove photo',
+                                  child: InkWell(
+                                    onTap: _removeImage,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(6),
+                                      child: Icon(Symbols.close_rounded,
+                                          color: ext.mark(ext.error), size: 20),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1139,20 +1213,39 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
               child: Icon(icon, color: rem.onContainer, size: 20),
             ),
             const SizedBox(width: AppSpacing.lg),
+            // Expanded on the VALUE, not a Spacer.
+            //
+            // `label` is a fixed short word ("Date"/"Time"); `value` is a
+            // formatted date — 'EEE, MMM d, y' is "Wed, Sep 30, 2026" — and the
+            // chip took whatever width it wanted. Both rows overflowed on a
+            // 320pt phone, by 122px at 1.0x and 407px at 2.0x.
+            //
+            // This was invisible until the screen moved to `clock.now()`:
+            // against the wall clock it rendered a date the pinned test seed
+            // never matched, so the responsive sweep measured a different
+            // layout from the one users see.
             Text(
               label,
               style: tt.titleLarge?.copyWith(color: ext.textPrimary),
             ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: ext.surfaceVariant,
-                borderRadius: AppRadius.brSm,
-              ),
-              child: Text(
-                value,
-                style: tt.labelLarge?.copyWith(color: ext.mark(rem)),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: ext.surfaceVariant,
+                    borderRadius: AppRadius.brSm,
+                  ),
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelLarge?.copyWith(color: ext.mark(rem)),
+                  ),
+                ),
               ),
             ),
           ],
@@ -1161,38 +1254,81 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
+  /// The Apple HIG minimum. The circle stays 40 so the row looks unchanged.
+  static const double _dayToggleTarget = 44.0;
+
+  /// Indexed by `DateTime.weekday - 1`, matching the `day` the toggles pass and
+  /// the `customDays` values they store.
+  static const List<String> _dayNames = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  /// One day-of-week toggle: a 40pt circle inside a 44pt target.
+  ///
+  /// This is the control that decides which days a reminder fires on, and it
+  /// was a bare 40x40 `GestureDetector` — under the 44pt floor, with no name
+  /// and no state. A screen reader reached seven unlabelled buttons and could
+  /// not tell which days were already on.
   Widget _buildDayToggle(String label, int day) {
     final ext = AppColorsExt.of(context);
     final rem = ext.reminders;
     final isSelected = _customDays.contains(day);
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          if (isSelected) {
-            _customDays.remove(day);
-          } else {
-            _customDays.add(day);
-          }
-        });
-      },
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? rem.container : ext.surfaceVariant,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? ext.mark(rem) : ext.outline,
-            width: isSelected ? 1.6 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: isSelected ? rem.onContainer : ext.textSecondary,
-                fontWeight: FontWeight.w700,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      // The full name, because the visible letter cannot be the accessible one:
+      // 'T' is both Tuesday and Thursday, 'S' both Saturday and Sunday. The
+      // letter itself is excluded down at the [Text] rather than with
+      // `excludeSemantics` here — that would also drop the tap action this
+      // annotation has to merge with, leaving a named node nothing can
+      // activate.
+      label: _dayNames[day - 1],
+      child: GestureDetector(
+        // Opaque: the 2pt ring of padding around the circle has no painted
+        // child of its own, so without this the target is 40pt again.
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() {
+            if (isSelected) {
+              _customDays.remove(day);
+            } else {
+              _customDays.add(day);
+            }
+          });
+        },
+        child: SizedBox(
+          width: _dayToggleTarget,
+          height: _dayToggleTarget,
+          child: Center(
+            child: Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isSelected ? rem.container : ext.surfaceVariant,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? ext.mark(rem) : ext.outline,
+                  width: isSelected ? 1.6 : 1,
+                ),
               ),
+              child: ExcludeSemantics(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: isSelected ? rem.onContainer : ext.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

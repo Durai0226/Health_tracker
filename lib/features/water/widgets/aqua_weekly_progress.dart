@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
+import '../../../core/design/app_design.dart';
 import '../theme/aqua_theme.dart';
 
 /// Weekly progress widget with mini circular indicators
@@ -20,6 +21,7 @@ class AquaWeeklyProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     final isDark = AquaTheme.isDark(context);
     final beverage = AquaTheme.getBeverage(beverageId);
     final today = DateTime.now().weekday;
@@ -27,7 +29,7 @@ class AquaWeeklyProgress extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(AquaTheme.spacingM),
-      decoration: AquaTheme.getCardDecoration(context, accentColor: beverage.primary),
+      decoration: AquaTheme.getCardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -36,12 +38,12 @@ class AquaWeeklyProgress extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  gradient: beverage.gradient,
-                  borderRadius: BorderRadius.circular(AquaTheme.radiusSmall),
+                  color: ext.water.container,
+                  borderRadius: AppRadius.brSm,
                 ),
-                child: const Icon(
+                child: Icon(
                   Symbols.calendar_today_rounded,
-                  color: Colors.white,
+                  color: ext.water.onContainer,
                   size: 16,
                 ),
               ),
@@ -54,8 +56,8 @@ class AquaWeeklyProgress extends StatelessWidget {
                   'This Week',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AquaTheme.heading3.copyWith(
-                    color: AquaTheme.getTextPrimary(context),
+                  style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                    color: ext.textPrimary,
                   ),
                 ),
               ),
@@ -74,15 +76,15 @@ class AquaWeeklyProgress extends StatelessWidget {
                         children: [
                           Text(
                             'History',
-                            style: AquaTheme.labelMedium.copyWith(
-                              color: beverage.primary,
+                            style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                              color: ext.mark(ext.water),
                             ),
                           ),
                           const SizedBox(width: 4),
                           Icon(
                             Symbols.arrow_forward_ios_rounded,
                             size: 12,
-                            color: beverage.primary,
+                            color: ext.mark(ext.water),
                           ),
                         ],
                       ),
@@ -115,11 +117,16 @@ class AquaWeeklyProgress extends StatelessWidget {
               // reported 70-100% hydration nobody ever drank (and the "Goals
               // Hit" figure below it — which reads weekData directly —
               // disagreed with the dials).
-              // goalMl is guarded too: 0/0 is NaN and NaN.clamp(0, 1) returns
-              // the UPPER limit, which would paint a bogus "goal reached" tick.
+              // Each day against ITS OWN goal (DayProgress.progress), not the
+              // single `goalMl` this widget is handed: the caller now passes
+              // the goal each day was actually measured against, so editing
+              // the goal no longer retroactively rewrites the week.
+              // DayProgress.progress guards the 0/0 case too — NaN.clamp(0, 1)
+              // returns the UPPER limit, which would paint a bogus
+              // "goal reached" tick.
               double progress = 0;
-              if (index < weekData.length && goalMl > 0) {
-                progress = (weekData[index].intakeMl / goalMl).clamp(0.0, 1.0);
+              if (index < weekData.length) {
+                progress = weekData[index].progress;
               }
 
               return Expanded(
@@ -145,22 +152,20 @@ class AquaWeeklyProgress extends StatelessWidget {
   }
 
   Widget _buildSummaryStats(BuildContext context, BeverageThemeData beverage, bool isDark) {
+    final ext = AppColorsExt.of(context);
     // Calculate weekly stats
     final totalIntake = weekData.fold<int>(0, (sum, day) => sum + day.intakeMl);
     final daysWithData = weekData.where((d) => d.intakeMl > 0).length;
     final avgIntake = daysWithData > 0 ? (totalIntake / daysWithData).round() : 0;
-    final goalReachedDays = weekData.where((d) => d.intakeMl >= goalMl).length;
+    // Per-day goals here too, so "Goals Hit n/7" agrees with the dials above it.
+    final goalReachedDays =
+        weekData.where((d) => d.goalMl > 0 && d.intakeMl >= d.goalMl).length;
 
     return Container(
       padding: const EdgeInsets.all(AquaTheme.spacingM),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            beverage.primary.withOpacity(isDark ? 0.15 : 0.08),
-            beverage.secondary.withOpacity(isDark ? 0.1 : 0.04),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
+        color: ext.surfaceVariant,
+        borderRadius: AppRadius.brLg,
       ),
       child: Row(
         children: [
@@ -190,24 +195,26 @@ class AquaWeeklyProgress extends StatelessWidget {
   }
 
   Widget _buildStatItem(BuildContext context, String value, String label, BeverageThemeData beverage) {
+    final ext = AppColorsExt.of(context);
     return Expanded(
       child: Column(
         children: [
-          ShaderMask(
-            shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
-            child: Text(
-              value,
-              style: AquaTheme.heading2.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
+          // The figure was painted through a `ShaderMask` of the beverage
+          // gradient, i.e. white text tinted by two arbitrary hues — for milk
+          // that is #FAFAFA on a #FAFAFA-tinted panel. A stat value is body
+          // text: it reads in `textPrimary`.
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+              color: ext.textPrimary,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: AquaTheme.caption.copyWith(
-              color: AquaTheme.getTextSecondary(context),
+            style: Theme.of(context).textTheme.labelSmall!.copyWith(
+              color: ext.textSecondary,
             ),
           ),
         ],
@@ -216,10 +223,12 @@ class AquaWeeklyProgress extends StatelessWidget {
   }
 
   Widget _buildDivider(bool isDark) {
-    return Container(
-      width: 1,
-      height: 30,
-      color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+    return Builder(
+      builder: (context) => Container(
+        width: 1,
+        height: 30,
+        color: AppColorsExt.of(context).outline,
+      ),
     );
   }
 }
@@ -244,7 +253,7 @@ class _DayIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AquaTheme.isDark(context);
+    final ext = AppColorsExt.of(context);
     final isComplete = progress >= 1.0;
 
     return LayoutBuilder(builder: (context, constraints) {
@@ -268,9 +277,7 @@ class _DayIndicator extends StatelessWidget {
                   height: dial,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isFuture
-                        ? (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100)
-                        : null,
+                    color: isFuture ? ext.surfaceVariant : null,
                   ),
                 ),
 
@@ -281,15 +288,16 @@ class _DayIndicator extends StatelessWidget {
                     painter: _CircularProgressPainter(
                       progress: progress,
                       strokeWidth: 3,
-                      backgroundColor: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.grey.shade200,
+                      backgroundColor: ext.outline,
+                      // One hue per state, from the chart-mark set that was
+                      // validated against these surfaces. The two-stop
+                      // gradients here were decoration on a 3pt stroke.
                       progressColor: isComplete
-                          ? AquaTheme.success
-                          : beverage.primary,
+                          ? ext.chartMark(ext.success)
+                          : ext.chartMark(ext.water),
                       gradientColors: isComplete
-                          ? [AquaTheme.success, const Color(0xFF34D399)]
-                          : [beverage.primary, beverage.secondary],
+                          ? [ext.chartMark(ext.success), ext.chartMark(ext.success)]
+                          : [ext.chartMark(ext.water), ext.chartMark(ext.water)],
                     ),
                   ),
 
@@ -300,24 +308,27 @@ class _DayIndicator extends StatelessWidget {
                     height: 24,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF10B981), Color(0xFF34D399)],
-                      ),
+                      color: ext.fillBg(ext.success),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Symbols.check_rounded,
-                      color: Colors.white,
+                      color: ext.fillFg(ext.success),
                       size: 14,
+                      applyTextScaling: false,
                     ),
                   )
                 else if (!isFuture && progress > 0)
-                  Text(
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
                     '${(progress * 100).toInt()}',
-                    style: AquaTheme.caption.copyWith(
-                      color: beverage.primary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 10,
+                    // 11 (labelSmall) is the scale's floor; the `fontSize: 10`
+                    // override this had was the only sub-floor caption left in
+                    // the feature. FittedBox keeps it inside the 38pt dial.
+                    style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                      color: ext.mark(ext.water),
                     ),
+                  ),
                   ),
               ],
             ),
@@ -326,9 +337,8 @@ class _DayIndicator extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              gradient: isToday ? beverage.gradient : null,
-              color: isToday ? null : Colors.transparent,
-              borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+              color: isToday ? ext.fillBg(ext.water) : Colors.transparent,
+              borderRadius: AppRadius.brFull,
             ),
             // A single-letter day never needs to wrap; keeping it on one line
             // stops a wide Dynamic Type letter from stretching the slot.
@@ -336,12 +346,10 @@ class _DayIndicator extends StatelessWidget {
               day,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AquaTheme.labelMedium.copyWith(
+              style: Theme.of(context).textTheme.labelMedium!.copyWith(
                 color: isToday
-                    ? Colors.white
-                    : (isFuture
-                        ? AquaTheme.textTertiary
-                        : AquaTheme.getTextSecondary(context)),
+                    ? ext.fillFg(ext.water)
+                    : (isFuture ? ext.textTertiary : ext.textSecondary),
                 fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
               ),
             ),

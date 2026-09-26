@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import '../app_database.dart';
 import '../tables/medication_tables.dart';
+import '../../utils/calendar_day.dart';
 
 part 'medication_dao.g.dart';
 
@@ -21,35 +22,70 @@ class MedicationDao extends DatabaseAccessor<AppDatabase> with _$MedicationDaoMi
 
   Future<List<EnhancedMedicine>> getAllMedicines({bool includeArchived = false}) async {
     if (includeArchived) {
-      return await select(enhancedMedicines).get();
+      return await (select(enhancedMedicines)
+            ..where((t) => t.deletedAt.isNull()))
+          .get();
     }
     return await (select(enhancedMedicines)
-      ..where((t) => t.isArchived.equals(false) & t.isActive.equals(true)))
+      ..where((t) =>
+          t.isArchived.equals(false) &
+          t.isActive.equals(true) &
+          t.deletedAt.isNull()))
       .get();
   }
 
+  /// Every medicine INCLUDING tombstoned ones — the shape cloud sync needs.
+  ///
+  /// `getAllMedicines` filters `deletedAt IS NULL`, and a syncer that cannot
+  /// see a tombstone reads the row as "missing on this device" and downloads
+  /// the deleted medicine straight back, alarms and all.
+  Future<List<EnhancedMedicine>> getAllMedicinesIncludingDeleted() =>
+      select(enhancedMedicines).get();
+
   Future<EnhancedMedicine?> getMedicine(String id) async {
     return await (select(enhancedMedicines)
-      ..where((t) => t.id.equals(id)))
+      ..where((t) => t.id.equals(id) & t.deletedAt.isNull()))
       .getSingleOrNull();
   }
 
+  /// Insert, clearing any tombstone.
+  ///
+  /// Re-adding a medicine that was previously deleted reuses nothing by
+  /// default, but a cloud download can carry an id that is tombstoned here.
+  /// Without the explicit clear the row would stay invisible forever — the
+  /// same trap `PeriodDao.upsertDay` documents.
   Future<void> addMedicine(EnhancedMedicinesCompanion medicine) async {
-    await into(enhancedMedicines).insert(medicine);
+    await into(enhancedMedicines).insertOnConflictUpdate(
+        medicine.copyWith(deletedAt: const Value(null)));
   }
 
   Future<void> updateMedicine(EnhancedMedicinesCompanion medicine) async {
     await (update(enhancedMedicines)
       ..where((t) => t.id.equals(medicine.id.value)))
-      .write(medicine);
+      .write(medicine.copyWith(deletedAt: const Value(null)));
   }
 
+  /// Soft delete: stamp a tombstone instead of dropping the row.
+  ///
+  /// A hard DELETE left nothing to say "the user removed this", so once
+  /// medicines are cloud-synced the next sync sees the id present in Firestore
+  /// and absent locally, reads that as "not downloaded yet", and writes the
+  /// medicine back — reinstating its schedule and its alarms.
+  ///
+  /// `updatedAt` is bumped so the deletion wins the LWW comparison.
+  ///
+  /// The logs are still hard-deleted: they are the medicine's own history, a
+  /// tombstoned medicine appears nowhere, and orphaned taken logs would inflate
+  /// adherence (numerator) against a denominator that no longer includes it.
   Future<void> deleteMedicine(String id) async {
-    // Cascade-delete the medicine's logs. Orphaned taken logs would otherwise
-    // survive and inflate adherence (numerator) against a denominator that no
-    // longer includes the deleted medicine.
     await (delete(medicineLogs)..where((t) => t.medicineId.equals(id))).go();
-    await (delete(enhancedMedicines)..where((t) => t.id.equals(id))).go();
+    final now = DateTime.now();
+    await (update(enhancedMedicines)..where((t) => t.id.equals(id))).write(
+      EnhancedMedicinesCompanion(
+        deletedAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
   }
 
   Stream<List<EnhancedMedicine>> watchMedicines() {
@@ -80,7 +116,7 @@ class MedicationDao extends DatabaseAccessor<AppDatabase> with _$MedicationDaoMi
 
   Future<List<MedicineLog>> getLogsForDate(DateTime date) async {
     final startOfDay = DateTime(date.year, date.month, date.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
+    final endOfDay = dayOffset(startOfDay, 1);
     return await (select(medicineLogs)
       ..where((t) => t.scheduledTime.isBiggerOrEqualValue(startOfDay) & 
                      t.scheduledTime.isSmallerThanValue(endOfDay))

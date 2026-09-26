@@ -110,7 +110,7 @@ rule Google applies: **the justification must point at a feature a reviewer can
 see in the app.** Generic wording ("to improve the user experience") gets
 rejected.
 
-The app declares 18 health permissions. Copy these:
+The app declares 20 health permissions. Copy these:
 
 | Permission | Justification |
 |---|---|
@@ -132,10 +132,21 @@ The app declares 18 health permissions. Copy these:
 | `WRITE_BLOOD_PRESSURE` | Optional, off by default: writes blood-pressure readings the user logged in DlyMinder back to Health Connect so their other health apps can see them. |
 | `WRITE_BLOOD_GLUCOSE` | Optional, off by default: same, for blood sugar. |
 | `WRITE_WEIGHT` | Optional, off by default: same, for weight. |
+| `READ_HYDRATION` | Lets the Water tracker count drinks the user logged in another app, so the daily total is their real intake rather than only what they entered here. |
+| `WRITE_HYDRATION` | Optional, off by default: writes each drink the user logs in DlyMinder (amount and time) back to Health Connect so Samsung Health, Fitbit and their other apps can see it. |
 
 > The Heart and Workouts screens these justifications name now exist and are
 > reachable from the Health tab, so this form is ready to submit — **once the
 > privacy policy URL from step 1 is live**, since the form asks for it.
+
+> **Hydration is new and gates the Water feature's headline integration.**
+> Declaring `READ_HYDRATION`/`WRITE_HYDRATION` in the manifest is not enough:
+> without them on this form, users hit "your app can't access the Health
+> Connect data types because they require special approval" and the toggle in
+> Water → Hydration Profile → Health Connect silently never writes. The
+> declaration is mandatory for **every** track, including closed and open
+> testing. The in-app toggle is off by default, so nothing breaks before the
+> form is approved — the feature is simply unavailable.
 
 ---
 
@@ -179,6 +190,35 @@ sleep, exercise, heart rate and HRV. Google splits these, so declare both.
 Do **not** declare: Photos (the prescription scan is on-device only and never
 uploaded), Location (the app requests none), or Analytics (there is no analytics
 SDK).
+
+---
+
+## 3b. Register the iOS App Group (gates the iOS water widget)
+
+The `WaterWidget` extension shares data with the app through an App Group, and
+an App Group is a **provisioned capability** — the entitlement is declared in
+both `ios/Runner/Runner.entitlements` and
+`ios/WaterWidget/WaterWidget.entitlements`, but it cannot be signed until the
+group exists on the account.
+
+**Apple Developer → Certificates, Identifiers & Profiles → Identifiers → App Groups → +**
+
+- [ ] Create the group with **exactly** this identifier:
+      `group.com.implementation.tabletremainder.tabletRemainder`
+- [ ] Add it to the `com.implementation.tabletremainder.tabletRemainder` App ID
+- [ ] Create an App ID for the extension,
+      `com.implementation.tabletremainder.tabletRemainder.WaterWidget`, and add
+      the same group to it
+- [ ] Set the development team on both targets in Xcode (the project has none
+      set, so signing is unresolved until you do)
+
+Until this is done the widget target still **compiles** — verified with
+`xcodebuild -target WaterWidget -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO`,
+which reports BUILD SUCCEEDED — but a signed build will fail, and a running
+widget would read an empty container. If the group identifier changes, three
+places must change together: both entitlements files and `_appGroupId` in
+`lib/core/services/home_widget_service.dart` (which must also match
+`appGroupId` in `ios/WaterWidget/WaterWidget.swift`). A guard test pins all four.
 
 ---
 
@@ -235,20 +275,32 @@ Not blocking the forms, but blocking a real release:
   the permission sheet, the rationale deep link and any real sync are still
   unverified.
 
-## ⚠️ Mindfulness write-back: the Kotlin is NOT compile-verified
+## ✅ Mindfulness write-back: compiled, and it was broken
 
-`android/app/src/main/kotlin/com/dlyminder/app/MindfulnessChannel.kt` was written
-without ever being compiled, because **there is no Java runtime on the machine it
-was written on** — `./gradlew` fails with "Unable to locate a Java Runtime", and
-`flutter doctor` reports the Android SDK but no JDK. Every other line of the Focus
-work is covered by the headless suite; this one file is not, and a Kotlin compile
-error here breaks the **entire Android build**, not just this feature.
+**Resolved.** `MindfulnessChannel.kt` was written without ever being compiled
+(the note below explains why) and it **did not compile**. It carried
+`@OptIn(ExperimentalMindfulnessSessionApi::class)` plus the matching import, and
+that annotation does not exist in
+`androidx.health.connect:connect-client:1.2.0-alpha02` — the AAR ships only
+`ExperimentalDeduplicationApi` and `ExperimentalPersonalHealthRecordApi`.
+`MindfulnessSessionRecord` itself is present and needs no opt-in at this version.
 
-**Before any Android build, run:**
+Three unresolved-reference errors, and because Kotlin compiles the whole module
+they failed `:app:compileDebugKotlin` outright — **no Android build of this app
+could succeed at all**, for any feature. The suspicion recorded here was correct;
+it just needed the compiler actually run against it.
+
+The JDK was there all along, just not on `PATH`:
 
 ```bash
-cd android && ./gradlew :app:compileDebugKotlin
+export JAVA_HOME=~/android-sdk/jdk/Contents/Home
+export PATH="$JAVA_HOME/bin:$PATH"
+export ANDROID_SDK_ROOT=~/android-sdk
+cd android && ./gradlew :app:processDebugResources :app:compileDebugKotlin
 ```
+
+That now reports BUILD SUCCESSFUL, and it is the command to run before any
+Android build or after touching anything under `android/`.
 
 Two dependencies were added to `android/app/build.gradle.kts` specifically because
 of a trap worth knowing: the `health` plugin pulls in both
@@ -258,7 +310,8 @@ keeps them off our COMPILE classpath. Assuming they were inherited would have be
 a build error waiting for whoever added the next native health call, so both are
 now declared explicitly. If the compile fails, that is the first place to look —
 followed by the exact `MindfulnessSessionRecord` constructor signature, which is
-`@ExperimentalMindfulnessSessionApi` and may still shift.
+still marked experimental upstream and may shift between connect-client versions
+even though this version needs no opt-in annotation.
 
 Then, on a device with a recent Play System Update:
 

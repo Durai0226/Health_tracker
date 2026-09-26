@@ -16,6 +16,8 @@ library;
 ///
 /// `FocusService.tick` now carries the per-second signal on its own
 /// `ValueNotifier`, and only the clock and progress ring listen to it.
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/features/focus/services/focus_service.dart';
@@ -63,6 +65,11 @@ void main() {
     // builds every track eagerly. A per-second notifyListeners() rebuilt all
     // of it 60 times a minute for the length of the session.
     final service = RelaxationService();
+    // Singleton: a session left running by an earlier test in this isolate
+    // would give `applyTick` a non-null `_endTime` and send it down the
+    // wall-clock branch, so the exact countdown asserted below would depend on
+    // test order.
+    service.resetForTesting();
 
     var structuralRebuilds = 0;
     void listener() => structuralRebuilds++;
@@ -89,15 +96,34 @@ void main() {
       reason: 'The relaxation countdown fired the ChangeNotifier that the '
           'whole screen listens to. Only the clock may react to a tick.',
     );
-    expect(tickRebuilds, greaterThanOrEqualTo(0));
+    // Counting notifications is not enough: the clock widget renders
+    // `tick.value`, so a tick that fires without carrying the new remaining
+    // seconds leaves a frozen number on screen while the ChangeNotifier stays
+    // (correctly) silent — i.e. the scoping fix would have traded a rebuild
+    // storm for a stopped clock. Three ticks from a primed 60 s session must
+    // land on 57, and the service's own countdown must agree with what it
+    // published.
+    expect(service.tick.value, 57,
+        reason: 'the tick notifier must carry the countdown, not just signal '
+            'that one happened — the clock reads this value directly');
+    expect(service.remainingSeconds, service.tick.value,
+        reason: 'the published tick and the service\'s own remaining time must '
+            'not disagree about how much of the session is left');
   });
 
-  testWidgets('the Focus screen listens to the tick separately', (tester) async {
-    // A ValueListenableBuilder bound to FocusService.tick must exist: it is the
-    // thing that keeps the clock live while the rest of the tree stays put. If
-    // someone reverts the scoping and goes back to a single ListenableBuilder,
-    // the clock would still work — so this asserts the narrow listener exists,
-    // which the coarse implementation cannot satisfy.
+  testWidgets('the tick notifier drives a rebuild on its own', (tester) async {
+    // Half of the scoping fix is that `tick` is a real ValueListenable a narrow
+    // builder can bind to, and that setting it repaints only that builder.
+    //
+    // This was named "the Focus screen listens to the tick separately" and its
+    // comment claimed to assert that a ValueListenableBuilder bound to
+    // FocusService.tick EXISTS in the screen. It did no such thing: it built
+    // its own ValueListenableBuilder here in the test body and never referred
+    // to `focus_screen.dart` at all. Deleting the screen's narrow builder and
+    // putting the whole 2322-widget body back under one ListenableBuilder left
+    // this green — the test measured Flutter's ValueListenableBuilder, not the
+    // app's use of it. The wiring assertion it was supposed to make now lives
+    // in the source guard below.
     final service = FocusService();
 
     var built = 0;
@@ -119,5 +145,44 @@ void main() {
 
     expect(built, 2, reason: 'the tick notifier must drive a rebuild');
     expect(find.text('42'), findsOneWidget);
+  });
+
+  test('each screen binds its clock to the tick, not its whole body', () {
+    // The two tests above prove a tick does NOT fire notifyListeners(). They
+    // prove nothing about either screen actually reading it: delete the narrow
+    // builder, put the body back under one ListenableBuilder, and both still
+    // pass while the on-screen clock silently stops counting.
+    //
+    // Mounting FocusScreen or RelaxationScreen here is not an option — between
+    // them they need the whole service stack and start real timers — so the
+    // wiring is read out of the source, the way
+    // test/release/ambient_refresh_wiring_test.dart already does for the shell.
+    //
+    // Anchored on the `ValueListenableBuilder<int>(` + `valueListenable:` PAIR,
+    // not on either half alone. `relaxation_screen.dart` already carries a
+    // SECOND ValueListenableBuilder on a different notifier, so the widget name
+    // alone does not say the clock is the thing bound; and the bare field name
+    // would be satisfied by any plain read of `tick`, `tick.value` included.
+    // Matching the pair is what makes deleting the narrow builder fail here.
+    const bindings = <String, String>{
+      'lib/features/focus/screens/focus_screen.dart': '_focusService.tick',
+      'lib/features/focus/screens/relaxation_screen.dart':
+          '_relaxationService.tick',
+    };
+
+    bindings.forEach((path, field) {
+      final src = File(path).readAsStringSync();
+      final narrow = RegExp('ValueListenableBuilder<int>\\(\\s*'
+          'valueListenable:\\s*${RegExp.escape(field)}\\b');
+      expect(
+        narrow.hasMatch(src),
+        isTrue,
+        reason: '$path must drive its clock from `$field` through a '
+            'ValueListenableBuilder. Without it the per-second countdown has '
+            'no subscriber and the readout freezes, or it comes back through '
+            'a ListenableBuilder on the whole service and the rebuild storm '
+            'this file exists to prevent is back.',
+      );
+    });
   });
 }

@@ -18,6 +18,8 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/health/med_safety_checker.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
+import '../../../core/design/on_arbitrary_fill.dart';
 
 /// How the end of a medication course is expressed in the wizard.
 enum _DurationMode { ongoing, endDate, duration }
@@ -77,13 +79,33 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   /// keypad rather than a prescription.
   static const int _maxDoseAmount = 1000;
 
+  /// Parses a dose field the way its keyboard can actually produce one.
+  ///
+  /// The dose fields offer a DECIMAL keypad, and on a comma-decimal locale
+  /// (most of Europe, much of Latin America) the separator key the platform
+  /// puts on it is ',' — which [double.tryParse] rejects outright, so a
+  /// perfectly typed "2,5" came back as "Please enter a valid dosage". Treat a
+  /// lone comma as the decimal point. Grouping separators are deliberately NOT
+  /// accepted: the field counts units of the dosage FORM and is capped at
+  /// [_maxDoseAmount], so "1,000" is a slipped keypad, not a thousand pills.
+  static double? _parseDose(String raw) {
+    final text = raw.trim();
+    // A single comma and no dot can only be a decimal separator. Anything else
+    // keeps its literal meaning and is left for tryParse to accept or reject.
+    final normalised =
+        (!text.contains('.') && text.indexOf(',') == text.lastIndexOf(','))
+            ? text.replaceFirst(',', '.')
+            : text;
+    return double.tryParse(normalised);
+  }
+
   /// The dose amount, or null when the field doesn't hold a usable quantity
   /// (unparseable, non-finite, zero/negative, or above [_maxDoseAmount]).
   /// Step-1 validation and the save both read this, so a quantity that fails
   /// validation can't reach [EnhancedMedicine.dosageAmount] by another route
   /// (the AI pre-fill writes straight into the controller).
   double? get _doseAmount {
-    final v = double.tryParse(_dosageController.text.trim());
+    final v = _parseDose(_dosageController.text);
     if (v == null || !v.isFinite || v <= 0 || v > _maxDoseAmount) return null;
     return v;
   }
@@ -151,6 +173,108 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   bool get _isEditing => widget.editMedicine != null;
 
+  // --- Unsaved-work guard -------------------------------------------------
+  //
+  // A five-step wizard that threw everything away on back was the worst kind
+  // of data loss, because the user had already done the work. The guard is a
+  // snapshot comparison rather than a per-field diff so the EDIT case needs no
+  // second copy of "what counts as unchanged": the baseline is simply whatever
+  // the form held once [_loadExistingMedicine] (or the field initialisers)
+  // finished, captured at the end of [initState].
+
+  /// The form as it looked when the wizard opened.
+  late final String _pristineSignature;
+
+  /// The value [build] last handed to [PopScope.canPop]. Cached because
+  /// `canPop` is read at build time and typing in an [AppTextField] rebuilds
+  /// nothing — [_onFieldEdited] compares against this and asks for the one
+  /// rebuild PopScope needs on the keystroke that FLIPS it, rather than a full
+  /// five-page rebuild per keystroke.
+  bool _lastDirty = false;
+
+  /// Whether the user has changed anything worth confirming before discarding.
+  bool get _isDirty => _formSignature() != _pristineSignature;
+
+  /// Every text field whose contents count as user work. The titration rows
+  /// come and go, so this is read fresh rather than stored.
+  List<TextEditingController> get _formControllers => [
+        _nameController,
+        _genericNameController,
+        _descController,
+        _dosageController,
+        _strengthController,
+        _stockController,
+        _instructionsController,
+        _purposeController,
+        ..._titrationDayControllers,
+        ..._titrationDoseControllers,
+      ];
+
+  /// Every field the user can edit, flattened into one comparable string.
+  ///
+  /// The wizard step is deliberately absent — paging back and forth loses
+  /// nothing. Map and list entries are emitted in a canonical order so a
+  /// semantically identical form can't read as dirty because a reminder time
+  /// was removed and re-added.
+  String _formSignature() {
+    final windows = _windowMinutesByTime.entries
+        .map((e) => '${e.key}=${e.value}')
+        .toList()
+      ..sort();
+    return [
+      _nameController.text,
+      _genericNameController.text,
+      _descController.text,
+      '$_selectedForm',
+      '$_selectedRoute',
+      '${_expiryDate?.toIso8601String()}',
+      _dosageController.text,
+      _strengthController.text,
+      _dosageUnit,
+      _stockController.text,
+      '$_lowStockThreshold',
+      '$_refillReminderEnabled',
+      '$_titrationEnabled',
+      _titrationDayControllers.map((c) => c.text).join(','),
+      _titrationDoseControllers.map((c) => c.text).join(','),
+      '$_frequencyType',
+      _scheduleTimes.map((t) => '${t.hour}:${t.minute}').join(','),
+      '$_weekendOverrideEnabled',
+      '$_weekendAnchorTime',
+      windows.join(','),
+      _selectedDays.join(','),
+      '$_intervalHours',
+      '$_intervalDays',
+      '$_cycleDaysOn',
+      '$_cycleDaysOff',
+      '$_maxDailyDoses',
+      '$_minHoursBetweenDoses',
+      '$_mealTiming',
+      _startDate.toIso8601String(),
+      '$_durationMode',
+      '${_endDate?.toIso8601String()}',
+      '$_durationDays',
+      '$_selectedColor',
+      '$_selectedShape',
+      _instructionsController.text,
+      _purposeController.text,
+      '$_reminderEnabled',
+      // NUL separator: no field can contain one, so two different forms can
+      // never collide on the same signature by running fields together.
+    ].join('\u0000');
+  }
+
+  /// Text-field edits don't otherwise rebuild this screen; [PopScope.canPop]
+  /// needs them to when — and only when — dirtiness changes.
+  void _onFieldEdited() {
+    if (_isDirty != _lastDirty) setState(() {});
+  }
+
+  /// A titration row controller wired into the dirty check like every other
+  /// field on the form.
+  TextEditingController _titrationController(String text) =>
+      TextEditingController(text: text)..addListener(_onFieldEdited);
+
   @override
   void initState() {
     super.initState();
@@ -158,6 +282,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _pageController = PageController(initialPage: _currentStep);
     if (_isEditing) {
       _loadExistingMedicine();
+    }
+    // After the edit-load, so an untouched edit counts as clean.
+    _pristineSignature = _formSignature();
+    for (final c in _formControllers) {
+      c.addListener(_onFieldEdited);
     }
     // Offline drug-name typeahead (privacy-first, bundled asset).
     DrugNameCatalog.ensureLoaded();
@@ -322,8 +451,41 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         curve: Curves.easeOutCubic,
       );
     } else {
-      Navigator.pop(context);
+      // Unreachable today — the "Back" button only renders past step 0 — but
+      // routed through the guard anyway so this can't quietly become a second
+      // silent-discard path the day step 0 grows one.
+      _handleClose();
     }
+  }
+
+  /// Leave the wizard, confirming first if there's unsaved work.
+  ///
+  /// [PopScope] only sees ROUTE pops — the system back gesture and
+  /// [Navigator.maybePop]. The header's close button calls [Navigator.pop]
+  /// imperatively, which pops regardless of `canPop`, so it routes through here
+  /// too or the guard would cover only one of the two ways out.
+  ///
+  /// An untouched form pops straight through: a confirmation on a form nobody
+  /// has typed into is its own annoyance.
+  Future<void> _handleClose() async {
+    if (!_isDirty) {
+      Navigator.pop(context);
+      return;
+    }
+    final discard = await ConfirmationBottomSheet.show(
+      context: context,
+      title: _isEditing ? 'Discard changes?' : 'Discard this medicine?',
+      message: _isEditing
+          ? "Your edits haven't been saved yet. Leaving now keeps the medicine "
+              'as it was.'
+          : "This medicine hasn't been saved yet. Leaving now loses "
+              "everything you've entered.",
+      confirmText: 'Discard',
+      cancelText: 'Keep editing',
+      icon: Symbols.warning_rounded,
+      isDangerous: true,
+    );
+    if (discard == true && mounted) Navigator.pop(context);
   }
 
   bool _validateCurrentStep() => _validateStep(_currentStep);
@@ -337,7 +499,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     switch (step) {
       case 0:
         if (_nameController.text.trim().isEmpty) {
-          _showError('Please enter a medication name');
+          _showError('Please enter a medicine name');
           return false;
         }
         return true;
@@ -346,7 +508,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         // went straight through to dosageAmount — a saved dose of zero silently
         // disables adherence maths, a negative one is nonsense the rest of the
         // app never guards against. Require a real, bounded quantity.
-        final dose = double.tryParse(_dosageController.text.trim());
+        final dose = _parseDose(_dosageController.text);
         if (dose == null || !dose.isFinite) {
           _showError('Please enter a valid dosage');
           return false;
@@ -388,8 +550,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   'Step ${i + 1}: enter the day this dose starts (0 or more)');
               return false;
             }
-            final text = _titrationDoseControllers[i].text.trim();
-            final stepDose = double.tryParse(text);
+            final stepDose = _parseDose(_titrationDoseControllers[i].text);
             if (stepDose == null || !stepDose.isFinite) {
               _showError('Step ${i + 1}: enter a valid dose');
               return false;
@@ -473,28 +634,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (warnings.isEmpty) return true;
     if (!mounted) return true;
 
-    final ext = AppColorsExt.of(context);
-    final proceed = await showDialog<bool>(
+    final proceed = await ConfirmationBottomSheet.show(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: ext.surface,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
-        title: Text('Possible allergy conflict',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: ext.textPrimary)),
-        content: Text(warnings.map((w) => w.message).join('\n\n'),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: ext.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.warning.strong),
-            child: const Text('Save anyway'),
-          ),
-        ],
-      ),
+      title: 'Possible allergy conflict',
+      message: warnings.map((w) => w.message).join('\n\n'),
+      confirmText: 'Save anyway',
+      icon: Symbols.warning_amber_rounded,
+      isDangerous: true,
     );
     return proceed ?? false;
   }
@@ -541,34 +687,18 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (!mounted) return true;
 
     interactions.sort((a, b) => b.severity.index.compareTo(a.severity.index));
-    final ext = AppColorsExt.of(context);
-    final proceed = await showDialog<bool>(
+    // No SingleChildScrollView around the list any more: AppBottomSheet caps
+    // itself at 90% of the screen and scrolls its own body, so a long run of
+    // interactions still reaches the buttons.
+    final proceed = await ConfirmationBottomSheet.show(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: ext.surface,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
-        title: Text('Possible drug interaction',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: ext.textPrimary)),
-        content: SingleChildScrollView(
-          child: Text(
-            interactions
-                .map((i) => '${i.severity.displayName}: ${i.description}')
-                .join('\n\n'),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: ext.textSecondary),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.warning.strong),
-            child: const Text('Save anyway'),
-          ),
-        ],
-      ),
+      title: 'Possible drug interaction',
+      message: interactions
+          .map((i) => '${i.severity.displayName}: ${i.description}')
+          .join('\n\n'),
+      confirmText: 'Save anyway',
+      icon: Symbols.warning_amber_rounded,
+      isDangerous: true,
     );
     return proceed ?? false;
   }
@@ -606,8 +736,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       // behind "Failed to save medication", making the root cause invisible.
       debugPrint('Error saving medicine: $e\n$st');
       _showError(kDebugMode
-          ? 'Failed to save medication: $e'
-          : "Couldn't save this medication. Please check the details and try again.");
+          ? 'Failed to save medicine: $e'
+          : "Couldn't save this medicine. Please check the details and try again.");
       if (mounted) setState(() => _isLoading = false);
       return;
     }
@@ -744,28 +874,41 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   @override
   Widget build(BuildContext context) {
-    return AccentScope(
-      feature: FeatureAccent.medicine,
-      child: AppScaffold(
-        body: Column(
-          children: [
-            _buildHeader(context),
-            _buildProgressIndicator(context),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildStep1BasicInfo(context),
-                  _buildStep2Dosage(context),
-                  _buildStep3Schedule(context),
-                  _buildStep4Appearance(context),
-                  _buildStep5Additional(context),
-                ],
+    // Re-read here rather than in a listener: most of this form is chips,
+    // switches and steppers that already setState, so build is where the
+    // cached flag stays honest for them. See [_lastDirty].
+    _lastDirty = _isDirty;
+    return PopScope(
+      // The system back gesture is vetoed only while there IS work to lose;
+      // [_handleClose] then asks, and pops itself on "Discard". A clean form
+      // pops with no prompt at all.
+      canPop: !_lastDirty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleClose();
+      },
+      child: AccentScope(
+        feature: FeatureAccent.medicine,
+        child: AppScaffold(
+          body: Column(
+            children: [
+              _buildHeader(context),
+              _buildProgressIndicator(context),
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _buildStep1BasicInfo(context),
+                    _buildStep2Dosage(context),
+                    _buildStep3Schedule(context),
+                    _buildStep4Appearance(context),
+                    _buildStep5Additional(context),
+                  ],
+                ),
               ),
-            ),
-            _buildBottomButtons(context),
-          ],
+              _buildBottomButtons(context),
+            ],
+          ),
         ),
       ),
     );
@@ -774,12 +917,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   Widget _buildHeader(BuildContext context) {
     final ext = AppColorsExt.of(context);
     return AppHeader(
-      title: _isEditing ? 'Edit Medication' : 'Add Medication',
+      title: _isEditing ? 'Edit medicine' : 'Add medicine',
       leading: AppIconButton(
         icon: Symbols.close_rounded,
         filled: false,
         accent: ext.medicine,
-        onPressed: () => Navigator.pop(context),
+        tooltip: 'Close',
+        onPressed: _handleClose,
       ),
     );
   }
@@ -807,7 +951,9 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                         height: 4,
                         decoration: BoxDecoration(
                           color: isActive ? ext.mark(med) : ext.outline,
-                          borderRadius: BorderRadius.circular(2),
+                          // Clamps to height / 2 = 2 on a 4pt bar, so brFull is
+                          // pixel-identical to the literal it replaces.
+                          borderRadius: AppRadius.brFull,
                         ),
                       ),
                     ),
@@ -900,13 +1046,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('What medication are you adding?', style: tt.headlineMedium),
+          Text('What medicine are you adding?', style: tt.headlineMedium),
           const SizedBox(height: AppSpacing.xl),
           _buildSmartAddSection(context),
           const SizedBox(height: AppSpacing.xl),
           AppTextField(
             controller: _nameController,
-            label: 'Medication Name',
+            label: 'Medicine name',
             hint: 'e.g., Aspirin, Vitamin D',
             accent: med,
             textCapitalization: TextCapitalization.words,
@@ -983,7 +1129,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(form.icon, style: const TextStyle(fontSize: 18)),
+                    Text(form.icon, style: tt.headlineSmall),
                     const SizedBox(width: 8),
                     // Flexible + ellipsis: at 2.0x Dynamic Type on a 320pt
                     // screen the emoji and the form name together overflowed
@@ -1098,7 +1244,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           const SizedBox(height: AppSpacing.md),
           AppTextField(
             controller: _descController,
-            hint: 'Describe your medication…',
+            hint: 'Describe your medicine…',
             accent: med,
             maxLines: 2,
             textCapitalization: TextCapitalization.sentences,
@@ -1177,11 +1323,9 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         setState(() => _applyExtraction(parsed));
         _hapticService.success();
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(parsed != null
-            ? 'Scanned — please review each step'
-            : 'Scanned text added — review and adjust'),
-      ));
+      context.toastSuccess(parsed != null
+          ? 'Scanned — please review each step'
+          : 'Scanned text added — review and adjust');
     } catch (e) {
       if (mounted) {
         setState(() => _filling = false);
@@ -1193,7 +1337,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   Future<void> _quickFill() async {
     final desc = _descController.text.trim();
     if (desc.isEmpty) {
-      _showError('Describe the medication first');
+      _showError('Describe the medicine first');
       return;
     }
 
@@ -1210,10 +1354,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     setState(() => _applyExtraction(result));
     _hapticService.success();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Filled in — please review each step')),
-      );
+      context.toastSuccess('Filled in — please review each step');
     }
   }
 
@@ -1424,7 +1565,15 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                 flex: 2,
                 child: AppTextField(
                   controller: _dosageController,
-                  keyboardType: TextInputType.number,
+                  // Decimal, not `TextInputType.number`: half a tablet and
+                  // 2.5 ml are ordinary prescriptions, the value is parsed as a
+                  // double, and a digits-only keypad offers no separator key at
+                  // all — so "0.5" was simply untypable. See [_parseDose] for
+                  // the comma-locale half of the same problem. (AppTextField
+                  // applies no inputFormatters, so nothing strips the
+                  // separator back out.)
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   // WCAG 3.3.2 — this was the only numeric health input in the
                   // app with no persistent label: the hint 'Amount' was the
                   // field's sole identification and it disappeared the moment
@@ -1657,7 +1806,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   Expanded(
                     child: AppTextField(
                       controller: _titrationDoseControllers[i],
-                      keyboardType: TextInputType.number,
+                      // A titration dose REPLACES the base one from its day
+                      // onward, so it needs the same decimal keypad — the day
+                      // offset beside it stays whole-number.
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       label: 'Dose ($_dosageUnit)',
                       hint: 'e.g. 50',
                       accent: med,
@@ -1666,6 +1819,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                   const SizedBox(width: 4),
                   IconButton(
                     onPressed: () => setState(() => _removeTitrationStep(i)),
+                    tooltip: 'Remove step ${i + 1}',
                     icon: Icon(Symbols.delete_outline_rounded,
                         color: ext.textTertiary),
                   ),
@@ -1689,10 +1843,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final lastDay = _titrationDayControllers.isNotEmpty
         ? int.tryParse(_titrationDayControllers.last.text.trim()) ?? 0
         : 0;
+    // Rows created here get their dirty-check listener from
+    // [_titrationController]; the ones [_loadExistingMedicine] builds get it
+    // from the [_formControllers] sweep in [initState] instead.
     _titrationDayControllers
-        .add(TextEditingController(text: (lastDay + 7).toString()));
-    _titrationDoseControllers
-        .add(TextEditingController(text: _dosageController.text));
+        .add(_titrationController((lastDay + 7).toString()));
+    _titrationDoseControllers.add(_titrationController(_dosageController.text));
   }
 
   void _removeTitrationStep(int index) {
@@ -1731,7 +1887,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   /// this value REPLACES the base dose from its day onward, so a zero,
   /// negative, or absurd quantity must never reach [TitrationStep].
   double? _titrationDoseAt(int i) {
-    final v = double.tryParse(_titrationDoseControllers[i].text.trim());
+    final v = _parseDose(_titrationDoseControllers[i].text);
     if (v == null || !v.isFinite || v <= 0 || v > _maxDoseAmount) return null;
     return v;
   }
@@ -2142,15 +2298,29 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final med = ext.medicine;
     final tt = Theme.of(context).textTheme;
 
-    Widget stepButton(IconData icon, bool enabled, VoidCallback onTap) {
-      return GestureDetector(
+    Widget stepButton(
+        IconData icon, bool enabled, VoidCallback onTap, String semanticLabel) {
+      return Semantics(
+        button: true,
+        enabled: enabled,
+        label: semanticLabel,
+        child: GestureDetector(
         onTap: enabled
             ? () {
                 _hapticService.selection();
                 onTap();
               }
             : null,
+        // 44pt hit target around the 40pt visual: WCAG 2.2 SC 2.5.8 measures
+        // the TARGET, not the paint, so the box can stay 40 as long as what
+        // responds to a finger is 44. Sized here rather than by growing the
+        // Container so the row's spacing is unchanged.
+        behavior: HitTestBehavior.opaque,
         child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          child: Container(
           width: 40,
           height: 40,
           decoration: BoxDecoration(
@@ -2163,6 +2333,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             size: 20,
             color: enabled ? med.onContainer : ext.textTertiary,
           ),
+        ),
+        ),
         ),
       );
     }
@@ -2183,7 +2355,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
                 style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
           ),
           stepButton(Symbols.remove_rounded, value > min,
-              () => onChanged((value - 1).clamp(min, max))),
+              () => onChanged((value - 1).clamp(min, max)), 'Decrease $label'),
           Container(
             constraints: const BoxConstraints(minWidth: 88),
             alignment: Alignment.center,
@@ -2196,7 +2368,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             ),
           ),
           stepButton(Symbols.add_rounded, value < max,
-              () => onChanged((value + 1).clamp(min, max))),
+              () => onChanged((value + 1).clamp(min, max)), 'Increase $label'),
         ],
       ),
     );
@@ -2915,7 +3087,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         children: [
           Text('What does it look like?', style: tt.headlineMedium),
           const SizedBox(height: AppSpacing.sm),
-          Text('This helps identify your medication',
+          Text('This helps identify your medicine',
               style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
           const SizedBox(height: AppSpacing.xl),
           Center(
@@ -2935,35 +3107,43 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
             children: MedicineColor.values.map((color) {
               final isSelected = _selectedColor == color;
               final swatchColor = Color(color.colorValue);
-              return GestureDetector(
-                onTap: () {
-                  _hapticService.selection();
-                  setState(() => _selectedColor = color);
-                },
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: swatchColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSelected ? ext.mark(med) : ext.outlineStrong,
-                      width: isSelected ? 3 : 1,
+              // The swatch is pure colour — selection shows as a ring and a
+              // check mark, neither of which a screen reader can see, so the
+              // name and the selected state have to be said out loud.
+              return Semantics(
+                button: true,
+                selected: isSelected,
+                label: color.displayName,
+                child: GestureDetector(
+                  onTap: () {
+                    _hapticService.selection();
+                    setState(() => _selectedColor = color);
+                  },
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: swatchColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? ext.mark(med) : ext.outlineStrong,
+                        width: isSelected ? 3 : 1,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: med.base.withOpacity(0.3),
+                                blurRadius: 8,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : null,
                     ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: med.base.withOpacity(0.3),
-                              blurRadius: 8,
-                              spreadRadius: 2,
-                            ),
-                          ]
+                    child: isSelected
+                        ? Icon(Symbols.check_rounded,
+                            color: _contrastOn(swatchColor), size: 20)
                         : null,
                   ),
-                  child: isSelected
-                      ? Icon(Symbols.check_rounded,
-                          color: _contrastOn(swatchColor), size: 20)
-                      : null,
                 ),
               );
             }).toList(),
@@ -3008,7 +3188,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Additional Details', style: tt.headlineMedium),
+          Text('Additional details', style: tt.headlineMedium),
           const SizedBox(height: AppSpacing.xl),
           AppTextField(
             controller: _instructionsController,
@@ -3175,7 +3355,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               Expanded(
                 child: AppButton(
                   label: canFinish
-                      ? (_isEditing ? 'Save Changes' : 'Add Medication')
+                      ? (_isEditing ? 'Save changes' : 'Add medicine')
                       : 'Continue',
                   variant: AppButtonVariant.primary,
                   accent: med,
@@ -3220,9 +3400,5 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   /// Contrast foreground for a check mark drawn on an arbitrary medication
   /// swatch color (not a theme token — must be computed against the fill).
-  Color _contrastOn(Color color) {
-    final luminance =
-        (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255;
-    return luminance > 0.5 ? const Color(0xDD000000) : const Color(0xFFFFFFFF);
-  }
+  Color _contrastOn(Color color) => onArbitraryFill(color);
 }

@@ -4,6 +4,7 @@ import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/sleep_schedule.dart';
 import '../services/sleep_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// Edit the nightly sleep schedule: target duration, bedtime, wake time,
 /// wind-down lead, and a (placeholder) bedtime-reminder toggle. Changes persist
@@ -26,19 +27,54 @@ class _SleepScheduleSettingsScreenState
     _schedule = SleepService.getSchedule();
   }
 
-  void _update(SleepSchedule next) {
+  Future<void> _update(SleepSchedule next) async {
     setState(() => _schedule = next);
     // Fire-and-forget persist (the service holds the canonical copy).
     SleepService.saveSchedule(next);
-    // Keep the daily wind-down reminder + wake alarm in sync with the schedule.
-    NotificationService().scheduleBedtimeReminder(
+
+    // Keep the daily wind-down reminder + wake alarm in sync with the schedule
+    // — and BELIEVE the answer.
+    //
+    // Both schedulers used to return void and bail on a permission refusal
+    // with only a debugPrint, so this screen left the switch ON and the
+    // subtitle saying "Rings at 7:00 AM" while nothing was scheduled at all.
+    // Someone who declined notifications at onboarding slept through their
+    // alarm with the app insisting it was set.
+    final bedtimeOk = await NotificationService().scheduleBedtimeReminder(
       enabled: next.reminderEnabled,
       minuteOfDay: next.reminderMinuteOfDay,
     );
-    NotificationService().scheduleWakeAlarm(
+    final wakeOk = await NotificationService().scheduleWakeAlarm(
       enabled: next.alarmEnabled,
       hour: next.wakeHour,
       minute: next.wakeMinute,
+    );
+
+    // `false` for a toggle the user just turned OFF is the expected answer,
+    // not a failure — only a request to arm that did not arm is.
+    final bedtimeFailed = next.reminderEnabled && !bedtimeOk;
+    final wakeFailed = next.alarmEnabled && !wakeOk;
+    if (!bedtimeFailed && !wakeFailed) return;
+
+    // Put the switch back where the OS actually left things, and persist that,
+    // so a relaunch does not show it on again.
+    final reverted = next.copyWith(
+      reminderEnabled: bedtimeFailed ? false : next.reminderEnabled,
+      alarmEnabled: wakeFailed ? false : next.alarmEnabled,
+    );
+    if (!mounted) return;
+    setState(() => _schedule = reverted);
+    SleepService.saveSchedule(reverted);
+
+    final what = bedtimeFailed && wakeFailed
+        ? 'the reminder and the alarm'
+        : (wakeFailed ? 'the wake alarm' : 'the bedtime reminder');
+    context.toastWarning(
+      "Notifications are off, so $what could not be set.",
+      action: AppToastAction(
+        label: 'Open settings',
+        onPressed: () => openAppSettings(),
+      ),
     );
   }
 
@@ -98,6 +134,8 @@ class _SleepScheduleSettingsScreenState
                           title: 'Sleep target',
                           subtitle: 'Nightly goal',
                           valueLabel: _schedule.targetLabel,
+                          decrementLabel: 'Decrease sleep target',
+                          incrementLabel: 'Increase sleep target',
                           onMinus: _schedule.targetMinutes > 240
                               ? () => _update(_schedule.copyWith(
                                   targetMinutes: _schedule.targetMinutes - 15))
@@ -113,6 +151,8 @@ class _SleepScheduleSettingsScreenState
                           title: 'Wind-down',
                           subtitle: 'Lead time before bed',
                           valueLabel: '${_schedule.windDownMinutes}m',
+                          decrementLabel: 'Decrease wind-down',
+                          incrementLabel: 'Increase wind-down',
                           onMinus: _schedule.windDownMinutes > 0
                               ? () => _update(_schedule.copyWith(
                                   windDownMinutes:
@@ -231,11 +271,19 @@ class _StepperRow extends StatelessWidget {
   final VoidCallback? onMinus;
   final VoidCallback? onPlus;
 
+  /// What the −/+ buttons announce. Required, like [AppStepper]'s pair, so a
+  /// row cannot be added with two icon-only controls that read as nothing —
+  /// which is how both of these shipped.
+  final String decrementLabel;
+  final String incrementLabel;
+
   const _StepperRow({
     required this.icon,
     required this.title,
     this.subtitle,
     required this.valueLabel,
+    required this.decrementLabel,
+    required this.incrementLabel,
     this.onMinus,
     this.onPlus,
   });
@@ -275,7 +323,7 @@ class _StepperRow extends StatelessWidget {
           ),
           AppIconButton(
             icon: Symbols.remove_rounded,
-            size: 36,
+            tooltip: decrementLabel,
             accent: sleep,
             onPressed: onMinus,
           ),
@@ -292,7 +340,7 @@ class _StepperRow extends StatelessWidget {
           ),
           AppIconButton(
             icon: Symbols.add_rounded,
-            size: 36,
+            tooltip: incrementLabel,
             accent: sleep,
             onPressed: onPlus,
           ),

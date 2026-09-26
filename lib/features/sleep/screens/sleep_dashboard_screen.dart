@@ -121,7 +121,12 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
   Future<void> _checkMilestones() async {
     final r = await MilestonesService.sync();
     if (!mounted || r.newlyEarned.isEmpty) return;
-    context.toastSuccess('Milestone reached · ${r.newlyEarned.first.title}');
+    showAppToast(
+      context,
+      'Milestone reached · ${r.newlyEarned.first.title}',
+      variant: AppToastVariant.success,
+      duration: const Duration(seconds: 3),
+    );
   }
 
   bool get _healthAvailable => _availability == HealthAvailability.available;
@@ -167,36 +172,32 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     final wellRested = session.sleepScore >= 85;
     final already =
         CleanStorageService.getAppPreference(key, '') == session.dateKey;
-    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
     if (wellRested && !already) {
       CleanStorageService.setAppPreference(key, session.dateKey);
       HapticFeedback.mediumImpact();
-      messenger.showSnackBar(SnackBar(
-        content: Text('Well rested — score ${session.sleepScore}. Nice night.'),
-        behavior: SnackBarBehavior.floating,
+      showAppToast(
+        context,
+        'Well rested — score ${session.sleepScore}. Nice night.',
+        variant: AppToastVariant.success,
         duration: const Duration(seconds: 3),
-      ));
+      );
     } else {
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Sleep logged'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      context.toastSuccess('Sleep logged');
     }
   }
 
   Future<void> _connect() async {
-    // Capture the messenger before any await so we never touch context across
-    // an async gap, and always give the user explicit feedback — the old
-    // handler was silent, so denial / no-data / success all looked identical.
-    final messenger = ScaffoldMessenger.of(context);
+    // Always give the user explicit feedback — the old handler was silent, so
+    // denial / no-data / success all looked identical.
 
     // Health Connect missing/outdated: the consent sheet can't open at all, so
     // send the user to the Play Store instead of failing silently.
     if (_availability == HealthAvailability.needsProviderUpdate) {
       await HealthDataService.instance.installHealthConnect();
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Install Health Connect, then come back to connect.'),
-      ));
+      // An ordinary async gap in a State method: a mounted guard is enough, so
+      // the toast can take `context` rather than a pre-captured messenger.
+      if (!mounted) return;
+      context.toastInfo('Install Health Connect, then come back to connect.');
       return;
     }
 
@@ -219,7 +220,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     } else {
       msg = "Connected. No sleep data found yet — it'll sync as it appears.";
     }
-    messenger.showSnackBar(SnackBar(content: Text(msg)));
+    context.toastInfo(msg);
   }
 
   static String _storeName() =>
@@ -690,11 +691,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'LAST NIGHT',
-                  style: tt.labelSmall
-                      ?.copyWith(color: ext.textTertiary, letterSpacing: 0.6),
-                ),
+                const AppEyebrow('LAST NIGHT'),
                 const SizedBox(height: 6),
                 Text(
                   night.durationLabel,
@@ -801,8 +798,16 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
             'target across the $loggedNights night${loggedNights == 1 ? '' : 's'} '
             'you logged — nicely rested.',
         metric: '${SleepSession.formatMinutes(-debt)} ahead',
-        why:
-            'What you slept over the last 7 nights vs your ${schedule.targetLabel} nightly target × 7.',
+        // The mirror of `sleep_balance_low`'s note above, and stale for the
+        // same reason it was: "last 7 nights … × 7" described the OLD
+        // `sleepDebtMinutes`, which charged every un-logged night a full
+        // night's target. It now divides by logged nights only, so the credit
+        // side has to say so too — a surplus quoted against seven nights when
+        // four were logged is as invented as the debt was.
+        why: 'What you actually slept across the $loggedNights logged '
+            'night${loggedNights == 1 ? '' : 's'}, minus your '
+            '${schedule.targetLabel} nightly target for each of them. Nights '
+            'you did not log are not counted.',
         rank: 22,
       );
     }

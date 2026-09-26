@@ -46,6 +46,22 @@ class EnhancedMedicines extends Table {
   IntColumn get minimumConsecutiveDays => integer().nullable()();
   TextColumn get customFieldsJson => text().nullable()();
 
+  /// Whether this medicine's reminders are armed.
+  ///
+  /// The add/edit flow has always shown a "Reminders" toggle and
+  /// `EnhancedMedicine` has always carried the field — but there was no column,
+  /// so the mapper dropped it on write and the constructor default (`true`)
+  /// came back on every read. Turning reminders off worked exactly once: the
+  /// save cancelled them, and the next app start's `rescheduleAllReminders`
+  /// read `true` from Drift and armed them again. The Edit screen showed the
+  /// toggle back ON.
+  BoolColumn get reminderEnabled =>
+      boolean().withDefault(const Constant(true))();
+
+  /// Soft-delete tombstone, so a deletion can propagate through LWW cloud sync
+  /// instead of looking like "this device has not downloaded it yet".
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

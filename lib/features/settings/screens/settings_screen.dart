@@ -8,8 +8,6 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import 'notification_settings_screen.dart';
 import 'haptic_settings_screen.dart';
-import 'vitavibe_settings_screen.dart';
-import '../../../core/services/vitavibe_service.dart';
 import 'backup_screen.dart';
 import '../../backup/presentation/screens/backup_settings_screen.dart';
 import '../../sleep/screens/sleep_schedule_settings_screen.dart';
@@ -26,6 +24,8 @@ import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
 import '../../onboarding/screens/welcome_screen.dart';
+import 'early_access_screen.dart';
+import '../../../core/constants/app_strings.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -38,7 +38,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _authService = AuthService();
   bool _cloudSyncEnabled = CleanStorageService.cloudSyncEnabled;
   final _hapticService = HapticService();
-  final _vitaVibeService = VitaVibeService();
   final _localBackupService = local_backup.BackupService();
   bool _isLoading = false;
   bool _isExporting = false;
@@ -47,9 +46,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
     final result = await _authService.signInWithGoogle();
+    // Before the setState, not after it. Sign-in takes seconds and leaves the
+    // app for the account picker; a user who backs out of Settings meanwhile
+    // disposes this State, and setState() on a defunct State throws.
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (!mounted) return;
     if (result == null) {
       context.toastSuccess('Successfully signed in with Google!');
     } else if (result != 'cancelled') {
@@ -314,7 +316,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                       ),
                       _buildHapticSettingsTile(),
-                      _buildVitaVibeSettingsTile(),
+                      _buildEarlyAccessTile(),
                     ],
                   ),
 
@@ -530,7 +532,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: Symbols.lock_rounded,
                         iconColor: ext.mark(ext.brand),
                         title: 'App lock',
-                        subtitle: 'PIN & biometric lock for DailyMinder',
+                        subtitle: 'PIN & biometric lock for ${AppStrings.productName}',
                         onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -560,19 +562,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       AppListTile(
                         icon: Symbols.info_rounded,
                         iconColor: ext.mark(ext.brand),
-                        title: 'About DailyMinder',
+                        title: 'About ${AppStrings.productName}',
                         subtitle: 'Version 1.0.0',
                         onTap: () {
                           showAboutDialog(
                             context: context,
-                            applicationName: 'DailyMinder',
+                            applicationName: AppStrings.productName,
                             applicationVersion: '1.0.0',
                             applicationIcon: const AppLogo.mark(size: 44),
-                            applicationLegalese: '© 2026 DailyMinder',
+                            applicationLegalese: '© 2026 ${AppStrings.productName}',
                             children: const [
                               SizedBox(height: 12),
                               Text(
-                                'DailyMinder is a general wellness and reminder '
+                                '${AppStrings.productName} is a general wellness and reminder '
                                 'tool — not a medical device, and not a source of '
                                 'diagnosis or treatment. Always confirm health '
                                 'decisions with a qualified clinician or '
@@ -641,7 +643,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Text('Theme', style: tt.titleLarge),
                     const SizedBox(height: 2),
-                    Text('Choose how DailyMinder looks',
+                    Text('Choose how ${AppStrings.productName} looks',
                         style: tt.bodyMedium
                             ?.copyWith(color: ext.textSecondary)),
                   ],
@@ -722,65 +724,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _buildVitaVibeSettingsTile() {
-    return ListenableBuilder(
-      listenable: _vitaVibeService,
-      builder: (context, _) {
-        final ext = AppColorsExt.of(context);
-        final tt = Theme.of(context).textTheme;
-        return AppListTile(
-          icon: Symbols.vibration_rounded,
-          iconColor: ext.mark(ext.success),
-          title: 'Haptix',
-          subtitle: _vitaVibeService.isEnabled
-              ? 'Advanced haptic patterns enabled'
-              : 'Advanced vibration patterns',
-          // Same fix as Haptic Feedback above, and this row was the worse of
-          // the two: its trailing was a Row holding a FREE badge AND a switch,
-          // which is also the trailing that could not fit a width constraint
-          // (+12px at 428pt) until the row learned to scale an over-stuffed
-          // trailing down. The master toggle lives on
-          // `vitavibe_settings_screen.dart:79`.
-          //
-          // The FREE badge stays. It is a label, not a control, so it does not
-          // compete with the row's one tap.
-          onTap: () {
-            _vitaVibeService.tap();
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const VitaVibeSettingsScreen()),
-            );
-          },
-          // Badge AND chevron, spelled out: `AppListTile` renders
-          // `trailing ?? chevron`, so a custom trailing REPLACES the arrow —
-          // and a navigational row with no arrow is the defect this change is
-          // removing, just inverted. Not fixed in the widget because the four
-          // radio-style rows using `trailing: SizedBox.shrink()` are
-          // interactive and deliberately arrow-free.
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: ext.success.container,
-                  borderRadius: AppRadius.brFull,
-                ),
-                child: Text(
-                  'FREE',
-                  style: tt.labelSmall?.copyWith(
-                    color: ext.success.onContainer,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 9,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(Symbols.chevron_right_rounded,
-                  size: AppRowMetrics.chevronSize, color: ext.textTertiary),
-            ],
-          ),
+  /// "Early access" used to live inside the Haptix screen.
+  ///
+  /// That screen is gone — it duplicated Haptic Feedback's structure (a master
+  /// toggle, the same six feature rows, a pattern explorer) with a second,
+  /// independent master switch, so toggling one did nothing to the other. This
+  /// entry was the only thing on it that had no equivalent, so it moves here
+  /// rather than disappearing with the screen.
+  Widget _buildEarlyAccessTile() {
+    final ext = AppColorsExt.of(context);
+    return AppListTile(
+      icon: Symbols.science_rounded,
+      iconColor: ext.mark(ext.success),
+      title: 'Early access',
+      subtitle: 'Try experimental features',
+      onTap: () {
+        _hapticService.tap();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const EarlyAccessScreen()),
         );
       },
     );

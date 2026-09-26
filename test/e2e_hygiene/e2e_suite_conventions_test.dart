@@ -232,7 +232,12 @@ void main() {
     // against a widget tree that draws `Symbols.foo` is a permanent zero match
     // in EVERY harness. It stayed invisible for months because the rule that
     // catches it only ever scanned integration_test/.
-    final hits = scan(RegExp(r'Icons\.'),
+    // `\b` matters: without it this also matched any identifier ENDING in
+    // "Icons", e.g. `ReminderCategory.availableIcons.first` — a legitimate
+    // domain list, not a Material icon finder. A guard that fires on correct
+    // code gets suppressed with opt-out markers, which is how it stops
+    // catching the thing it was written for.
+    final hits = scan(RegExp(r'\bIcons\.'),
         optOut: 'e2e-icons-ok:', files: unitSuites());
     expect(
       hits,
@@ -282,7 +287,14 @@ void main() {
         // distinct per iteration at run time even though the literal repeats.
         if (title.contains(r'$')) continue;
         if (src.contains('$title\', // dupe-title-ok:')) continue;
-        if (!seen.add('$group $title')) dupes.add('$group > $title');
+        // `\u0000` written as an ESCAPE, not as a literal NUL byte. It used to
+        // be the byte itself, which made `file` report this source as "data"
+        // and made grep treat it as binary — so every `grep` over the one file
+        // whose job is catching tests that cannot fail returned silently empty.
+        // The separator keeps group and title from colliding ("a" + "b|c" vs
+        // "a|b" + "c"); any character no title contains would do, and this one
+        // is guaranteed.
+        if (!seen.add('$group\u0000$title')) dupes.add('$group > $title');
       }
       for (final d in dupes) {
         offenders.add('${rel(f)}  duplicate: "$d"');

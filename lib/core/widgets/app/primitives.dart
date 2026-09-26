@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
+import 'app_button.dart';
 import 'app_switch.dart';
 
 /// Flat scaffold on the token background.
@@ -165,7 +166,15 @@ class SectionHeader extends StatelessWidget {
             ),
           ),
           if (actionLabel != null && onAction != null)
-            TextButton(
+            // Flexible, because this button is INFLEXIBLE and grows with
+            // Dynamic Type. The title beside it is Expanded so it yields, but a
+            // Row only overflows on its non-flex children: at 2.0x on a 320pt
+            // phone the icon (28) + gap (10) + a scaled-up action label ran the
+            // header 10px over. Flexible lets the label ellipsize instead;
+            // `fit: loose` keeps it at its natural width whenever there is room,
+            // so nothing changes at ordinary text sizes.
+            Flexible(
+              child: TextButton(
               onPressed: onAction,
               // Explicit 44pt floor. The app theme trims TextButton's tap
               // target, so every section action ("Customize", "Edit", "See
@@ -178,7 +187,10 @@ class SectionHeader extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.padded,
               ),
               child: Text(actionLabel!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: tt.labelLarge?.copyWith(color: ext.mark(s))),
+            ),
             ),
         ],
       ),
@@ -306,32 +318,55 @@ class EmptyState extends StatelessWidget {
     final ext = AppColorsExt.of(context);
     final s = accent ?? AccentScope.swatchOf(context);
     final tt = Theme.of(context).textTheme;
+    // FittedBox(scaleDown), not a bare Center.
+    //
+    // A 72pt medallion plus a headline and a message that both wrap does not
+    // fit a 320pt phone at 2.0x Dynamic Type — steps_history overflowed by
+    // 184px there, and by 24px at 360pt, clipping the very sentence that tells
+    // the user what to do next.
+    //
+    // scaleDown NEVER enlarges, so at ordinary text sizes this renders exactly
+    // as before; only the cases that would clip are shrunk. Same idiom as
+    // StepActivityRing, which had the identical problem.
+    //
+    // A SingleChildScrollView would be better a11y — the user keeps their full
+    // chosen text size and scrolls — and it was tried first. It introduces a
+    // Viewport, and EmptyState appears on ~30 screens: three focus suites crash
+    // traversing an unlaid-out viewport ("Null check operator used on a null
+    // value" in _ViewportElement.debugVisitOnstageChildren), and screens that
+    // place an EmptyState in an unbounded-height parent threw "BoxConstraints
+    // forces an infinite height". Shrinking to ~0.75 at the worst case (2.0x on
+    // a 320pt phone, i.e. still an effective 1.5x) beats clipping, and beats
+    // destabilising every empty state in the app.
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(color: s.container, shape: BoxShape.circle),
-              child: Icon(icon, size: 34, color: s.onContainer),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(title, style: tt.headlineSmall, textAlign: TextAlign.center),
-            if (message != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(message!,
-                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
-                  textAlign: TextAlign.center),
-            ],
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xxl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                      children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(color: s.container, shape: BoxShape.circle),
+                    child: Icon(icon, size: 34, color: s.onContainer),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(title, style: tt.headlineSmall, textAlign: TextAlign.center),
+                  if (message != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(message!,
+                        style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+                        textAlign: TextAlign.center),
+                  ],
             if (action != null) ...[
               const SizedBox(height: AppSpacing.xl),
               action!,
             ],
           ],
         ),
+      ),
       ),
     );
   }
@@ -841,6 +876,197 @@ class _LoadingSkeletonState extends State<LoadingSkeleton>
           ),
         );
       },
+    );
+  }
+}
+
+/// The section "eyebrow" — a small uppercase label sitting above a heading
+/// ("PERSONAL BEST", "LAST 7 DAYS", "BREATHING").
+///
+/// Thirteen sites compose this shape, in two spellings that differ only in
+/// tracking: `tt.labelSmall?.copyWith(letterSpacing: 0.6)` and the same thing
+/// at 0.5. (Two more, a raw `TextStyle(fontSize: 11, fontWeight: w700)` in
+/// `vitavibe_settings_screen`, went with that screen — being raw they were
+/// also in a different family, since `labelSmall` is Inter and a bare
+/// `TextStyle` falls back to the platform default.) 0.6 is the one kept; the
+/// difference is a tenth of a point and invisible. The point is that there is
+/// now one of them.
+///
+/// Three adopters so far — `PersonalBestCard`, `KpiCell` and `InsightCard`,
+/// the ones that live in this kit. Ten remain hand-rolled in `lib/features`,
+/// across nine files; at 0.6: `trends_dashboard_screen`, `weekly_recap_screen`,
+/// `sleep_consistency_card`, `prediction_card`, `sleep_dashboard_screen`,
+/// `steps_dashboard_screen`; at 0.5: `nunito_medication_detail_screen`,
+/// `sleep_score_ring`, and `home_dashboard` **twice** ('UP NEXT · …' and
+/// 'OF 4'). `_eyebrowBudget` in `design_tokens_guard_test.dart` holds the same
+/// census and says which of the ten want a `color:` rather than the default.
+///
+/// ## Why the default colour is secondary, not tertiary
+///
+/// Six of the ten use `ext.textTertiary`, and at 11pt that is measurably
+/// below AA: 3.50:1 on the light background, 3.78:1 on a light card, 3.85:1 on
+/// a dark card, 4.16:1 on the dark background — where normal text needs 4.5:1
+/// and 11pt is nowhere near the 18pt/14pt-bold exemption. `ext.textSecondary`
+/// clears it in every combination (5.53 / 5.98 / 7.71 / 8.32:1) and is still
+/// plainly a de-emphasised label. So migrating a call site here will darken
+/// its eyebrow slightly; that is the fix, not a side-effect.
+///
+/// [color] exists for the one eyebrow drawn on an accent fill rather than a
+/// surface (`weekly_recap_screen` passes `on.withOpacity(0.7)`), where the
+/// token would be the wrong contrast reference entirely — and for the two that
+/// draw an accent on a surface (`home_dashboard`'s 'UP NEXT · …' in
+/// `ext.mark(accent)`, `sleep_score_ring`'s score band), where the colour is
+/// carrying meaning rather than de-emphasis.
+class AppEyebrow extends StatelessWidget {
+  final String text;
+
+  /// Overrides the AA-safe default. Only for an eyebrow that is NOT on a
+  /// surface — see the class doc.
+  final Color? color;
+
+  /// Forwarded to [Text] unchanged, all four defaulting to null so an eyebrow
+  /// that passes none renders exactly as a bare `Text` does.
+  ///
+  /// They exist because two of the hand-rolled copies are constrained rather
+  /// than free-flowing: `KpiCell`'s label sits in a 4-up row (~70pt a cell on a
+  /// 320pt screen) inside a `FittedBox`, where "REMINDERS" broke as
+  /// "REMINDE / RS" until it was clamped to one unwrapped line; `InsightCard`'s
+  /// overline sits in an `Expanded` and ellipsizes. A widget that could not
+  /// express either would have left both sites hand-rolled.
+  final TextAlign? textAlign;
+  final int? maxLines;
+  final TextOverflow? overflow;
+  final bool? softWrap;
+
+  const AppEyebrow(
+    this.text, {
+    super.key,
+    this.color,
+    this.textAlign,
+    this.maxLines,
+    this.overflow,
+    this.softWrap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    return Text(
+      // Idempotent, so a call site that already passes 'PERSONAL BEST' renders
+      // identically to one that passes 'Personal best'.
+      text.toUpperCase(),
+      textAlign: textAlign,
+      maxLines: maxLines,
+      overflow: overflow,
+      softWrap: softWrap,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color ?? ext.textSecondary,
+            letterSpacing: 0.6,
+          ),
+    );
+  }
+}
+
+/// The −/+ value stepper: two icon buttons around a large number.
+///
+/// Three copies of this had drifted apart — `aqua_water_dashboard`,
+/// `aqua_quick_add_grid` and `hydration_profile_screen` — with icon padding of
+/// 10 against 8, value type of `displayLarge` against a raw
+/// `TextStyle(fontSize: 28)`, and **no `tooltip:` on any of the six
+/// `IconButton`s**, so a screen reader announced each of them as an unlabelled
+/// "button". Hence [decrementTooltip] / [incrementTooltip] being required
+/// rather than optional: the reason the copies had none is that nothing asked.
+///
+/// The value shrinks to fit rather than wrapping or clipping. A stepper is a
+/// fixed row — two 44pt targets and two gaps — so on a 320pt phone at 2.0×
+/// Dynamic Type a 28pt number has ~200pt to live in, and `scaleDown` never
+/// enlarges, so a value that already fits is unchanged.
+///
+/// Must be laid out with a bounded width (the value takes the remaining
+/// space); inside a sheet, card or column body that is always true.
+class AppStepper extends StatelessWidget {
+  /// The formatted value, e.g. `'2000ml'`.
+  final String value;
+
+  /// Optional second line under [value], e.g. `'8 glasses'`.
+  final String? subLabel;
+
+  /// Null disables the button — at a clamp boundary, say.
+  final VoidCallback? onDecrement;
+  final VoidCallback? onIncrement;
+
+  final String decrementTooltip;
+  final String incrementTooltip;
+
+  final AccentSwatch? accent;
+
+  /// Defaults to `displayMedium` (28) — the size two of the three copies drew.
+  /// Pass `displayLarge` for a hero stepper.
+  final TextStyle? valueStyle;
+
+  const AppStepper({
+    super.key,
+    required this.value,
+    required this.decrementTooltip,
+    required this.incrementTooltip,
+    this.onDecrement,
+    this.onIncrement,
+    this.subLabel,
+    this.accent,
+    this.valueStyle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final s = accent ?? AccentScope.swatchOf(context);
+    final tt = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        AppIconButton(
+          icon: Symbols.remove_rounded,
+          tooltip: decrementTooltip,
+          onPressed: onDecrement,
+          accent: s,
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: (valueStyle ?? tt.displayMedium)
+                      ?.copyWith(color: ext.mark(s)),
+                ),
+              ),
+              if (subLabel != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subLabel!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        AppIconButton(
+          icon: Symbols.add_rounded,
+          tooltip: incrementTooltip,
+          onPressed: onIncrement,
+          accent: s,
+        ),
+      ],
     );
   }
 }

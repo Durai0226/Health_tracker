@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/design/app_design.dart';
 import '../theme/aqua_theme.dart';
 
 /// A self-contained, asset-free, theme-aware shimmer effect.
@@ -47,13 +48,18 @@ class _AquaShimmerState extends State<AquaShimmer>
     }
     if (!_controller.isAnimating) _controller.repeat();
 
-    final isDark = AquaTheme.isDark(context);
+    final ext = AppColorsExt.of(context);
     // Highlight band. Fading to fully-transparent (highlight.withOpacity(0))
-    // rather than Colors.transparent avoids the grey/black fringe that
+    // rather than a named transparent avoids the grey/black fringe that
     // interpolating toward premultiplied-black transparent can produce.
-    final highlight = isDark
-        ? Colors.white.withOpacity(0.14)
-        : Colors.white.withOpacity(0.70);
+    //
+    // Both ends are token surfaces now: on light the sweep is the card surface
+    // itself brightening the skeleton, on dark it is the elevated surface. It
+    // was `white` at 0.70 / 0.14 in both themes, which on dark is a white haze
+    // over a near-black card.
+    final highlight = ext.isDark
+        ? ext.surfaceElevated.withOpacity(0.75)
+        : ext.surface.withOpacity(0.70);
 
     return AnimatedBuilder(
       animation: _controller,
@@ -112,9 +118,9 @@ class AquaSkeletonBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = AquaTheme.isDark(context)
-        ? Colors.white.withOpacity(0.10)
-        : const Color(0xFFE4E9EF);
+    // The skeleton's own fill: the token variant surface, which is what a
+    // not-yet-loaded card actually is.
+    final color = AppColorsExt.of(context).surfaceVariant;
     return Container(
       width: width,
       height: height,

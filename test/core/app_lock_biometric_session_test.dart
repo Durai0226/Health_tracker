@@ -9,6 +9,7 @@
 library;
 
 import 'package:drift/native.dart';
+import 'package:clock/clock.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth_platform_interface/local_auth_platform_interface.dart';
@@ -113,6 +114,57 @@ void main() {
     expect(AppLockService().isLockedNotifier.value, isFalse,
         reason: 'a user who fumbled the sensor for 30s was re-locked the '
             'instant they succeeded');
+  });
+
+  test('a successful unlock is not undone by the pause that caused the lock',
+      () async {
+    // The sibling test above cannot fail on this: it round-trips in
+    // milliseconds against a 30-SECOND grace period, so the re-lock branch is
+    // never reached whether the guard is there or not. This one pins the clock
+    // and walks the real OEM sequence.
+    await AppLockService().setPin('1234');
+    await AppLockService().init();
+    AppLockService().unlock();
+
+    final t0 = DateTime(2026, 3, 1, 9, 0);
+    at(Duration d, void Function() body) =>
+        withClock(Clock.fixed(t0.add(d)), body);
+
+    // 1. The user backgrounds the app.
+    at(Duration.zero,
+        () => AppLockService()
+            .didChangeAppLifecycleState(AppLifecycleState.paused));
+
+    // 2. They come back a minute later — well past the grace period — so the
+    //    app locks. This is the pause that justifies the lock.
+    at(const Duration(minutes: 1),
+        () => AppLockService()
+            .didChangeAppLifecycleState(AppLifecycleState.resumed));
+    expect(AppLockService().isLockedNotifier.value, isTrue,
+        reason: 'sanity: a long background must lock, or the rest of this '
+            'test proves nothing');
+
+    // 3. The lock screen raises OUR biometric prompt. On an OEM whose prompt is
+    //    its own activity, that pauses the host — and the _inFlight guard
+    //    correctly refuses to restart the clock.
+    final f = AppLockService().authenticateWithBiometrics();
+    at(const Duration(minutes: 1, seconds: 1),
+        () => AppLockService()
+            .didChangeAppLifecycleState(AppLifecycleState.paused));
+    fake.complete(true);
+    await f;
+    AppLockService().unlock(); // what PinEntryScreen does on success
+
+    // 4. The prompt closing fires `resumed`.
+    at(const Duration(minutes: 2),
+        () => AppLockService()
+            .didChangeAppLifecycleState(AppLifecycleState.resumed));
+
+    expect(AppLockService().isLockedNotifier.value, isFalse,
+        reason: 'the pause from step 1 was already acted on in step 2. '
+            'Measuring this resume against it locks the user again the instant '
+            'they authenticate — and it is guaranteed to, because that instant '
+            'is by definition already past the grace period');
   });
 
   test('outcomes the UI must speak about are distinguished from a cancel', () {

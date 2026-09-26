@@ -5,6 +5,7 @@ import '../../design/app_colors_ext.dart';
 import '../../health/insight.dart';
 import '../../health/safety_guard.dart';
 import 'app_card.dart';
+import 'primitives.dart';
 import 'progress_ring.dart';
 import 'vitals_theme.dart';
 
@@ -104,13 +105,14 @@ class KpiCell extends StatelessWidget {
         // WATER, FOCUS) render exactly as before.
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(
-            label.toUpperCase(),
+          // AppEyebrow, not a hand-rolled labelSmall: this was one of the
+          // copies of that style. It already drew textSecondary, so the colour
+          // is unchanged here — only the tracking moves, 0.5 → the kit's 0.6.
+          child: AppEyebrow(
+            label,
             textAlign: TextAlign.center,
             maxLines: 1,
             softWrap: false,
-            style: tt.labelSmall
-                ?.copyWith(color: ext.textSecondary, letterSpacing: 0.5),
           ),
         ),
       ],
@@ -414,12 +416,16 @@ class InsightCard extends StatelessWidget {
                   size: 14, color: ext.mark(accent)),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
-                  '${_featureName(insight.feature).toUpperCase()} · ${_severityWord(insight.severity).toUpperCase()}',
+                // AppEyebrow uppercases, so the two halves go in cased and the
+                // '·' between them is caseless either way. This one DID change
+                // colour: textTertiary at 11pt measures 3.78:1 on a light card
+                // and 3.85:1 on a dark one, under the 4.5:1 AA asks of normal
+                // text, and the eyebrow here names the feature and the severity
+                // — the two words that say what the card is about.
+                child: AppEyebrow(
+                  '${_featureName(insight.feature)} · ${_severityWord(insight.severity)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: tt.labelSmall
-                      ?.copyWith(color: ext.textTertiary, letterSpacing: 0.5),
                 ),
               ),
               const SizedBox(width: 6),

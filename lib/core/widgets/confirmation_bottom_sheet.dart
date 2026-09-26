@@ -1,142 +1,93 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:flutter/services.dart';
 
-/// Standard confirmation bottom sheet for critical actions
-/// Replaces AlertDialog for delete, logout, and destructive actions
+import '../design/app_design.dart';
+import 'app/app_bottom_sheet.dart';
+import 'app/app_button.dart';
+
+/// The destructive-confirmation sheet — delete account, erase all data, restore
+/// a backup, reset a forgotten PIN.
+///
+/// Now a thin adapter over [AppBottomSheet], which is the point: this was the
+/// app's most consequential surface and also its least conformant one. It
+/// hand-rolled a sheet that agreed with nothing else on screen —
+/// `Color(0xFF1E1E1E)` for the dark surface (the theme's elevated dark surface
+/// is `#1E242C`, so it was a visibly different grey from every other sheet), a
+/// top radius of 20 against [AppRadius.sheet] 24, `Colors.red.shade400` for
+/// danger against `ext.error`, `Theme.of(context).primaryColor` for the
+/// non-destructive fill, and raw 18/14pt `TextStyle`s where the type scale has
+/// `headlineSmall` / `bodyMedium`.
+///
+/// The danger red was the measurable one: white on `Colors.red.shade400`
+/// (`#EF5350`) is 3.49:1 in both themes, below the 4.5:1 a 13pt button label
+/// needs. The token path is 4.83:1 on light. On dark it is 2.77:1 — worse, and
+/// not fixable from here: [AppButtonVariant.danger] hardcodes a white
+/// foreground instead of pairing `fillBg`/`fillFg`, so all five danger buttons
+/// in the app share that defect and it has to be fixed in `app_button.dart`.
+///
+/// The five call sites are unchanged. Layout follows [AppBottomSheet]'s grammar
+/// now, so the title and message are leading-aligned rather than centred, and
+/// the icon sits in the header chip rather than in a 56pt circle above the
+/// title — for a destructive sheet that chip is tinted with the error swatch's
+/// container pair (6.80:1 in both themes), which is what carries the signal.
 class ConfirmationBottomSheet {
-  /// Show a confirmation sheet for destructive actions
+  /// Show a confirmation sheet for destructive actions.
+  ///
+  /// The former `confirmColor` parameter is gone: it took a raw [Color], which
+  /// cannot be resolved into an accent-aware fill, and no call site passed it.
   static Future<bool?> show({
     required BuildContext context,
     required String title,
     required String message,
     String confirmText = 'Confirm',
     String cancelText = 'Cancel',
-    Color? confirmColor,
     IconData? icon,
     bool isDangerous = false,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dangerColor = Colors.red.shade400;
-    final primaryColor = Theme.of(context).primaryColor;
-    final buttonColor = isDangerous ? dangerColor : (confirmColor ?? primaryColor);
+    final ext = AppColorsExt.of(context);
 
-    return showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 16,
-        ),
-        child: Column(
+    return AppBottomSheet.show<bool>(
+      context,
+      title: title,
+      icon: icon,
+      // A destructive sheet states itself in its own accent rather than
+      // inheriting whichever feature the caller happened to be scoped to.
+      accent: isDangerous ? ext.error : null,
+      builder: (ctx) {
+        final tt = Theme.of(ctx).textTheme;
+        return Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.black12,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            if (icon != null) ...[
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: buttonColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: buttonColor, size: 28),
-              ),
-              const SizedBox(height: 16),
-            ],
             Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-              textAlign: TextAlign.center,
+              message,
+              style: tt.bodyMedium?.copyWith(color: AppColorsExt.of(ctx).textSecondary),
             ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                message,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.white60 : Colors.black54,
+            const SizedBox(height: AppSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: cancelText,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => Navigator.pop(ctx, false),
+                  ),
                 ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.pop(context, false);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(
-                          color: isDark ? Colors.white24 : Colors.black12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        cancelText,
-                        style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black54,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: AppButton(
+                    label: confirmText,
+                    variant: isDangerous
+                        ? AppButtonVariant.danger
+                        : AppButtonVariant.primary,
+                    onPressed: () => Navigator.pop(ctx, true),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        HapticFeedback.mediumImpact();
-                        Navigator.pop(context, true);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        confirmText,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 

@@ -647,7 +647,38 @@ class HealthDataService {
   /// HealthKit never discloses READ authorization (`hasPermissions` returns null
   /// by design), so there we fall back to the persisted "user completed the
   /// connect flow" flag.
-  Future<HealthAvailability> availability() async {
+  /// Memoised for the session.
+  ///
+  /// Ten call sites reach this, several on screen-open paths that wrap it in a
+  /// six-second timeout — sleep, steps, heart and workouts each paid a platform
+  /// round trip every time the user opened them, for an answer that changes at
+  /// most a handful of times in a device's life.
+  ///
+  /// The cache is NOT permanent, because the answer genuinely can change
+  /// mid-session: [installHealthConnect] and [requestPermissions] both exist to
+  /// change it, and both clear this. A change made OUTSIDE the app (installing
+  /// Health Connect from the Play Store directly) is picked up by the next
+  /// launch, or by passing [forceRefresh] — the in-app install flow already
+  /// routes through installHealthConnect, so it re-reads without needing that.
+  HealthAvailability? _cachedAvailability;
+
+  /// Drop the memoised answer. Call after anything that could change it.
+  void invalidateAvailabilityCache() => _cachedAvailability = null;
+
+  Future<HealthAvailability> availability({bool forceRefresh = false}) async {
+    final cached = _cachedAvailability;
+    if (!forceRefresh && cached != null) return cached;
+    final result = await _readAvailability();
+    // Deliberately caches `unavailable` too. It is a real answer on a device
+    // with no health provider, and re-asking on every screen open is exactly
+    // the cost this exists to remove. The catch below only reaches it on a
+    // genuine platform failure, and the invalidation hooks cover the cases
+    // where the answer can actually change.
+    _cachedAvailability = result;
+    return result;
+  }
+
+  Future<HealthAvailability> _readAvailability() async {
     try {
       await _ensureConfigured();
 
@@ -708,6 +739,9 @@ class HealthDataService {
   /// request, so a user who allowed steps + sleep but not calories/distance would
   /// otherwise be told "not granted" and left with the Enable card up.
   Future<bool> requestPermissions() async {
+    // Both of these exist to CHANGE the availability answer, so the memoised
+    // one is stale the moment they are called.
+    invalidateAvailabilityCache();
     try {
       await _ensureConfigured();
       await _setAsked(true);
@@ -764,6 +798,9 @@ class HealthDataService {
 
   /// Send the user to the Play Store to install / update Health Connect.
   Future<void> installHealthConnect() async {
+    // Both of these exist to CHANGE the availability answer, so the memoised
+    // one is stale the moment they are called.
+    invalidateAvailabilityCache();
     if (!Platform.isAndroid) return;
     try {
       await _health.installHealthConnect();
@@ -848,6 +885,26 @@ class HealthDataService {
   }
 
   /// 24 hourly step buckets for [day].
+  /// SS-12 — this makes 24 platform round trips, one per hour.
+  ///
+  /// Measured: `readStepsForDay` is 1 call, this is 24, so a full
+  /// `syncFromHealth()` pass costs 24 + 3 for today plus 3 for each of the other
+  /// six days = 45 round trips, **53% of them for one chart**.
+  ///
+  /// The `health` package CAN do it in one:
+  /// `getHealthIntervalDataFromTypes(startDate:, endDate:, types:, interval:)`
+  /// (health 13.3.2, health_plugin.dart:1275) returns bucketed points for a
+  /// range. Deliberately NOT swapped in here, for the same reason the Kotlin
+  /// items in this audit were left alone: the bucket alignment and the unit of
+  /// `interval` cannot be verified without a device, and this feeds the user's
+  /// hourly step chart. Replacing a working read with an unverified one and
+  /// calling it done is the failure mode this audit kept finding.
+  ///
+  /// To finish it: confirm on-device that `interval` is seconds and that empty
+  /// hours come back as zero-valued buckets rather than being omitted (this
+  /// method's contract is a dense 24-element list), then map the points into
+  /// `out` by hour. Keep the `catch` — a partial read must still return zeros
+  /// rather than throw into the sync.
   Future<List<int>> readHourlySteps(DateTime day) async {
     final out = List<int>.filled(24, 0);
     try {

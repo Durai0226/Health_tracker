@@ -78,7 +78,7 @@ class BatteryOptimizationService {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'This is critical for medication reminders!',
+                      'This is critical for medicine reminders!',
                       style: TextStyle(
                         color: Colors.orange.shade800,
                         fontWeight: FontWeight.w500,

@@ -34,6 +34,7 @@ import '../../../core/health/coach_text.dart';
 import '../../../core/health/streak_milestones.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/widgets/toast/toast.dart';
+import 'package:clock/clock.dart';
 
 class FocusScreen extends StatefulWidget {
   const FocusScreen({super.key});
@@ -182,7 +183,7 @@ class _FocusScreenState extends State<FocusScreen> {
                   final started = _breathingStartedAt;
                   if (started != null) {
                     _focusService.writeBreathingMindfulness(
-                        start: started, end: DateTime.now());
+                        start: started, end: clock.now());
                   }
                   _breathingStartedAt = null;
                   setState(() => _showBreathing = false);
@@ -190,7 +191,7 @@ class _FocusScreenState extends State<FocusScreen> {
                     _prerollThenStart = false;
                     _startSession();
                   } else {
-                    _showCompletionSnackbar('Breathing exercise completed!');
+                    _showCompletionToast('Breathing exercise completed!');
                   }
                 },
                 onClose: () {
@@ -324,7 +325,12 @@ class _FocusScreenState extends State<FocusScreen> {
                           _buildFeaturesGrid(ext),
                           const SizedBox(height: AppSpacing.xl),
                           _buildQuickStats(ext),
-                          const SizedBox(height: 120),
+                          // Was a magic 120. This is a TAB ROOT whose content
+                          // scrolls behind the nav bar and the FAB overhanging
+                          // it, which is exactly what `underNav` computes —
+                          // and unlike the constant it adds the gesture-bar
+                          // inset, so the last row is not half under the pill.
+                          SizedBox(height: AppInsets.underNav(context)),
                         ];
                         return ListView.builder(
                           physics: const BouncingScrollPhysics(),
@@ -722,7 +728,7 @@ class _FocusScreenState extends State<FocusScreen> {
                   onPressed: _finishFlowSession,
                 )
               : AppButton(
-                  label: 'Give Up',
+                  label: 'Give up',
                   leadingIcon: Symbols.close_rounded,
                   variant: AppButtonVariant.danger,
                   size: AppButtonSize.lg,
@@ -959,13 +965,34 @@ class _FocusScreenState extends State<FocusScreen> {
         _selectedBreathingPattern = BreathingPattern.balancing;
         _showBreathing = true;
         _prerollThenStart = true;
-        _breathingStartedAt = DateTime.now();
+        _breathingStartedAt = clock.now();
       });
       return;
     }
     _hapticService.focusStart();
     _vitaVibeService.focusStart();
     _focusService.startSession();
+    // Flow mode gets its own line, because it has no target to announce.
+    //
+    // This used to read the same `selectedMinutes` as every other mode — and
+    // `startSession()` has just set that field to `kMaxSessionMinutes` for a
+    // flow session, since the cap is what `_phaseMinutes` needs. So the toast
+    // greeted a flow session with "600 minute session - stay focused!", which is
+    // both absurd on its face and a target the feature explicitly refuses to
+    // set: the ring stays empty and the readout counts UP for exactly this
+    // reason (see `FocusService.progress`).
+    if (_focusService.isCountUp) {
+      ToastService.show(
+        context,
+        type: ToastType.info,
+        feature: ToastFeature.focus,
+        title: 'Flow session started',
+        message: 'No timer to beat — counting up. Tap Done when you\'re ready.',
+        customIcon: Symbols.play_circle_rounded,
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
     FocusToast.sessionStarted(context,
         minutes: _focusService.mode == FocusMode.pomodoro
             ? _focusService.workMinutes
@@ -1705,12 +1732,20 @@ class _FocusScreenState extends State<FocusScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: AppSpacing.md),
                   child: GestureDetector(
+                    // A locked tile used to have a null onTap: it looks
+                    // tappable, it IS tapped, and nothing happened — no toast,
+                    // no shake, nothing. The unlock rule is already on the tile
+                    // ("45m"); saying it out loud costs one line and turns a
+                    // dead tap into an answer.
                     onTap: isUnlocked
                         ? () {
                             _hapticService.selection();
                             _focusService.setPlant(plant);
                           }
-                        : null,
+                        : () => context.toastInfo(
+                              '${plant.name} unlocks after '
+                              '${plant.unlockMinutes} minutes of focus.',
+                            ),
                     child: AnimatedContainer(
                       duration: AppMotion.fast,
                       curve: AppMotion.standard,
@@ -1829,7 +1864,17 @@ class _FocusScreenState extends State<FocusScreen> {
                   tooltip: _focusService.isAudioPlaying
                       ? 'Pause ambient sound'
                       : 'Play ambient sound',
-                  onPressed: () => _focusService.toggleAudio(),
+                  // With no sound chosen there is nothing loaded and nothing to
+                  // replay, so `AudioService.toggle()` -> `resume()` returns
+                  // without touching the engine: a play button that plays
+                  // nothing and reports nothing. The picker is one tap away and
+                  // is what the user actually needs.
+                  onPressed: sound == AmbientSoundType.none
+                      ? () {
+                          context.toastInfo('Pick a sound first.');
+                          _showSoundPicker();
+                        }
+                      : () => _focusService.toggleAudio(),
                 ),
               ],
             ),
@@ -1876,7 +1921,7 @@ class _FocusScreenState extends State<FocusScreen> {
                         setState(() {
                           _selectedBreathingPattern = pattern;
                           _showBreathing = true;
-                          _breathingStartedAt = DateTime.now();
+                          _breathingStartedAt = clock.now();
                         });
                       },
                       child: Column(
@@ -2280,25 +2325,35 @@ class _FocusScreenState extends State<FocusScreen> {
   // Sound picker sheet
   // ---------------------------------------------------------------------------
 
+  /// The [ListenableBuilder] is load-bearing, for the same reason as the one in
+  /// [_showSessionSetupSheet]: a modal sheet is its own route, so this screen's
+  /// listener does not rebuild it. [AmbientSoundSelector] is stateless and takes
+  /// the volume as a value, so without this the slider was handed
+  /// `_focusService.soundVolume` exactly once — the thumb could not move. The
+  /// audio volume followed the drag, so the sound changed while the control
+  /// reporting it sat still and snapped back on release.
   void _showSoundPicker() {
     AppBottomSheet.show(
       context,
       title: 'Ambient Sounds',
       icon: Symbols.music_note_rounded,
       accent: AppColorsExt.of(context).focus,
-      builder: (ctx) => AmbientSoundSelector(
-        selectedSound: _focusService.selectedSound,
-        volume: _focusService.soundVolume,
-        onSoundChanged: (sound) {
-          _focusService.setSound(sound);
-          Navigator.pop(ctx);
-        },
-        onVolumeChanged: (volume) {
-          _focusService.setSoundVolume(volume, persist: false);
-        },
-        onVolumeCommitted: (volume) {
-          _focusService.setSoundVolume(volume);
-        },
+      builder: (ctx) => ListenableBuilder(
+        listenable: _focusService,
+        builder: (context, _) => AmbientSoundSelector(
+          selectedSound: _focusService.selectedSound,
+          volume: _focusService.soundVolume,
+          onSoundChanged: (sound) {
+            _focusService.setSound(sound);
+            Navigator.pop(ctx);
+          },
+          onVolumeChanged: (volume) {
+            _focusService.setSoundVolume(volume, persist: false);
+          },
+          onVolumeCommitted: (volume) {
+            _focusService.setSoundVolume(volume);
+          },
+        ),
       ),
     );
   }
@@ -2378,13 +2433,13 @@ class _FocusScreenState extends State<FocusScreen> {
         ),
         actions: [
           AppButton(
-            label: 'Keep Going',
+            label: 'Keep going',
             variant: AppButtonVariant.secondary,
             accent: ext.focus,
             onPressed: () => Navigator.pop(dialogCtx),
           ),
           AppButton(
-            label: 'Give Up',
+            label: 'Give up',
             variant: AppButtonVariant.danger,
             onPressed: () {
               Navigator.pop(dialogCtx);
@@ -2392,7 +2447,7 @@ class _FocusScreenState extends State<FocusScreen> {
               // it is written, so this is the last moment it can land.
               if (blamed != null) _focusService.logDistraction(blamed!);
               _focusService.abandonSession();
-              _showCompletionSnackbar('Session abandoned. Your plant has withered 🥀');
+              _showCompletionToast('Session abandoned. Your plant has withered 🥀');
             },
           ),
         ],
@@ -2458,7 +2513,7 @@ class _FocusScreenState extends State<FocusScreen> {
         ),
         actions: [
           AppButton(
-            label: 'Stay Focused',
+            label: 'Stay focused',
             variant: AppButtonVariant.secondary,
             accent: ext.focus,
             onPressed: () => Navigator.pop(dialogCtx),
@@ -2472,7 +2527,7 @@ class _FocusScreenState extends State<FocusScreen> {
               // this screen into its idle state. Do NOT pop the screen itself —
               // it's a tab root, so popping leaves a black screen.
               _focusService.abandonSession();
-              _showCompletionSnackbar('Session abandoned. Your plant has withered 🥀');
+              _showCompletionToast('Session abandoned. Your plant has withered 🥀');
             },
           ),
         ],
@@ -2480,14 +2535,7 @@ class _FocusScreenState extends State<FocusScreen> {
     );
   }
 
-  void _showCompletionSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        margin: const EdgeInsets.all(AppSpacing.lg),
-      ),
-    );
+  void _showCompletionToast(String message) {
+    context.toastInfo(message);
   }
 }

@@ -44,6 +44,17 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Gradle output. `./gradlew :app:compileDebugKotlin` (the pre-Android-build
+# check in docs/release-checklist.md) writes a problems report here, which
+# otherwise shows up as an untracked directory after every run.
+/android/build/
+/android/app/build/
+/android/.gradle/
+
+# xcodebuild output. A bare `xcodebuild -target ...` (no -derivedDataPath) drops
+# products in ios/build/, which the root /build/ rule does not match.
+/ios/build/
+
 # Sensitive Config Files
 *.env
 key.properties

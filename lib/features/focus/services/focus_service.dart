@@ -21,6 +21,7 @@ import 'coins_service.dart';
 import 'focus_reminder_scheduler.dart';
 import 'focus_session_alarm.dart';
 import 'tag_service.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// Shortest session the app will run. Below this a "session" is not measurable.
 const int kMinSessionMinutes = 1;
@@ -61,6 +62,21 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   bool _isRunning = false;
   bool _isPaused = false;
   int _remainingSeconds = 0;
+
+  /// A completion or abandon is already in flight.
+  ///
+  /// `_isRunning` cannot serve as this guard: it is only cleared in
+  /// `_resetSession()`, which runs AFTER the disarm, the audio stop, the DAO
+  /// upsert, the tag write and the coin award — five awaits during which a second
+  /// call still passes an `_isRunning` check and runs the whole payout again.
+  /// `AppButton` has no debounce, so a double-tap on Done in flow mode banked two
+  /// sessions, two plants and eighty coins for one twenty-minute session, which
+  /// skews `totalMinutes`, `totalSessions` and the median-length suggestion. The
+  /// same window let Give Up in the final second file an abandoned record
+  /// alongside the completed one, or throw on `_startTime!` if the reset landed
+  /// first. Set SYNCHRONOUSLY, before any await, and cleared by whichever state
+  /// transition ends the window.
+  bool _finishing = false;
 
   /// Fires once a second while a session runs — and NOTHING else.
   ///
@@ -114,6 +130,16 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _startTime;
   DateTime? _endTime;
   DateTime? _pauseStartTime;
+
+  /// Time spent PAUSED in the current interval.
+  ///
+  /// [elapsedSeconds] measures `now - _startTime`, and neither pause nor resume
+  /// ever moved `_startTime` — so flow mode, whose whole record is
+  /// "time spent", banked paused time as focused time: pause for twenty
+  /// minutes, tap Done, and twenty minutes the user did not focus went into the
+  /// session, the daily total, the streak and the median-duration suggestion.
+  /// (Countdown mode was unaffected: it pushes `_endTime` forward instead.)
+  Duration _pausedTotal = Duration.zero;
   Timer? _timer;
 
   // Total length (minutes) of the interval that is currently running. For single
@@ -199,7 +225,14 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   int get elapsedSeconds {
     final start = _startTime;
     if (!_isRunning || start == null) return 0;
-    final e = clock.now().difference(start).inSeconds;
+    var paused = _pausedTotal;
+    // A pause still in progress counts too, or the readout keeps climbing
+    // while the session is stopped.
+    final pausedSince = _pauseStartTime;
+    if (_isPaused && pausedSince != null) {
+      paused += clock.now().difference(pausedSince);
+    }
+    final e = clock.now().difference(start).inSeconds - paused.inSeconds;
     return e < 0 ? 0 : e;
   }
 
@@ -221,7 +254,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   
   int get weekMinutes {
     final now = clock.now();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    final weekStart = startOfWeek(now);
     return _sessions
         .where((s) => s.startedAt.isAfter(weekStart) && s.wasCompleted)
         .fold(0, (sum, s) => sum + s.actualMinutes);
@@ -290,11 +323,13 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
         if (_isRunning) {
           _timer?.cancel();
           _timer = null;
-          _saveActiveSession();
           // Covers the one case arming-at-start cannot: the ticker pre-empted the
           // notification in the final seconds and the user then left the screen.
           // Idempotent — same id, so re-arming an already-armed phase replaces.
+          //
+          // BEFORE the snapshot, so the snapshot records the armed instant.
           if (!_isPaused) _armCompletion();
+          _saveActiveSession();
         }
       case AppLifecycleState.inactive:
         break; // transient (a system overlay); keep ticking
@@ -450,6 +485,17 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
         // Remaining is persisted so a session killed WHILE PAUSED resumes with
         // the right amount left — a paused session has no meaningful end time.
         'remainingSeconds': _remainingSeconds,
+        // The armed instant, because the OS keeps a scheduled notification
+        // across a process kill and the guard against announcing twice does
+        // not. Without it `_armedFor` came back null, `_disarmCompletion()`
+        // computed `_completionDelivered = false`, and the user who had stepped
+        // away got the scheduled banner and then a SECOND one the moment they
+        // reopened the app — exactly the duplicate `_completionDelivered`
+        // exists to prevent, reintroduced by the kill.
+        //
+        // Every writer arms or disarms BEFORE calling this, so what is stored
+        // is the state the OS is actually in.
+        'armedForMs': _armedFor?.millisecondsSinceEpoch,
       });
     } catch (e) {
       debugPrint('Error saving active focus session: $e');
@@ -498,9 +544,46 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       _endTime = endsAt;
       _isRunning = true;
       _isPaused = data['isPaused'] == true;
+      // Restored BEFORE either completion path below can run: `_disarmCompletion`
+      // reads it to decide whether the OS has already announced this session,
+      // and that decision is the whole of `_completionDelivered`.
+      final armedMs = data['armedForMs'] as int?;
+      _armedFor =
+          armedMs == null ? null : DateTime.fromMillisecondsSinceEpoch(armedMs);
 
       if (_isPaused) {
-        _remainingSeconds = (data['remainingSeconds'] as int?) ?? 0;
+        // An ABSENT `remainingSeconds` is not evidence of a finished interval.
+        //
+        // Defaulting it to 0 meant any snapshot written without that key — an
+        // older build, a partial write, a pause persisted fire-and-forget and
+        // then killed — was credited a FULL completed session: a plant, the
+        // coins and the minutes, for a session whose end time had not arrived.
+        // When the key is missing, fall back to what the stored end time
+        // implies, and require BOTH signals to agree before banking anything.
+        final storedRemaining = data['remainingSeconds'] as int?;
+        _remainingSeconds = storedRemaining ??
+            endsAt.difference(clock.now()).inSeconds.clamp(0, 24 * 60 * 60);
+        if (_remainingSeconds <= 0 && !endsAt.isAfter(clock.now())) {
+          // A paused snapshot with nothing left on it is a finished interval.
+          // Restoring it would show 00:00 with Resume doing nothing, so the only
+          // way out of the screen would be Give Up — for a session that had
+          // already run its full length.
+          debugPrint('✓ Recovered a paused focus session with no time left');
+          await _onIntervalComplete();
+          return;
+        }
+        // Re-anchor BOTH halves of the pause, because neither survives a kill.
+        //
+        // `resumeSession()` requires `_pauseStartTime`, and it lives only in
+        // memory — so a recovered pause left Resume a DEAD BUTTON: pressing it
+        // returned silently, and the user's only exit was Give Up, which withers
+        // the plant and files an abandoned session for one they meant to finish.
+        // `_endTime` is likewise still the pre-kill instant, already in the past
+        // after any real interruption, so even a working Resume would have pushed
+        // it forward from there and handed back the wrong countdown.
+        final now = clock.now();
+        _pauseStartTime = now;
+        _endTime = now.add(Duration(seconds: _remainingSeconds));
         notifyListeners();
         debugPrint('✓ Recovered a PAUSED focus session');
         return;
@@ -687,6 +770,29 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Re-read the session history from Drift and rebuild the UI from it.
+  ///
+  /// Cloud sync applies downloaded sessions with `focusDao.upsertRaw`, which
+  /// never passes through this service — so the garden, streak and stats keep
+  /// rendering the pre-sync history until the next launch.
+  ///
+  /// Deliberately narrower than `_loadData()`: that also re-reads the
+  /// preference blob, and doing so mid-session resets the in-flight phase
+  /// length over the running timer — the reason [init] is guarded at all.
+  Future<void> reloadSessionsFromDb() async {
+    try {
+      final rows = await _focusDao.getAll();
+      _sessions = rows.map(_fromRow).toList();
+      // `_stats` is NOT rebuilt here: it is a separately persisted blob kept
+      // incrementally (and synced in its own pass), not derived from the
+      // session list. Recomputing it from history would silently disagree with
+      // the wallet and the streak.
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error reloading focus sessions: $e');
+    }
+  }
+
   /// Write one session. Called at each of the four points `_sessions` changes.
   ///
   /// Per-row rather than rewriting the whole history on every save: that is what
@@ -783,28 +889,61 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Persist everything. For history and stats changes — not for a single
   /// setting, which has [_savePreference].
+  /// Everything `_saveData` persists, as one map.
+  ///
+  /// Split out so a caller can compare it against what is already stored and
+  /// skip the write entirely — see [_saveData].
+  Map<String, dynamic> _persistableState() => {
+        'focusSelectedMinutes': _selectedMinutes,
+        'focusMode': _mode.index,
+        'focusPomoWorkMinutes': _workMinutes,
+        'focusPomoShortBreakMinutes': _shortBreakMinutes,
+        'focusPomoLongBreakMinutes': _longBreakMinutes,
+        'focusPomoRoundsBeforeLong': _roundsBeforeLongBreak,
+        'focusPomoTotalRounds': _totalRounds,
+        'focusSelectedPlant': _selectedPlant.index,
+        'focusSelectedActivityType': _selectedActivity.index,
+        'focusSelectedSound': _selectedSound.index,
+        'focusSoundVolume': _soundVolume,
+        _kBreathingPreroll: _breathingPreroll,
+        _kMindfulnessSync: _mindfulnessSync,
+        'focusSelectedTagIds': _selectedTagIds,
+        'focusStats': _stats.toJson(),
+        'focusGarden': _garden.map((p) => p.toJson()).toList(),
+        'focusAchievements':
+            _achievements.map((k, v) => MapEntry(k.index.toString(), v.toJson())),
+        'focusUnlockedPlants': _unlockedPlants.map((p) => p.index).toList(),
+        'focusUsedSounds': _usedSounds.map((s) => s.index).toList(),
+      };
+
+  /// Persist the focus state — in ONE transaction, and only when it changed.
+  ///
+  /// This was 19 sequential `setAppPreference` calls, each its own Drift write
+  /// with its own WAL fsync, and `_checkAndUpdateStreak` calls it
+  /// unconditionally from `init()` — which main awaits in its pre-runApp
+  /// `Future.wait`. A user who had never opened Focus paid all 19 writes before
+  /// the first frame of every cold start, to store values identical to what was
+  /// already on disk.
+  ///
+  /// The comparison is on the ENCODED form, because that is what actually goes
+  /// to SQLite: comparing the objects would miss a map whose contents changed
+  /// but whose identity did not, and would report a change for an equal map
+  /// rebuilt each call.
   Future<void> _saveData() async {
     try {
-      await CleanStorageService.setAppPreference('focusSelectedMinutes', _selectedMinutes);
-      await CleanStorageService.setAppPreference('focusMode', _mode.index);
-      await CleanStorageService.setAppPreference('focusPomoWorkMinutes', _workMinutes);
-      await CleanStorageService.setAppPreference('focusPomoShortBreakMinutes', _shortBreakMinutes);
-      await CleanStorageService.setAppPreference('focusPomoLongBreakMinutes', _longBreakMinutes);
-      await CleanStorageService.setAppPreference('focusPomoRoundsBeforeLong', _roundsBeforeLongBreak);
-      await CleanStorageService.setAppPreference('focusPomoTotalRounds', _totalRounds);
-      await CleanStorageService.setAppPreference('focusSelectedPlant', _selectedPlant.index);
-      await CleanStorageService.setAppPreference('focusSelectedActivityType', _selectedActivity.index);
-      await CleanStorageService.setAppPreference('focusSelectedSound', _selectedSound.index);
-      await CleanStorageService.setAppPreference('focusSoundVolume', _soundVolume);
-      await CleanStorageService.setAppPreference(_kBreathingPreroll, _breathingPreroll);
-      await CleanStorageService.setAppPreference(_kMindfulnessSync, _mindfulnessSync);
-      await CleanStorageService.setAppPreference('focusSelectedTagIds', _selectedTagIds);
-      await CleanStorageService.setAppPreference('focusStats', _stats.toJson());
-      await CleanStorageService.setAppPreference('focusGarden', _garden.map((p) => p.toJson()).toList());
-      await CleanStorageService.setAppPreference('focusAchievements', 
-        _achievements.map((k, v) => MapEntry(k.index.toString(), v.toJson())));
-      await CleanStorageService.setAppPreference('focusUnlockedPlants', _unlockedPlants.map((p) => p.index).toList());
-      await CleanStorageService.setAppPreference('focusUsedSounds', _usedSounds.map((s) => s.index).toList());
+      final next = _persistableState();
+      final stored = CleanStorageService.getAppPreferences();
+      final changed = <String, dynamic>{};
+      for (final e in next.entries) {
+        final before = stored[e.key];
+        final a = (before is Map || before is List) ? jsonEncode(before) : before;
+        final b = (e.value is Map || e.value is List)
+            ? jsonEncode(e.value)
+            : e.value;
+        if (a != b) changed[e.key] = e.value;
+      }
+      if (changed.isEmpty) return;
+      await CleanStorageService.setAppPreferences(changed);
     } catch (e) {
       debugPrint('Error saving focus data: $e');
     }
@@ -859,19 +998,49 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   /// pattern for the same decision.
   bool get mindfulnessSync => _mindfulnessSync;
 
-  Future<void> setMindfulnessSync(bool value) async {
-    // Re-validated against the REAL grant rather than trusted: a user who
-    // revokes the permission in the Health Connect app would otherwise leave this
-    // switch stuck on, silently writing nothing.
-    if (value && !await MindfulnessChannel.instance.hasPermission()) {
-      _mindfulnessSync = false;
-      await _savePreference(_kMindfulnessSync, false);
-      notifyListeners();
-      return;
+  String? _mindfulnessDenialReason;
+
+  /// Why the switch is off when the user just asked for it on, or null.
+  ///
+  /// The switch used to bounce back with NO message at all, so the only feedback
+  /// was the toggle sliding back on its own. The service has no `BuildContext`
+  /// and must not acquire one, so it publishes the reason the way [tick] and
+  /// [justCompleted] publish theirs and lets the settings row say it.
+  String? get mindfulnessDenialReason => _mindfulnessDenialReason;
+
+  /// Turn mindfulness write-back on or off. Returns whether the requested value
+  /// actually took effect.
+  Future<bool> setMindfulnessSync(bool value) async {
+    _mindfulnessDenialReason = null;
+    if (value) {
+      // ASK, then re-check — do not just check.
+      //
+      // Nothing anywhere requested the Health Connect mindfulness write
+      // permission, so on every device where this row is shown the grant is
+      // absent the first time and a bare `hasPermission()` check wrote `false`
+      // back and returned. The switch was therefore impossible to turn on,
+      // permanently and silently.
+      //
+      // The re-check after granting is still worth keeping: it catches the user
+      // who revoked the permission in the Health Connect app, who would otherwise
+      // leave this switch stuck on while nothing was being written.
+      var granted = await MindfulnessChannel.instance.hasPermission();
+      if (!granted) {
+        granted = await MindfulnessChannel.instance.requestPermission();
+      }
+      if (!granted) {
+        _mindfulnessSync = false;
+        await _savePreference(_kMindfulnessSync, false);
+        _mindfulnessDenialReason =
+            'Health Connect has not granted permission to save mindful minutes.';
+        notifyListeners();
+        return false;
+      }
     }
     _mindfulnessSync = value;
     await _savePreference(_kMindfulnessSync, value);
     notifyListeners();
+    return true;
   }
 
   /// Write a completed session to Health Connect, if it is mindfulness practice.
@@ -1134,6 +1303,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
     _remainingSeconds = _phaseMinutes * 60;
     _startTime = clock.now();
+    _pausedTotal = Duration.zero;
     _endTime = _startTime!.add(Duration(minutes: _phaseMinutes));
 
     // Start ambient sound if selected
@@ -1142,8 +1312,11 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _startTimer();
-    await _saveActiveSession();
+    // Arm first: the snapshot has to carry the armed instant (see
+    // [_saveActiveSession]), and `_armCompletion` sets it synchronously before
+    // its own unawaited I/O.
     _armCompletion();
+    await _saveActiveSession();
     notifyListeners();
     debugPrint('✓ Focus session started (${_mode.name}): $_phaseMinutes minutes, ends at $_endTime');
   }
@@ -1162,12 +1335,18 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   void _startBreak() {
     _isOnBreak = true;
     _isPaused = false;
+    // A fresh interval is running, so the previous one's payout window is closed
+    // and the next completion must be allowed through. Pomodoro reaches
+    // `_completeSession` once per work round, and it never calls `_resetSession`
+    // between them.
+    _finishing = false;
     // A long break lands after every _roundsBeforeLongBreak completed work rounds.
     _isLongBreak =
         _roundsBeforeLongBreak > 0 && _currentRound % _roundsBeforeLongBreak == 0;
     _phaseMinutes = _isLongBreak ? _longBreakMinutes : _shortBreakMinutes;
     _remainingSeconds = _phaseMinutes * 60;
     _startTime = clock.now();
+    _pausedTotal = Duration.zero;
     _endTime = _startTime!.add(Duration(minutes: _phaseMinutes));
     _startTimer();
     _armCompletion();
@@ -1177,45 +1356,60 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Break finished → back to a work interval (pomodoro).
   Future<void> _completeBreak() async {
-    _timer?.cancel();
-    await _disarmCompletion();
-    await _audioService.stop();
-    _isOnBreak = false;
-    _isLongBreak = false;
+    if (_finishing) return;
+    _finishing = true;
+    // try/finally, because `_finishing` latches BEFORE the awaits below.
+    // A throw from any of them (the DAO write, the tag persist, the coin
+    // award) would otherwise leave the flag set for the life of the
+    // process, and every later Done AND Give Up would return silently —
+    // the same dead-button failure the paused-recovery fix was about.
+    // Clearing on the error path can in principle let a half-finished
+    // payout be retried; a session the user cannot end at all is worse.
+    try {      _timer?.cancel();
+      await _disarmCompletion();
+      await _audioService.stop();
+      _isOnBreak = false;
+      _isLongBreak = false;
 
-    // Start the work interval FIRST, then announce.
-    //
-    // Two fixes in one reordering:
-    //
-    //  * The notification was awaited between clearing `_isOnBreak` and calling
-    //    `_startWork()`, so for the duration of a platform round trip the service
-    //    sat in a state that is neither a break nor a work interval — `_endTime`
-    //    still the break's, `_phaseMinutes` still the break's — and any listener
-    //    that rebuilt in that window read an inconsistent phase.
-    //  * The banner was UNGATED, so a pomodoro user watching the screen got a
-    //    system notification dropped over it at the end of every single break.
-    //    That is precisely the interruption `_announceCompletion` exists to avoid;
-    //    it was fixed for completion and missed here. On screen the handover is
-    //    already visible — the phase pill flips and the ring returns to the focus
-    //    tone — so the banner is only useful to someone who is not looking.
-    _startWork();
+      // Start the work interval FIRST, then announce.
+      //
+      // Two fixes in one reordering:
+      //
+      //  * The notification was awaited between clearing `_isOnBreak` and calling
+      //    `_startWork()`, so for the duration of a platform round trip the service
+      //    sat in a state that is neither a break nor a work interval — `_endTime`
+      //    still the break's, `_phaseMinutes` still the break's — and any listener
+      //    that rebuilt in that window read an inconsistent phase.
+      //  * The banner was UNGATED, so a pomodoro user watching the screen got a
+      //    system notification dropped over it at the end of every single break.
+      //    That is precisely the interruption `_announceCompletion` exists to avoid;
+      //    it was fixed for completion and missed here. On screen the handover is
+      //    already visible — the phase pill flips and the ring returns to the focus
+      //    tone — so the banner is only useful to someone who is not looking.
+      _startWork();
 
-    if (!_isForeground) {
-      await NotificationService().showFocusNotification(
-        title: 'Break over ☕',
-        body: 'Time to focus again — round ${_currentRound + 1} of $_totalRounds.',
-      );
+      if (!_isForeground) {
+        await NotificationService().showFocusNotification(
+          title: 'Break over ☕',
+          body: 'Time to focus again — round ${_currentRound + 1} of $_totalRounds.',
+        );
+      }
+    } finally {
+      _finishing = false;
     }
-  }
+}
 
   /// Begins the next work interval (pomodoro).
   void _startWork() {
     _isOnBreak = false;
     _isPaused = false;
+    // See `_startBreak`: the break's own window ends the moment work resumes.
+    _finishing = false;
     _selectedMinutes = _workMinutes;
     _phaseMinutes = _workMinutes;
     _remainingSeconds = _phaseMinutes * 60;
     _startTime = clock.now();
+    _pausedTotal = Duration.zero;
     _endTime = _startTime!.add(Duration(minutes: _phaseMinutes));
 
     if (_selectedSound != AmbientSoundType.none) {
@@ -1223,8 +1417,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _startTimer();
-    _saveActiveSession();
+    // Arm first: the snapshot has to carry the armed instant (see
+    // [_saveActiveSession]), and `_armCompletion` sets it synchronously.
     _armCompletion();
+    _saveActiveSession();
     notifyListeners();
     debugPrint('✓ Pomodoro work started: round ${_currentRound + 1} of $_totalRounds');
   }
@@ -1323,10 +1519,12 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       _pauseStartTime = clock.now();
       _audioService.pause();
       _timer?.cancel(); // Save resources
-      _saveActiveSession();
       // A paused session has no end time to announce. Leaving it armed would
       // announce the ORIGINAL end time while the user is still paused.
+      //
+      // BEFORE the snapshot, so it records that nothing is armed any more.
       _disarmCompletion();
+      _saveActiveSession();
       notifyListeners();
     }
   }
@@ -1337,19 +1535,24 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       
       // Calculate how long we were paused
       final pauseDuration = clock.now().difference(_pauseStartTime!);
-      
+
       // Push the end time forward by the pause duration
       _endTime = _endTime!.add(pauseDuration);
+      // And remember it, so `elapsedSeconds` — which flow mode banks as the
+      // session's length — does not charge the pause to the user.
+      _pausedTotal += pauseDuration;
       _pauseStartTime = null;
       
       _audioService.resume();
       _startTimer(); // Check immediately
-      _saveActiveSession();
       // Re-arm against the NEW `_endTime`, which the pause just pushed forward.
       // Re-arming rather than resuming matters: the same id replaces, so a
       // pause/resume cycle cannot leave a notification pointing at the old
       // instant.
+      //
+      // BEFORE the snapshot, so it records the new armed instant.
       _armCompletion();
+      _saveActiveSession();
       notifyListeners();
     }
   }
@@ -1380,7 +1583,11 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   /// No competitor can do this, because none of them measure natural stopping
   /// points — only whether you hit a number you picked in advance.
   Future<void> stopFlowSession() async {
-    if (!_isRunning || _mode != FocusMode.flow) return;
+    // No flag of its own: everything from here to the delegated call is
+    // synchronous, and both `abandonSession` and `_completeSession` raise
+    // `_finishing` before their own first await — so a second tap arriving during
+    // the payout is already refused by the check above.
+    if (!_isRunning || _mode != FocusMode.flow || _finishing) return;
     final elapsed = elapsedSeconds ~/ 60;
     if (elapsed < kMinSessionMinutes) {
       // Under a minute is not a session. Abandon rather than bank it, so a
@@ -1397,208 +1604,250 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> abandonSession() async {
-    if (!_isRunning) return;
+    if (!_isRunning || _finishing) return;
+    _finishing = true;
+    // try/finally, because `_finishing` latches BEFORE the awaits below.
+    // A throw from any of them (the DAO write, the tag persist, the coin
+    // award) would otherwise leave the flag set for the life of the
+    // process, and every later Done AND Give Up would return silently —
+    // the same dead-button failure the paused-recovery fix was about.
+    // Clearing on the error path can in principle let a half-finished
+    // payout be retried; a session the user cannot end at all is worse.
+    try {
+      // CAPTURED before the awaits below, and bailed on if absent.
+      //
+      // `_startTime!` was dereferenced AFTER them, so a state reset landing
+      // mid-payout (a delete-all-data wipe, or `clearInMemory`) crashed with
+      // "Null check operator used on a null value". `_finishing` stops a second
+      // CALL; it cannot stop the state being cleared from underneath one that
+      // is already in flight.
+      final startedAt = _startTime;
+      if (startedAt == null) return;
+      _timer?.cancel();
+      await _disarmCompletion();
+      await _audioService.stop();
 
-    _timer?.cancel();
-    await _disarmCompletion();
-    await _audioService.stop();
+      // Abandoning during a pomodoro break just ends the session — a break grows
+      // no plant, so nothing withers and no abandoned session is recorded.
+      if (_mode == FocusMode.pomodoro && _isOnBreak) {
+        _resetSession();
+        await _saveData();
+        debugPrint('✓ Pomodoro ended during break');
+        return;
+      }
 
-    // Abandoning during a pomodoro break just ends the session — a break grows
-    // no plant, so nothing withers and no abandoned session is recorded.
-    if (_mode == FocusMode.pomodoro && _isOnBreak) {
+      // Elapsed, floored to whole minutes.
+      //
+      // This was `_selectedMinutes - (_remainingSeconds ~/ 60)`, which OVER-credits:
+      // the truncation on the remainder rounds the subtraction up, so abandoning a
+      // 25-minute session after 30 seconds logged a full minute, and after 90
+      // seconds logged two. Compute the elapsed side directly instead, and floor it.
+      final elapsedSeconds =
+          (_phaseMinutes > 0 ? _phaseMinutes * 60 : _selectedMinutes * 60) -
+              _remainingSeconds;
+      final elapsedMinutes = (elapsedSeconds ~/ 60).clamp(0, _selectedMinutes);
+    
+      // Create dead plant
+      final deadPlant = FocusPlant(
+        id: _generateId(),
+        type: _selectedPlant,
+        plantedAt: startedAt,
+        durationMinutes: elapsedMinutes,
+        isAlive: false,
+        growthProgress: progress,
+        activity: _selectedActivity.name,
+      );
+      _garden.add(deadPlant);
+    
+      // Create abandoned session
+      final session = FocusSession(
+        id: _generateId(),
+        startedAt: startedAt,
+        completedAt: clock.now(),
+        targetMinutes: _selectedMinutes,
+        actualMinutes: elapsedMinutes,
+        wasCompleted: false,
+        wasAbandoned: true,
+        activityType: _selectedActivity,
+        note: _pendingIntention,
+        distractions: List<DistractionTap>.from(_pendingDistractions),
+        plantType: _selectedPlant,
+        soundUsed: _selectedSound,
+        tagIds: List<String>.from(_selectedTagIds),
+      );
+      _sessions.insert(0, session);
+      await _persistSession(session);
+      // Deliberately NO mindfulness write here. An abandoned session is not a
+      // completed practice, and a health record should not carry one.
+
+      // Persist the session → tag mapping (also bumps tag usage counts)
+      if (_selectedTagIds.isNotEmpty) {
+        await TagService().tagSession(session.id, List<String>.from(_selectedTagIds));
+      }
+
+      // Update stats
+      _stats = _stats.copyWith(
+        totalSessions: _stats.totalSessions + 1,
+        abandonedSessions: _stats.abandonedSessions + 1,
+        totalPlants: _stats.totalPlants + 1,
+        deadPlants: _stats.deadPlants + 1,
+      );
+    
       _resetSession();
       await _saveData();
-      debugPrint('✓ Pomodoro ended during break');
-      return;
+    
+      debugPrint('✓ Focus session abandoned');
+    } finally {
+      _finishing = false;
     }
-
-    // Elapsed, floored to whole minutes.
-    //
-    // This was `_selectedMinutes - (_remainingSeconds ~/ 60)`, which OVER-credits:
-    // the truncation on the remainder rounds the subtraction up, so abandoning a
-    // 25-minute session after 30 seconds logged a full minute, and after 90
-    // seconds logged two. Compute the elapsed side directly instead, and floor it.
-    final elapsedSeconds =
-        (_phaseMinutes > 0 ? _phaseMinutes * 60 : _selectedMinutes * 60) -
-            _remainingSeconds;
-    final elapsedMinutes = (elapsedSeconds ~/ 60).clamp(0, _selectedMinutes);
-    
-    // Create dead plant
-    final deadPlant = FocusPlant(
-      id: _generateId(),
-      type: _selectedPlant,
-      plantedAt: _startTime!,
-      durationMinutes: elapsedMinutes,
-      isAlive: false,
-      growthProgress: progress,
-      activity: _selectedActivity.name,
-    );
-    _garden.add(deadPlant);
-    
-    // Create abandoned session
-    final session = FocusSession(
-      id: _generateId(),
-      startedAt: _startTime!,
-      completedAt: clock.now(),
-      targetMinutes: _selectedMinutes,
-      actualMinutes: elapsedMinutes,
-      wasCompleted: false,
-      wasAbandoned: true,
-      activityType: _selectedActivity,
-      note: _pendingIntention,
-      distractions: List<DistractionTap>.from(_pendingDistractions),
-      plantType: _selectedPlant,
-      soundUsed: _selectedSound,
-      tagIds: List<String>.from(_selectedTagIds),
-    );
-    _sessions.insert(0, session);
-    await _persistSession(session);
-    // Deliberately NO mindfulness write here. An abandoned session is not a
-    // completed practice, and a health record should not carry one.
-
-    // Persist the session → tag mapping (also bumps tag usage counts)
-    if (_selectedTagIds.isNotEmpty) {
-      await TagService().tagSession(session.id, List<String>.from(_selectedTagIds));
-    }
-
-    // Update stats
-    _stats = _stats.copyWith(
-      totalSessions: _stats.totalSessions + 1,
-      abandonedSessions: _stats.abandonedSessions + 1,
-      totalPlants: _stats.totalPlants + 1,
-      deadPlants: _stats.deadPlants + 1,
-    );
-    
-    _resetSession();
-    await _saveData();
-    
-    debugPrint('✓ Focus session abandoned');
-  }
+}
 
   Future<void> _completeSession() async {
-    _timer?.cancel();
-    // Before anything else: this both withdraws a pending notification and
-    // records whether it already fired, which `_announceCompletion` needs to
-    // avoid telling the user twice.
-    await _disarmCompletion();
-    await _audioService.stop();
+    if (_finishing) return;
+    _finishing = true;
+    // try/finally, because `_finishing` latches BEFORE the awaits below.
+    // A throw from any of them (the DAO write, the tag persist, the coin
+    // award) would otherwise leave the flag set for the life of the
+    // process, and every later Done AND Give Up would return silently —
+    // the same dead-button failure the paused-recovery fix was about.
+    // Clearing on the error path can in principle let a half-finished
+    // payout be retried; a session the user cannot end at all is worse.
+    try {
+      // CAPTURED before the awaits below, and bailed on if absent.
+      //
+      // `_startTime!` was dereferenced AFTER them, so a state reset landing
+      // mid-payout (a delete-all-data wipe, or `clearInMemory`) crashed with
+      // "Null check operator used on a null value". `_finishing` stops a second
+      // CALL; it cannot stop the state being cleared from underneath one that
+      // is already in flight.
+      final startedAt = _startTime;
+      if (startedAt == null) return;
+      _timer?.cancel();
+      // Before anything else: this both withdraws a pending notification and
+      // records whether it already fired, which `_announceCompletion` needs to
+      // avoid telling the user twice.
+      await _disarmCompletion();
+      await _audioService.stop();
 
-    // Track whether this is the first completed session today (for streak bonus)
-    final isFirstCompletedToday = !_sessions.any(
-      (s) => s.wasCompleted && _isSameDay(s.startedAt, clock.now()),
-    );
+      // Track whether this is the first completed session today (for streak bonus)
+      final isFirstCompletedToday = !_sessions.any(
+        (s) => s.wasCompleted && _isSameDay(s.startedAt, clock.now()),
+      );
 
-    // Create healthy plant
-    final plant = FocusPlant(
-      id: _generateId(),
-      type: _selectedPlant,
-      plantedAt: _startTime!,
-      durationMinutes: _selectedMinutes,
-      isAlive: true,
-      growthProgress: 1.0,
-      activity: _selectedActivity.name,
-    );
-    _garden.add(plant);
+      // Create healthy plant
+      final plant = FocusPlant(
+        id: _generateId(),
+        type: _selectedPlant,
+        plantedAt: startedAt,
+        durationMinutes: _selectedMinutes,
+        isAlive: true,
+        growthProgress: 1.0,
+        activity: _selectedActivity.name,
+      );
+      _garden.add(plant);
     
-    // Create completed session
-    final session = FocusSession(
-      id: _generateId(),
-      startedAt: _startTime!,
-      completedAt: clock.now(),
-      targetMinutes: _selectedMinutes,
-      actualMinutes: _selectedMinutes,
-      wasCompleted: true,
-      wasAbandoned: false,
-      activityType: _selectedActivity,
-      note: _pendingIntention,
-      distractions: List<DistractionTap>.from(_pendingDistractions),
-      plantType: _selectedPlant,
-      soundUsed: _selectedSound,
-      tagIds: List<String>.from(_selectedTagIds),
-    );
-    _sessions.insert(0, session);
-    await _persistSession(session);
-    // Unawaited on purpose — see [_writeMindfulness]. Completed only: an
-    // abandoned session is not a practice.
-    _writeMindfulness(session);
+      // Create completed session
+      final session = FocusSession(
+        id: _generateId(),
+        startedAt: startedAt,
+        completedAt: clock.now(),
+        targetMinutes: _selectedMinutes,
+        actualMinutes: _selectedMinutes,
+        wasCompleted: true,
+        wasAbandoned: false,
+        activityType: _selectedActivity,
+        note: _pendingIntention,
+        distractions: List<DistractionTap>.from(_pendingDistractions),
+        plantType: _selectedPlant,
+        soundUsed: _selectedSound,
+        tagIds: List<String>.from(_selectedTagIds),
+      );
+      _sessions.insert(0, session);
+      await _persistSession(session);
+      // Unawaited on purpose — see [_writeMindfulness]. Completed only: an
+      // abandoned session is not a practice.
+      _writeMindfulness(session);
 
-    // Persist the session → tag mapping (also bumps tag usage counts)
-    if (_selectedTagIds.isNotEmpty) {
-      await TagService().tagSession(session.id, List<String>.from(_selectedTagIds));
-    }
-
-    // Update activity minutes
-    final activityMinutes = Map<FocusActivityType, int>.from(_stats.minutesByActivity);
-    activityMinutes[_selectedActivity] = (activityMinutes[_selectedActivity] ?? 0) + _selectedMinutes;
-    
-    // Update plant counts
-    final plantCounts = Map<PlantType, int>.from(_stats.plantCounts);
-    plantCounts[_selectedPlant] = (plantCounts[_selectedPlant] ?? 0) + 1;
-    
-    // Update stats
-    _stats = _stats.copyWith(
-      totalMinutes: _stats.totalMinutes + _selectedMinutes,
-      totalSessions: _stats.totalSessions + 1,
-      completedSessions: _stats.completedSessions + 1,
-      totalPlants: _stats.totalPlants + 1,
-      minutesByActivity: activityMinutes,
-      plantCounts: plantCounts,
-      lastSessionDate: clock.now(),
-    );
-    
-    // Check for new plant unlocks
-    await _checkPlantUnlocks();
-    
-    // Check achievements
-    await _checkAchievements();
-    
-    // Update streak
-    await _checkAndUpdateStreak();
-
-    // Award focus coins for the completed session (Forest-style earn loop),
-    // capped per session.
-    //
-    // Flow mode made this necessary: at two coins a minute an uncapped count-up
-    // running to the ten-hour ceiling would pay 1,200 coins — twice the most
-    // expensive tree — from one forgotten timer. The cap is deliberately well
-    // above any real session, so it never touches an honest one; it exists so the
-    // economy cannot be broken by walking away from the app.
-    final coinsService = CoinsService();
-    await coinsService.earnCoins(
-      minutes: _selectedMinutes.clamp(0, kMaxCoinEarningMinutes),
-      sessionId: session.id,
-    );
-    // Award a streak bonus once per day on the first completed session
-    if (isFirstCompletedToday) {
-      await coinsService.addStreakBonus(_stats.currentStreak);
-    }
-
-    // Pomodoro: this was a WORK interval. Advance the round counter, then either
-    // finish the whole session (total-rounds reached) or auto-start a break.
-    if (_mode == FocusMode.pomodoro) {
-      _currentRound++;
-      await _saveData();
-      final finished = _currentRound >= _totalRounds;
-      // Captured BEFORE the branch: `_resetSession()` sets `_currentRound` back to
-      // 0, so the final round used to log "round 0/4 completed".
-      final roundJustFinished = _currentRound;
-      await _announceCompletion(session, finished: finished);
-      if (finished) {
-        _resetSession();
-      } else {
-        _startBreak();
+      // Persist the session → tag mapping (also bumps tag usage counts)
+      if (_selectedTagIds.isNotEmpty) {
+        await TagService().tagSession(session.id, List<String>.from(_selectedTagIds));
       }
-      debugPrint(
-          '✓ Pomodoro work round $roundJustFinished/$_totalRounds completed');
-      return;
+
+      // Update activity minutes
+      final activityMinutes = Map<FocusActivityType, int>.from(_stats.minutesByActivity);
+      activityMinutes[_selectedActivity] = (activityMinutes[_selectedActivity] ?? 0) + _selectedMinutes;
+    
+      // Update plant counts
+      final plantCounts = Map<PlantType, int>.from(_stats.plantCounts);
+      plantCounts[_selectedPlant] = (plantCounts[_selectedPlant] ?? 0) + 1;
+    
+      // Update stats
+      _stats = _stats.copyWith(
+        totalMinutes: _stats.totalMinutes + _selectedMinutes,
+        totalSessions: _stats.totalSessions + 1,
+        completedSessions: _stats.completedSessions + 1,
+        totalPlants: _stats.totalPlants + 1,
+        minutesByActivity: activityMinutes,
+        plantCounts: plantCounts,
+        lastSessionDate: clock.now(),
+      );
+    
+      // Check for new plant unlocks
+      await _checkPlantUnlocks();
+    
+      // Check achievements
+      await _checkAchievements();
+    
+      // Update streak
+      await _checkAndUpdateStreak();
+
+      // Award focus coins for the completed session (Forest-style earn loop),
+      // capped per session.
+      //
+      // Flow mode made this necessary: at two coins a minute an uncapped count-up
+      // running to the ten-hour ceiling would pay 1,200 coins — twice the most
+      // expensive tree — from one forgotten timer. The cap is deliberately well
+      // above any real session, so it never touches an honest one; it exists so the
+      // economy cannot be broken by walking away from the app.
+      final coinsService = CoinsService();
+      await coinsService.earnCoins(
+        minutes: _selectedMinutes.clamp(0, kMaxCoinEarningMinutes),
+        sessionId: session.id,
+      );
+      // Award a streak bonus once per day on the first completed session
+      if (isFirstCompletedToday) {
+        await coinsService.addStreakBonus(_stats.currentStreak);
+      }
+
+      // Pomodoro: this was a WORK interval. Advance the round counter, then either
+      // finish the whole session (total-rounds reached) or auto-start a break.
+      if (_mode == FocusMode.pomodoro) {
+        _currentRound++;
+        await _saveData();
+        final finished = _currentRound >= _totalRounds;
+        // Captured BEFORE the branch: `_resetSession()` sets `_currentRound` back to
+        // 0, so the final round used to log "round 0/4 completed".
+        final roundJustFinished = _currentRound;
+        await _announceCompletion(session, finished: finished);
+        if (finished) {
+          _resetSession();
+        } else {
+          _startBreak();
+        }
+        debugPrint(
+            '✓ Pomodoro work round $roundJustFinished/$_totalRounds completed');
+        return;
+      }
+
+      await _announceCompletion(session, finished: true);
+      _resetSession();
+      await _saveData();
+
+      debugPrint('✓ Focus session completed');
+    } finally {
+      _finishing = false;
     }
-
-    await _announceCompletion(session, finished: true);
-    _resetSession();
-    await _saveData();
-
-    debugPrint('✓ Focus session completed');
-  }
+}
 
   /// Tell the user their work finished — once, through the right channel, and
   /// without lying about what finished.
@@ -1692,8 +1941,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     if (_armedFor != null) _disarmCompletion();
     _isRunning = false;
     _isPaused = false;
+    _finishing = false;
     _remainingSeconds = 0;
     _startTime = null;
+    _pausedTotal = Duration.zero;
     _endTime = null;
     _pauseStartTime = null;
     _phaseMinutes = 0;
@@ -1767,8 +2018,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     // that a "perfect week" would quietly contradict the forgiveness the rest of
     // the feature is careful to be honest about. This counts actual days.
     final today = clock.now();
-    final weekStart = DateTime(today.year, today.month, today.day)
-        .subtract(const Duration(days: 6));
+    final weekStart = dayOffset(today, -6);
     final daysThisWeek = _completedSessionDays()
         .where((d) => !d.isBefore(weekStart))
         .length;
@@ -1875,8 +2125,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   Map<DateTime, List<FocusPlant>> getGardenByWeek() {
     final Map<DateTime, List<FocusPlant>> grouped = {};
     for (final plant in _garden) {
-      final weekStart = plant.plantedAt.subtract(Duration(days: plant.plantedAt.weekday - 1));
-      final key = DateTime(weekStart.year, weekStart.month, weekStart.day);
+      // startOfWeek already normalises to midnight Monday; the old form
+      // stepped by weekday-1 whole days, which drifts off midnight across a
+      // transition and split one week into two garden groups.
+      final key = startOfWeek(plant.plantedAt);
       grouped.putIfAbsent(key, () => []);
       grouped[key]!.add(plant);
     }
@@ -1951,6 +2203,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     }
     _isRunning = false;
     _isPaused = false;
+    _finishing = false;
     _remainingSeconds = 0;
     _startTime = null;
     _endTime = null;
@@ -1958,6 +2211,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     _phaseMinutes = 0;
     _breathingPreroll = false;
     _mindfulnessSync = false;
+    _mindfulnessDenialReason = null;
     _mode = FocusMode.single;
     _workMinutes = 25;
     _shortBreakMinutes = 5;

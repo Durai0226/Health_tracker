@@ -63,6 +63,30 @@ class MindfulnessChannel {
     }
   }
 
+  /// Ask Health Connect for the mindfulness WRITE grant. Returns whether it is
+  /// held afterwards.
+  ///
+  /// Nothing in the app used to request it, so [hasPermission] was always false
+  /// the first time and the settings switch could never be turned on at all.
+  ///
+  /// **Check [isAvailable] first.** Health Connect refuses the entire permission
+  /// sheet if any requested type is unsupported, which would take the grants the
+  /// app genuinely needs down with it.
+  ///
+  /// A missing native handler reads as "denied", not as a crash: this is opt-in
+  /// and secondary, and a build whose Kotlin half predates this method must still
+  /// leave the switch usable everywhere else.
+  Future<bool> requestPermission() async {
+    if (!_isAndroid) return false;
+    try {
+      return await channelForTesting.invokeMethod<bool>('requestPermission') ??
+          false;
+    } catch (e) {
+      debugPrint('Mindfulness permission request failed: $e');
+      return false;
+    }
+  }
+
   /// Write one session. Returns whether it landed.
   Future<bool> writeSession({
     required DateTime start,

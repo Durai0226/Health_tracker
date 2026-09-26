@@ -6,6 +6,7 @@ import '../../design/app_design.dart';
 import '../../services/notification_service.dart';
 import 'app_card.dart';
 import 'app_button.dart';
+import '../../../core/constants/app_strings.dart';
 
 /// Calm Clarity warning banner shown when OS notifications are disabled.
 ///
@@ -149,7 +150,7 @@ class _NotificationPermissionBannerState
                               'are scheduled inexactly and can be delayed. Allow '
                               'exact alarms for on-time doses.'
                           : 'Medicine and reminder alerts will not appear until you '
-                              'enable notifications for DailyMinder.',
+                              'enable notifications for ${AppStrings.productName}.',
                       style: tt.bodySmall?.copyWith(color: warning.onContainer),
                     ),
                   ],

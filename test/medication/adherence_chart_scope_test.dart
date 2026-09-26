@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -142,5 +143,44 @@ void main() {
     // rather than a bar built from as-needed doses.
     expect(find.text('No doses scheduled in this period'), findsOneWidget);
     expect(find.byType(FractionallySizedBox), findsNothing);
+  });
+
+  testWidgets("a dose pre-logged for later today isn't today's adherence",
+      (tester) async {
+    // The denominator counts only slots already DUE, so a dose pre-logged for
+    // tonight must not reach the numerator — it would be a numerator with no
+    // denominator, and the 0..1 clamp would hide it as a perfect day.
+    //
+    // TWO layers enforce that now: the screen's single shared read ends at
+    // `now`, and `_calculateDailyStats` re-applies the bound to what it is
+    // handed. Either alone keeps this green — this asserts the OUTCOME, so it
+    // fails if the read is ever widened without the in-memory bound (verified:
+    // widening it to `dayOffset(now, 1)` with that filter dropped renders
+    // today's bar at 1.0).
+    //
+    // Pinned to midday so "tonight" is genuinely in the future whatever time
+    // the suite runs at.
+    final noon = DateTime(today.year, today.month, today.day, 12);
+    await withClock(Clock.fixed(noon), () async {
+      await MedicineCleanStorageService.addMedicine(scheduledMed(id: 'active'),
+          stampActiveProfile: false);
+      // Today's 08:00 dose was NOT taken; tonight's 20:00 dose is pre-logged.
+      await MedicineCleanStorageService.addLog(MedicineLog.preLogged(
+        id: MedicineCleanStorageService.doseLogId(
+            'active', today.add(const Duration(hours: 20))),
+        medicineId: 'active',
+        scheduledTime: today.add(const Duration(hours: 20)),
+        actionTime: noon,
+      ));
+
+      await pump(tester);
+
+      // Today is the last of the seven bars. 0 of the 1 due slot = empty.
+      final bars = tester
+          .widgetList<FractionallySizedBox>(find.byType(FractionallySizedBox))
+          .toList();
+      expect(bars.length, 7, reason: 'the Week view draws 7 daily bars');
+      expect(bars.last.heightFactor, closeTo(0.0, 0.001));
+    });
   });
 }

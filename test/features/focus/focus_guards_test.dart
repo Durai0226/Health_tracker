@@ -9,6 +9,8 @@ import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/features/focus/models/ambient_sound.dart';
 import 'package:tablet_remainder/features/focus/models/focus_achievement.dart';
 
+import '../../support/emoji_chrome_scan.dart';
+
 /// Standing structural guards for the Focus feature.
 ///
 /// Every assertion here failed when it was written, and each one guards a defect
@@ -682,34 +684,17 @@ void main() {
       // container. Inline content glyphs run at the default text size. So the
       // rule is: no emoji in a Text() that also sets a fontSize of 20 or more.
       // It catches every case the audit named and none of the legitimate ones.
-      final hits = <String>[];
-      final emoji = RegExp(
-          r"[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]",
-          unicode: true);
-      final sized = RegExp(r'fontSize:\s*(\d+)');
-      for (final f in focusFiles) {
-        // `read`, not `code`: `code` strips comment LINES, which would delete the
-        // opt-out annotation before it could be seen. Same shape as the haptic
-        // guard above — skip comment lines by hand, and require the marker inline
-        // on the offending line so it cannot drift away from what it excuses.
-        final lines = read(f).split('\n');
-        for (var i = 0; i < lines.length; i++) {
-          final line = lines[i];
-          if (line.trimLeft().startsWith('//')) continue;
-          if (!line.contains('Text(')) continue;
-          if (!emoji.hasMatch(line)) continue;
-          // Same opt-out idiom as the haptic and notification guards above. It
-          // exists because the font-size heuristic cannot tell a badge from a
-          // large piece of CONTENT — the plant metaphor legitimately renders a
-          // withered flower at 28pt — and forcing the author to say which it is
-          // beats loosening the rule until it catches nothing.
-          if (line.contains('emoji-content-ok:')) continue;
-          final m = sized.firstMatch(line);
-          if (m == null) continue;
-          if (int.parse(m.group(1)!) < 20) continue;
-          hits.add('${f.path}:${i + 1}  ${line.trim()}');
-        }
-      }
+      //
+      // The scan itself lives in `test/support/emoji_chrome_scan.dart` because
+      // the water feature needs the same instrument (DS-17). Only the POLICY is
+      // here: the opt-out annotation and the 20pt floor. Water applies a
+      // stricter one, in `test/design/water_conformance_test.dart` — its emoji
+      // are written with theme text styles rather than a raw `fontSize`, which
+      // this heuristic cannot see at all.
+      final hits = unannotatedEmojiTextLines('lib/features/focus')
+          .where((h) => (h.fontSize ?? 0) >= 20)
+          .map((h) => h.toString())
+          .toList();
       expect(hits, isEmpty,
           reason: 'badge-sized emoji is iconography — use Material Symbols so it '
               'tints, scales and themes, or annotate '

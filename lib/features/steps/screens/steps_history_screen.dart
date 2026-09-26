@@ -4,6 +4,8 @@ import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/step_daily_data.dart';
 import '../models/step_source.dart';
 import '../services/step_service.dart';
+import '../utils/step_format.dart';
+import 'package:clock/clock.dart';
 
 /// Scrollable history of recent days — a mini goal ring, the day's steps,
 /// distance and calories, and a reached badge. Reactive to service changes.
@@ -41,7 +43,7 @@ class StepsHistoryScreen extends StatelessWidget {
   }
 
   Widget _buildList(BuildContext context) {
-    final now = DateTime.now();
+    final now = clock.now();
     final days = StepService.getDataForRange(
       now.subtract(const Duration(days: 30)),
       now,
@@ -100,9 +102,9 @@ class _DayCard extends StatelessWidget {
                 Text(_dateLabel(day.date), style: tt.titleLarge),
                 const SizedBox(height: 2),
                 Text(
-                  '${_fmt(day.effectiveSteps)} steps · '
+                  '${formatThousands(day.effectiveSteps)} steps · '
                   '${day.distanceKm.toStringAsFixed(day.distanceKm >= 10 ? 0 : 1)} km · '
-                  '${_fmt(day.activeCalories.round())} kcal',
+                  '${formatThousands(day.activeCalories.round())} kcal',
                   style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                 ),
                 const SizedBox(height: 4),
@@ -129,7 +131,7 @@ class _DayCard extends StatelessWidget {
   }
 
   String _dateLabel(DateTime d) {
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final that = DateTime(d.year, d.month, d.day);
     final diff = today.difference(that).inDays;
@@ -159,15 +161,5 @@ class _DayCard extends StatelessWidget {
       'Dec'
     ];
     return '${weekdays[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
-  }
-
-  static String _fmt(int n) {
-    final str = n.abs().toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buf.write(',');
-      buf.write(str[i]);
-    }
-    return '${n < 0 ? '-' : ''}$buf';
   }
 }

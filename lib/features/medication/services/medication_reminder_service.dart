@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/health/adaptive_timing.dart';
@@ -11,6 +12,8 @@ import '../../../core/services/background_alarm_service.dart'
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
+import '../../../core/utils/calendar_day.dart';
+import '../models/medicine_log.dart';
 import 'medicine_storage_service.dart';
 import 'reminder_slot_grouping.dart';
 import 'reminder_window_nudges.dart';
@@ -57,6 +60,31 @@ class MedicationReminderService {
   static const String _idSchemeV3Key = 'medicine_notif_id_scheme_v3';
 
   Map<String, int>? _indexCache;
+
+  /// Forces the Android recompute path on a host that isn't Android.
+  ///
+  /// `Platform.isAndroid` is a dart:io constant — `debugDefaultTargetPlatform`
+  /// does not move it — so a headless `flutter test` can only ever reach the
+  /// iOS legacy branch, and every read this class makes lives on the other one.
+  /// Forcing it is safe: the scheduling calls the recomputes make are
+  /// themselves `Platform.isAndroid`-gated inside [NotificationService] and
+  /// return false without touching a channel, so this changes which of OUR
+  /// code runs, not which platform APIs it reaches.
+  @visibleForTesting
+  static bool debugForceAndroidPath = false;
+
+  static bool get _useAndroidPath =>
+      Platform.isAndroid || debugForceAndroidPath;
+
+  /// Overridable so a test can count the alarm snapshots ONE recompute takes:
+  /// [BackgroundAlarmService.getScheduledAlarms] re-reads and `jsonDecode`s
+  /// every `alarm_*` preference, and the two recomputes below used to take one
+  /// each. Production always gets the real reader.
+  @visibleForTesting
+  Future<List<Map<String, dynamic>>> Function()? debugAlarmReader;
+
+  Future<List<Map<String, dynamic>>> _readAlarms() =>
+      (debugAlarmReader ?? BackgroundAlarmService().getScheduledAlarms)();
 
   /// Reschedule reminders for all stored medicines.
   ///
@@ -145,10 +173,9 @@ class MedicationReminderService {
   /// Schedule all reminders for a medicine.
   /// Returns the notification id(s) now covering this medicine.
   Future<List<int>> scheduleReminders(EnhancedMedicine medicine) async {
-    if (Platform.isAndroid) {
+    if (_useAndroidPath) {
       final medicines = await _resolveMedicines(upsert: medicine);
-      final slots = await _recomputeAndroidSlots(medicines);
-      await _recomputeWindowNudges(medicines);
+      final slots = await _recomputeAll(medicines);
       return slots
           .where((s) => s.medicines.any((m) => m.medicineId == medicine.id))
           .map((s) => s.notificationId)
@@ -267,6 +294,26 @@ class MedicationReminderService {
     return medicines;
   }
 
+  /// One full Android recompute: both alarm families, from ONE alarm snapshot.
+  ///
+  /// The two recomputes prune disjoint id ranges — `[slotIdOffset, +1440)` and
+  /// `[windowNudgeIdOffset, +100000)` — so they can share a snapshot, and each
+  /// used to take its own. That is not free: every snapshot re-reads and
+  /// `jsonDecode`s every `alarm_*` preference on the device.
+  ///
+  /// The snapshot is taken BEFORE either pass schedules anything, on purpose.
+  /// A pass only ever schedules ids that are in its own `neededIds`, and the
+  /// prune only cancels ids that are NOT — so an alarm armed during this
+  /// recompute, and therefore missing from the snapshot, can never be pruned
+  /// by it.
+  Future<List<ReminderSlot>> _recomputeAll(
+      List<EnhancedMedicine> medicines) async {
+    final alarms = await _readAlarms();
+    final slots = await _recomputeAndroidSlots(medicines, alarms);
+    await _recomputeWindowNudges(medicines, alarms);
+    return slots;
+  }
+
   /// Recomputes every Android medicine-slot alarm from [medicines] (the full
   /// list, already resolved by [_resolveMedicines]), (re)schedules each
   /// slot's alarm, then cancels any previously-scheduled slot that's no
@@ -279,7 +326,8 @@ class MedicationReminderService {
   /// medicines list as orphaned and cancels it, so a partial list would read
   /// every excluded medicine's alarm as orphaned and cancel it.
   Future<List<ReminderSlot>> _recomputeAndroidSlots(
-      List<EnhancedMedicine> medicines) async {
+      List<EnhancedMedicine> medicines,
+      List<Map<String, dynamic>> alarms) async {
     final slots = groupRemindersBySlot(medicines, DateTime.now());
     final neededIds = <int>{};
     for (final slot in slots) {
@@ -292,7 +340,6 @@ class MedicationReminderService {
     }
 
     try {
-      final alarms = await BackgroundAlarmService().getScheduledAlarms();
       for (final a in alarms) {
         if (a['channelId'] != 'medicine_channel') continue;
         final id = a['id'];
@@ -324,8 +371,17 @@ class MedicationReminderService {
   /// but DOES protect them from being pruned as "orphaned" by adding their
   /// ids to [neededIds] too, since their lifecycle is owned by the chain, not
   /// by this periodic recompute.
-  Future<void> _recomputeWindowNudges(List<EnhancedMedicine> medicines) async {
+  Future<void> _recomputeWindowNudges(List<EnhancedMedicine> medicines,
+      List<Map<String, dynamic>> alarms) async {
     final neededIds = <int>{};
+
+    // Dose history for every windowed medicine, read ONCE up front.
+    //
+    // [_adaptiveSuggestionMinutes] used to fetch it per (medicine, windowed
+    // slot) from inside the two loops below, and `getLogsForMedicine` is an
+    // unranged full select — so a user with three windowed doses paid three
+    // whole-history reads to save one medicine.
+    final takeMinutes = await _recentTakeMinutes(medicines);
 
     for (final medicine in medicines) {
       if (!medicine.reminderEnabled || medicine.schedule.isPRN) continue;
@@ -344,7 +400,8 @@ class MedicationReminderService {
           neededIds.add(windowNudgeId(medicineIndex, timeIndex, n));
         }
 
-        final adaptiveMinutes = await _adaptiveSuggestionMinutes(medicine, time);
+        final adaptiveMinutes = _adaptiveSuggestionMinutes(
+            takeMinutes[medicine.id] ?? const <int>[], time);
         final nudgeMinutes = windowNudgeMinutes(
           startMinuteOfDay: time.hour * 60 + time.minute,
           windowMinutes: time.windowMinutes!,
@@ -368,7 +425,6 @@ class MedicationReminderService {
     }
 
     try {
-      final alarms = await BackgroundAlarmService().getScheduledAlarms();
       for (final a in alarms) {
         if (a['channelId'] != 'medicine_channel') continue;
         final id = a['id'];
@@ -389,51 +445,94 @@ class MedicationReminderService {
     }
   }
 
+  /// Trailing window of dose history [AdaptiveTiming] learns from.
+  ///
+  /// Bounded so a whole recompute can take ONE ranged read of `medicine_logs`
+  /// rather than an unranged per-medicine select for every windowed dose. Six
+  /// months is far more than the four samples AdaptiveTiming needs to be
+  /// confident, and a take-time habit that old should not still be moving
+  /// today's alarm — so the bound is a behaviour change, in the direction of
+  /// recency, not a pure refactor.
+  static const int _adaptiveHistoryDays = 180;
+
+  /// Real take-times (minutes since midnight) per medicine id, over the last
+  /// [_adaptiveHistoryDays], for the medicines in [medicines] that actually
+  /// have a windowed dose.
+  ///
+  /// Returns empty — issuing NO query at all — when no medicine has a window,
+  /// which is the common case: the old per-dose read cost nothing then, and
+  /// hoisting it must not turn "no windows" into a read.
+  ///
+  /// Unscoped: this runs while recomputing window nudges for the FULL,
+  /// cross-profile medicine list (see [_recomputeWindowNudges]'s own doc), so
+  /// a dependent's medicine must see ITS logs even while a different profile
+  /// (e.g. self) is currently active — the log reads' default scoping would
+  /// otherwise silently return zero logs for it and make AdaptiveTiming report
+  /// "not confident" every time.
+  Future<Map<String, List<int>>> _recentTakeMinutes(
+      List<EnhancedMedicine> medicines) async {
+    final windowed = <String>{};
+    for (final m in medicines) {
+      if (!m.reminderEnabled || m.schedule.isPRN) continue;
+      if (m.isArchived || !m.isActive) continue;
+      final times = m.schedule.times;
+      for (int i = 0; i < times.length && i < maxSlotsPerMedicinePerDay; i++) {
+        if (times[i].hasWindow) {
+          windowed.add(m.id);
+          break;
+        }
+      }
+    }
+    if (windowed.isEmpty) return const {};
+
+    try {
+      final now = clock.now();
+      final logs = MedicineCleanStorageService.dedupeByDose(
+          await MedicineCleanStorageService.getLogsForDateRange(
+              dayOffset(now, -_adaptiveHistoryDays), dayOffset(now, 1),
+              scopeToActiveProfile: false));
+      final out = <String, List<int>>{};
+      for (final MedicineLog l in logs) {
+        if (!windowed.contains(l.medicineId)) continue;
+        // Deliberately l.isTaken, NOT countsAsTaken: a pre-logged dose's
+        // actionTime is an artificial early timestamp (the pre-log moment),
+        // not a real "when do I actually take this dose" data point — folding
+        // it in would corrupt this suggestion.
+        if (!l.isTaken || l.actionTime == null) continue;
+        (out[l.medicineId] ??= <int>[])
+            .add(l.actionTime!.hour * 60 + l.actionTime!.minute);
+      }
+      return out;
+    } catch (e) {
+      debugPrint('⚠️ Adaptive take-time history unavailable: $e');
+      return const {};
+    }
+  }
+
   /// The user's real median take-time for this dose, in minutes-of-day, if
   /// [AdaptiveTiming] is confident about it — null otherwise (too few doses
-  /// logged, or the timing isn't consistent enough to trust). Must run here,
-  /// on the main isolate: it needs Drift (via `getLogsForMedicine`), which is
-  /// unavailable inside the background alarm isolate where a fired nudge
-  /// actually runs — so the result is pre-computed at schedule time and
-  /// carried in the persisted alarm data, not recomputed live.
-  Future<int?> _adaptiveSuggestionMinutes(
-      EnhancedMedicine medicine, ScheduledTime time) async {
-    try {
-      // Unscoped: this runs while recomputing window nudges for the FULL,
-      // cross-profile medicine list (see _recomputeWindowNudges's own doc),
-      // so a dependent's medicine must see ITS logs even while a different
-      // profile (e.g. self) is currently active — getLogsForMedicine's
-      // default scoping would otherwise silently return zero logs for it and
-      // make AdaptiveTiming report "not confident" every time.
-      final logs = MedicineCleanStorageService.dedupeByDose(
-          await MedicineCleanStorageService.getLogsForMedicine(medicine.id,
-              scopeToActiveProfile: false));
-      // Deliberately l.isTaken, NOT countsAsTaken: a pre-logged dose's
-      // actionTime is an artificial early timestamp (the pre-log moment),
-      // not a real "when do I actually take this dose" data point — folding
-      // it in would corrupt this suggestion.
-      final actualMinutes = logs
-          .where((l) => l.isTaken && l.actionTime != null)
-          .map((l) => l.actionTime!.hour * 60 + l.actionTime!.minute)
-          .toList();
-      final suggestion = AdaptiveTiming.suggest(
-        scheduledMinutes: time.hour * 60 + time.minute,
-        actualMinutes: actualMinutes,
-      );
-      return suggestion.confident ? suggestion.suggestedMinutes : null;
-    } catch (e) {
-      debugPrint('⚠️ Adaptive suggestion failed for ${medicine.name}: $e');
-      return null;
-    }
+  /// logged, or the timing isn't consistent enough to trust).
+  ///
+  /// [actualMinutes] comes from [_recentTakeMinutes], which must run on the
+  /// main isolate: it needs Drift, which is unavailable inside the background
+  /// alarm isolate where a fired nudge actually runs — so the result is
+  /// pre-computed at schedule time and carried in the persisted alarm data,
+  /// not recomputed live.
+  int? _adaptiveSuggestionMinutes(
+      List<int> actualMinutes, ScheduledTime time) {
+    final suggestion = AdaptiveTiming.suggest(
+      scheduledMinutes: time.hour * 60 + time.minute,
+      actualMinutes: actualMinutes,
+    );
+    return suggestion.confident ? suggestion.suggestedMinutes : null;
   }
 
   /// Cancel all reminders for a medicine.
   Future<void> cancelReminders(EnhancedMedicine medicine) async {
     debugPrint('🗑️ Canceling all reminders for ${medicine.name}');
-    if (Platform.isAndroid) {
+    if (_useAndroidPath) {
       final medicines = await _resolveMedicines(excludeMedicineId: medicine.id);
-      await _recomputeAndroidSlots(medicines);
-      await _recomputeWindowNudges(medicines);
+      await _recomputeAll(medicines);
       return;
     }
     await _cancelRemindersLegacy(medicine.id);
@@ -442,10 +541,9 @@ class MedicationReminderService {
   /// Cancel reminders by medicine ID string.
   Future<void> cancelRemindersById(String medicineId) async {
     debugPrint('🗑️ Canceling reminders for medicine ID: $medicineId');
-    if (Platform.isAndroid) {
+    if (_useAndroidPath) {
       final medicines = await _resolveMedicines(excludeMedicineId: medicineId);
-      await _recomputeAndroidSlots(medicines);
-      await _recomputeWindowNudges(medicines);
+      await _recomputeAll(medicines);
       return;
     }
     await _cancelRemindersLegacy(medicineId);
@@ -467,7 +565,7 @@ class MedicationReminderService {
     // Android: scheduleReminders' upsert-and-recompute already prunes any
     // slot this medicine no longer occupies — a separate cancel pass would
     // just redo the same recompute twice.
-    if (Platform.isAndroid) return scheduleReminders(medicine);
+    if (_useAndroidPath) return scheduleReminders(medicine);
     await cancelReminders(medicine);
     return await scheduleReminders(medicine);
   }
@@ -476,9 +574,8 @@ class MedicationReminderService {
   Future<void> scheduleAllReminders(List<EnhancedMedicine> medicines) async {
     debugPrint('📅 Scheduling reminders for ${medicines.length} medicines');
 
-    if (Platform.isAndroid) {
-      final slots = await _recomputeAndroidSlots(medicines);
-      await _recomputeWindowNudges(medicines);
+    if (_useAndroidPath) {
+      final slots = await _recomputeAll(medicines);
       debugPrint('✓ Scheduled ${slots.length} medicine slot(s)');
       return;
     }
@@ -569,9 +666,25 @@ class MedicationReminderService {
   }
 
   /// Snooze a specific reminder
-  Future<bool> snoozeReminder(int notificationId, int minutes) async {
+  Future<bool> snoozeReminder(
+    int notificationId,
+    int minutes, {
+    String? title,
+    String? body,
+    String? medicineId,
+    int? hour,
+    int? minute,
+  }) async {
     try {
-      await _notificationService.snoozeReminder(notificationId, minutes);
+      await _notificationService.snoozeReminder(
+        notificationId,
+        minutes,
+        title: title,
+        body: body,
+        medicineId: medicineId,
+        hour: hour,
+        minute: minute,
+      );
       debugPrint('✓ Snoozed reminder $notificationId for $minutes minutes');
       return true;
     } catch (e) {
@@ -590,14 +703,43 @@ class MedicationReminderService {
     DateTime scheduledTime,
     int minutes,
   ) async {
+    // The dose's IDENTITY has to travel with the snooze.
+    //
+    // Slot ids are not in `CleanStorageService.getReminders()`, so the lookup
+    // inside `NotificationService.snoozeReminder` found nothing and the re-fire
+    // was titled "⏰ Snoozed: Reminder / Time for your reminder" — no medicine
+    // name — with `medicineId: null` in its payload. Tapping it opened the
+    // AlarmScreen, whose `_payloadMedicineIds()` returned an empty list, so
+    // Take looped over nothing: the notification closed, no dose was logged,
+    // no stock was decremented, no error was shown, and at the grace cutoff
+    // reconciliation marked the dose missed.
+    final title = medicine.name;
+    final body = 'Time to take ${medicine.name}';
+
     if (Platform.isAndroid) {
       final notificationId =
           slotNotificationId(scheduledTime.hour, scheduledTime.minute);
-      return snoozeReminder(notificationId, minutes);
+      return snoozeReminder(
+        notificationId,
+        minutes,
+        title: title,
+        body: body,
+        medicineId: medicine.id,
+        hour: scheduledTime.hour,
+        minute: scheduledTime.minute,
+      );
     }
     final timeIndex = _resolveTimeIndex(medicine, scheduledTime);
     final notificationId = await _notificationIdFor(medicine.id, timeIndex);
-    return snoozeReminder(notificationId, minutes);
+    return snoozeReminder(
+      notificationId,
+      minutes,
+      title: title,
+      body: body,
+      medicineId: medicine.id,
+      hour: scheduledTime.hour,
+      minute: scheduledTime.minute,
+    );
   }
 
   /// Find the index of the schedule time slot matching [scheduledTime]

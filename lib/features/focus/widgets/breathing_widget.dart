@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/design/app_design.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
+import '../../../core/widgets/app/app_button.dart';
 import '../models/breathing_exercise.dart';
 
 class BreathingWidget extends StatefulWidget {
@@ -227,7 +228,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
             AppColorsExt.of(context).surface,
           ],
         ),
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: AppRadius.brSheet,
       ),
       child: SafeArea(
         child: Column(
@@ -243,8 +244,10 @@ class _BreathingWidgetState extends State<BreathingWidget>
   }
 
   Widget _buildHeader() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Row(
         children: [
           IconButton(
@@ -255,8 +258,8 @@ class _BreathingWidgetState extends State<BreathingWidget>
             tooltip: 'Close',
             icon: const Icon(Symbols.close_rounded),
             style: IconButton.styleFrom(
-              backgroundColor: AppColorsExt.of(context).surface,
-              foregroundColor: AppColorsExt.of(context).textSecondary,
+              backgroundColor: ext.surface,
+              foregroundColor: ext.textSecondary,
             ),
           ),
           Expanded(
@@ -264,18 +267,16 @@ class _BreathingWidgetState extends State<BreathingWidget>
               children: [
                 Text(
                   widget.pattern.name,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: widget.pattern.color,
-                  ),
+                  textAlign: TextAlign.center,
+                  // `pattern.color` as text is the same trap the plant and tag
+                  // hues are: a mid-tone model constant on the card. The title
+                  // takes the text token and the circle below carries the hue.
+                  style: tt.headlineSmall,
                 ),
                 Text(
                   '$_completedCycles / ${widget.targetCycles} cycles',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColorsExt.of(context).textSecondary,
-                  ),
+                  textAlign: TextAlign.center,
+                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
                 ),
               ],
             ),
@@ -286,7 +287,30 @@ class _BreathingWidgetState extends State<BreathingWidget>
     );
   }
 
+  /// The AA-verified pair for a breathing phase.
+  ///
+  /// `BreathingPhase.color` is a raw model constant used as a FILL with white
+  /// text on top, and measured that is the same defect as the tree-shop header:
+  /// white on inhale's #22C55E is **2.28:1**. Each phase maps onto a palette
+  /// swatch, so the hue family survives and the countdown becomes legible.
+  /// hold-after-exhale is the rest beat and has no hue — it takes the neutral.
+  ({Color bg, Color fg}) _phaseColors(BreathingPhase phase) {
+    final ext = AppColorsExt.of(context);
+    switch (phase) {
+      case BreathingPhase.inhale:
+        return (bg: ext.fillBg(ext.steps), fg: ext.fillFg(ext.steps));
+      case BreathingPhase.holdAfterInhale:
+        return (bg: ext.fillBg(ext.info), fg: ext.fillFg(ext.info));
+      case BreathingPhase.exhale:
+        return (bg: ext.fillBg(ext.focus), fg: ext.fillFg(ext.focus));
+      case BreathingPhase.holdAfterExhale:
+        return (bg: ext.surfaceVariant, fg: ext.textPrimary);
+    }
+  }
+
   Widget _buildBreathingCircle() {
+    final tt = Theme.of(context).textTheme;
+    final phase = _phaseColors(_currentPhase);
     return Center(
       child: AnimatedBuilder(
         animation: Listenable.merge([_breathController, _pulseController]),
@@ -294,7 +318,8 @@ class _BreathingWidgetState extends State<BreathingWidget>
           final scale = _isActive
               ? _scaleAnimation.value
               : _pulseAnimation.value * 0.6;
-          
+          final diameter = 240 * scale;
+
           return Stack(
             alignment: Alignment.center,
             children: [
@@ -306,7 +331,7 @@ class _BreathingWidgetState extends State<BreathingWidget>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: _currentPhase.color.withOpacity(0.3),
+                      color: phase.bg.withOpacity(0.3),
                       blurRadius: 60,
                       spreadRadius: 20,
                     ),
@@ -315,48 +340,53 @@ class _BreathingWidgetState extends State<BreathingWidget>
               ),
               // Main circle
               Container(
-                width: 240 * scale,
-                height: 240 * scale,
+                width: diameter,
+                height: diameter,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      _currentPhase.color.withOpacity(0.8),
-                      _currentPhase.color,
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _currentPhase.color.withOpacity(0.4),
-                      blurRadius: 30,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
+                  color: phase.bg,
+                  boxShadow: AppShadows.elevated(context),
                 ),
+                // The disc SHRINKS to 0.6x while idle and the readout does not:
+                // a 64pt count plus a 20pt instruction needs ~100pt of height
+                // inside a 144pt circle at 1.0x, and at 2.0x text it is ~200pt
+                // inside the same 144. scaleDown never enlarges, so the resting
+                // rendering is unchanged and only the cases that would have
+                // spilled shrink to fit.
                 child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _isActive ? '$_currentCount' : '',
-                        style: const TextStyle(
-                          fontSize: 64,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                  child: SizedBox(
+                    // 0.707 = 1/sqrt(2): the largest square that fits a circle.
+                    width: diameter * 0.707,
+                    height: diameter * 0.707,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _isActive ? '$_currentCount' : '',
+                            maxLines: 1,
+                            softWrap: false,
+                            style: tt.displayLarge?.copyWith(
+                              // No scale slot exists above 32 for a countdown;
+                              // this keeps the display face and overrides size.
+                              fontSize: 64,
+                              color: phase.fg,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            _isActive
+                                ? _currentPhase.instruction
+                                : 'Tap to start',
+                            maxLines: 1,
+                            softWrap: false,
+                            style: tt.headlineMedium?.copyWith(color: phase.fg),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _isActive
-                            ? _currentPhase.instruction
-                            : 'Tap to start',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -367,94 +397,52 @@ class _BreathingWidgetState extends State<BreathingWidget>
     );
   }
 
+  /// The two controls, on [AppButton].
+  ///
+  /// They were bare `GestureDetector`s wrapping a hand-rolled Container: no ink,
+  /// no pressed state, no disabled handling, no enforced 48pt height, and a
+  /// gradient fill from `pattern.color` carrying white text — 2.28:1 on the
+  /// relaxing pattern's green. AppButton is the design system's answer to all
+  /// of that, and `size: lg` keeps the generous 56pt target these had.
   Widget _buildControls() {
+    final ext = AppColorsExt.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (!_isActive)
-            _buildControlButton(
-              icon: Symbols.play_arrow_rounded,
-              label: 'Start',
-              onPressed: _start,
-              isPrimary: true,
-            )
-          else if (_isPaused)
-            _buildControlButton(
-              icon: Symbols.play_arrow_rounded,
-              label: 'Resume',
-              onPressed: _resume,
-              isPrimary: true,
-            )
-          else
-            _buildControlButton(
-              icon: Symbols.pause_rounded,
-              label: 'Pause',
-              onPressed: _pause,
-              isPrimary: true,
+          Flexible(
+            child: AppButton(
+              label: !_isActive
+                  ? 'Start'
+                  : _isPaused
+                      ? 'Resume'
+                      : 'Pause',
+              leadingIcon: _isActive && !_isPaused
+                  ? Symbols.pause_rounded
+                  : Symbols.play_arrow_rounded,
+              size: AppButtonSize.lg,
+              accent: ext.focus,
+              onPressed: !_isActive
+                  ? _start
+                  : _isPaused
+                      ? _resume
+                      : _pause,
             ),
+          ),
           if (_isActive) ...[
-            const SizedBox(width: 16),
-            _buildControlButton(
-              icon: Symbols.stop_rounded,
-              label: 'Stop',
-              onPressed: _stop,
-              isPrimary: false,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildControlButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-    required bool isPrimary,
-  }) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-        decoration: BoxDecoration(
-          gradient: isPrimary
-              ? LinearGradient(
-                  colors: [widget.pattern.color, widget.pattern.color.withOpacity(0.8)],
-                )
-              : null,
-          color: isPrimary ? null : AppColorsExt.of(context).outline,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isPrimary
-              ? [
-                  BoxShadow(
-                    color: widget.pattern.color.withOpacity(0.4),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isPrimary ? Colors.white : AppColorsExt.of(context).textSecondary,
-              size: 24,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: isPrimary ? Colors.white : AppColorsExt.of(context).textSecondary,
+            const SizedBox(width: AppSpacing.lg),
+            Flexible(
+              child: AppButton(
+                label: 'Stop',
+                leadingIcon: Symbols.stop_rounded,
+                size: AppButtonSize.lg,
+                variant: AppButtonVariant.secondary,
+                onPressed: _stop,
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -474,33 +462,21 @@ class BreathingPatternCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
+        duration: AppMotion.base,
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: isSelected ? pattern.color.withOpacity(0.15) : AppColorsExt.of(context).surface,
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? pattern.color.withOpacity(0.15) : ext.surface,
+          borderRadius: AppRadius.brCard,
           border: Border.all(
-            color: isSelected ? pattern.color : Colors.grey.withOpacity(0.2),
+            color: isSelected ? pattern.color : ext.outline,
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: pattern.color.withOpacity(0.2),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          boxShadow: AppShadows.resting(context),
         ),
         child: Row(
           children: [
@@ -509,34 +485,20 @@ class BreathingPatternCard extends StatelessWidget {
               height: 48,
               decoration: BoxDecoration(
                 color: pattern.color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: AppRadius.brLg,
               ),
-              child: Icon(
-                pattern.icon,
-                color: pattern.color,
-                size: 24,
-              ),
+              child: Icon(pattern.icon, color: ext.mark(ext.focus), size: 24),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.lg),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    pattern.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? pattern.color : AppColorsExt.of(context).textPrimary,
-                    ),
-                  ),
+                  Text(pattern.name, style: tt.titleMedium),
                   const SizedBox(height: 2),
                   Text(
                     pattern.description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColorsExt.of(context).textSecondary,
-                    ),
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -544,10 +506,7 @@ class BreathingPatternCard extends StatelessWidget {
               ),
             ),
             if (isSelected)
-              Icon(
-                Symbols.check_circle_rounded,
-                color: pattern.color,
-              ),
+              Icon(Symbols.check_circle_rounded, color: ext.mark(ext.focus)),
           ],
         ),
       ),

@@ -80,20 +80,19 @@ class _WeightScreenState extends State<WeightScreen> {
   }
 
   Future<void> _delete(WeightReading r) async {
-    final messenger = ScaffoldMessenger.of(context);
     await VitalsStorageService.deleteWeight(r.id);
     _load();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Reading deleted'),
-        persist: false,
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () async {
-            await VitalsStorageService.saveWeight(r);
-            _load();
-          },
-        ),
+    // The messenger used to be captured before the await so the toast
+    // survived the gap; the toast kit takes a context, so guard instead.
+    if (!mounted) return;
+    context.toastSuccess(
+      'Reading deleted',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await VitalsStorageService.saveWeight(r);
+          _load();
+        },
       ),
     );
   }
@@ -145,12 +144,16 @@ class _WeightScreenState extends State<WeightScreen> {
     final accent = VitalsColors.weightAccent(ext.isDark);
 
     return AppScaffold(
-      floatingActionButton: AppFab(
-        icon: Symbols.add_rounded,
-        label: 'Log',
-        accent: accent,
-        onPressed: () => _openLogSheet(),
-      ),
+      // Only float the FAB once there are readings to add to; the empty state
+      // carries its own 'Log reading' CTA, so a FAB there duplicates it.
+      floatingActionButton: _readings.isEmpty
+          ? null
+          : AppFab(
+              icon: Symbols.add_rounded,
+              label: 'Log',
+              accent: accent,
+              onPressed: () => _openLogSheet(),
+            ),
       body: Column(
         children: [
           AppHeader(
@@ -162,11 +165,19 @@ class _WeightScreenState extends State<WeightScreen> {
             // 8 + 8 + 8 = 24pt and pushed this four-control header off a 320pt
             // screen. (blood_pressure/mood never had them.)
             actions: [
-              AppChip(
-                label: _unitLabel,
-                accent: accent,
-                selected: true,
-                onTap: _toggleUnit,
+              // A bare "kg" chip announces as its own label with no hint that
+              // tapping converts the whole screen to the other unit.
+              Semantics(
+                label: 'Units: $_unitLabel, tap to switch to '
+                    '${_isLb ? 'kg' : 'lb'}',
+                button: true,
+                container: true,
+                child: AppChip(
+                  label: _unitLabel,
+                  accent: accent,
+                  selected: true,
+                  onTap: _toggleUnit,
+                ),
               ),
               _importing
                   ? SizedBox(
@@ -462,7 +473,7 @@ class _EmptyState extends StatelessWidget {
             style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
-          label: 'Log your first reading',
+          label: 'Log reading',
           leadingIcon: Symbols.add_rounded,
           accent: accent,
           fullWidth: true,
@@ -542,7 +553,19 @@ class _WeightLogFormState extends State<_WeightLogForm> {
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       createdAt: e?.createdAt ?? DateTime.now(),
     );
-    await VitalsStorageService.saveWeight(reading);
+    // See blood_pressure_screen.dart's identical guard.
+    try {
+      await VitalsStorageService.saveWeight(reading);
+    } catch (e) {
+      debugPrint('⚠️ Saving a weight reading failed: $e');
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Could not save this reading. Try again.';
+        });
+      }
+      return;
+    }
     if (mounted) Navigator.pop(context, true);
   }
 
@@ -564,9 +587,10 @@ class _WeightLogFormState extends State<_WeightLogForm> {
           onChanged: (_) => setState(() => _error = null),
         ),
         const SizedBox(height: AppSpacing.md),
-        _TakenAtField(
+        AppDateTimeField(
           value: _takenAt,
           accent: widget.accent,
+          noun: 'Reading',
           onChanged: (v) => setState(() => _takenAt = v),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -593,128 +617,6 @@ class _WeightLogFormState extends State<_WeightLogForm> {
         ),
         const SizedBox(height: AppSpacing.sm),
       ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Optional "when" control for the log sheet.
-//
-// `_takenAt` already existed on this form but nothing ever wrote to it, so a
-// reading could not be back-dated and editing one silently kept the original
-// timestamp with no way to correct it. Defaults to now, so the common case
-// still costs zero taps.
-// ---------------------------------------------------------------------------
-class _TakenAtField extends StatelessWidget {
-  final DateTime value;
-  final AccentSwatch accent;
-  final ValueChanged<DateTime> onChanged;
-
-  const _TakenAtField({
-    required this.value,
-    required this.accent,
-    required this.onChanged,
-  });
-
-  Future<void> _pickDate(BuildContext context) async {
-    final now = DateTime.now();
-    final picked = await AppDatePicker.show(
-      context,
-      initial: value,
-      first: DateTime(now.year - 5),
-      // A reading can't have been taken in the future.
-      last: DateTime(now.year, now.month, now.day),
-      accent: accent,
-      title: 'Reading date',
-    );
-    if (picked == null) return;
-    onChanged(DateTime(
-        picked.year, picked.month, picked.day, value.hour, value.minute));
-  }
-
-  Future<void> _pickTime(BuildContext context) async {
-    final picked = await AppTimePicker.show(
-      context,
-      initial: TimeOfDay.fromDateTime(value),
-      accent: accent,
-      title: 'Reading time',
-    );
-    if (picked == null) return;
-    onChanged(DateTime(
-        value.year, value.month, value.day, picked.hour, picked.minute));
-  }
-
-  String _dateLabel() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(value.year, value.month, value.day);
-    final diff = today.difference(day).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    return DateFormats.dayLabel(day, reference: today);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Date & time',
-            style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: _box(context, Symbols.calendar_today_rounded, _dateLabel(),
-                  () => _pickDate(context)),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _box(
-                  context,
-                  Symbols.schedule_rounded,
-                  TimeOfDay.fromDateTime(value).format(context),
-                  () => _pickTime(context)),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _box(
-      BuildContext context, IconData icon, String label, VoidCallback onTap) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.brMd,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: ext.surfaceVariant,
-          borderRadius: AppRadius.brMd,
-          border: Border.all(color: ext.outline),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: ext.textTertiary),
-            const SizedBox(width: AppSpacing.sm),
-            // scaleDown only: a long date shrinks to fit on a 320pt screen,
-            // nothing is ever enlarged and no font size is hardcoded.
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(label,
-                    style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -127,23 +127,18 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     // Reconcile notifications: an archived medicine must stop firing reminders;
     // a restored one gets them back. (Scheduling itself no-ops for archived.)
     await _syncReminders(updated);
-    _loadMedicines();
+    await _loadMedicines();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(medicine.isArchived ? 'Medicine restored' : 'Medicine archived'),
-          // SnackBar.persist defaults to `action != null`, which would pin this
-          // toast open forever; force auto-dismiss while keeping Undo.
-          persist: false,
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () async {
-              await MedicineCleanStorageService.saveMedicine(medicine);
-              await _syncReminders(medicine);
-              _loadMedicines();
-            },
-          ),
+      context.toastSuccess(
+        medicine.isArchived ? 'Medicine restored' : 'Medicine archived',
+        action: AppToastAction(
+          label: 'Undo',
+          onPressed: () async {
+            await MedicineCleanStorageService.saveMedicine(medicine);
+            await _syncReminders(medicine);
+            await _loadMedicines();
+          },
         ),
       );
     }
@@ -163,9 +158,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     final active = _medicines.where((m) => m.isActive && !m.isArchived).toList();
     if (active.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No active medications to report yet.')),
-        );
+        context.toastInfo('No active medicines to report yet.');
       }
       return null;
     }
@@ -177,11 +170,13 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     return entries;
   }
 
-  void _reportError() {
+  /// One failure message for both exports — plus the log line that tells
+  /// whoever gets the bug report which step actually failed. The friendly
+  /// toast used to be all there was: the exception was dropped on the floor.
+  void _reportError(Object error) {
+    debugPrint('Report export failed: $error');
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not create the report. Please try again.')),
-      );
+      context.toastError('Could not create the report. Please try again.');
     }
   }
 
@@ -231,9 +226,12 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
   /// three separate exports.
   Future<void> _exportAdherenceReport() async {
     _hapticService.medium();
-    final entries = await _buildReportEntries();
-    if (entries == null) return;
+    // Inside the try: reading every medicine's dose log is the step most
+    // likely to fail, and while it sat outside, a storage error escaped as an
+    // unhandled exception rather than reaching the catch below.
     try {
+      final entries = await _buildReportEntries();
+      if (entries == null) return;
       final now = DateTime.now();
       final from = now.subtract(const Duration(days: 30));
       final bpReadings = await VitalsStorageService.getBpForRange(from, now);
@@ -249,7 +247,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
       );
       await Printing.sharePdf(bytes: bytes, filename: 'adherence-report.pdf');
     } catch (e) {
-      _reportError();
+      _reportError(e);
     }
   }
 
@@ -273,17 +271,16 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
   /// Export the last-30-day dose log as a CSV via the OS share sheet.
   Future<void> _exportCsv() async {
     _hapticService.medium();
-    final entries = await _buildReportEntries();
-    if (entries == null) return;
-    if (entries.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No doses logged in the last 30 days')),
-        );
-      }
-      return;
-    }
+    // Inside the try, for the reason given in _exportAdherenceReport.
     try {
+      final entries = await _buildReportEntries();
+      if (entries == null) return;
+      if (entries.isEmpty) {
+        if (mounted) {
+          context.toastInfo('No doses logged in the last 30 days');
+        }
+        return;
+      }
       final now = DateTime.now();
       final csv = AdherenceReportService.buildCsv(
         entries: entries,
@@ -295,42 +292,20 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
       await file.writeAsString(csv);
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'text/csv')],
-        subject: 'Medication log (last 30 days)',
+        subject: 'Medicine log (last 30 days)',
       );
     } catch (e) {
-      _reportError();
+      _reportError(e);
     }
   }
 
   Future<void> _deleteMedicine(EnhancedMedicine medicine) async {
-    final ext = AppColorsExt.of(context);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: ext.surface,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
-        title: Text('Delete ${medicine.name}?',
-            style: Theme.of(context).textTheme.headlineSmall),
-        content: Text(
-          'This action cannot be undone.',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: ext.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    // Dismissible, as the dialog it replaces was: a swipe-down or a tap on the
+    // scrim returns null, which is not `true` and so deletes nothing. The
+    // sheet itself is the detail screen's, so the two ways into this ask the
+    // same question — see [NunitoMedicationDetailScreen.confirmDelete].
+    final confirm =
+        await NunitoMedicationDetailScreen.confirmDelete(context, medicine);
 
     if (confirm == true) {
       _hapticService.error();
@@ -338,7 +313,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
       // firing orphaned reminders.
       await MedicationReminderService().cancelRemindersById(medicine.id);
       await MedicineCleanStorageService.deleteMedicine(medicine.id);
-      _loadMedicines();
+      await _loadMedicines();
     }
   }
 
@@ -352,13 +327,14 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
         body: Column(
           children: [
             AppHeader(
-              title: 'Medications',
+              title: 'Medicines',
               leading: AppHeader.backButton(context),
               actions: [
                 AppIconButton(
                   icon: Symbols.ios_share_rounded,
                   filled: false,
                   accent: ext.medicine,
+                  tooltip: 'Share with your doctor',
                   onPressed: _openExportChooser,
                 ),
               ],
@@ -366,7 +342,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
                 children: [
                   AppSearchField(
                     controller: _searchController,
-                    hint: 'Search medications',
+                    hint: 'Search medicines',
                     accent: ext.medicine,
                     onChanged: _onSearchChanged,
                   ),
@@ -408,17 +384,17 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     // Hosted in a scroller: the Expanded above hands the empty state exactly
     // the height the header leaves over, and at large Dynamic Type the
     // circle + title + message need more than that (bottom overflow at 200%).
-    // See [_ScrollableFill] — unchanged whenever it fits.
-    return _ScrollableFill(
+    // See [ScrollableFill] — unchanged whenever it fits.
+    return ScrollableFill(
       child: EmptyState(
         icon: Symbols.medication_rounded,
         accent: ext.medicine,
         title: _selectedTab == 0
-            ? 'No active medications'
+            ? 'No active medicines'
             : _selectedTab == 1
-                ? 'No archived medications'
-                : 'No medications found',
-        message: 'Tap the + button to add a medication.',
+                ? 'No archived medicines'
+                : 'No medicines found',
+        message: 'Tap the + button to add a medicine.',
       ),
     );
   }
@@ -459,14 +435,21 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
         padding: const EdgeInsets.only(right: 24),
         child: Icon(Symbols.delete_rounded, color: ext.error.onContainer),
       ),
+      // Await the action, THEN answer. Firing it off and returning false on
+      // the same frame sprang the card back to rest while its confirmation
+      // sheet was still open, so a delete the user had just confirmed looked
+      // like it had failed — the row only vanished a reload later. `false`
+      // stays the right answer afterwards: a row that really went away has
+      // already been rebuilt out of the list (Dismissible drops the result
+      // once it is unmounted), and one that stayed — archiving from the "All"
+      // tab, or a cancelled delete — must spring back.
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          _archiveMedicine(medicine);
-          return false;
+          await _archiveMedicine(medicine);
         } else {
-          _deleteMedicine(medicine);
-          return false;
+          await _deleteMedicine(medicine);
         }
+        return false;
       },
       child: AppCard(
         onTap: () => _navigateToDetail(medicine),
@@ -583,30 +566,6 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Gives its child the incoming viewport height as a MINIMUM instead of a
-/// fixed size, and lets it scroll past that.
-///
-/// Anything dropped into an [Expanded] gets a tight height, which is fine
-/// until Dynamic Type grows the content past it — then a centred column of
-/// text simply gets clipped ("BOTTOM OVERFLOWED"). Because the constraint is
-/// only a minimum, layout at default text sizes is byte-for-byte unchanged.
-class _ScrollableFill extends StatelessWidget {
-  final Widget child;
-  const _ScrollableFill({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: child,
-        ),
       ),
     );
   }

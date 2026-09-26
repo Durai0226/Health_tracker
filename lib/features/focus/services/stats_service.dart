@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'tag_service.dart';
 import 'package:clock/clock.dart';
 import '../models/focus_session.dart';
 import '../models/detailed_stats.dart';
+import '../../../core/utils/calendar_day.dart';
 
 class StatsService extends ChangeNotifier {
   static final StatsService _instance = StatsService._internal();
@@ -89,26 +89,28 @@ class StatsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Tag minutes for a session, skipping tags that no longer exist.
+  /// Per-tag minutes for one day, keyed by the ids the session carried.
   ///
-  /// `TagService.deleteTag` scrubs its own `_sessionTags` map but cannot scrub the
-  /// `tagIds` list copied onto each `FocusSession` — that is history, and rewriting
-  /// it would be a lie about what the session was tagged at the time. So the
-  /// breakdown filtered nothing and happily rendered a deleted tag's id as a row,
-  /// attributing minutes to a tag the user had removed.
+  /// Deliberately does NOT filter against the live tag list. An earlier version
+  /// did, on the theory that a deleted tag could be rendered as a row — but the
+  /// rendered breakdown does not read this map. Both readers
+  /// (`detailed_stats_screen`, `custom_tags_screen`) call
+  /// `TagService.calculateTagStatistics`, which builds its rows with
+  /// `_tags.map((tag) => TagStatistics(tagId: tag.id, ...))` — it projects over
+  /// the LIVE tag list, so a deleted id structurally cannot reach the UI from
+  /// there. The filter fixed nothing and made this method depend on
+  /// `TagService()` being initialised: called before `TagService.init()`, it
+  /// would have silently zeroed every tag's minutes.
   ///
-  /// Filtering here keeps the history honest and the UI correct, and it also
-  /// covers any other source of an unknown id (a restored backup from a build with
-  /// different tags, for instance).
+  /// `session.tagIds` is history — what the session was tagged at the time — and
+  /// keeping unknown ids here preserves that. Nothing renders them.
   ///
   /// Minutes are completed-only, matching `DailyFocusStats.totalMinutes`, so the
   /// per-tag rows sum to the day's headline instead of exceeding it.
   Map<String, int> _tagMinutes(Map<String, int> base, FocusSession session) {
     if (session.tagIds.isEmpty || !session.wasCompleted) return base;
-    final known = TagService().tags.map((t) => t.id).toSet();
     final result = Map<String, int>.from(base);
     for (final tagId in session.tagIds) {
-      if (!known.contains(tagId)) continue;
       result[tagId] = (result[tagId] ?? 0) + session.actualMinutes;
     }
     return result;
@@ -117,6 +119,30 @@ class StatsService extends ChangeNotifier {
   void updateProductivityPattern(List<FocusSession> sessions) {
     _productivityPattern = ProductivityPattern.analyze(sessions);
     notifyListeners();
+  }
+
+  /// Minutes focused on ONE calendar day, bucketed by the hour each session
+  /// started.
+  ///
+  /// Deliberately not [productivityPattern]. That is a LIFETIME aggregate — it
+  /// answers "which hour do you usually focus in" — and the Statistics screen's
+  /// **Day** chart plotted it directly, so a segment labelled Day showed every
+  /// session ever recorded and a day with no focus at all still drew last
+  /// week's bars. The pattern card lower down the same screen still wants the
+  /// lifetime shape, so the two derivations are separate rather than one of
+  /// them filtered.
+  ///
+  /// Completed sessions only, matching [DailyFocusStats.totalMinutes]: focus
+  /// time is time you finished.
+  Map<int, int> minutesByHourForDay(DateTime day, List<FocusSession> sessions) {
+    final byHour = <int, int>{};
+    for (final session in sessions) {
+      if (!session.wasCompleted) continue;
+      if (!isSameCalendarDay(session.startedAt, day)) continue;
+      final hour = session.startedAt.hour;
+      byHour[hour] = (byHour[hour] ?? 0) + session.actualMinutes;
+    }
+    return byHour;
   }
 
   DailyFocusStats? getStatsForDate(DateTime date) {
@@ -141,7 +167,11 @@ class StatsService extends ChangeNotifier {
   }
 
   WeeklyFocusStats getLastWeekStats() {
-    final lastWeekStart = _getWeekStart(clock.now()).subtract(const Duration(days: 7));
+    // dayOffset, not subtract(Duration(days: 7)): _getWeekStart returns
+    // midnight, and 168 hours before midnight is 01:00 (or 23:00) across a DST
+    // boundary. WeeklyFocusStats.calculate compares against day-only keys, so
+    // an 01:00 start sorts AFTER that Monday and silently drops it.
+    final lastWeekStart = dayOffset(_getWeekStart(clock.now()), -7);
     return WeeklyFocusStats.calculate(_dailyStats, lastWeekStart);
   }
 
@@ -165,13 +195,13 @@ class StatsService extends ChangeNotifier {
 
   List<DailyFocusStats> getLast7Days() {
     final now = clock.now();
-    final weekAgo = now.subtract(const Duration(days: 7));
+    final weekAgo = dayOffset(now, -7);
     return getStatsForRange(weekAgo, now);
   }
 
   List<DailyFocusStats> getLast30Days() {
     final now = clock.now();
-    final monthAgo = now.subtract(const Duration(days: 30));
+    final monthAgo = dayOffset(now, -30);
     return getStatsForRange(monthAgo, now);
   }
 
@@ -181,7 +211,7 @@ class StatsService extends ChangeNotifier {
     
     for (int i = 0; i < 4; i++) {
       weeks.add(WeeklyFocusStats.calculate(_dailyStats, weekStart));
-      weekStart = weekStart.subtract(const Duration(days: 7));
+      weekStart = dayOffset(weekStart, -7);
     }
     
     return weeks;
@@ -240,9 +270,13 @@ class StatsService extends ChangeNotifier {
     }
   }
 
-  DateTime _getWeekStart(DateTime date) {
-    return date.subtract(Duration(days: date.weekday - 1));
-  }
+  /// Midnight on the Monday of [date]'s week.
+  ///
+  /// This used to keep [date]'s time of day, so `!d.date.isBefore(weekStart)`
+  /// excluded Monday's midnight-normalised row for the whole of every day
+  /// after Monday 00:00 — the Week overview card reported fewer minutes than
+  /// the bar chart directly beneath it, which uses getLast7Days.
+  DateTime _getWeekStart(DateTime date) => startOfWeek(date);
   /// Fresh-install state between tests. See FocusService.resetForTesting.
   @visibleForTesting
   void resetForTesting() {

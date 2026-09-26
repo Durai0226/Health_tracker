@@ -87,13 +87,13 @@ void main() {
   }
 
   /// The wizard's own primary button — `find.text` alone is ambiguous, since
-  /// the header title reads "Add Medication" as well.
+  /// the header title reads "Add medicine" as well.
   Finder button(String label) => find.widgetWithText(AppButton, label);
 
   /// Step 1 (Info) -> step 2 (Dosage).
   Future<void> toDosageStep(WidgetTester tester) async {
     await openFlow(tester);
-    await enterInto(tester, 'Medication Name', 'Aspirin');
+    await enterInto(tester, 'Medicine name', 'Aspirin');
     await tapVisible(tester, button('Continue'));
     expect(find.text('How much do you take?'), findsOneWidget);
   }
@@ -114,7 +114,7 @@ void main() {
 
       // "End date" mode selected, but no date picked yet.
       await tapVisible(tester, find.text('End date'));
-      await tapVisible(tester, button('Add Medication'));
+      await tapVisible(tester, button('Add medicine'));
 
       expect(find.text('Please pick an end date'), findsOneWidget);
       expect(await savedCount(), 0,
@@ -125,7 +125,7 @@ void main() {
 
     testWidgets('saves normally once the step is valid', (tester) async {
       await toScheduleStep(tester);
-      await tapAndPump(tester, button('Add Medication'));
+      await tapAndPump(tester, button('Add medicine'));
 
       expect(await savedCount(), 1);
     });
@@ -181,7 +181,7 @@ void main() {
       await tapVisible(tester, button('Continue'));
       expect(find.text('When do you take it?'), findsOneWidget);
 
-      await tapAndPump(tester, button('Add Medication'));
+      await tapAndPump(tester, button('Add medicine'));
 
       final saved = await MedicineCleanStorageService.getAllMedicines();
       expect(saved, hasLength(1));

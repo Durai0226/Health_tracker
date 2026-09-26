@@ -8,6 +8,8 @@ import '../../../core/widgets/app/vitals_widgets.dart';
 import '../../medication/screens/vitals/vitals_trend_chart.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
+import '../../../core/utils/calendar_day.dart';
+import 'package:clock/clock.dart';
 
 /// How today's caffeine intake is classified against the FDA's 400 mg/day
 /// guidance for healthy adults. General reference only — never presented as
@@ -21,7 +23,7 @@ enum _CaffeineBand { none, withinRange, approaching, over }
 /// AppSpacing + the AccentSwatch theming contract). The previous version was
 /// the last screen still on the original generation: raw Scaffold + AppBar,
 /// `CommonButton`, hand-rolled Container cards, ~25 hardcoded
-/// `Colors.brown/amber/orange` values that ignored dark mode, and emoji used
+/// raw brown/amber/orange values that ignored dark mode, and emoji used
 /// as iconography.
 class CaffeineInsightsScreen extends StatefulWidget {
   const CaffeineInsightsScreen({super.key});
@@ -146,9 +148,12 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
   /// The last 7 days' totals, oldest → newest, aligned to real calendar days
   /// so a gap day reads as 0 rather than shifting the series.
   List<double> get _weekSeries {
-    final today = DateTime.now();
+    final today = clock.now();
     return List<double>.generate(7, (i) {
-      final day = today.subtract(Duration(days: 6 - i));
+      // dayOffset, not subtract(): the doc comment above promises real calendar
+      // days, and Duration stepping is precisely what breaks that promise on a
+      // DST boundary.
+      final day = dayOffset(today, i - 6);
       final match = _weeklyData.where((d) =>
           d.date.year == day.year &&
           d.date.month == day.month &&
@@ -261,7 +266,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
         child: VitalsTrendChart(
           series: [
             VitalsSeries(
-                values: series, color: ext.mark(accent), label: 'Caffeine'),
+                values: series, color: ext.chartMark(accent), label: 'Caffeine'),
           ],
           minY: 0,
           // Headroom above the larger of the limit and the week's peak, so a

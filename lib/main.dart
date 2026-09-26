@@ -5,10 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'core/dev/qa_seed.dart';
 import 'core/services/active_profile_service.dart';
+import 'core/services/home_widget_service.dart';
 import 'core/services/app_lock_service.dart';
 import 'core/services/clean_storage_service.dart';
 import 'core/database/app_database.dart';
@@ -17,7 +17,6 @@ import 'core/services/cloud_sync_service.dart';
 import 'core/services/haptic_service.dart';
 import 'core/services/vitavibe_service.dart';
 import 'features/medication/services/medicine_storage_service.dart';
-import 'features/medication/services/intake_tracking_service.dart';
 import 'features/focus/services/focus_service.dart';
 import 'features/water/services/water_service.dart';
 import 'features/period/services/period_service.dart';
@@ -26,7 +25,6 @@ import 'features/sleep/services/sleep_service.dart';
 import 'features/biometrics/services/biometrics_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/reminder_reschedule_service.dart';
-import 'core/services/sync_service.dart';
 import 'core/services/background_alarm_service.dart';
 import 'core/services/background_health_sync_service.dart';
 import 'core/services/feature_flag_service.dart';
@@ -36,10 +34,12 @@ import 'core/theme/app_theme.dart';
 import 'features/onboarding/screens/welcome_screen.dart';
 import 'features/home/screens/app_shell.dart';
 import 'features/reminders/screens/alarm_screen.dart';
+import 'features/reminders/services/reminder_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'core/services/app_check_service.dart';
 import 'core/services/health_rationale_channel.dart';
 import 'features/settings/screens/app_lock_gate.dart';
+import 'core/constants/app_strings.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -93,15 +93,18 @@ Future<void> _initService(String name, Future<void> Function() init) async {
   }
 }
 
-/// Sync snooze settings asynchronously without blocking startup
+/// Sync the alarm-isolate settings mirror asynchronously without blocking startup.
+///
+/// A safety net, not the mechanism: [CleanStorageService.saveUserSettings] now
+/// mirrors on every save, so a change in Settings takes effect immediately
+/// instead of at the next cold start. This still runs to cover installs upgrading
+/// from a build that never wrote some of these keys.
 void _syncSnoozeSettings() {
   Future(() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final userSettings = CleanStorageService.getUserSettings();
-      await prefs.setInt('snooze_interval_minutes', userSettings.snoozeIntervalMinutes);
-      await prefs.setBool('snooze_enabled', userSettings.snoozeEnabled);
-      debugPrint('✓ Synced snooze settings to SharedPreferences');
+      await CleanStorageService.mirrorSettingsForAlarmIsolate(
+          CleanStorageService.getUserSettings());
+      debugPrint('✓ Synced alarm-isolate settings to SharedPreferences');
     } catch (e) {
       debugPrint('⚠️ Snooze settings sync failed: $e');
     }
@@ -118,7 +121,6 @@ void _initDeferredServices() {
         // dialog blocks tests/screenshots.
         if (!kE2ETest && !kSkipNotifInit)
           _initService('SimpleAdService', () => SimpleAdService().init()),
-        _initService('SyncService', () async => SyncService().init()),
         _initService('BackgroundAlarmService', () => BackgroundAlarmService().init()),
         // Separate from BackgroundAlarmService on purpose: a data sync must
         // not ride the exact-alarm path. See its class doc.
@@ -126,6 +128,10 @@ void _initDeferredServices() {
             () => BackgroundHealthSyncService.instance.init()),
         _initService('FeatureFlagService', () => FeatureFlagService().init()),
         _initService('VitaVibeService', () => VitaVibeService().init()),
+        // Registers the home-screen widget's tap handler. Without this the
+        // widget's "+250" button fires its broadcast, the isolate starts, and
+        // finds no callback to run — a dead button with no error anywhere.
+        _initService('HomeWidget', () => HomeWidgetService.init()),
         // Other services can be initialized on-demand
       ]);
       
@@ -149,8 +155,7 @@ void _initDeferredServices() {
       // uploaded for every user, including people who tapped "Continue as
       // guest", while onboarding told them "Private · on-device · no account".
       //
-      // Two guards now, matching what SyncService already does
-      // (sync_service.dart: `if (user.isAnonymous) return;`):
+      // Two guards now:
       //   1. isAuthenticated — excludes anonymous users and offline guests
       //   2. cloudSyncEnabled — the user's own opt-in, default false
       final auth = AuthService();
@@ -278,13 +283,22 @@ void main() async {
       debugPrint('✓ Drift database connection established');
     });
     
-    // Initialize core storage service (now uses Drift)
+    // Initialize core storage service (now uses Drift).
+    //
+    // Deliberately AWAITED ALONE, not folded into the group below: the
+    // services there read `CleanStorageService.getAppPreference`, which is the
+    // SYNCHRONOUS cache — it answers from memory and cannot wait for a load in
+    // flight. StepService.init reaches it for the best-day record and the
+    // step-reminder settings (step_service.dart), and PeriodService.init fires
+    // PeriodReminderService.reschedule, whose getConfig() reads
+    // 'periodReminderConfig' the same way. Started concurrently, both would
+    // silently read defaults on every cold start. The four reads INSIDE
+    // CleanStorageService.init are the ones that now run together.
     await _initService('CleanStorageService', () => CleanStorageService.init());
 
     // Initialize dependent storage services in parallel
     await Future.wait([
       _initService('MedicineCleanStorageService', () => MedicineCleanStorageService.init()),
-      _initService('IntakeTrackingService', () => IntakeTrackingService.init()),
       _initService('WaterService', () => WaterService.init()),
       _initService('PeriodService', () => PeriodService.init()),
       _initService('StepService', () => StepService.init()),
@@ -314,6 +328,12 @@ void main() async {
       _initService('FeatureManager', () => FeatureManager().init()),
       _initService('ActiveProfileService', () => ActiveProfileService().init()),
       _initService('AppLockService', () => AppLockService().init()),
+      // Reminders start watching Drift at launch, not on screen mount — same
+      // reasoning as Focus below. The Today dashboard shows reminders, so a
+      // cold launch straight to Today must not read a stale list, and a write
+      // from the reschedule pass (which runs at startup) must be visible
+      // without the user navigating into the reminders screen first.
+      _initService('ReminderService', () => ReminderService.instance.start()),
       // Focus hydrates at startup, not on screen mount.
       //
       // init() used to be called ONLY from FocusScreen.initState, so on a cold
@@ -434,7 +454,7 @@ class _MyAppState extends State<MyApp> {
       valueListenable: themeModeNotifier,
       builder: (context, themeMode, _) {
         return MaterialApp(
-          title: 'DailyMinder',
+          title: AppStrings.productName,
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,

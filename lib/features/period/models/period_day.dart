@@ -124,17 +124,29 @@ class PeriodDay {
     return db.PeriodDaysCompanion(
       id: Value(id),
       date: Value(DateTime(date.year, date.month, date.day)),
-      cycleId: cycleId == null ? const Value.absent() : Value(cycleId),
+      // `Value(x)` for every nullable field, NEVER `Value.absent()`.
+      //
+      // `upsertDay` is an `insertOnConflictUpdate`, whose ON CONFLICT DO UPDATE
+      // only writes the columns the companion actually sets. `Value.absent()`
+      // therefore means "leave whatever is stored", so clearing a field could
+      // not be saved: the Log sheet clears mood/energy by passing null (tap the
+      // selected face again) and BBT by emptying the field, `PeriodService`
+      // updated its in-memory map optimistically so the UI showed the value
+      // gone — and the next read from Drift brought the old mood, BBT or note
+      // straight back. A mistyped BBT was unfixable except by overwriting it.
+      //
+      // `Value(null)` is an explicit SET NULL, which is what "the user cleared
+      // this" means. `symptomIdsJson` on the line below already did this, and
+      // so does every vitals mapper.
+      cycleId: Value(cycleId),
       flowIndex: Value(flowIndex),
-      mood: mood == null ? const Value.absent() : Value(mood),
-      energy: energy == null ? const Value.absent() : Value(energy),
-      bbtCelsius:
-          bbtCelsius == null ? const Value.absent() : Value(bbtCelsius),
-      intercourse:
-          intercourse == null ? const Value.absent() : Value(intercourse),
+      mood: Value(mood),
+      energy: Value(energy),
+      bbtCelsius: Value(bbtCelsius),
+      intercourse: Value(intercourse),
       symptomIdsJson:
           symptomIds.isEmpty ? const Value(null) : Value(jsonEncode(symptomIds)),
-      note: note == null ? const Value.absent() : Value(note),
+      note: Value(note),
       createdAt: Value(createdAt ?? now),
       updatedAt: Value(now),
       synced: const Value(false),

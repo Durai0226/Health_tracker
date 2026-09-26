@@ -74,7 +74,6 @@ import 'features/reminders/screens/category_management_screen.dart';
 import 'features/insights/screens/weekly_recap_screen.dart';
 import 'features/settings/screens/notification_settings_screen.dart';
 import 'features/settings/screens/haptic_settings_screen.dart';
-import 'features/settings/screens/vitavibe_settings_screen.dart';
 import 'features/focus/screens/settings/focus_reminders_settings_screen.dart';
 import 'features/settings/screens/security_settings_screen.dart';
 import 'features/settings/screens/early_access_screen.dart';
@@ -293,7 +292,6 @@ class _QaApp extends StatelessWidget {
       'weekly_recap' => const WeeklyRecapScreen(),
       'notif_settings' => const NotificationSettingsScreen(),
       'haptics' => const HapticSettingsScreen(),
-      'vitavibe' => const VitaVibeSettingsScreen(),
       'focus_reminders' => const FocusRemindersSettingsScreen(),
       'security' => const SecuritySettingsScreen(),
       'early_access' => const EarlyAccessScreen(),

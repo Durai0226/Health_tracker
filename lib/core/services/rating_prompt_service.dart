@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'clean_storage_service.dart';
+import '../../core/constants/app_strings.dart';
 
 /// Asks for a store rating ONCE, and only after a real "win" (a medication
 /// adherence streak) — the retention→ratings→ASO loop the BA flagged as the only
@@ -33,7 +34,7 @@ class RatingPromptService {
     final rate = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Enjoying DailyMinder?'),
+        title: Text('Enjoying ${AppStrings.productName}?'),
         content: Text(
             "You're on a $streak-day streak — nicely done! A quick rating "
             'really helps others find a private, free reminder app.'),

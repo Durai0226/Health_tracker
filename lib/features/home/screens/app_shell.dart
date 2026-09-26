@@ -1,7 +1,14 @@
+import 'dart:async';
+
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../medication/services/medicine_storage_service.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/services/reminder_reschedule_service.dart';
+import '../../../core/services/home_widget_service.dart';
+import '../../water/services/water_service.dart';
 import '../../../core/services/health_sync_queue.dart';
 import '../../steps/services/step_service.dart';
 import '../../sleep/services/sleep_service.dart';
@@ -66,6 +73,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Cold start needs draining too — and it is the MOST likely case, since a
+    // notification action tapped while the app was dead is exactly what fills
+    // the queue. `didChangeAppLifecycleState` does not fire for the initial
+    // launch, so without this the doses sat unapplied until the user happened to
+    // background and foreground the app.
+    //
+    // Post-frame rather than inline: the drain shows a toast, which needs a
+    // mounted Scaffold.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _drainQueuedDoseActions();
+      _drainQueuedWaterActions();
+      _drainBackgroundHealthSync();
+      _refreshAmbientData();
+    });
   }
 
   @override
@@ -79,14 +101,57 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   /// A Take/Skip tapped on a notification is handled in a background isolate that
   /// can't reach Drift, so it lands in the dose-action queue instead. Draining it
-  /// here (rather than only inside a screen's own load) means the dose appears the
+  /// here (rather than inside a screen's own load) means the dose appears the
   /// moment the user comes back, not after they navigate or pull-to-refresh.
   /// Every affected surface listens to `revision`, which the drain's writes bump.
+  ///
+  /// **This is the only place that drains the dose queue.** The medicine
+  /// dashboard used to drain it as well, inside its own load, with its own
+  /// duplicate "Logged N doses · Undo" toast. `drainPendingDoseActions` is
+  /// read-and-clear, so the two raced: on a resume into the Meds tab whichever
+  /// ran first got the ids and reported them, and the other silently reported
+  /// nothing — so whether the user was told a dose had been logged on their
+  /// behalf depended on which tab they happened to open.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     _drainQueuedDoseActions();
+    _drainQueuedWaterActions();
     _drainBackgroundHealthSync();
+    _rearmIfExactAlarmsWereGranted();
+    _refreshAmbientData();
+  }
+
+  /// Re-arm everything if the user has just granted SCHEDULE_EXACT_ALARM.
+  ///
+  /// Android 14+ denies it by default, so reminders armed before the grant are
+  /// inexact — up to an hour late, which is fine for a nudge and not fine for a
+  /// dose. The grant does not retroactively upgrade them; they have to be
+  /// rescheduled, exactly as after a reboot.
+  ///
+  /// Done on resume rather than via a `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_
+  /// STATE_CHANGED` receiver deliberately. That broadcast would need a native
+  /// BroadcastReceiver spinning up a Dart isolate, and this app has no native
+  /// receivers at all today (MainActivity hosts MethodChannels and nothing
+  /// else). It would only buy the case where the grant happens while the app is
+  /// dead — and the only route to that settings page in this app is the
+  /// "Allow exact alarms" button on `NotificationPermissionBanner`, which means
+  /// the user leaves the app and comes back. Resume catches exactly that, with
+  /// no native code to maintain.
+  Future<void> _rearmIfExactAlarmsWereGranted() async {
+    try {
+      final downgraded =
+          await NotificationService().remindersDowngradedToInexact();
+      if (!downgraded) return;
+      if (!await NotificationService().canScheduleExactAlarms()) return;
+      // The flag still says "downgraded" but the permission is now granted —
+      // so the grant landed while we were away. Rebuilding clears the flag as a
+      // side effect, because every re-arm goes through the guarded scheduler.
+      debugPrint('✓ Exact alarms granted while away — re-arming everything');
+      await ReminderRescheduleService.rescheduleAllReminders();
+    } catch (e) {
+      debugPrint('⚠️ Exact-alarm re-arm check failed: $e');
+    }
   }
 
   /// The background health worker cannot write to Drift — it drops a snapshot
@@ -137,6 +202,78 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         },
       ),
     );
+  }
+
+  /// Apply drinks logged without opening the app — a water reminder's action
+  /// button or the home-screen widget's quick-add.
+  ///
+  /// Same hand-off as the dose drain above and confirmed the same way: writing
+  /// on the user's behalf without saying so is not something to leave unsaid,
+  /// and a mis-tap needs a way back.
+  Future<void> _drainQueuedWaterActions() async {
+    List<AppliedWaterAction> applied;
+    try {
+      // iOS first: its widget cannot start a Flutter isolate, so its taps are
+      // sitting in the App Group rather than in the queue. Moving them across
+      // before the drain means both platforms share one code path from here on.
+      await HomeWidgetService.drainIosWidgetQueue();
+      applied = await WaterService.drainPendingWaterActions();
+    } catch (e) {
+      debugPrint('⚠️ Draining queued water actions on resume failed: $e');
+      return;
+    }
+    if (applied.isEmpty || !mounted) return;
+
+    // The real total, not count × 250: the widget and the notification can both
+    // send other volumes, so "2 × 250 ml" was simply wrong for a 500 ml tap.
+    // And "from your reminder" was wrong for every home-screen quick-add.
+    final ml = applied.fold<int>(0, (sum, a) => sum + a.amountMl);
+    context.toastSuccess(
+      'Logged $ml ml from your quick-add',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          for (final a in applied) {
+            // Remove it from the day it was FILED UNDER, not today. A reminder
+            // answered at 23:30 and an app opened next morning logs to
+            // yesterday; undoing against today deleted nothing that mattered
+            // and left the drink standing in history and the weekly totals.
+            await WaterService.removeWaterLogForDate(a.at, a.id);
+          }
+        },
+      ),
+    );
+  }
+
+  /// Last time the home-screen widget was refreshed, for the debounce below.
+  DateTime? _lastWidgetPush;
+
+  /// How often a resume may re-push the widget snapshot. Resume fires on every
+  /// return from a permission dialog, a share sheet or the app switcher, and
+  /// the push reads services and hits a platform channel.
+  static const _widgetPushInterval = Duration(minutes: 1);
+
+  /// Work that keeps what the user sees CURRENT, rather than applying anything
+  /// on their behalf. Silent by design, and safe to run on every resume.
+  ///
+  /// Both halves used to have no caller at all on this path:
+  ///
+  ///  * `refreshWeatherGoal` was reachable only from a button on the hydration
+  ///    profile screen, so "adjust for the weather" raised the goal once and
+  ///    then never again — not at launch, not on a hot afternoon, not on the
+  ///    next day. The service caches its reading for three hours, which is the
+  ///    rate limiting this needs.
+  ///  * `pushSnapshot` ran only when a dashboard was opened, so the widget went
+  ///    on drawing yesterday's steps as today's until the user happened to open
+  ///    the steps or sleep tab.
+  void _refreshAmbientData() {
+    unawaited(WaterService.refreshWeatherGoal());
+
+    final now = clock.now();
+    final last = _lastWidgetPush;
+    if (last != null && now.difference(last) < _widgetPushInterval) return;
+    _lastWidgetPush = now;
+    unawaited(HomeWidgetService.pushSnapshot());
   }
 
   // Slots {0,1,3,4} → stack children {0,1,2,3}.
@@ -203,7 +340,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final screens = [
-      HomeDashboard(onNavigate: _legacyNavigate, refreshTick: _homeTick),
+      HomeDashboard(
+        onNavigate: _legacyNavigate,
+        refreshTick: _homeTick,
+        onOpenTrends: () => _onTap(4),
+      ),
       const NunitoMedicationDashboard(),
       HealthBrowseScreen(onOpenTrends: () => _onTap(4)),
       const TrendsDashboardScreen(isRoot: true),

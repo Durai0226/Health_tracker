@@ -333,7 +333,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
     ),
     success: AccentSwatch(
       base: AppPalette.successDark,
-      on: AppPalette.onSuccessContainer,
+      on: AppPalette.onSuccessDark,
       strong: AppPalette.successDark,
       container: AppPalette.onSuccessContainer,
       onContainer: AppPalette.successContainer,
@@ -349,7 +349,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
     ),
     error: AccentSwatch(
       base: AppPalette.errorDark,
-      on: AppPalette.onErrorContainer,
+      on: AppPalette.onErrorDark,
       strong: AppPalette.errorDark,
       container: AppPalette.onErrorContainer,
       onContainer: AppPalette.errorContainer,
@@ -357,7 +357,7 @@ class AppColorsExt extends ThemeExtension<AppColorsExt> {
     ),
     info: AccentSwatch(
       base: AppPalette.infoDark,
-      on: AppPalette.onInfoContainer,
+      on: AppPalette.onInfoDark,
       strong: AppPalette.infoDark,
       container: AppPalette.onInfoContainer,
       onContainer: AppPalette.infoContainer,

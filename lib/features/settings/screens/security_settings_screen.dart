@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/services/app_lock_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import 'pin_entry_screen.dart';
+import '../../../core/constants/app_strings.dart';
 
 /// "App lock" settings: a PIN toggle, "Change PIN", and — only on devices
 /// that actually support it — a biometric shortcut switch. PIN is always the
@@ -61,32 +62,43 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     return result == true;
   }
 
+  /// The two directions share nothing but the switch — on is a PIN-setup
+  /// push, off is an identity check followed by three preference writes — and
+  /// they were one method with a `return` in the middle, which put a
+  /// `setState` after an `await` that only the OTHER branch performs.
   Future<void> _onToggleLock(bool enable) async {
     if (_busy) return;
-    if (enable) {
-      final result = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (routeContext) => PinEntryScreen(
-            mode: PinEntryMode.setup,
-            setupTitle: 'Set a PIN',
-            onSuccess: () => Navigator.of(routeContext).pop(true),
-          ),
-        ),
-      );
-      if (result == true && mounted) {
-        context.toastSuccess('App lock is on.');
-        setState(() {});
-      }
-      return;
-    }
+    return enable ? _turnLockOn() : _turnLockOff();
+  }
 
+  Future<void> _turnLockOn() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (routeContext) => PinEntryScreen(
+          mode: PinEntryMode.setup,
+          setupTitle: 'Set a PIN',
+          onSuccess: () => Navigator.of(routeContext).pop(true),
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      context.toastSuccess('App lock is on.');
+      setState(() {});
+    }
+  }
+
+  Future<void> _turnLockOff() async {
     setState(() => _busy = true);
     final confirmed = await _confirmIdentity();
     if (!mounted) return;
     if (confirmed) {
       await _service.disableLock();
-      if (mounted) context.toastInfo('App lock is off.');
+      // An early return, not `if (mounted)` around the toast alone: the
+      // setState below sits outside this branch, so a screen popped during
+      // the write reached it anyway.
+      if (!mounted) return;
+      context.toastInfo('App lock is off.');
     }
     setState(() => _busy = false);
   }
@@ -141,10 +153,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                   SettingsSection(
                     title: 'App lock',
                     footer: enabled
-                        ? 'A PIN is required every time DailyMinder is '
+                        ? 'A PIN is required every time ${AppStrings.productName} is '
                           'opened or returned to after being in the '
                           'background for a while.'
-                        : 'Require a PIN to open DailyMinder.',
+                        : 'Require a PIN to open ${AppStrings.productName}.',
                     children: [
                       SettingsTile(
                         icon: Symbols.lock_rounded,

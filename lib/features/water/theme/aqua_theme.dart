@@ -1,6 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../../core/design/app_palette.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/design/app_design.dart';
 import '../models/beverage_type.dart';
 
 /// Aqua Water Tracking Theme - Modern 2025/2026 Design System
@@ -59,24 +59,15 @@ class AquaTheme {
   static const Color surfaceLight = AppPalette.surfaceVariantL;
   static const Color surfaceDark = AppPalette.surfaceVariantD;
 
-  // ==========================================
-  // TEXT COLORS
-  // ==========================================
-  
-  static const Color textPrimary = AppPalette.textPrimaryL;
-  static const Color textSecondary = AppPalette.textSecondaryL;
-  static const Color textTertiary = AppPalette.textTertiaryL;
-  static const Color textOnDark = Colors.white;
-  static const Color textOnPrimary = Colors.white;
-
-  // ==========================================
-  // STATUS COLORS
-  // ==========================================
-  
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
-  static const Color info = Color(0xFF3B82F6);
+  // Text and status colours are deliberately ABSENT.
+  //
+  // This class used to export `textPrimary/textSecondary/textTertiary` bound to
+  // the LIGHT palette and `textOnDark = Colors.white`, i.e. exactly the shape of
+  // the deleted `AppColors` consts that painted white-on-white in dark mode. A
+  // const cannot know the brightness, so every consumer that reached for one was
+  // one theme away from being unreadable. Read colour from
+  // `AppColorsExt.of(context)` — or the context helpers at the bottom of this
+  // file, which resolve through it.
 
   // ==========================================
   // BEVERAGE DATA
@@ -222,182 +213,63 @@ class AquaTheme {
   }
 
   // ==========================================
-  // GRADIENTS
-  // ==========================================
-  
-  static const LinearGradient primaryGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [waterPrimary, waterSecondary],
-  );
-
-  static LinearGradient get backgroundGradientLight => LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [
-      waterPrimary.withOpacity(0.1),
-      backgroundLight,
-    ],
-    stops: const [0.0, 0.4],
-  );
-
-  static LinearGradient get backgroundGradientDark => LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [
-      waterPrimary.withOpacity(0.15),
-      backgroundDark,
-    ],
-    stops: const [0.0, 0.4],
-  );
-
-  // ==========================================
   // SHADOWS
   // ==========================================
-  
-  static List<BoxShadow> cardShadow(Color accentColor) => [
-    BoxShadow(
-      color: accentColor.withOpacity(0.15),
-      blurRadius: 20,
-      offset: const Offset(0, 8),
-      spreadRadius: 0,
-    ),
-    BoxShadow(
-      color: accentColor.withOpacity(0.08),
-      blurRadius: 10,
-      offset: const Offset(0, 4),
-      spreadRadius: 0,
-    ),
-  ];
 
-  static List<BoxShadow> get defaultCardShadow => cardShadow(waterPrimary);
+  /// The one card shadow, from the design system.
+  ///
+  /// What was here before was a two-layer ACCENT-TINTED glow (0.15/0.08 of the
+  /// beverage colour, blur 20 and 10) plus a brightness-blind
+  /// `black.withOpacity(0.05)` "subtle" variant. Neither matched
+  /// [AppShadows.card] (0.06 light / 0.30 dark, blur 16, spread -2, offset
+  /// 0,6), so a water card cast a visibly different shadow from every other
+  /// card in the app — and the black-at-5% one was invisible on dark.
+  ///
+  /// It takes a context now because a shadow that cannot see the brightness
+  /// cannot be right in both themes.
+  static List<BoxShadow> cardShadow(BuildContext context) =>
+      AppShadows.card(context);
 
-  static List<BoxShadow> dropletGlow(Color color) => [
-    BoxShadow(
-      color: color.withOpacity(0.4),
-      blurRadius: 30,
-      spreadRadius: 5,
-    ),
-    BoxShadow(
-      color: color.withOpacity(0.2),
-      blurRadius: 50,
-      spreadRadius: 10,
-    ),
-  ];
-
-  static List<BoxShadow> get subtleShadow => [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.05),
-      blurRadius: 10,
-      offset: const Offset(0, 4),
-    ),
-  ];
+  /// Sheets, dialogs, menus.
+  static List<BoxShadow> elevatedShadow(BuildContext context) =>
+      AppShadows.elevated(context);
 
   // ==========================================
-  // BORDER RADIUS
+  // BORDER RADIUS — aliases of the one scale
   // ==========================================
-  
-  static const double radiusSmall = 8.0;
-  static const double radiusMedium = 16.0;
-  static const double radiusLarge = 24.0;
-  static const double radiusXLarge = 32.0;
-  static const double radiusFull = 100.0;
+  //
+  // Kept as names rather than deleted so the water widgets do not all have to
+  // change in the same commit, but every value now resolves to [AppRadius].
+  // `radiusFull` was 100 and is now the scale's 999: identical on any pill
+  // smaller than 200pt, which is all of them.
 
-  // ==========================================
-  // SPACING
-  // ==========================================
-  
-  static const double spacingXS = 4.0;
-  static const double spacingS = 8.0;
-  static const double spacingM = 16.0;
-  static const double spacingL = 24.0;
-  static const double spacingXL = 32.0;
-  static const double spacingXXL = 48.0;
+  static const double radiusSmall = AppRadius.sm;    // 8
+  static const double radiusMedium = AppRadius.lg;   // 16
+  static const double radiusLarge = AppRadius.sheet; // 24
+  static const double radiusFull = AppRadius.full;   // 999
 
   // ==========================================
-  // TYPOGRAPHY
+  // SPACING — aliases of the 4pt scale
   // ==========================================
-  
-  static TextStyle get displayLarge => const TextStyle(
-    fontSize: 36,
-    fontWeight: FontWeight.w700,
-    color: textPrimary,
-    letterSpacing: -0.5,
-    height: 1.2,
-  );
+  //
+  // Mapped BY VALUE, not by name: this scale's `M` is 16, which is
+  // `AppSpacing.lg`, not `AppSpacing.md` (12). Renaming without measuring would
+  // have quietly retightened every gap in the feature by 4pt.
 
-  static TextStyle get displayMedium => const TextStyle(
-    fontSize: 28,
-    fontWeight: FontWeight.w700,
-    color: textPrimary,
-    letterSpacing: -0.5,
-    height: 1.2,
-  );
+  static const double spacingXS = AppSpacing.xs;  // 4
+  static const double spacingS = AppSpacing.sm;   // 8
+  static const double spacingM = AppSpacing.lg;   // 16
+  static const double spacingL = AppSpacing.xl;   // 24
+  static const double spacingXL = AppSpacing.xxl; // 32
+  static const double spacingXXL = AppSpacing.huge; // 48
 
-  static TextStyle get heading1 => const TextStyle(
-    fontSize: 24,
-    fontWeight: FontWeight.w700,
-    color: textPrimary,
-    letterSpacing: -0.3,
-    height: 1.3,
-  );
-
-  static TextStyle get heading2 => const TextStyle(
-    fontSize: 20,
-    fontWeight: FontWeight.w600,
-    color: textPrimary,
-    letterSpacing: -0.2,
-    height: 1.3,
-  );
-
-  static TextStyle get heading3 => const TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.w600,
-    color: textPrimary,
-    height: 1.4,
-  );
-
-  static TextStyle get bodyLarge => const TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    color: textPrimary,
-    height: 1.5,
-  );
-
-  static TextStyle get bodyMedium => const TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: textPrimary,
-    height: 1.5,
-  );
-
-  static TextStyle get bodySmall => const TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: textSecondary,
-    height: 1.5,
-  );
-
-  static TextStyle get labelLarge => const TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    color: textPrimary,
-    letterSpacing: 0.5,
-  );
-
-  static TextStyle get labelMedium => const TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    color: textSecondary,
-    letterSpacing: 0.5,
-  );
-
-  static TextStyle get caption => const TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.w500,
-    color: textTertiary,
-    letterSpacing: 0.3,
-  );
+  // Typography lives in `AppType` / `Theme.of(context).textTheme`.
+  //
+  // The eleven `TextStyle` getters that were here (36/28/24/20/18/16/14/12/14/
+  // 12/11) were a SECOND type scale, off the app's one at four of eleven steps,
+  // and every one of them baked `color: AppPalette.textPrimaryL` — a light-mode
+  // colour — into a const. A caller that forgot `.copyWith(color:)` rendered
+  // near-black text on the dark surface.
 
   // ==========================================
   // ANIMATION DURATIONS
@@ -420,85 +292,113 @@ class AquaTheme {
   static const Curve curveSmooth = Curves.easeInOutCubic;
 
   // ==========================================
-  // GLASSMORPHISM HELPERS
-  // ==========================================
-  
-  static BoxDecoration glassDecoration({
-    Color? color,
-    double opacity = 0.7,
-    double borderRadius = radiusMedium,
-    Color? borderColor,
-    List<BoxShadow>? shadows,
-  }) {
-    return BoxDecoration(
-      color: (color ?? Colors.white).withOpacity(opacity),
-      borderRadius: BorderRadius.circular(borderRadius),
-      border: Border.all(
-        color: borderColor ?? Colors.white.withOpacity(0.2),
-        width: 1,
-      ),
-      boxShadow: shadows ?? subtleShadow,
-    );
-  }
-
-  static BoxDecoration glassDecorationDark({
-    double opacity = 0.3,
-    double borderRadius = radiusMedium,
-  }) {
-    return BoxDecoration(
-      color: Colors.black.withOpacity(opacity),
-      borderRadius: BorderRadius.circular(borderRadius),
-      border: Border.all(
-        color: Colors.white.withOpacity(0.1),
-        width: 1,
-      ),
-    );
-  }
-
-  static ImageFilter get glassBlur => ImageFilter.blur(sigmaX: 10, sigmaY: 10);
-
-  // ==========================================
   // HELPER METHODS
   // ==========================================
   
-  static bool isDark(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark;
-  }
+  static bool isDark(BuildContext context) => AppColorsExt.of(context).isDark;
 
-  static Color getBackground(BuildContext context) {
-    return isDark(context) ? backgroundDark : backgroundLight;
-  }
+  static Color getBackground(BuildContext context) =>
+      AppColorsExt.of(context).background;
 
-  static Color getCardBg(BuildContext context) {
-    return isDark(context) ? cardDark : cardLight;
-  }
+  static Color getCardBg(BuildContext context) =>
+      AppColorsExt.of(context).surface;
 
-  static Color getSurface(BuildContext context) {
-    return isDark(context) ? surfaceDark : surfaceLight;
-  }
+  static Color getSurface(BuildContext context) =>
+      AppColorsExt.of(context).surfaceVariant;
 
-  static Color getTextPrimary(BuildContext context) {
-    return isDark(context) ? textOnDark : textPrimary;
-  }
+  static Color getTextPrimary(BuildContext context) =>
+      AppColorsExt.of(context).textPrimary;
 
-  static Color getTextSecondary(BuildContext context) {
-    return isDark(context) ? textTertiary : textSecondary;
-  }
+  static Color getTextSecondary(BuildContext context) =>
+      AppColorsExt.of(context).textSecondary;
 
-  static LinearGradient getBackgroundGradient(BuildContext context) {
-    return isDark(context) ? backgroundGradientDark : backgroundGradientLight;
-  }
+  /// The third text rank. It exists because two widgets were reaching for the
+  /// deleted `textTertiary` CONST, which was the light value in both themes.
+  static Color getTextTertiary(BuildContext context) =>
+      AppColorsExt.of(context).textTertiary;
 
-  static BoxDecoration getCardDecoration(BuildContext context, {Color? accentColor}) {
-    final color = accentColor ?? waterPrimary;
+  /// The card surface every water widget shares: token surface, token radius,
+  /// token shadow, and on dark the 1px outline `AppCard` uses — shadows read
+  /// weakly on dark, so the outline is what defines the card's edge.
+  ///
+  /// `accentColor` is gone rather than ignored. Its only effect was tinting the
+  /// shadow, which is the thing that made these cards disagree with every
+  /// `AppCard` in the app.
+  static BoxDecoration getCardDecoration(BuildContext context) {
+    final ext = AppColorsExt.of(context);
     return BoxDecoration(
-      color: getCardBg(context),
-      borderRadius: BorderRadius.circular(radiusMedium),
-      boxShadow: cardShadow(color),
-      border: isDark(context) 
-          ? Border.all(color: Colors.white.withOpacity(0.1))
-          : null,
+      color: ext.surface,
+      borderRadius: AppRadius.brCard,
+      boxShadow: AppShadows.card(context),
+      border: ext.isDark ? Border.all(color: ext.outline, width: 1) : null,
     );
+  }
+
+  /// The foreground for text or an icon drawn ON a beverage fill.
+  ///
+  /// Beverage identity is a real product decision (the quick-add block is
+  /// deliberately tinted by the selected drink), but the colours it tints with
+  /// are a hand-picked set spanning #FAFAFA (milk) to #7B1FA2 (alcohol) — so a
+  /// hardcoded `Colors.white` foreground, which is what every one of these
+  /// sites used, measured 1.04:1 on milk and 1.14:1 on energy's neon green.
+  ///
+  /// This picks whichever of white / near-black scores HIGHER against the fill,
+  /// so the worst case is the crossover at relative luminance ~0.209, where
+  /// both sides measure 4.09:1 — above the 3:1 large-text floor everywhere and
+  /// above 4.5:1 for all but the mid-tone beverages.
+  static Color onBeverage(Color fill) {
+    final l = fill.computeLuminance();
+    final againstWhite = 1.05 / (l + 0.05);
+    final againstInk =
+        (l + 0.05) / (AppPalette.textPrimaryL.computeLuminance() + 0.05);
+    return againstWhite >= againstInk ? Colors.white : AppPalette.textPrimaryL;
+  }
+
+  /// A beverage's Material Symbol.
+  ///
+  /// DS-17: an emoji sized 20-28pt inside a decorated tile is CHROME, not
+  /// content — it renders in the platform's emoji font, ignores the accent, and
+  /// on Android is a different picture per OEM. Beverage identity still comes
+  /// from [BeverageThemeData.primary]; the glyph is now drawn by the icon font
+  /// the rest of the app uses.
+  ///
+  /// The user's own persisted cup emoji is NOT routed through here — that is a
+  /// choice they made and stored, so it stays as they picked it.
+  static IconData iconFor(String beverageId) {
+    switch (beverageId.toLowerCase()) {
+      case 'coffee':
+      case 'espresso':
+        return Symbols.coffee_rounded;
+      case 'tea':
+      case 'green_tea':
+      case 'herbal_tea':
+      case 'iced_tea':
+        return Symbols.emoji_food_beverage_rounded;
+      case 'milk':
+      case 'juice':
+      case 'orange_juice':
+      case 'lemonade':
+      case 'coconut_water':
+      case 'soda':
+      case 'diet_soda':
+      case 'smoothie':
+        return Symbols.local_drink_rounded;
+      case 'energy':
+      case 'energy_drink':
+      case 'sports_drink':
+        return Symbols.bolt_rounded;
+      case 'beer':
+        return Symbols.sports_bar_rounded;
+      case 'wine':
+      case 'alcohol':
+      case 'spirits':
+      case 'cocktail':
+        return Symbols.local_bar_rounded;
+      case 'water':
+      case 'sparkling_water':
+      default:
+        return Symbols.water_drop_rounded;
+    }
   }
 }
 

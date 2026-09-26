@@ -11,7 +11,16 @@ import 'trends_dashboard_screen.dart';
 /// hasn't been dismissed, and records show/dismiss state in app preferences.
 /// Renders nothing (zero height) when there's nothing to nudge.
 class ProactiveNudge extends StatefulWidget {
-  const ProactiveNudge({super.key});
+  const ProactiveNudge({super.key, this.onOpenTrends});
+
+  /// Switch to the Trends TAB, rather than pushing a second copy of it.
+  ///
+  /// Trends is already a live IndexedStack tab (`app_shell.dart`), so the
+  /// fallback push below stacks a second Trends over the one the user already
+  /// had, with a back arrow that returns to... Trends. Supplied from the shell,
+  /// which is the only layer that knows the tab index. Nullable so the widget
+  /// still works anywhere it is rendered outside the shell.
+  final VoidCallback? onOpenTrends;
 
   @override
   State<ProactiveNudge> createState() => _ProactiveNudgeState();
@@ -91,8 +100,9 @@ class _ProactiveNudgeState extends State<ProactiveNudge> {
       child: ProactiveNudgeBanner(
         insight: _insight!,
         onDismiss: _dismiss,
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const TrendsDashboardScreen())),
+        onTap: widget.onOpenTrends ??
+            () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const TrendsDashboardScreen())),
       ),
     );
   }

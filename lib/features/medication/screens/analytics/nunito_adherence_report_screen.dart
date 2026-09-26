@@ -1,8 +1,11 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/utils/calendar_day.dart';
 import '../../../../core/utils/date_formats.dart';
 import '../../models/enhanced_medicine.dart';
+import '../../models/medicine_log.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -71,18 +74,31 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       // logs again), then loop getAdherenceStatsForMedicine over every active
       // medicine — two more reads each. Measured, a 5-medicine user paid ~17
       // SELECTs to open this screen, and it grew by 2 per medicine added.
-      final now = DateTime.now();
+      final now = clock.now();
       _medicines = await MedicineCleanStorageService.getAllMedicines();
-      final windowLogs = await MedicineCleanStorageService.getLogsForDateRange(
-        now.subtract(Duration(days: _periodDays)),
+
+      // ONE ranged read of `medicine_logs`, sized to the WIDEST consumer.
+      //
+      // The summary, the per-medicine rows and the daily chart all want the
+      // selected period; the streak looks back to the oldest active medicine's
+      // creation day (capped at 180), which for Week and Month reaches further.
+      // Every consumer re-applies its own window to what it is handed, so the
+      // union is safe — and sizing it to the union rather than a flat 180 days
+      // is what keeps Week from fetching six months of rows it would discard.
+      final windowStart = now.subtract(Duration(days: _periodDays));
+      final streakStart =
+          MedicineCleanStorageService.streakWindowStart(_medicines, now);
+      final logs = await MedicineCleanStorageService.getLogsForDateRange(
+        streakStart.isBefore(windowStart) ? streakStart : windowStart,
         now,
       );
 
       _summary = _AdherenceSummary.fromMap(
         await MedicineCleanStorageService.getAdherenceStats(
-            days: _periodDays, medicines: _medicines),
+            days: _periodDays, medicines: _medicines, logs: logs),
       );
-      _streak = await MedicineCleanStorageService.getCurrentStreak();
+      _streak = await MedicineCleanStorageService.getCurrentStreak(
+          medicines: _medicines, logs: logs);
 
       _medStats.clear();
       for (final m in _medicines.where((m) => m.isActive && !m.isArchived)) {
@@ -91,11 +107,11 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
           m.id,
           days: _periodDays,
           medicine: m,
-          allLogs: windowLogs,
+          allLogs: logs,
         );
       }
 
-      await _calculateDailyStats();
+      _calculateDailyStats(now, logs);
 
       _controller.forward(from: 0);
     } catch (e) {
@@ -109,15 +125,17 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
   /// adherence is taken / scheduled slots (non-PRN, active meds, due-only).
   /// Days with no scheduled doses are flagged [_DayStats.hasData] = false so
   /// the chart can render them as empty rather than a misleading full bar.
-  Future<void> _calculateDailyStats() async {
+  ///
+  /// [allLogs] is the screen's single read; this narrows it to the chart's own
+  /// window rather than issuing a fourth query for the same rows. [now] is the
+  /// caller's instant, so every panel on the screen agrees on where "now" is.
+  void _calculateDailyStats(DateTime now, List<MedicineLog> allLogs) {
     _dailyStats = [];
 
-    final now = DateTime.now();
-    final startDate = now.subtract(Duration(days: _periodDays - 1));
-    final startDay = DateTime(startDate.year, startDate.month, startDate.day);
-    final today = DateTime(now.year, now.month, now.day);
+    final startDay = dayOffset(now, -(_periodDays - 1));
+    final today = startOfDay(now);
 
-    // Reuse the list already loaded by _load() rather than re-reading it.
+    // Reuse the list already loaded by _loadData() rather than re-reading it.
     final medicines = _medicines
         .where((m) => m.isActive && !m.isArchived && !m.schedule.isPRN)
         .toList();
@@ -131,14 +149,24 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
     // Deduped per slot for the same reason getAdherenceStats does it: installs
     // written before the deterministic-log-id fix can hold both a `missed` and
     // a `taken` row for one dose, which would double-count here.
+    //
+    // The [startDay, now) bound is what this method's own query used to apply,
+    // and it is restated here because what arrives now is the screen's WIDER
+    // shared read. Today's shared read happens to end at `now` too, so the
+    // upper bound is belt-and-braces — but it is the half that matters: a dose
+    // PRE-LOGGED for later today counts as taken while its slot is not yet
+    // due, so the denominator below excludes it and counting it would put a
+    // day over 100% (which the clamp would then hide, not fix).
     final logs = MedicineCleanStorageService.dedupeByDose(
-      (await MedicineCleanStorageService.getLogsForDateRange(startDay, now))
-          .where((l) => eligibleIds.contains(l.medicineId)),
+      allLogs.where((l) =>
+          eligibleIds.contains(l.medicineId) &&
+          !l.scheduledTime.isBefore(startDay) &&
+          l.scheduledTime.isBefore(now)),
     );
 
     for (var day = startDay;
         !day.isAfter(today);
-        day = day.add(const Duration(days: 1))) {
+        day = dayOffset(day, 1)) {
       int scheduled = 0;
       for (final m in medicines) {
         final createdDay =
@@ -251,7 +279,14 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
           icon: Symbols.donut_large_rounded,
           accent: ext.medicine,
         ),
-        AppCard(
+        // Every other section on this screen contains a Row/Expanded and so
+        // fills the column for free. This card's contents are all intrinsically
+        // sized -- a fixed-diameter ring and two centred labels -- so under the
+        // parent's loose constraints it shrank to the ring's width and sat at
+        // ~60%, out of line with the SectionHeader and StatTileRow around it.
+        SizedBox(
+          width: double.infinity,
+          child: AppCard(
           child: Column(
             children: [
               ProgressRing(
@@ -286,6 +321,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
               ),
             ],
           ),
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         StatTileRow(
@@ -293,7 +329,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
             StatTile(
               icon: Symbols.local_fire_department_rounded,
               value: '$_streak',
-              label: 'Day Streak',
+              label: 'Day streak',
               accent: ext.warning,
             ),
             StatTile(
@@ -323,7 +359,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          title: 'Daily Adherence',
+          title: 'Daily adherence',
           icon: Symbols.bar_chart_rounded,
           accent: c.medicine,
         ),
@@ -417,10 +453,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     softWrap: false,
-                    style: tt.bodySmall?.copyWith(
-                      fontSize: 10,
-                      color: c.textTertiary,
-                    ),
+                    style: tt.labelSmall?.copyWith(color: c.textTertiary),
                   ),
                 ),
               );
@@ -541,7 +574,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          title: 'By Medication',
+          title: 'By medicine',
           icon: Symbols.medication_rounded,
           accent: ext.medicine,
         ),
@@ -569,7 +602,9 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
             height: 40,
             decoration: BoxDecoration(
               color: accentColor,
-              borderRadius: BorderRadius.circular(4),
+              // brFull clamps to min(w, h) / 2 = 4 on an 8pt-wide box, so this
+              // is pixel-identical to the literal 4 it replaces.
+              borderRadius: AppRadius.brFull,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -624,22 +659,22 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       insights.add(_Insight(
         icon: Symbols.emoji_events_rounded,
         swatch: ext.success,
-        title: 'Excellent Adherence!',
+        title: 'Excellent adherence!',
         description: 'You\'re doing great! Keep up the good work.',
       ));
     } else if (adherenceRate >= 70) {
       insights.add(_Insight(
         icon: Symbols.trending_up_rounded,
         swatch: ext.info,
-        title: 'Good Progress',
+        title: 'Good progress',
         description: 'You\'re on the right track. Try to improve a bit more.',
       ));
     } else {
       insights.add(_Insight(
         icon: Symbols.tips_and_updates_rounded,
         swatch: ext.warning,
-        title: 'Room for Improvement',
-        description: 'Set reminders to help you remember your medications.',
+        title: 'Room for improvement',
+        description: 'Set reminders to help you remember your medicines.',
       ));
     }
 
@@ -647,7 +682,7 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
       icon: Symbols.lightbulb_rounded,
       swatch: ext.medicine,
       title: 'Tip',
-      description: 'Taking medications at the same time daily can improve adherence.',
+      description: 'Taking medicines at the same time daily can improve adherence.',
     ));
 
     return Column(

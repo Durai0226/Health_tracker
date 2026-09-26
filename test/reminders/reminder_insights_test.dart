@@ -1,8 +1,7 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/core/database/app_database.dart'
-    show AppDatabase, ReminderOccurrence, ReminderOccurrencesCompanion;
+    show AppDatabase, ReminderOccurrence;
 import 'package:tablet_remainder/core/database/daos/reminders_dao.dart';
 import 'package:tablet_remainder/core/health/adherence_analyzer.dart';
 import 'package:tablet_remainder/features/reminders/models/reminder_model.dart';

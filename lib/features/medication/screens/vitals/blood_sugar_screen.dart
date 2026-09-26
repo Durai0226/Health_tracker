@@ -15,8 +15,11 @@ import '../../../../core/widgets/app/vitals_widgets.dart';
 import '../../models/glucose_reading.dart';
 import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
+import 'vitals_emergency_call.dart';
 import 'vitals_reminder_button.dart';
 import 'blood_sugar_report_screen.dart';
+import 'package:clock/clock.dart';
+import '../../../../core/utils/calendar_day.dart';
 
 /// Blood Sugar tracker — log, classify per-context (ADA), estimated A1C, trend.
 class BloodSugarScreen extends StatefulWidget {
@@ -97,20 +100,19 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
   Future<void> _delete(GlucoseReading r) async {
     // Soft delete: remove now, but offer Undo — deleting a health record must
     // never be a one-swipe, unrecoverable action.
-    final messenger = ScaffoldMessenger.of(context);
     await VitalsStorageService.deleteGlucose(r.id);
     _load();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Reading deleted'),
-        persist: false,
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () async {
-            await VitalsStorageService.saveGlucose(r);
-            _load();
-          },
-        ),
+    // The messenger used to be captured before the await so the toast
+    // survived the gap; the toast kit takes a context, so guard instead.
+    if (!mounted) return;
+    context.toastSuccess(
+      'Reading deleted',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await VitalsStorageService.saveGlucose(r);
+          _load();
+        },
       ),
     );
   }
@@ -121,12 +123,16 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     final accent = VitalsColors.glucoseAccent(ext.isDark);
 
     return AppScaffold(
-      floatingActionButton: AppFab(
-        icon: Symbols.add_rounded,
-        label: 'Log',
-        accent: accent,
-        onPressed: () => _openLogSheet(),
-      ),
+      // Only float the FAB once there are readings to add to; the empty state
+      // carries its own 'Log reading' CTA, so a FAB there duplicates it.
+      floatingActionButton: _readings.isEmpty
+          ? null
+          : AppFab(
+              icon: Symbols.add_rounded,
+              label: 'Log',
+              accent: accent,
+              onPressed: () => _openLogSheet(),
+            ),
       body: Column(
         children: [
           AppHeader(
@@ -137,11 +143,19 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
             // to sit here was itself treated as an action, so it cost
             // 8 + 8 + 8 = 24pt and pushed the header off a 320pt screen.
             actions: [
-              AppChip(
-                label: _unitLabel,
-                accent: accent,
-                selected: true,
-                onTap: _toggleUnit,
+              // A bare "mg/dL" chip announces as its own label with no hint
+              // that tapping converts the whole screen to the other unit.
+              Semantics(
+                label: 'Units: $_unitLabel, tap to switch to '
+                    '${_isMmol ? 'mg/dL' : 'mmol/L'}',
+                button: true,
+                container: true,
+                child: AppChip(
+                  label: _unitLabel,
+                  accent: accent,
+                  selected: true,
+                  onTap: _toggleUnit,
+                ),
               ),
               VitalsReminderButton(
                 id: 900021,
@@ -156,6 +170,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
                   icon: Symbols.assessment_rounded,
                   filled: false,
                   accent: accent,
+                  tooltip: 'Blood sugar report',
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -181,19 +196,52 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     final cls = latest.glucoseClass;
     final band = VitalsColors.glucoseBand(ext.isDark, cls);
 
-    final values90 = _readings
-        .where((r) => DateTime.now().difference(r.takenAt).inDays < 90)
-        .map((r) => r.valueMgdl)
+    // PV-13 — one 90-day window for all three tiles.
+    //
+    // "In range" was computed over ALL history while Average and eA1c beside it
+    // were 90-day, so one card showed two windows without saying so: a user who
+    // improved over the last month read a stale in-range percentage next to a
+    // fresh average and had no way to tell they disagreed on purpose.
+    // 90 days is the right window to keep — it is what eA1c is defined over.
+    //
+    // `calendarDaysBetween` rather than `.inDays`: a civil day is 23 or 25
+    // hours across a DST boundary, and the reading exactly 90 days old must not
+    // move in or out of the window depending on the time of year.
+    final recent = _readings
+        .where((r) => calendarDaysBetween(r.takenAt, clock.now()) < 90)
         .toList();
+    final values90 = recent.map((r) => r.valueMgdl).toList();
     final avg = VitalsAnalyzer.mean(values90);
     final eA1c = VitalsAnalyzer.estimatedA1c(values90);
     final inRange = VitalsAnalyzer.inRangePercent(
-        _readings.map((r) => (mgdl: r.valueMgdl, ctx: r.context)).toList());
+        recent.map((r) => (mgdl: r.valueMgdl, ctx: r.context)).toList());
 
     final trend = _readings.take(20).toList().reversed.toList();
-    final series = trend.map((r) => r.valueMgdl.toDouble()).toList();
-    final minY = series.isEmpty ? 40.0 : (series.reduce((a, b) => a < b ? a : b) - 20).clamp(20, 400).toDouble();
-    final maxY = series.isEmpty ? 250.0 : (series.reduce((a, b) => a > b ? a : b) + 20).clamp(120, 500).toDouble();
+    // PV-16 — the chart drew raw mg/dL for everyone.
+    //
+    // Every other number on this screen goes through [_display], so an mmol/L
+    // user read "6.7" in the history and saw a trend line against a 20-400
+    // axis with an in-range band at 70-180. A glucose figure in the wrong unit
+    // is out by ~18x, and this is the screen a person checks before deciding
+    // whether to treat a low.
+    //
+    // The headroom and the clamps stay in mg/dL — they are calibrated to that
+    // scale — and EVERYTHING the chart draws is converted together at the end.
+    // Converting the series but not the axis (or the band) would be worse than
+    // converting neither: the line would be right and its context wrong.
+    final rawSeries = trend.map((r) => r.valueMgdl.toDouble()).toList();
+    final rawMinY = rawSeries.isEmpty
+        ? 40.0
+        : (rawSeries.reduce((a, b) => a < b ? a : b) - 20).clamp(20, 400).toDouble();
+    final rawMaxY = rawSeries.isEmpty
+        ? 250.0
+        : (rawSeries.reduce((a, b) => a > b ? a : b) + 20).clamp(120, 500).toDouble();
+
+    double chartY(double mgdl) =>
+        _isMmol ? VitalsAnalyzer.mgdlToMmol(mgdl.round()) : mgdl;
+    final series = rawSeries.map(chartY).toList();
+    final minY = chartY(rawMinY);
+    final maxY = chartY(rawMaxY);
 
     // Deterministic pattern insight over the user's own readings.
     final insight = InsightEngine.bloodSugar(_readings
@@ -277,9 +325,14 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
               ],
               minY: minY,
               maxY: maxY,
-              bandLow: 70,
-              bandHigh: 180,
+              bandLow: chartY(70),
+              bandHigh: chartY(180),
               bandColor: VitalsColors.glucoseBand(ext.isDark, GlucoseClass.inRange),
+              // A shaded band with no explanation is unreadable — and it is
+              // where the unit has to be stated, since the axis carries no
+              // label of its own.
+              bandLabel: 'Shaded band is the in-range zone '
+                  '(${_display(70)}–${_display(180)} $_unitLabel)',
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -356,12 +409,13 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     }
   }
 
-  void _callEmergency() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('Treat the low now (15 g carbs). If severe, call your local emergency number.')),
-    );
-  }
+  /// Opens the dialer on the region's emergency number. Shared with the
+  /// blood-pressure screen's identical card — see [VitalsEmergencyCall].
+  ///
+  /// The 15-15 rule this button used to print as a toast is already the second
+  /// sentence of the card's own message, so nothing is lost by the button
+  /// doing what its label says instead.
+  Future<void> _callEmergency() => VitalsEmergencyCall.dial(context);
 
 }
 
@@ -422,7 +476,7 @@ class _EmptyState extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
-          label: 'Log your first reading',
+          label: 'Log reading',
           leadingIcon: Symbols.add_rounded,
           accent: accent,
           fullWidth: true,
@@ -527,7 +581,21 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       createdAt: e?.createdAt ?? DateTime.now(),
     );
-    await VitalsStorageService.saveGlucose(reading);
+    // See blood_pressure_screen.dart's identical guard: without it a failed
+    // write leaves the Save button spinning and the user unable to tell
+    // whether the reading was recorded.
+    try {
+      await VitalsStorageService.saveGlucose(reading);
+    } catch (e) {
+      debugPrint('⚠️ Saving a glucose reading failed: $e');
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Could not save this reading. Try again.';
+        });
+      }
+      return;
+    }
     if (VitalsAnalyzer.isGlucoseEmergencyLow(v)) HapticFeedback.heavyImpact();
     if (mounted) Navigator.pop(context, true);
   }
@@ -607,9 +675,10 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
           accent: widget.accent,
         ),
         const SizedBox(height: AppSpacing.md),
-        _TakenAtField(
+        AppDateTimeField(
           value: _takenAt,
           accent: widget.accent,
+          noun: 'Reading',
           onChanged: (v) => setState(() => _takenAt = v),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -636,128 +705,6 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
         ),
         const SizedBox(height: AppSpacing.sm),
       ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Optional "when" control for the log sheet.
-//
-// `_takenAt` already existed on this form but nothing ever wrote to it, so a
-// reading could not be back-dated and editing one silently kept the original
-// timestamp with no way to correct it. Defaults to now, so the common case
-// still costs zero taps.
-// ---------------------------------------------------------------------------
-class _TakenAtField extends StatelessWidget {
-  final DateTime value;
-  final AccentSwatch accent;
-  final ValueChanged<DateTime> onChanged;
-
-  const _TakenAtField({
-    required this.value,
-    required this.accent,
-    required this.onChanged,
-  });
-
-  Future<void> _pickDate(BuildContext context) async {
-    final now = DateTime.now();
-    final picked = await AppDatePicker.show(
-      context,
-      initial: value,
-      first: DateTime(now.year - 5),
-      // A reading can't have been taken in the future.
-      last: DateTime(now.year, now.month, now.day),
-      accent: accent,
-      title: 'Reading date',
-    );
-    if (picked == null) return;
-    onChanged(DateTime(
-        picked.year, picked.month, picked.day, value.hour, value.minute));
-  }
-
-  Future<void> _pickTime(BuildContext context) async {
-    final picked = await AppTimePicker.show(
-      context,
-      initial: TimeOfDay.fromDateTime(value),
-      accent: accent,
-      title: 'Reading time',
-    );
-    if (picked == null) return;
-    onChanged(DateTime(
-        value.year, value.month, value.day, picked.hour, picked.minute));
-  }
-
-  String _dateLabel() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(value.year, value.month, value.day);
-    final diff = today.difference(day).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    return DateFormats.dayLabel(day, reference: today);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Date & time',
-            style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: _box(context, Symbols.calendar_today_rounded, _dateLabel(),
-                  () => _pickDate(context)),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _box(
-                  context,
-                  Symbols.schedule_rounded,
-                  TimeOfDay.fromDateTime(value).format(context),
-                  () => _pickTime(context)),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _box(
-      BuildContext context, IconData icon, String label, VoidCallback onTap) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.brMd,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: ext.surfaceVariant,
-          borderRadius: AppRadius.brMd,
-          border: Border.all(color: ext.outline),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: ext.textTertiary),
-            const SizedBox(width: AppSpacing.sm),
-            // scaleDown only: a long date shrinks to fit on a 320pt screen,
-            // nothing is ever enlarged and no font size is hardcoded.
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(label,
-                    style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

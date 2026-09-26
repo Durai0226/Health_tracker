@@ -30,7 +30,16 @@ class StepHourlyChart extends StatelessWidget {
             children: [
               Icon(Symbols.schedule_rounded, size: 18, color: ext.mark(ext.steps)),
               const SizedBox(width: 8),
-              Text('Active hours', style: tt.titleLarge),
+              // Expanded, not a bare Text: titleLarge grows with Dynamic Type
+              // and the icon beside it does not, so at large text sizes the
+              // heading outran the card. The string is fixed and developer
+              // authored, so ellipsizing it is safe.
+              Expanded(
+                child: Text('Active hours',
+                    style: tt.titleLarge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),

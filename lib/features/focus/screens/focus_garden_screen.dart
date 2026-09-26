@@ -4,6 +4,8 @@ import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/focus_plant.dart';
 import '../services/focus_service.dart';
+import '../../../core/utils/calendar_day.dart';
+import 'package:clock/clock.dart';
 
 class FocusGardenScreen extends StatelessWidget {
   const FocusGardenScreen({super.key});
@@ -76,10 +78,10 @@ class FocusGardenScreen extends StatelessWidget {
         tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
         icon: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(AppSpacing.sm),
           decoration: BoxDecoration(
             color: AppColorsExt.of(context).surface,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.brMd,
           ),
           child: const Icon(Symbols.arrow_back_rounded, size: 20),
         ),
@@ -136,7 +138,7 @@ class FocusGardenScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  _buildGardenStats(garden),
+                  _buildGardenStats(context, garden),
                 ],
               ),
             ),
@@ -146,7 +148,8 @@ class FocusGardenScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildGardenStats(List<FocusPlant> garden) {
+  Widget _buildGardenStats(BuildContext context, List<FocusPlant> garden) {
+    final tt = Theme.of(context).textTheme;
     final plantCounts = <PlantType, int>{};
     for (final plant in garden.where((p) => p.isAlive)) {
       plantCounts[plant.type] = (plantCounts[plant.type] ?? 0) + 1;
@@ -159,24 +162,23 @@ class FocusGardenScreen extends StatelessWidget {
       child: Row(
         children: plantCounts.entries.map((entry) {
           return Container(
-            margin: const EdgeInsets.only(right: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            margin: const EdgeInsets.only(right: AppSpacing.md),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: AppSpacing.sm),
             decoration: BoxDecoration(
               color: entry.key.primaryColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.brMd,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // emoji-content-ok: the plant species IS the garden metaphor
                 Text(entry.key.emoji, style: const TextStyle(fontSize: 18)),
                 const SizedBox(width: 6),
                 Text(
                   '${entry.value}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: entry.key.primaryColor,
-                  ),
+                  style: tt.labelLarge
+                      ?.copyWith(color: AppColorsExt.of(context).textPrimary),
                 ),
               ],
             ),
@@ -232,61 +234,56 @@ class FocusGardenScreen extends StatelessWidget {
                 dateLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColorsExt.of(context).textPrimary,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Flexible(
               child: Text(
                 '$totalMinutes min',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColorsExt.of(context).textSecondary,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColorsExt.of(context).textSecondary,
+                    ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
           children: plants.map((plant) => _buildPlantCard(context, plant)).toList(),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
       ],
     );
   }
 
   Widget _buildPlantCard(BuildContext context, FocusPlant plant) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Container(
       width: 100,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: plant.isAlive
             ? plant.type.primaryColor.withOpacity(0.1)
-            : Colors.grey.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
+            : ext.surfaceVariant,
+        borderRadius: AppRadius.brLg,
         border: Border.all(
           color: plant.isAlive
               ? plant.type.primaryColor.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.3),
+              : ext.outline,
         ),
       ),
       child: Column(
         children: [
-          Text(
-            plant.isAlive ? plant.type.emoji : '🥀',
-            style: TextStyle(
-              fontSize: 32,
-              color: plant.isAlive ? null : Colors.grey,
-            ),
+          Opacity(
+            opacity: plant.isAlive ? 1 : 0.5,
+            child: Text(plant.isAlive ? plant.type.emoji : '🥀', // emoji-content-ok: the species, or the withered marker that shares its slot
+                style: const TextStyle(fontSize: 32)),
           ),
           const SizedBox(height: 6),
           // The card is a fixed 100 wide, so the duration and timestamp use
@@ -298,10 +295,12 @@ class FocusGardenScreen extends StatelessWidget {
               '${plant.durationMinutes}m',
               maxLines: 1,
               softWrap: false,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: plant.isAlive ? plant.type.primaryColor : Colors.grey,
+              // Was `plant.type.primaryColor` as text: sakura's #F8BBD9
+              // measures 1.31:1 and sunflower's #FFC107 1.90:1 on the card. The
+              // species reads from the emoji and the surrounding tint; the
+              // NUMBER has to be legible.
+              style: tt.titleSmall?.copyWith(
+                color: plant.isAlive ? ext.textPrimary : ext.textSecondary,
               ),
             ),
           ),
@@ -311,9 +310,9 @@ class FocusGardenScreen extends StatelessWidget {
               DateFormats.time.format(plant.plantedAt),
               maxLines: 1,
               softWrap: false,
-              style: TextStyle(
-                fontSize: 10,
-                color: AppColorsExt.of(context).textSecondary,
+              style: tt.labelSmall?.copyWith(
+                fontWeight: FontWeight.w400,
+                color: ext.textSecondary,
               ),
             ),
           ),
@@ -354,7 +353,10 @@ class FocusGardenScreen extends StatelessWidget {
   }
 
   bool _isYesterday(DateTime date) {
-    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    // prevDay, not subtract(Duration(days: 1)): on a 23-hour spring-forward day
+    // subtracting 24 hours lands back on the SAME calendar day, so "yesterday"
+    // matched today and a plant planted yesterday read as planted today.
+    final yesterday = prevDay(clock.now());
     return date.year == yesterday.year &&
         date.month == yesterday.month &&
         date.day == yesterday.day;

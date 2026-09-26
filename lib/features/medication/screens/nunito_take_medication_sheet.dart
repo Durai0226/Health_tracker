@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
@@ -28,6 +29,8 @@ class NunitoTakeMedicationSheet extends StatefulWidget {
 }
 
 class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
+  // emoji-content-ok: these ride inside a chip LABEL at the label's own size —
+  // content beside the word they illustrate, not badge chrome.
   static const List<String> _moodEmojis = ['😄', '🙂', '😐', '😕', '😢'];
   // Labels (and their 1-5 rating direction) are shared with the report's
   // symptom-summary rendering — see medicine_log.dart's moodRatingLabels /
@@ -218,95 +221,85 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     if (warnings.isEmpty) return true;
     if (!mounted) return true;
 
-    final ext = AppColorsExt.of(context);
     // A dependent's PRN limit is caregiver-set, not the taker's own call (see
     // the add/edit form's matching caption) — a one-tap "Log anyway" is fine
     // for a self-owned medicine, but overriding a caregiver's safety limit
     // needs deliberate acknowledgment, not a casual tap.
-    final isCaregiverManaged = widget.medicine.dependentId != null;
+    if (widget.medicine.dependentId == null) {
+      final proceed = await ConfirmationBottomSheet.show(
+        context: context,
+        title: 'PRN limit reached',
+        message: warnings.join('\n\n'),
+        confirmText: 'Log anyway',
+        icon: Symbols.warning_amber_rounded,
+        isDangerous: true,
+      );
+      return proceed ?? false;
+    }
+
+    // The acknowledgment gate has no equivalent in ConfirmationBottomSheet —
+    // its confirm button is unconditionally enabled — so this branch spells
+    // the same sheet out on [AppBottomSheet], which that helper is itself a
+    // thin adapter over. Same grammar, same error accent, one extra gate.
+    final ext = AppColorsExt.of(context);
     // Hoisted OUTSIDE the StatefulBuilder below: a `var` declared inside that
     // builder callback would reset to false on every rebuild it triggers via
-    // setDialogState, making the checkbox immediately un-check itself.
+    // setSheetState, making the checkbox immediately un-check itself.
     var acknowledged = false;
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (context) => !isCaregiverManaged
-          ? AlertDialog(
-              backgroundColor: ext.surface,
-              shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
-              title: Text('PRN limit reached',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(color: ext.textPrimary)),
-              content: Text(warnings.join('\n\n'),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: ext.textSecondary)),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
+    final proceed = await AppBottomSheet.show<bool>(
+      context,
+      title: 'Caregiver safety limit reached',
+      icon: Symbols.warning_amber_rounded,
+      accent: ext.error,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(warnings.join('\n\n'),
+                style: Theme.of(ctx)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: ext.textSecondary)),
+            const SizedBox(height: AppSpacing.md),
+            CheckboxListTile(
+              value: acknowledged,
+              onChanged: (v) => setSheetState(() => acknowledged = v ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                "I'm the caregiver and I'm overriding this limit.",
+                style: Theme.of(ctx)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: ext.textPrimary),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: 'Cancel',
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => Navigator.pop(sheetContext, false),
+                  ),
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: TextButton.styleFrom(foregroundColor: ext.warning.strong),
-                  child: const Text('Log anyway'),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: AppButton(
+                    label: 'Log anyway',
+                    variant: AppButtonVariant.danger,
+                    onPressed: acknowledged
+                        ? () => Navigator.pop(sheetContext, true)
+                        : null,
+                  ),
                 ),
               ],
-            )
-          : StatefulBuilder(
-              builder: (context, setDialogState) {
-                return AlertDialog(
-                  backgroundColor: ext.surface,
-                  shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
-                  title: Text('Caregiver safety limit reached',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(color: ext.textPrimary)),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(warnings.join('\n\n'),
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: ext.textSecondary)),
-                      const SizedBox(height: AppSpacing.md),
-                      CheckboxListTile(
-                        value: acknowledged,
-                        onChanged: (v) =>
-                            setDialogState(() => acknowledged = v ?? false),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          "I'm the caregiver and I'm overriding this limit.",
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: ext.textPrimary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
-                    ),
-                    TextButton(
-                      onPressed:
-                          acknowledged ? () => Navigator.pop(context, true) : null,
-                      style: TextButton.styleFrom(foregroundColor: ext.warning.strong),
-                      child: const Text('Log anyway'),
-                    ),
-                  ],
-                );
-              },
             ),
+          ],
+        ),
+      ),
     );
     return proceed ?? false;
   }
@@ -387,6 +380,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
 
     final reason = await _showSkipReasonSheet();
     if (reason == null) return;
+    if (!mounted) return;
 
     setState(() => _isLoading = true);
 
@@ -459,27 +453,41 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
     setState(() => _isLoading = true);
 
     try {
-      // Actually reschedule the notification instead of just closing the sheet.
-      await MedicationReminderService().snoozeReminderForDose(
+      // Actually reschedule the notification instead of just closing the sheet —
+      // and BELIEVE the answer.
+      //
+      // `snoozeReminderForDose` returns false on failure (it swallows the
+      // exception and reports it), and this ignored the result and toasted
+      // "Snoozed for 10 min" either way. With the exact-alarm permission
+      // revoked nothing was rescheduled at all, and the user was told it was.
+      final ok = await MedicationReminderService().snoozeReminderForDose(
         widget.medicine,
         widget.scheduledTime,
         minutes,
       );
+
+      if (!mounted) return;
+      if (!ok) {
+        // Keep the sheet open: Take and Skip are still available, and closing
+        // it would strand the dose with no reminder and no record.
+        setState(() => _isLoading = false);
+        context.toastError("Couldn't snooze this reminder — try Take or Skip.");
+        return;
+      }
 
       // Snooze only reschedules the reminder — it is NOT an adherence outcome.
       // Do NOT persist a log: the store has no 'snoozed' status, so a snoozed
       // log round-trips to 'pending', shows wrongly in history, and (worse)
       // suppresses missed-dose reconciliation for that slot. The dose stays
       // open and will reconcile to 'missed' if never taken.
-      if (mounted) {
-        context.toastInfo('Snoozed for $minutes min');
-        Navigator.pop(context, {'snoozed': true, 'minutes': minutes});
-      }
+      context.toastInfo('Snoozed for $minutes min');
+      Navigator.pop(context, {'snoozed': true, 'minutes': minutes});
     } catch (e) {
       debugPrint('Error snoozing medication: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        context.toastError('Error: $e');
+        // The raw exception string is not something a patient can act on.
+        context.toastError("Couldn't snooze this reminder. Please try again.");
       }
     }
   }
@@ -781,7 +789,7 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
       children: [
         // Primary action - Take
         AppButton(
-          label: 'Take Medication',
+          label: 'Take medicine',
           leadingIcon: Symbols.check_rounded,
           variant: AppButtonVariant.primary,
           size: AppButtonSize.lg,

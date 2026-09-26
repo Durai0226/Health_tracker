@@ -75,7 +75,7 @@ void main() {
   }
 
   Future<void> skipTheDose(WidgetTester tester) async {
-    await tester.tap(find.textContaining('Take Now').first);
+    await tester.tap(find.textContaining('Take now').first);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(InkWell, 'Skip').first);
     await tester.pumpAndSettle();
@@ -90,7 +90,7 @@ void main() {
     await pumpDashboard(tester);
 
     // Starts on the timeline by default.
-    expect(find.textContaining('Take Now'), findsOneWidget);
+    expect(find.textContaining('Take now'), findsOneWidget);
 
     await switchToPillboxView(tester);
 
@@ -99,12 +99,12 @@ void main() {
     expect(find.text('Metformin'), findsOneWidget);
     // Timeline-only chrome is gone — this really swapped layouts, not just
     // added to it.
-    expect(find.textContaining('Take Now'), findsNothing);
+    expect(find.textContaining('Take now'), findsNothing);
 
     // Toggling back restores the timeline.
     await tester.tap(find.byTooltip('Timeline view'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Take Now'), findsOneWidget);
+    expect(find.textContaining('Take now'), findsOneWidget);
     expect(find.text('Morning'), findsNothing);
   });
 
@@ -125,7 +125,7 @@ void main() {
     await tester.tap(find.text('Metformin'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Take Medication'), findsOneWidget,
+    expect(find.text('Take medicine'), findsOneWidget,
         reason:
             'an untaken pillbox pill must open the same take-medication sheet as the timeline');
   });
@@ -159,7 +159,7 @@ void main() {
     // can't be re-taken from the pillbox view either.
     await tester.tap(find.text('Metformin'));
     await tester.pumpAndSettle();
-    expect(find.text('Take Medication'), findsNothing);
+    expect(find.text('Take medicine'), findsNothing);
   });
 
   testWidgets('the chosen view mode is persisted across a fresh mount',
@@ -176,6 +176,6 @@ void main() {
 
     expect(find.text('Morning'), findsOneWidget,
         reason: 'medicationViewMode should have been restored as pillbox');
-    expect(find.textContaining('Take Now'), findsNothing);
+    expect(find.textContaining('Take now'), findsNothing);
   });
 }

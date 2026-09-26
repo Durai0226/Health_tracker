@@ -95,7 +95,7 @@ void main() {
       // the Divider are both laid out for real; their left edges must line up.
       final title = tester.getTopLeft(find.text('Row 0'));
       final divider = find.byType(Divider);
-      final dividerBox = tester.renderObject<RenderBox>(divider) as RenderBox;
+      final dividerBox = tester.renderObject<RenderBox>(divider);
       final dividerLeft =
           dividerBox.localToGlobal(Offset.zero).dx;
 

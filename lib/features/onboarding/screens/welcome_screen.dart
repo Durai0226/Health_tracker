@@ -6,8 +6,8 @@ import '../../../core/services/auth_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/widgets/auth_gate_sheet.dart';
-import '../../water/services/water_service.dart';
 import '../../home/screens/app_shell.dart';
+import '../../../core/constants/app_strings.dart';
 
 /// Onboarding — medication-first, low-friction, premium.
 ///   1. Hero — brand + the core promise ("never miss a dose"), private by default.
@@ -31,8 +31,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   final PageController _pager = PageController();
   int _page = 0;
 
-  // Seeded, sensible defaults — persisted on finish, editable anytime in-app.
-  late int _waterGoal;
+  // Seeded, sensible default — persisted on finish, editable anytime in-app.
   late TimeOfDay _reminderTime;
   bool _requesting = false;
   bool _finishing = false;
@@ -51,8 +50,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   void initState() {
     super.initState();
-    final seeded = WaterService.getDailyGoal();
-    _waterGoal = (seeded <= 0 ? 2500 : seeded).clamp(500, 5000);
     final h = CleanStorageService.getAppPreference('preferredReminderHour', 9);
     final m = CleanStorageService.getAppPreference('preferredReminderMinute', 0);
     _reminderTime = TimeOfDay(hour: h is int ? h : 9, minute: m is int ? m : 0);
@@ -76,11 +73,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     if (_page < _paneCount - 1) _goToPage(_page + 1);
   }
 
+  /// Persists only what onboarding actually asked about — the reminder time.
+  ///
+  /// The hydration profile is deliberately NOT written here. This screen has no
+  /// water-goal UI (see the class comment), so the goal it used to save was
+  /// never a user choice, and it saved it as `useCustomGoal: true` — an
+  /// explicit override. That pinned every new user to a 2500 ml default they
+  /// were never shown: `HydrationProfile.effectiveGoalMl` stops consulting the
+  /// profile-calculated goal, and `WaterService.refreshWeatherGoal()` returns
+  /// early on a custom goal, so the weather adjustment could never apply.
+  /// Leaving the profile untouched lets the calculated goal stand until the
+  /// user sets one themselves in Hydration profile.
   Future<void> _saveSetup() async {
-    final profile = WaterService.getProfile();
-    await WaterService.saveProfile(
-      profile.copyWith(customGoalMl: _waterGoal, useCustomGoal: true),
-    );
     await CleanStorageService.setAppPreference(
         'preferredReminderHour', _reminderTime.hour);
     await CleanStorageService.setAppPreference(
@@ -115,7 +119,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     if (!auth.isAuthenticated) {
       final proceed = await AuthGateSheet.show(
         context: context,
-        featureName: 'DailyMinder',
+        featureName: AppStrings.productName,
         featureColor: AppColorsExt.of(context).brand.base,
         featureIcon: Symbols.event_available_rounded,
       );
@@ -291,7 +295,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   /// A tiny, elegant preview of the app's signature moment — the next dose with
-  /// a one-tap "Take" — so the welcome shows what DailyMinder does, not just
+  /// a one-tap "Take" — so the welcome shows what Dlyminder does, not just
   /// tells. Illustrative sample content.
   Widget _dosePeek(AppColorsExt ext, TextTheme tt) {
     return Container(
@@ -416,7 +420,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('How DailyMinder helps',
+                Text('How ${AppStrings.productName} helps',
                     style: tt.headlineSmall
                         ?.copyWith(color: ext.textPrimary)),
                 const SizedBox(height: AppSpacing.xl),

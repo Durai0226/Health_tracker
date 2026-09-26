@@ -74,9 +74,10 @@ void main() {
           'user believes it worked.',
     );
 
-    // The SnackBar carries an action, and in this SDK that pins it open
-    // forever unless `persist: false` is passed. aqua_water_dashboard.dart
-    // passes it; this asserts that it stays passed.
+    // The toast carries an action, and in this SDK a SnackBar with one pins
+    // itself open forever unless `persist: false` is passed. Since the toast-kit
+    // migration the guarantee is central — showAppToast sets it for every
+    // caller — so this now asserts the kit keeps setting it.
     await E2E.assertToastGone(t);
     E2E.assertClean('water quick-add and undo');
   });

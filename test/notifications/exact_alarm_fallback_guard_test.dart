@@ -57,10 +57,17 @@ void main() {
   final code = byPath.values.join('\n');
 
   group('every zonedSchedule goes through the exact→inexact fallback', () {
-    test('no call site reaches the plugin directly', () {
-      // The one legitimate `plugin.zonedSchedule` is inside
+    test('no call site reaches the scheduler directly', () {
+      // The one legitimate `scheduler.zonedSchedule` is inside
       // `zonedScheduleGuarded` itself, which is the thing being funnelled into.
-      final direct = RegExp(r'(?<!plugin)\.zonedSchedule\s*\(')
+      //
+      // This used to read `plugin.zonedSchedule`. The plugin is now behind the
+      // `NotificationScheduler` seam (lib/core/services/notification_scheduler.dart)
+      // so scheduling decisions can be asserted behaviourally instead of by
+      // grep — see the test below, which pins the raw plugin call to that one
+      // adapter. The invariant here is unchanged and is checked the same way:
+      // exactly one call, and it is inside the helper.
+      final direct = RegExp(r'(?<!scheduler)\.zonedSchedule\s*\(')
           .allMatches(code)
           .length;
       expect(
@@ -74,14 +81,46 @@ void main() {
       );
     });
 
-    test('the guarded helper is the sole owner of plugin.zonedSchedule', () {
-      expect(RegExp(r'plugin\.zonedSchedule\s*\(').allMatches(code).length, 1);
+    test('the guarded helper is the sole owner of scheduler.zonedSchedule', () {
+      expect(
+          RegExp(r'scheduler\.zonedSchedule\s*\(').allMatches(code).length, 1);
       // ...and that one call is inside zonedScheduleGuarded, not somewhere else.
       final home = byPath['lib/core/services/background_alarm_service.dart']!;
       final helperStart = home.indexOf('Future<bool> zonedScheduleGuarded(');
       expect(helperStart, greaterThan(-1),
           reason: 'zonedScheduleGuarded was renamed, removed, or moved file');
-      expect(home.indexOf('plugin.zonedSchedule('), greaterThan(helperStart));
+      expect(home.indexOf('scheduler.zonedSchedule('), greaterThan(helperStart));
+    });
+
+    test('the raw plugin call lives ONLY in the scheduler adapter', () {
+      // The seam is only worth having if nothing routes around it. One adapter
+      // owns `_plugin.zonedSchedule`; every other file in lib/ must go through
+      // NotificationScheduler, and therefore through the fallback above.
+      final offenders = <String>[];
+      for (final f in Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))) {
+        if (f.path.endsWith('lib/core/services/notification_scheduler.dart')) {
+          continue;
+        }
+        final body = _codeOnly(f.readAsStringSync());
+        if (RegExp(r'_?plugin\.zonedSchedule\s*\(').hasMatch(body)) {
+          offenders.add(f.path);
+        }
+      }
+      expect(offenders, isEmpty,
+          reason: 'these call the plugin directly instead of going through '
+              'NotificationScheduler, so they skip the exact→inexact '
+              'fallback:\n  ${offenders.join('\n  ')}');
+
+      final adapter = _codeOnly(
+          File('lib/core/services/notification_scheduler.dart')
+              .readAsStringSync());
+      expect(RegExp(r'_plugin\.zonedSchedule\s*\(').allMatches(adapter).length,
+          1,
+          reason: 'the adapter is meant to be the single narrow point where '
+              'this app touches the plugin');
     });
 
     test('the helper retries inexact and pre-checks the capability', () {

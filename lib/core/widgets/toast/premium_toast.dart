@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
+import '../../design/app_radius.dart';
 import 'toast_theme.dart';
 import 'toast_animations.dart';
 import 'toast_particles.dart';
@@ -308,7 +309,10 @@ class _PremiumToastState extends State<PremiumToast>
                 _themeData.secondaryColor.withOpacity(0.1),
               ],
             ),
-            borderRadius: BorderRadius.circular(14),
+            // 16, not the 14 this was written at: the icon tile is 48pt
+            // chrome, and AppRadius is the whole scale — a value two off it
+            // reads as a different component at a glance.
+            borderRadius: AppRadius.brLg,
             border: Border.all(
               color: _themeData.primaryColor.withOpacity(0.3),
               width: 1,
@@ -374,7 +378,8 @@ class _PremiumToastState extends State<PremiumToast>
           foregroundColor: widget.action!.color ?? _themeData.primaryColor,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            // 8 (the chip radius), not 10 — same reason as the icon tile.
+            borderRadius: AppRadius.brSm,
           ),
           backgroundColor: (widget.action!.color ?? _themeData.primaryColor)
               .withOpacity(0.1),

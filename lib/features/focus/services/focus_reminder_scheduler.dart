@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/notification_service.dart';
 import 'focus_service.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// The one place Focus reminders are scheduled from.
 ///
@@ -115,6 +116,10 @@ class FocusReminderScheduler {
   static DateTime nextOccurrence(int hour, int minute) {
     final now = clock.now();
     final today = DateTime(now.year, now.month, now.day, hour, minute);
-    return today.isAfter(now) ? today : today.add(const Duration(days: 1));
+    // shiftCalendarDays, not add(Duration(days: 1)): this is a promise about a
+    // wall-clock time. Adding 24 hours to 08:00 the day before spring forward
+    // arms the reminder for 09:00 — an hour late, on the one morning a user is
+    // least likely to forgive it.
+    return today.isAfter(now) ? today : shiftCalendarDays(today, 1);
   }
 }

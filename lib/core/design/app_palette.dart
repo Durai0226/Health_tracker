@@ -202,6 +202,16 @@ class AppPalette {
   static const successStrong = Color(0xFF047857); // AA fill / small text
   static const successContainer = Color(0xFFD1FAE5);
   static const onSuccessContainer = Color(0xFF065F46);
+  /// Foreground for a DARK-theme filled success control.
+  ///
+  /// The dark swatch used to borrow `onSuccessContainer` here, which is a
+  /// container colour and not a fill foreground: #065F46 on the dark fill
+  /// #34D399 measures **4.00:1**, under the 4.5:1 that small text needs — so
+  /// every `fillFg(success)` label in dark mode failed AA, including the
+  /// "Goal reached" readout on the water gauge. Near-black, matching
+  /// `onStepsDark`, which is the same problem solved for the other green:
+  /// #34D399 on #052E16 is 7.75:1.
+  static const onSuccessDark = Color(0xFF052E16);
 
   static const warning = Color(0xFFF59E0B);
   static const warningDark = Color(0xFFFBBF24);
@@ -214,10 +224,19 @@ class AppPalette {
   static const errorStrong = Color(0xFFDC2626);
   static const errorContainer = Color(0xFFFEE2E2);
   static const onErrorContainer = Color(0xFF991B1B);
+  /// Foreground for a DARK-theme filled error control. See [onSuccessDark] —
+  /// same defect: the dark swatch borrowed `onErrorContainer`, giving #991B1B
+  /// on #F87171 = 3.29:1. Deep red-black, matching the family's own hue:
+  /// #F87171 on #450A0A is 5.84:1.
+  static const onErrorDark = Color(0xFF450A0A);
 
   static const info = Color(0xFF3B82F6);
   static const infoDark = Color(0xFF60A5FA);
   static const infoStrong = Color(0xFF1D4ED8);
   static const infoContainer = Color(0xFFDBEAFE);
   static const onInfoContainer = Color(0xFF1E40AF);
+  /// Foreground for a DARK-theme filled info control. See [onSuccessDark] —
+  /// the dark swatch borrowed `onInfoContainer`, giving #1E40AF on #60A5FA =
+  /// 3.20:1. Navy-black keeps the family hue: #60A5FA on #172554 is 5.78:1.
+  static const onInfoDark = Color(0xFF172554);
 }

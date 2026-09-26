@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'cloud_sync_service.dart';
 import 'app_lock_service.dart';
 import 'clean_storage_service.dart';
+import 'lww_collection_sync.dart';
 import '../config/env_config.dart';
 import '../utils/validators.dart';
 
@@ -481,57 +482,126 @@ class AuthService extends ChangeNotifier {
       return null;
     }
 
+    String? message;
     try {
-      final uid = user.uid;
-      final db = FirebaseFirestore.instance;
-
-      // Backups first — each document holds a complete health export, so it is
-      // the most sensitive thing to leave behind if a later step fails.
-      for (final sub in const [
-        'backups',
-        'medicines',
-        'reminders',
-        'reminderCategories',
-        'water',
-        'vitals',
-        'diary',
-        'cycles',
-        'steps',
-        'sleep',
-      ]) {
-        try {
-          final docs =
-              await db.collection('users').doc(uid).collection(sub).get();
-          for (final d in docs.docs) {
-            await d.reference.delete();
-          }
-        } catch (e) {
-          debugPrint('Account delete: subcollection $sub failed: $e');
-        }
-      }
-      try {
-        await db.collection('users').doc(uid).delete();
-      } catch (e) {
-        debugPrint('Account delete: user doc failed: $e');
-      }
-
-      await user.delete();
+      message = await runAccountDeletion(
+        lastSignInTime: user.metadata.lastSignInTime,
+        now: DateTime.now(),
+        deleteCloudData: () => _deleteCloudData(user.uid),
+        deleteAuthUser: () => user.delete(),
+      );
     } on firebase_auth.FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        // Firebase refuses deletion on a stale session. This is correct
-        // behaviour, not a bug — surface it so the user can re-authenticate.
-        return 'For your security, please sign in again and then delete your '
-            'account.';
-      }
+      // Backstop for the recency check in runAccountDeletion: Firebase, not
+      // this client, is the authority on how stale is too stale.
+      if (e.code == 'requires-recent-login') return reauthRequiredMessage;
       return e.message ?? 'Could not delete the account.';
     } catch (e) {
       return 'Could not delete the account: $e';
     }
+    if (message != null) return message;
 
     await _clearSavedUser();
     await CleanStorageService.setCloudSyncEnabled(false);
     _enableOfflineGuestMode();
     return null;
+  }
+
+  /// How stale a sign-in may be before [deleteAccount] refuses to start.
+  ///
+  /// Firebase rejects `user.delete()` with `requires-recent-login` once the
+  /// session is a few minutes old; five minutes is the documented window. This
+  /// deliberately errs toward asking too often — a needless extra sign-in is a
+  /// nuisance, whereas guessing "recent enough" and being wrong destroys the
+  /// cloud data first and asks afterwards.
+  static const Duration recentLoginWindow = Duration(minutes: 5);
+
+  /// The one message for "we can't do this on a stale session".
+  static const String reauthRequiredMessage =
+      'For your security, please sign in again and then delete your account.';
+
+  /// Whether the session is too old for Firebase to accept a deletion.
+  ///
+  /// A null [lastSignInTime] counts as stale: not knowing when someone signed
+  /// in is not a reason to start deleting.
+  @visibleForTesting
+  static bool requiresRecentLogin(DateTime? lastSignInTime, DateTime now) =>
+      lastSignInTime == null ||
+      now.difference(lastSignInTime) > recentLoginWindow;
+
+  /// The order of the deletion, with the Firebase plumbing injected so it can
+  /// be tested.
+  ///
+  /// **Re-authentication is decided FIRST, before anything is destroyed.** It
+  /// used to be discovered last: the method deleted every subcollection —
+  /// starting with `backups`, each document a complete health export — deleted
+  /// the `users/{uid}` profile, and only then called `user.delete()`, which is
+  /// where a stale session throws `requires-recent-login`. The user was told
+  /// "please sign in again and then delete your account", signed in, retried…
+  /// and by then the backups they might have changed their mind about were
+  /// already gone. Every step here is irreversible, so the one step that can
+  /// refuse must come before all of them.
+  ///
+  /// [deleteCloudData] returns the labels of the parts it could NOT delete.
+  @visibleForTesting
+  static Future<String?> runAccountDeletion({
+    required DateTime? lastSignInTime,
+    required DateTime now,
+    required Future<List<String>> Function() deleteCloudData,
+    required Future<void> Function() deleteAuthUser,
+  }) async {
+    if (requiresRecentLogin(lastSignInTime, now)) return reauthRequiredMessage;
+
+    final failed = await deleteCloudData();
+    if (failed.isNotEmpty) {
+      // Deliberately BEFORE deleteAuthUser: deleting the Auth user orphans
+      // whatever is left, because the client can no longer authenticate as
+      // the owner the rules require. Stopping here keeps the account usable
+      // so a retry can finish the job.
+      return 'Some cloud data could not be deleted (${failed.join(', ')}). '
+          'Your account was not deleted — please check your connection and '
+          'try again.';
+    }
+
+    await deleteAuthUser();
+    return null;
+  }
+
+  /// Deletes every Firestore document this app writes for [uid]. Returns the
+  /// subcollections (plus `profile`) that could not be removed.
+  ///
+  /// Every subcollection the app writes comes from the one shared list — see
+  /// kUserSubcollections for why a hand-written list here was wrong (six of
+  /// its ten names were paths this app has never written, so the loop
+  /// "succeeded" while the real health documents survived).
+  ///
+  /// Backups are deleted first: each document holds a complete health export,
+  /// so it is the most sensitive thing to leave behind if a later step fails.
+  /// Failures are collected rather than swallowed — a delete that could not
+  /// remove someone's cloud data must not report success.
+  Future<List<String>> _deleteCloudData(String uid) async {
+    final db = FirebaseFirestore.instance;
+    final failed = <String>[];
+    for (final sub in kUserSubcollections) {
+      try {
+        final docs =
+            await db.collection('users').doc(uid).collection(sub).get();
+        if (docs.docs.isEmpty) continue;
+        await commitInChunks(
+          db,
+          [for (final d in docs.docs) (b) => b.delete(d.reference)],
+        );
+      } catch (e) {
+        debugPrint('Account delete: subcollection $sub failed: $e');
+        failed.add(sub);
+      }
+    }
+    try {
+      await db.collection('users').doc(uid).delete();
+    } catch (e) {
+      debugPrint('Account delete: user doc failed: $e');
+      failed.add('profile');
+    }
+    return failed;
   }
 
   /// Send password reset email

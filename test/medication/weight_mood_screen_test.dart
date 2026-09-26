@@ -34,14 +34,14 @@ void main() {
     testWidgets('empty state prompts to log the first reading', (tester) async {
       await pump(tester, const WeightScreen());
       expect(find.text('Track your weight'), findsOneWidget);
-      expect(find.text('Log your first reading'), findsOneWidget);
+      expect(find.text('Log reading'), findsOneWidget);
     });
 
     testWidgets('positive: a valid weight saves and shows in history',
         (tester) async {
       await pump(tester, const WeightScreen());
 
-      await tester.tap(find.text('Log your first reading'));
+      await tester.tap(find.text('Log reading'));
       await tester.pumpAndSettle();
       expect(find.text('Save reading'), findsOneWidget);
 
@@ -50,7 +50,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Sheet closed, empty state gone, the logged value is now on screen.
-      expect(find.text('Log your first reading'), findsNothing);
+      expect(find.text('Log reading'), findsNothing);
       expect(find.textContaining('70.5'), findsWidgets);
     });
 
@@ -58,7 +58,7 @@ void main() {
         (tester) async {
       await pump(tester, const WeightScreen());
 
-      await tester.tap(find.text('Log your first reading'));
+      await tester.tap(find.text('Log reading'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField).first, 'abc');
@@ -75,7 +75,7 @@ void main() {
         (tester) async {
       await pump(tester, const WeightScreen());
 
-      await tester.tap(find.text('Log your first reading'));
+      await tester.tap(find.text('Log reading'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField).first, '9999');
@@ -90,21 +90,21 @@ void main() {
     testWidgets('empty state prompts to log how you feel', (tester) async {
       await pump(tester, const MoodScreen());
       expect(find.text('Track your mood'), findsOneWidget);
-      expect(find.text('Log how you feel'), findsOneWidget);
+      expect(find.text('Log mood'), findsOneWidget);
     });
 
     testWidgets('positive: picking a mood saves and shows in history',
         (tester) async {
       await pump(tester, const MoodScreen());
 
-      await tester.tap(find.text('Log how you feel'));
+      await tester.tap(find.text('Log mood'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Good'));
       await tester.tap(find.text('Save entry'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Log how you feel'), findsNothing);
+      expect(find.text('Log mood'), findsNothing);
       expect(find.text('Good'), findsWidgets);
     });
 
@@ -112,7 +112,7 @@ void main() {
         (tester) async {
       await pump(tester, const MoodScreen());
 
-      await tester.tap(find.text('Log how you feel'));
+      await tester.tap(find.text('Log mood'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Save entry'));

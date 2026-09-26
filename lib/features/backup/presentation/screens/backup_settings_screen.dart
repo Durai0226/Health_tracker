@@ -8,7 +8,7 @@ import '../../services/backup_service.dart';
 ///
 /// Backup: builds a ZIP snapshot and opens the system share sheet.
 /// Restore: picks a ZIP and merges it (destructive-overwrite warning shown).
-/// Every action reports a success OR error SnackBar; a user-canceled restore
+/// Every action reports a success OR error toast; a user-canceled restore
 /// reports a neutral "canceled" message rather than silently doing nothing.
 class BackupSettingsScreen extends StatefulWidget {
   const BackupSettingsScreen({super.key});
@@ -26,17 +26,13 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
 
   void _snack(String message, {required bool isError, bool neutral = false}) {
     if (!mounted) return;
-    final ext = AppColorsExt.of(context);
-    final swatch = neutral ? ext.info : (isError ? ext.error : ext.success);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: ext.fillBg(swatch),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
+    if (neutral) {
+      context.toastInfo(message);
+    } else if (isError) {
+      context.toastError(message);
+    } else {
+      context.toastSuccess(message);
+    }
   }
 
   Future<void> _createBackup() async {
@@ -67,8 +63,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
       title: 'Restore backup?',
       message:
           'This overwrites current data with the backup file. Any changes not '
-          'in the backup will be lost. Locked notes need the encryption key '
-          'from the device that created them to be readable.',
+          'in the backup will be lost.',
       confirmText: 'Restore & overwrite',
       icon: Symbols.restore_page_rounded,
       isDangerous: true,
@@ -109,9 +104,17 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                 padding: const EdgeInsets.fromLTRB(
                     AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, 40),
                 children: [
+                  // SB-14 — a file flow must not wear cloud iconography.
+                  //
+                  // This screen exports to a FILE the user shares themselves;
+                  // the cloud one is settings/screens/backup_screen.dart. Both
+                  // showed a cloud-upload glyph, so the two entry points were
+                  // indistinguishable at a glance — and here the icon
+                  // contradicted the subtitle beside it, which already said
+                  // "Export your data to a file".
                   SectionHeader(
-                    title: 'Backup',
-                    icon: Symbols.cloud_upload_rounded,
+                    title: 'Backup to a file',
+                    icon: Symbols.save_alt_rounded,
                     accent: ext.success,
                   ),
                   AppCard(
@@ -119,7 +122,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _rowHeader(
-                          icon: Symbols.cloud_upload_rounded,
+                          icon: Symbols.save_alt_rounded,
                           title: 'Create backup',
                           subtitle:
                               'Export your data to a file and share it anywhere.',
@@ -168,8 +171,6 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _infoBanner(ext),
                 ],
               ),
             ),
@@ -214,27 +215,4 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
     );
   }
 
-  Widget _infoBanner(AppColorsExt ext) {
-    final tt = Theme.of(context).textTheme;
-    return AppCard(
-      color: ext.warning.container,
-      pressEffect: false,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Symbols.warning_amber_rounded,
-              size: 20, color: ext.warning.onContainer),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Locked notes are encrypted. To read them after restoring on a '
-              'new device, use the same security setup (biometrics/PIN) or they '
-              'may remain inaccessible.',
-              style: tt.bodySmall?.copyWith(color: ext.warning.onContainer),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

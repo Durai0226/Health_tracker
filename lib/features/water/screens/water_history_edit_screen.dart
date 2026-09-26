@@ -5,6 +5,7 @@ import '../models/beverage_type.dart';
 import '../models/enhanced_water_log.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
+import '../theme/aqua_theme.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 
 /// Screen for editing water history - add/edit/delete entries for any date
@@ -92,7 +93,8 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final goal = WaterService.getDailyGoal();
+    // The goal THIS day had, not today's — see WaterService.goalForDay.
+    final goal = WaterService.goalForDay(_dayData);
     final progress = _dayData != null && goal > 0
         ? (_dayData!.effectiveHydrationMl / goal).clamp(0.0, 1.5)
         : 0.0;
@@ -100,7 +102,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
     return AppScaffold(
       floatingActionButton: AppFab(
         icon: Symbols.add_rounded,
-        label: 'Add Entry',
+        label: 'Add entry',
         accent: ext.water,
         onPressed: _showAddEntryDialog,
       ),
@@ -308,7 +310,8 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
   Widget _buildLogItem(EnhancedWaterLog log) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    final time = '${log.time.hour.toString().padLeft(2, '0')}:${log.time.minute.toString().padLeft(2, '0')}';
+    // W15: one formatter for a drink time, the user's own locale format.
+    final time = TimeOfDay.fromDateTime(log.time).format(context);
 
     return Dismissible(
       key: Key(log.id),
@@ -362,7 +365,13 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                   borderRadius: AppRadius.brMd,
                 ),
                 child: Center(
-                  child: Text(log.beverageEmoji, style: const TextStyle(fontSize: 24)),
+                  // DS-17: 24pt emoji inside a 48pt tinted tile is chrome.
+                  child: Icon(
+                    AquaTheme.iconFor(log.beverageId),
+                    size: 24,
+                    color: ext.water.onContainer,
+                    applyTextScaling: false,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -628,14 +637,22 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(beverage.emoji, style: const TextStyle(fontSize: 24)),
+                      Icon(
+                        AquaTheme.iconFor(beverage.id),
+                        size: 24,
+                        color: isSelected
+                            ? ext.water.onContainer
+                            : ext.textSecondary,
+                        applyTextScaling: false,
+                      ),
                       const SizedBox(height: 4),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Text(
                           beverage.name,
+                          // 11 is the scale's floor; this had a `fontSize: 10`
+                          // override on top of labelSmall.
                           style: tt.labelSmall?.copyWith(
-                            fontSize: 10,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                             color: isSelected ? ext.water.onContainer : ext.textSecondary,
                           ),
@@ -749,7 +766,12 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
           ),
           child: Row(
             children: [
-              Text(_selectedBeverage.emoji, style: const TextStyle(fontSize: 24)),
+              Icon(
+                AquaTheme.iconFor(_selectedBeverage.id),
+                size: 24,
+                color: ext.water.onContainer,
+                applyTextScaling: false,
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(

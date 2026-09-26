@@ -1,5 +1,7 @@
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 import 'dart:math' as math;
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:uuid/uuid.dart';
@@ -11,6 +13,7 @@ import 'package:tablet_remainder/core/services/health_data_service.dart';
 import '../models/sleep_session.dart';
 import '../models/sleep_schedule.dart';
 import '../models/sleep_stage.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// Reactive sleep tracking service — the single source of truth for sleep
 /// sessions and the schedule.
@@ -46,7 +49,32 @@ class SleepService {
   /// device health store (no-op when health is unavailable, e.g. Simulator).
   static Future<void> init() async {
     if (_isInitialized) return;
+    await reloadFromDb();
+    _isInitialized = true;
 
+    // Best-effort health import (safe no-op on Simulator / when denied) —
+    // deliberately NOT awaited. `main.dart` awaits this init before `runApp`,
+    // and [syncFromHealth] walks the entire Health Connect / HealthKit channel
+    // chain (configure → SDK status → permissions → eight days of segments)
+    // before it returns, so awaiting it held the very first frame behind a
+    // platform round trip and the app opened on a blank screen. `StepService`
+    // and `BiometricsService` already fire theirs off the critical path; the
+    // dashboard rebuilds from the ValueNotifier when the nights land, so
+    // nothing is lost by letting it finish after paint. A failure still stays
+    // non-fatal (and never surfaces as an unhandled async error).
+    unawaited(syncFromHealth().catchError((Object e) {
+      debugPrint('⚠️ SleepService initial health sync failed: $e');
+      return 0;
+    }));
+  }
+
+  /// Re-read the schedule and the recent-nights window from Drift.
+  ///
+  /// Split out of [init] and deliberately NOT behind its `_isInitialized`
+  /// guard: cloud sync applies downloaded nights straight to the Drift table,
+  /// so without a reload the dashboard keeps showing the pre-sync nights until
+  /// the next cold launch. Mirrors `BiometricsService.reloadFromDb`.
+  static Future<void> reloadFromDb() async {
     // Schedule (shared health profile).
     try {
       final row = await _stepsDao.getProfile();
@@ -57,10 +85,10 @@ class SleepService {
 
     // Recent sessions.
     try {
-      final now = DateTime.now();
+      final today = startOfDay(clock.now());
       final rows = await _dao.getForRange(
-        now.subtract(const Duration(days: 35)),
-        now.add(const Duration(days: 1)),
+        dayOffset(today, -35),
+        dayOffset(today, 1),
       );
       final map = <String, SleepSession>{};
       for (final r in rows) {
@@ -72,15 +100,6 @@ class SleepService {
       debugPrint('✓ SleepService loaded ${map.length} nights from Drift');
     } catch (e) {
       debugPrint('⚠️ SleepService load failed (using empty): $e');
-    }
-
-    _isInitialized = true;
-
-    // Best-effort health import (safe no-op on Simulator / when denied).
-    try {
-      await syncFromHealth();
-    } catch (e) {
-      debugPrint('⚠️ SleepService initial health sync failed: $e');
     }
   }
 
@@ -109,6 +128,27 @@ class SleepService {
 
   static String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  /// The night a sleep segment starting at [segmentStart] belongs to, as a
+  /// `dateKey`.
+  ///
+  /// A night is named after the morning you wake up on, so anything that starts
+  /// at or after 18:00 belongs to the NEXT calendar day. That "+1 day" is
+  /// calendar arithmetic, not elapsed time: with
+  /// `DateTime(y, m, d).add(const Duration(days: 1))` a segment that began at
+  /// 23:00 on the day *before* a 25-hour civil day landed back on its own start
+  /// date — so the night of Nov 1→2 was filed under Nov 1, on top of the night
+  /// of Oct 31→1, and the two got aggregated into one session with a wake time
+  /// 24 hours after its bedtime.
+  ///
+  /// Exposed for the DST probe: `syncFromHealth` can only be driven through the
+  /// platform channel, which `flutter test` cannot reach.
+  @visibleForTesting
+  static String nightKeyFor(DateTime segmentStart) {
+    final startDay = startOfDay(segmentStart);
+    return _dateKey(
+        segmentStart.hour >= 18 ? dayOffset(startDay, 1) : startDay);
+  }
 
   // ============ QUERIES ============
 
@@ -167,11 +207,10 @@ class SleepService {
   /// The last 7 nights (oldest → newest) for the trend chart, with gaps as
   /// empty [SleepTrendDay]s.
   static List<SleepTrendDay> getWeeklyTrend() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = startOfDay(clock.now());
     final out = <SleepTrendDay>[];
     for (var i = 6; i >= 0; i--) {
-      final d = today.subtract(Duration(days: i));
+      final d = dayOffset(today, -i);
       out.add(SleepTrendDay(
         date: d,
         session: _sessionsNotifier.value[_dateKey(d)],
@@ -268,9 +307,9 @@ class SleepService {
     );
   }
 
-  /// Cumulative sleep debt over the last 7 nights, in minutes
-  /// (target×7 − asleep). Positive → under-slept; negative → surplus.
-  /// Shortfall against target across the nights that were ACTUALLY LOGGED.
+  /// Shortfall against target across the nights that were ACTUALLY LOGGED, in
+  /// minutes (target × logged − asleep). Positive → under-slept; negative →
+  /// surplus.
   ///
   /// This used to be `targetMinutes * 7 - slept`, summing over all seven days
   /// of the trend. A night with no session contributes `asleepMinutes == 0`, so
@@ -337,7 +376,7 @@ class SleepService {
       // overnight session) instead of silently recording a 1-minute night.
       // The manual sheet already shifts; other callers (quick-log, AI NL
       // logging) may pass same-day times.
-      bedtime = bedtime.subtract(const Duration(days: 1));
+      bedtime = shiftCalendarDays(bedtime, -1);
       inBed = wakeTime.difference(bedtime).inMinutes;
     }
     if (inBed <= 0) inBed = 1; // final fallback for still-degenerate input
@@ -349,9 +388,18 @@ class SleepService {
     final awake = inBed - asleep;
 
     final key = _dateKey(wakeTime);
-    final now = DateTime.now();
+    final now = clock.now();
+
+    // A second hand-logged night for a date that already has one is an EDIT of
+    // that night, not a new row. Minting a fresh uuid every call left two rows
+    // sharing the same `dateKey`: the reader ([_winsOver]) picked one and the
+    // other became invisible — impossible to see, correct or delete — while
+    // still occupying the database and cloud sync forever.
+    final prior = _sessionsNotifier.value[key];
+    final replacing = prior != null && prior.source == SleepSource.manual;
+
     var session = SleepSession(
-      id: _uuid.v4(),
+      id: replacing ? prior.id : _uuid.v4(),
       dateKey: key,
       bedtime: bedtime,
       wakeTime: wakeTime,
@@ -363,7 +411,7 @@ class SleepService {
       qualityIndex: q,
       source: SleepSource.manual,
       note: (note != null && note.trim().isEmpty) ? null : note?.trim(),
-      createdAt: now,
+      createdAt: replacing ? prior.createdAt : now,
       updatedAt: now,
     );
 
@@ -409,9 +457,8 @@ class SleepService {
     }
     if (avail != HealthAvailability.available) return 0;
 
-    final now = DateTime.now();
-    final from =
-        DateTime(now.year, now.month, now.day).subtract(const Duration(days: 8));
+    final now = clock.now();
+    final from = dayOffset(now, -8);
 
     final List<HealthDataPoint> segments;
     try {
@@ -425,11 +472,7 @@ class SleepService {
     // Bucket segments by their night's wake-morning date.
     final buckets = <String, List<HealthDataPoint>>{};
     for (final p in segments) {
-      final f = p.dateFrom;
-      final wakeMorning = f.hour >= 18
-          ? DateTime(f.year, f.month, f.day).add(const Duration(days: 1))
-          : DateTime(f.year, f.month, f.day);
-      (buckets[_dateKey(wakeMorning)] ??= []).add(p);
+      (buckets[nightKeyFor(p.dateFrom)] ??= []).add(p);
     }
 
     final source =
@@ -446,6 +489,21 @@ class SleepService {
       debugPrint('⚠️ SleepService tombstone lookup failed: $e');
     }
 
+    return _importBuckets(buckets, source, deletedIds);
+  }
+
+  /// The bucket-and-store half of [syncFromHealth], split out from the platform
+  /// reads that precede it.
+  ///
+  /// Exposed through [importBucketsForTesting] because `flutter test` reaches
+  /// neither Health Connect nor HealthKit: [syncFromHealth] returns 0 at its
+  /// availability check long before any of this runs, so hand-built segments
+  /// are the only way to exercise the import rules.
+  static Future<int> _importBuckets(
+    Map<String, List<HealthDataPoint>> buckets,
+    SleepSource source,
+    Set<String> deletedIds,
+  ) async {
     var changed = false;
     var count = 0;
 
@@ -456,8 +514,31 @@ class SleepService {
       // …nor resurrect an imported night they deleted.
       if (deletedIds.contains('hk_${entry.key}')) continue;
 
-      final session = _aggregate(entry.key, entry.value, source);
+      var session = _aggregate(entry.key, entry.value, source);
       if (session == null) continue;
+
+      // A re-import of a night we already hold is an UPDATE of that row, not a
+      // new one, so it keeps the original creation stamp — and when nothing
+      // about the night changed it is not a write at all.
+      //
+      // This used to upsert every bucketed night unconditionally, and
+      // `toCompanion()` stamps a fresh `updatedAt` on every write. The 8-day
+      // window plus the `init()` sync meant up to eight untouched nights were
+      // rewritten with a new modification time on every single launch. That is
+      // not just churn: `updatedAt` is the last-write-wins key the cloud
+      // syncer compares (`lww_collection_sync`, and [_winsOver] locally), so
+      // re-stamping decouples it from "when the data changed" and reduces it
+      // to "which device opened the app last". A phone whose health store held
+      // a stale or partial copy of a night could therefore overwrite a newer,
+      // more complete copy another device had already uploaded, purely by
+      // being launched afterwards. Leaving an unchanged row alone keeps
+      // `updatedAt` meaning what LWW needs it to mean.
+      final prior =
+          (existing != null && existing.id == session.id) ? existing : null;
+      if (prior != null) {
+        session = session.copyWith(createdAt: prior.createdAt);
+        if (_sameNight(prior, session)) continue;
+      }
 
       _sessionsNotifier.value[entry.key] = session;
       changed = true;
@@ -473,9 +554,150 @@ class SleepService {
     return count;
   }
 
+  /// Test seam for the import rules (see [_importBuckets]).
+  @visibleForTesting
+  static Future<int> importBucketsForTesting(
+    Map<String, List<HealthDataPoint>> buckets,
+    SleepSource source, {
+    Set<String> deletedIds = const {},
+  }) =>
+      _importBuckets(buckets, source, deletedIds);
+
+  /// Whether a freshly aggregated night is, field for field, the night already
+  /// stored — ignoring the timestamps, which are exactly what must not drive
+  /// the decision.
+  ///
+  /// Spelled out rather than `prior == session`: [SleepSession] has no value
+  /// equality, so `==` is identity and every re-import would compare unequal.
+  /// Every column [SleepSession.toCompanion] writes is listed here apart from
+  /// `createdAt` (equalised by the caller), `updatedAt` and `synced`; the list
+  /// is pinned against that companion by
+  /// `test/features/sleep/sleep_resync_is_idempotent_test.dart` so a column
+  /// added later cannot be silently left out.
+  static bool _sameNight(SleepSession a, SleepSession b) =>
+      a.id == b.id &&
+      a.dateKey == b.dateKey &&
+      a.bedtime == b.bedtime &&
+      a.wakeTime == b.wakeTime &&
+      a.inBedMinutes == b.inBedMinutes &&
+      a.asleepMinutes == b.asleepMinutes &&
+      a.awakeMinutes == b.awakeMinutes &&
+      a.lightMinutes == b.lightMinutes &&
+      a.deepMinutes == b.deepMinutes &&
+      a.remMinutes == b.remMinutes &&
+      a.sleepScore == b.sleepScore &&
+      a.efficiency == b.efficiency &&
+      a.qualityIndex == b.qualityIndex &&
+      a.source == b.source &&
+      a.note == b.note;
+
+  /// Longest gap between two segments that still counts as the SAME sleep
+  /// episode. Three hours is comfortably longer than any ordinary mid-night
+  /// wake (bathroom, feeding, insomnia stretch) and comfortably shorter than
+  /// the gap between getting up in the morning and lying down for a nap.
+  static const int _episodeGapMinutes = 180;
+
+  /// Split one bucket's segments into separate sleep episodes.
+  ///
+  /// A bucket is a whole 18:00→18:00 window, so an afternoon nap lands in the
+  /// same bucket as the night before it. Sorted by start, a gap longer than
+  /// [_episodeGapMinutes] between one segment and the running end of the
+  /// current episode starts a new one.
+  static List<List<HealthDataPoint>> _splitEpisodes(
+      List<HealthDataPoint> points) {
+    final sorted = [...points]..sort((a, b) => a.dateFrom.compareTo(b.dateFrom));
+    final episodes = <List<HealthDataPoint>>[];
+    DateTime? runningEnd;
+    for (final p in sorted) {
+      if (runningEnd == null ||
+          p.dateFrom.difference(runningEnd).inMinutes > _episodeGapMinutes) {
+        episodes.add(<HealthDataPoint>[p]);
+        runningEnd = p.dateTo;
+      } else {
+        episodes.last.add(p);
+        if (p.dateTo.isAfter(runningEnd)) runningEnd = p.dateTo;
+      }
+    }
+    return episodes;
+  }
+
+  /// Total wall-clock span of one episode, in minutes.
+  static int _episodeSpan(List<HealthDataPoint> episode) {
+    var from = episode.first.dateFrom;
+    var to = episode.first.dateTo;
+    for (final p in episode) {
+      if (p.dateFrom.isBefore(from)) from = p.dateFrom;
+      if (p.dateTo.isAfter(to)) to = p.dateTo;
+    }
+    final m = to.difference(from).inMinutes;
+    return m < 0 ? 0 : m;
+  }
+
+  /// Hours an episode must lie WHOLLY within to count as daytime sleep.
+  ///
+  /// A nap is defined by WHEN it happens, not by how short it is. The first
+  /// version of this split picked the longest-spanning episode as the night,
+  /// which is wrong twice over: a 4-hour afternoon nap beats a 3-hour night,
+  /// and — much worse — a genuinely fragmented night (asleep 22:00–02:00, awake
+  /// 3½ hours, asleep 05:30–08:00) was truncated to its longest fragment, so
+  /// two hours of real sleep were discarded and the wake time moved six hours
+  /// early. That feeds the sleep score, `sleepDebtMinutes` and the
+  /// BedtimeGuidance averages, and it is worse than the nap bug it replaced.
+  ///
+  /// 11:00–19:00 local: late enough that a lie-in or a shift worker's morning
+  /// sleep still belongs to the night, early enough that an evening bedtime
+  /// never falls inside it.
+  static const int _dayNapStartHour = 11;
+  static const int _dayNapEndHour = 19;
+
+  /// Whether every segment of [episode] falls inside the daytime window.
+  ///
+  /// Deliberately "wholly within": an episode that starts at 18:30 and runs
+  /// into the night is the night beginning, not a nap ending.
+  static bool _isDaytimeNap(List<HealthDataPoint> episode) {
+    for (final p in episode) {
+      if (p.dateFrom.hour < _dayNapStartHour ||
+          p.dateFrom.hour >= _dayNapEndHour) {
+        return false;
+      }
+      if (p.dateTo.hour < _dayNapStartHour || p.dateTo.hour >= _dayNapEndHour) {
+        return false;
+      }
+      // A segment longer than the window cannot be contained by it.
+      if (p.dateTo.difference(p.dateFrom).inHours >
+          _dayNapEndHour - _dayNapStartHour) {
+        return false;
+      }
+      if (!isSameCalendarDay(p.dateFrom, p.dateTo)) return false;
+    }
+    return true;
+  }
+
   /// Aggregate one night's raw [HealthDataPoint] segments into a [SleepSession].
+  ///
+  /// Only the night itself is aggregated. This used to fold EVERY segment in
+  /// the bucket into one session, so a 45-minute afternoon nap both inflated
+  /// time-in-bed and moved the recorded wake time to the end of the nap —
+  /// which shifted the sleep score, the sleep debt and the bedtime guidance for
+  /// that night. Episodes that lie wholly inside the daytime window are kept
+  /// out of the night's figures and recorded in the note rather than thrown
+  /// away; everything else is the night, however fragmented.
   static SleepSession? _aggregate(
-      String dateKey, List<HealthDataPoint> points, SleepSource source) {
+      String dateKey, List<HealthDataPoint> allPoints, SleepSource source) {
+    final episodes = _splitEpisodes(allPoints);
+    final nightEpisodes =
+        episodes.where((e) => !_isDaytimeNap(e)).toList(growable: false);
+    // Every episode looked like a nap (a bucket with nothing but daytime
+    // sleep): report it as the session rather than losing the day entirely.
+    final kept = nightEpisodes.isEmpty ? episodes : nightEpisodes;
+    var points = kept.isEmpty
+        ? allPoints
+        : kept.expand((e) => e).toList(growable: false);
+    var napMinutes = 0;
+    for (final e in episodes) {
+      if (!kept.contains(e)) napMinutes += _episodeSpan(e);
+    }
+
     DateTime? bed;
     DateTime? wake;
     var light = 0, deep = 0, rem = 0, awake = 0, asleepGeneric = 0, inBedRaw = 0;
@@ -537,7 +759,7 @@ class SleepService {
         : (windowMinutes > 0 ? windowMinutes : asleep + awake);
     final efficiency = inBed > 0 ? (asleep / inBed).clamp(0.0, 1.0) : 0.0;
 
-    final now = DateTime.now();
+    final now = clock.now();
     var session = SleepSession(
       // Stable per-night id so a re-sync upserts the same row (no duplicates).
       id: 'hk_$dateKey',
@@ -553,11 +775,24 @@ class SleepService {
       sleepScore: 0,
       efficiency: efficiency.toDouble(),
       source: source,
+      // Daytime sleep is excluded from the figures above, so say so instead of
+      // dropping it silently.
+      note: napMinutes > 0
+          ? 'Excludes $napMinutes min of daytime sleep'
+          : null,
       createdAt: now,
       updatedAt: now,
     );
     return session.copyWith(sleepScore: computeScore(session));
   }
+
+  /// Test seam for the night/nap split (see [_aggregate]). The plugin has no
+  /// platform channel under `flutter test`, so hand-built points are the only
+  /// way to drive the import path.
+  @visibleForTesting
+  static SleepSession? aggregateForTesting(
+          String dateKey, List<HealthDataPoint> points, SleepSource source) =>
+      _aggregate(dateKey, points, source);
 
   // ============ LIFECYCLE ============
 

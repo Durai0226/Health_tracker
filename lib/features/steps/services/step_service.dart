@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:uuid/uuid.dart';
@@ -12,6 +13,8 @@ import '../models/health_profile.dart';
 import '../models/step_daily_data.dart';
 import '../models/step_manual_entry.dart';
 import '../models/step_source.dart';
+import '../utils/step_format.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// Reactive step-count service, mirroring the water service contract: all-static,
 /// a single [ValueNotifier] of the date-keyed day map for the UI to listen on,
@@ -41,6 +44,26 @@ class StepService {
   static int _liveStartSteps = 0; // today's sensor steps when tracking began
   static String? _liveDayKey;
 
+  /// The most recent cumulative-since-boot reading. Needed so a Health sync can
+  /// re-anchor BOTH ends of the live sum at once — see [_rawForDay].
+  static int? _liveLastRaw;
+
+  /// How long a burst of pedometer ticks may accumulate before today's row is
+  /// written to Drift. See [_queueLivePersist].
+  static const Duration livePersistInterval = Duration(seconds: 30);
+
+  /// The window actually in force. Only [livePersistWindowForTesting] ever
+  /// moves it off [livePersistInterval].
+  static Duration _livePersistWindow = livePersistInterval;
+
+  /// Shortens the throttle window so a test can prove the timer closes it
+  /// without waiting half a minute of real time. Restored by [resetForTesting].
+  @visibleForTesting
+  static set livePersistWindowForTesting(Duration d) => _livePersistWindow = d;
+
+  static Timer? _livePersistTimer;
+  static StepDailyData? _livePendingDay;
+
   static StepsDao get _dao => db.AppDatabase.instance.stepsDao;
 
   /// Listen to the day map for reactive rebuilds.
@@ -53,7 +76,21 @@ class StepService {
   /// best-effort health sync (a no-op when health data is unavailable).
   static Future<void> init() async {
     if (_isInitialized) return;
+    await reloadFromDb();
+    _isInitialized = true;
 
+    // Fire-and-forget: pull sensor data if available; the notifier updates the
+    // UI reactively when it lands, so first paint isn't blocked on health reads.
+    unawaited(syncFromHealth());
+  }
+
+  /// Re-read the profile and the in-memory day window from Drift.
+  ///
+  /// Split out of [init] and deliberately NOT behind its `_isInitialized`
+  /// guard: cloud sync applies downloaded step days straight to the Drift
+  /// table, so without a reload the dashboard keeps showing the pre-sync counts
+  /// until the next cold launch. Mirrors `BiometricsService.reloadFromDb`.
+  static Future<void> reloadFromDb() async {
     // Profile first — adaptive goal + distance/calorie math depend on it.
     try {
       final row = await _dao.getProfile();
@@ -66,10 +103,10 @@ class StepService {
     }
 
     try {
-      final now = DateTime.now();
+      final today = _dayOnly(clock.now());
       final rows = await _dao.getDayRange(
-        now.subtract(const Duration(days: 35)),
-        now.add(const Duration(days: 1)),
+        dayOffset(today, -35),
+        dayOffset(today, 1),
       );
       // One query, not one per day — same pre-runApp cost as the water
       // service's loop (35 days here).
@@ -88,12 +125,6 @@ class StepService {
     } catch (e) {
       debugPrint('⚠️ StepService load failed (using empty): $e');
     }
-
-    _isInitialized = true;
-
-    // Fire-and-forget: pull sensor data if available; the notifier updates the
-    // UI reactively when it lands, so first paint isn't blocked on health reads.
-    unawaited(syncFromHealth());
   }
 
   // ============ READ ============
@@ -102,10 +133,10 @@ class StepService {
 
   /// Today's day, creating (in-memory) a fresh one if absent.
   static StepDailyData getTodayData() {
-    final key = _dateKey(DateTime.now());
+    final key = _dateKey(clock.now());
     final existing = _dailyNotifier.value[key];
     if (existing != null) return existing;
-    final day = _newDay(DateTime.now());
+    final day = _newDay(clock.now());
     _dailyNotifier.value[key] = day;
     return day;
   }
@@ -121,7 +152,7 @@ class StepService {
     while (!cursor.isAfter(last)) {
       final d = _dailyNotifier.value[_dateKey(cursor)];
       if (d != null) results.add(d);
-      cursor = cursor.add(const Duration(days: 1));
+      cursor = dayOffset(cursor, 1);
     }
     return results;
   }
@@ -136,7 +167,7 @@ class StepService {
   /// updated day. Works with zero health permissions.
   static Future<StepDailyData> addManualSteps(int steps, {String? note}) async {
     if (steps == 0) return getTodayData();
-    final now = DateTime.now();
+    final now = clock.now();
     final key = _dateKey(now);
     var day = _dailyNotifier.value[key] ?? _newDay(now);
 
@@ -174,10 +205,13 @@ class StepService {
     int maxDaysBack = 7,
   }) async {
     if (steps == 0) return getDataForDate(date);
-    final today = _dayOnly(DateTime.now());
+    final today = _dayOnly(clock.now());
     final day0 = _dayOnly(date);
     if (day0.isAfter(today)) return null; // no future days
-    if (today.difference(day0).inDays > maxDaysBack) return null; // bounded
+    // Calendar days, not elapsed hours: `difference().inDays` truncates a
+    // spring-forward span to one day fewer, which let a day OUTSIDE the window
+    // through (8 calendar days back measures 191h, i.e. 7 whole days).
+    if (calendarDaysBetween(day0, today) > maxDaysBack) return null; // bounded
     if (day0 == today) return addManualSteps(steps, note: note);
 
     final key = _dateKey(day0);
@@ -189,7 +223,7 @@ class StepService {
       time: DateTime(day0.year, day0.month, day0.day, 12),
       steps: steps,
       note: note,
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
     );
     day = day.copyWith(
       manualEntries: [...day.manualEntries, entry],
@@ -207,7 +241,7 @@ class StepService {
 
   /// Remove a manual entry from today and re-tally.
   static Future<void> removeManualEntry(String entryId) async {
-    final key = _dateKey(DateTime.now());
+    final key = _dateKey(clock.now());
     final day = _dailyNotifier.value[key];
     if (day == null) return;
     final entries = day.manualEntries.where((e) => e.id != entryId).toList();
@@ -239,7 +273,7 @@ class StepService {
     _profile = profile;
     await _persistProfile(profile);
 
-    final key = _dateKey(DateTime.now());
+    final key = _dateKey(clock.now());
     final newGoal = computeAdaptiveGoal();
     final today = _dailyNotifier.value[key];
     if (today != null && today.goalSteps != newGoal) {
@@ -278,7 +312,7 @@ class StepService {
   static bool isTodayNewBest() {
     final today = getTodayData();
     if (today.effectiveSteps <= 0) return false;
-    final todayKey = _dateKey(DateTime.now());
+    final todayKey = _dateKey(clock.now());
     var prev = 0;
     final storedRaw =
         (CleanStorageService.getAppPreference(_kBestDayDate, '') as String?) ?? '';
@@ -295,11 +329,11 @@ class StepService {
 
   /// This calendar week (Mon→today) aggregates.
   static Map<String, dynamic> getWeeklyStats() {
-    final now = DateTime.now();
-    final weekStart = _dayOnly(now).subtract(Duration(days: now.weekday - 1));
+    final now = clock.now();
+    final weekStart = startOfWeek(now);
     int total = 0, daysTracked = 0, daysGoalMet = 0, best = 0;
     for (int i = 0; i < 7; i++) {
-      final date = weekStart.add(Duration(days: i));
+      final date = dayOffset(weekStart, i);
       if (date.isAfter(now)) break;
       final d = getDataForDate(date);
       if (d == null) continue;
@@ -336,7 +370,7 @@ class StepService {
   /// user (no streak-anxiety), but it's here for internal logic if ever needed.
   static StreakResult getStreakResult() => StreakEngine.compute(
         completedDays: _completedDays(),
-        today: DateTime.now(),
+        today: clock.now(),
       );
 
   /// Consecutive (grace-forgiven) goal-reached days. Kept as an int for existing
@@ -386,26 +420,26 @@ class StepService {
     if (_profile.useCustomStepGoal &&
         _profile.customStepGoal != null &&
         _profile.customStepGoal! > 0) {
-      return 'Using your custom goal of ${_fmt(_profile.customStepGoal!)} steps.';
+      return 'Using your custom goal of ${formatThousands(_profile.customStepGoal!)} steps.';
     }
     final samples = _recentEffectiveSamples(14);
     if (samples.length < 3) {
-      return 'Starting at ${_fmt(_defaultGoal)} steps while we learn your routine. '
+      return 'Starting at ${formatThousands(_defaultGoal)} steps while we learn your routine. '
           'Log a few days and your goal adapts automatically.';
     }
     final sorted = [...samples]..sort();
     final median = _median(sorted);
     final goal = computeAdaptiveGoal();
-    return 'Adapted from your ${samples.length}-day median of ${_fmt(median)} steps, '
+    return 'Adapted from your ${samples.length}-day median of ${formatThousands(median)} steps, '
         'nudged up ~10% to keep you progressing — kept within 4,000–15,000. '
-        "Today's goal: ${_fmt(goal)}.";
+        "Today's goal: ${formatThousands(goal)}.";
   }
 
   static List<int> _recentEffectiveSamples(int days) {
     final out = <int>[];
-    final today = _dayOnly(DateTime.now());
+    final today = _dayOnly(clock.now());
     for (int i = 1; i <= days; i++) {
-      final date = today.subtract(Duration(days: i));
+      final date = dayOffset(today, -i);
       final d = _dailyNotifier.value[_dateKey(date)];
       if (d != null && d.effectiveSteps > 0) out.add(d.effectiveSteps);
     }
@@ -432,17 +466,31 @@ class StepService {
     }
   }
 
-  static Future<void> stopLiveTracking() async {
+  /// Stop the sensor subscription, writing anything the throttle still holds.
+  ///
+  /// [flush] is false only for a data wipe ([clearInMemory], [resetForTesting]):
+  /// there the pending day belongs to rows that are being deleted, so writing
+  /// it back would resurrect the count the wipe just removed.
+  static Future<void> stopLiveTracking({bool flush = true}) async {
+    if (flush) {
+      await flushPendingLiveDay();
+    } else {
+      _livePersistTimer?.cancel();
+      _livePersistTimer = null;
+      _livePendingDay = null;
+    }
     await _liveSub?.cancel();
     _liveSub = null;
     _liveBaseline = null;
     _liveDayKey = null;
     _liveStartSteps = 0;
+    _liveLastRaw = null;
   }
 
   static void _onStepCount(StepCount event) {
-    final key = _dateKey(DateTime.now());
+    final key = _dateKey(clock.now());
     // (Re)baseline at first event or a midnight rollover.
+    _liveLastRaw = event.steps;
     if (_liveBaseline == null || _liveDayKey != key) {
       _liveBaseline = event.steps;
       _liveDayKey = key;
@@ -456,7 +504,7 @@ class StepService {
     if (delta <= 0) return;
 
     final liveRawSteps = _liveStartSteps + delta;
-    var day = _dailyNotifier.value[key] ?? _newDay(DateTime.now());
+    var day = _dailyNotifier.value[key] ?? _newDay(clock.now());
     if (liveRawSteps <= (_rawSensorSteps(day) ?? 0)) return; // never regress
 
     day = day.copyWith(
@@ -467,10 +515,69 @@ class StepService {
     day = _recompute(day, rawSensorSteps: liveRawSteps);
     _dailyNotifier.value[key] = day;
     _notifyListeners();
-    unawaited(_persistDay(day));
+    _queueLivePersist(day);
+  }
+
+  /// Queue [day] for persistence, writing at most once per
+  /// [livePersistInterval] and always writing the LAST value queued.
+  ///
+  /// The sensor fires once per step, and this used to be a bare
+  /// `unawaited(_persistDay(day))` — a `saveDay` upsert plus the best-day
+  /// preference pass on every footfall, so a brisk twenty-minute walk cost
+  /// roughly two thousand write transactions. Only the disk write is
+  /// coalesced: `_dailyNotifier` is still updated on every tick above, so the
+  /// number on screen is exactly as live as it was.
+  ///
+  /// A restart-on-every-tick debounce would be the wrong shape here. The
+  /// pedometer keeps firing for as long as the user keeps walking, so a timer
+  /// that restarted on each event would never elapse and a long walk would
+  /// persist nothing at all. This arms once and lets the window run out, which
+  /// makes the interval a ceiling on how much work is in flight rather than on
+  /// how long a walk can defer it.
+  static void _queueLivePersist(StepDailyData day) {
+    _livePendingDay = day;
+    _livePersistTimer ??= Timer(_livePersistWindow, () {
+      _livePersistTimer = null;
+      unawaited(flushPendingLiveDay());
+    });
+  }
+
+  /// Write whatever the live tracker has queued, right now.
+  ///
+  /// The throttle defers writes; it must never drop one. This is the escape
+  /// hatch that guarantees it — called when tracking stops and from the
+  /// dashboard's lifecycle handler as the app leaves the foreground, which is
+  /// the last moment Dart is guaranteed to run before the OS may kill the
+  /// process. A no-op when nothing is pending.
+  static Future<void> flushPendingLiveDay() async {
+    _livePersistTimer?.cancel();
+    _livePersistTimer = null;
+    final day = _livePendingDay;
+    if (day == null) return;
+    _livePendingDay = null;
+    await _persistDay(day);
   }
 
   // ============ HEALTH SYNC ============
+
+  /// The calendar days [syncFromHealth] pulls, newest first: today and the
+  /// [days] - 1 days before it, each at local midnight.
+  ///
+  /// Stepped with [dayOffset], not `subtract(Duration(days: i))`. The Duration
+  /// form measures elapsed time, so once a 23-hour civil day fell inside the
+  /// window the cursor slid to 23:00 of the day BEFORE the one intended: from
+  /// Mon 9 Mar 2026 it produced Mar 9, Mar 7, Mar 6, … — the DST Sunday was
+  /// never requested from the health store at all, and Mar 7's window was read
+  /// with the wrong bounds. That Sunday then showed 0 steps forever, because
+  /// nothing else ever backfills a past day.
+  ///
+  /// Exposed because the loop itself can only run against a real Health Connect
+  /// / HealthKit channel, which `flutter test` cannot reach.
+  @visibleForTesting
+  static List<DateTime> recentSyncDays(DateTime now, {int days = 7}) {
+    final today = _dayOnly(now);
+    return [for (var i = 0; i < days; i++) dayOffset(today, -i)];
+  }
 
   /// Best-effort pull of recent days from HealthKit / Health Connect. No-op when
   /// health data isn't available (e.g. Simulator, permissions not granted).
@@ -484,15 +591,14 @@ class StepService {
 
       final source =
           Platform.isIOS ? StepSource.healthKit : StepSource.healthConnect;
-      final now = DateTime.now();
+      final now = clock.now();
       var changed = false;
 
-      for (int i = 0; i < 7; i++) {
-        final date = _dayOnly(now).subtract(Duration(days: i));
-        final isToday = i == 0;
+      for (final date in recentSyncDays(now)) {
+        final isToday = date == _dayOnly(now);
         final key = _dateKey(date);
         final start = date;
-        final end = isToday ? now : start.add(const Duration(days: 1));
+        final end = isToday ? now : dayOffset(start, 1);
 
         final steps = await svc.readStepsForDay(date, end: isToday ? now : null);
         if (steps == null) continue;
@@ -516,9 +622,7 @@ class StepService {
         );
         // `steps` is the RAW device reading; _recompute layers this day's manual
         // entries on top of it so a hand-typed count is never overwritten.
-        day = _recompute(day, rawSensorSteps: steps);
-
-        _dailyNotifier.value[key] = day;
+        day = _storeHealthDay(key, day, steps, isToday);
         await _persistDay(day);
         changed = true;
         count++;
@@ -531,12 +635,87 @@ class StepService {
     return count;
   }
 
+  /// Merge a fresh Health reading into [day] and put it back in the day map.
+  static StepDailyData _storeHealthDay(
+      String key, StepDailyData day, int healthSteps, bool isToday) {
+    final merged =
+        _recompute(day, rawSensorSteps: _rawForDay(day, healthSteps, isToday));
+    _dailyNotifier.value[key] = merged;
+    return merged;
+  }
+
+  /// Test seam for the today-vs-Health merge (see [_rawForDay]). `flutter test`
+  /// reaches neither Health Connect nor HealthKit, so this stands in for one
+  /// day of [syncFromHealth].
+  @visibleForTesting
+  static StepDailyData storeHealthDayForTesting(DateTime date, int healthSteps,
+      {required bool isToday}) {
+    final key = _dateKey(date);
+    final day = _dailyNotifier.value[key] ?? _newDay(date);
+    final merged = _storeHealthDay(key, day, healthSteps, isToday);
+    _notifyListeners();
+    return merged;
+  }
+
+  /// The raw sensor total to store for a synced day.
+  ///
+  /// For every day but today the platform store is authoritative. For TODAY it
+  /// is not: Health Connect / HealthKit aggregate on a delay, so the figure they
+  /// report trails the live pedometer. Taking it verbatim made the step count on
+  /// screen visibly jump BACKWARDS after every sync and then climb again, which
+  /// reads as lost steps. While live tracking is running, keep whichever raw
+  /// total is higher.
+  ///
+  /// Keeping the higher number also strands the live start count — it was
+  /// anchored to the pre-sync total, so the next sensor tick would add its
+  /// delta to a stale start.
+  ///
+  /// Re-anchor BOTH ends of the live sum: the day's start becomes the total we
+  /// just kept, and the sensor origin becomes the latest reading.
+  ///
+  /// The live total is `_liveStartSteps + (event.steps - _liveBaseline)`, so
+  /// moving one end without the other is wrong in one direction or the other:
+  ///
+  ///  * Nulling `_liveBaseline` (the obvious-looking fix) LOSES steps —
+  ///    `_onStepCount` treats a null baseline as "first event", re-baselines
+  ///    and `return`s without applying that event's delta, so every sync while
+  ///    the dashboard was open discarded the steps taken since the last sensor
+  ///    event.
+  ///  * Moving only `_liveStartSteps` DOUBLE-COUNTS — the delta is still
+  ///    measured from the old origin, so the steps already reflected in the
+  ///    kept total are added a second time.
+  ///
+  /// Re-anchoring both means the next tick contributes exactly the steps taken
+  /// after the sync, and nothing else.
+  static int _rawForDay(StepDailyData day, int healthSteps, bool isToday) {
+    if (!isToday || _liveSub == null) return healthSteps;
+    final live = _rawSensorSteps(day) ?? 0;
+    final kept = live > healthSteps ? live : healthSteps;
+    if (_liveBaseline != null && _liveLastRaw != null) {
+      _liveStartSteps = kept;
+      _liveBaseline = _liveLastRaw;
+    }
+    return kept;
+  }
+
+  /// Whether the live pedometer baseline is currently anchored — exposed so a
+  /// test can assert a sync does NOT drop it (see [_rawForDay]).
+  @visibleForTesting
+  static bool get liveBaselineAnchoredForTesting => _liveBaseline != null;
+
+  /// Where the day's total is currently anchored — exposed so a test can assert
+  /// a sync re-anchors it to the kept total rather than stranding it.
+  @visibleForTesting
+  static int get liveStartStepsForTesting => _liveStartSteps;
+
   // ============ WIPE ============
 
   /// Reset all in-memory state after a full data wipe (Drift rows removed
   /// elsewhere). Stops live tracking and drops the reactive map to empty.
   static void clearInMemory() {
-    unawaited(stopLiveTracking());
+    // flush: false — the rows this pending day would be written back into are
+    // the ones the wipe is removing.
+    unawaited(stopLiveTracking(flush: false));
     _dailyNotifier.value = {};
     _profile = const HealthProfile();
   }
@@ -544,7 +723,8 @@ class StepService {
   @visibleForTesting
   static Future<void> resetForTesting() async {
     _isInitialized = false;
-    await stopLiveTracking();
+    _livePersistWindow = livePersistInterval;
+    await stopLiveTracking(flush: false);
     _dailyNotifier.value = {};
     _profile = const HealthProfile();
   }
@@ -559,7 +739,7 @@ class StepService {
         id: _dateKey(date),
         date: _dayOnly(date),
         goalSteps: computeAdaptiveGoal(),
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
       );
 
   /// The day's *raw* device reading, backed out of the stored combined total —
@@ -621,7 +801,7 @@ class StepService {
 
     final reached = day.goalSteps > 0 && effective >= day.goalSteps;
     final reachedAt =
-        reached && !day.goalReached ? DateTime.now() : day.goalReachedAt;
+        reached && !day.goalReached ? clock.now() : day.goalReachedAt;
 
     return day.copyWith(
       sensorSteps: combined,
@@ -681,16 +861,6 @@ class StepService {
     final mid = sorted.length ~/ 2;
     if (sorted.length.isOdd) return sorted[mid];
     return ((sorted[mid - 1] + sorted[mid]) / 2).round();
-  }
-
-  static String _fmt(int n) {
-    final s = n.abs().toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
-      buf.write(s[i]);
-    }
-    return '${n < 0 ? '-' : ''}$buf';
   }
 
   static String _dateKey(DateTime date) =>

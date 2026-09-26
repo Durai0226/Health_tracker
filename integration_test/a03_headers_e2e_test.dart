@@ -4,9 +4,9 @@ import 'package:tablet_remainder/core/widgets/app/app_header.dart';
 import 'package:tablet_remainder/features/home/screens/home_dashboard.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_dashboard.dart';
 
+import '../test/support/text_layout.dart';
 import 'support/app_strings.dart';
 import 'support/e2e.dart';
-import 'support/text_layout.dart';
 
 /// Header chrome, on real hardware.
 ///
@@ -21,7 +21,10 @@ import 'support/text_layout.dart';
 /// Migrated from `home_header_e2e_test.dart`. Two changes beyond the harness:
 /// the Meds case used to `markTestSkipped` when it could not find the tab —
 /// turning "navigation is broken" into a green run — and the line-counting
-/// helper moved to `support/text_layout.dart` so every suite can reuse it.
+/// helper moved out of this file. It lives in `test/support/text_layout.dart`,
+/// imported by relative path: there was briefly a second copy under
+/// `integration_test/support/`, and the two drifted until the device copy had
+/// no truncation check and a hard-coded one-line allowance.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -63,7 +66,7 @@ void main() {
     );
 
     expect(
-      wrappedTextUnder(header),
+      collectWrappedText(header),
       isEmpty,
       reason: 'Header text wrapped on this device. This is the exact defect '
           "from the screenshot: header chrome must be one line at the device's "
@@ -90,7 +93,7 @@ void main() {
       findsOneWidget,
     );
 
-    expect(wrappedTextUnder(header), isEmpty,
+    expect(collectWrappedText(header), isEmpty,
         reason: 'The Medicine header wrapped on this device. Its title is '
             'deliberately short so it never truncates — assert that.');
 

@@ -20,6 +20,21 @@ import 'package:tablet_remainder/core/widgets/app/app_header.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import 'package:tablet_remainder/core/widgets/app/settings_tile.dart';
 
+import 'package:tablet_remainder/features/biometrics/screens/health_source_detail_screen.dart';
+import 'package:tablet_remainder/features/backup/presentation/screens/backup_settings_screen.dart';
+import 'package:tablet_remainder/features/medication/data/condition_library_data.dart';
+import 'package:tablet_remainder/features/medication/screens/conditions/condition_detail_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/nunito_medication_detail_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/refill_overview_screen.dart';
+import 'package:tablet_remainder/features/period/screens/period_reminder_settings_screen.dart';
+import 'package:tablet_remainder/features/reminders/screens/add_reminder_screen.dart';
+import 'package:tablet_remainder/features/reminders/screens/category_management_screen.dart';
+import 'package:tablet_remainder/features/settings/screens/pin_entry_screen.dart';
+import 'package:tablet_remainder/features/sleep/screens/sleep_schedule_settings_screen.dart';
+import 'package:tablet_remainder/features/steps/screens/steps_goal_settings_screen.dart';
+import 'package:tablet_remainder/features/water/screens/water_reminder_settings_screen.dart';
+import '../support/overflow_errors.dart';
+import '../support/screen_fixtures.dart';
 import '../support/text_layout.dart';
 
 import 'package:tablet_remainder/features/medication/screens/appointments/nunito_add_edit_appointment_screen.dart';
@@ -62,7 +77,6 @@ import 'package:tablet_remainder/features/period/screens/cycle_history_screen.da
 import 'package:tablet_remainder/features/reminders/screens/reminders_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/settings_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/haptic_settings_screen.dart';
-import 'package:tablet_remainder/features/settings/screens/vitavibe_settings_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/security_settings_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/health_privacy_screen.dart';
 import 'package:tablet_remainder/features/biometrics/screens/heart_dashboard_screen.dart';
@@ -171,8 +185,17 @@ const Map<String, int> _rowCutBaseline = {
   'early_access': 55,
   'focus_reminders': 13,
   'haptics': 12,
-  'vitavibe': 11,
   'notif_settings': 8,
+  // Newly registered (TQ-05), so these were always there and simply unmeasured
+  // — the same shape as `vitals_reminders` above. Both are harness-font: the
+  // widest offender on `period_reminders` is "~2 days before your start", a
+  // 25-character STATUS line clamped to one line of a 134pt column, and
+  // `health_source_detail` cuts "Use for health data" — eighteen characters —
+  // across two lines of the same column. Real Inter is about half that advance.
+  // 51 rather than a handful because this screen is four reminder rows at four
+  // widths and three scales, each contributing a title and a status.
+  'period_reminders': 51,
+  'health_source_detail': 27,
 };
 
 /// The instant every seeded screen is rendered at.
@@ -185,12 +208,15 @@ const Map<String, int> _rowCutBaseline = {
 /// no code change, and the gate called it a regression.
 final DateTime _seedNow = DateTime(2026, 8, 12, 10, 30);
 
-/// **Empty, and it must stay empty.**
+/// **One entry, and it may only shrink.**
 ///
-/// This began at six screens and 219 device/text-scale combinations. Every one
-/// is fixed. The gate is shrink-only in both directions, so adding an entry here
-/// is a deliberate act that has to be argued for, and a screen that starts
-/// overflowing fails immediately rather than being absorbed.
+/// This began at six screens and 219 device/text-scale combinations. All 219 are
+/// fixed; the single entry below is not one of them — it is what pinning
+/// `water_history_edit` to `_seedNow` uncovered, on a screen whose list had
+/// never been rendered with data in it. The gate is shrink-only in both
+/// directions, so adding an entry here is a deliberate act that has to be
+/// argued for, and a screen that starts overflowing fails immediately rather
+/// than being absorbed.
 ///
 /// All 219 were two defects wearing different clothes:
 ///
@@ -209,7 +235,56 @@ final DateTime _seedNow = DateTime(2026, 8, 12, 10, 30);
 /// is not that. And `focus_stats` kept eight combinations alive on **0.200px**,
 /// because Flutter rounds a line box UP from the scaled metrics and the
 /// derivation rounded down.
-const Map<String, int> _seededOverflowBaseline = <String, int>{};
+const Map<String, int> _seededOverflowBaseline = <String, int>{
+  // Five drink rows on the seeded day, each one the SAME defect: the time on
+  // the right of `_buildLogItem`'s inner `Row`
+  // (`water_history_edit_screen.dart:382-395`) is a non-flex child, so when the
+  // string alone outgrows the row the `Expanded` beside it is squeezed to zero
+  // and the remainder overflows. Only at 320pt @2.0x, and the amounts are the
+  // giveaway: +7.4px for the three 7-character times ("8:00 AM") and +32px for
+  // the two 8-character ones ("10:00 AM"), i.e. one character of difference —
+  // 24.6px — in a font whose every glyph is an em wide. Shipped Inter averages
+  // about half that advance, so all five fit on a device, and the layout that
+  // would satisfy the harness (a `Flexible` time) would ellipsise a clock that
+  // currently renders in full on real hardware. Recorded rather than papered
+  // over: this is the first time anything has rendered this list at all, and
+  // the count is exact, so a sixth row or a wider one fails the gate.
+  'water_history_edit': 5,
+
+  // --- The five screens registering the last twelve surfaces uncovered (TQ-05).
+  //
+  // Recorded, not waived. Each is the FIRST time the screen has been laid out
+  // at any width, the counts are exact, and the entries exist so the numbers
+  // can only go down. Read them with the report header's caveat in mind:
+  // `flutter_test` renders in a square-em fallback font roughly twice the
+  // advance of the shipped Inter/Plus Jakarta, so an overflow that appears only
+  // at 2.0x is usually the font. An overflow at 1.0x is not — that one is a
+  // layout that has no slack at the default text size, on a phone the app
+  // claims to support.
+  //
+  // 'add_reminder' was here at 18 — FIXED, so it is gone rather than lowered.
+  // It was `_buildTimeRow`'s `Text + Spacer + chip`: the label set the width and
+  // the row had nowhere to put a formatted date ("Wed, Sep 30, 2026"). The
+  // value chip is now Expanded and ellipsizes, which cleared all of them.
+  //
+  // It got WORSE before it got better: moving the screen to `clock.now()`
+  // (TQ-02) took it from 18 to 20, because against the wall clock it had been
+  // rendering a date the pinned seed never matched — so this harness was
+  // measuring a layout users never see. That is the whole argument for TQ-02.
+  // 10. `Row > Padding > Container > Column` — +13px at 320pt @1.0x, the rest
+  // at 1.3x and above. Rendered against the seeded `seed-med-1`, so this is the
+  // populated screen, not the empty state.
+  'medicine_detail': 10,
+  // 8, all of them the `CategoryChip` row: +32px at 320pt @1.0x. A chip is
+  // exactly the widget whose text is developer-authored and short, which is why
+  // one that does not fit at the default size is worth a look.
+  'condition_detail': 8,
+  // 5, none at 1.0x — starts at 1.3x on the 320pt phone and is 2.0x-only above
+  // it. Most likely the fallback font; the entry keeps it from growing.
+  'steps_goal': 5,
+  // 4, all at 2.0x, and +2.6px of the worst one. The mildest of the five.
+  'refill_overview': 4,
+};
 
 /// Phone sizes this app must support, in LOGICAL pixels (portrait).
 /// 320x568 is the floor (iPhone SE 1st gen / small Android); 428x926 the
@@ -246,7 +321,16 @@ final Map<String, ScreenBuilder> _screens = {
   'milestones': () => MilestonesScreen(accentOf: (ext) => ext.sleep),
   'proactive_nudge': () => const ProactiveNudge(),
   'notif_settings': () => const NotificationSettingsScreen(),
-  'water_history_edit': () => WaterHistoryEditScreen(date: DateTime.now()),
+  // `_seedNow`, not `DateTime.now()`. This screen takes the day it edits as a
+  // constructor argument, and the argument is the ONE input the pinned clock
+  // cannot reach: `withClock` only redirects `clock.now()`, so a literal
+  // `DateTime.now()` here handed the screen the real calendar day while
+  // `seedQaData` wrote its 30 days of history behind `_seedNow`. Those two
+  // windows stop overlapping the moment the suite runs more than 30 days after
+  // `_seedNow` — the screen then loads a day with no logs and renders its empty
+  // state, so this registration measured an empty list and called it clean.
+  // `water_statistics_screen` already lost a 42px overflow to exactly that.
+  'water_history_edit': () => WaterHistoryEditScreen(date: _seedNow),
   // docs/ui-audit.md calls this screen "Worst. 5 overflow stripes" — and it
   // was absent from this registry entirely.
   'add_medicine': () => const NunitoAddMedicationFlow(debugInitialStep: 0),
@@ -276,7 +360,6 @@ final Map<String, ScreenBuilder> _screens = {
   'reminders': () => const RemindersScreen(),
   'settings': () => const SettingsScreen(),
   'haptics': () => const HapticSettingsScreen(),
-  'vitavibe': () => const VitaVibeSettingsScreen(),
   // In NO Dart harness before this, despite a zero-argument const constructor
   // and eleven SettingsTiles — and it is one of the three screens the redesign
   // was reported against. Registering it was the entire barrier.
@@ -311,13 +394,43 @@ final Map<String, ScreenBuilder> _screens = {
   'backup': () => const BackupScreen(),
   'alarm': () => const AlarmScreen(payload: {'title': 'Metformin 500mg extended release', 'body': 'Time for your evening dose'}),
   'trends': () => const TrendsDashboardScreen(),
-};
 
-/// A failure we care about: RenderFlex/RenderBox overflow.
-bool _isOverflow(Object e) {
-  final s = e.toString();
-  return s.contains('overflowed by') || s.contains('A RenderFlex overflowed');
-}
+  // The last twelve `*Screen` classes this registry had never named (TQ-05).
+  // Seven of them are settings surfaces whose rows are the exact shape this
+  // harness catches — a fixed-width control beside a label that grows with
+  // Dynamic Type — and no harness had ever laid one of them out.
+  // `screen_registration_guard_test.dart` is what keeps the list complete from
+  // here: a new `*Screen` has to be registered or skip-listed with a reason.
+  'add_reminder': () => const AddReminderScreen(),
+  'backup_settings': () => const BackupSettingsScreen(),
+  'reminder_categories': () => const CategoryManagementScreen(),
+  'period_reminders': () => const PeriodReminderSettingsScreen(),
+  'refill_overview': () => const RefillOverviewScreen(),
+  'sleep_schedule': () => const SleepScheduleSettingsScreen(),
+  'steps_goal': () => const StepsGoalSettingsScreen(),
+  'water_reminders': () => const WaterReminderSettingsScreen(),
+  // `autoPromptBiometrics: false`. The default raises the platform's biometric
+  // sheet on first build, which under `flutter test` is a `local_auth` channel
+  // that does not exist — and a layout harness has no business asking.
+  'pin_entry': () => const PinEntryScreen(
+        mode: PinEntryMode.setup,
+        setupTitle: 'Change PIN',
+        autoPromptBiometrics: false,
+      ),
+  // hypertension: the longest name in the library and the only entry that
+  // renders both personalised sections, exactly as the comment on
+  // `condition_library` above already claimed was the fixture of choice.
+  'condition_detail': () => ConditionDetailScreen(
+        condition:
+            conditionLibrary.firstWhere((c) => c.id == 'hypertension'),
+      ),
+  'medicine_detail': () =>
+      NunitoMedicationDetailScreen(medicine: seededMedicine(_seedNow)),
+  'health_source_detail': () => HealthSourceDetailScreen(
+        controller: seededSourceController(_seedNow),
+        sourceId: kFixtureSourceId,
+      ),
+};
 
 /// Extract "overflowed by 24 pixels on the bottom" for a readable report.
 String _overflowSummary(Object e) {
@@ -435,7 +548,7 @@ void main() {
           final caught = <String>[];
           final prevOnError = FlutterError.onError;
           FlutterError.onError = (d) {
-            if (!_isOverflow(d.exception)) {
+            if (!isOverflowError(d.exception)) {
               buildErrors.putIfAbsent(
                   name, () => d.exception.toString().split('\n').first);
               return;
@@ -474,11 +587,11 @@ void main() {
             //
             // This harness was blind to the bug it existed to catch: a Text
             // that soft-wraps to three lines is, to Flutter, a perfectly legal
-            // layout — nothing throws, so `_isOverflow` never saw it. Scoped to
-            // AppHeader because header text is chrome, not content: a title or
-            // a greeting that needs two lines is broken by definition.
-            final wrapped =
-                collectWrappedText(tester, find.byType(AppHeader));
+            // layout — nothing throws, so `isOverflowError` never saw it.
+            // Scoped to AppHeader because header text is chrome, not content:
+            // a title or a greeting that needs two lines is broken by
+            // definition.
+            final wrapped = collectWrappedText(find.byType(AppHeader));
             for (final w in wrapped) {
               wraps.putIfAbsent(name, () => []).add('${dev.key} @${scale}x  $w');
             }
@@ -488,7 +601,7 @@ void main() {
             // The header scope above is the only place this harness ever
             // looked, and it is why the settings screenshots got through: an
             // unclamped subtitle running to four lines is a legal layout, so
-            // `_isOverflow` cannot see it, and a row body is not inside an
+            // `isOverflowError` cannot see it, and a row body is not inside an
             // AppHeader.
             //
             // Allowance 2, not 1. A row is not chrome — Android's settings
@@ -496,7 +609,7 @@ void main() {
             // the subtext "should be only one line". Applying the looser of the
             // two uniformly catches the three- and four-line rows without the
             // gate having to decide which slot each RichText belongs to.
-            for (final w in collectWrappedText(tester, find.byType(SettingsTile),
+            for (final w in collectWrappedText(find.byType(SettingsTile),
                 defaultAllowance: 2)) {
               rowWraps.putIfAbsent(name, () => []).add('${dev.key} @${scale}x  $w');
             }
@@ -514,7 +627,7 @@ void main() {
             // Clamping the title to 2 and the subtitle to 1 therefore moves the
             // signal from the first bucket to this one. Gating only the first
             // would have looked like a fix and measured nothing.
-            for (final t in collectTruncatedText(tester, find.byType(SettingsTile))) {
+            for (final t in collectTruncatedText(find.byType(SettingsTile))) {
               rowCuts.putIfAbsent(name, () => []).add('${dev.key} @${scale}x  $t');
             }
 
@@ -523,10 +636,25 @@ void main() {
             // ellipsizes, so this needs a human read. A developer-authored
             // string in the list is a layout bug.
             if (scale == 1.0) {
-              for (final t in collectTruncatedText(tester, find.byType(MaterialApp))) {
+              for (final t in collectTruncatedText(find.byType(MaterialApp))) {
                 truncations.putIfAbsent(name, () => []).add('${dev.key}  $t');
               }
             }
+            // Some screens guard their init with `.timeout(6s)`, which leaves
+            // a pending Timer that trips the teardown assertion. Advancing the
+            // fake clock past it is instant (no real wall time) and lets those
+            // timers fire so the harness reports overflows, not timer noise.
+            //
+            // This pump belongs INSIDE the try, before onError is restored and
+            // before the drain below. It used to sit after both, so anything
+            // that overflowed on this frame — the state the user actually ends
+            // up in, once init has resolved — was recorded by the binding and
+            // picked up by the NEXT combination's drain, i.e. reported against
+            // the wrong device and scale; on the last combination there was no
+            // next drain at all and it surfaced as a tearDownAll failure. That
+            // is how a PersonalBestCard row that overflowed by 75px at 320pt
+            // @1.0x got reported as "+37px at 428pt @2.0x".
+            await tester.pump(const Duration(seconds: 7));
           } catch (e) {
             unrenderable.putIfAbsent(name, () => e.toString().split('\n').first);
           } finally {
@@ -536,7 +664,7 @@ void main() {
           // Drain anything the framework recorded too.
           Object? ex;
           while ((ex = tester.takeException()) != null) {
-            if (_isOverflow(ex!)) caught.add(_overflowSummary(ex));
+            if (isOverflowError(ex!)) caught.add(_overflowSummary(ex));
           }
 
           for (final line in caught) {
@@ -545,14 +673,18 @@ void main() {
                 .add('${dev.key} @${scale}x  $line');
           }
 
-          // Some screens guard their init with `.timeout(6s)`, which leaves a
-          // pending Timer that trips the teardown assertion. Advancing the
-          // fake clock past it is instant (no real wall time) and lets those
-          // timers fire so the harness reports overflows, not timer noise.
-          await tester.pump(const Duration(seconds: 7));
-
           // Reset so the next combination starts clean.
           await tester.pumpWidget(const SizedBox.shrink());
+          // …and let the teardown's own timers run. Drift's
+          // `StreamQueryStore.markAsClosed` arms a zero-duration timer when the
+          // last listener goes away, so a screen built on a `StreamBuilder`
+          // over a Drift query (`CategoryManagementScreen`) died on "A Timer is
+          // still pending after the widget tree was disposed" — a teardown
+          // artefact of unsubscribing, reported as if the screen were broken.
+          // A duration, not a bare `pump()`: the binding only advances its
+          // fake clock when it is given one, and a zero-duration FakeTimer
+          // fires on elapse, not on a microtask drain.
+          await tester.pump(const Duration(milliseconds: 1));
           }
         }
       });
@@ -826,8 +958,8 @@ void main() {
             'to a second line; its status line may not, and neither may run to '
             'a third. This is the gate that was missing when the three '
             'screenshots got through — the header scope above does not contain '
-            'row bodies, and a soft wrap throws nothing for `_isOverflow` to '
-            'catch.\n${rowWraps.keys.join(', ')}');
+            'row bodies, and a soft wrap throws nothing for '
+            '`isOverflowError` to catch.\n${rowWraps.keys.join(', ')}');
     expect(unrenderable, isEmpty,
         reason: 'Screens could not be constructed at all — see above.');
     // `blank` was collected at :298 and printed, but never asserted — so a

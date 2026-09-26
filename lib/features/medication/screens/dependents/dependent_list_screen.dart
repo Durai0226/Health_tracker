@@ -65,7 +65,6 @@ class _DependentListScreenState extends State<DependentListScreen> {
   }
 
   Future<void> _deleteDependent(DependentProfile dependent) async {
-    final ext = AppColorsExt.of(context);
     final confirm = await AppBottomSheet.confirm(
       context,
       title: 'Delete ${dependent.name}?',
@@ -86,13 +85,7 @@ class _DependentListScreenState extends State<DependentListScreen> {
     }
     _loadDependents();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: ext.surfaceElevated,
-          content: Text('${dependent.name} removed',
-              style: TextStyle(color: ext.textPrimary)),
-        ),
-      );
+      context.toastSuccess('${dependent.name} removed');
     }
   }
 
@@ -173,8 +166,8 @@ class _DependentListScreenState extends State<DependentListScreen> {
               height: 48,
               decoration: BoxDecoration(color: med.container, shape: BoxShape.circle),
               child: Center(
-                child: Text(dependent.relationship.icon,
-                    style: const TextStyle(fontSize: 22)),
+                child: Icon(relationshipSymbol(dependent.relationship),
+                    size: 22, color: med.onContainer),
               ),
             ),
             const SizedBox(width: AppSpacing.md),

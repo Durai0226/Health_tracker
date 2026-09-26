@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
-import '../theme/nunito_theme.dart';
 import '../models/medicine_enums.dart';
+import '../theme/nunito_theme.dart';
+import '../../../core/design/on_arbitrary_fill.dart';
 
 /// Visual representation of a pill/medication with customizable shape and color
 class NunitoPillVisual extends StatelessWidget {
@@ -74,6 +74,10 @@ class _PillPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
 
+    // Specular highlight and (below) the score line are drawn ON the user's own
+    // pill colour, which is not a theme token — a physical gloss is white and a
+    // groove is a shadow regardless of light/dark. Same reason `_getContrastColor`
+    // stays: it is measured against that arbitrary fill, not against a surface.
     final highlightPaint = Paint()
       ..color = Colors.white.withOpacity(0.4)
       ..style = PaintingStyle.fill;
@@ -299,10 +303,10 @@ class _PillPainter extends CustomPainter {
     );
   }
 
-  Color _getContrastColor(Color color) {
-    final luminance = (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255;
-    return luminance > 0.5 ? Colors.black87 : Colors.white;
-  }
+  /// See [onArbitraryFill] — this used the YIQ/NTSC luma formula, which
+  /// disagrees with WCAG relative luminance and chose white on five of the
+  /// nineteen medicine colours where black scored materially higher.
+  Color _getContrastColor(Color color) => onArbitraryFill(color);
 
   @override
   bool shouldRepaint(covariant _PillPainter oldDelegate) {
@@ -333,67 +337,5 @@ class NunitoPillIndicator extends StatelessWidget {
       size: size,
       showShadow: false,
     );
-  }
-}
-
-/// Dosage form icon widget
-class NunitoDosageIcon extends StatelessWidget {
-  final DosageForm dosageForm;
-  final double size;
-  final Color? color;
-
-  const NunitoDosageIcon({
-    super.key,
-    required this.dosageForm,
-    this.size = 24,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Icon(
-      _getIcon(),
-      size: size,
-      color: color ?? NunitoTheme.primary,
-    );
-  }
-
-  IconData _getIcon() {
-    switch (dosageForm) {
-      case DosageForm.tablet:
-        return Symbols.medication_rounded;
-      case DosageForm.capsule:
-        return Symbols.medication_liquid_rounded;
-      case DosageForm.syrup:
-        return Symbols.local_drink_rounded;
-      case DosageForm.injection:
-        return Symbols.vaccines_rounded;
-      case DosageForm.drops:
-        return Symbols.water_drop_rounded;
-      case DosageForm.cream:
-        return Symbols.sanitizer_rounded;
-      case DosageForm.inhaler:
-        return Symbols.air_rounded;
-      case DosageForm.patch:
-        return Symbols.healing_rounded;
-      case DosageForm.suppository:
-        return Symbols.medication_rounded;
-      case DosageForm.powder:
-        return Symbols.grain_rounded;
-      case DosageForm.spray:
-        return Symbols.wb_cloudy_rounded;
-      case DosageForm.gel:
-        return Symbols.opacity_rounded;
-      case DosageForm.ointment:
-        return Symbols.healing_rounded;
-      case DosageForm.lozenge:
-        return Symbols.circle_rounded;
-      case DosageForm.solution:
-        return Symbols.science_rounded;
-      case DosageForm.suspension:
-        return Symbols.science_rounded;
-      case DosageForm.other:
-        return Symbols.medical_services_rounded;
-    }
   }
 }

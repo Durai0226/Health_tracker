@@ -62,12 +62,36 @@ class HydrationPacer {
       );
     }
 
-    final wake = wakeMinutes.clamp(0, 24 * 60);
-    final sleep = sleepMinutes.clamp(wake + 1, 24 * 60);
-    final wakingSpan = sleep - wake;
+    // The waking window may WRAP past midnight — a night-shift profile wakes at
+    // 22:00 and sleeps at 06:00. The old code was
+    // `sleepMinutes.clamp(wake + 1, 1440)`, which had two failures:
+    //
+    //   1. `wakeMinutes: 1440` threw ArgumentError outright (lowerLimit 1441 >
+    //      upperLimit 1440), taking the whole dashboard card with it.
+    //   2. For any wrapped window it forced sleep down to `wake + 1`, making the
+    //      waking span ONE MINUTE. `elapsed` then pinned to 0, expected-by-now
+    //      was always 0, and a night-shift worker was permanently reported as
+    //      "ahead of pace" and never nudged. Silent, and the worst direction to
+    //      be wrong in.
+    //
+    // Same convention as [QuietHours.isAllowedMinute], which already handles
+    // the wrap for the reminder window.
+    const dayMinutes = 24 * 60;
+    final wake = wakeMinutes.clamp(0, dayMinutes);
+    final sleepRaw = sleepMinutes.clamp(0, dayMinutes);
+
+    // Unwrap onto a monotonic line: a wrapped window becomes wake..sleep+1440,
+    // and "now" is shifted into the same frame when it sits after midnight.
+    final wrapped = sleepRaw <= wake;
+    final sleep = wrapped ? sleepRaw + dayMinutes : sleepRaw;
+    final now = (wrapped && nowMinutes < wake) ? nowMinutes + dayMinutes : nowMinutes;
+
+    // A zero-length window (wake == sleep, e.g. both midnight) has no pace to
+    // measure; treat the whole day as awake rather than dividing by zero.
+    final wakingSpan = sleep - wake <= 0 ? dayMinutes : sleep - wake;
 
     // Fraction of the waking day elapsed (0 before waking, 1 at/after sleep).
-    final elapsed = ((nowMinutes - wake) / wakingSpan).clamp(0.0, 1.0);
+    final elapsed = ((now - wake) / wakingSpan).clamp(0.0, 1.0);
 
     final expected = (goalMl * elapsed).round();
     final deficit = expected - intakeMl;

@@ -107,6 +107,15 @@ class DailyWaterData {
   final bool goalReached;
   final DateTime? goalReachedAt;
 
+  /// Ids of drinks deleted from this day, kept after the row itself is gone.
+  ///
+  /// The cloud merge is a union by log id, so a drink the *other* copy of the
+  /// day still holds comes straight back on the next sync unless the deletion
+  /// is recorded. That bites on a single device too: the cloud keeps whatever
+  /// was uploaded before the delete, and the next download merges it back in.
+  /// Carried through [toJson] so the deletion travels with the day.
+  final Set<String> deletedLogIds;
+
   DailyWaterData({
     required this.id,
     required this.date,
@@ -118,7 +127,9 @@ class DailyWaterData {
     this.alcoholicDrinksCount = 0,
     this.goalReached = false,
     this.goalReachedAt,
-  }) : logs = logs ?? [];
+    Set<String>? deletedLogIds,
+  })  : logs = logs ?? [],
+        deletedLogIds = deletedLogIds ?? const <String>{};
 
   double get progress => dailyGoalMl > 0 ? effectiveHydrationMl / dailyGoalMl : 0.0;
   double get rawProgress => dailyGoalMl > 0 ? totalIntakeMl / dailyGoalMl : 0.0;
@@ -146,6 +157,11 @@ class DailyWaterData {
     return distribution;
   }
 
+  /// [clearGoalReachedAt] exists because `goalReachedAt: null` cannot mean
+  /// "unset it" in a `??`-style copyWith — null is indistinguishable from
+  /// "argument omitted". Editing or deleting a log can drop a day back under
+  /// its goal, and without this the day kept a "reached at" timestamp while
+  /// reporting `goalReached: false`.
   DailyWaterData copyWith({
     int? dailyGoalMl,
     int? totalIntakeMl,
@@ -155,6 +171,8 @@ class DailyWaterData {
     int? alcoholicDrinksCount,
     bool? goalReached,
     DateTime? goalReachedAt,
+    bool clearGoalReachedAt = false,
+    Set<String>? deletedLogIds,
   }) {
     return DailyWaterData(
       id: id,
@@ -166,7 +184,9 @@ class DailyWaterData {
       totalCaffeineMg: totalCaffeineMg ?? this.totalCaffeineMg,
       alcoholicDrinksCount: alcoholicDrinksCount ?? this.alcoholicDrinksCount,
       goalReached: goalReached ?? this.goalReached,
-      goalReachedAt: goalReachedAt ?? this.goalReachedAt,
+      goalReachedAt:
+          clearGoalReachedAt ? null : (goalReachedAt ?? this.goalReachedAt),
+      deletedLogIds: deletedLogIds ?? this.deletedLogIds,
     );
   }
 
@@ -181,6 +201,9 @@ class DailyWaterData {
     'alcoholicDrinksCount': alcoholicDrinksCount,
     'goalReached': goalReached,
     'goalReachedAt': goalReachedAt?.toIso8601String(),
+    // Omitted when empty — the overwhelming majority of days have no deleted
+    // drinks, and every one of those documents is a cloud write.
+    if (deletedLogIds.isNotEmpty) 'deletedLogIds': deletedLogIds.toList(),
   };
 
   factory DailyWaterData.fromJson(Map<String, dynamic> json) => DailyWaterData(
@@ -198,6 +221,9 @@ class DailyWaterData {
     goalReachedAt: json['goalReachedAt'] != null
         ? DateTime.parse(json['goalReachedAt'])
         : null,
+    deletedLogIds: (json['deletedLogIds'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toSet(),
   );
 }
 
@@ -310,12 +336,22 @@ class HydrationInsight {
     required int hourOfDay,
     required int avgDailyMl,
     required int goalMl,
+    /// True when [goalMl] is a fluid CEILING (dialysis, heart failure) rather
+    /// than a target. Insights that celebrate reaching the number, or urge
+    /// drinking more to reach it, are actively harmful in that mode.
+    bool isRestricted = false,
   }) {
     final insights = <HydrationInsight>[];
     final now = DateTime.now();
 
+    // Every "drink more" / "you reached it" insight below is gated on
+    // !isRestricted. Under a fluid ceiling these invert from encouragement into
+    // advice to breach a clinical limit: "Below Average Intake — try setting
+    // more reminders" and the afternoon catch-up nudge are the clearest cases,
+    // and "Goal Achieved!" celebrates the breach itself.
+
     // Morning hydration tip
-    if (hourOfDay >= 6 && hourOfDay <= 9 && todayProgress < 0.1) {
+    if (!isRestricted && hourOfDay >= 6 && hourOfDay <= 9 && todayProgress < 0.1) {
       insights.add(HydrationInsight(
         id: 'morning_hydrate_${now.day}',
         type: InsightType.tip,
@@ -337,7 +373,7 @@ class HydrationInsight {
     }
 
     // Streak celebration
-    if (currentStreak == 7) {
+    if (!isRestricted && currentStreak == 7) {
       insights.add(HydrationInsight(
         id: 'streak_7_${now.day}',
         type: InsightType.achievement,
@@ -348,7 +384,7 @@ class HydrationInsight {
     }
 
     // Afternoon reminder
-    if (hourOfDay >= 14 && hourOfDay <= 16 && todayProgress < 0.5) {
+    if (!isRestricted && hourOfDay >= 14 && hourOfDay <= 16 && todayProgress < 0.5) {
       insights.add(HydrationInsight(
         id: 'afternoon_reminder_${now.day}',
         type: InsightType.reminder,
@@ -359,7 +395,7 @@ class HydrationInsight {
     }
 
     // Below average warning
-    if (avgDailyMl > 0 && avgDailyMl < goalMl * 0.7) {
+    if (!isRestricted && avgDailyMl > 0 && avgDailyMl < goalMl * 0.7) {
       insights.add(HydrationInsight(
         id: 'below_avg_${now.day}',
         type: InsightType.suggestion,
@@ -370,7 +406,7 @@ class HydrationInsight {
     }
 
     // Evening completion
-    if (hourOfDay >= 18 && todayProgress >= 1.0) {
+    if (!isRestricted && hourOfDay >= 18 && todayProgress >= 1.0) {
       insights.add(HydrationInsight(
         id: 'goal_complete_${now.day}',
         type: InsightType.achievement,

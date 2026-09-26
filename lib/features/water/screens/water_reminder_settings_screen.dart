@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/services/battery_optimization_service.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/reminder_reschedule_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -28,10 +31,14 @@ class _WaterReminderSettingsScreenState
   bool _useSleepSchedule = false;
   bool _isSaving = false;
 
+  /// Null until checked; true when Android will let us run in the background.
+  bool? _batteryExempt;
+
   @override
   void initState() {
     super.initState();
     _loadExisting();
+    _checkBatteryExemption();
   }
 
   void _loadExisting() {
@@ -57,9 +64,12 @@ class _WaterReminderSettingsScreenState
   int _compareTimes(TimeOfDay a, TimeOfDay b) =>
       (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute);
 
-  void _snack(String message, {bool error = false, bool success = false}) {
+  void _snack(String message,
+      {bool error = false, bool success = false, bool warning = false}) {
     if (error) {
       context.toastError(message);
+    } else if (warning) {
+      context.toastWarning(message);
     } else if (success) {
       context.toastSuccess(message);
     } else {
@@ -137,10 +147,29 @@ class _WaterReminderSettingsScreenState
 
     if (!_isEnabled) {
       _snack('Water reminders turned off', success: true);
-    } else if (scheduled == 0 &&
-        _pauseWhenGoalReached &&
-        WaterService.getTodayData().goalReached) {
-      _snack('Saved — paused until tomorrow (goal reached)', success: true);
+    } else if (scheduled == 0) {
+      // Zero is never a success while reminders are ON: nothing was armed and
+      // the user was being told it had worked. Name the reason when this screen
+      // can know it, and warn rather than congratulate when it cannot.
+      if (WaterService.isFluidRestricted) {
+        // ReminderRescheduleService refuses to schedule at all in this mode —
+        // nudging someone on a prescribed limit to drink more is against the
+        // advice they were given.
+        _snack('Saved — reminders stay off while a fluid limit is set',
+            warning: true);
+      } else if (WaterService.getTodayData().goalReached) {
+        // Both routes to this: `pauseWhenGoalReached`, and the pacing prune,
+        // which drops every slot once the remaining gap is zero.
+        _snack('Saved — paused until tomorrow (goal reached)', success: true);
+      } else {
+        // Left: a notification permission that is not granted, and a schedule
+        // whose every time falls outside the wake-to-bedtime window. Neither is
+        // knowable from here, so the message says what IS known.
+        _snack(
+            'Saved, but no reminders could be scheduled. Check notification '
+            'permissions and your reminder times.',
+            warning: true);
+      }
     } else {
       _snack('$scheduled water reminders scheduled', success: true);
     }
@@ -195,6 +224,8 @@ class _WaterReminderSettingsScreenState
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 _buildAdaptiveCard(ext),
+                const SizedBox(height: AppSpacing.lg),
+                _buildReliabilityCard(ext),
                 const SizedBox(height: AppSpacing.xl),
                 AppButton(
                   label: 'Save Water Reminders',
@@ -388,7 +419,7 @@ class _WaterReminderSettingsScreenState
           ),
           const SizedBox(height: AppSpacing.sm),
           AppButton(
-            label: 'Generate Times',
+            label: 'Generate times',
             variant: AppButtonVariant.tonal,
             leadingIcon: Symbols.auto_fix_high_rounded,
             fullWidth: true,
@@ -458,6 +489,7 @@ class _WaterReminderSettingsScreenState
                 style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
             trailing: IconButton(
               icon: Icon(Symbols.close_rounded, color: ext.mark(ext.error)),
+              tooltip: 'Remove reminder time',
               onPressed: () => _removeTime(index),
             ),
           );

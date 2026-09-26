@@ -25,12 +25,17 @@ import '../../settings/screens/settings_screen.dart';
 import '../../insights/screens/proactive_nudge.dart';
 import '../widgets/log_something_sheet.dart';
 import '../../../widgets/smart_ad_widgets.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// The unified landing screen — one calm "today" snapshot across every feature.
 /// The only greeting in the app.
 class HomeDashboard extends StatefulWidget {
   /// Switches the shell destination; [healthTab] selects Medicine(0)/Water(1).
   final void Function(int index, {int? healthTab}) onNavigate;
+
+  /// Passed to [ProactiveNudge] so its tap switches to the Trends tab instead
+  /// of pushing a duplicate over it.
+  final VoidCallback? onOpenTrends;
 
   /// Bumped by the shell whenever Home is re-selected. Lets the sync-only
   /// surfaces (reminders roll-up + card) refresh when the user returns to Home,
@@ -40,6 +45,7 @@ class HomeDashboard extends StatefulWidget {
   const HomeDashboard({
     super.key,
     required this.onNavigate,
+    this.onOpenTrends,
     this.refreshTick = 0,
   });
 
@@ -65,6 +71,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
   // The daily-briefing sentence is loaded once (like the old AiInsightCard) and
   // reset on pull-to-refresh, so it doesn't re-run on every unrelated rebuild.
   Future<String?>? _briefingFuture;
+
+  /// What [_briefingFuture] was computed FROM. A cache with a lifetime but no
+  /// validity key goes stale in place: the sentence interpolates
+  /// `clock.now().hour`, so a "Good morning" greeting survived into the evening
+  /// for anyone who left Home open, and only pull-to-refresh could clear it.
+  int? _briefingRevision;
+  int? _briefingHour;
 
   // The header's profile-chip label, cached exactly like _medicineData above:
   // rebuilt only when the active dependent actually changes. It used to be
@@ -128,7 +141,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
     super.didUpdateWidget(oldWidget);
     // Returning to Home recomputes the sync parts (reminders have no notifier).
     if (oldWidget.refreshTick != widget.refreshTick && mounted) {
-      setState(() {});
+      setState(() {
+        // The briefing also counts water, focus minutes and reminders — none of
+        // which bump the medicine revision — so coming back to Home is the only
+        // signal that those may have moved. Without this the validity key alone
+        // would hold a sentence written before the user logged anything.
+        _briefingFuture = null;
+      });
     }
   }
 
@@ -215,8 +234,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
     // after a skip, with nothing the user could do about it.
     final medDone = summary?.isDayResolved ?? true;
 
-    final goal = WaterService.getDailyGoal();
     final water = WaterService.getTodayData();
+    // The goal today was JUDGED against, not the one the profile would compute
+    // now. `goalReached` is stamped on the day row against that row's own
+    // `dailyGoalMl`, and the weather refresh moves that number without touching
+    // the profile — so dividing by the profile let this one widget contradict
+    // itself: on a hot day the ring captioned 100% while the water pillar
+    // stayed outstanding, and on a cool one the pillar closed at 99%.
+    final goal = WaterService.goalForDay(water);
     final waterMl = water.effectiveHydrationMl;
     // Same rule as the medicine ring: this caption sits inside the arc, so it
     // must not read 100% at 2,490 of 2,500 ml while the ring is visibly open.
@@ -465,11 +490,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
                                 color: ext.mark(ext.brand),
                                 fontWeight: FontWeight.w800,
                                 fontFeatures: kTabular)),
-                        Text('OF 4',
-                            maxLines: 1,
-                            softWrap: false,
-                            style: tt.labelSmall?.copyWith(
-                                color: ext.textTertiary, letterSpacing: 0.5)),
+                        const AppEyebrow('OF 4',
+                            maxLines: 1, softWrap: false),
                       ],
                     ),
                   ),
@@ -721,7 +743,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 delegate: SliverChildListDelegate([
                   // 2 — self-gating attention/urgent nudge. Stays on top: it
                   // is absent unless something genuinely needs attention.
-                  const ProactiveNudge(),
+                  ProactiveNudge(onOpenTrends: widget.onOpenTrends),
                   const SizedBox(height: AppSpacing.md),
                   // 3 — the single elevated focal card. Promoted above the
                   // briefing so the FIRST thing under the title is the next
@@ -902,7 +924,17 @@ class _HomeDashboardState extends State<HomeDashboard> {
   /// Builds the numeric roll-up, then the summary sentence. The sentence itself
   /// is synchronous; only gathering the numbers is async.
   Future<String?> _briefingSentence() {
-    return _briefingFuture ??= () async {
+    final revision = MedicineCleanStorageService.revision.value;
+    final hour = clock.now().hour;
+    final cached = _briefingFuture;
+    if (cached != null &&
+        _briefingRevision == revision &&
+        _briefingHour == hour) {
+      return cached;
+    }
+    _briefingRevision = revision;
+    _briefingHour = hour;
+    return _briefingFuture = () async {
       final d = await _briefingData();
       return const CoachText().dailyBriefing(
         medsTaken: d.medsTaken,
@@ -934,8 +966,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final medsTotal = s.totalPlanned;
     final medsTaken = s.taken;
 
-    final goal = WaterService.getDailyGoal();
     final water = WaterService.getTodayData();
+    // Today's stored goal, for the reason spelled out in _pillarStats: the
+    // briefing strip sits above the pulse row, so both must divide by one
+    // number.
+    final goal = WaterService.goalForDay(water);
     final waterPct = goal > 0 ? Pct.of(water.effectiveHydrationMl / goal) : 0;
 
     final focusMinutes = _focus.todayMinutes;
@@ -967,7 +1002,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
-  // ---- quick log deck ------------------------------------------------------
+  // ---- actions ---------------------------------------------------------
 
   void _addReminder() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AddReminderScreen()))
@@ -1216,7 +1251,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
   }
 
   Widget _waterCardBody(AppColorsExt ext, DailyWaterData data) {
-    final goal = WaterService.getDailyGoal();
+    // The row's own goal, so "remaining", the bar and the weekly dots agree
+    // with the pulse row and with `goalReached` (see _pillarStats). It falls
+    // back to the profile for a day with no row, which is what keeps the
+    // "set a hydration goal" CTA below reachable.
+    final goal = WaterService.goalForDay(data);
 
     // No goal configured → CTA into the hydration setup flow.
     if (goal <= 0) {
@@ -1239,8 +1278,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final now = clock.now();
     int daysHit = 0;
     for (var i = 0; i < 7; i++) {
-      final d = DateTime(now.year, now.month, now.day)
-          .subtract(Duration(days: i));
+      final d = dayOffset(now, -i);
       final dd = WaterService.getDataForDate(d);
       if (dd == null) continue;
       final g = dd.dailyGoalMl > 0 ? dd.dailyGoalMl : goal;
@@ -1294,9 +1332,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
   Widget _weeklyStripBody(AppColorsExt ext) {
     final tt = Theme.of(context).textTheme;
     final now = clock.now();
-    final days = List<DateTime>.generate(
-        7, (i) => DateTime(now.year, now.month, now.day)
-            .subtract(Duration(days: 6 - i)));
+    final days = List<DateTime>.generate(7, (i) => dayOffset(now, -(6 - i)));
     final labels =
         days.map((d) => DateFormats.weekdayNarrow.format(d).substring(0, 1)).toList();
 
@@ -1304,7 +1340,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final waterValues = days.map((d) {
       final data = WaterService.getDataForDate(d);
       if (data == null) return 0.0;
-      final goal = data.dailyGoalMl > 0 ? data.dailyGoalMl : WaterService.getDailyGoal();
+      final goal = WaterService.goalForDay(data);
       if (goal <= 0) return 0.0;
       return (data.effectiveHydrationMl / goal).clamp(0.0, 1.0);
     }).toList();
@@ -1717,142 +1753,6 @@ class _StaggeredKpiState extends State<_StaggeredKpi> {
       label: widget.label,
       accent: widget.accent,
       muted: widget.muted,
-    );
-  }
-}
-
-/// One colorful capture tile in the quick-log deck: an accent badge + glyph over
-/// a live value (or an inviting "Log"). Press → scale 0.97 + an accent flash and
-/// the resting shadow drops. Reduce-motion → the scale is instant.
-class _QuickLogTile extends StatefulWidget {
-  final AccentSwatch accent;
-  final IconData icon;
-  final String label;
-  final String? value; // null / empty → renders "Log" in the accent mark
-  final bool done; // today's target met → completion dot
-  final VoidCallback onTap;
-
-  const _QuickLogTile({
-    required this.accent,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.done,
-    required this.onTap,
-  });
-
-  @override
-  State<_QuickLogTile> createState() => _QuickLogTileState();
-}
-
-class _QuickLogTileState extends State<_QuickLogTile> {
-  bool _pressed = false;
-
-  void _set(bool v) => setState(() => _pressed = v);
-
-  @override
-  Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    final reduce = MediaQuery.of(context).disableAnimations;
-    final filled = widget.value != null && widget.value!.trim().isNotEmpty;
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => _set(true),
-      onTapUp: (_) => _set(false),
-      onTapCancel: () => _set(false),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: reduce ? Duration.zero : AppMotion.fast,
-        curve: AppMotion.standard,
-        child: AspectRatio(
-          aspectRatio: 0.95,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: ext.surface,
-              borderRadius: AppRadius.brLg,
-              border: Border.all(color: ext.outline, width: 1),
-              boxShadow: _pressed ? null : AppShadows.resting(context),
-            ),
-            child: Stack(
-              children: [
-                if (_pressed)
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: widget.accent.container.withOpacity(0.6),
-                        borderRadius: AppRadius.brLg,
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                                color: widget.accent.container,
-                                borderRadius: AppRadius.brSm),
-                            child: Icon(widget.icon,
-                                size: 20, color: widget.accent.onContainer),
-                          ),
-                          const Spacer(),
-                          if (widget.done)
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                  color: ext.mark(widget.accent),
-                                  shape: BoxShape.circle),
-                            ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              filled ? widget.value!.trim() : 'Log',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: tt.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                fontFeatures: kTabular,
-                                color: filled
-                                    ? ext.textPrimary
-                                    : ext.mark(widget.accent),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(widget.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: tt.labelSmall
-                                  ?.copyWith(color: ext.textSecondary)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

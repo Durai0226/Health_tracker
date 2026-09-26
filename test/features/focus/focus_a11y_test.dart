@@ -33,6 +33,19 @@ import 'package:tablet_remainder/features/focus/services/tag_service.dart';
 import '../../support/fake_audio_engine.dart';
 import '../../support/perf_rating.dart';
 
+/// A RenderFlex/RenderBox overflow, which belongs to `responsive_overflow_test`
+/// and not to this file.
+///
+/// Everything else that reaches `FlutterError.onError` here means the surface
+/// did not render. That distinction is the whole point: this harness used to
+/// install `FlutterError.onError = (_) {}` and swallow the lot, so a `build()`
+/// that threw left an `ErrorWidget` on screen, scheduled no animation and
+/// exposed no tap target — and both dimensions scored it clean.
+bool _isOverflow(Object e) {
+  final s = e.toString();
+  return s.contains('overflowed by') || s.contains('A RenderFlex overflowed');
+}
+
 /// Can Focus be used without sight, and can it be used without motion?
 ///
 /// ## Why this harness exists
@@ -184,18 +197,35 @@ void main() {
 
   /// Pump [build] inside the app shell, optionally with reduce-motion on.
   ///
+  /// Returns null when the surface rendered, or a one-line description of why it
+  /// did not. Every caller MUST record that description into [couldNotBuild],
+  /// which `tearDownAll` gates on — a surface that never rendered has no unnamed
+  /// controls and schedules no animation, so returning early without recording
+  /// makes "nothing was wrong" and "nothing was inspected" the same green.
+  ///
+  /// Both failure routes are covered. A throw that escapes `pumpWidget` lands in
+  /// the `catch`; a throw inside `build()` does NOT — the framework catches it,
+  /// reports it to `FlutterError.onError` and paints an `ErrorWidget`, so the
+  /// handler below keeps anything that is not an overflow instead of dropping it.
+  ///
   /// The `MediaQuery` override goes in `MaterialApp.builder`, not above
   /// `MaterialApp`: `WidgetsApp` inserts its own `MediaQuery.fromView` and would
   /// discard an ancestor one, which would silently make the reduce-motion half of
   /// this harness test nothing at all.
-  Future<bool> pumpSurface(
+  Future<String?> pumpSurface(
     WidgetTester tester,
     Widget Function() build, {
     bool reduceMotion = false,
     double textScale = 1.0,
   }) async {
+    final failures = <String>[];
     final prev = FlutterError.onError;
-    FlutterError.onError = (_) {}; // overflow is the responsive sweep's job
+    FlutterError.onError = (d) {
+      // Overflow is the responsive sweep's job; anything else is this surface
+      // failing to render, and that must not be silent.
+      if (_isOverflow(d.exception)) return;
+      failures.add(d.exception.toString().split('\n').first);
+    };
     try {
       await withClock(Clock.fixed(DateTime(2026, 3, 14, 13, 0)), () async {
         await tester.pumpWidget(MaterialApp(
@@ -219,12 +249,18 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
         await tester.pump(const Duration(milliseconds: 350));
       });
-      return true;
-    } catch (_) {
-      return false;
+    } catch (e) {
+      failures.add(e.toString().split('\n').first);
     } finally {
       FlutterError.onError = prev;
     }
+    // Anything the binding recorded on its own, drained so it is reported here
+    // rather than as a bare teardown failure with no surface name on it.
+    Object? ex;
+    while ((ex = tester.takeException()) != null) {
+      if (!_isOverflow(ex!)) failures.add(ex.toString().split('\n').first);
+    }
+    return failures.isEmpty ? null : failures.first;
   }
 
   Future<void> unmount(WidgetTester tester) async {
@@ -278,7 +314,14 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      if (!await pumpSurface(tester, build, reduceMotion: true)) return;
+      final failure = await pumpSurface(tester, build, reduceMotion: true);
+      if (failure != null) {
+        // A surface that never rendered scheduled nothing, so the count below
+        // would read 0 and this gate would call it respectful of reduce-motion.
+        // Recorded and gated in tearDownAll instead of returning silently.
+        couldNotBuild['$name (reduce-motion)'] = failure;
+        return;
+      }
 
       // Give every FINITE animation room to finish. Anything still scheduled
       // after this is repeating, i.e. it ignored the preference.
@@ -303,7 +346,13 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      if (!await pumpSurface(tester, build)) return;
+      final failure = await pumpSurface(tester, build);
+      if (failure != null) {
+        // Same hazard mirrored: an unbuilt surface animates nothing, which this
+        // half reads as "the motion was deleted". Record the real reason.
+        couldNotBuild['$name (motion allowed)'] = failure;
+        return;
+      }
       for (var i = 0; i < 12; i++) {
         await tester.pump(const Duration(milliseconds: 500));
       }
@@ -342,7 +391,8 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final handle = tester.ensureSemantics();
-      if (!await pumpSurface(tester, build, textScale: scale)) {
+      final failure = await pumpSurface(tester, build, textScale: scale);
+      if (failure != null) {
         handle.dispose();
         // A surface that cannot build leaves BOTH a11y dimensions unmeasured
         // for it, and unmeasured must never read as clean. Recorded and gated
@@ -351,7 +401,7 @@ void main() {
         // make one defect cost two findings.
         couldNotBuild['$name@${scale}x'] =
             'threw while building, so its tap targets and its motion were '
-            'never inspected';
+            'never inspected: $failure';
         return;
       }
 
@@ -458,8 +508,14 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final handle = tester.ensureSemantics();
-    if (!await pumpSurface(tester, () => const FocusScreen())) {
+    final failure = await pumpSurface(tester, () => const FocusScreen());
+    if (failure != null) {
       handle.dispose();
+      // Not a silent return: with no tree there are no labels, so `described`
+      // below would be false and `rawClock` false too — the screen would be
+      // recorded as neither undescribed nor offending, which is the shape of a
+      // pass. Gated in tearDownAll with the reason attached.
+      couldNotBuild['focus (timer readout)'] = failure;
       return;
     }
 

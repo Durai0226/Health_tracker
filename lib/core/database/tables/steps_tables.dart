@@ -37,6 +37,7 @@ class StepDailyData extends Table {
 
 /// A manual step adjustment/log entry (many per day).
 @DataClassName('StepManualEntryRow')
+@TableIndex(name: 'idx_step_manual_daily', columns: {#dailyDataId})
 class StepManualEntries extends Table {
   TextColumn get id => text()();
   TextColumn get dailyDataId => text()(); // → StepDailyData.id

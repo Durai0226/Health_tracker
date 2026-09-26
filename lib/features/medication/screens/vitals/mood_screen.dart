@@ -58,20 +58,19 @@ class _MoodScreenState extends State<MoodScreen> {
   }
 
   Future<void> _delete(MoodEntry r) async {
-    final messenger = ScaffoldMessenger.of(context);
     await VitalsStorageService.deleteMood(r.id);
     _load();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Entry deleted'),
-        persist: false,
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () async {
-            await VitalsStorageService.saveMood(r);
-            _load();
-          },
-        ),
+    // The messenger used to be captured before the await so the toast
+    // survived the gap; the toast kit takes a context, so guard instead.
+    if (!mounted) return;
+    context.toastSuccess(
+      'Entry deleted',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await VitalsStorageService.saveMood(r);
+          _load();
+        },
       ),
     );
   }
@@ -82,12 +81,16 @@ class _MoodScreenState extends State<MoodScreen> {
     final accent = VitalsColors.moodAccent(ext.isDark);
 
     return AppScaffold(
-      floatingActionButton: AppFab(
-        icon: Symbols.add_rounded,
-        label: 'Log',
-        accent: accent,
-        onPressed: () => _openLogSheet(),
-      ),
+      // Only float the FAB once there is history to add to; the empty state
+      // carries its own 'Log mood' CTA, so a FAB there duplicates it.
+      floatingActionButton: _entries.isEmpty
+          ? null
+          : AppFab(
+              icon: Symbols.add_rounded,
+              label: 'Log',
+              accent: accent,
+              onPressed: () => _openLogSheet(),
+            ),
       body: Column(
         children: [
           AppHeader(
@@ -290,7 +293,7 @@ class _EmptyState extends StatelessWidget {
             style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
-          label: 'Log how you feel',
+          label: 'Log mood',
           leadingIcon: Symbols.add_rounded,
           accent: accent,
           fullWidth: true,
@@ -355,7 +358,19 @@ class _MoodLogFormState extends State<_MoodLogForm> {
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       createdAt: e?.createdAt ?? DateTime.now(),
     );
-    await VitalsStorageService.saveMood(entry);
+    // See blood_pressure_screen.dart's identical guard.
+    try {
+      await VitalsStorageService.saveMood(entry);
+    } catch (e) {
+      debugPrint('⚠️ Saving a mood entry failed: $e');
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Could not save this entry. Try again.';
+        });
+      }
+      return;
+    }
     if (mounted) Navigator.pop(context, true);
   }
 
@@ -372,25 +387,27 @@ class _MoodLogFormState extends State<_MoodLogForm> {
             style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
         const SizedBox(height: AppSpacing.sm),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             for (var i = 0; i < moodRatingLabels.length; i++)
-              _MoodFaceButton(
-                selected: _selected == i,
-                icon: VitalsColors.moodIcon(i),
-                label: moodRatingLabels[i],
-                color: VitalsColors.moodBand(ext.isDark, i),
-                onTap: () => setState(() {
-                  _selected = i;
-                  _error = null;
-                }),
+              Expanded(
+                child: _MoodFaceButton(
+                  selected: _selected == i,
+                  icon: VitalsColors.moodIcon(i),
+                  label: moodRatingLabels[i],
+                  color: VitalsColors.moodBand(ext.isDark, i),
+                  onTap: () => setState(() {
+                    _selected = i;
+                    _error = null;
+                  }),
+                ),
               ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        _TakenAtField(
+        AppDateTimeField(
           value: _takenAt,
           accent: widget.accent,
+          noun: 'Entry',
           onChanged: (v) => setState(() => _takenAt = v),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -440,150 +457,44 @@ class _MoodFaceButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? color.withOpacity(0.16) : ext.surfaceVariant,
-              shape: BoxShape.circle,
-              border: Border.all(color: selected ? color : ext.outline, width: 1.5),
-            ),
-            child: Icon(icon, color: selected ? color : ext.textTertiary, size: 26),
-          ),
-          const SizedBox(height: 4),
-          Text(label,
-              style: tt.labelSmall?.copyWith(
-                  color: selected ? color : ext.textTertiary,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal)),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Optional "when" control for the log sheet.
-//
-// `_takenAt` already existed on this form but nothing ever wrote to it, so a
-// reading could not be back-dated and editing one silently kept the original
-// timestamp with no way to correct it. Defaults to now, so the common case
-// still costs zero taps.
-// ---------------------------------------------------------------------------
-class _TakenAtField extends StatelessWidget {
-  final DateTime value;
-  final AccentSwatch accent;
-  final ValueChanged<DateTime> onChanged;
-
-  const _TakenAtField({
-    required this.value,
-    required this.accent,
-    required this.onChanged,
-  });
-
-  Future<void> _pickDate(BuildContext context) async {
-    final now = DateTime.now();
-    final picked = await AppDatePicker.show(
-      context,
-      initial: value,
-      first: DateTime(now.year - 5),
-      // A reading can't have been taken in the future.
-      last: DateTime(now.year, now.month, now.day),
-      accent: accent,
-      title: 'Entry date',
-    );
-    if (picked == null) return;
-    onChanged(DateTime(
-        picked.year, picked.month, picked.day, value.hour, value.minute));
-  }
-
-  Future<void> _pickTime(BuildContext context) async {
-    final picked = await AppTimePicker.show(
-      context,
-      initial: TimeOfDay.fromDateTime(value),
-      accent: accent,
-      title: 'Entry time',
-    );
-    if (picked == null) return;
-    onChanged(DateTime(
-        value.year, value.month, value.day, picked.hour, picked.minute));
-  }
-
-  String _dateLabel() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(value.year, value.month, value.day);
-    final diff = today.difference(day).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    return DateFormats.dayLabel(day, reference: today);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Date & time',
-            style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
-        const SizedBox(height: 6),
-        Row(
+    return Semantics(
+      button: true,
+      selected: selected,
+      container: true,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: _box(context, Symbols.calendar_today_rounded, _dateLabel(),
-                  () => _pickDate(context)),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _box(
-                  context,
-                  Symbols.schedule_rounded,
-                  TimeOfDay.fromDateTime(value).format(context),
-                  () => _pickTime(context)),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _box(
-      BuildContext context, IconData icon, String label, VoidCallback onTap) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.brMd,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: ext.surfaceVariant,
-          borderRadius: AppRadius.brMd,
-          border: Border.all(color: ext.outline),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: ext.textTertiary),
-            const SizedBox(width: AppSpacing.sm),
-            // scaleDown only: a long date shrinks to fit on a 320pt screen,
-            // nothing is ever enlarged and no font size is hardcoded.
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(label,
-                    style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
+            Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? color.withOpacity(0.16) : ext.surfaceVariant,
+                shape: BoxShape.circle,
+                border:
+                    Border.all(color: selected ? color : ext.outline, width: 1.5),
               ),
+              child:
+                  Icon(icon, color: selected ? color : ext.textTertiary, size: 26),
+            ),
+            const SizedBox(height: 4),
+            // The cell is width / 5 -- about 55pt on a 320pt sheet -- so the
+            // label has to shrink into it. scaleDown never enlarges, so at
+            // default sizes it renders exactly as before.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: tt.labelSmall?.copyWith(
+                      color: selected ? color : ext.textTertiary,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.normal)),
             ),
           ],
         ),

@@ -95,6 +95,26 @@
     <uses-permission android:name="android.permission.health.READ_WEIGHT"/>
     <uses-permission android:name="android.permission.health.WRITE_WEIGHT"/>
 
+    <!-- Hydration. Maps to Health Connect's HydrationRecord (category
+         Nutrition), which is what Samsung Health, Fitbit and every other
+         hydration app read and write. The permission strings are
+         READ_HYDRATION / WRITE_HYDRATION — NOT READ_WATER/WRITE_WATER, which
+         are not valid Health Connect permissions even though the Flutter
+         plugin names the type `WATER`.
+
+         WRITE pushes each logged drink out; READ lets the app see water logged
+         in other apps instead of pretending its own database is the whole
+         picture. Both are behind an off-by-default Settings toggle, and READ is
+         requested alongside WRITE only because the plugin has no write-only
+         request.
+
+         NOTE: declaring these is not sufficient to ship. The Play Console
+         "Health apps declaration" must list hydration and justify each access,
+         for every track including closed/open testing, or users hit an access
+         error. See docs/release-checklist.md. -->
+    <uses-permission android:name="android.permission.health.READ_HYDRATION"/>
+    <uses-permission android:name="android.permission.health.WRITE_HYDRATION"/>
+
     <application
         android:label="Dlyminder"
         android:name="${applicationName}"
@@ -204,6 +224,44 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/steps_sleep_widget_info"/>
         </receiver>
+
+        <!-- Receives taps on the widget's "+250" button and wakes a Flutter
+             background isolate to run the registered Dart callback. The
+             home_widget plugin ships this class but its own manifest is bare
+             (`<manifest package="es.antonborri.home_widget" />`) and declares
+             no components, so the receiver has to be declared here or the
+             button silently does nothing. -->
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND"/>
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false"/>
+
+        <!-- Quick Settings tile: log a glass from the notification shade
+             without opening the app. Must be exported and hold
+             BIND_QUICK_SETTINGS_TILE, or the system refuses to bind it. The
+             user adds it themselves from the shade's edit screen; nothing
+             appears uninvited. -->
+        <service
+            android:name=".WaterQuickSettingsTile"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Log water"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false"/>
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -217,5 +275,14 @@
         </intent>
         <!-- Health Connect app (for the `health` plugin) -->
         <package android:name="com.google.android.apps.healthdata"/>
+        <!-- The dialer, for the vitals crisis cards' "Call emergency" button
+             and the call action on doctor/clinic cards. Without this, Android
+             11+ package visibility hides every dialer from `resolveActivity`,
+             so url_launcher's canLaunchUrl('tel:…') answers false on a phone
+             that dials perfectly well. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
     </queries>
 </manifest>

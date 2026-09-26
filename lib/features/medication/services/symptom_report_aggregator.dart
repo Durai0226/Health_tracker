@@ -3,7 +3,7 @@ import '../models/medicine_log.dart'
 
 /// One medicine's side-effect / mood / effectiveness signal over a report
 /// window. Medisafe's own report covers adherence and measurements but not
-/// this — DailyMinder already captures mood, side effects and effectiveness
+/// this — Dlyminder already captures mood, side effects and effectiveness
 /// on every dose ([nunito_take_medication_sheet.dart]) and never surfaces any
 /// of it. This turns those captured-but-unread fields into the "Symptoms &
 /// well-being" section of [AdherenceReportService.buildPdf] and new CSV

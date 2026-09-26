@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
@@ -34,6 +35,22 @@ class NunitoMedicationDetailScreen extends StatefulWidget {
     super.key,
     required this.medicine,
   });
+
+  /// The one delete confirmation for a medicine, shared with the list screen.
+  ///
+  /// The two surfaces had drifted into different sheets AND different copy —
+  /// the list only said "This action cannot be undone", which doesn't tell the
+  /// user that the dose history goes with it. Deleting a medicine is the most
+  /// destructive thing either screen can do, so both now ask the same
+  /// question, in the destructive sheet's own error accent.
+  static Future<bool?> confirmDelete(
+          BuildContext context, EnhancedMedicine medicine) =>
+      ConfirmationBottomSheet.showDelete(
+        context: context,
+        itemName: medicine.name,
+        customMessage: 'This permanently deletes ${medicine.name} and its '
+            'whole dose history. This cannot be undone.',
+      );
 
   @override
   State<NunitoMedicationDetailScreen> createState() => _NunitoMedicationDetailScreenState();
@@ -109,27 +126,40 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
 
       _computeInteractions(medicines);
 
-      // Load recent logs
-      // Deduped per slot so one dose can't appear twice in the history list.
-      _recentLogs = MedicineCleanStorageService.dedupeByDose(
-          await MedicineCleanStorageService.getLogsForMedicine(_medicine.id));
-      _recentLogs.sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
-      if (_recentLogs.length > 10) {
-        _recentLogs = _recentLogs.sublist(0, 10);
-      }
-
-      // Calculate stats
+      // This medicine's dose history, read ONCE for every consumer below.
+      //
+      // Three of them want the same rows — the history list, the refill/insight
+      // engines, and the adherence stats — and each used to fetch its own copy,
+      // so opening the screen cost three full selects of `medicine_logs`.
+      // Deduped per slot so one dose can't appear twice in the history list,
+      // and sorted newest-first because that is the order the history list
+      // renders in (and the order the DAO already returned).
       final allLogs = MedicineCleanStorageService.dedupeByDose(
-          await MedicineCleanStorageService.getLogsForMedicine(_medicine.id));
+          await MedicineCleanStorageService.getLogsForMedicine(_medicine.id))
+        ..sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
+      _recentLogs =
+          allLogs.length > 10 ? allLogs.sublist(0, 10) : List.of(allLogs);
+
       // Adherence = taken / SCHEDULED doses, never taken / number-of-log-rows:
       // log rows are outcomes, not the doses that were due, so the old ratio
       // read 0% for a brand-new medicine with no logs and was meaningless in
       // general. getAdherenceStatsForMedicine owns the scheduled-slot rule
       // (due-only, from the medicine's creation, PRN/archived excluded) and is
-      // the same source the dashboard's headline adherence uses.
+      // the same source the dashboard's headline adherence uses. `allLogs` is
+      // what it would otherwise re-read; it applies its own window filter, so
+      // handing it the whole history changes nothing but the read count.
+      //
+      // `medicine:` is the same row this method read moments ago — without it
+      // the service falls back to `getMedicine(id)` and selects
+      // `enhanced_medicines` a second time for a row already in hand. If the
+      // medicine was deleted from under an open screen, this now reports the
+      // schedule the screen is still SHOWING rather than silently dropping to
+      // "0 doses scheduled", which is the more honest of the two.
       _stats = await MedicineCleanStorageService.getAdherenceStatsForMedicine(
         _medicine.id,
         days: _lifetimeWindowDays,
+        medicine: _medicine,
+        allLogs: allLogs,
       );
 
       _computeRefill(allLogs);
@@ -368,9 +398,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(heading.toUpperCase(),
-                  style: tt.labelSmall?.copyWith(
-                      color: ext.textSecondary, letterSpacing: 0.5)),
+              AppEyebrow(heading),
               const SizedBox(height: 4),
               Text(body,
                   style: tt.bodyMedium
@@ -422,34 +450,43 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
 
   Future<void> _toggleArchive() async {
     _hapticService.warning();
+    final previous = _medicine;
     final updated = _medicine.copyWith(isArchived: !_medicine.isArchived);
     await MedicineCleanStorageService.saveMedicine(updated);
-
-    if (_medicine.isArchived) {
-      await _reminderService.scheduleReminders(updated);
-    } else {
-      await _reminderService.cancelReminders(_medicine);
-    }
+    await _syncReminders(updated);
 
     if (!mounted) return; // awaits above may outlive the screen
     setState(() => _medicine = updated);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_medicine.isArchived ? 'Medicine archived' : 'Medicine restored'),
+    context.toastSuccess(
+      _medicine.isArchived ? 'Medicine archived' : 'Medicine restored',
+      // The same Undo the list screen's swipe-to-archive offers. Archiving
+      // silently cancels every reminder the medicine has, so the two places
+      // that can do it must both be one tap from reversing it.
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await MedicineCleanStorageService.saveMedicine(previous);
+          await _syncReminders(previous);
+          if (mounted) setState(() => _medicine = previous);
+        },
       ),
     );
   }
 
+  /// Cancel or (re)schedule this medicine's reminders to match its archived
+  /// state — the list screen's `_syncReminders`, same rule.
+  Future<void> _syncReminders(EnhancedMedicine medicine) async {
+    if (medicine.isArchived) {
+      await _reminderService.cancelReminders(medicine);
+    } else {
+      await _reminderService.scheduleReminders(medicine);
+    }
+  }
+
   Future<void> _deleteMedicine() async {
-    final confirm = await AppBottomSheet.confirm(
-      context,
-      title: 'Delete ${_medicine.name}?',
-      message: 'This will permanently delete this medication and all its history.',
-      confirmLabel: 'Delete',
-      danger: true,
-      icon: Symbols.delete_rounded,
-    );
+    final confirm =
+        await NunitoMedicationDetailScreen.confirmDelete(context, _medicine);
 
     if (confirm == true) {
       _hapticService.error();
@@ -482,7 +519,8 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                     SliverToBoxAdapter(child: _buildSafetySection()),
                     SliverToBoxAdapter(child: _buildHistorySection()),
                     SliverToBoxAdapter(child: _buildActionsSection()),
-                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                    SliverToBoxAdapter(
+                        child: SizedBox(height: AppInsets.pushed(context))),
                   ],
                 ),
               ),
@@ -522,6 +560,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       foregroundColor: onHeader,
       leading: IconButton(
         icon: Icon(Symbols.arrow_back_rounded, color: onHeader),
+        tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
@@ -532,6 +571,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         ),
         IconButton(
           icon: Icon(Symbols.edit_rounded, color: onHeader),
+          tooltip: 'Edit medicine',
           onPressed: _editMedicine,
         ),
         PopupMenuButton<String>(
@@ -1046,9 +1086,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       _hapticService.success();
       await _loadData();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added $amount to ${_medicine.name}')),
-        );
+        context.toastSuccess('Added $amount to ${_medicine.name}');
       }
     }
   }
@@ -1321,7 +1359,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               Icon(Symbols.history_rounded,
                   color: ext.mark(ext.medicine), size: 20),
               const SizedBox(width: AppSpacing.sm),
-              Text('Recent History', style: tt.titleLarge),
+              Text('Recent history', style: tt.titleLarge),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1450,7 +1488,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
-                    _medicine.isArchived ? 'Restore Medication' : 'Archive Medication',
+                    _medicine.isArchived ? 'Restore medicine' : 'Archive medicine',
                     style: tt.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600, color: ext.textPrimary),
                   ),
@@ -1468,7 +1506,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
-                    'Delete Medication',
+                    'Delete medicine',
                     style: tt.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600, color: ext.mark(ext.error)),
                   ),
@@ -1506,19 +1544,30 @@ class _RefillSheetState extends State<_RefillSheet> {
     final tt = Theme.of(context).textTheme;
     final newTotal = (widget.medicine.currentStock ?? 0) + _amount;
 
-    Widget stepButton(IconData icon, bool enabled, VoidCallback onTap) {
-      return GestureDetector(
-        onTap: enabled ? onTap : null,
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: enabled ? med.container : ext.surfaceVariant,
-            borderRadius: AppRadius.brSm,
-            border: Border.all(color: enabled ? med.base : ext.outline),
+    // Not AppStepper: that control is a full-width row of two 44pt circles
+    // around an Expanded value, and this is a centred row of two 48pt bordered
+    // squares around a fixed-width one — swapping it would redraw the sheet.
+    // So it takes the same Semantics wrapper the add-flow's stepper carries:
+    // an icon-only GestureDetector announces as nothing without one.
+    Widget stepButton(
+        IconData icon, bool enabled, VoidCallback onTap, String semanticLabel) {
+      return Semantics(
+        button: true,
+        enabled: enabled,
+        label: semanticLabel,
+        child: GestureDetector(
+          onTap: enabled ? onTap : null,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: enabled ? med.container : ext.surfaceVariant,
+              borderRadius: AppRadius.brSm,
+              border: Border.all(color: enabled ? med.base : ext.outline),
+            ),
+            child: Icon(icon,
+                color: enabled ? med.onContainer : ext.textTertiary),
           ),
-          child: Icon(icon,
-              color: enabled ? med.onContainer : ext.textTertiary),
         ),
       );
     }
@@ -1535,8 +1584,11 @@ class _RefillSheetState extends State<_RefillSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            stepButton(Symbols.remove_rounded, _amount > 1,
-                () => setState(() => _amount = (_amount - 1).clamp(1, 9999))),
+            stepButton(
+                Symbols.remove_rounded,
+                _amount > 1,
+                () => setState(() => _amount = (_amount - 1).clamp(1, 9999)),
+                'Decrease refill amount'),
             Container(
               constraints: const BoxConstraints(minWidth: 96),
               alignment: Alignment.center,
@@ -1546,8 +1598,11 @@ class _RefillSheetState extends State<_RefillSheet> {
                     color: ext.textPrimary, fontWeight: FontWeight.w800),
               ),
             ),
-            stepButton(Symbols.add_rounded, true,
-                () => setState(() => _amount = (_amount + 1).clamp(1, 9999))),
+            stepButton(
+                Symbols.add_rounded,
+                true,
+                () => setState(() => _amount = (_amount + 1).clamp(1, 9999)),
+                'Increase refill amount'),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),

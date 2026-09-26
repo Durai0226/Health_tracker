@@ -223,6 +223,171 @@ class WeeklyRecapScreen extends StatefulWidget {
         ),
     ];
   }
+
+  // ------------------------------------------------------------------- COVER
+
+  /// The cover card, for a hand-built recap.
+  ///
+  /// Static and `@visibleForTesting` for the same reason [cardsFor] is: this
+  /// repo's widget tests run against an empty in-memory database, so pumping
+  /// the screen only ever exercises the *empty* week and any assertion about a
+  /// populated one passes vacuously. Pass [hasCards] whatever [cardsFor]
+  /// returned for the same recap — that pairing is the thing under test.
+  @visibleForTesting
+  static Widget coverFor(BuildContext context, AppColorsExt ext, WeeklyRecap r,
+          {required bool hasCards}) =>
+      _cover(context, ext, r, hasCards: hasCards);
+
+  /// One figure, its denominator, and an optional delta. No ring.
+  ///
+  /// `displayLarge` is 32px, and stays 32px. That is this app's established hero
+  /// size — `water_hero_gauge` and `step_activity_ring` both use it — so making
+  /// the recap's cover bigger would be a change to the house scale, not a fix.
+  ///
+  /// What did change is the figures. The old cover applied `kTabular`, and
+  /// tabular figures give every digit the width of a `0`, so a large standalone
+  /// number reads loose. Proportional here; tabular only where numbers align in
+  /// columns, which is what the table view exists for.
+  static Widget _cover(BuildContext context, AppColorsExt ext, WeeklyRecap r,
+      {required bool hasCards}) {
+    final tt = Theme.of(context).textTheme;
+    final on = ext.brand.onContainer;
+    final hero = r.hero;
+
+    final range = '${DateFormats.dayMonth.format(r.from).toUpperCase()} – '
+        '${DateFormats.dayMonth.format(r.to).toUpperCase()}';
+
+    return AppCard(
+      color: ext.brand.container,
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // `color:` override — this eyebrow sits on the hero's coloured
+          // fill, not on a surface, so the AA-safe default would be wrong here.
+          AppEyebrow('THIS WEEK · $range', color: on.withOpacity(0.7)),
+          if (hero.hasValue) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      switch (hero.kind) {
+                        RecapHeroKind.adherence => '${hero.value}%',
+                        RecapHeroKind.daysLogged => '${hero.value}',
+                      },
+                      maxLines: 1,
+                      style: tt.displayLarge?.copyWith(
+                          color: on, fontWeight: FontWeight.w800, height: 1.0),
+                    ),
+                  ),
+                ),
+                if (hero.deltaPct != null && hero.deltaPct != 0) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  _deltaChip(ext, tt, hero.deltaPct!),
+                ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            // The denominator, always. "86%" alone is magic; "86% of doses
+            // taken, across 5 days with doses due" is checkable.
+            Text(
+              switch (hero.kind) {
+                RecapHeroKind.adherence =>
+                  'of doses taken, ${hero.denominator}',
+                RecapHeroKind.daysLogged => 'days logged ${hero.denominator}',
+              },
+              style: tt.bodyMedium?.copyWith(color: on.withOpacity(0.85)),
+            ),
+          ] else ...[
+            // No value — and deliberately not an em dash. The old screen had
+            // four reachable em-dash sites; a dash is what a screen shows when
+            // it has given up.
+            //
+            // WHICH words, though, is not the hero's decision to make alone.
+            // The hero is MEDICINE-only — `WeeklyRecapService._hero` reads dose
+            // summaries and nothing else — so "no figure" says nothing about
+            // water, steps or sleep. This branch printed *Nothing logged yet
+            // this week* regardless, directly above the populated day-by-day
+            // cards, which is the screen contradicting itself inside a single
+            // viewport. Gated on what is actually rendered below rather than on
+            // `WeeklyRecap.isEmptyWeek`, because the cards are what the sentence
+            // would be contradicting.
+            for (final line in _coverFallback(r, hasCards: hasCards).indexed)
+              Padding(
+                padding: EdgeInsets.only(
+                    top: line.$1 == 0 ? AppSpacing.md : AppSpacing.xs),
+                child: Text(
+                  line.$2,
+                  style: line.$1 == 0
+                      ? tt.headlineSmall?.copyWith(color: on, height: 1.3)
+                      : tt.bodyMedium?.copyWith(color: on.withOpacity(0.85)),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Headline then body for a cover with no hero figure.
+  ///
+  /// Three different facts, three different sentences — the file's own rule
+  /// that *null is "we don't know", zero is "we measured zero"*:
+  ///
+  /// * the adherence read threw, so the cover states the gap and points at the
+  ///   retry the screen already has, rather than asserting a week it never got;
+  /// * doses are missing but the week is not — the cards below carry it;
+  /// * nothing was logged at all, which is the only case the original sentence
+  ///   was ever true for.
+  static List<String> _coverFallback(WeeklyRecap r, {required bool hasCards}) {
+    if (r.failedSources.contains('adherence')) {
+      return const [
+        "This week's doses couldn't be loaded.",
+        'Pull down to try again.',
+      ];
+    }
+    if (hasCards) {
+      return const [
+        'No doses to report this week.',
+        'Your week is below, day by day.',
+      ];
+    }
+    // The reassurance belongs here rather than in a second card saying the same
+    // thing differently. Somebody returning after a gap wants to know their
+    // history survived.
+    return const [
+      'Nothing logged yet this week.',
+      'Your history is still here — log anything and this week starts '
+          'filling in.',
+    ];
+  }
+
+  static Widget _deltaChip(AppColorsExt ext, TextTheme tt, int delta) {
+    final up = delta > 0;
+    // Adherence is the one hero here where "up" is unambiguously good.
+    final swatch = up ? ext.success : ext.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration:
+          BoxDecoration(color: swatch.container, borderRadius: AppRadius.brFull),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(up ? Symbols.trending_up_rounded : Symbols.trending_down_rounded,
+              size: 14, color: swatch.onContainer),
+          const SizedBox(width: 4),
+          Text('${up ? '+' : ''}$delta pts',
+              style: tt.labelSmall?.copyWith(
+                  color: swatch.onContainer, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
 }
 
 class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
@@ -317,7 +482,8 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
             AppSpacing.gutter, AppInsets.pushed(context)),
         children: [
           // ---- Tier 1 — one figure, no chart at all. ---------------------
-          _cover(ext, r),
+          WeeklyRecapScreen._cover(context, ext, r,
+              hasCards: cards.isNotEmpty),
 
           // Only when something WAS logged but nothing is chartable. With a
           // truly empty week the cover already says it, and saying it twice in
@@ -360,123 +526,6 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
 
           const SizedBox(height: AppSpacing.lg),
           const SafetyDisclaimerBar(),
-        ],
-      ),
-    );
-  }
-
-  // ------------------------------------------------------------------- COVER
-
-  /// One figure, its denominator, and an optional delta. No ring.
-  ///
-  /// `displayLarge` is 32px, and stays 32px. That is this app's established hero
-  /// size — `water_hero_gauge` and `step_activity_ring` both use it — so making
-  /// the recap's cover bigger would be a change to the house scale, not a fix.
-  ///
-  /// What did change is the figures. The old cover applied `kTabular`, and
-  /// tabular figures give every digit the width of a `0`, so a large standalone
-  /// number reads loose. Proportional here; tabular only where numbers align in
-  /// columns, which is what the table view exists for.
-  Widget _cover(AppColorsExt ext, WeeklyRecap r) {
-    final tt = Theme.of(context).textTheme;
-    final on = ext.brand.onContainer;
-    final hero = r.hero;
-
-    final range = '${DateFormats.dayMonth.format(r.from).toUpperCase()} – '
-        '${DateFormats.dayMonth.format(r.to).toUpperCase()}';
-
-    return AppCard(
-      color: ext.brand.container,
-      padding: const EdgeInsets.all(AppSpacing.gutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('THIS WEEK · $range',
-              style: tt.labelSmall
-                  ?.copyWith(color: on.withOpacity(0.7), letterSpacing: 0.6)),
-          if (hero.hasValue) ...[
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      switch (hero.kind) {
-                        RecapHeroKind.adherence => '${hero.value}%',
-                        RecapHeroKind.daysLogged => '${hero.value}',
-                      },
-                      maxLines: 1,
-                      style: tt.displayLarge?.copyWith(
-                          color: on, fontWeight: FontWeight.w800, height: 1.0),
-                    ),
-                  ),
-                ),
-                if (hero.deltaPct != null && hero.deltaPct != 0) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  _deltaChip(ext, hero.deltaPct!),
-                ],
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            // The denominator, always. "86%" alone is magic; "86% of doses
-            // taken, across 5 days with doses due" is checkable.
-            Text(
-              switch (hero.kind) {
-                RecapHeroKind.adherence =>
-                  'of doses taken, ${hero.denominator}',
-                RecapHeroKind.daysLogged => 'days logged ${hero.denominator}',
-              },
-              style: tt.bodyMedium?.copyWith(color: on.withOpacity(0.85)),
-            ),
-          ] else
-            // No value — and deliberately not an em dash. The old screen had
-            // four reachable em-dash sites; a dash is what a screen shows when
-            // it has given up.
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Nothing logged yet this week.',
-                      style:
-                          tt.headlineSmall?.copyWith(color: on, height: 1.3)),
-                  const SizedBox(height: AppSpacing.xs),
-                  // The reassurance belongs here rather than in a second card
-                  // saying the same thing differently. Somebody returning after
-                  // a gap wants to know their history survived.
-                  Text('Your history is still here — log anything and this '
-                      'week starts filling in.',
-                      style: tt.bodyMedium
-                          ?.copyWith(color: on.withOpacity(0.85))),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _deltaChip(AppColorsExt ext, int delta) {
-    final tt = Theme.of(context).textTheme;
-    final up = delta > 0;
-    // Adherence is the one hero here where "up" is unambiguously good.
-    final swatch = up ? ext.success : ext.warning;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration:
-          BoxDecoration(color: swatch.container, borderRadius: AppRadius.brFull),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(up ? Symbols.trending_up_rounded : Symbols.trending_down_rounded,
-              size: 14, color: swatch.onContainer),
-          const SizedBox(width: 4),
-          Text('${up ? '+' : ''}$delta pts',
-              style: tt.labelSmall?.copyWith(
-                  color: swatch.onContainer, fontWeight: FontWeight.w700)),
         ],
       ),
     );

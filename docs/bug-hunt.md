@@ -177,3 +177,135 @@ by convenience.
 - **34 medium/low findings** remain unverified by design.
 - Six critical/high findings were verified late; their fixes are in, but they did not
   go through the same fix-then-reverify cycle as the original 23.
+
+---
+
+# Second pass — September 2026
+
+A whole-app re-audit: every feature line by line for critical bugs, performance,
+code quality, positive **and** negative user scenarios, UX, and UI/typography —
+then fix what was found. Where the August pass hunted wrong health data, this one
+kept finding a second class underneath it: **tests that could not fail**, so a
+defect and its "fix" both looked correct.
+
+## Result
+
+| | |
+|---|---|
+| Raw findings | **257** |
+| Verified against the code by 6 agents + 6 skeptics | **205** |
+| Closed this pass | **~215** |
+| Refuted on evidence (no fix written) | **8** |
+| Cannot be done in this environment | **4** |
+
+| Gate | Before | After |
+|---|---|---|
+| Analyze | 0 errors | **0 errors** (4 intentional Drift warnings) |
+| Tests | 2,197 passing | **3,030 passing** |
+| Test files | 203 | **349** |
+| Responsive sweep | clean | **clean**, and the report is now trustworthy |
+| Raw `SnackBar` in `lib/features` | 24 files | **0** |
+| Raw `AlertDialog` in `lib/features` | 12 files | **4**, each with a written reason |
+
+## The finding that outranks the rest
+
+**The tests were lying more often than the code was.** Not as a slogan — as a
+count. Every one of these was found during this pass, and several were in tests
+written *during* it:
+
+* A responsive harness that printed a report with **zero `expect()` calls**, so
+  "564 combinations, NO OVERFLOWS" could never fail.
+* A guard named *"the allow-list excludes every today-scoped signal"* that
+  enumerated **nine** ids by hand and omitted the tenth — the broken one.
+* A lock test whose paused→resumed round trip took **milliseconds** against a
+  **30-second** grace period, so its branch was unreachable in either direction.
+* A test asserting on `DailyFocusStats.minutesByTag` — a field **no widget
+  renders**.
+* A test that built its **own** `ValueListenableBuilder` and so measured Flutter
+  rather than the app's use of one.
+* A suite that proved a helper's truth table but never executed the `!` at the
+  shipped call site — so `_deleteBackup` running on **Cancel** passed 8 tests.
+* A guard whose string also matched a *different* call on the next line, so
+  deleting the thing it guarded still passed. (That one was mine.)
+* A `find.byIcon(Icons.*)` rule matching any identifier *ending* in "Icons", so
+  it fired on correct code and got suppressed.
+* A `CountingExecutor` blind to Drift transactions, so every "at most N writes"
+  budget passed as long as the writes were batched — exactly what such a test
+  exists to catch.
+
+The method that worked is **mutation verification**: break the production code,
+watch the test fail, restore. It is the only thing that separates a test from a
+comment. Two fixes in this pass were caught *only* because their mutation
+returned zero failures.
+
+## The most serious findings
+
+* **The Forgot-PIN wipe left cloud sync on and the user signed in** — so the
+  cloud restored everything the wipe was meant to destroy, with the lock now off.
+  A privacy control that did the opposite of what it promised.
+* **A correct PIN read "Incorrect PIN"** for up to 30 minutes during lockout,
+  with no countdown — the user was told they were wrong when they were right.
+* **The glucose chart ignored the mmol/L setting.** The hero read 7.0 and the
+  plot beneath it drew 126 on a mg/dL axis with a 70–180 band. Out by ~18× on
+  one card, on the screen a person checks before treating a low.
+* **"Call emergency" only showed a snackbar.** A button on a hypo/hypertensive
+  crisis screen that did nothing.
+* **The water download fetched the OLDEST 30 days** (a missing
+  `descending: true`), so a returning user restored ancient data.
+* **Deleted drinks came back**, and deleted nights and period days never
+  propagated — cloud sync read the `deletedAt`-filtered DAO getters, so
+  tombstones could not travel.
+* **Backups over Firestore's 1 MiB limit threw**, and the catch only
+  `debugPrint`ed: the user's backup silently did not exist.
+* **~20 sites did calendar arithmetic with `Duration`.** A civil day is 23 or 25
+  hours: focus charts dropped Monday, the water week rendered **M T W T F S M**,
+  a reminder armed an hour late, and "yesterday" matched today.
+
+## Refuted, and why that matters
+
+Eight findings were refuted on evidence rather than fixed. Two are worth
+recording because the "fix" would have been worse than the bug:
+
+* **L20** — a stale tag id in the stats breakdown. `calculateTagStatistics`
+  projects over the **live** tag list, so a deleted id structurally cannot reach
+  the screen. The fix that had been written filtered a field nothing renders and
+  added a `TagService` singleton dependency that would have zeroed every tag's
+  minutes if called before init. It was reverted.
+* **R14** — `checkPermissions()` returns `true` on error. Real, but it gates
+  **13 early returns**, so failing closed converts a rare "armed but muted" into
+  a rare "nothing armed at all". The audit's stated harm also proved
+  unreachable. The right fix is to report permission state *alongside* the
+  schedule result rather than gate on it — a design change needing device
+  verification, so it stays open with the reasoning written down.
+
+## Process notes
+
+* **Directory-exclusive ownership** is what made parallel agents safe. Splitting
+  by *finding* produced collisions; splitting by *directory* did not.
+* **Review is not optional.** Every unreviewed agent group in this pass had
+  something wrong with it — including one whose doc comment claimed a call was
+  inside a `try/catch` when it was outside, so the one failure it was written for
+  was still uncaught.
+* **Session limits killed agents mid-mutation**, twice leaving production methods
+  gutted with only a `// MUTATION:` marker to show for it. Both compiled and the
+  analyzer was clean. Grep for that marker after any interrupted run.
+* A perf budget that is quietly raised has stopped measuring anything. When
+  `Insights/trends` grew 130 elements, the cause was checked first — a ring
+  reporting progress against an invented 60-minute goal became a bar chart — and
+  the reason was written into the budget.
+
+## Outstanding
+
+* **Four items need Android hardware** and are deliberately not written:
+  **F6** (`requestPermission` in `MindfulnessChannel.kt`), **SS-08** and
+  **SS-09** (`StepsSleepWidgetProvider.kt` and its layout), **TQ-23**
+  (permission-denied device suites). Shipping an unverified permission flow
+  marked "done" is the exact failure this audit kept finding.
+* **R14** as above — open by judgement, not omission.
+* **`textTertiary` measures 3.78:1 at 11pt** app-wide. Fixing it is a design
+  decision about the palette, not a bug fix, so it is flagged rather than
+  changed.
+* **The weekly recap can show a 7-day adherence hero beside a 180-day
+  `med_adherence` figure.** The copy hedges ("lately"), so it never literally
+  claims the week — but two different percentages sit on one page. Relabel,
+  rescope, or leave: a product call.

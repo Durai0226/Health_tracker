@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/design/app_design.dart';
+import '../../../core/widgets/app/app_toast.dart';
 import '../models/focus_plant.dart';
 
 class PlantAnimationWidget extends StatefulWidget {
@@ -203,17 +205,18 @@ class _PlantAnimationWidgetState extends State<PlantAnimationWidget>
                   fontSize: widget.size * (0.2 + widget.progress * 0.2),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               // Growth stage text
               Text(
                 _getGrowthText(growthStage),
                 maxLines: 1,
                 softWrap: false,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: widget.plantType.primaryColor,
-                ),
+                // Was `plantType.primaryColor`, which for sakura is #F8BBD9 —
+                // 1.31:1 against the pale disc behind it, i.e. unreadable. The
+                // species already reads from the emoji above.
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColorsExt.of(context).textPrimary,
+                    ),
               ),
             ],
           ),
@@ -314,58 +317,57 @@ class PlantGridItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     return GestureDetector(
-      onTap: isUnlocked ? onTap : null,
+      // A locked tile used to carry a null onTap: it looks tappable, is tapped,
+      // and nothing happens. The unlock rule is already printed on the tile, so
+      // saying it out loud costs one line and turns the dead tap into an answer.
+      onTap: isUnlocked
+          ? onTap
+          : () => context.toastInfo(unlockMinutes == null
+              ? '${type.name} is still locked.'
+              : '${type.name} unlocks after $unlockMinutes minutes of focus.'),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
+        duration: AppMotion.base,
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: isSelected
               ? type.primaryColor.withOpacity(0.2)
               : ext.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.brLg,
           border: Border.all(
             color: isSelected ? type.primaryColor : ext.outline,
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: type.primaryColor.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
+          boxShadow: isSelected ? AppShadows.resting(context) : null,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              isUnlocked ? type.emoji : '🔒',
-              style: TextStyle(
-                fontSize: 32,
-                color: isUnlocked ? null : ext.textDisabled,
-              ),
-            ),
-            const SizedBox(height: 4),
+            // The padlock is CHROME — a state, not a species — so it is a
+            // Symbol; the species glyph beside it is content and stays.
+            if (isUnlocked)
+              // emoji-content-ok: the plant species IS the garden metaphor
+              Text(type.emoji, style: const TextStyle(fontSize: 32))
+            else
+              Icon(Symbols.lock_rounded, size: 32, color: ext.textDisabled),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               type.name,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isUnlocked ? type.primaryColor : ext.textDisabled,
-              ),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: isUnlocked ? ext.textPrimary : ext.textDisabled,
+                  ),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             if (!isUnlocked && unlockMinutes != null)
+              // Was fontSize: 9 — below the scale's 11pt floor, on the one
+              // string that tells the user how to unlock the tile.
               Text(
                 '${unlockMinutes}min',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: ext.textTertiary,
-                ),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w400,
+                      color: ext.textTertiary,
+                    ),
               ),
           ],
         ),

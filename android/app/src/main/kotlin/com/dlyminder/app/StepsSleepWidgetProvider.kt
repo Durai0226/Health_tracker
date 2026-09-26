@@ -5,8 +5,10 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetBackgroundIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
 /**
@@ -32,12 +34,52 @@ class StepsSleepWidgetProvider : HomeWidgetProvider() {
         val stepPct = widgetData.getInt("stepPct", 0).coerceIn(0, 100)
         val sleep = widgetData.getString("sleep", null) ?: "—"
         val sleepScore = widgetData.getInt("sleepScore", 0)
+        val waterMl = widgetData.getInt("waterMl", 0)
+        val waterGoalMl = widgetData.getInt("waterGoalMl", 0)
+        val waterPct = widgetData.getInt("waterPct", 0).coerceIn(0, 100)
+        // Under a prescribed fluid ceiling the number counts DOWN and the
+        // quick-add button is hidden — offering one-tap "+250 ml" to someone
+        // told to limit their intake is the exact harm the restriction mode
+        // exists to prevent.
+        val waterRestricted = widgetData.getBoolean("waterRestricted", false)
 
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.steps_sleep_widget).apply {
                 setTextViewText(R.id.steps_value, "%,d steps".format(steps))
                 setProgressBar(R.id.steps_progress, 100, stepPct, false)
                 setTextViewText(R.id.steps_pct, "$stepPct%")
+
+                setTextViewText(
+                    R.id.water_value,
+                    if (waterGoalMl > 0) {
+                        if (waterRestricted) {
+                            "%,d of %,d ml limit".format(waterMl, waterGoalMl)
+                        } else {
+                            "%,d / %,d ml".format(waterMl, waterGoalMl)
+                        }
+                    } else {
+                        "%,d ml".format(waterMl)
+                    }
+                )
+                setProgressBar(R.id.water_progress, 100, waterPct, false)
+
+                if (waterRestricted) {
+                    setViewVisibility(R.id.water_add, View.GONE)
+                } else {
+                    setViewVisibility(R.id.water_add, View.VISIBLE)
+                    // Fires HomeWidgetBackgroundReceiver, which wakes a Flutter
+                    // background isolate and runs the Dart callback registered
+                    // by HomeWidgetService. Drift is unavailable there, so the
+                    // callback only queues the drink — the same hand-off the
+                    // notification action uses.
+                    setOnClickPendingIntent(
+                        R.id.water_add,
+                        HomeWidgetBackgroundIntent.getBroadcast(
+                            context,
+                            Uri.parse("dlyminder://water/log?ml=250")
+                        )
+                    )
+                }
 
                 setTextViewText(R.id.sleep_value, "Sleep: $sleep")
                 if (sleepScore > 0) {

@@ -61,6 +61,7 @@ import '../../../core/health/insight.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import 'insight_service.dart';
 import 'trends_data_service.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// The hero figure's subject, chosen by what the week actually contains.
 enum RecapHeroKind {
@@ -163,7 +164,13 @@ abstract final class WeeklyRecapService {
     'focus_besthour',
     'focus_streak',
     'steps_streak',
-    'steps_short',
+    // 'steps_short' is NOT here. Its own sentence says "about N steps from
+    // today's goal" and its why is "Today's steps vs your daily goal" — a
+    // true statement about today, which is exactly what this list exists to
+    // keep out of a heading that says "your last 7 days". It sat here for
+    // months because the guard test enumerated the EXCLUDED ids by hand and
+    // simply never named this one; see weekly_recap_service_test.dart, which
+    // now derives the full id set from the engine instead.
     'sleep_regularity',
     'sleep_balance_low',
     'sleep_balance_up',
@@ -176,8 +183,8 @@ abstract final class WeeklyRecapService {
   /// nothing worth showing. Everything else degrades into [failedSources].
   static Future<WeeklyRecap> load({DateTime? now}) async {
     final ref = now ?? clock.now();
-    final today = DateTime(ref.year, ref.month, ref.day);
-    final from = today.subtract(const Duration(days: 6));
+    final today = startOfDay(ref);
+    final from = dayOffset(today, -6);
 
     // Deliberately NOT wrapped: a bundle failure is the one case where the
     // screen has nothing to render and the retry panel is the right answer.
@@ -238,9 +245,8 @@ abstract final class WeeklyRecapService {
       // chip, not the hero.
       int? previousPct;
       try {
-        final prevTo = from.subtract(const Duration(days: 1));
-        final prev = await _adherence(
-            prevTo.subtract(const Duration(days: 6)), prevTo);
+        final prevTo = dayOffset(from, -1);
+        final prev = await _adherence(dayOffset(prevTo, -6), prevTo);
         previousPct = prev.pct;
       } catch (_) {
         // A missing comparison is not a failure worth reporting.

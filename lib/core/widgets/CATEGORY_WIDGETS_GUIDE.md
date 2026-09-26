@@ -1,236 +1,56 @@
-# Premium Category Selection Widgets Guide
+# Widgets in this folder — where to look
 
-## Overview
-Modern, compact, and premium category selection widgets that provide an excellent user experience aligned with the app's theme.
+This file used to be a guide to `PremiumCategorySelector`, `CompactCategorySelector`
+and `CategoryDetailCard`. All three are gone, along with
+`lib/core/widgets/premium_category_selector.dart`,
+`lib/core/services/category_manager.dart` and
+`lib/features/onboarding/screens/category_selection_screen.dart` — the whole
+category-selection concept was removed with the slim-to-core-features cut. The
+guide also taught `AppColors` (deleted), "glassmorphism" (removed with the flat
+Calm Clarity pass) and `TextStyle(fontSize: 20)` / `EdgeInsets.all(24)` as the
+recommended idiom, which is now the exact opposite of the house rules. It is the
+first file a new contributor opens in this folder, so it is a pointer instead.
 
-## Available Widgets
+## Tokens — `lib/core/design/`
 
-### 1. PremiumCategorySelector
-**Use Case:** Full-screen category selection with grid layout
-**Best For:** Onboarding, settings, main category selection
+One import, `app_design.dart`, re-exports all of them.
 
-```dart
-PremiumCategorySelector(
-  initialCategory: AppCategory.health,
-  showHeader: true,
-  onCategorySelected: (category) {
-    print('Selected: ${category.name}');
-  },
-)
-```
+| Need | Use |
+| --- | --- |
+| Type | `Theme.of(context).textTheme.*` — the scale lives in `app_typography.dart`. **11pt is the floor**; never a raw `TextStyle` with a `fontSize`. |
+| Colour | `AppColorsExt.of(context)` → `ext.textPrimary`, `ext.surface`, `ext.mark(swatch)`, and the AA-verified `ext.fillBg(swatch)` / `ext.fillFg(swatch)` pair. Never `Colors.*` or `Color(0xFF…)` in a feature file. |
+| Radius | `AppRadius.brSm/brMd/brLg/brCard/brSheet` — not `Radius.circular(n)`. |
+| Spacing | `AppSpacing.xs…huge`, `AppSpacing.gutter` for the screen edge. |
+| Bottom padding of a scrollable | `AppInsets.pushed(context)` or `AppInsets.underNav(context)` — not a magic `SizedBox(height: 100)`. |
+| Shadow | `AppShadows.resting/card/elevated(context)`. |
+| Feature accent | wrap the feature body in `AccentScope(feature: FeatureAccent.water, …)`; components then resolve it themselves. |
 
-**Features:**
-- ✨ Animated grid layout (2 columns)
-- 🎨 Gradient backgrounds with category colors
-- 💫 Smooth scale animations on load
-- ✓ Selection indicators with checkmarks
-- 📊 Feature count badges
-- 🎯 Premium glassmorphism effects
+## Components — `lib/core/widgets/app/`
 
----
+`app_widgets.dart` is the single import, and it re-exports `app_design.dart` too.
 
-### 2. CompactCategorySelector
-**Use Case:** Horizontal scrolling category selector
-**Best For:** Modals, bottom sheets, inline selections
+- **Page frame:** `AppScaffold`, `AppHeader` (`AppHeader.backButton(context)` is the
+  only back arrow in the app), `SectionHeader`, `AppEyebrow`.
+- **Surfaces:** `AppCard`, `AppListGroup`, `AppBottomSheet` (`AppBottomSheet.confirm`
+  for a yes/no; `ConfirmationBottomSheet` is the destructive-flow adapter over it).
+- **Controls:** `AppButton`, `AppIconButton`, `AppFab`, `AppSwitch`, `AppChip`,
+  `AppTextField`, `AppSearchField`, `SegmentedToggle`, `AppStepper`, the
+  `app_pickers.dart` date/time pickers.
+- **Feedback:** `showAppToast` / `context.toast*` (never a raw `SnackBar`),
+  `EmptyState`, `AsyncSection`, `PageSkeleton` / `LoadingSkeleton`.
+- **Data display:** `StatTile`, `ProgressRing`, `insight_kit.dart`, `TipCard`,
+  `CountBadge`, `PersonalBestCard`.
 
-```dart
-CompactCategorySelector(
-  initialCategory: AppCategory.productivity,
-  onCategorySelected: (category) {
-    // Handle selection
-  },
-)
-```
+Every one of these carries something a hand-rolled `Container` will not: the AA
+contrast pair, the 44pt tap floor, the `Tooltip`, the `Semantics(header: true)`,
+the dark-mode surface. Prefer the component; if it genuinely does not fit, extend
+it rather than opening a fourth copy.
 
-**Features:**
-- 📱 Horizontal scroll (120px height)
-- 🎨 Gradient cards when selected
-- ⚡ Compact 140px width per card
-- ✓ Check circle indicators
-- 🔄 Smooth transitions
+## Guards
 
----
-
-### 3. CategoryDetailCard
-**Use Case:** Detailed category information with action button
-**Best For:** Category details page, confirmation screens
-
-```dart
-CategoryDetailCard(
-  config: CategoryManager.allCategories[0],
-  isSelected: true,
-  onSelect: () {
-    // Handle selection
-  },
-)
-```
-
-**Features:**
-- 📋 Full category description
-- 🏷️ Feature tags with checkmarks
-- 🎯 Action button (gradient or success)
-- 💎 Premium elevated card design
-- 📝 Formatted feature names
-
----
-
-## Category Configuration
-
-Each category includes:
-- **Name:** Display name (e.g., "Health & Wellness")
-- **Icon:** Material icon
-- **Color:** Primary color for theming
-- **Tagline:** Short motivational phrase
-- **Description:** Detailed explanation
-- **Features:** List of included feature IDs
-
-### Current Categories
-
-1. **Health & Wellness** 🩺
-   - Color: Teal (#00897B)
-   - Features: medicine, water, reminders
-   - Tagline: "Your complete health companion"
-
-2. **Focus & Productivity** 🧠
-   - Color: Purple (#8B5CF6)
-   - Features: focus, notes, exam_prep
-   - Tagline: "Maximize your potential"
-
-3. **Fitness & Activity** 💪
-   - Color: Red (#EF4444)
-   - Features: fitness
-   - Tagline: "Transform your body"
-
-4. **Finance Tracker** 💰
-   - Color: Green (#22C55E)
-   - Features: finance
-   - Tagline: "Master your money"
-
-5. **Period Tracking** 📅
-   - Color: Pink (#EC4899)
-   - Features: period
-   - Tagline: "Understand your cycle"
-
----
-
-## Integration Examples
-
-### Example 1: Modal Bottom Sheet
-```dart
-showModalBottomSheet(
-  context: context,
-  builder: (context) => Container(
-    padding: EdgeInsets.all(24),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Select Category', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        SizedBox(height: 16),
-        CompactCategorySelector(
-          onCategorySelected: (category) {
-            Navigator.pop(context, category);
-          },
-        ),
-      ],
-    ),
-  ),
-);
-```
-
-### Example 2: Settings Screen
-```dart
-PremiumCategorySelector(
-  initialCategory: CategoryManager().selectedCategory,
-  showHeader: true,
-  onCategorySelected: (category) async {
-    await CategoryManager().selectCategory(category);
-    // Navigate or update UI
-  },
-)
-```
-
-### Example 3: Category Details
-```dart
-ListView.builder(
-  itemCount: CategoryManager.allCategories.length,
-  itemBuilder: (context, index) {
-    final config = CategoryManager.allCategories[index];
-    return Padding(
-      padding: EdgeInsets.only(bottom: 16),
-      child: CategoryDetailCard(
-        config: config,
-        isSelected: selectedCategory == config.category,
-        onSelect: () => selectCategory(config.category),
-      ),
-    );
-  },
-)
-```
-
----
-
-## Design Principles
-
-### 🎨 Visual Hierarchy
-- Category color as primary accent
-- White/dark card backgrounds
-- Gradient overlays for selection
-- Shadow depth indicates selection state
-
-### 💫 Animations
-- Scale animations on load (staggered)
-- Smooth color transitions (300ms)
-- Bounce physics for scrolling
-- Fade transitions for state changes
-
-### 📱 Responsive Design
-- Grid adapts to screen size
-- Touch targets minimum 44px
-- Proper spacing for readability
-- Compact mode for small spaces
-
-### ♿ Accessibility
-- High contrast ratios
-- Clear selection indicators
-- Descriptive labels
-- Proper semantic structure
-
----
-
-## Theme Integration
-
-All widgets automatically adapt to:
-- ✅ Light/Dark mode
-- ✅ App color scheme (AppColors)
-- ✅ Custom category colors
-- ✅ Glassmorphism effects
-
----
-
-## Best Practices
-
-1. **Use PremiumCategorySelector** for main selection screens
-2. **Use CompactCategorySelector** for quick picks in modals
-3. **Use CategoryDetailCard** for detailed information
-4. **Always provide onCategorySelected callback**
-5. **Show current selection with initialCategory**
-6. **Combine with CommonButton for actions**
-7. **Use with TabBarModal for multi-step flows**
-
----
-
-## Notes
-
-- Fun & Relax category is always available (not in selection)
-- Users can only select ONE category at a time
-- Category change requires sign out (enforced by CategoryManager)
-- Exam prep is included in "Focus & Productivity" category
-- All widgets use shared AppColors for consistency
-
----
-
-## File Locations
-
-- **Widgets:** `lib/core/widgets/premium_category_selector.dart`
-- **Manager:** `lib/core/services/category_manager.dart`
-- **Onboarding:** `lib/features/onboarding/screens/category_selection_screen.dart`
+`test/design/design_tokens_guard_test.dart` scans `lib/features/**/{screens,widgets}`
+for the deviations above with a per-file allow-list of the offenders that existed
+when it was written. The counts may only go down, so a new file that hand-rolls
+type, colour or radius fails the suite. `test/responsive/responsive_overflow_test.dart`
+(320–428pt × 1.0/1.3/2.0× text) and `test/responsive/touch_target_audit_test.dart`
+are the other two that must stay green.

@@ -201,8 +201,7 @@ void main() {
             // never report 3 — and a width check is satisfied by construction.
             // This asks the render object whether it actually had to cut the
             // string, which is the state the FittedBox was hiding.
-            final truncated =
-                collectTruncatedText(tester, find.byType(AppHeader));
+            final truncated = collectTruncatedText(find.byType(AppHeader));
             expect(truncated, isEmpty,
                 reason: 'a developer-authored title was cut: $truncated');
 
@@ -385,7 +384,7 @@ void main() {
       // is that nothing is CUT.
       expect(renderedLineCount(tester, find.text('Weight')),
           lessThanOrEqualTo(2));
-      expect(collectTruncatedText(tester, find.byType(AppHeader)), isEmpty);
+      expect(collectTruncatedText(find.byType(AppHeader)), isEmpty);
     });
   });
 

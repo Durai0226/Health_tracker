@@ -4,5 +4,13 @@
 <dict>
 	<key>com.apple.developer.healthkit</key>
 	<true/>
+	<!-- Shared with the WaterWidget extension so the widget can read today's
+	     hydration and hand back taps on its "+250 ml" button. Requires the App
+	     Group to be registered against the team's App ID in the Apple developer
+	     portal — see docs/release-checklist.md. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.implementation.tabletremainder.tabletRemainder</string>
+	</array>
 </dict>
 </plist>

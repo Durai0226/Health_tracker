@@ -28,6 +28,19 @@ import 'package:tablet_remainder/features/focus/services/tag_service.dart';
 import '../../support/fake_audio_engine.dart';
 import '../../support/perf_rating.dart';
 
+/// A RenderFlex/RenderBox overflow, which is `responsive_overflow_test`'s
+/// dimension and not this file's.
+///
+/// Everything else that reaches `FlutterError.onError` while a surface is being
+/// pumped means the surface did not render. This harness used to install
+/// `FlutterError.onError = (_) {}` and drop the lot, so a `build()` that threw
+/// painted an `ErrorWidget` — which holds no `RenderParagraph` — and the sweep
+/// found no text to measure and no contrast to fail on.
+bool _isOverflow(Object e) {
+  final s = e.toString();
+  return s.contains('overflowed by') || s.contains('A RenderFlex overflowed');
+}
+
 /// Text that is invisible in dark mode.
 ///
 /// `docs/ui-audit.md` measured **≈1.05:1** contrast on five Focus screens and put
@@ -126,6 +139,16 @@ void main() {
   final invisible = <String, List<String>>{};
   final belowAA = <String, List<String>>{};
 
+  /// Surfaces that threw while building, so no text of theirs was measured.
+  ///
+  /// Printed in the report AND failed on, in the test that hit it and again in
+  /// `tearDownAll`. It used to be a bare `return` under the reasoning that an
+  /// unbuildable screen is the responsive sweep's problem — which is true of
+  /// the *defect* and false of the *reporting*: this file went on to print "no
+  /// invisible text on any Focus surface" with the surface in question never
+  /// having rendered a single glyph.
+  final couldNotBuild = <String, String>{};
+
   for (final entry in surfaces.entries) {
     final name = entry.key;
 
@@ -135,8 +158,16 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
+      // Overflow noise is filtered; a genuine build failure is KEPT. A throw
+      // inside `build()` never escapes `pumpWidget` — the framework catches it
+      // and routes it here — so a blanket `(_) {}` was the only thing standing
+      // between this sweep and an unrendered screen.
+      final failures = <String>[];
       final prev = FlutterError.onError;
-      FlutterError.onError = (_) {};
+      FlutterError.onError = (d) {
+        if (_isOverflow(d.exception)) return;
+        failures.add(d.exception.toString().split('\n').first);
+      };
       try {
         await withClock(Clock.fixed(DateTime(2026, 3, 14, 13, 0)), () async {
           await tester.pumpWidget(MaterialApp(
@@ -148,12 +179,22 @@ void main() {
           await tester.pump(const Duration(milliseconds: 50));
           await tester.pump(const Duration(milliseconds: 350));
         });
-      } catch (_) {
-        // A screen that cannot build headlessly is the responsive sweep's
-        // problem, not this one's.
-        return;
+      } catch (e) {
+        failures.add(e.toString().split('\n').first);
       } finally {
         FlutterError.onError = prev;
+      }
+      Object? ex;
+      while ((ex = tester.takeException()) != null) {
+        if (!_isOverflow(ex!)) failures.add(ex.toString().split('\n').first);
+      }
+      if (failures.isNotEmpty) {
+        // Fail HERE, named, rather than returning and letting the sweep report
+        // a surface it never saw as clean. Recorded too, so the report at the
+        // end says which surfaces were not covered by its own headline.
+        couldNotBuild[name] = failures.first;
+        fail('$name could not be built in dark mode, so its text was never '
+            'measured — this is not a pass:\n${failures.first}');
       }
 
       var checked = 0;
@@ -208,7 +249,18 @@ void main() {
     }
     if (invisible.isEmpty) {
       // ignore: avoid_print
-      print('no invisible text on any Focus surface');
+      print(couldNotBuild.isEmpty
+          ? 'no invisible text on any Focus surface'
+          : 'no invisible text on the surfaces that BUILT — '
+              '${couldNotBuild.keys.join(', ')} did not');
+    }
+    if (couldNotBuild.isNotEmpty) {
+      // ignore: avoid_print
+      print('-- could not be built, so nothing was measured --');
+      couldNotBuild.forEach((k, v) {
+        // ignore: avoid_print
+        print('   $k: $v');
+      });
     }
     // ignore: avoid_print
     print('===========================\n');
@@ -234,6 +286,10 @@ void main() {
       ));
     }
 
+    expect(couldNotBuild, isEmpty,
+        reason: 'these surfaces never rendered, so the contrast result above '
+            'says nothing about them:\n'
+            '${couldNotBuild.entries.map((e) => '${e.key}: ${e.value}').join('\n')}');
     expect(invisible, isEmpty,
         reason: 'text that cannot be read at all in dark mode:\n'
             '${invisible.values.expand((v) => v).join('\n')}');

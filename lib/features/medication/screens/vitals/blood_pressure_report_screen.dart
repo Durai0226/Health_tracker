@@ -51,9 +51,7 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
   Future<void> _export() async {
     final data = _inWindow;
     if (data.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No readings in this period to export.')),
-      );
+      context.toastInfo('No readings in this period to export.');
       return;
     }
     try {
@@ -65,9 +63,7 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
       await Printing.sharePdf(bytes: bytes, filename: 'blood-pressure-report.pdf');
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not create the report. Try again.')),
-        );
+        context.toastError('Could not create the report. Try again.');
       }
     }
   }
@@ -89,6 +85,7 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
                 icon: Symbols.ios_share_rounded,
                 filled: false,
                 accent: accent,
+                tooltip: 'Export report as PDF',
                 onPressed: _export,
               ),
             ],

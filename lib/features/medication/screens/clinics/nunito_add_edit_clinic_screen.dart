@@ -99,13 +99,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
       debugPrint('Error saving clinic: $e');
       _hapticService.error();
       if (mounted) {
-        final ext = AppColorsExt.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: ext.error.base,
-            content: Text('Error: $e', style: TextStyle(color: ext.error.on)),
-          ),
-        );
+        context.toastError('Could not save this clinic. Please try again.');
       }
     }
 
@@ -124,9 +118,12 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AppHeader(
-              title: _isEditing ? 'Edit Clinic' : 'Add Clinic',
-              leading: IconButton(
-                icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
+              title: _isEditing ? 'Edit clinic' : 'Add clinic',
+              leading: AppIconButton(
+                icon: Symbols.close_rounded,
+                filled: false,
+                color: ext.textPrimary,
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
@@ -150,7 +147,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                     children: [
                       // ---- Basic Information ----
                       SectionHeader(
-                        title: 'Basic Information',
+                        title: 'Basic information',
                         icon: Symbols.info_rounded,
                         accent: med,
                       ),
@@ -162,8 +159,12 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         prefixIcon: Symbols.local_hospital_rounded,
                         accent: med,
                         textCapitalization: TextCapitalization.words,
-                        validator: (v) =>
-                            v == null || v.isEmpty ? 'Name is required' : null,
+                        // Trimmed, like the doctor/appointment/dependent
+                        // siblings: the name is saved trimmed, so a field
+                        // holding only spaces saved an empty clinic name.
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Name is required'
+                            : null,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Text(
@@ -238,7 +239,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
 
                       // ---- Operating Hours ----
                       SectionHeader(
-                        title: 'Operating Hours',
+                        title: 'Operating hours',
                         icon: Symbols.schedule_rounded,
                         accent: med,
                       ),
@@ -265,7 +266,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
 
                       // ---- Save ----
                       AppButton(
-                        label: _isEditing ? 'Save Changes' : 'Add Clinic',
+                        label: _isEditing ? 'Save changes' : 'Add clinic',
                         accent: med,
                         fullWidth: true,
                         size: AppButtonSize.lg,

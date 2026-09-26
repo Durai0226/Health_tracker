@@ -1,6 +1,5 @@
 import 'package:clock/clock.dart';
 import 'package:drift/native.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;

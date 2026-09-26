@@ -41,6 +41,43 @@ class PeriodService {
   /// Idempotent load of persisted days + settings from Drift.
   static Future<void> init() async {
     if (_isInitialized) return;
+    await reloadFromDb();
+    _isInitialized = true;
+    // Re-arm predictive period reminders on every startup (dates shift each
+    // cycle; the planner no-ops when nothing is enabled).
+    unawaited(PeriodReminderService.reschedule());
+  }
+
+  /// Re-read days and settings from Drift into the cache the UI renders from.
+  ///
+  /// Separate from [init] and deliberately NOT guarded by `_isInitialized`:
+  /// cloud sync applies downloaded period days straight to the Drift table, so
+  /// without a reload the calendar keeps showing the pre-sync month until the
+  /// next cold launch. Mirrors `BiometricsService.reloadFromDb`.
+  static Future<void> reloadFromDb() async {
+    // Two different tables, and neither read uses the other's result — the
+    // cycle derivation below needs only the days — so they go out together
+    // instead of one after another. [init] is awaited before the first frame
+    // from main's pre-runApp group, and production runs Drift on a background
+    // isolate, so two awaited-in-turn reads are two sequential port round
+    // trips there.
+    //
+    // Each load keeps its own try/catch rather than sharing one around the
+    // pair: `Future.wait` rejects on the FIRST error and leaves the other
+    // future's failure unobserved, so a settings read that fails would
+    // otherwise also lose the logged days.
+    await Future.wait([_loadDays(), _loadSettings()]);
+
+    // Derive cycles in memory; don't write on a read-only launch.
+    _recomputeCyclesInMemory();
+  }
+
+  /// The full day history, deliberately unranged: the calendar pages back to
+  /// any month (`PeriodCalendarScreen._shiftMonth` has no floor) and the cycle
+  /// history screen lists every derived cycle, both straight off this in-memory
+  /// map with no second fetch. A window would silently blank older months and
+  /// truncate the averages in [CycleStats].
+  static Future<void> _loadDays() async {
     try {
       final rows = await _dao.getAllDays();
       final map = <String, PeriodDay>{};
@@ -52,7 +89,9 @@ class PeriodService {
     } catch (e) {
       debugPrint('⚠️ PeriodService day load failed (using empty): $e');
     }
+  }
 
+  static Future<void> _loadSettings() async {
     try {
       final s = await _dao.getSettings();
       if (s != null) {
@@ -62,13 +101,6 @@ class PeriodService {
     } catch (e) {
       debugPrint('⚠️ PeriodService settings load failed: $e');
     }
-
-    // Derive cycles in memory; don't write on a read-only launch.
-    _recomputeCyclesInMemory();
-    _isInitialized = true;
-    // Re-arm predictive period reminders on every startup (dates shift each
-    // cycle; the planner no-ops when nothing is enabled).
-    unawaited(PeriodReminderService.reschedule());
   }
 
   // ---- Days --------------------------------------------------------------

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:vibration/vibration.dart';
 import '../services/clean_storage_service.dart';
+import 'haptic_service.dart';
 
 enum VibeCategory {
   basic,
@@ -70,7 +71,19 @@ class VitaVibeService extends ChangeNotifier {
   VitaVibeService._internal();
 
   bool _isEnabled = true;
-  bool get isEnabled => _isEnabled;
+  /// ONE master switch, owned by [HapticService].
+  ///
+  /// These were two independent toggles for one concept — Settings carried a
+  /// "Haptic Feedback" row and a "Haptix" row, each with its own master switch
+  /// backed by a different service, so turning haptics off left the pattern
+  /// library buzzing and a user who wanted silence had to find both. The
+  /// duplicate entry is gone and this now follows the haptic setting, so "off"
+  /// means off.
+  ///
+  /// `_isEnabled` is kept as a SECOND gate rather than deleted: a user who had
+  /// deliberately silenced the advanced patterns while keeping ordinary haptics
+  /// should stay silenced, and dropping it would switch them back on.
+  bool get isEnabled => HapticService().isEnabled && _isEnabled;
 
   VibeIntensity _intensity = VibeIntensity.medium;
   VibeIntensity get intensity => _intensity;

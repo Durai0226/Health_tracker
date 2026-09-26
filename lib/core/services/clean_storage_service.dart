@@ -20,10 +20,11 @@ import '../database/daos/reminders_dao.dart';
 import '../models/user_settings.dart';
 import '../../features/reminders/models/reminder_model.dart' as ReminderModel;
 import '../../features/reminders/models/reminder_category_model.dart' as ReminderCategoryModel;
-import '../../features/medication/models/medicine.dart';
 import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/medication/services/vitals_storage_service.dart';
 import '../../features/diary/services/diary_storage_service.dart';
+import '../../features/backup/services/health_backup_serializer.dart';
+import '../../features/backup/services/medication_backup_serializer.dart';
 import '../../features/focus/services/focus_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/period/services/period_service.dart';
@@ -32,29 +33,36 @@ import '../../features/sleep/services/sleep_service.dart';
 import '../../features/biometrics/services/biometrics_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/water/models/water_reminder_config.dart';
+import '../../features/reminders/models/reminder_recurrence.dart';
 
 /// Clean Drift-based storage service - unified storage using Drift DAOs
 class CleanStorageService {
   static bool _isInitialized = false;
-  static AppDatabase? _database;
-  
+
   // DAO accessors
-  static AppDatabase get database {
-    _database ??= AppDatabase.instance;
-    return _database!;
-  }
+  /// Always the CURRENT singleton — deliberately not cached here.
+  ///
+  /// This used to hold its own `AppDatabase?` and `??=` it on first use, which
+  /// bought nothing (`AppDatabase.instance` is itself a singleton) and cost a
+  /// real hazard: the handle survived `setInstanceForTesting`, so any test that
+  /// closed its in-memory database without also calling `resetForTesting()`
+  /// left this service pointing at the closed one. Every later read threw
+  /// "Can't re-open a database after closing it" — swallowed by the callers'
+  /// try/catch, so the test still passed while the service silently returned
+  /// nothing. That noise is visible in the suite's output today.
+  static AppDatabase get database => AppDatabase.instance;
   
   static CoreDao get _coreDao => database.coreDao;
   static MedicationDao get _medicationDao => database.medicationDao;
   static WaterDao get _waterDao => database.waterDao;
   static RemindersDao get _remindersDao => database.remindersDao;
 
-  /// Test-only: drop the cached DB handle + in-memory caches so the service
-  /// re-reads `AppDatabase.instance` (which a test may have pointed at an
-  /// in-memory database). Does NOT close the old handle — the test owns it.
+  /// Test-only: drop the in-memory caches so the service re-reads from
+  /// whatever `AppDatabase.instance` currently points at. The handle itself is
+  /// no longer cached (see [database]); this clears the DATA caches, which do
+  /// still need resetting between tests.
   @visibleForTesting
   static void resetForTesting() {
-    _database = null;
     _isInitialized = false;
     _appPreferencesCache.clear();
     _medicinesCache.clear();
@@ -69,15 +77,33 @@ class CleanStorageService {
     }
     
     try {
-      _database = AppDatabase.instance;
+      // Touch the singleton so a connection failure surfaces here rather than
+      // at the first read. Nothing is cached — see [database].
+      AppDatabase.instance;
       debugPrint('✓ Drift database initialized');
-      await _initDefaultCategories();
-      
-      // Load all caches for synchronous access
-      await loadAppPreferences();
-      await getAllCategoriesAsync();
-      await getAllMedicinesAsync();
-      await getAllReminders();
+
+      // Load all caches for synchronous access.
+      //
+      // Four disjoint tables, four independent results — nothing here reads
+      // what another one wrote — so they go out together instead of one after
+      // another. That matters specifically because this runs BEFORE the first
+      // frame (main.dart) and production opens Drift over a background isolate
+      // (`driftDatabase(name: 'dlyminder')`): the client side of that
+      // connection has no statement lock, so four awaited-in-turn reads are
+      // four sequential port round trips, while one `Future.wait` puts all
+      // four requests in flight at once.
+      //
+      // No try/catch around the group: `Future.wait` rejects on the FIRST
+      // error and leaves the other three running unobserved, so one failing
+      // table would cost the whole startup cache. Each load owns its own
+      // error boundary instead (see each method's catch) and always
+      // completes — which is what makes waiting on all four safe here.
+      await Future.wait([
+        loadAppPreferences(),
+        _loadCategoriesSeedingDefaults(),
+        getAllMedicinesAsync(),
+        getAllReminders(),
+      ]);
 
       _isInitialized = true;
       debugPrint('✓ CleanStorageService initialized successfully');
@@ -86,37 +112,61 @@ class CleanStorageService {
     }
   }
 
-  static Future<void> _initDefaultCategories() async {
+  /// Fill the category cache, seeding the three defaults on a first launch.
+  ///
+  /// This used to be two full passes over `reminder_categories` on every cold
+  /// start: a now-deleted `_initDefaultCategories` read the whole table to
+  /// decide whether to seed, then [getAllCategoriesAsync] read it again to
+  /// build the cache. The seeding check only needs to know whether the table
+  /// came back empty, which the cache load already answers — so the steady
+  /// state is one select, not two, and the second read survives only on the
+  /// launch that actually seeds.
+  ///
+  /// The read is deliberately NOT the swallowing [getAllCategoriesAsync]: that
+  /// returns `[]` on a failure, which would look identical to "empty table"
+  /// and seed defaults into a database that is merely unreachable.
+  static Future<void> _loadCategoriesSeedingDefaults() async {
+    try {
+      var categories = await _readCategories();
+      if (categories.isEmpty) {
+        await _insertDefaultCategories();
+        categories = await _readCategories();
+      }
+      _categoriesCache
+        ..clear()
+        ..addAll(categories);
+    } catch (e) {
+      debugPrint('Error getting categories: $e');
+    }
+  }
+
+  /// Seed the three built-in categories. Only reached when a successful read
+  /// found the table empty, i.e. on a genuine first launch.
+  static Future<void> _insertDefaultCategories() async {
     try {
       final db = database;
-      // Check if categories already exist
-      final existingCategories = await db.select(db.reminderCategories).get();
-      
-      if (existingCategories.isEmpty) {
-        // Insert default categories
-        await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
-          id: 'personal',
-          name: 'Personal',
-          colorValue: 0xFF4CAF50,
-          iconCodePoint: 0xe7fd, // Symbols.person_rounded
-        ));
-        
-        await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
-          id: 'work', 
-          name: 'Work',
-          colorValue: 0xFF2196F3,
-          iconCodePoint: 0xe89c, // Symbols.work_rounded
-        ));
-        
-        await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
-          id: 'health',
-          name: 'Health',
-          colorValue: 0xFFFF5722,
-          iconCodePoint: 0xe3f4, // Symbols.health_and_safety_rounded
-        ));
-        
-        debugPrint('✓ Default categories created');
-      }
+      await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
+        id: 'personal',
+        name: 'Personal',
+        colorValue: 0xFF4CAF50,
+        iconCodePoint: 0xe7fd, // Symbols.person_rounded
+      ));
+
+      await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
+        id: 'work',
+        name: 'Work',
+        colorValue: 0xFF2196F3,
+        iconCodePoint: 0xe89c, // Symbols.work_rounded
+      ));
+
+      await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
+        id: 'health',
+        name: 'Health',
+        colorValue: 0xFFFF5722,
+        iconCodePoint: 0xe3f4, // Symbols.health_and_safety_rounded
+      ));
+
+      debugPrint('✓ Default categories created');
     } catch (e) {
       debugPrint('Error creating default categories: $e');
     }
@@ -309,6 +359,97 @@ class CleanStorageService {
   ///
   /// [grace] is how long after the due time an occurrence may still be resolved
   /// normally; only rows older than that are written off.
+  /// Create a `pending` row for every occurrence that has come DUE and has no
+  /// row yet — the missing half of the adherence denominator.
+  ///
+  /// `reconcileMissedReminders` only rewrites rows returned by `pendingBefore`,
+  /// and NOTHING ever wrote a `pending` row: `recordReminderOutcome` had exactly
+  /// one production caller, the in-app tick, which writes `done`. The alarm
+  /// isolate has no Drift connection and the scheduler never touched the table.
+  /// So the sweep always found zero rows, `ReminderAdherence.byDay` only ever
+  /// saw `done`, and the card printed "100% of days fully covered" for a user
+  /// who had ignored a daily reminder for a month and ticked it once.
+  ///
+  /// Runs from the app-start / resume re-arm pass, which is the same
+  /// queue-and-drain shape the dose actions use: the occurrences are derived
+  /// from the recurrence, so a device that was off still gets its history.
+  ///
+  /// [lookback] bounds the walk. A year-old daily reminder must not mint 365
+  /// rows on first run — adherence is a recent-behaviour signal, and the
+  /// reconcile window is measured in minutes.
+  static Future<int> recordDueReminderOccurrences({
+    Duration lookback = const Duration(days: 30),
+  }) async {
+    try {
+      final now = clock.now();
+      final windowStart = now.subtract(lookback);
+      final reminders = await getAllReminders();
+      var created = 0;
+
+      for (final reminder in reminders) {
+        if (reminder.isPaused) continue;
+
+        // Which instants have come due inside the window?
+        final due = <DateTime>[];
+        final recurrence = ReminderRecurrence.parse(
+          reminder.recurrenceRule,
+          fallback: reminder.repeatType,
+          fallbackDays: reminder.customDays,
+        );
+        if (!recurrence.repeats) {
+          // A one-off: its single occurrence, if it is in the past.
+          if (!reminder.scheduledTime.isAfter(now) &&
+              reminder.scheduledTime.isAfter(windowStart)) {
+            due.add(reminder.scheduledTime);
+          }
+        } else {
+          // Walk forward from the later of the reminder's own start and the
+          // window, stopping at now. `nextAfter` steps by CALENDAR day, so an
+          // 08:00 reminder stays 08:00 across a DST transition.
+          var cursor = reminder.scheduledTime.isAfter(windowStart)
+              ? reminder.scheduledTime.subtract(const Duration(microseconds: 1))
+              : windowStart;
+          // Hard cap as well as the time bound: a malformed rule must not spin.
+          for (var i = 0; i < 400; i++) {
+            final next = recurrence.nextAfter(
+                start: reminder.scheduledTime, after: cursor);
+            if (next == null || next.isAfter(now)) break;
+            if (reminder.endsAt != null && next.isAfter(reminder.endsAt!)) break;
+            due.add(next);
+            cursor = next;
+          }
+        }
+
+        for (final at in due) {
+          // insertOrIgnore, NEVER an upsert: a `done` row the user created must
+          // not be overwritten with a fresh `pending` one.
+          final wrote = await _remindersDao.recordOccurrenceIfAbsent(
+            ReminderOccurrencesCompanion.insert(
+              id: RemindersDao.occurrenceId(reminder.id, at),
+              reminderId: reminder.id,
+              scheduledFor: at,
+              outcome: const Value('pending'),
+              // The occurrence became due; whether the OS actually delivered
+              // the notification is not something this pass can know, so
+              // `firedAt` is the due instant.
+              firedAt: Value(at),
+              source: const Value('derived'),
+            ),
+          );
+          if (wrote) created++;
+        }
+      }
+
+      if (created > 0) {
+        debugPrint('✓ Recorded $created due reminder occurrences');
+      }
+      return created;
+    } catch (e) {
+      debugPrint('⚠️ Recording due reminder occurrences failed: $e');
+      return 0;
+    }
+  }
+
   static Future<int> reconcileMissedReminders({Duration? grace}) async {
     try {
       final settings = getUserSettings();
@@ -417,20 +558,7 @@ class CleanStorageService {
   
   static Future<List<ReminderCategoryModel.ReminderCategory>> getAllCategoriesAsync() async {
     try {
-      final db = database;
-      final categoryRows = await db.select(db.reminderCategories).get();
-      
-      // Convert Drift rows to model objects
-      final categories = categoryRows.map((row) {
-        return ReminderCategoryModel.ReminderCategory(
-          id: row.id,
-          name: row.name,
-          color: row.colorValue,
-          icon: row.iconCodePoint,
-          isDefault: row.isDefault,
-        );
-      }).toList();
-
+      final categories = await _readCategories();
       _categoriesCache.clear();
       _categoriesCache.addAll(categories);
       return categories;
@@ -438,6 +566,25 @@ class CleanStorageService {
       debugPrint('Error getting categories: $e');
       return [];
     }
+  }
+
+  /// The raw read behind both category paths. Throws on failure — the callers
+  /// decide what an error means (see [_loadCategoriesSeedingDefaults]).
+  static Future<List<ReminderCategoryModel.ReminderCategory>>
+      _readCategories() async {
+    final db = database;
+    final categoryRows = await db.select(db.reminderCategories).get();
+
+    // Convert Drift rows to model objects
+    return categoryRows.map((row) {
+      return ReminderCategoryModel.ReminderCategory(
+        id: row.id,
+        name: row.name,
+        color: row.colorValue,
+        icon: row.iconCodePoint,
+        isDefault: row.isDefault,
+      );
+    }).toList();
   }
 
   /// Create or update a reminder category (upsert) and refresh the cache.
@@ -508,6 +655,42 @@ class CleanStorageService {
       }
     } catch (e) {
       debugPrint('Error saving preference: $e');
+    }
+  }
+
+  /// Write many preferences in ONE transaction.
+  ///
+  /// `setAppPreference` is a separate Drift write per key, and each one is its
+  /// own transaction with its own WAL fsync. `FocusService._saveData` writes 19
+  /// keys and is called unconditionally from `_checkAndUpdateStreak`, which
+  /// runs from `init()` — awaited in main's pre-runApp `Future.wait`. So a user
+  /// who has never opened Focus paid 19 sequential SQLite write transactions
+  /// before the first frame, every cold start, to persist values that had not
+  /// changed.
+  ///
+  /// The cache is updated for every key even if the write fails, matching
+  /// `setAppPreference`'s existing behaviour (it writes the cache first, then
+  /// persists, and swallows a failure).
+  static Future<void> setAppPreferences(Map<String, dynamic> values) async {
+    if (values.isEmpty) return;
+    _appPreferencesCache.addAll(values);
+    try {
+      await AppDatabase.instance.transaction(() async {
+        for (final e in values.entries) {
+          final value = e.value;
+          if (value is bool) {
+            await _coreDao.setBoolPreference(e.key, value);
+          } else if (value is int) {
+            await _coreDao.setIntPreference(e.key, value);
+          } else if (value is Map || value is List) {
+            await _coreDao.setPreference(e.key, jsonEncode(value));
+          } else {
+            await _coreDao.setPreference(e.key, value?.toString());
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Error saving preferences: $e');
     }
   }
 
@@ -605,10 +788,6 @@ class CleanStorageService {
   }
   
   /// Add medicine from model object (for cloud sync compatibility)
-  static Future<void> addMedicineFromModel(Medicine medicine) async {
-    // Store in cache for now - full Drift integration would convert to Companion
-    debugPrint('Adding medicine from model: ${medicine.name}');
-  }
   
   // ============ REMINDERS (using RemindersDao) ============
   static Future<void> updateReminder(RemindersCompanion reminder) async {
@@ -632,19 +811,19 @@ class CleanStorageService {
   ///
   /// **Every column, not a subset.** This used to write ten of seventeen,
   /// silently dropping `customDaysJson`, `snoozeDuration`, `sound`, `note`,
-  /// `imagePath` and `noteId`. The consequence was worse than lost detail:
-  /// `sync_service` then scheduled the reminder with its `repeatType` intact but
-  /// `customDays` null, and the `custom` branch of `scheduleGenericReminder`
-  /// loops over that list — so a cloud-arrived custom reminder armed **zero**
-  /// notifications while appearing perfectly normal in the list.
+  /// `imagePath` and `noteId`. The consequence was worse than lost detail: a
+  /// cloud-arrived reminder kept its `repeatType` but lost the day list the
+  /// `custom` branch of `scheduleGenericReminder` loops over, so it armed
+  /// **zero** notifications while appearing perfectly normal in the list.
   ///
-  /// Latent rather than live: nothing currently writes to `users/{uid}/reminders`
-  /// (`RemindersCloudService` was deleted in `0dd3c72`), so the listener in
-  /// `sync_service` never receives anything. Fixed rather than deleted because
-  /// whether reminders should sync across devices is a product decision, and
-  /// leaving a *broken* dormant path is strictly worse than leaving a correct
-  /// one — the next person to add a writer would inherit the bug, not discover
-  /// it.
+  /// Dormant, not live: nothing writes `users/{uid}/reminders`
+  /// (`RemindersCloudService` was deleted in `0dd3c72`) and nothing reads it —
+  /// the download-only listener in `sync_service.dart` was deleted with it.
+  /// This applier stays, covered by
+  /// `test/reminders/cloud_inbound_reminder_test.dart`, because whether
+  /// reminders sync across devices is a product decision and leaving a
+  /// *broken* inbound path for the next person to inherit is strictly worse
+  /// than leaving a correct one.
   static Future<void> saveSyncedReminderFromModel(
       ReminderModel.Reminder reminder) async {
     try {
@@ -824,10 +1003,17 @@ class CleanStorageService {
     }
   }
   
-  /// Full backup snapshot: medicines, focus sessions, reminders, water,
-  /// settings & preferences. Medicines and focus are delegated to their own
-  /// services so this service never names the generated Drift `EnhancedMedicine`
-  /// (which it imports unprefixed) and avoids the naming clash.
+  /// Full backup snapshot: medicines (with dose history), doctors,
+  /// appointments, household profiles, focus sessions, reminders, water,
+  /// vitals, diary, sleep, period, steps, the shared health profile, settings
+  /// & preferences. Medicines and focus are delegated to their own services so
+  /// this service never names the generated Drift `EnhancedMedicine` (which it
+  /// imports unprefixed) and avoids the naming clash; sleep/period/steps/
+  /// profile go through [HealthBackupSerializer] and doctors/appointments/
+  /// dependents through [MedicationBackupSerializer] for the same reason —
+  /// `StepDailyData`, `HealthProfile`, `Doctor`, `Appointment` and
+  /// `DependentProfile` are all domain names here and generated table names
+  /// there.
   static Future<Map<String, dynamic>> exportAllData() async {
     // Read the whole persisted history, NOT `listenToDailyData()?.value` — that
     // is WaterService's 90-day warm cache, so backups silently contained only
@@ -835,9 +1021,12 @@ class CleanStorageService {
     final water = await WaterService.exportAllDaysForBackup();
     return {
       // v4: adds a 'vitals' section (BP + glucose, later weight). v5 adds
-      // 'diary'. Older backups simply omit sections and are restored
-      // non-destructively by importData.
-      'version': 5,
+      // 'diary'. v6 adds 'sleep', 'period', 'steps' and 'healthProfile' — the
+      // four features that had never been in a backup at all. v7 adds
+      // 'doctors', 'appointments' and 'dependents', which had never been in
+      // one either and, being hand-typed, exist nowhere else. Older backups
+      // simply omit sections and are restored non-destructively by importData.
+      'version': 7,
       'timestamp': DateTime.now().toIso8601String(),
       'settings': getUserSettings().toJson(),
       'medicines': await MedicineCleanStorageService.exportMedicinesJson(),
@@ -848,6 +1037,8 @@ class CleanStorageService {
       'water': water.map((d) => d.toJson()).toList(),
       'vitals': await VitalsStorageService.exportJson(),
       'diary': await DiaryStorageService.exportJson(),
+      ...await HealthBackupSerializer.exportJson(),
+      ...await MedicationBackupSerializer.exportJson(),
       'preferences': Map<String, dynamic>.fromEntries(
         _appPreferencesCache.entries
             .where((e) => !kNeverLeaveTheDevice.contains(e.key)),
@@ -902,47 +1093,90 @@ class CleanStorageService {
   /// Clears ONLY the tables that [importData] is able to put back.
   ///
   /// A destructive restore used to call [clearAllPersistentData], which wipes
-  /// 18 tables — but the backup format covers far fewer. Everything in the gap
+  /// 18 tables — but the backup format covered far fewer. Everything in the gap
   /// was deleted with nothing to restore it, while the UI reported "Backup
-  /// restored successfully":
+  /// restored successfully".
   ///
-  ///   * medicineLogs        — ALL dose/adherence history (exportMedicinesJson
-  ///                           serialises medicines only; the logs-carrying
-  ///                           exportAllMedicineData has no callers)
-  ///   * periodDays / menstrualCycles / periodSettingsTable
-  ///   * stepDailyData / stepManualEntries  — incl. hand-typed entries
-  ///   * sleepSessions / healthProfiles
+  /// The gap was closed from both ends. `enhancedWaterLogs` went first: the
+  /// format has always *carried* per-drink logs (DailyWaterData.toJson embeds
+  /// them) and the restore path simply dropped them by writing through
+  /// `saveDailyData`, which persists the day row only; it now uses
+  /// `WaterService.restoreDayWithLogs`. Sleep, period days, step days and
+  /// hand-typed step entries followed — they are exported and re-imported by
+  /// [HealthBackupSerializer], whose [HealthBackupSerializer.clearRestorableRows]
+  /// is the matching clear called below. Doctors and appointments came last,
+  /// through [MedicationBackupSerializer] in the same shape.
+  ///
+  /// What is STILL outside the backup, and therefore still must not be cleared
+  /// here:
+  ///
+  ///   * medicineLogs        — dose history IS exported (nested under each
+  ///                           medicine, see `doseLogsBackupKey`), but a log
+  ///                           whose medicine no longer exists is not, so
+  ///                           clearing the table could destroy a row the
+  ///                           restore cannot put back
+  ///   * menstrualCycles     — derived from periodDays and recomputed by
+  ///                           PeriodService, so never exported
   ///   * waterAchievements   — unlocked badges and points (recomputed from the
   ///                           restored history by refreshAfterRestore, so this
   ///                           one is derived rather than lost)
+  ///   * dependentProfiles   — exported and re-imported, but not cleared: the
+  ///                           "self" row is app scaffolding created once by
+  ///                           ActiveProfileService.init(). See
+  ///                           [MedicationBackupSerializer.clearRestorableRows]
+  ///   * pharmacies /        — tables with DAO methods and no writer anywhere
+  ///     treatmentCourses      in the app, so they hold no user data at all
   ///
-  /// `enhancedWaterLogs` used to be in that list. It no longer is: the backup
-  /// format has always *carried* per-drink logs (DailyWaterData.toJson embeds
-  /// them) — the restore path just dropped them by writing through
-  /// `saveDailyData`, which persists the day row only. It now uses
-  /// `WaterService.restoreDayWithLogs`, so the logs are covered and the table
-  /// is cleared here alongside the day totals it belongs to. Leaving it
-  /// uncleared would orphan every log whose day is not in the backup.
+  /// The rollback snapshot uses the same export, so a failure path can only
+  /// recover what the export covers. Restoring a backup must never destroy
+  /// data the backup does not contain.
   ///
-  /// The rollback snapshot uses the same lossy export, so the failure path
-  /// could not recover them either. Restoring a backup must never destroy data
-  /// the backup does not contain.
+  /// [forBackup] is the file about to be imported, and narrows the wipe to the
+  /// sections that file actually carries. "What [importData] can put back" is a
+  /// property of the FILE, not of the format: an overwrite restore of an older
+  /// backup — a v5 one, written before `sleep`/`period`/`steps` existed, or a
+  /// v6 one written before `doctors`/`appointments` did — would otherwise clear
+  /// tables whose section is simply absent, and the import would put nothing
+  /// back. That is the same silent destruction this method was extracted to
+  /// stop, one version late: every backup already in someone's Firestore or
+  /// Drive predates the newest sections. Passing null clears every covered
+  /// table, which is right only for a map known to be a current
+  /// [exportAllData]; both call sites below pass theirs explicitly, so the
+  /// null default is reached only from tests that clear without restoring.
+  ///
+  /// The test is `containsKey`, never "is non-empty": a file that carries
+  /// `'diary': []` is a file whose author has no diary entries, and an
+  /// overwrite restore of it must genuinely empty the table.
   ///
   /// If [exportAllData]/[importData] are ever extended to cover more tables,
   /// add them here in the same change — the two lists must stay in sync.
-  static Future<void> clearRestorableData() async {
+  /// `test/core/restore_does_not_destroy_test.dart` pins that invariant.
+  static Future<void> clearRestorableData({
+    Map<String, dynamic>? forBackup,
+  }) async {
     final db = database;
+    bool carries(String section) =>
+        forBackup == null || forBackup.containsKey(section);
     try {
-      await db.delete(db.reminders).go();
-      await db.delete(db.enhancedMedicines).go();
-      // Logs before day totals: the logs reference the day id.
-      await db.delete(db.enhancedWaterLogs).go();
-      await db.delete(db.dailyWaterDataTable).go();
-      await db.delete(db.bloodPressureReadings).go();
-      await db.delete(db.glucoseReadings).go();
-      await db.delete(db.weightReadings).go();
-      await db.delete(db.moodEntries).go();
-      await db.delete(db.diaryEntries).go();
+      if (carries('reminders')) await db.delete(db.reminders).go();
+      if (carries('medicines')) await db.delete(db.enhancedMedicines).go();
+      if (carries('water')) {
+        // Logs before day totals: the logs reference the day id.
+        await db.delete(db.enhancedWaterLogs).go();
+        await db.delete(db.dailyWaterDataTable).go();
+      }
+      if (carries('vitals')) {
+        // One section, four tables — VitalsStorageService exports and imports
+        // blood pressure, glucose, weight and mood together.
+        await db.delete(db.bloodPressureReadings).go();
+        await db.delete(db.glucoseReadings).go();
+        await db.delete(db.weightReadings).go();
+        await db.delete(db.moodEntries).go();
+      }
+      if (carries('diary')) await db.delete(db.diaryEntries).go();
+      await HealthBackupSerializer.clearRestorableRows(forBackup: forBackup);
+      await MedicationBackupSerializer.clearRestorableRows(
+          forBackup: forBackup);
       debugPrint('✓ Restorable data cleared (backup-covered tables only)');
     } catch (e) {
       debugPrint('Error clearing restorable data: $e');
@@ -958,6 +1192,20 @@ class CleanStorageService {
       // Medicines + their logs
       await db.delete(db.medicineLogs).go();
       await db.delete(db.enhancedMedicines).go();
+      // The medication side tables, which "Delete all data" left behind
+      // entirely: a consultant's name and phone number, the date and place of
+      // every appointment, and a household member's date of birth, blood type,
+      // allergies and insurance details all survived a wipe that told the user
+      // "All data deleted." Appointments first — they reference the other two.
+      // `pharmacies` and `treatmentCourses` are not here because nothing in
+      // the app has ever written a row to either. The well-known "self"
+      // profile goes with them and is recreated by ActiveProfileService.init()
+      // on the next launch — the same restart-shaped limitation FocusService
+      // has below, and the right trade against leaving a dependent's medical
+      // details on a device the user was told is now clean.
+      await db.delete(db.appointments).go();
+      await db.delete(db.doctors).go();
+      await db.delete(db.dependentProfiles).go();
       // Water consumption data + logs + achievements
       await db.delete(db.enhancedWaterLogs).go();
       await db.delete(db.dailyWaterDataTable).go();
@@ -1056,11 +1304,14 @@ class CleanStorageService {
     }
     try {
       if (clearExisting) {
-        // Only the backup-covered tables. Using clearAllPersistentData() here
-        // deleted dose history, period history and sleep/step entries that the
-        // backup cannot restore — permanently, while the UI said "Backup
-        // restored successfully".
-        await clearRestorableData();
+        // Only the backup-covered tables, and only the sections THIS file
+        // carries. Using clearAllPersistentData() here deleted dose history,
+        // period history and sleep/step entries that the backup cannot restore
+        // — permanently, while the UI said "Backup restored successfully".
+        // Passing `data` closes the same hole one version further out: an
+        // older file omits whole sections, and clearing those would destroy
+        // them just as permanently.
+        await clearRestorableData(forBackup: data);
       }
       await importData(data);
     } catch (e) {
@@ -1070,7 +1321,9 @@ class CleanStorageService {
       // so wiping here would destroy strictly more than the failure did.
       if (snapshot != null && clearExisting) {
         try {
-          await clearRestorableData();
+          // The snapshot is a current export, so it carries every section —
+          // but say so explicitly rather than relying on the null default.
+          await clearRestorableData(forBackup: snapshot);
           await importData(snapshot);
           debugPrint('✓ Rolled back to pre-restore snapshot');
         } catch (rollbackError) {
@@ -1160,6 +1413,28 @@ class CleanStorageService {
           debugPrint('Import diary failed: $e');
         }
       }
+      // Sleep / period / steps / health profile (v6+). Each section is
+      // independently optional, so a pre-v6 backup restores exactly as before.
+      //
+      // These write Drift rows directly. The SleepService / PeriodService /
+      // StepService singletons hold their own in-memory copy and reload it in
+      // `init()`, so the restored nights, cycles and step days appear after the
+      // app restart the restore screens already ask for — the same known
+      // limitation FocusService has above.
+      try {
+        await HealthBackupSerializer.importJson(data);
+      } catch (e) {
+        debugPrint('Import sleep/period/steps failed: $e');
+      }
+      // Doctors / appointments / household profiles (v7+), same shape: each
+      // section independently optional, so a pre-v7 backup restores exactly as
+      // before. The screens that show these read on build rather than from a
+      // cached singleton, so nothing needs reloading here.
+      try {
+        await MedicationBackupSerializer.importJson(data);
+      } catch (e) {
+        debugPrint('Import doctors/appointments/dependents failed: $e');
+      }
       if (data['preferences'] is Map) {
         for (final e in (data['preferences'] as Map).entries) {
           final key = e.key.toString();
@@ -1184,13 +1459,15 @@ class CleanStorageService {
   }
   
 
-  /// Close the database connection
+  /// Close the database connection.
+  ///
+  /// Closes the singleton itself: this service no longer owns a separate handle
+  /// to close, and leaving `AppDatabase.instance` open while marking ourselves
+  /// closed would be the same staleness bug from the other direction.
   static Future<void> close() async {
-    if (_database != null) {
-      await _database!.close();
-      _database = null;
-      _isInitialized = false;
-      debugPrint('✓ CleanStorageService closed');
-    }
+    if (!_isInitialized) return;
+    await AppDatabase.instance.close();
+    _isInitialized = false;
+    debugPrint('✓ CleanStorageService closed');
   }
 }

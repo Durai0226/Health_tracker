@@ -57,6 +57,25 @@ class RemindersDao extends DatabaseAccessor<AppDatabase> with _$RemindersDaoMixi
   Future<void> recordOccurrence(ReminderOccurrencesCompanion row) =>
       into(reminderOccurrences).insertOnConflictUpdate(row);
 
+  /// Create an occurrence row ONLY if one does not already exist.
+  ///
+  /// Distinct from [recordOccurrence] because the due-occurrence backfill must
+  /// never overwrite what the user already told us. Upserting a fresh `pending`
+  /// row over a `done` one would silently erase a tick — turning the adherence
+  /// record it is meant to build into the thing that corrupts it.
+  ///
+  /// Returns true when a row was created.
+  /// `insertReturningOrNull`, not `insert(mode: insertOrIgnore)`: the latter
+  /// returns a rowid, which is non-zero even when the conflicting row was
+  /// ignored, so it cannot answer "did I create one?". Returning null on a
+  /// conflict is the only reliable signal, and callers count on it to report
+  /// how many occurrences they actually derived.
+  Future<bool> recordOccurrenceIfAbsent(
+          ReminderOccurrencesCompanion row) async =>
+      await into(reminderOccurrences)
+          .insertReturningOrNull(row, mode: InsertMode.insertOrIgnore) !=
+      null;
+
   Future<ReminderOccurrence?> getOccurrence(
           String reminderId, DateTime scheduledFor) =>
       (select(reminderOccurrences)

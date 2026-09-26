@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
-import '../../../core/design/app_colors_ext.dart';
 import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
+import '../theme/aqua_theme.dart';
 import '../widgets/aqua_shimmer.dart';
 import 'water_history_edit_screen.dart';
 
@@ -155,31 +155,26 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
   }
 
   Widget _buildMonthSelector() {
-    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: ext.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    // DS-20/21: one of three hand-rolled cards on this screen whose shadow
+    // (black at .25/.05, blur 10, offset 0,4) and radius (16) disagreed with
+    // AppCard's.
+    return AppCard(
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      pressEffect: false,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
             icon: const Icon(Symbols.chevron_left_rounded),
+            tooltip: 'Previous month',
             onPressed: () => _changeMonth(-1),
           ),
           Flexible(
@@ -189,16 +184,13 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                 '${monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}',
                 maxLines: 1,
                 softWrap: false,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: ext.textPrimary,
-                ),
+                style: tt.headlineSmall,
               ),
             ),
           ),
           IconButton(
             icon: const Icon(Symbols.chevron_right_rounded),
+            tooltip: 'Next month',
             onPressed: _selectedMonth.month == DateTime.now().month &&
                     _selectedMonth.year == DateTime.now().year
                 ? null
@@ -211,6 +203,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
 
   Widget _buildCalendarGrid() {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final firstDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
     final lastDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
     final startWeekday = firstDayOfMonth.weekday;
@@ -218,23 +211,12 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
 
     final dataMap = _monthData;
 
-    final goal = WaterService.getDailyGoal();
     final dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: ext.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return AppCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      pressEffect: false,
       child: Column(
         children: [
           // Day names
@@ -243,11 +225,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
               child: Center(
                 child: Text(
                   name,
-                  style: TextStyle(
-                    color: ext.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
+                  style: tt.labelMedium?.copyWith(color: ext.textSecondary),
                 ),
               ),
             )).toList(),
@@ -306,10 +284,16 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                     date.year == _selectedDate!.year;
                 final isFuture = date.isAfter(DateTime.now());
 
-                // Calculate progress
+                // Judged against the goal THAT DAY had, not today's — see
+                // WaterService.goalForDay. Dividing history by the current
+                // goal meant raising it on Friday retroactively un-achieved
+                // Monday, and lowering it awarded goals never met.
                 double progress = 0;
-                if (dayData != null && goal > 0) {
-                  progress = dayData.effectiveHydrationMl / goal;
+                if (dayData != null) {
+                  final dayGoal = WaterService.goalForDay(dayData);
+                  if (dayGoal > 0) {
+                    progress = dayData.effectiveHydrationMl / dayGoal;
+                  }
                 }
 
                 return GestureDetector(
@@ -318,11 +302,11 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                     margin: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? ext.water.base
+                          ? ext.fillBg(ext.water)
                           : isToday
-                              ? ext.water.base.withOpacity(0.12)
+                              ? ext.water.container
                               : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppRadius.brSm,
                       border: isToday && !isSelected
                           ? Border.all(color: ext.mark(ext.water), width: 2)
                           : null,
@@ -340,7 +324,9 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                                 strokeWidth: 2,
                                 backgroundColor: ext.surfaceVariant,
                                 valueColor: AlwaysStoppedAnimation(
-                                  progress >= 1 ? ext.success.base : ext.water.base,
+                                  progress >= 1
+                                    ? ext.chartMark(ext.success)
+                                    : ext.chartMark(ext.water),
                                 ),
                               ),
                             ),
@@ -354,16 +340,15 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                             '$day',
                             maxLines: 1,
                             softWrap: false,
-                            style: TextStyle(
+                            style: tt.titleSmall?.copyWith(
                               color: isSelected
                                   ? ext.fillFg(ext.water)
                                   : isFuture
-                                      ? ext.textSecondary.withOpacity(0.4)
+                                      ? ext.textDisabled
                                       : ext.textPrimary,
                               fontWeight: isToday || isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              fontSize: 13,
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
                             ),
                           ),
                         ),
@@ -375,7 +360,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                               width: 6,
                               height: 6,
                               decoration: BoxDecoration(
-                                color: ext.success.base,
+                                color: ext.chartMark(ext.success),
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -402,7 +387,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: ext.success.base,
+                    color: ext.chartMark(ext.success),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -440,7 +425,10 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
             label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: ext.textSecondary),
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: ext.textSecondary),
           ),
         ),
       ],
@@ -453,48 +441,45 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
     }
 
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final data = _selectedDayData!;
-    final goal = WaterService.getDailyGoal();
+    final goal = WaterService.goalForDay(data);
     final progress = goal > 0 ? data.effectiveHydrationMl / goal : 0.0;
 
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: ext.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(ext.isDark ? 0.25 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return AppCard(
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      padding: EdgeInsets.zero,
+      pressEffect: false,
       child: Column(
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
               color: progress >= 1
-                  ? ext.success.base.withOpacity(0.12)
-                  : ext.water.base.withOpacity(0.12),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  ? ext.success.container
+                  : ext.water.container,
+              borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppRadius.card)),
             ),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: progress >= 1 ? ext.success.base : ext.water.base,
-                    borderRadius: BorderRadius.circular(12),
+                    color: progress >= 1
+                        ? ext.fillBg(ext.success)
+                        : ext.fillBg(ext.water),
+                    borderRadius: AppRadius.brMd,
                   ),
                   child: Icon(
                     progress >= 1 ? Symbols.check_rounded : Symbols.water_drop_rounded,
-                    color: progress >= 1 ? ext.success.on : ext.water.on,
+                    color: progress >= 1
+                        ? ext.fillFg(ext.success)
+                        : ext.fillFg(ext.water),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: AppSpacing.lg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,19 +488,21 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                         _formatDate(_selectedDate!),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: ext.textPrimary,
-                        ),
+                        style: tt.titleLarge,
                       ),
                       Text(
-                        progress >= 1 ? 'Goal Achieved!' : '${(progress * 100).toInt()}% of goal',
+                        data.goalReached
+                            ? 'Goal Achieved!'
+                            : '${(progress * 100).toInt()}% of goal',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: progress >= 1 ? ext.mark(ext.success) : ext.mark(ext.water),
-                          fontWeight: FontWeight.w500,
+                        // `onContainer` on the header's own container tint,
+                        // rather than `mark` on the app surface — the tint is
+                        // what this text actually sits on.
+                        style: tt.titleMedium?.copyWith(
+                          color: data.goalReached
+                              ? ext.success.onContainer
+                              : ext.water.onContainer,
                         ),
                       ),
                     ],
@@ -535,11 +522,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                           '${data.effectiveHydrationMl}ml',
                           maxLines: 1,
                           softWrap: false,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: ext.textPrimary,
-                          ),
+                          style: tt.headlineMedium,
                         ),
                       ),
                       FittedBox(
@@ -549,18 +532,16 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                           'of ${goal}ml',
                           maxLines: 1,
                           softWrap: false,
-                          style: TextStyle(
-                            color: ext.textSecondary,
-                            fontSize: 12,
-                          ),
+                          style: tt.bodySmall
+                              ?.copyWith(color: ext.water.onContainer),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 IconButton(
-                  icon: Icon(Symbols.edit_rounded, color: ext.mark(ext.water)),
+                  icon: Icon(Symbols.edit_rounded, color: ext.water.onContainer),
                   onPressed: () => _openHistoryEdit(),
                   tooltip: 'Edit',
                 ),
@@ -569,26 +550,31 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
           ),
           // Stats row
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
                 _buildDayStatItem(
                   icon: Symbols.local_drink_rounded,
                   value: '${data.drinksCount}',
                   label: 'Drinks',
-                  color: ext.mark(ext.water),
+                  swatch: ext.water,
                 ),
+                // DS-09. These were Material brown (#795548) and purple
+                // (#9C27B0) — 2.64:1 and 2.74:1 as bold value
+                // text on the dark surface #171B22, both under AA. Amber and
+                // violet are the palette's nearest brightness-aware swatches
+                // and keep caffeine/alcohol reading as different things.
                 _buildDayStatItem(
                   icon: Symbols.coffee_rounded,
                   value: '${data.totalCaffeineMg}mg',
                   label: 'Caffeine',
-                  color: Colors.brown,
+                  swatch: ext.reminders,
                 ),
                 _buildDayStatItem(
                   icon: Symbols.wine_bar_rounded,
                   value: '${data.alcoholicDrinksCount}',
                   label: 'Alcohol',
-                  color: Colors.purple,
+                  swatch: ext.focus,
                 ),
               ],
             ),
@@ -600,13 +586,13 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
               child: Center(
                 child: Text(
                   'No drinks logged',
-                  style: TextStyle(color: ext.textSecondary),
+                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
                 ),
               ),
             )
           else
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Column(
                 children: [
                   for (final log in data.logs.reversed) _buildLogItem(log),
@@ -620,42 +606,33 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
 
   Widget _buildEmptyDayDetails() {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Container(
       // Without an explicit width this Container sized to its widest child
       // inside the page Column, so the empty state rendered visibly narrower
       // than the month and calendar cards above it — it read as a layout bug.
       width: double.infinity,
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(32),
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xxl),
       decoration: BoxDecoration(
         color: ext.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.brCard,
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Symbols.water_drop_rounded,
-            size: 64,
-            color: ext.textSecondary.withOpacity(0.5),
-          ),
-          const SizedBox(height: 16),
+          Icon(Symbols.water_drop_rounded, size: 64, color: ext.textTertiary),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             'No data for this day',
-            style: TextStyle(
-              color: ext.textSecondary,
-              fontSize: 16,
-            ),
+            style: tt.bodyLarge?.copyWith(color: ext.textSecondary),
           ),
           if (_selectedDate != null)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: Text(
                 _formatDate(_selectedDate!),
-                style: TextStyle(
-                  color: ext.textSecondary.withOpacity(0.7),
-                  fontSize: 14,
-                ),
+                style: tt.bodyMedium?.copyWith(color: ext.textTertiary),
               ),
             ),
         ],
@@ -667,34 +644,32 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
     required IconData icon,
     required String value,
     required String label,
-    required Color color,
+    required AccentSwatch swatch,
   }) {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Expanded(
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(ext.isDark ? 0.18 : 0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: swatch.container,
+              borderRadius: AppRadius.brSm,
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: swatch.onContainer, size: 20),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: color,
+            style: tt.titleLarge?.copyWith(
+              color: ext.mark(swatch),
+              fontWeight: FontWeight.w700,
             ),
           ),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 11,
-              color: ext.textSecondary,
-            ),
+            style: tt.labelSmall?.copyWith(color: ext.textSecondary),
           ),
         ],
       ),
@@ -703,17 +678,24 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
 
   Widget _buildLogItem(EnhancedWaterLog log) {
     final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: ext.surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.brMd,
       ),
       child: Row(
         children: [
-          Text(log.beverageEmoji, style: const TextStyle(fontSize: 24)),
-          const SizedBox(width: 12),
+          // DS-17: a 24pt emoji in a tinted row is chrome.
+          Icon(
+            AquaTheme.iconFor(log.beverageId),
+            size: 24,
+            color: ext.mark(ext.water),
+            applyTextScaling: false,
+          ),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -722,19 +704,19 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                   log.beverageName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w500, color: ext.textPrimary),
+                  style: tt.titleMedium,
                 ),
+                // W15: the drink time, in the user's own 12/24h locale format —
+                // this was a zero-padded 24h string, one of three formats the
+                // feature used for the same value.
                 Text(
-                  '${log.time.hour.toString().padLeft(2, '0')}:${log.time.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: ext.textSecondary,
-                  ),
+                  TimeOfDay.fromDateTime(log.time).format(context),
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -746,7 +728,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                     '+${log.amountMl}ml',
                     maxLines: 1,
                     softWrap: false,
-                    style: TextStyle(fontWeight: FontWeight.bold, color: ext.textPrimary),
+                    style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
                 FittedBox(
@@ -756,8 +738,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                     'Hydration: ${log.effectiveHydrationMl}ml',
                     maxLines: 1,
                     softWrap: false,
-                    style: TextStyle(
-                      fontSize: 10,
+                    style: tt.labelSmall?.copyWith(
                       color: log.effectiveHydrationMl >= 0
                           ? ext.mark(ext.success)
                           : ext.mark(ext.error),

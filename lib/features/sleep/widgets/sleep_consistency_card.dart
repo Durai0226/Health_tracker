@@ -66,11 +66,7 @@ class SleepConsistencyCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'YOUR RHYTHM',
-                      style: tt.labelSmall
-                          ?.copyWith(color: ext.textTertiary, letterSpacing: 0.6),
-                    ),
+                    const AppEyebrow('YOUR RHYTHM'),
                     const SizedBox(height: 2),
                     Text(
                       consistency.label,

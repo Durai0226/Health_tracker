@@ -3,10 +3,59 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../../core/services/backup_service.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
+
+  /// The two destructive confirmations, hoisted out of the [State] so a widget
+  /// test can drive the real sheets: the screen itself cannot be pumped
+  /// headlessly, because [BackupService] resolves `FirebaseFirestore.instance`
+  /// in its constructor and `flutter test` has no Firebase app.
+  ///
+  /// Each collapses the sheet's `bool?` exactly as the `AlertDialog` it
+  /// replaced did — a dismissed sheet returns null, and null is not consent.
+  @visibleForTesting
+  static Future<bool> confirmRestore(BuildContext context) async {
+    final confirm = await ConfirmationBottomSheet.show(
+      context: context,
+      title: 'Restore Backup?',
+      message:
+          'This will OVERWRITE all current data on this device with the backup data. This action cannot be undone. Are you sure?',
+      confirmText: 'Restore',
+      icon: Symbols.restore_rounded,
+      isDangerous: true,
+    );
+    return confirm == true;
+  }
+
+  /// What to show when [BackupService.createBackup] throws.
+  ///
+  /// Its three refusals — no real account, cloud sync off, and an export over
+  /// `maxBackupPayloadBytes` — are `StateError`s written FOR the user, and
+  /// `'Failed to create backup: $e'` wrecked all three: `$e` on a `StateError`
+  /// renders as "Bad state: ...", so 36 characters of prefix went in front of
+  /// a sentence `AppToast` then clipped at two lines and an ellipsis. The
+  /// clause telling the user what to do about it was always the part that got
+  /// cut. Anything else is a genuinely unexpected failure and keeps the prefix
+  /// naming the operation that failed.
+  ///
+  /// Static for the same reason the two confirmations above are — see the note
+  /// on [confirmRestore].
+  @visibleForTesting
+  static String failureMessage(Object error) =>
+      error is StateError ? error.message : 'Failed to create backup: $error';
+
+  @visibleForTesting
+  static Future<bool> confirmDelete(BuildContext context) async {
+    final confirm = await ConfirmationBottomSheet.showDelete(
+      context: context,
+      itemName: 'Backup',
+      customMessage: 'Are you sure you want to delete this backup?',
+    );
+    return confirm == true;
+  }
 
   @override
   State<BackupScreen> createState() => _BackupScreenState();
@@ -43,35 +92,13 @@ class _BackupScreenState extends State<BackupScreen> {
       context.toastSuccess('Backup created successfully');
       _loadBackups();
     } catch (e) {
-      _showError('Failed to create backup: $e');
+      _showError(BackupScreen.failureMessage(e));
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _restoreBackup(BackupModel backup) async {
-    final ext = AppColorsExt.of(context);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Restore Backup?'),
-        content: const Text(
-          'This will OVERWRITE all current data on this device with the backup data. This action cannot be undone. Are you sure?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
-            child: const Text('Restore'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
+    if (!await BackupScreen.confirmRestore(context)) return;
 
     setState(() => _isLoading = true);
     try {
@@ -88,29 +115,7 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _deleteBackup(BackupModel backup) async {
-    final ext = AppColorsExt.of(context);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Backup?'),
-        content: const Text(
-          'Are you sure you want to delete this backup?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
+    if (!await BackupScreen.confirmDelete(context)) return;
 
     setState(() => _isLoading = true);
     try {

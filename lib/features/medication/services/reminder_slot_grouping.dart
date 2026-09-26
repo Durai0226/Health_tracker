@@ -112,6 +112,31 @@ List<ReminderSlot> groupRemindersBySlot(
           .getScheduledTimesForDate(date)
           .map((d) => ScheduledTime(hour: d.hour, minute: d.minute))
           .toList();
+    } else if (medicine.schedule.hasWeekendOverride) {
+      // BOTH sets, deduped on clock time.
+      //
+      // `MedicineSchedule.getScheduledTimesForDate` substitutes `weekendTimes`
+      // on a Sat/Sun, and Today, adherence and missed-dose reconciliation all
+      // honour it — but this function used the weekday `times` alone, so the
+      // weekend slot was never armed and the weekday one rang anyway.
+      // Levothyroxine set to 07:00 weekdays / 10:00 weekends rang at 07:00 on
+      // Saturday, a Take from that notification logged an ORPHAN dose at a time
+      // that is not a slot (still decrementing stock), Today went on showing
+      // the 10:00 dose as pending, no 10:00 alarm existed, and at 13:00
+      // reconciliation wrote a `missed` row for a dose the user had taken.
+      //
+      // Arming both is safe because the fire-time gate in `alarmCallback` now
+      // checks that the slot is one of THAT day's scheduled times, so exactly
+      // one of the two fires on any given day.
+      final byClock = <String, ScheduledTime>{};
+      for (final t in [
+        ...medicine.schedule.times,
+        ...?medicine.schedule.weekendTimes,
+      ]) {
+        byClock['${t.hour}:${t.minute}'] = t;
+      }
+      slots = byClock.values.toList()
+        ..sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
     } else {
       slots = medicine.schedule.times;
     }

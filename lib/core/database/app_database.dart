@@ -114,7 +114,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -436,6 +436,63 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(reminders, reminders.escalation);
           }
           debugPrint('✓ Added reminders.escalation (v19)');
+        }
+        if (from < 20) {
+          // Two columns on enhanced_medicines and three indexes.
+          //
+          // `reminderEnabled`: the per-medicine Reminders toggle had no column
+          // at all, so it could not persist — see the column's own doc.
+          // `deletedAt`: medicines are about to be cloud-synced with LWW, and
+          // a hard delete with no tombstone is exactly how the sleep/period
+          // resurrection bug worked.
+          //
+          // Guarded with PRAGMA like v16/v18/v19: the `createAll()` calls in
+          // the v12/v13 steps mean a database upgraded along some paths
+          // already has these columns, and ADD COLUMN on an existing one is a
+          // hard error that would strand the user on a broken database.
+          final medCols = await customSelect(
+                  "PRAGMA table_info('enhanced_medicines')")
+              .get()
+              .then((rows) => rows.map((r) => r.read<String>('name')).toSet());
+          if (!medCols.contains('reminder_enabled')) {
+            await m.addColumn(enhancedMedicines, enhancedMedicines.reminderEnabled);
+          }
+          if (!medCols.contains('deleted_at')) {
+            await m.addColumn(enhancedMedicines, enhancedMedicines.deletedAt);
+          }
+          // The three new indexes, created explicitly rather than via
+          // `createAll()`.
+          //
+          // `createAll()` looked tempting (v12/v13 use it) but is WRONG here:
+          // drift emits a plain `CREATE INDEX`, not `IF NOT EXISTS`, so on a
+          // database that already has the earlier indexes it throws
+          // "index idx_medicine_logs_medicine already exists" and the whole
+          // upgrade fails. It only works in the v13 step because recreating a
+          // table drops that table's indexes first, leaving nothing to collide
+          // with. Upgrading a v12 install straight through to v20 hits exactly
+          // that collision.
+          // Each is guarded on its table existing: an index DDL against a
+          // missing table throws, and a migration that throws leaves the user
+          // unable to open the app at all. Cheap insurance for a step whose
+          // only job is performance.
+          Future<bool> tableExists(String name) => customSelect(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                'AND name = ?',
+                variables: [Variable<String>(name)],
+              ).get().then((rows) => rows.isNotEmpty);
+
+          if (await tableExists('reminder_occurrences')) {
+            await customStatement('CREATE INDEX IF NOT EXISTS '
+                'idx_occ_reminder ON reminder_occurrences (reminder_id)');
+            await customStatement('CREATE INDEX IF NOT EXISTS '
+                'idx_occ_scheduled ON reminder_occurrences (scheduled_for)');
+          }
+          if (await tableExists('step_manual_entries')) {
+            await customStatement('CREATE INDEX IF NOT EXISTS '
+                'idx_step_manual_daily ON step_manual_entries (daily_data_id)');
+          }
+          debugPrint('✓ Added enhanced_medicines.reminderEnabled/deletedAt '
+              'and the occurrence/manual-entry indexes (v20)');
         }
       },
     );

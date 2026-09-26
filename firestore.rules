@@ -27,8 +27,7 @@ rules_version = '2';
 //   users/{uid}                          — CloudSyncService (root doc)
 //   users/{uid}/medicines/{id}           — CloudSyncService
 //   users/{uid}/water_intake/{dateKey}   — CloudSyncService
-//   users/{uid}/reminders/{id}           — RemindersCloudService / SyncService
-//   users/{uid}/reminder_categories/{id} — RemindersCloudService
+//   users/{uid}/focus_sessions/{id}      — CloudSyncService
 //   users/{uid}/backups/{isoTimestamp}   — BackupService
 //   users/{uid}/step_days/{dateKey}      — HealthCloudSyncService
 //   users/{uid}/sleep_sessions/{id}      — HealthCloudSyncService
@@ -36,10 +35,22 @@ rules_version = '2';
 //   users/{uid}/workouts/{id}            — HealthCloudSyncService
 //   users/{uid}/health_profile/{id}      — HealthCloudSyncService
 //   users/{uid}/period_days/{dateKey}    — HealthCloudSyncService (opt-in)
-//   users/{uid}/menstrual_cycles/{id}    — HealthCloudSyncService (opt-in)
 //
 // `step_entries` and `period_settings` were removed: no code path writes them,
 // and an unused-but-writable path is attack surface for nothing.
+//
+// Three paths stay READABLE AND DELETABLE but are no longer writable:
+//
+//   users/{uid}/reminders/{id}           — writer deleted in 0dd3c72
+//   users/{uid}/reminder_categories/{id} — never had a writer
+//   users/{uid}/menstrual_cycles/{id}    — derived locally; sync removed
+//
+// They are not deleted outright because `AuthService.deleteAccount` iterates
+// `kUserSubcollections`, and a `.get()` on a path with no match block throws
+// permission-denied — which that loop records as a failure and then refuses to
+// delete the Auth user. Removing these blocks would make account deletion
+// impossible for everyone, and strand whatever an older build wrote. Dropping
+// just `create, update` is the part that actually closes surface.
 //
 // Deploy with:  firebase deploy --only firestore:rules
 // ==============================================================================
@@ -79,7 +90,7 @@ service cloud.firestore {
 
     // The ONE field worth validating server-side.
     //
-    // Deliberately not a full schema: HealthCloudSyncService._sync ends in
+    // Deliberately not a full schema: `syncLwwCollection` ends in
     // `catch (e) { debugPrint(...) }`, so every rules rejection is SILENT.
     // Per-field rules would turn any schema drift into sync that stops forever
     // with no signal to the user or the developer — worse than the malformed
@@ -90,10 +101,23 @@ service cloud.firestore {
     //
     // `updatedAtMs` is the exception because it is the only field with
     // CROSS-DEVICE consequences, and its failure mode is nasty:
-    // health_cloud_sync_service.dart reads `(cloud['updatedAtMs'] as int?)`.
-    // That is a CAST — a string or a missing value throws a TypeError, which
-    // the outer catch swallows, silently killing sync for that entire
+    // lww_collection_sync.dart reads `(cloud['updatedAtMs'] as int?)`.
+    // That is a CAST — a string or a wrongly-typed value throws a TypeError,
+    // which the outer catch swallows, silently killing sync for that entire
     // collection on every device. One line stops it ever landing.
+    //
+    // INVARIANT: every collection routed through `syncLwwCollection` requires
+    // it — that helper always writes `data['updatedAtMs'] = lMs`, so no
+    // legitimate write can fail the check. The eight are medicines,
+    // focus_sessions, step_days, sleep_sessions, biometric_days, workouts,
+    // health_profile and period_days; `test/core/firestore_rules_lww_test.dart`
+    // derives that list from `lib/` and fails when one is missing a check.
+    //
+    // `water_intake` is deliberately NOT in it: that document is union-merged
+    // by log id rather than compared by timestamp, nothing casts an
+    // `updatedAtMs` off it, and `DailyWaterData.toJson` does not emit one — so
+    // requiring it here would reject every water upload, silently, inside
+    // `_syncWaterIntake`'s catch.
     function hasSyncTimestamp() {
       return request.resource.data.updatedAtMs is int;
     }
@@ -109,15 +133,18 @@ service cloud.firestore {
       allow read, delete: if isOwner(userId);
       allow create, update: if isOwner(userId) && isReasonableSize();
 
-      // Medicines (synced by CloudSyncService).
+      // Medicines (synced by CloudSyncService through syncLwwCollection).
       match /medicines/{medicineId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(medicineId);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(medicineId)
+                              && hasSyncTimestamp();
       }
 
       // Daily water intake. Keyed by a date string rather than the record id,
       // so the id/path check doesn't apply here — ownership plus the size cap is
-      // the boundary.
+      // the boundary. No `hasSyncTimestamp()`: this is the one collection that
+      // is union-merged rather than timestamp-compared — see the helper above.
       match /water_intake/{dateKey} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
@@ -125,22 +152,27 @@ service cloud.firestore {
                               && isReasonableSize();
       }
 
-      // Reminders (synced by RemindersCloudService / SyncService).
+      // Reminders. NOTHING WRITES THESE TWO: `RemindersCloudService` was
+      // deleted in 0dd3c72, and the download-only `SyncService` listener that
+      // read `/reminders` was deleted along with these write rules. Read and
+      // delete survive so `deleteAccount` can still clear whatever an older
+      // build left — see the header for why removing the blocks would break it.
       match /reminders/{reminderId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(reminderId);
       }
 
-      // Reminder categories (synced by RemindersCloudService).
       match /reminder_categories/{categoryId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(categoryId);
       }
 
       // Cloud backups: one document per backup (keyed by its ISO-8601 creation
-      // instant), holding the export as a JSON string. Deliberately no `update`
-      // rule — a backup that can be rewritten in place is not a backup, and
-      // BackupService only ever creates a fresh doc or deletes an old one.
+      // instant). `data` is a string either way, which is why the payload is
+      // base64'd after gzip rather than sent as a Blob — the `is string` check
+      // below is deployed separately from the app, so changing the field's
+      // type would have silently rejected every backup until a rules deploy
+      // caught up. Deliberately no `update` rule — a backup that can be
+      // rewritten in place is not a backup, and BackupService only ever
+      // creates a fresh doc or deletes an old one.
       match /backups/{backupId} {
         allow read, delete: if isOwner(userId);
         allow create: if isOwner(userId)
@@ -150,27 +182,37 @@ service cloud.firestore {
                       && isReasonableSize();
       }
 
-      // Period / menstrual cycle. Synced only when the user opts in, and
-      // owner-private either way — sensitive data never leaves without consent.
-      match /menstrual_cycles/{cycleId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(cycleId);
-      }
+      // Period days. Synced only when the user opts in, and owner-private
+      // either way — sensitive data never leaves without consent.
       match /period_days/{dateKey} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(dateKey);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(dateKey)
+                              && hasSyncTimestamp();
+      }
+
+      // Cycles are DERIVED from those days — `PeriodService` recomputes and
+      // replaces the whole local set after every log — so they are no longer
+      // uploaded. Read and delete only, for the same cleanup reason as the two
+      // reminder paths above.
+      match /menstrual_cycles/{cycleId} {
+        allow read, delete: if isOwner(userId);
       }
 
       // Steps.
       match /step_days/{dateKey} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(dateKey);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(dateKey)
+                              && hasSyncTimestamp();
       }
 
       // Sleep.
       match /sleep_sessions/{sessionId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(sessionId);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(sessionId)
+                              && hasSyncTimestamp();
       }
 
       // Wearable biometrics — DAILY AGGREGATES ONLY. Raw samples are never
@@ -218,7 +260,9 @@ service cloud.firestore {
       // Shared health profile (height/weight/stride — used by Steps and Sleep).
       match /health_profile/{docId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidRecord(docId);
+        allow create, update: if isOwner(userId)
+                              && isValidRecord(docId)
+                              && hasSyncTimestamp();
       }
     }
   }

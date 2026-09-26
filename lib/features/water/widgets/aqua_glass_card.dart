@@ -1,6 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/design/app_design.dart';
 import '../theme/aqua_theme.dart';
 
 /// Glassmorphism card with dynamic beverage-based styling
@@ -30,24 +30,20 @@ class AquaGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AquaTheme.isDark(context);
-    final beverage = beverageId != null 
-        ? AquaTheme.getBeverage(beverageId!) 
-        : AquaTheme.getBeverage('water');
+    final ext = AppColorsExt.of(context);
 
-    // Calm Clarity: flat opaque surface (no BackdropFilter/glass).
+    // Calm Clarity: flat opaque surface (no BackdropFilter/glass), and the same
+    // surface/outline/shadow triple `AppCard` paints.
     Widget card = Container(
       width: width,
       height: height,
       margin: margin,
       padding: padding ?? const EdgeInsets.all(AquaTheme.spacingM),
       decoration: BoxDecoration(
-        color: isDark ? AquaTheme.cardDark : AquaTheme.cardLight,
+        color: ext.surface,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: isDark
-            ? Border.all(color: Colors.white.withOpacity(0.08), width: 1)
-            : null,
-        boxShadow: AquaTheme.cardShadow(beverage.primary),
+        border: ext.isDark ? Border.all(color: ext.outline, width: 1) : null,
+        boxShadow: AppShadows.card(context),
       ),
       child: child,
     );
@@ -128,9 +124,7 @@ class AquaSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final beverage = beverageId != null 
-        ? AquaTheme.getBeverage(beverageId!) 
-        : AquaTheme.getBeverage('water');
+    final ext = AppColorsExt.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -143,12 +137,12 @@ class AquaSectionHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                gradient: beverage.gradient,
-                borderRadius: BorderRadius.circular(AquaTheme.radiusSmall),
+                color: ext.water.container,
+                borderRadius: AppRadius.brSm,
               ),
               child: Icon(
                 icon,
-                color: Colors.white,
+                color: ext.water.onContainer,
                 size: 16,
               ),
             ),
@@ -164,8 +158,8 @@ class AquaSectionHeader extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AquaTheme.heading3.copyWith(
-                color: AquaTheme.getTextPrimary(context),
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                color: ext.textPrimary,
               ),
             ),
           ),
@@ -184,15 +178,15 @@ class AquaSectionHeader extends StatelessWidget {
                     children: [
                       Text(
                         actionText!,
-                        style: AquaTheme.labelMedium.copyWith(
-                          color: beverage.primary,
+                        style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                          color: ext.mark(ext.water),
                         ),
                       ),
                       const SizedBox(width: 4),
                       Icon(
                         Symbols.arrow_forward_ios_rounded,
                         size: 12,
-                        color: beverage.primary,
+                        color: ext.mark(ext.water),
                       ),
                     ],
                   ),
@@ -224,57 +218,36 @@ class AquaStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AquaTheme.isDark(context);
-    final beverage = beverageId != null 
-        ? AquaTheme.getBeverage(beverageId!) 
-        : AquaTheme.getBeverage('water');
+    final ext = AppColorsExt.of(context);
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(AquaTheme.spacingM),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              beverage.primary.withOpacity(isDark ? 0.2 : 0.1),
-              beverage.secondary.withOpacity(isDark ? 0.1 : 0.05),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-          border: Border.all(
-            color: beverage.primary.withOpacity(0.2),
-            width: 1,
-          ),
+          color: ext.water.container,
+          borderRadius: AppRadius.brLg,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: beverage.primary.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(AquaTheme.radiusSmall),
-              ),
-              child: Icon(
-                icon,
-                color: beverage.primary,
-                size: 20,
-              ),
-            ),
+            Icon(icon, color: ext.water.onContainer, size: 20),
             const SizedBox(height: AquaTheme.spacingS),
+            // `onContainer` on `container` is the AA-verified pair. The value
+            // used to be `beverage.primary` drawn on a 10%-tint of itself —
+            // cyan #06B6D4 on #E6F8FC measures 2.24:1, and milk's #FAFAFA on
+            // its own tint 1.03:1.
             Text(
               value,
-              style: AquaTheme.heading2.copyWith(
-                color: beverage.primary,
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                color: ext.water.onContainer,
                 fontWeight: FontWeight.w700,
               ),
             ),
             Text(
               label,
-              style: AquaTheme.bodySmall.copyWith(
-                color: AquaTheme.getTextSecondary(context),
+              style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                color: ext.water.onContainer,
               ),
             ),
           ],
@@ -289,57 +262,75 @@ class AquaStreakBadge extends StatelessWidget {
   final int streak;
   final bool isCompact;
 
+  /// Grace days still in hand this week — the user's "shield".
+  ///
+  /// [StreakEngine] has always forgiven one missed day per rolling week, and
+  /// the UI has always hidden that: the number simply didn't drop, and the user
+  /// never learned they had a safety net. The whole retention benefit of
+  /// forgiveness comes from knowing about it *before* the miss (Duolingo's
+  /// streak freeze: +3.3% D14, and their explicit finding is that a freeze the
+  /// user has to discover after the fact does nothing — they aren't in the app
+  /// to discover it).
+  final int gracesRemaining;
+
   const AquaStreakBadge({
     super.key,
     required this.streak,
     this.isCompact = false,
+    this.gracesRemaining = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     if (streak <= 0) return const SizedBox.shrink();
 
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+
+    // Same defect as DS-01/DS-02, in a pill: an orange gradient
+    // (#FF9500 -> #FF5E3A) with a same-hue glow, white w700 text on it at
+    // 2.21:1 and `Colors.white70` at 1.61:1. The amber `container`/
+    // `onContainer` pair carries the same "streak" heat and is AA-verified.
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isCompact ? 10 : 14,
         vertical: isCompact ? 6 : 8,
       ),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFF9500), Color(0xFFFF5E3A)],
-        ),
-        borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFF9500).withOpacity(0.4),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        color: ext.reminders.container,
+        borderRadius: AppRadius.brFull,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🔥', style: TextStyle(fontSize: 14)),
+          Icon(Symbols.local_fire_department_rounded,
+              size: 14,
+              color: ext.reminders.onContainer,
+              applyTextScaling: false),
           const SizedBox(width: 4),
           Text(
             '$streak',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isCompact ? 13 : 15,
+            style: (isCompact ? tt.titleSmall : tt.titleMedium)?.copyWith(
+              color: ext.reminders.onContainer,
               fontWeight: FontWeight.w700,
             ),
           ),
           if (!isCompact) ...[
             const SizedBox(width: 2),
-            const Text(
+            Text(
               'days',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
+              style: tt.labelSmall?.copyWith(color: ext.reminders.onContainer),
             ),
+          ],
+          if (gracesRemaining > 0) ...[
+            SizedBox(width: isCompact ? 4 : 6),
+            // A shield the user can see. Not decoration: it is the difference
+            // between "one bad day and I lose everything" and "one bad day is
+            // already covered".
+            Icon(Symbols.shield_rounded,
+                size: isCompact ? 12 : 14,
+                color: ext.reminders.onContainer,
+                applyTextScaling: false),
           ],
         ],
       ),

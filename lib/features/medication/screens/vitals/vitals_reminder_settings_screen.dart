@@ -25,6 +25,13 @@ class _VitalsReminderSettingsScreenState
   bool _syncLoaded = false;
   bool _syncToggleBusy = false;
 
+  /// True when the persisted "share with Health Connect" flag said ON but the
+  /// OS grant behind it is gone. The screen used to correct the flag and say
+  /// nothing, so the user met a switch that had turned itself off: identical
+  /// on screen to a switch they had never touched. The notice below says which
+  /// of the two it is, and that new readings stopped being shared.
+  bool _syncRevoked = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,15 +41,18 @@ class _VitalsReminderSettingsScreenState
   Future<void> _loadSyncPref() async {
     try {
       var enabled = await VitalsStorageService.isHealthConnectSyncEnabled();
+      var revoked = false;
       // Re-validate against the real OS grant, not just the persisted flag —
       // it can drift true if the user revoked access from the OS's own
       // Health Connect/Health app settings since last enabling sync here.
       if (enabled && !await HealthDataService.instance.hasVitalsWritePermission()) {
         enabled = false;
+        revoked = true;
         await VitalsStorageService.setHealthConnectSyncEnabled(false);
       }
       if (mounted) setState(() {
         _syncEnabled = enabled;
+        _syncRevoked = revoked;
         _syncLoaded = true;
       });
     } catch (e) {
@@ -74,7 +84,12 @@ class _VitalsReminderSettingsScreenState
         }
       }
       await VitalsStorageService.setHealthConnectSyncEnabled(v);
-      if (mounted) setState(() => _syncEnabled = v);
+      // Any successful toggle answers the notice — granting again clears it,
+      // and switching off deliberately makes "it turned itself off" untrue.
+      if (mounted) setState(() {
+        _syncEnabled = v;
+        _syncRevoked = false;
+      });
     } finally {
       if (mounted) setState(() => _syncToggleBusy = false);
     }
@@ -173,6 +188,10 @@ class _VitalsReminderSettingsScreenState
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
+                if (_syncRevoked) ...[
+                  _SyncRevokedNotice(healthAppName: _healthAppName),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
                 if (_syncLoaded)
                   SettingsSection(
                     title: 'Sync',
@@ -194,6 +213,41 @@ class _VitalsReminderSettingsScreenState
                     ],
                   ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown once, above the Sync row, when the OS grant behind an enabled sync
+/// has been revoked outside the app. Warning-coloured and persistent rather
+/// than a toast: the user is not necessarily on this screen when the
+/// revalidation runs, and the fact survives a rebuild until they act on it.
+class _SyncRevokedNotice extends StatelessWidget {
+  final String healthAppName;
+  const _SyncRevokedNotice({required this.healthAppName});
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
+      color: ext.warning.container,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Symbols.warning_amber_rounded,
+              size: 18, color: ext.warning.onContainer),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Sharing with $healthAppName stopped: its permission was turned '
+              'off outside DlyMinder, so new readings are no longer being '
+              'sent. Switch it back on below to grant it again.',
+              style: tt.bodySmall
+                  ?.copyWith(color: ext.warning.onContainer, height: 1.35),
             ),
           ),
         ],

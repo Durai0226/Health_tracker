@@ -1,5 +1,6 @@
 import '../../../core/utils/enum_json.dart';
 import 'focus_session.dart';
+import '../../../core/utils/calendar_day.dart';
 
 enum StatsPeriod {
   daily,
@@ -147,7 +148,10 @@ class WeeklyFocusStats {
   double get completionRate => totalSessions > 0 ? completedSessions / totalSessions : 0;
 
   static WeeklyFocusStats calculate(List<DailyFocusStats> dailyStats, DateTime weekStart) {
-    final weekEnd = weekStart.add(const Duration(days: 6));
+    // dayOffset, not add(Duration(days: 6)): weekStart is midnight and the
+    // rows are keyed to midnight, so on a spring-forward week 144 hours later
+    // lands at 23:00 the previous day and isAfter() drops that final day.
+    final weekEnd = dayOffset(weekStart, 6);
     final weeklyData = dailyStats.where((d) =>
         !d.date.isBefore(weekStart) && !d.date.isAfter(weekEnd)).toList();
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
+import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../models/clinic.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -87,36 +88,18 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
   }
 
   Future<void> _deleteClinic(Clinic clinic) async {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    final confirm = await showDialog<bool>(
+    // Dismissible, as the dialog it replaces was: a swipe-down or a tap on the
+    // scrim returns null, which is not `true` and so deletes nothing.
+    final confirm = await ConfirmationBottomSheet.showDelete(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: ext.surface,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brCard),
-        title: Text('Delete Clinic',
-            style: tt.headlineSmall?.copyWith(color: ext.textPrimary)),
-        content: Text('Are you sure you want to delete ${clinic.name}?',
-            style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel',
-                style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.mark(ext.error)),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      itemName: 'clinic',
+      customMessage: 'Are you sure you want to delete ${clinic.name}?',
     );
 
     if (confirm == true) {
       _hapticService.error();
       await MedicineCleanStorageService.deleteClinic(clinic.id);
-      _loadClinics();
+      await _loadClinics();
     }
   }
 
@@ -132,7 +115,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AppHeader(
-              title: widget.isSelectionMode ? 'Select Clinic' : 'Clinics',
+              title: widget.isSelectionMode ? 'Select clinic' : 'Clinics',
               leading: AppHeader.backButton(context),
             ),
             Expanded(
@@ -143,7 +126,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                       // state exactly the height the header leaves over, and
                       // at large Dynamic Type the circle + title + message
                       // need more than that (bottom overflow at 200%).
-                      ? _ScrollableFill(
+                      ? ScrollableFill(
                           child: EmptyState(
                             icon: Symbols.local_hospital_rounded,
                             title: 'No clinics added',
@@ -157,7 +140,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
         ),
         floatingActionButton: AppFab(
           icon: Symbols.add_rounded,
-          label: 'Add Clinic',
+          label: 'Add clinic',
           accent: med,
           onPressed: () => _navigateToAddEdit(),
         ),
@@ -195,8 +178,13 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
         padding: const EdgeInsets.only(right: 20),
         child: Icon(Symbols.delete_rounded, color: ext.error.on),
       ),
+      // Await the action, THEN answer — see the medication list screen, where
+      // this shape sprang the card back to rest while its own confirmation
+      // sheet was still open. `false` stays right afterwards: a row that
+      // really went away has already been rebuilt out of the list, and a
+      // cancelled delete must spring back.
       confirmDismiss: (direction) async {
-        _deleteClinic(clinic);
+        await _deleteClinic(clinic);
         return false;
       },
       child: AppCard(
@@ -342,29 +330,5 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
       default:
         return Symbols.local_hospital_rounded;
     }
-  }
-}
-
-/// Gives its child the incoming viewport height as a MINIMUM instead of a
-/// fixed size, and lets it scroll past that.
-///
-/// Anything dropped into an [Expanded] gets a tight height, which is fine
-/// until Dynamic Type grows the content past it — then a centred column of
-/// text simply gets clipped ("BOTTOM OVERFLOWED"). Because the constraint is
-/// only a minimum, layout at default text sizes is byte-for-byte unchanged.
-class _ScrollableFill extends StatelessWidget {
-  final Widget child;
-  const _ScrollableFill({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: child,
-        ),
-      ),
-    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
+import '../../../core/widgets/app/app_widgets.dart';
 import '../theme/aqua_theme.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
@@ -76,7 +77,6 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                 child: _buildAmountButton(
                   option,
                   beverage,
-                  beverage.emoji,
                   isDark,
                   isPressed,
                   index,
@@ -101,6 +101,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   }
 
   Widget _buildCupsSection(BeverageThemeData beverage, bool isDark) {
+    final ext = AppColorsExt.of(context);
     // Surface custom cups first, then defaults.
     final containers = [...WaterService.getAllContainers()]
       ..sort((a, b) {
@@ -113,12 +114,13 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
       children: [
         Row(
           children: [
-            Icon(Symbols.local_cafe_rounded, size: 16, color: beverage.primary),
+            Icon(Symbols.local_cafe_rounded,
+                size: 16, color: ext.mark(ext.water)),
             const SizedBox(width: 6),
             Text(
               'Cups',
-              style: AquaTheme.labelMedium.copyWith(
-                color: AquaTheme.getTextSecondary(context),
+              style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                color: ext.textSecondary,
               ),
             ),
           ],
@@ -149,6 +151,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     BeverageThemeData beverage,
     bool isDark,
   ) {
+    final ext = AppColorsExt.of(context);
     return Semantics(
       button: true,
       label: 'Add ${container.capacityMl} millilitres from ${container.emoji} cup',
@@ -163,22 +166,24 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
-          border: Border.all(
-            color: beverage.primary.withOpacity(isDark ? 0.3 : 0.2),
-            width: 1,
-          ),
+          color: ext.surfaceVariant,
+          borderRadius: AppRadius.brFull,
+          border: Border.all(color: ext.outline, width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(container.emoji, style: const TextStyle(fontSize: 16)),
+            // emoji-content-ok: the user PICKED this glyph for this cup in the
+            // creator and it is persisted on the container. It renders at body
+            // size, is not in a decorated tile of its own, and swapping it for
+            // an icon would discard their choice.
+            Text(container.emoji,
+                style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(width: 6),
             Text(
               '${container.capacityMl}ml',
-              style: AquaTheme.labelMedium.copyWith(
-                color: AquaTheme.getTextPrimary(context),
+              style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                color: ext.textPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -190,6 +195,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   }
 
   Widget _buildNewCupChip(BeverageThemeData beverage, bool isDark) {
+    final onFill = AquaTheme.onBeverage(beverage.primary);
     return Semantics(
       button: true,
       label: 'Create new cup',
@@ -204,18 +210,18 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          gradient: beverage.gradient,
-          borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+          color: beverage.primary,
+          borderRadius: AppRadius.brFull,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Symbols.add_rounded, size: 16, color: Colors.white),
+            Icon(Symbols.add_rounded, size: 16, color: onFill),
             const SizedBox(width: 6),
             Text(
               'New Cup',
-              style: AquaTheme.labelMedium.copyWith(
-                color: Colors.white,
+              style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                color: onFill,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -227,6 +233,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   }
 
   Widget _buildBeverageSelector(BeverageThemeData beverage, bool isDark) {
+    final ext = AppColorsExt.of(context);
     final beverageList = WaterService.getAllBeverages();
 
     return SizedBox(
@@ -252,8 +259,8 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
             },
             child: AnimatedContainer(
               duration: AquaTheme.animationFast,
-              // 44pt floor: `vertical: 10` around the emoji lands at exactly
-              // 40. These sit in a horizontally scrolling strip, where an
+              // 44pt floor: `vertical: 10` around the 18pt glyph lands at 38.
+              // These sit in a horizontally scrolling strip, where an
               // undersized target is easiest to miss — a near-miss scrolls the
               // strip instead of selecting the beverage.
               constraints: const BoxConstraints(minHeight: 44),
@@ -267,38 +274,33 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                 vertical: 10,
               ),
               decoration: BoxDecoration(
-                gradient: isSelected ? bev.gradient : null,
-                color: isSelected 
-                    ? null 
-                    : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100),
-                borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+                color: isSelected ? bev.primary : ext.surfaceVariant,
+                borderRadius: AppRadius.brFull,
                 border: Border.all(
-                  color: isSelected 
-                      ? Colors.transparent 
-                      : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade300),
+                  color: isSelected ? Colors.transparent : ext.outline,
                   width: 1,
                 ),
-                boxShadow: isSelected ? [
-                  BoxShadow(
-                    color: bev.primary.withOpacity(0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ] : null,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    bev.emoji,
-                    style: const TextStyle(fontSize: 18),
+                  // DS-17: an 18pt emoji inside a filled chip is chrome. The
+                  // glyph comes from the icon font; the drink's identity still
+                  // comes from the chip's fill.
+                  Icon(
+                    AquaTheme.iconFor(bev.id),
+                    size: 18,
+                    color: isSelected
+                        ? AquaTheme.onBeverage(bev.primary)
+                        : ext.textSecondary,
+                    applyTextScaling: false,
                   ),
                   if (isSelected) ...[
                     const SizedBox(width: 6),
                     Text(
                       bev.name,
-                      style: AquaTheme.labelMedium.copyWith(
-                        color: Colors.white,
+                      style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                        color: AquaTheme.onBeverage(bev.primary),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -316,11 +318,11 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   Widget _buildAmountButton(
     _QuickAddOption option,
     BeverageThemeData beverage,
-    String emoji,
     bool isDark,
     bool isPressed,
     int index,
   ) {
+    final ext = AppColorsExt.of(context);
     return Semantics(
       button: true,
       label: 'Add ${option.amount} millilitres, ${option.label}',
@@ -340,32 +342,19 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         // against the 1.5pt border of its cell.
         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
-                : [Colors.white, Colors.grey.shade50],
-          ),
-          borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-          border: Border.all(
-            color: beverage.primary.withOpacity(isDark ? 0.3 : 0.2),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: beverage.primary.withOpacity(isDark ? 0.2 : 0.1),
-              blurRadius: isPressed ? 5 : 12,
-              offset: Offset(0, isPressed ? 2 : 4),
-            ),
-          ],
+          color: ext.surface,
+          borderRadius: AppRadius.brLg,
+          border: Border.all(color: beverage.primary, width: 1.5),
+          boxShadow: isPressed ? AppShadows.resting(context) : AppShadows.card(context),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              emoji,
-              style: const TextStyle(fontSize: 24),
+            Icon(
+              AquaTheme.iconFor(beverage.id),
+              size: 24,
+              color: ext.mark(ext.water),
+              applyTextScaling: false,
             ),
             const SizedBox(height: 6),
             // Four of these share a row, so each cell is ~80pt wide. At large
@@ -373,18 +362,19 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
             // and shoved the unit out of the tile. A number must never break:
             // shrink it to fit instead. scaleDown never enlarges, so the tile
             // is unchanged at default text sizes.
+            // Was white text behind a `ShaderMask` of the beverage gradient,
+            // so on a white card the amount rendered in the drink's own two
+            // hues — 1.03:1 for milk. The figure is the point of the tile: it
+            // reads in `textPrimary`.
             FittedBox(
               fit: BoxFit.scaleDown,
-              child: ShaderMask(
-                shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
-                child: Text(
-                  '+${option.amount}',
-                  maxLines: 1,
-                  softWrap: false,
-                  style: AquaTheme.labelLarge.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
+              child: Text(
+                '+${option.amount}',
+                maxLines: 1,
+                softWrap: false,
+                style: Theme.of(context).textTheme.labelLarge!.copyWith(
+                  color: ext.textPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -394,8 +384,8 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                 'ml',
                 maxLines: 1,
                 softWrap: false,
-                style: AquaTheme.caption.copyWith(
-                  color: AquaTheme.getTextSecondary(context),
+                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                  color: ext.textSecondary,
                 ),
               ),
             ),
@@ -407,6 +397,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   }
 
   Widget _buildCustomAmountButton(BeverageThemeData beverage, bool isDark) {
+    final onFill = AquaTheme.onBeverage(beverage.primary);
     return Semantics(
       button: true,
       label: 'Custom amount',
@@ -420,20 +411,13 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          gradient: beverage.gradient,
-          borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-          boxShadow: [
-            BoxShadow(
-              color: beverage.primary.withOpacity(0.4),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
+          color: beverage.primary,
+          borderRadius: AppRadius.brMd,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Symbols.add_circle_rounded, color: Colors.white, size: 20),
+            Icon(Symbols.add_circle_rounded, color: onFill, size: 20),
             const SizedBox(width: 8),
             // Bound the label to the row and shrink-to-fit rather than let it
             // run off the CTA at large text sizes (scaleDown never enlarges).
@@ -444,8 +428,8 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                   'Custom Amount',
                   maxLines: 1,
                   softWrap: false,
-                  style: AquaTheme.labelLarge.copyWith(
-                    color: Colors.white,
+                  style: Theme.of(context).textTheme.labelLarge!.copyWith(
+                    color: onFill,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -488,17 +472,19 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final beverage = AquaTheme.getBeverage(widget.beverageId);
-    final isDark = AquaTheme.isDark(context);
+    final onFill = AquaTheme.onBeverage(beverage.primary);
 
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
         padding: const EdgeInsets.all(AquaTheme.spacingL),
         decoration: BoxDecoration(
-          color: AquaTheme.getCardBg(context),
-          borderRadius: BorderRadius.circular(AquaTheme.radiusLarge),
-          boxShadow: AquaTheme.cardShadow(beverage.primary),
+          color: ext.surface,
+          borderRadius: AppRadius.brSheet,
+          boxShadow: AppShadows.elevated(context),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -506,9 +492,11 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
             // Header
             Row(
               children: [
-                Text(
-                  beverage.emoji,
-                  style: const TextStyle(fontSize: 28),
+                Icon(
+                  AquaTheme.iconFor(beverage.id),
+                  size: 28,
+                  color: ext.mark(ext.water),
+                  applyTextScaling: false,
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -516,15 +504,11 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                   children: [
                     Text(
                       'Custom Amount',
-                      style: AquaTheme.heading2.copyWith(
-                        color: AquaTheme.getTextPrimary(context),
-                      ),
+                      style: tt.headlineSmall!.copyWith(color: ext.textPrimary),
                     ),
                     Text(
                       beverage.name,
-                      style: AquaTheme.bodySmall.copyWith(
-                        color: beverage.primary,
-                      ),
+                      style: tt.bodySmall!.copyWith(color: ext.textSecondary),
                     ),
                   ],
                 ),
@@ -537,72 +521,28 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    beverage.primary.withOpacity(0.1),
-                    beverage.secondary.withOpacity(0.05),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
+                color: ext.surfaceVariant,
+                borderRadius: AppRadius.brLg,
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      setState(() {
-                        _amount = (_amount - 50).clamp(50, 2000);
-                      });
-                    },
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: beverage.primary.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Symbols.remove_rounded, color: beverage.primary),
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Column(
-                    children: [
-                      ShaderMask(
-                        shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
-                        child: Text(
-                          '$_amount',
-                          style: AquaTheme.displayLarge.copyWith(
-                            color: Colors.white,
-                            fontSize: 42,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        'ml',
-                        style: AquaTheme.bodyMedium.copyWith(
-                          color: AquaTheme.getTextSecondary(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 20),
-                  IconButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      setState(() {
-                        _amount = (_amount + 50).clamp(50, 2000);
-                      });
-                    },
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: beverage.primary.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Symbols.add_rounded, color: beverage.primary),
-                    ),
-                  ),
-                ],
+              child: AppStepper(
+                value: '$_amount',
+                subLabel: 'ml',
+                valueStyle: tt.displayLarge,
+                accent: ext.water,
+                decrementTooltip: 'Decrease by 50 ml',
+                incrementTooltip: 'Increase by 50 ml',
+                onDecrement: _amount <= 50
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _amount = (_amount - 50).clamp(50, 2000));
+                      },
+                onIncrement: _amount >= 2000
+                    ? null
+                    : () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _amount = (_amount + 50).clamp(50, 2000));
+                      },
               ),
             ),
             
@@ -622,21 +562,16 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      gradient: isSelected ? beverage.gradient : null,
-                      color: isSelected 
-                          ? null 
-                          : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100),
-                      borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
+                      color: isSelected ? beverage.primary : ext.surfaceVariant,
+                      borderRadius: AppRadius.brFull,
                       border: Border.all(
-                        color: isSelected 
-                            ? Colors.transparent 
-                            : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade300),
+                        color: isSelected ? Colors.transparent : ext.outline,
                       ),
                     ),
                     child: Text(
                       '${preset}ml',
-                      style: AquaTheme.labelMedium.copyWith(
-                        color: isSelected ? Colors.white : AquaTheme.getTextPrimary(context),
+                      style: tt.labelMedium!.copyWith(
+                        color: isSelected ? onFill : ext.textPrimary,
                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       ),
                     ),
@@ -658,25 +593,18 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
-                  gradient: beverage.gradient,
-                  borderRadius: BorderRadius.circular(AquaTheme.radiusMedium),
-                  boxShadow: [
-                    BoxShadow(
-                      color: beverage.primary.withOpacity(0.4),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
+                  color: beverage.primary,
+                  borderRadius: AppRadius.brMd,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Symbols.add_rounded, color: Colors.white),
+                    Icon(Symbols.add_rounded, color: onFill),
                     const SizedBox(width: 8),
                     Text(
                       'Add $_amount ml',
-                      style: AquaTheme.labelLarge.copyWith(
-                        color: Colors.white,
+                      style: tt.labelLarge!.copyWith(
+                        color: onFill,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

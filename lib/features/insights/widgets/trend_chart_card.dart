@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../services/trends_data_service.dart';
 import 'trend_table_view.dart';
@@ -21,16 +22,13 @@ class TrendBand {
 }
 
 const List<FontFeature> _tabular = [FontFeature.tabularFigures()];
-const List<String> _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-const List<String> _weekdays = [
-  'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-];
 
-String _tooltipDate(DateTime d) =>
-    '${_weekdays[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]}';
+/// The tooltip's date line, e.g. "Mon, Mar 14".
+///
+/// This was two const English tables indexed by `weekday - 1` / `month - 1`, so
+/// a chart tooltip stayed English — and day-before-month — whatever the device
+/// was set to, while every other date in the app went through [DateFormats].
+String _tooltipDate(DateTime d) => DateFormats.weekdayDayMonthShort.format(d);
 
 /// A reusable small-multiple card: one feature, its FIXED accent, a header
 /// (accent icon tile + title + tabular headline stat + optional trend arrow), a
@@ -1189,7 +1187,9 @@ Color _trendColorOf(AppColorsExt ext, StatTrend t) => switch (t) {
       StatTrend.flat => ext.textTertiary,
     };
 
-/// A sparse bottom date axis: ~4 evenly-spaced 'M/d' labels, never one per day.
+/// A sparse bottom date axis: ~4 evenly-spaced short numeric dates, never one
+/// per day. The label itself comes from [DateFormats.numericShort] rather than
+/// being assembled here, so the whole app changes date style in one place.
 Widget _bottomDateLabel(
     int i, List<TrendPoint> points, int n, TextTheme tt, AppColorsExt ext) {
   if (i < 0 || i >= n) return const SizedBox.shrink();
@@ -1198,7 +1198,7 @@ Widget _bottomDateLabel(
   final d = points[i].date;
   return Padding(
     padding: const EdgeInsets.only(top: 6),
-    child: Text('${d.month}/${d.day}',
+    child: Text(DateFormats.numericShort.format(d),
         style: tt.labelSmall?.copyWith(color: ext.textTertiary, fontFeatures: _tabular)),
   );
 }

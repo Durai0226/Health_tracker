@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
+import '../utils/step_format.dart';
 
 /// Bottom sheet to add or adjust steps by hand — the zero-permission path that
 /// always works (Simulator included).
@@ -110,6 +111,14 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
   /// This is a MAGNITUDE editor — it is seeded with `_amount.abs()` and a typed
   /// figure is always a positive step count. Subtracting stays on the minus
   /// stepper, which is the only signed control the sheet advertises.
+  ///
+  /// Deliberately still a dialog. DS-13 moved the app's raw Material asks onto
+  /// `ConfirmationBottomSheet`, but that helper answers `bool?` out of a fixed
+  /// title + message + two buttons: no slot for a field, no way to hand back an
+  /// `int`. This is a form, not a decision — and it already draws on the kit
+  /// (`ext.surfaceElevated`, `AppRadius.brCard`, `AppTextField`, `AppButton`),
+  /// so converting it would buy a second modal sheet stacked on the one
+  /// `StepManualEntrySheet.show` is already inside.
   Future<void> _openEditor() async {
     final ext = AppColorsExt.of(context);
     final s = ext.steps;
@@ -134,7 +143,7 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
                   : value <= 0
                       ? 'Enter a number greater than 0'
                       : value > _maxSteps
-                          ? 'Enter ${_formatUnsigned(_maxSteps)} or less'
+                          ? 'Enter ${formatThousands(_maxSteps)} or less'
                           : null;
               if (message != null) {
                 setDialogState(() => error = message);
@@ -231,21 +240,13 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
     return '${wd[(_date.weekday - 1) % 7]} ${_date.day}';
   }
 
-  // ── Display helpers (no new dependency) ───────────────────────────────────
-  String _formatUnsigned(int value) {
-    final digits = value.abs().toString();
-    final buf = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) buf.write(',');
-      buf.write(digits[i]);
-    }
-    return buf.toString();
-  }
-
+  // ── Display helpers ───────────────────────────────────────────────────────
+  /// `+1,500` / `-1,500` / `0` — the sign is part of the reading here, because
+  /// a manual entry can be a trim as well as an addition.
   String _formatSigned(int value) {
-    if (value > 0) return '+${_formatUnsigned(value)}';
-    if (value < 0) return '-${_formatUnsigned(value)}';
-    return '0';
+    if (value == 0) return '0';
+    final grouped = formatThousands(value); // already carries a leading '-'
+    return value > 0 ? '+$grouped' : grouped;
   }
 
   /// K-notation keeps the preset chips a uniform, scannable width.
@@ -258,12 +259,12 @@ class _StepManualEntrySheetState extends State<StepManualEntrySheet> {
       case 5000:
         return '+5K';
       default:
-        return '+${_formatUnsigned(p)}';
+        return '+${formatThousands(p)}';
     }
   }
 
   String get _ctaLabel =>
-      _amount < 0 ? 'Adjust steps' : 'Add ${_formatUnsigned(_amount)} steps';
+      _amount < 0 ? 'Adjust steps' : 'Add ${formatThousands(_amount)} steps';
 
   @override
   Widget build(BuildContext context) {

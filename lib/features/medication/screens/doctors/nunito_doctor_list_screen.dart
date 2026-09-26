@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
+import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -85,41 +86,18 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
   }
 
   Future<void> _deleteDoctor(Doctor doctor) async {
-    final ext = AppColorsExt.of(context);
-    final confirm = await showDialog<bool>(
+    // Dismissible, as the dialog it replaces was: a swipe-down or a tap on the
+    // scrim returns null, which is not `true` and so deletes nothing.
+    final confirm = await ConfirmationBottomSheet.showDelete(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: ext.surface,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
-        title: Text('Delete Doctor',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(color: ext.textPrimary)),
-        content: Text('Are you sure you want to delete Dr. ${doctor.name}?',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: ext.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel',
-                style: TextStyle(color: ext.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      itemName: 'doctor',
+      customMessage: 'Are you sure you want to delete Dr. ${doctor.name}?',
     );
 
     if (confirm == true) {
       _hapticService.error();
       await MedicineCleanStorageService.deleteDoctor(doctor.id);
-      _loadDoctors();
+      await _loadDoctors();
     }
   }
 
@@ -131,16 +109,21 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
     return AccentScope(
       feature: FeatureAccent.medicine,
       child: AppScaffold(
-        floatingActionButton: AppFab(
-          icon: Symbols.add_rounded,
-          label: 'Add Doctor',
-          accent: accent,
-          onPressed: () => _navigateToAddEdit(),
-        ),
+        // DS-16: one primary action per state. The empty state already
+        // carries the same CTA, so the FAB there was a second button for the
+        // same job -- and with a tall empty state it overlapped it.
+        floatingActionButton: _doctors.isEmpty
+            ? null
+            : AppFab(
+                icon: Symbols.add_rounded,
+                label: 'Add doctor',
+                accent: accent,
+                onPressed: () => _navigateToAddEdit(),
+              ),
         body: Column(
           children: [
             AppHeader(
-              title: widget.isSelectionMode ? 'Select Doctor' : 'Doctors',
+              title: widget.isSelectionMode ? 'Select doctor' : 'Doctors',
               leading: AppHeader.backButton(context),
             ),
             Expanded(
@@ -151,7 +134,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
                       // state exactly the height the header leaves over, and
                       // at large Dynamic Type the circle + title + message +
                       // button need more than that (bottom overflow at 200%).
-                      ? _ScrollableFill(
+                      ? ScrollableFill(
                           child: EmptyState(
                             icon: Symbols.person_add_rounded,
                             title: 'No doctors added',
@@ -159,7 +142,7 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
                                 'Add your doctors to keep their info handy.',
                             accent: accent,
                             action: AppButton(
-                              label: 'Add Doctor',
+                              label: 'Add doctor',
                               accent: accent,
                               leadingIcon: Symbols.add_rounded,
                               onPressed: () => _navigateToAddEdit(),
@@ -201,8 +184,13 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
         padding: const EdgeInsets.only(right: 20),
         child: Icon(Symbols.delete_rounded, color: ext.error.on),
       ),
+      // Await the action, THEN answer — see the medication list screen, where
+      // this shape sprang the card back to rest while its own confirmation
+      // sheet was still open. `false` stays right afterwards: a row that
+      // really went away has already been rebuilt out of the list, and a
+      // cancelled delete must spring back.
       confirmDismiss: (direction) async {
-        _deleteDoctor(doctor);
+        await _deleteDoctor(doctor);
         return false;
       },
       child: AppCard(
@@ -323,29 +311,5 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
     return parts.isNotEmpty ? parts[0][0].toUpperCase() : '?';
-  }
-}
-
-/// Gives its child the incoming viewport height as a MINIMUM instead of a
-/// fixed size, and lets it scroll past that.
-///
-/// Anything dropped into an [Expanded] gets a tight height, which is fine
-/// until Dynamic Type grows the content past it — then a centred column of
-/// text simply gets clipped ("BOTTOM OVERFLOWED"). Because the constraint is
-/// only a minimum, layout at default text sizes is byte-for-byte unchanged.
-class _ScrollableFill extends StatelessWidget {
-  final Widget child;
-  const _ScrollableFill({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: child,
-        ),
-      ),
-    );
   }
 }

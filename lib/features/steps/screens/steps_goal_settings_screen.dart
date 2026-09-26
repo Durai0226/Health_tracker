@@ -3,7 +3,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
+import '../models/health_profile.dart';
 import '../services/step_service.dart';
+import '../utils/step_format.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// Goal + body-profile settings: choose an adaptive or a fixed custom goal, see
 /// exactly why the adaptive goal is what it is, and provide weight/height so
@@ -23,6 +26,8 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
   late int _reminderMinute;
   final _weightController = TextEditingController();
   final _heightController = TextEditingController();
+  String? _weightError;
+  String? _heightError;
   bool _saving = false;
 
   @override
@@ -70,7 +75,7 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
 
   String _explanation() {
     if (_useCustom) {
-      return 'Your goal is fixed at ${_fmt(_customGoal)} steps until you switch '
+      return 'Your goal is fixed at ${formatThousands(_customGoal)} steps until you switch '
           'back to Adaptive.';
     }
     final now = DateTime.now();
@@ -95,10 +100,26 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
 
   Future<void> _save() async {
     if (_saving) return;
-    setState(() => _saving = true);
-    final base = StepService.getProfile();
     final wText = _weightController.text.trim();
     final hText = _heightController.text.trim();
+
+    // Validated BEFORE `_saving` flips, so a rejected save leaves the button
+    // usable instead of spinning. These values are not decoration: height
+    // becomes every distance the app reports and weight becomes every calorie
+    // figure, so a stray `-5` would be shown back to the user as a confident
+    // health number rather than as the typo it is.
+    final wError = HealthProfile.validateWeightText(wText);
+    final hError = HealthProfile.validateHeightText(hText);
+    if (wError != null || hError != null) {
+      setState(() {
+        _weightError = wError;
+        _heightError = hError;
+      });
+      return;
+    }
+
+    setState(() => _saving = true);
+    final base = StepService.getProfile();
     final updated = base.copyWith(
       useCustomStepGoal: _useCustom,
       customStepGoal: _customGoal,
@@ -113,15 +134,33 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
 
   /// Reminder settings persist immediately (independent of the profile save on
   /// pop) and reschedule the gentle evening nudge right away.
-  void _updateReminder(bool enabled, int minute) {
+  Future<void> _updateReminder(bool enabled, int minute) async {
     setState(() {
       _reminderEnabled = enabled;
       _reminderMinute = minute;
     });
     StepService.setReminder(enabled, minute);
-    NotificationService().scheduleStepReminder(
+
+    // Believe the answer. `scheduleStepReminder` used to return void and bail
+    // on a permission refusal with only a debugPrint, so the switch stayed ON
+    // and the subtitle named a time for a nudge that was never scheduled.
+    final armed = await NotificationService().scheduleStepReminder(
       enabled: enabled,
       minuteOfDay: minute,
+    );
+    // Being told "not armed" for a reminder just switched OFF is the expected
+    // answer, not a failure.
+    if (!enabled || armed) return;
+
+    if (!mounted) return;
+    setState(() => _reminderEnabled = false);
+    StepService.setReminder(false, minute);
+    context.toastWarning(
+      'Notifications are off, so the step reminder could not be set.',
+      action: AppToastAction(
+        label: 'Open settings',
+        onPressed: () => openAppSettings(),
+      ),
     );
   }
 
@@ -188,7 +227,7 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       Text(
-                        '${_fmt(_previewGoal())} steps',
+                        '${formatThousands(_previewGoal())} steps',
                         style: tt.displaySmall?.copyWith(
                           color: ext.mark(s),
                           fontWeight: FontWeight.w800,
@@ -224,7 +263,7 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
                               onPressed: () => _bumpCustom(-500),
                             ),
                             Text(
-                              _fmt(_customGoal),
+                              formatThousands(_customGoal),
                               style: tt.displaySmall?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 fontFeatures: const [
@@ -261,6 +300,14 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
                         accent: s,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
+                        errorText: _weightError,
+                        // Cleared on edit rather than re-validated on every
+                        // keystroke: typing "70" passes through "7", and an
+                        // error that flashes while you type reads as the app
+                        // arguing with you.
+                        onChanged: _weightError == null
+                            ? null
+                            : (_) => setState(() => _weightError = null),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppTextField(
@@ -271,6 +318,10 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
                         keyboardType: TextInputType.number,
                         helperText:
                             'Used to estimate distance and active calories.',
+                        errorText: _heightError,
+                        onChanged: _heightError == null
+                            ? null
+                            : (_) => setState(() => _heightError = null),
                       ),
                     ],
                   ),
@@ -339,15 +390,5 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
         ],
       ),
     );
-  }
-
-  static String _fmt(int n) {
-    final str = n.abs().toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buf.write(',');
-      buf.write(str[i]);
-    }
-    return '${n < 0 ? '-' : ''}$buf';
   }
 }

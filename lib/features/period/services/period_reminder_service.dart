@@ -4,6 +4,7 @@ import '../models/cycle_prediction.dart';
 import '../models/period_reminder_config.dart';
 import '../models/period_settings.dart';
 import 'period_service.dart';
+import '../../../core/utils/calendar_day.dart';
 
 // Stable notification ids in the period range, so a reschedule cleanly cancels
 // the previous arming before scheduling the (shifted) next one.
@@ -48,8 +49,12 @@ class PeriodReminderPlanner {
     if (start == null) return out;
 
     DateTime at(DateTime day, {int minusDays = 0}) {
-      final d = day.subtract(Duration(days: minusDays));
-      return DateTime(d.year, d.month, d.day, config.reminderHour, config.reminderMinute);
+      // Calendar arithmetic, not an elapsed Duration: across a DST transition
+      // `subtract(Duration(days: n))` lands on the previous calendar day, so
+      // the "cycle coming up" / PMS / fertile nudges all fired a day early.
+      final d = dayOffset(day, -minusDays);
+      return DateTime(
+          d.year, d.month, d.day, config.reminderHour, config.reminderMinute);
     }
 
     void add(bool enabled, int id, DateTime when, String title, String body) {

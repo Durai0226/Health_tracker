@@ -1,5 +1,7 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/utils/calendar_day.dart';
 import '../../../core/utils/date_formats.dart';
 import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/haptic_service.dart';
@@ -35,7 +37,7 @@ class NunitoMedicationDashboard extends StatefulWidget {
 }
 
 class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   List<EnhancedMedicine> _medicines = [];
   List<_ScheduledDose> _todaysDoses = [];
   final Map<String, bool> _takenStatus = {};
@@ -49,12 +51,30 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   /// which rendered a fabricated "100% adherence" next to "0 Medicines".
   /// A health app must not invent a clinical figure — gate the display on this.
   int _adherenceScheduled = 0;
-  // Log ids applied this load from queued notification actions (for Undo).
-  List<String> _drainedLogIds = const [];
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = clock.now();
+  /// Whether [_selectedDate] means "today" rather than a day the user picked.
+  ///
+  /// Starts true because the initial selection IS today. It has to be tracked
+  /// separately: once the clock rolls past midnight, "the selection is today"
+  /// and "the selection was today when it was made" stop being the same
+  /// question, and only the second one may be moved forward.
+  bool _selectionWasToday = true;
   // Guards against overlapping / re-entrant loads (see _loadData).
   bool _loadInFlight = false;
   bool _reloadQueued = false;
+  /// Log ids (see [MedicineCleanStorageService.doseLogId]) of slots the user
+  /// undid back to having NO outcome at all.
+  ///
+  /// `reconcileMissedDoses` runs on every load and writes a `missed` log for
+  /// any past-due slot without a terminal one — which is exactly what Undo
+  /// leaves behind. On a dose whose slot is already past the 3h grace window
+  /// that landed in the same reload, so the row came back as "Missed"
+  /// instantly: the Undo read as a no-op AND, missed being terminal, the dose
+  /// could no longer be taken. The row is left in the table (the dose really
+  /// is unaccounted for, so adherence must still count it) and ignored HERE
+  /// until the slot gets a real outcome — taking or skipping it overwrites
+  /// that row, since the id is the same.
+  final Set<String> _reopenedDoseIds = {};
   // Timeline vs. pillbox-tray layout for today's schedule; persisted so the
   // choice survives an app restart (see _loadViewModePreference).
   _MedicationViewMode _viewMode = _MedicationViewMode.timeline;
@@ -81,6 +101,9 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       curve: AppMotion.standard,
     );
     _viewMode = _loadViewModePreference();
+    // Resume is when a phone left on this screen overnight comes back — see
+    // _rollSelectionToTodayIfStale.
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
     // Live refresh: any dose taken/edited/deleted — here, from a notification,
     // the medicine detail screen, or another tab — bumps this revision. Kept
@@ -96,11 +119,36 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   }
 
   void _onMedicineRevision() {
-    if (mounted) _loadData(showLoader: false);
+    if (!mounted) return;
+    _rollSelectionToTodayIfStale();
+    _loadData(showLoader: false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (_rollSelectionToTodayIfStale()) _loadData(showLoader: false);
+  }
+
+  /// Move a "today" selection onto the real today when the day has changed
+  /// underneath the screen. Returns whether it moved.
+  ///
+  /// The dashboard is kept alive in the Health hub's IndexedStack, so a phone
+  /// left open across midnight went on showing YESTERDAY as today: yesterday's
+  /// doses, yesterday's Taken count, and a Take button that wrote its log
+  /// against the wrong day. A date the user tapped in the strip is left exactly
+  /// where they put it — only a selection that meant "today" rolls over.
+  bool _rollSelectionToTodayIfStale() {
+    if (!_selectionWasToday) return false;
+    final today = clock.now();
+    if (isSameCalendarDay(_selectedDate, today)) return false;
+    _selectedDate = today;
+    return true;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     MedicineCleanStorageService.revision.removeListener(_onMedicineRevision);
     ActiveProfileService().removeListener(_onMedicineRevision);
     _fadeController.dispose();
@@ -133,9 +181,12 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     if (showLoader) setState(() => _isLoading = true);
     try {
       await MedicineCleanStorageService.init();
-      // Apply any Take/Skip the user tapped on a notification while the app was
-      // closed (queued by the background isolate); reflected below in the stats.
-      _drainedLogIds = await MedicineCleanStorageService.drainPendingDoseActions();
+      // The dose queue is drained by AppShell, which owns it — see the note
+      // there. This screen used to drain it too, and because the drain is
+      // read-and-clear the two raced: one of them got the ids and showed
+      // "Logged N doses · Undo", the other showed nothing. The drain's writes
+      // bump `revision`, which this screen already listens to, so the numbers
+      // below arrive either way.
       // Backfill `missed` logs for past-due slots so adherence reflects reality.
       await MedicineCleanStorageService.reconcileMissedDoses();
       _medicines = await MedicineCleanStorageService.getAllMedicines();
@@ -152,32 +203,6 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       debugPrint('Error loading data: $e');
     }
     if (mounted) setState(() => _isLoading = false);
-
-    // Confirm + offer Undo for doses logged from a notification while away.
-    if (_drainedLogIds.isNotEmpty && mounted) {
-      final ids = _drainedLogIds;
-      _drainedLogIds = const [];
-      final n = ids.length;
-      context.toastSuccess(
-        'Logged $n dose${n == 1 ? '' : 's'} from your reminder',
-        action: AppToastAction(
-          label: 'Undo',
-          onPressed: () async {
-            for (final id in ids) {
-              // Reverse the stock decrement for taken doses before deleting,
-              // otherwise Undo silently loses inventory.
-              final log = await MedicineCleanStorageService.getLog(id);
-              if (log != null && log.countsAsTaken) {
-                await MedicineCleanStorageService.restoreStock(
-                    log.medicineId, log.dosageTaken);
-              }
-              await MedicineCleanStorageService.deleteLog(id);
-            }
-            await _loadData();
-          },
-        ),
-      );
-    }
 
     // One-shot: after a real adherence "win", ask for a store rating (never nags).
     if (!_ratingChecked && mounted) {
@@ -207,6 +232,12 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     if (!mounted) return;
     _hapticService.medium();
     final ext = AppColorsExt.of(context);
+    // Deliberately still a Material dialog, and the one raw use this file's
+    // entry in the design-token guard's budget records. DS-13 moved the
+    // screens' CONFIRMATIONS onto ConfirmationBottomSheet, whose contract is a
+    // two-button decision returning `bool?`; a celebration asks nothing, has
+    // no cancel arm and no result to branch on, so routing it through that
+    // helper would invent a "Cancel" for a streak.
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -277,7 +308,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     final doses = TodayScheduleService.dosesFrom(
       requestDate,
       medicines: _medicines,
-      logs: await MedicineCleanStorageService.getLogsForDate(requestDate),
+      logs: _withoutReopenedSlots(
+          await MedicineCleanStorageService.getLogsForDate(requestDate)),
     );
     // Discard stale results if the user changed the date during the await —
     // otherwise two rapid taps could interleave and merge both days' doses.
@@ -295,9 +327,26 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     }
   }
 
+  /// Drops the `missed` rows the reconcile re-wrote over a slot the user just
+  /// undid — see [_reopenedDoseIds]. Only `missed` is dropped: once the slot
+  /// has a real outcome again its row must be honoured like any other.
+  List<MedicineLog> _withoutReopenedSlots(List<MedicineLog> logs) =>
+      _reopenedDoseIds.isEmpty
+          ? logs
+          : logs
+              .where((l) => !(l.isMissed && _reopenedDoseIds.contains(l.id)))
+              .toList();
+
   void _onDateChanged(DateTime date) {
-    setState(() => _selectedDate = date);
-    _buildTodaySchedule().then((_) => setState(() {}));
+    setState(() {
+      _selectedDate = date;
+      _selectionWasToday = isSameCalendarDay(date, clock.now());
+    });
+    // Guarded: leaving the screen while the new day's doses are still loading
+    // would otherwise setState on a disposed State.
+    _buildTodaySchedule().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   static const String _viewModeKey = 'medicationViewMode';
@@ -328,6 +377,11 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   Future<void> _onTakeMedication(_ScheduledDose dose) async {
     _hapticService.medium();
 
+    // What the slot looked like BEFORE the sheet wrote to it: Undo has to put
+    // it back to exactly this, and "no outcome at all" is the case the
+    // missed-dose reconcile would otherwise fill in (see [_reopenedDoseIds]).
+    final wasOpen = dose.log == null;
+
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -344,18 +398,20 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     // the log, so re-querying is only for the derived stats — waiting on it (and
     // on the full-screen loader it used to raise) made a Take/Skip look like it
     // hadn't registered until the screen came back.
-    final log = result['log'];
-    if (log is MedicineLog) _applyLogLocally(dose, log);
+    final log = result['log'] as MedicineLog?;
+    if (log != null) _applyLogLocally(dose, log);
 
     // No loader: the schedule is already correct on screen, so this quietly
     // refreshes streak / adherence / refill state underneath.
     await _loadData(showLoader: false);
 
     if (!mounted) return;
-    if (result['skipped'] == true && log is MedicineLog) {
-      _confirmDoseOutcome('${dose.medicine.name} skipped', log);
-    } else if (result['taken'] == true && log is MedicineLog) {
-      _confirmDoseOutcome('${dose.medicine.name} taken', log);
+    if (result['skipped'] == true && log != null) {
+      _confirmDoseOutcome('${dose.medicine.name} skipped', log,
+          reopensSlot: wasOpen);
+    } else if (result['taken'] == true && log != null) {
+      _confirmDoseOutcome('${dose.medicine.name} taken', log,
+          reopensSlot: wasOpen);
     }
   }
 
@@ -365,6 +421,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     final i = _todaysDoses.indexWhere((d) =>
         d.medicine.id == dose.medicine.id && d.timeIndex == dose.timeIndex);
     if (i < 0) return;
+    // The slot has an outcome again, so it is no longer being held open.
+    _reopenedDoseIds.remove(log.id);
     setState(() {
       _todaysDoses[i] = _ScheduledDose(
         medicine: _todaysDoses[i].medicine,
@@ -378,7 +436,12 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
 
   /// One-line confirmation with Undo — a mis-tapped Skip used to be permanent
   /// (the row simply became non-actionable with no way back).
-  void _confirmDoseOutcome(String message, MedicineLog log) {
+  ///
+  /// [reopensSlot] is whether the slot had no outcome before this one, i.e.
+  /// whether Undo hands it back to the missed-dose reconcile — see
+  /// [_reopenedDoseIds].
+  void _confirmDoseOutcome(String message, MedicineLog log,
+      {required bool reopensSlot}) {
     context.toastSuccess(
       message,
       action: AppToastAction(
@@ -390,6 +453,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 log.medicineId, log.dosageTaken);
           }
           await MedicineCleanStorageService.deleteLog(log.id);
+          // Before the reload, which reconciles: an open slot must stay open.
+          if (reopensSlot) _reopenedDoseIds.add(log.id);
           await _loadData(showLoader: false);
         },
       ),
@@ -488,7 +553,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                         ? SliverToBoxAdapter(child: _buildPillboxGrid())
                         : _buildTimelineList()),
                 SliverToBoxAdapter(child: _buildQuickActions()),
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                SliverToBoxAdapter(
+                    child: SizedBox(height: AppInsets.underNav(context))),
               ],
             ),
           );
@@ -529,7 +595,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
           ),
           const SizedBox(height: AppSpacing.xl),
           Text(
-            'Loading your medications...',
+            'Loading your medicines...',
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
@@ -582,7 +648,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
         AppIconButton(
           icon: Symbols.list_rounded,
           accent: ext.medicine,
-          tooltip: 'All medications',
+          tooltip: 'All medicines',
           onPressed: _navigateToMedicationList,
         ),
       ],
@@ -987,7 +1053,6 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                             color: isSelected
                                 ? ext.fillFg(ext.medicine).withOpacity(0.8)
                                 : ext.textTertiary,
-                            fontSize: 10,
                           ),
                         ),
                       ),
@@ -1040,10 +1105,10 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
       child: EmptyState(
         icon: Symbols.event_available_rounded,
-        title: hasMeds ? 'Nothing scheduled for this day' : 'No medications scheduled',
+        title: hasMeds ? 'Nothing scheduled for this day' : 'No medicines scheduled',
         message: hasMeds
             ? 'None of your medicines are due on this date.'
-            : 'Tap + to add your first medication',
+            : 'Tap + to add your first medicine',
         accent: ext.medicine,
       ),
     );
@@ -1289,7 +1354,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     if (isMissed) return _doseBadge('Missed', ext.warning.base);
     if (actionable) {
       return AppButton(
-        label: isNext ? 'Take Now' : 'Take',
+        label: isNext ? 'Take now' : 'Take',
         size: AppButtonSize.sm,
         variant: isNext ? AppButtonVariant.primary : AppButtonVariant.tonal,
         accent: ext.medicine,
@@ -1318,7 +1383,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     if (isSkipped) return _measureLabel('Skipped', tt.labelMedium) + 20;
     if (isMissed) return _measureLabel('Missed', tt.labelMedium) + 20;
     if (actionable) {
-      return _measureLabel(isNext ? 'Take Now' : 'Take', tt.labelLarge) + 40;
+      return _measureLabel(isNext ? 'Take now' : 'Take', tt.labelLarge) + 40;
     }
     return 22;
   }
@@ -1550,8 +1615,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 ),
                 Text(
                   DateFormats.time.format(dose.scheduledTime),
-                  style: tt.labelSmall
-                      ?.copyWith(color: ext.textTertiary, fontSize: 10),
+                  style: tt.labelSmall?.copyWith(color: ext.textTertiary),
                 ),
               ],
             ),
@@ -1680,7 +1744,11 @@ class _ScheduledDose {
   final EnhancedMedicine medicine;
   final DateTime scheduledTime;
   final int timeIndex;
-  final dynamic log;
+  /// The dose's log, if it has one. Typed, not `dynamic`: every value assigned
+  /// here is a MedicineLog, and `dynamic` only meant a wrong type would reach
+  /// the row builders' `log?.isSkipped` reads as a runtime NoSuchMethodError
+  /// instead of an analyzer error.
+  final MedicineLog? log;
 
   _ScheduledDose({
     required this.medicine,

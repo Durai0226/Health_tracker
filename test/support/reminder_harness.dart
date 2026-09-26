@@ -49,6 +49,9 @@ class ReminderHarness {
     List<int>? customDays,
     bool isCompleted = false,
     int? notificationId,
+    String? recurrenceRule,
+    DateTime? endsAt,
+    bool isPaused = false,
   }) =>
       CleanStorageService.saveReminderAllocatingId(Reminder(
         id: id,
@@ -59,6 +62,9 @@ class ReminderHarness {
         customDays: customDays,
         isCompleted: isCompleted,
         notificationId: notificationId,
+        recurrenceRule: recurrenceRule,
+        endsAt: endsAt,
+        isPaused: isPaused,
       ));
 }
 

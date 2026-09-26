@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:clock/clock.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/vitals_storage_service.dart';
@@ -10,14 +11,11 @@ import '../../sleep/services/sleep_service.dart';
 import '../../focus/services/focus_service.dart';
 import '../../period/services/period_service.dart';
 import '../../period/models/cycle_phase.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// ADA Time-in-Range thresholds (mg/dL): <70 low, 70–180 in-range, >180 high.
 const int kGlucoseLowThreshold = 70;
 const int kGlucoseHighThreshold = 180;
-
-/// A sensible default daily focus target (minutes) — the app stores no explicit
-/// per-day focus goal, so this is the honest, documented fallback.
-const double kFocusDailyGoalMinutes = 60;
 
 /// Fallback nightly sleep target (minutes) when the schedule has none.
 const int kSleepDefaultTargetMinutes = 480;
@@ -237,7 +235,17 @@ class TrendsBundle {
 class TrendsDataService {
   const TrendsDataService._();
 
+  /// How many times [build] has been entered, process-wide.
+  ///
+  /// Test-only, and the only observable there is: the Trends tab defers its
+  /// reload while it is a hidden `IndexedStack` child, and an empty in-memory
+  /// database returns the same bundle either way — so nothing on screen can
+  /// tell a skipped rebuild from one that ran.
+  @visibleForTesting
+  static int debugBuilds = 0;
+
   static Future<TrendsBundle> build(TrendRange range) async {
+    debugBuilds++;
     // Ensure the in-memory-backed stores are loaded. Each init() is guarded and
     // cheap when already warm (FocusService is a startup singleton, so it is
     // read as-is rather than re-initialised here).
@@ -255,10 +263,10 @@ class TrendsDataService {
     // other a pinned clock they silently disagreed — a test asserting the
     // bundle's first day matched the recap's `from` failed by exactly one day.
     final now = clock.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = startOfDay(now);
     final n = range.days;
-    final start = today.subtract(Duration(days: n - 1));
-    final days = List<DateTime>.generate(n, (i) => start.add(Duration(days: i)));
+    final start = dayOffset(today, -(n - 1));
+    final days = List<DateTime>.generate(n, (i) => dayOffset(start, i));
 
     // Kick all three async series off together, then await — keeps concurrency
     // while letting glucose return its extra Time-in-Range payload.
@@ -374,7 +382,13 @@ class TrendsDataService {
       final m = byDay[_ymd(d)];
       return TrendPoint(d, (m != null && m > 0) ? m : null);
     }).toList();
-    return TrendSeries(points, goal: kFocusDailyGoalMinutes);
+    // No goal, deliberately. Nothing in this app stores a per-day focus
+    // target — `focusWeeklyGoalMinutes` in analytics_service.dart is read with
+    // a default and never written — so the 60 minutes that used to sit here was
+    // invented by this file and then reported back to the user as *their*
+    // target, ring and all. Null is what makes [TrendGoalCard.build] fall back
+    // to a bar, which is the call the Weekly Recap already makes for focus.
+    return TrendSeries(points);
   }
 
   // ----------------------------------------------------------- BLOOD PRESSURE

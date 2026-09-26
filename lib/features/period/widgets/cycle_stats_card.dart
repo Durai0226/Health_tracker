@@ -4,8 +4,22 @@ import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 
 import '../models/cycle_prediction.dart';
 
-/// Cycle statistics as a [StatTileRow]: average cycle length, average period
-/// length, and count of cycles tracked. Honest about a thin sample.
+/// Cycle statistics as a [StatTileRow]: median cycle length, median period
+/// length, and the spread around them. Honest about a thin sample.
+///
+/// The tiles say MEDIAN because they show a median. They were labelled "Avg"
+/// over [CycleStats.medianCycleLength] / [CycleStats.medianPeriodLength], so
+/// the word and the number disagreed for anyone with an irregular cycle.
+///
+/// The label moved rather than the maths, because the median is the figure the
+/// rest of the feature already runs on: `CyclePredictor._learnedCycleLength`
+/// returns `medianCycleLength` and the predicted period length is
+/// `medianPeriodLength`. Showing a mean here would put a number on screen that
+/// nothing else in the app uses — "Day 12 of ~28" beside an "Avg cycle" of 31d
+/// — and would let one 60-day cycle after an illness drag the headline figure
+/// that outlier rejection exists to keep out. [CycleStats.avgCycleLength] and
+/// [CycleStats.avgPeriodLength] are still computed and available if a future
+/// surface genuinely wants a mean.
 class CycleStatsCard extends StatelessWidget {
   final CycleStats stats;
   final VoidCallback? onTap;
@@ -35,13 +49,13 @@ class CycleStatsCard extends StatelessWidget {
             StatTile(
               icon: Symbols.autorenew_rounded,
               value: cycleVal,
-              label: 'Avg cycle',
+              label: 'Median cycle',
               accent: ext.period,
             ),
             StatTile(
               icon: Symbols.water_drop_rounded,
               value: periodVal,
-              label: 'Avg period',
+              label: 'Median period',
               accent: ext.info,
             ),
             StatTile(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-/// The DailyMinder brand mark — always sourced from the real assets so the logo
+/// The Dlyminder brand mark — always sourced from the real assets so the logo
 /// is consistent everywhere it appears.
 ///
 /// - [AppLogo.mark]  → the icon mark (`logo_icon.svg`), natural or tinted.

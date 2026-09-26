@@ -36,8 +36,8 @@ class AmbientSoundSelector extends StatelessWidget {
       children: [
         // Volume slider
         if (selectedSound != AmbientSoundType.none) ...[
-          _buildVolumeSlider(),
-          const SizedBox(height: 24),
+          _buildVolumeSlider(context),
+          const SizedBox(height: AppSpacing.xl),
         ],
         
         // Sound categories
@@ -46,26 +46,25 @@ class AmbientSoundSelector extends StatelessWidget {
     );
   }
 
-  Widget _buildVolumeSlider() {
+  Widget _buildVolumeSlider(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final mark = ext.mark(ext.focus);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: selectedSound.color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.brLg,
       ),
       child: Row(
         children: [
-          Icon(
-            Symbols.volume_down_rounded,
-            color: selectedSound.color,
-          ),
+          Icon(Symbols.volume_down_rounded, color: mark),
           Expanded(
             child: SliderTheme(
               data: SliderThemeData(
-                activeTrackColor: selectedSound.color,
-                inactiveTrackColor: selectedSound.color.withOpacity(0.2),
-                thumbColor: selectedSound.color,
-                overlayColor: selectedSound.color.withOpacity(0.2),
+                activeTrackColor: mark,
+                inactiveTrackColor: mark.withOpacity(0.2),
+                thumbColor: mark,
+                overlayColor: mark.withOpacity(0.2),
               ),
               child: Slider(
                 value: volume,
@@ -78,10 +77,7 @@ class AmbientSoundSelector extends StatelessWidget {
               ),
             ),
           ),
-          Icon(
-            Symbols.volume_up_rounded,
-            color: selectedSound.color,
-          ),
+          Icon(Symbols.volume_up_rounded, color: mark),
         ],
       ),
     );
@@ -112,14 +108,13 @@ class AmbientSoundSelector extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          padding: const EdgeInsets.only(
+              left: AppSpacing.xs, bottom: AppSpacing.md),
           child: Text(
             category,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColorsExt.of(context).textSecondary,
-            ),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: AppColorsExt.of(context).textSecondary,
+                ),
           ),
         ),
         Wrap(
@@ -127,49 +122,43 @@ class AmbientSoundSelector extends StatelessWidget {
           runSpacing: 10,
           children: sounds.map((sound) => _buildSoundChip(context, sound)).toList(),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.gutter),
       ],
     );
   }
 
   Widget _buildSoundChip(BuildContext context, AmbientSoundType sound) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     final isSelected = selectedSound == sound;
-    
+
     return GestureDetector(
       onTap: () => onSoundChanged(sound),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: AppMotion.base,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? sound.color : AppColorsExt.of(context).surface,
-          borderRadius: BorderRadius.circular(14),
+          // Selected used to fill with `sound.color` and put white on it, which
+          // for the green/amber/cyan soundscapes measures 2.2–2.6:1. The Focus
+          // fill pair is 5.70:1 light / 5.60:1 dark; the sound still reads by
+          // its own glyph.
+          color: isSelected ? ext.fillBg(ext.focus) : ext.surface,
+          borderRadius: AppRadius.brLg,
           border: Border.all(
-            color: isSelected ? sound.color : Colors.grey.withOpacity(0.2),
+            color: isSelected ? ext.fillBg(ext.focus) : ext.outline,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: sound.color.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
+          boxShadow: isSelected ? AppShadows.resting(context) : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              sound.emoji,
-              style: const TextStyle(fontSize: 18),
-            ),
+            // emoji-content-ok: one glyph per soundscape, from the catalogue
+            Text(sound.emoji, style: const TextStyle(fontSize: 18)),
             const SizedBox(width: 6),
             Text(
               sound.name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColorsExt.of(context).textPrimary,
+              style: tt.labelLarge?.copyWith(
+                color: isSelected ? ext.fillFg(ext.focus) : ext.textPrimary,
               ),
             ),
           ],
@@ -197,27 +186,27 @@ class AmbientSoundMiniPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
     if (sound == AmbientSoundType.none) {
       return GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColorsExt.of(context).surfaceVariant,
-            borderRadius: BorderRadius.circular(20),
+            color: ext.surfaceVariant,
+            borderRadius: AppRadius.brCard,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Symbols.music_note_rounded, color: Colors.grey, size: 20),
-              const SizedBox(width: 8),
+              Icon(Symbols.music_note_rounded,
+                  color: ext.textSecondary, size: 20),
+              const SizedBox(width: AppSpacing.sm),
               Text(
                 'Add Sound',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColorsExt.of(context).textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: tt.labelLarge?.copyWith(color: ext.textSecondary),
               ),
             ],
           ),
@@ -228,40 +217,40 @@ class AmbientSoundMiniPlayer extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: AppSpacing.sm),
         decoration: BoxDecoration(
           color: sound.color.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: sound.color.withOpacity(0.3),
-          ),
+          borderRadius: AppRadius.brCard,
+          border: Border.all(color: sound.color.withOpacity(0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // emoji-content-ok: the soundscape's own glyph
             Text(sound.emoji, style: const TextStyle(fontSize: 16)),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Text(
               sound.name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: sound.color,
-              ),
+              style: tt.labelLarge?.copyWith(color: ext.textPrimary),
             ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: onToggle,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: sound.color,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
-                  color: Colors.white,
-                  size: 16,
+            const SizedBox(width: AppSpacing.sm),
+            Semantics(
+              button: true,
+              label: isPlaying ? 'Pause ambient sound' : 'Play ambient sound',
+              child: GestureDetector(
+                onTap: onToggle,
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
+                  decoration: BoxDecoration(
+                    color: ext.fillBg(ext.focus),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                    color: ext.fillFg(ext.focus),
+                    size: 16,
+                  ),
                 ),
               ),
             ),
@@ -289,21 +278,23 @@ class SoundCategoryTab extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: AppMotion.base,
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
         decoration: BoxDecoration(
           color: isSelected
               ? AppColorsExt.of(context).fillBg(AppColorsExt.of(context).focus)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: AppRadius.brCard,
         ),
         child: Text(
           category,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : AppColorsExt.of(context).textSecondary,
-          ),
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: isSelected
+                    ? AppColorsExt.of(context)
+                        .fillFg(AppColorsExt.of(context).focus)
+                    : AppColorsExt.of(context).textSecondary,
+              ),
         ),
       ),
     );

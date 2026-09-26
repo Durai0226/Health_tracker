@@ -92,9 +92,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
       debugPrint('Error saving doctor: $e');
       _hapticService.error();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        context.toastError('Could not save this doctor. Please try again.');
       }
     }
 
@@ -112,11 +110,12 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
         body: Column(
           children: [
             AppHeader(
-              title: _isEditing ? 'Edit Doctor' : 'Add Doctor',
+              title: _isEditing ? 'Edit doctor' : 'Add doctor',
               leading: AppIconButton(
                 icon: Symbols.close_rounded,
                 filled: false,
                 accent: accent,
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
@@ -143,7 +142,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SectionHeader(
-                            title: 'Basic Information',
+                            title: 'Basic information',
                             icon: Symbols.badge_rounded,
                             accent: accent,
                           ),
@@ -187,7 +186,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SectionHeader(
-                            title: 'Contact Information',
+                            title: 'Contact information',
                             icon: Symbols.contact_phone_rounded,
                             accent: accent,
                           ),
@@ -305,7 +304,7 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
 
                     // Primary save action
                     AppButton(
-                      label: _isEditing ? 'Save Changes' : 'Add Doctor',
+                      label: _isEditing ? 'Save changes' : 'Add doctor',
                       accent: accent,
                       fullWidth: true,
                       size: AppButtonSize.lg,

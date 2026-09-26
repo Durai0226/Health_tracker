@@ -3,7 +3,6 @@ package com.dlyminder.app
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
-import androidx.health.connect.client.ExperimentalMindfulnessSessionApi
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.MindfulnessSessionRecord
 import androidx.health.connect.client.records.metadata.Device
@@ -48,7 +47,15 @@ import java.time.ZoneOffset
  * `isAvailable` must be checked before the permission is ever requested, and the
  * settings row hidden rather than shown-and-broken.
  */
-@OptIn(ExperimentalMindfulnessSessionApi::class)
+// No @OptIn here. An earlier version of this file carried
+// `@OptIn(ExperimentalMindfulnessSessionApi::class)`, but that annotation does
+// not exist in androidx.health.connect:connect-client:1.2.0-alpha02 (the AAR
+// ships only ExperimentalDeduplicationApi and ExperimentalPersonalHealthRecordApi).
+// MindfulnessSessionRecord is present and needs no opt-in at this version, so
+// the reference was simply unresolvable — and it failed the whole
+// :app:compileDebugKotlin task, i.e. no Android build could succeed at all.
+// docs/release-checklist.md flagged this file as "NOT compile-verified"; it has
+// now been compiled, which is how the break surfaced.
 class MindfulnessChannel(private val context: Context) {
 
     companion object {

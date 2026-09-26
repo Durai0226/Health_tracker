@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../../core/services/haptic_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
+import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
 import 'nunito_add_edit_appointment_screen.dart';
@@ -63,41 +64,19 @@ class _NunitoAppointmentListScreenState
   }
 
   Future<void> _deleteAppointment(Appointment appointment) async {
-    final ext = AppColorsExt.of(context);
-    final confirm = await showDialog<bool>(
+    // Dismissible, as the dialog it replaces was: a swipe-down or a tap on the
+    // scrim returns null, which is not `true` and so deletes nothing.
+    final confirm = await ConfirmationBottomSheet.showDelete(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: ext.surface,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.brLg),
-        title: Text('Delete appointment',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(color: ext.textPrimary)),
-        content: Text(
-            'Are you sure you want to delete this appointment with ${appointment.doctorName}?',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: ext.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: ext.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: ext.error.strong),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      itemName: 'appointment',
+      customMessage:
+          'Are you sure you want to delete this appointment with ${appointment.doctorName}?',
     );
 
     if (confirm == true) {
       _hapticService.error();
       await MedicineCleanStorageService.deleteAppointment(appointment.id);
-      _load();
+      await _load();
     }
   }
 
@@ -114,12 +93,17 @@ class _NunitoAppointmentListScreenState
     return AccentScope(
       feature: FeatureAccent.medicine,
       child: AppScaffold(
-        floatingActionButton: AppFab(
-          icon: Symbols.add_rounded,
-          label: 'Add appointment',
-          accent: accent,
-          onPressed: () => _navigateToAddEdit(),
-        ),
+        // DS-16: one primary action per state. The empty state already
+        // carries the same CTA, so the FAB there was a second button for the
+        // same job -- and with a tall empty state it overlapped it.
+        floatingActionButton: _appointments.isEmpty
+            ? null
+            : AppFab(
+                icon: Symbols.add_rounded,
+                label: 'Add appointment',
+                accent: accent,
+                onPressed: () => _navigateToAddEdit(),
+              ),
         body: Column(
           children: [
             AppHeader(
@@ -134,7 +118,7 @@ class _NunitoAppointmentListScreenState
                       // state exactly the height the header leaves over, and
                       // at large Dynamic Type the circle + title + message +
                       // button need more than that (bottom overflow at 200%).
-                      ? _ScrollableFill(
+                      ? ScrollableFill(
                           child: EmptyState(
                             icon: Symbols.event_rounded,
                             title: 'No appointments yet',
@@ -191,8 +175,13 @@ class _NunitoAppointmentListScreenState
         padding: const EdgeInsets.only(right: 20),
         child: Icon(Symbols.delete_rounded, color: ext.error.on),
       ),
+      // Await the action, THEN answer — see the medication list screen, where
+      // this shape sprang the card back to rest while its own confirmation
+      // sheet was still open. `false` stays right afterwards: a row that
+      // really went away has already been rebuilt out of the list, and a
+      // cancelled delete must spring back.
       confirmDismiss: (direction) async {
-        _deleteAppointment(a);
+        await _deleteAppointment(a);
         return false;
       },
       child: AppCard(
@@ -200,7 +189,17 @@ class _NunitoAppointmentListScreenState
         onTap: () => _navigateToAddEdit(appointment: a),
         child: Row(
           children: [
-            GestureDetector(
+            // A state-CHANGING control that announced as nothing: it is an
+            // icon-only tap target inside a card whose own onTap opens the
+            // editor, so a screen-reader user had no way to know it existed,
+            // what it would do, or which state it was in.
+            Semantics(
+              button: true,
+              toggled: a.isCompleted,
+              label: a.isCompleted
+                  ? 'Mark the appointment with ${a.doctorName} as not done'
+                  : 'Mark the appointment with ${a.doctorName} as done',
+              child: GestureDetector(
               onTap: () => _toggleCompleted(a),
               child: Container(
                 width: 44,
@@ -215,6 +214,7 @@ class _NunitoAppointmentListScreenState
                   size: 22,
                 ),
               ),
+            ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -265,29 +265,5 @@ class _NunitoAppointmentListScreenState
     final minute = dt.minute.toString().padLeft(2, '0');
     final period = dt.hour >= 12 ? 'PM' : 'AM';
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year} · $hour:$minute $period';
-  }
-}
-
-/// Gives its child the incoming viewport height as a MINIMUM instead of a
-/// fixed size, and lets it scroll past that.
-///
-/// Anything dropped into an [Expanded] gets a tight height, which is fine
-/// until Dynamic Type grows the content past it — then a centred column of
-/// text simply gets clipped ("BOTTOM OVERFLOWED"). Because the constraint is
-/// only a minimum, layout at default text sizes is byte-for-byte unchanged.
-class _ScrollableFill extends StatelessWidget {
-  final Widget child;
-  const _ScrollableFill({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: child,
-        ),
-      ),
-    );
   }
 }

@@ -5,6 +5,8 @@ import '../../../core/database/daos/reminders_dao.dart'
 import '../../../core/services/background_alarm_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/reminder_model.dart';
+import 'package:clock/clock.dart';
+import '../utils/reminder_helper.dart';
 
 /// What to arm. A value type rather than a long parameter list, so adding a
 /// field later does not break every implementation and every call site.
@@ -20,9 +22,11 @@ class ReminderArmRequest {
     this.customDays,
     this.snoozeDuration,
     this.sound,
-    this.payload,
     this.escalation = ReminderEscalation.standard,
     this.reminderId,
+    this.recurrenceRule,
+    this.endsAt,
+    this.isPaused = false,
   });
 
   final int id;
@@ -34,7 +38,6 @@ class ReminderArmRequest {
   final List<int>? customDays;
   final int? snoozeDuration;
   final String? sound;
-  final String? payload;
 
   /// How insistent this reminder is. Drives whether a follow-up is armed
   /// alongside the reminder itself.
@@ -43,6 +46,84 @@ class ReminderArmRequest {
   /// The owning reminder's id, needed to key the follow-up's resolved flag.
   /// Null for callers that do not want a follow-up.
   final String? reminderId;
+
+  /// RFC 5545 rule, when the reminder has one. Smart Add produces these
+  /// ("every 3 days" → `RRULE:FREQ=DAILY;INTERVAL=3`) with `repeatType` left
+  /// at `none`.
+  final String? recurrenceRule;
+
+  /// Hard stop. `RepeatType.daily` + an `endsAt` used to be armed as a
+  /// self-rescheduling native daily alarm, which has no notion of an end.
+  final DateTime? endsAt;
+
+  /// Paused reminders must not be armed at all.
+  final bool isPaused;
+
+  /// Whether this reminder's schedule is something the native repeating
+  /// registration can express.
+  ///
+  /// It cannot express an RRULE, and it cannot express an end — a daily
+  /// AlarmManager alarm reschedules itself forever. Anything with a rule or a
+  /// bound is therefore armed as a ONE-SHOT at its next occurrence, and the
+  /// app-start / resume re-arm pass (and the roll-forward after a manual tick)
+  /// advances it. Everything else keeps the cheaper native repeat.
+  bool get needsPerOccurrenceArming =>
+      recurrenceRule != null || endsAt != null;
+
+  /// The request that arms [reminder]'s NEXT occurrence, or null when there is
+  /// nothing left to arm (paused, past its `endsAt`, or a rule that has run
+  /// out).
+  ///
+  /// This is the decision `scheduleGenericReminder` could never make: it
+  /// understood only the six-value `RepeatType` and had no parameter for
+  /// `recurrenceRule`, `endsAt` or `isPaused`, so Smart Add's
+  /// `RRULE:FREQ=DAILY;INTERVAL=3` (written with `repeat` left at `none`) was
+  /// armed as a one-shot and then retired, while `daily` + `endsAt` was armed
+  /// as a native daily alarm that outlived its own end date.
+  ///
+  /// Deliberately here rather than inside [ReminderAlarm.arm]: choosing WHEN a
+  /// reminder fires is scheduling policy, and the alarm is the OS adapter that
+  /// arms what it is told. Keeping the two apart is also what lets a recording
+  /// alarm assert the decision in a headless test.
+  static ReminderArmRequest? forNextOccurrence(Reminder reminder) {
+    if (reminder.isPaused) return null;
+
+    final needsPerOccurrence =
+        reminder.recurrenceRule != null || reminder.endsAt != null;
+
+    var fireTime = reminder.scheduledTime;
+    if (needsPerOccurrence) {
+      final next = ReminderHelper.nextOccurrenceFrom(
+        scheduledTime: reminder.scheduledTime,
+        repeatType: reminder.repeatType,
+        customDays: reminder.customDays,
+        recurrenceRule: reminder.recurrenceRule,
+        endsAt: reminder.endsAt,
+        isPaused: reminder.isPaused,
+      );
+      if (next == null) return null;
+      fireTime = next;
+    }
+
+    return ReminderArmRequest(
+      reminderId: reminder.id,
+      escalation: reminder.escalation,
+      id: reminder.notificationSlot,
+      title: reminder.title,
+      body: reminder.body,
+      scheduledTime: fireTime,
+      // A rule or a bound cannot be expressed as a native repeat.
+      repeatType:
+          needsPerOccurrence ? RepeatType.none : reminder.repeatType,
+      customDays: reminder.customDays,
+      snoozeDuration: reminder.snoozeDuration,
+      sound: reminder.sound,
+      priority: reminder.priority,
+      recurrenceRule: reminder.recurrenceRule,
+      endsAt: reminder.endsAt,
+      isPaused: reminder.isPaused,
+    );
+  }
 
   @override
   String toString() =>
@@ -87,6 +168,9 @@ class NotificationReminderAlarm implements ReminderAlarm {
 
   @override
   Future<bool> arm(ReminderArmRequest r) async {
+    // `r` already names the exact instant to arm — see
+    // ReminderArmRequest.forNextOccurrence, which resolves the recurrence rule,
+    // the end date and the paused flag. This adapter arms what it is told.
     final ok = await NotificationService().scheduleGenericReminder(
       id: r.id,
       title: r.title,
@@ -97,7 +181,20 @@ class NotificationReminderAlarm implements ReminderAlarm {
       customDays: r.customDays,
       snoozeDuration: r.snoozeDuration,
       sound: r.sound,
-      payload: r.payload,
+      // No `payload:` override, deliberately. The one caller that passed one
+      // sent `note:<noteId>` for a reminder linked to a note, which REPLACED
+      // the whole `alarm:{json}` blob `scheduleGenericReminder` builds — and
+      // every consumer of a fired reminder gates on that prefix (`main.dart`,
+      // `BackgroundAlarmService`, `reminderSlotsIn`). Nothing has ever parsed
+      // `note:`, so the deep link was write-only while the cost was real: a
+      // reminder with a note reached a heads-up banner instead of AlarmScreen
+      // and lost its snooze duration and chosen sound. The note link itself is
+      // not lost — it lives on the reminder row (`Reminder.noteId`).
+
+      // The tier the user picked. This request has carried it all along; not
+      // forwarding it is why every reminder — "Quiet" included — was armed
+      // alarm-grade and full-screen.
+      escalation: r.escalation,
     );
 
     // The Apple Health Medications pattern: a second notification if nothing is
@@ -110,15 +207,39 @@ class NotificationReminderAlarm implements ReminderAlarm {
     final followUpId = r.id + genericReminderFollowUpOffset;
     await NotificationService().cancelNotification(followUpId);
     if (ok && r.escalation.hasFollowUp && r.reminderId != null) {
-      await BackgroundAlarmService().scheduleReminderFollowUp(
-        id: followUpId,
-        reminderId: r.reminderId!,
-        occurrenceDue: r.scheduledTime,
-        fireAt: r.scheduledTime.add(r.escalation.followUpAfter),
-        title: 'Still pending: ${r.title}',
-        body: r.body.isEmpty ? 'You have not marked this done yet.' : r.body,
-        escalation: r.escalation,
-      );
+      // Anchor the follow-up to the occurrence that is actually NEXT, not to
+      // the stored `scheduledTime`.
+      //
+      // For a repeating reminder that field is the creation instant (or the
+      // last manual roll-forward) and is never advanced when the AlarmManager
+      // alarm fires. So `scheduledTime + 30min` was an instant in the PAST on
+      // every app start, and `oneShotAt` with a past time fires at once: an
+      // Insistent daily "Insulin" popped "Still pending: Insulin" within
+      // seconds of every launch, and for the critical tier that started the
+      // 5-minute auto-snooze chain.
+      // For a per-occurrence request `scheduledTime` IS the next occurrence;
+      // for a native repeat it is the stale stored anchor, so resolve forward.
+      final occurrenceDue = r.needsPerOccurrenceArming
+          ? r.scheduledTime
+          : (ReminderHelper.nextOccurrenceFrom(
+                scheduledTime: r.scheduledTime,
+                repeatType: r.repeatType,
+                customDays: r.customDays,
+              ) ??
+              r.scheduledTime);
+      final fireAt = occurrenceDue.add(r.escalation.followUpAfter);
+      // A follow-up whose time has already passed is not a follow-up.
+      if (fireAt.isAfter(clock.now())) {
+        await BackgroundAlarmService().scheduleReminderFollowUp(
+          id: followUpId,
+          reminderId: r.reminderId!,
+          occurrenceDue: occurrenceDue,
+          fireAt: fireAt,
+          title: 'Still pending: ${r.title}',
+          body: r.body.isEmpty ? 'You have not marked this done yet.' : r.body,
+          escalation: r.escalation,
+        );
+      }
     }
     return ok;
   }

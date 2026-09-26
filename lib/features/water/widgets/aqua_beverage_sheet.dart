@@ -124,9 +124,12 @@ class _BeverageCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              beverage.emoji,
-              style: TextStyle(fontSize: isSelected ? 32 : 28),
+            // DS-17: 28/32pt emoji inside a bordered, tinted tile is chrome.
+            Icon(
+              AquaTheme.iconFor(beverage.id),
+              size: isSelected ? 32 : 28,
+              color: isSelected ? ext.water.onContainer : ext.textSecondary,
+              applyTextScaling: false,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -184,18 +187,12 @@ class AquaBeverageChip extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     // Resolve display data from the WaterService catalog; fall back to the
-    // AquaTheme lookup only for name/emoji when the id isn't in the catalog.
+    // AquaTheme lookup only for the name when the id isn't in the catalog.
+    // The glyph comes from `AquaTheme.iconFor`, keyed off the same id.
     final resolved = WaterService.getBeverage(beverageId);
-    final String emoji;
-    final String name;
-    if (resolved != null) {
-      emoji = resolved.emoji;
-      name = resolved.name;
-    } else {
-      final fallback = AquaTheme.getBeverage(beverageId);
-      emoji = fallback.emoji;
-      name = fallback.name;
-    }
+    final IconData icon = AquaTheme.iconFor(beverageId);
+    final String name =
+        resolved?.name ?? AquaTheme.getBeverage(beverageId).name;
 
     return GestureDetector(
       onTap: onTap,
@@ -216,9 +213,11 @@ class AquaBeverageChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              emoji,
-              style: TextStyle(fontSize: compact ? 14 : 18),
+            Icon(
+              icon,
+              size: compact ? 14 : 18,
+              color: isSelected ? ext.water.onContainer : ext.textSecondary,
+              applyTextScaling: false,
             ),
             if (!compact || isSelected) ...[
               const SizedBox(width: 6),
@@ -227,7 +226,6 @@ class AquaBeverageChip extends StatelessWidget {
                 style: tt.labelMedium?.copyWith(
                   color: isSelected ? ext.water.onContainer : ext.textPrimary,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: compact ? 11 : 12,
                 ),
               ),
             ],

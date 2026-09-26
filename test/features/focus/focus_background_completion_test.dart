@@ -243,6 +243,100 @@ void main() {
       expect(focus.sessions.single.wasCompleted, isTrue);
     });
 
+    test('a PROCESS KILL does not cost the guard', () async {
+      // The `_armedFor`/`_completionDelivered` pair lived only in memory, while
+      // the notification it describes lives in the OS and outlives the process.
+      // So the kill that this whole recovery path exists for — the OS reclaiming
+      // the app mid-session — took the guard with it: recovery found `_armedFor`
+      // null, `_disarmCompletion()` concluded nothing had been delivered, and the
+      // user who had stepped away got the scheduled banner and then a SECOND one
+      // the instant they reopened the app.
+      await withClock(Clock.fixed(t0), () async {
+        focus.setDuration(25);
+        await focus.startSession();
+        focus.didChangeAppLifecycleState(AppLifecycleState.paused);
+      });
+      final armedAt = alarm.pending.single.at;
+
+      // The kill itself: memory is gone, the persisted snapshot is not.
+      focus.resetForTesting();
+      expect(focus.armedCompletionForTesting, isNull,
+          reason: 'sanity: memory really is gone');
+
+      // Reopened well after the OS had already announced it.
+      await withClock(Clock.fixed(armedAt.add(const Duration(minutes: 4))),
+          () async {
+        await focus.init();
+      });
+      await waitUntil(() => !focus.isRunning,
+          because: 'a session whose end time passed while the process was dead '
+              'must still be credited');
+
+      expect(focus.completionAlreadyAnnouncedForTesting, isTrue,
+          reason: 'the armed instant had passed before the app came back, so '
+              'the OS has already told them — announcing again is the second '
+              'banner');
+      expect(focus.sessions.single.wasCompleted, isTrue,
+          reason: 'the session is still credited; only the announcement is '
+              'suppressed');
+    });
+
+    test('an OOM kill with no `paused` first still costs nothing', () async {
+      // The ordering half of the same fix, and the case it actually exists for.
+      //
+      // `startSession` writes the ONLY snapshot a session gets if the OS
+      // reclaims the app straight out of the foreground — no `paused`, no
+      // second save. `_armCompletion` has to run before that write or the
+      // snapshot records `armedForMs: null` and the guard is lost exactly when
+      // it is needed, even though the persistence itself is in place. The test
+      // above cannot see this: it backgrounds first, which re-saves with
+      // `_armedFor` already set by the start.
+      await withClock(Clock.fixed(t0), () async {
+        focus.setDuration(25);
+        await focus.startSession();
+      });
+      final armedAt = alarm.pending.single.at;
+
+      focus.resetForTesting();
+      await withClock(Clock.fixed(armedAt.add(const Duration(minutes: 4))),
+          () async {
+        await focus.init();
+      });
+      await waitUntil(() => !focus.isRunning,
+          because: 'the end time passed while the process was dead');
+
+      expect(focus.completionAlreadyAnnouncedForTesting, isTrue,
+          reason: 'the OS banner already landed, so the in-app announcement '
+              'would be the second one');
+    });
+
+    test('a kill BEFORE the armed instant still leaves it armed', () async {
+      // The other half. Restoring the armed instant must not be read as
+      // "already delivered": a session recovered while it is still running has
+      // a notification pending for a future instant, and the in-app
+      // pre-emption in [applyTick] needs to know about it.
+      await withClock(Clock.fixed(t0), () async {
+        focus.setDuration(25);
+        await focus.startSession();
+        focus.didChangeAppLifecycleState(AppLifecycleState.paused);
+      });
+      final armedAt = alarm.pending.single.at;
+
+      focus.resetForTesting();
+      await withClock(Clock.fixed(t0.add(const Duration(minutes: 10))),
+          () async {
+        await focus.init();
+      });
+
+      expect(focus.isRunning, isTrue, reason: 'fifteen minutes still to run');
+      expect(focus.armedCompletionForTesting, armedAt,
+          reason: 'the pending notification did not die with the process, so '
+              'the record of it must not either');
+      expect(focus.completionAlreadyAnnouncedForTesting, isFalse,
+          reason: 'nothing has been delivered yet — the instant is still in '
+              'the future');
+    });
+
     test('a completion the OS did NOT deliver is still announced', () async {
       // The other half, and the reason the flag is computed at disarm rather than
       // simply set: pre-empting in the foreground must not silence the app.

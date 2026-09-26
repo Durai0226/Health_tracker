@@ -71,7 +71,7 @@ class InsightEngine {
         id: 'med_adherence_good',
         feature: InsightFeature.medicine,
         severity: InsightSeverity.good,
-        title: 'Great medication adherence',
+        title: 'Great medicine adherence',
         detail: 'About ${(adherence * 100).round()}% of doses taken on schedule — keep it up.',
         metric: '${(adherence * 100).round()}%',
         progress: adherence,
@@ -390,11 +390,27 @@ class InsightEngine {
     return null;
   }
 
+  /// Minimum logged days required in EACH window. Two logged days is a sample,
+  /// not a week — an average over them swings on a single big glass.
+  static const int minTrendLoggedDays = 3;
+
   /// Period-over-period comparison: the last 7 complete days vs the 7 before
   /// them. Deliberately excludes today (a partial day would always look low).
   /// Only fires with real data in BOTH windows and a meaningful (≥8%) change,
   /// so it reflects a genuine trend rather than noise or an empty history —
   /// this is the honest "week vs week" the empty-data deficit numbers weren't.
+  ///
+  /// [thisWeek]/[lastWeek] are the window TOTALS; [thisWeekDays]/[lastWeekDays]
+  /// are how many days actually carried a log in each. What gets compared is
+  /// the two per-logged-day AVERAGES, never the totals: someone who logged
+  /// seven days this week and three last week has a bigger total for a reason
+  /// that has nothing to do with drinking or walking, and comparing the sums
+  /// reports that gap in LOGGING as a +130% improvement in behaviour.
+  ///
+  /// The day counts are what make the two windows comparable at all, so a
+  /// caller that does not supply them gets nothing: the defaults sit below
+  /// [minTrendLoggedDays] and fail the same gate. An unnormalised percentage
+  /// about someone's health is worse than a missing card.
   static Insight? trend({
     required InsightFeature feature,
     required String id,
@@ -402,9 +418,17 @@ class InsightEngine {
     required num thisWeek,
     required num lastWeek,
     required bool higherIsBetter,
+    int thisWeekDays = 0,
+    int lastWeekDays = 0,
   }) {
+    if (thisWeekDays < minTrendLoggedDays ||
+        lastWeekDays < minTrendLoggedDays) {
+      return null;
+    }
     if (lastWeek <= 0 || thisWeek <= 0) return null;
-    final pct = ((thisWeek - lastWeek) / lastWeek * 100).round();
+    final thisAvg = thisWeek / thisWeekDays;
+    final lastAvg = lastWeek / lastWeekDays;
+    final pct = ((thisAvg - lastAvg) / lastAvg * 100).round();
     if (pct.abs() < 8) return null;
     final up = pct > 0;
     final better = up == higherIsBetter;
@@ -415,9 +439,11 @@ class InsightEngine {
       severity: better ? InsightSeverity.good : InsightSeverity.info,
       title: '$cap ${up ? 'up' : 'down'} vs last week',
       detail:
-          'Your $label over the last 7 days is about ${pct.abs()}% ${up ? 'higher' : 'lower'} than the previous 7 days.',
+          'Your $label averaged about ${pct.abs()}% ${up ? 'higher' : 'lower'} per logged day than in the previous 7 days.',
       metric: '${up ? '+' : '-'}${pct.abs()}%',
-      why: 'Total over the last 7 complete days vs the 7 days before that.',
+      // Both counts are ≥ minTrendLoggedDays here, so "days" is never wrong.
+      why: 'Average per logged day, not the total: $thisWeekDays logged days in '
+          'the last 7 complete days vs $lastWeekDays in the 7 before that.',
       rank: better ? 28 : 38,
     );
   }

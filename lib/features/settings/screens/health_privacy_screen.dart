@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/env_config.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/constants/app_strings.dart';
 
 /// The app's canonical health-data disclosure.
 ///
@@ -23,7 +24,7 @@ import '../../../core/widgets/app/app_widgets.dart';
 /// ## Keeping this honest
 ///
 /// The lists below must match what `HealthDataService` actually requests —
-/// `readTypesFor` / `vitalsWriteTypes`. They are written out in plain language
+/// `readTypesFor` / `vitalsWriteTypes` / `hydrationWriteTypes`. They are written out in plain language
 /// rather than generated from those constants, because a reviewer (and a user)
 /// needs "how long you slept", not `SLEEP_REM`. **If you add a data type,
 /// change this screen in the same commit.** Claiming less than you read is the
@@ -63,7 +64,7 @@ class HealthPrivacyScreen extends StatelessWidget {
                     AppSpacing.md, AppSpacing.gutter, AppSpacing.xxl),
                 children: [
                   Text(
-                    'DailyMinder reads a small amount of health data so your '
+                    '${AppStrings.productName} reads a small amount of health data so your '
                     'trackers reflect what your phone and any connected watch '
                     'or band already recorded — instead of asking you to type '
                     'it in twice.',
@@ -95,20 +96,35 @@ class HealthPrivacyScreen extends StatelessWidget {
                         subtitle: 'Only when you tap "Import" on the Weight '
                             'screen — never in the background',
                       ),
+                      AppListTile(
+                        icon: Symbols.water_drop_rounded,
+                        iconColor: ext.mark(ext.water),
+                        title: 'Water logged in other apps',
+                        subtitle: 'So your daily total counts drinks you '
+                            'recorded elsewhere',
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
 
                   SettingsSection(
                     title: 'What we write back',
-                    footer: 'Off by default. Turn it on in Vitals settings if '
-                        'you want other health apps to see these readings.',
+                    footer: 'All off by default. Turn them on in Vitals '
+                        'settings and Hydration settings if you want other '
+                        'health apps to see this.',
                     children: [
                       AppListTile(
                         icon: Symbols.monitor_heart_rounded,
                         iconColor: ext.mark(ext.medicine),
                         title: 'Blood pressure, blood sugar and weight',
                         subtitle: 'Only readings you logged here yourself',
+                      ),
+                      AppListTile(
+                        icon: Symbols.water_drop_rounded,
+                        iconColor: ext.mark(ext.water),
+                        title: 'Drinks you log',
+                        subtitle: 'The amount you drank and when — not the '
+                            'drink type, and not our hydration adjustment',
                       ),
                     ],
                   ),
@@ -122,6 +138,15 @@ class HealthPrivacyScreen extends StatelessWidget {
                         iconColor: ext.mark(ext.brand),
                         title: 'It stays on this device',
                         subtitle: 'Stored in the app\'s own private database',
+                      ),
+                      AppListTile(
+                        icon: Symbols.thermostat_rounded,
+                        iconColor: ext.mark(ext.water),
+                        title: 'Weather, only if you turn it on',
+                        subtitle: 'If you switch on hot-weather goals, the town '
+                            'name you type is sent to Open-Meteo to look up the '
+                            'temperature. No location permission is used and no '
+                            'health data is sent.',
                       ),
                       AppListTile(
                         icon: Symbols.cloud_off_rounded,
@@ -145,21 +170,27 @@ class HealthPrivacyScreen extends StatelessWidget {
                     title: 'You stay in control',
                     footer: 'Revoking access stops new data arriving. Anything '
                         'already saved here stays until you delete it in '
-                        'DailyMinder.',
+                        '${AppStrings.productName}.',
                     children: [
                       AppListTile(
                         icon: Symbols.tune_rounded,
                         iconColor: ext.mark(ext.brand),
                         title: 'Change or revoke access any time',
                         subtitle: 'Health Connect → App permissions → '
-                            'DailyMinder (or Apple Health → Sharing on iPhone)',
+                            '${AppStrings.productName} (or Apple Health → Sharing on iPhone)',
                       ),
                       AppListTile(
                         icon: Symbols.delete_rounded,
                         iconColor: ext.mark(ext.brand),
                         title: 'Delete everything',
-                        subtitle: 'Settings → Clear all data removes it from '
-                            'this device and your account',
+                        // Both rows, because they do different things. This
+                        // named a single 'Settings → Clear all data' — a row
+                        // that does not exist — and credited it with clearing
+                        // the account too, which the local wipe has never
+                        // done. The row that does is 'Delete account'.
+                        subtitle: 'Settings → Delete all data erases it from '
+                            'this device; Delete account also erases your '
+                            'cloud copies',
                       ),
                     ],
                   ),
@@ -181,7 +212,7 @@ class HealthPrivacyScreen extends StatelessWidget {
 
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    'DailyMinder is a general wellness and reminder tool — not '
+                    '${AppStrings.productName} is a general wellness and reminder tool — not '
                     'a medical device, and not a source of diagnosis or '
                     'treatment. Always confirm health decisions with a '
                     'qualified clinician or pharmacist.',

@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/dependent_profile.dart';
 import '../../services/medicine_storage_service.dart';
+import '../../../../core/utils/date_formats.dart';
 
 class AddEditDependentScreen extends StatefulWidget {
   final DependentProfile? editDependent;
@@ -23,6 +24,10 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
   late TextEditingController _notesController;
   late TextEditingController _emergencyContactController;
   late TextEditingController _emergencyPhoneController;
+  /// The read-only date-of-birth field's controller. It is a field, not a
+  /// `TextEditingController(text: ...)` built inline: that allocated a fresh
+  /// controller on every rebuild and disposed none of them.
+  late TextEditingController _dobController;
 
   RelationshipType _relationship = RelationshipType.child;
   DateTime? _dateOfBirth;
@@ -49,6 +54,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
     _emergencyPhoneController = TextEditingController(text: d?.emergencyPhone);
     _relationship = d?.relationship ?? RelationshipType.child;
     _dateOfBirth = d?.dateOfBirth;
+    _dobController = TextEditingController(text: _formatDob(_dateOfBirth));
     _gender = d?.gender;
   }
 
@@ -60,6 +66,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
     _notesController.dispose();
     _emergencyContactController.dispose();
     _emergencyPhoneController.dispose();
+    _dobController.dispose();
     super.dispose();
   }
 
@@ -72,9 +79,23 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
       title: 'Date of birth',
     );
     if (picked != null) {
-      setState(() => _dateOfBirth = picked);
+      setState(() {
+        _dateOfBirth = picked;
+        _dobController.text = _formatDob(picked);
+      });
     }
   }
+
+  /// The date as a person writes it. Empty when no date is set.
+  ///
+  /// Was a raw `YYYY-MM-DD`, which read as an input mask — but the field is
+  /// wrapped in `IgnorePointer` behind a tap-to-pick `InkWell`, so nobody can
+  /// ever type into it. It is a DISPLAY of a date the user chose from a picker,
+  /// and an ISO string is a machine format shown to a human. Nothing parses
+  /// this text back (`_dateOfBirth` is the source of truth), so the format is
+  /// free to follow the device.
+  static String _formatDob(DateTime? d) =>
+      d == null ? '' : DateFormats.dayMonthYear.format(d);
 
   List<String>? _parseAllergies() {
     final raw = _allergiesController.text
@@ -89,7 +110,6 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
-    final ext = AppColorsExt.of(context);
 
     try {
       // This form has no controls for weight/height/conditions/
@@ -137,14 +157,9 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
         Navigator.pop(context, true);
       }
     } catch (e) {
+      debugPrint('Error saving profile: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: ext.error.base,
-            content: Text('Error saving profile: $e',
-                style: TextStyle(color: ext.error.on)),
-          ),
-        );
+        context.toastError('Could not save this profile. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -164,8 +179,11 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
           children: [
             AppHeader(
               title: _isEditing ? 'Edit profile' : 'Add family member',
-              leading: IconButton(
-                icon: Icon(Symbols.close_rounded, color: ext.textPrimary),
+              leading: AppIconButton(
+                icon: Symbols.close_rounded,
+                filled: false,
+                color: ext.textPrimary,
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
               actions: [
@@ -197,8 +215,8 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                             border: Border.all(color: med.base, width: 2),
                           ),
                           child: Center(
-                            child: Text(_relationship.icon,
-                                style: const TextStyle(fontSize: 40)),
+                            child: Icon(relationshipSymbol(_relationship),
+                                size: 40, color: med.onContainer),
                           ),
                         ),
                       ),
@@ -234,6 +252,8 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                           children: RelationshipType.values
                               .where((r) => r != RelationshipType.self)
                               .map((r) => AppChip(
+                                    // emoji-content-ok: a chip LABEL, at the
+                                    // label's own size — content, not a badge.
                                     label: '${r.icon} ${r.displayName}',
                                     selected: _relationship == r,
                                     accent: med,
@@ -249,13 +269,9 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                         borderRadius: AppRadius.brMd,
                         child: IgnorePointer(
                           child: AppTextField(
-                            controller: TextEditingController(
-                              text: _dateOfBirth != null
-                                  ? '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}'
-                                  : '',
-                            ),
+                            controller: _dobController,
                             label: 'Date of birth',
-                            hint: 'YYYY-MM-DD',
+                            hint: 'Tap to choose',
                             prefixIcon: Symbols.calendar_today_rounded,
                             accent: med,
                           ),
@@ -363,5 +379,27 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
         ),
       ),
     );
+  }
+}
+
+/// The Material Symbol for a relationship, for the places it is rendered as
+/// CHROME — a badge glyph in a decorated avatar. `RelationshipType.icon` (an
+/// emoji) is still correct inside a chip label, which is content.
+IconData relationshipSymbol(RelationshipType r) {
+  switch (r) {
+    case RelationshipType.self:
+      return Symbols.person_rounded;
+    case RelationshipType.child:
+      return Symbols.child_care_rounded;
+    case RelationshipType.parent:
+      return Symbols.family_restroom_rounded;
+    case RelationshipType.spouse:
+      return Symbols.favorite_rounded;
+    case RelationshipType.grandparent:
+      return Symbols.elderly_rounded;
+    case RelationshipType.sibling:
+      return Symbols.group_rounded;
+    case RelationshipType.other:
+      return Symbols.people_rounded;
   }
 }

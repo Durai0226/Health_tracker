@@ -77,6 +77,8 @@ void main() {
         label: 'steps',
         thisWeek: 56000,
         lastWeek: 42000,
+        thisWeekDays: 7,
+        lastWeekDays: 7,
         higherIsBetter: true,
       );
       expect(i, isNotNull);
@@ -91,6 +93,8 @@ void main() {
         label: 'water',
         thisWeek: 10000,
         lastWeek: 14000,
+        thisWeekDays: 7,
+        lastWeekDays: 7,
         higherIsBetter: true,
       );
       expect(i!.severity, InsightSeverity.info);
@@ -104,6 +108,8 @@ void main() {
               label: 'steps',
               thisWeek: 10300,
               lastWeek: 10000,
+              thisWeekDays: 7,
+              lastWeekDays: 7,
               higherIsBetter: true),
           isNull);
       expect(
@@ -113,6 +119,90 @@ void main() {
               label: 'steps',
               thisWeek: 5000,
               lastWeek: 0,
+              thisWeekDays: 7,
+              lastWeekDays: 3,
+              higherIsBetter: true),
+          isNull);
+    });
+
+    // INS-01. The window totals are what the caller has; the number of days
+    // that carried a log is what makes two totals comparable. Each of these
+    // passes under the per-logged-day maths and fails under raw sums.
+    test('same average, more days logged → no trend at all', () {
+      // 2000ml on each of 7 days vs 2000ml on each of 3 days. Behaviour is
+      // identical; only the logging changed. Raw sums would call this +133%.
+      final i = InsightEngine.trend(
+        feature: InsightFeature.water,
+        id: 'water_trend',
+        label: 'water',
+        thisWeek: 14000,
+        lastWeek: 6000,
+        thisWeekDays: 7,
+        lastWeekDays: 3,
+        higherIsBetter: true,
+      );
+      expect(i, isNull);
+    });
+    test('bigger total but a worse day → reported as down, not up', () {
+      // 1500ml x 7 days vs 2500ml x 3 days: the total rose 40%, the day-to-day
+      // habit fell 40%. Raw sums would congratulate the user for drinking less.
+      final i = InsightEngine.trend(
+        feature: InsightFeature.water,
+        id: 'water_trend',
+        label: 'water',
+        thisWeek: 10500,
+        lastWeek: 7500,
+        thisWeekDays: 7,
+        lastWeekDays: 3,
+        higherIsBetter: true,
+      );
+      expect(i, isNotNull);
+      expect(i!.title.toLowerCase(), contains('down'));
+      expect(i.severity, InsightSeverity.info);
+      expect(i.metric, '-40%');
+    });
+    test('the why explains what was measured, and it is not the total', () {
+      final i = InsightEngine.trend(
+        feature: InsightFeature.water,
+        id: 'water_trend',
+        label: 'water',
+        thisWeek: 14000,
+        lastWeek: 9000,
+        thisWeekDays: 7,
+        lastWeekDays: 6,
+        higherIsBetter: true,
+      );
+      expect(i, isNotNull);
+      expect(i!.why, contains('per logged day'));
+      expect(i.why, contains('7 logged days'));
+      expect(i.why, contains('6'));
+      expect(i.why.toLowerCase(), isNot(startsWith('total')));
+      expect(i.detail, contains('per logged day'));
+    });
+    test('too few logged days in either window → null', () {
+      Insight? t(int thisDays, int lastDays) => InsightEngine.trend(
+            feature: InsightFeature.water,
+            id: 'water_trend',
+            label: 'water',
+            thisWeek: 4000 * thisDays,
+            lastWeek: 2000 * lastDays,
+            thisWeekDays: thisDays,
+            lastWeekDays: lastDays,
+            higherIsBetter: true,
+          );
+      expect(t(2, 7), isNull);
+      expect(t(7, 2), isNull);
+      expect(t(InsightEngine.minTrendLoggedDays, InsightEngine.minTrendLoggedDays),
+          isNotNull);
+    });
+    test('a caller that does not say how many days it counted gets nothing', () {
+      expect(
+          InsightEngine.trend(
+              feature: InsightFeature.water,
+              id: 'water_trend',
+              label: 'water',
+              thisWeek: 14000,
+              lastWeek: 6000,
               higherIsBetter: true),
           isNull);
     });

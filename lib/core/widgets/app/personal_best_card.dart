@@ -45,15 +45,26 @@ class PersonalBestCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                // Wrap, not Row.
+                //
+                // The eyebrow and the "New best" badge are both fixed strings
+                // that grow with Dynamic Type, and neither can yield: this Row
+                // overflowed by 75px at 320pt even at 1.0x once a new personal
+                // best existed. Ellipsizing either one loses a word the user
+                // needs, so the badge drops to a second line instead.
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
-                    Text(
-                      'PERSONAL BEST',
-                      style: tt.labelSmall?.copyWith(
-                          color: ext.textTertiary, letterSpacing: 0.6),
-                    ),
+                    // AppEyebrow, not a hand-rolled labelSmall: this was one
+                    // of the seven copies of the same style, and the one thing
+                    // they all got wrong was the colour — textTertiary at 11pt
+                    // measures 3.78:1 on a light card and 3.85:1 on a dark
+                    // one, below the 4.5:1 AA asks of normal text. The
+                    // widget's default (textSecondary) clears both.
+                    const AppEyebrow('Personal best'),
                     if (isNew) ...[
-                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 2),

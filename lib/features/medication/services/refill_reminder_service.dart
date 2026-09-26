@@ -62,8 +62,16 @@ class RefillReminderService {
         final stock = m.currentStock;
         if (stock == null || stock <= 0) continue;
 
+        // Unscoped, like the medicine list above: this sweep runs over EVERY
+        // profile's medicines, so a dependent's medicine must see its own logs
+        // while the carer's own profile is active. With the default scoping
+        // those logs are all filtered out, `taken` is empty, and a parent's
+        // refill reminder never arms at all — see getLogsForMedicine's doc and
+        // MedicationReminderService._adaptiveSuggestionMinutes, which had to
+        // override the same default for the same reason.
         final taken = MedicineCleanStorageService.dedupeByDose(
-                await MedicineCleanStorageService.getLogsForMedicine(m.id))
+                await MedicineCleanStorageService.getLogsForMedicine(m.id,
+                    scopeToActiveProfile: false))
             .where((l) => l.countsAsTaken)
             .toList();
         if (taken.isEmpty) continue;

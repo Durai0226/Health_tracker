@@ -16,9 +16,30 @@ class HealthCloudSyncService {
   HealthCloudSyncService._();
   static final HealthCloudSyncService instance = HealthCloudSyncService._();
 
-  final FirebaseFirestore _fs = FirebaseFirestore.instance;
+  // Resolved on each use rather than in a field initializer — the same seam,
+  // for the same reason, as `CloudSyncService`. This is a `static final`
+  // singleton, so a field initializer ran `Firebase.app()` the first time
+  // anything so much as NAMED the service. `CloudSyncService.syncUserData`
+  // names it, so that entry point threw outside an initialised app and the
+  // cache reloads it performs could not be tested at all.
+  FirebaseFirestore? _firestoreOverride;
+  FirebaseFirestore get _fs => _firestoreOverride ?? FirebaseFirestore.instance;
+
+  /// Point the service at a fake Firestore. `null` restores the real instance.
+  @visibleForTesting
+  set firestoreForTesting(FirebaseFirestore? fs) => _firestoreOverride = fs;
+
   bool _syncing = false;
 
+  /// Every `apply` below writes `toCompanion(false)`, never the bare data class.
+  ///
+  /// `insertOnConflictUpdate(dataClass)` maps null fields to `Value.absent()`,
+  /// and ON CONFLICT DO UPDATE writes only the columns a companion sets — so a
+  /// cloud row carrying `deletedAt: null` could not clear a local tombstone.
+  /// Deletions propagated (a non-null `deletedAt` IS written) but un-deletions
+  /// did not. That matters most for `period_days` and `step_days`, whose ids
+  /// ARE the calendar date: delete a day here, re-log it on another device, and
+  /// the re-logged day stayed invisible on this one forever.
   Future<void> syncAll(String userId) async {
     if (_syncing) return;
     _syncing = true;
@@ -30,25 +51,29 @@ class HealthCloudSyncService {
       // ---- Steps ----
       await _sync(
         userId, 'step_days',
-        local: () async => db.stepsDao.getDayRange(from, now),
+        // Tombstones included — see the biometric_days note below.
+        local: () async =>
+            db.stepsDao.getDayRangeIncludingDeleted(from, now),
         id: (r) => (r as StepDayRow).id,
         updatedMs: (r) => (r as StepDayRow).updatedAt.millisecondsSinceEpoch,
         toJson: (r) => (r as StepDayRow).toJson(),
         apply: (m) async => db
             .into(db.stepDailyData)
-            .insertOnConflictUpdate(StepDayRow.fromJson(m)),
+            .insertOnConflictUpdate(StepDayRow.fromJson(m).toCompanion(false)),
       );
 
       // ---- Sleep ----
       await _sync(
         userId, 'sleep_sessions',
-        local: () async => db.sleepDao.getForRange(from, now),
+        // Tombstones included — see the biometric_days note below.
+        local: () async =>
+            db.sleepDao.getForRangeIncludingDeleted(from, now),
         id: (r) => (r as SleepSessionRow).id,
         updatedMs: (r) => (r as SleepSessionRow).updatedAt.millisecondsSinceEpoch,
         toJson: (r) => (r as SleepSessionRow).toJson(),
         apply: (m) async => db
             .into(db.sleepSessions)
-            .insertOnConflictUpdate(SleepSessionRow.fromJson(m)),
+            .insertOnConflictUpdate(SleepSessionRow.fromJson(m).toCompanion(false)),
       );
 
       // ---- Wearable biometrics (daily aggregates) ----
@@ -67,7 +92,7 @@ class HealthCloudSyncService {
         toJson: (r) => (r as BiometricDayRow).toJson(),
         apply: (m) async => db
             .into(db.biometricDailyData)
-            .insertOnConflictUpdate(BiometricDayRow.fromJson(m)),
+            .insertOnConflictUpdate(BiometricDayRow.fromJson(m).toCompanion(false)),
       );
 
       // ---- Workout sessions ----
@@ -81,7 +106,7 @@ class HealthCloudSyncService {
         toJson: (r) => (r as WorkoutSessionRow).toJson(),
         apply: (m) async => db
             .into(db.workoutSessions)
-            .insertOnConflictUpdate(WorkoutSessionRow.fromJson(m)),
+            .insertOnConflictUpdate(WorkoutSessionRow.fromJson(m).toCompanion(false)),
       );
 
       // The device registry (`health_sources`) is deliberately NOT synced. It
@@ -102,7 +127,7 @@ class HealthCloudSyncService {
         toJson: (r) => (r as HealthProfileRow).toJson(),
         apply: (m) async => db
             .into(db.healthProfiles)
-            .insertOnConflictUpdate(HealthProfileRow.fromJson(m)),
+            .insertOnConflictUpdate(HealthProfileRow.fromJson(m).toCompanion(false)),
       );
 
       // ---- Period (opt-in only) ----
@@ -114,25 +139,24 @@ class HealthCloudSyncService {
       if (periodOptIn) {
         await _sync(
           userId, 'period_days',
-          local: () async => db.periodDao.getAllDays(),
+          // Tombstones included — see the biometric_days note above.
+          local: () async => db.periodDao.getAllDaysIncludingDeleted(),
           id: (r) => (r as PeriodDayRow).id,
           updatedMs: (r) => (r as PeriodDayRow).updatedAt.millisecondsSinceEpoch,
           toJson: (r) => (r as PeriodDayRow).toJson(),
           apply: (m) async => db
               .into(db.periodDays)
-              .insertOnConflictUpdate(PeriodDayRow.fromJson(m)),
+              .insertOnConflictUpdate(PeriodDayRow.fromJson(m).toCompanion(false)),
         );
-        await _sync(
-          userId, 'menstrual_cycles',
-          local: () async => db.periodDao.getAllCycles(),
-          id: (r) => (r as MenstrualCycleRow).id,
-          updatedMs: (r) =>
-              (r as MenstrualCycleRow).updatedAt.millisecondsSinceEpoch,
-          toJson: (r) => (r as MenstrualCycleRow).toJson(),
-          apply: (m) async => db
-              .into(db.menstrualCycles)
-              .insertOnConflictUpdate(MenstrualCycleRow.fromJson(m)),
-        );
+        // `menstrual_cycles` is deliberately NOT synced: a cycle is DERIVED
+        // from the period_days above, never entered. `PeriodService`
+        // recomputes the whole set after every mutation and persists it with
+        // `replaceCycles`, which deletes every row and re-inserts — so a cycle
+        // downloaded here survived only until the next log, and uploading them
+        // spent a write per cycle on data the other device regenerates from
+        // the days it already received. Nothing reads the cloud copy either:
+        // the UI reads `PeriodService.getCycles()` (in memory), and
+        // `periodDao.getAllCycles()` had exactly one caller — this sync.
       }
     } catch (e) {
       debugPrint('HealthCloudSyncService.syncAll failed: $e');

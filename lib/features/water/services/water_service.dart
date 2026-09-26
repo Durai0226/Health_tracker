@@ -1,15 +1,33 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' show Value;
 import '../../../core/database/app_database.dart' as db;
 import '../../../core/database/daos/water_dao.dart';
+import '../../../core/health/hydration_goal.dart';
+import '../../sleep/services/sleep_service.dart';
 import '../../../core/health/streak_engine.dart';
 import '../models/beverage_type.dart';
 import '../models/water_container.dart';
 import '../models/hydration_profile.dart';
 import '../models/water_achievement.dart';
 import '../models/enhanced_water_log.dart';
+import '../../../core/services/home_widget_service.dart';
+import '../../../core/services/water_action_queue.dart';
+import 'hydration_health_sync.dart';
+import 'hydration_weather_service.dart';
+import '../../../core/utils/calendar_day.dart';
+
+/// One queued drink after it became a real log: the row's id, the moment it was
+/// filed under (which is when the button was tapped, not when the app resumed)
+/// and the volume as tapped.
+///
+/// The date travels with the id because an Undo has to delete from the day the
+/// drink actually landed on. See [WaterService.drainPendingWaterActions].
+typedef AppliedWaterAction = ({String id, DateTime at, int amountMl});
 
 /// Comprehensive water tracking service
 /// Handles beverages, containers, achievements, statistics, and insights
@@ -23,8 +41,19 @@ class WaterService {
       ValueNotifier<Map<String, DailyWaterData>>({});
   static final List<BeverageType> _customBeverages = [];
   static final List<WaterContainer> _customContainers = [];
-  static HydrationProfile _profile = HydrationProfile(id: 'profile', createdAt: DateTime.now());
+  static HydrationProfile _profile = HydrationProfile(id: 'profile', createdAt: clock.now());
   static UserAchievements _achievements = UserAchievements(id: 'user');
+
+  /// Drinks the user deleted, by day key — the tombstones that stop a stale
+  /// copy of a day putting them back. See [mergeCloudDay].
+  ///
+  /// Persisted as one JSON row in the shared key-value table rather than as a
+  /// column on `daily_water_data`: this is sync bookkeeping, not part of a
+  /// day's record, and it is read once per session — lazily, on the first path
+  /// that needs it, never on the start-up path. See [_ensureTombstonesLoaded].
+  static Map<String, Set<String>> _deletedLogIds = {};
+  static bool _tombstonesLoaded = false;
+  static const _deletedLogIdsPrefKey = 'water.deletedLogIds';
 
   /// Expose value listenable for daily water data
   static ValueListenable<Map<String, DailyWaterData>>? listenToDailyData() {
@@ -46,10 +75,10 @@ class WaterService {
   static Future<void> init() async {
     if (_isInitialized) return;
     try {
-      final now = DateTime.now();
+      final now = clock.now();
       final rows = await _dao.getDataForRange(
         now.subtract(warmCacheWindow),
-        now.add(const Duration(days: 1)),
+        DateTime(now.year, now.month, now.day + 1),
       );
       // ONE query for every day's logs, not one per day. This runs before
       // runApp(), and warmCacheWindow is 90 days — the old loop meant up to 91
@@ -119,6 +148,9 @@ class WaterService {
     } catch (e) {
       debugPrint('⚠️ WaterService achievements load failed: $e');
     }
+    // Log-derived favourites / frequent cups. Before achievements so a failure
+    // here cannot skip the achievement pass.
+    await _refreshUsage();
     try {
       await _evaluateAchievements();
     } catch (e) {
@@ -158,12 +190,91 @@ class WaterService {
       goalReached: r.goalReached,
       goalReachedAt: r.goalReachedAt,
       logs: logs,
+      deletedLogIds: _tombstonesFor(r.id),
     );
   }
 
-  static Future<void> _persistDay(DailyWaterData d) async {
+  /// Read the tombstone map, once per session, on first use.
+  ///
+  /// Deliberately NOT part of [init]: that runs before `runApp()`, and one more
+  /// read there is one more thing between tapping the icon and the first frame
+  /// — `test/performance/startup_cost_test.dart` holds that budget. Nothing on
+  /// the startup path needs these; the paths that do (a delete, a merge, a
+  /// restore, a backup export, a sync upload) all await this first, and all of
+  /// them are already asynchronous.
+  static Future<void> _ensureTombstonesLoaded() async {
+    if (_tombstonesLoaded) return;
+    // Set before the read, not after: a failure means an unreadable row, and
+    // retrying it on every delete would not make it readable.
+    _tombstonesLoaded = true;
     try {
-      await _dao.saveDailyData(db.DailyWaterDataTableCompanion(
+      final raw = await db.AppDatabase.instance.coreDao
+          .getPreference(_deletedLogIdsPrefKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      for (final e in decoded.entries) {
+        _deletedLogIds
+            .putIfAbsent(e.key, () => <String>{})
+            .addAll((e.value as List).map((id) => id.toString()));
+      }
+    } catch (e) {
+      debugPrint('⚠️ WaterService tombstone load failed: $e');
+    }
+  }
+
+  /// The drinks recorded as deleted on [dayKey] — a snapshot, not the live set,
+  /// so a day object cannot be mutated from under its holder.
+  ///
+  /// Empty until [_ensureTombstonesLoaded] has run, so every caller that needs
+  /// a real answer awaits that first.
+  static Set<String> _tombstonesFor(String dayKey) {
+    final ids = _deletedLogIds[dayKey];
+    return (ids == null || ids.isEmpty)
+        ? const <String>{}
+        : Set.unmodifiable(ids);
+  }
+
+  /// Record [ids] as deleted drinks on [dayKey] and persist the set.
+  ///
+  /// A no-op when nothing is new, so restoring a backup of hundreds of days
+  /// rewrites the row only for the days that actually add one, not once per day.
+  static Future<void> _recordDeletedLogs(
+      String dayKey, Iterable<String> ids) async {
+    if (ids.isEmpty) return;
+    await _ensureTombstonesLoaded();
+    final set = _deletedLogIds.putIfAbsent(dayKey, () => <String>{});
+    final before = set.length;
+    set.addAll(ids);
+    if (set.length == before) return;
+    await _persistDeletedLogIds();
+  }
+
+  /// Write the tombstone map, pruned to [warmCacheWindow].
+  ///
+  /// A tombstone only has to outlive the window in which a stale cloud copy or
+  /// a backup can still be carrying the drink; keeping every one of them would
+  /// grow this row for the life of the install. Day keys are `yyyy-MM-dd`, so
+  /// comparing them as strings compares them chronologically.
+  static Future<void> _persistDeletedLogIds() async {
+    try {
+      final cutoff = _getDateKey(clock.now().subtract(warmCacheWindow));
+      _deletedLogIds.removeWhere(
+          (key, ids) => ids.isEmpty || key.compareTo(cutoff) < 0);
+      await db.AppDatabase.instance.coreDao.setPreference(
+        _deletedLogIdsPrefKey,
+        jsonEncode({
+          for (final e in _deletedLogIds.entries) e.key: e.value.toList(),
+        }),
+      );
+    } catch (e) {
+      debugPrint('⚠️ persist water tombstones failed: $e');
+    }
+  }
+
+  /// The day row as Drift wants it. Shared by every writer so no path can
+  /// quietly persist a different subset of the columns.
+  static db.DailyWaterDataTableCompanion _dayCompanion(DailyWaterData d) =>
+      db.DailyWaterDataTableCompanion(
         id: Value(d.id),
         date: Value(d.date),
         dailyGoalMl: Value(d.dailyGoalMl),
@@ -173,15 +284,12 @@ class WaterService {
         alcoholicDrinksCount: Value(d.alcoholicDrinksCount),
         goalReached: Value(d.goalReached),
         goalReachedAt: Value(d.goalReachedAt),
-      ));
-    } catch (e) {
-      debugPrint('⚠️ persist day failed: $e');
-    }
-  }
+      );
 
-  static Future<void> _persistLog(String dayId, EnhancedWaterLog l) async {
-    try {
-      await _dao.addWaterLog(db.EnhancedWaterLogsCompanion(
+  /// One drink row, belonging to [dayId]. Shared for the same reason.
+  static db.EnhancedWaterLogsCompanion _logCompanion(
+          String dayId, EnhancedWaterLog l) =>
+      db.EnhancedWaterLogsCompanion(
         id: Value(l.id),
         dailyDataId: Value(dayId),
         time: Value(l.time),
@@ -196,7 +304,24 @@ class WaterService {
         caffeineAmount: Value(l.caffeineAmount),
         isAlcoholic: Value(l.isAlcoholic),
         note: Value(l.note),
-      ));
+      );
+
+  static Future<void> _persistDay(DailyWaterData d) async {
+    try {
+      await _dao.saveDailyData(_dayCompanion(d));
+      // [d] is what the table now holds for this day, so the lifetime snapshot
+      // can be folded forward rather than re-read. Only after the write
+      // succeeds: this method swallows its own failures, and a failed write
+      // must not leave the snapshot claiming something the table does not hold.
+      _patchAggregate(d);
+    } catch (e) {
+      debugPrint('⚠️ persist day failed: $e');
+    }
+  }
+
+  static Future<void> _persistLog(String dayId, EnhancedWaterLog l) async {
+    try {
+      await _dao.addWaterLog(_logCompanion(dayId, l));
     } catch (e) {
       debugPrint('⚠️ persist log failed: $e');
     }
@@ -245,6 +370,8 @@ class WaterService {
       wakeUpReminderEnabled: extra['wakeUpReminderEnabled'] as bool? ?? true,
       wakeUpHour: extra['wakeUpHour'] as int? ?? 7,
       bedtimeHour: extra['bedtimeHour'] as int? ?? 22,
+      fluidCeilingMl: extra['fluidCeilingMl'] as int?,
+      conditions: parseHydrationConditions(extra['conditions']),
     );
   }
 
@@ -260,6 +387,8 @@ class WaterService {
         'wakeUpReminderEnabled': p.wakeUpReminderEnabled,
         'wakeUpHour': p.wakeUpHour,
         'bedtimeHour': p.bedtimeHour,
+        'fluidCeilingMl': p.fluidCeilingMl,
+        'conditions': p.conditions.map((c) => c.name).toList(),
       };
       await _dao.saveProfile(db.HydrationProfilesCompanion(
         id: const Value('profile'),
@@ -270,8 +399,8 @@ class WaterService {
         useCustomGoal: Value(p.useCustomGoal),
         pregnantOrNursing: Value(p.isPregnant || p.isBreastfeeding),
         healthConditionsJson: Value(jsonEncode(extra)),
-        createdAt: Value(p.createdAt ?? DateTime.now()),
-        updatedAt: Value(p.updatedAt ?? DateTime.now()),
+        createdAt: Value(p.createdAt ?? clock.now()),
+        updatedAt: Value(p.updatedAt ?? clock.now()),
       ));
     } catch (e) {
       debugPrint('⚠️ persist profile failed: $e');
@@ -366,20 +495,130 @@ class WaterService {
   }
 
   /// Get favorite beverages (most used)
-  static List<BeverageType> getFavoriteBeverages({int limit = 6}) {
-    return getAllBeverages().take(limit).toList();
+  /// Log-derived usage, refreshed on init and after every write. Empty until
+  /// the first refresh, in which case the getters below fall back to declared
+  /// order — which is exactly the old behaviour, so a failed refresh degrades
+  /// rather than breaks.
+  static Map<String, WaterUsage> _beverageUsage = const {};
+  static Map<String, WaterUsage> _containerUsage = const {};
+
+  /// Recompute the usage maps from the logs. One grouped query.
+  ///
+  /// The exact answer, and the one the incremental [_bumpUsage] / [_dropUsage]
+  /// patches are kept in agreement with. Run on `init()` and after a restore;
+  /// the per-drink paths patch instead, because this scans every log row ever
+  /// written.
+  static Future<void> _refreshUsage() async {
+    try {
+      final u = await _dao.usageCounts();
+      _beverageUsage = u.beverages;
+      _containerUsage = u.containers;
+    } catch (e) {
+      debugPrint('⚠️ WaterService usage refresh failed: $e');
+    }
   }
 
-  /// Track beverage usage
-  static Future<void> _trackBeverageUsage(String beverageId) async {
-    // Track usage for favorites calculation
+  /// Fold one newly-added [log] into the usage maps.
+  ///
+  /// The maps are replaced rather than mutated: [_beverageUsage] starts as a
+  /// `const {}`, which cannot be written to.
+  static void _bumpUsage(EnhancedWaterLog log) {
+    _beverageUsage = {
+      ..._beverageUsage,
+      log.beverageId: _incremented(_beverageUsage[log.beverageId], log.time),
+    };
+    final containerId = log.containerId;
+    if (containerId != null) {
+      _containerUsage = {
+        ..._containerUsage,
+        containerId: _incremented(_containerUsage[containerId], log.time),
+      };
+    }
   }
+
+  /// Take one removed [log] back out again, so a delete cannot leave the counts
+  /// permanently inflated.
+  ///
+  /// The key is dropped at zero rather than left at 0, because
+  /// `_beverageUsage.keys` is what [_evaluateAchievements] reads as "every
+  /// beverage ever logged" — a stale key there would keep a "tried N drinks"
+  /// badge unlocked on a drink the user has removed.
+  ///
+  /// `lastUsed` is deliberately NOT rolled back: recovering the previous
+  /// maximum needs the log table, and this is the Undo path. It can therefore
+  /// name a moment slightly later than the newest surviving drink until the
+  /// next [_refreshUsage]; nothing but the cup list's "last used" reads it.
+  static void _dropUsage(EnhancedWaterLog log) {
+    _beverageUsage =
+        _decremented(_beverageUsage, log.beverageId);
+    final containerId = log.containerId;
+    if (containerId != null) {
+      _containerUsage = _decremented(_containerUsage, containerId);
+    }
+  }
+
+  /// [prev] with one more use at [at]. `lastUsed` takes the LATER of the two
+  /// because [WaterDao.usageCounts] reports `MAX(time)` and this path also
+  /// serves back-dated adds from the history editor.
+  static WaterUsage _incremented(WaterUsage? prev, DateTime at) {
+    final last = prev?.lastUsed;
+    return WaterUsage(
+      count: (prev?.count ?? 0) + 1,
+      lastUsed: last == null || at.isAfter(last) ? at : last,
+    );
+  }
+
+  static Map<String, WaterUsage> _decremented(
+      Map<String, WaterUsage> usage, String key) {
+    final prev = usage[key];
+    if (prev == null) return usage;
+    final next = {...usage};
+    if (prev.count <= 1) {
+      next.remove(key);
+    } else {
+      next[key] = WaterUsage(count: prev.count - 1, lastUsed: prev.lastUsed);
+    }
+    return next;
+  }
+
+  /// Most-logged beverages first, ties broken by declared order so the list is
+  /// stable. Previously `getAllBeverages().take(limit)` — i.e. never actually
+  /// the user's favourites, just the first six built-ins.
+  static List<BeverageType> getFavoriteBeverages({int limit = 6}) {
+    final all = getAllBeverages();
+    final ranked = [...all];
+    final order = {for (var i = 0; i < all.length; i++) all[i].id: i};
+    ranked.sort((a, b) {
+      final ca = _beverageUsage[a.id]?.count ?? 0;
+      final cb = _beverageUsage[b.id]?.count ?? 0;
+      if (ca != cb) return cb.compareTo(ca);
+      return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
+    });
+    return ranked.take(limit).toList();
+  }
+
+  /// How many times [beverageId] has been logged.
+  static int beverageUseCount(String beverageId) =>
+      _beverageUsage[beverageId]?.count ?? 0;
 
   // ============ CONTAINERS ============
 
   /// Get all containers
+  /// All containers, with [WaterContainer.usageCount] / [WaterContainer.lastUsed]
+  /// filled in from the logs. The columns of the same name exist on the table
+  /// but nothing ever wrote them, so both fields were permanently 0/null on
+  /// every container the UI showed.
   static List<WaterContainer> getAllContainers() {
-    return [...WaterContainer.defaultContainers, ..._customContainers];
+    return [
+      for (final c in [...WaterContainer.defaultContainers, ..._customContainers])
+        _withUsage(c),
+    ];
+  }
+
+  static WaterContainer _withUsage(WaterContainer c) {
+    final u = _containerUsage[c.id];
+    if (u == null) return c;
+    return c.copyWith(usageCount: u.count, lastUsed: u.lastUsed);
   }
 
   /// Get container by ID
@@ -425,9 +664,30 @@ class WaterService {
   }
 
   /// Get frequently used containers
+  /// Most-used cups first, ties broken by declared order. Previously
+  /// `getAllContainers().take(limit)` — the first four built-ins, regardless of
+  /// what the user actually drinks from.
   static List<WaterContainer> getFrequentContainers({int limit = 4}) {
-    return getAllContainers().take(limit).toList();
+    final all = getAllContainers();
+    final order = {for (var i = 0; i < all.length; i++) all[i].id: i};
+    final ranked = [...all];
+    ranked.sort((a, b) {
+      final ca = _containerUsage[a.id]?.count ?? 0;
+      final cb = _containerUsage[b.id]?.count ?? 0;
+      if (ca != cb) return cb.compareTo(ca);
+      return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
+    });
+    return ranked.take(limit).toList();
   }
+
+  /// How many times [containerId] has been logged, and when it was last used.
+  /// The `usage_count`/`last_used` columns exist but were never written; these
+  /// come from the logs instead, so they are correct for history too.
+  static int containerUseCount(String containerId) =>
+      _containerUsage[containerId]?.count ?? 0;
+
+  static DateTime? containerLastUsed(String containerId) =>
+      _containerUsage[containerId]?.lastUsed;
 
   // ============ HYDRATION PROFILE ============
 
@@ -446,7 +706,7 @@ class WaterService {
 
     // Recompute today's daily goal from the profile's effective goal and
     // persist the day so progress/goal-reached stay consistent.
-    final key = _getDateKey(DateTime.now());
+    final key = _getDateKey(clock.now());
     final newGoal = profile.effectiveGoalMl;
     final today = _dailyWaterNotifier.value[key];
     if (today != null) {
@@ -459,7 +719,7 @@ class WaterService {
       }
     } else {
       await saveDailyData(
-        DailyWaterData(id: key, date: DateTime.now(), dailyGoalMl: newGoal),
+        DailyWaterData(id: key, date: clock.now(), dailyGoalMl: newGoal),
       );
     }
   }
@@ -484,15 +744,29 @@ class WaterService {
 
   /// Get today's water data
   static DailyWaterData getTodayData() {
-    final key = _getDateKey(DateTime.now());
+    final key = _getDateKey(clock.now());
     if (!_dailyWaterNotifier.value.containsKey(key)) {
       _dailyWaterNotifier.value[key] = DailyWaterData(
         id: key,
-        date: DateTime.now(),
+        date: clock.now(),
         dailyGoalMl: getDailyGoal(),
       );
     }
     return _dailyWaterNotifier.value[key]!;
+  }
+
+  /// Today's day, stamped with the drinks that were deleted from it — the
+  /// shape the cloud uploader has to send.
+  ///
+  /// [getTodayData] stays synchronous because UI call sites read it during
+  /// build, and the tombstones are not in memory until something asks for them
+  /// (see [_ensureTombstonesLoaded]). Sync is the caller that must never miss
+  /// them: an upload without the tombstone is what lets the next download —
+  /// here or on another device — put the drink back.
+  static Future<DailyWaterData> todayDataForSync() async {
+    await _ensureTombstonesLoaded();
+    final key = _getDateKey(clock.now());
+    return getTodayData().copyWith(deletedLogIds: _tombstonesFor(key));
   }
 
   /// Get water data for a specific date.
@@ -549,18 +823,21 @@ class WaterService {
   static Future<void> ensureRangeLoaded(DateTime start, DateTime end) async {
     try {
       final from = DateTime(start.year, start.month, start.day);
-      final to = DateTime(end.year, end.month, end.day)
-          .add(const Duration(days: 1));
+      // Calendar-day step for the exclusive upper bound, not +24h.
+      final to = DateTime(end.year, end.month, end.day + 1);
       final rows = await _dao.getDataForRange(from, to);
-      var loadedAny = false;
-      for (final row in rows) {
-        if (_dailyWaterNotifier.value.containsKey(row.id)) continue;
-        final logRows = await _dao.getLogsForDay(row.id);
-        _dailyWaterNotifier.value[row.id] =
-            _dailyFromRow(row, logRows.map(_logFromRow).toList());
-        loadedAny = true;
+      final missing =
+          rows.where((r) => !_dailyWaterNotifier.value.containsKey(r.id)).toList();
+      if (missing.isEmpty) return;
+      // ONE query for every missing day's logs. This is called per rendered
+      // month, so the old per-day `getLogsForDay` loop was up to 31 serialized
+      // round trips before the grid could paint.
+      final byDay = await _dao.getLogsForDays(missing.map((r) => r.id).toList());
+      for (final row in missing) {
+        _dailyWaterNotifier.value[row.id] = _dailyFromRow(
+            row, (byDay[row.id] ?? const []).map(_logFromRow).toList());
       }
-      if (loadedAny) _notifyListeners();
+      _notifyListeners();
     } catch (e) {
       debugPrint('⚠️ WaterService range load failed: $e');
     }
@@ -575,7 +852,11 @@ class WaterService {
       if (data != null) {
         results.add(data);
       }
-      current = current.add(const Duration(days: 1));
+      // Step by calendar day, NOT by 24h: a local day is 23 or 25 hours
+      // across a DST transition, so adding a fixed Duration re-emits the
+      // same date key on the fall-back day (double-counting it) and skips
+      // one on the spring-forward day.
+      current = DateTime(current.year, current.month, current.day + 1);
     }
     return results;
   }
@@ -593,7 +874,7 @@ class WaterService {
     WaterContainer? container,
     String? note,
   }) async {
-    final now = DateTime.now();
+    final now = clock.now();
     return addWaterLogForDate(
       date: now,
       amountMl: amountMl,
@@ -605,8 +886,26 @@ class WaterService {
   }
 
   /// Remove water log
+  /// Remove a log without knowing which day it belongs to.
+  ///
+  /// Resolves the owning day from the stored row rather than assuming today:
+  /// the callers are foreground Undo buttons, and a drink added for a PAST date
+  /// (the history editor, a quick-add drained from a tap made before midnight)
+  /// would otherwise be looked for in today's logs, not found, and — since
+  /// [removeWaterLogForDate] now refuses to delete a row that is not in the day
+  /// it was handed — silently not removed at all.
   static Future<void> removeWaterLog(String logId) async {
-    await removeWaterLogForDate(DateTime.now(), logId);
+    final owning = await _dao.dayKeyForLog(logId);
+    await removeWaterLogForDate(
+      owning == null ? clock.now() : _dateFromKey(owning),
+      logId,
+    );
+  }
+
+  /// `yyyy-MM-dd` back to a local DateTime. Inverse of [_getDateKey].
+  static DateTime _dateFromKey(String key) {
+    final p = key.split('-');
+    return DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
   }
 
   /// Remove water log for a specific date
@@ -615,15 +914,39 @@ class WaterService {
     // Read the persisted day, not just the warm cache: an older day was seen as
     // null here, so the delete silently did nothing and left the log on disk.
     final data = await _ensureDayLoaded(key);
-    if (data != null) {
-      final updatedLogs = data.logs.where((l) => l.id != logId).toList();
-      final updatedData = _recalculateDailyData(data, updatedLogs);
-      _dailyWaterNotifier.value[key] = updatedData;
-      _notifyListeners();
-      await _dao.deleteWaterLog(logId);
-      await _persistDay(updatedData);
-      await _evaluateAchievements();
-    }
+    if (data == null) return;
+    final updatedLogs = data.logs.where((l) => l.id != logId).toList();
+    // Bail when the id is not one of THIS day's logs. It used to delete the row
+    // anyway: an Undo aimed at the wrong date (yesterday's quick-add undone
+    // against today) removed the log from `enhanced_water_logs` while leaving
+    // yesterday's totals and cached logs untouched — so history and the weekly
+    // stats still counted a drink whose row was gone, and the day no longer
+    // agreed with itself.
+    if (updatedLogs.length == data.logs.length) return;
+    // The counts are patched per drink rather than recounted (see
+    // [_refreshUsage]), so a removal has to be taken back out of them here or
+    // an undone drink keeps its vote in the favourites ranking for ever.
+    _dropUsage(data.logs.firstWhere((l) => l.id == logId));
+    // Tombstone the drink before anything else: the cloud merge is a union by
+    // log id, so without a record of the deletion the next sync — or, on a
+    // single device, the next download of the copy uploaded before the delete —
+    // hands it straight back. See [mergeCloudDay].
+    await _recordDeletedLogs(key, [logId]); // loads the set if it is not in yet
+    final updatedData = _recalculateDailyData(data, updatedLogs)
+        .copyWith(deletedLogIds: _tombstonesFor(key));
+    _dailyWaterNotifier.value[key] = updatedData;
+    _notifyListeners();
+    await _dao.deleteWaterLog(logId);
+    await _persistDay(updatedData);
+    await _evaluateAchievements();
+    // The home-screen widget shows today's intake, and only a push refreshes
+    // it. The ADD path pushed (aqua_water_dashboard.dart, after every "+"), the
+    // delete path did not — so an Undo, a swipe-delete in Today's Log or an
+    // edit in the history screen left the widget showing a drink the app had
+    // already removed, until the next steps/sleep write happened to refresh it.
+    // Pushed from here rather than from each screen so every delete path is
+    // covered by one call.
+    await HomeWidgetService.pushSnapshot();
   }
 
   /// Add water log for a specific date (for history editing)
@@ -676,10 +999,32 @@ class WaterService {
     await _persistDay(updatedData);
     await _persistLog(key, log);
 
-    // Track usage and update achievements
-    await _trackBeverageUsage(beverage.id);
-    _lastNewlyUnlocked =
-        await _updateAchievements(updatedData, beverage, effectiveTime);
+    // Write-through to Health Connect / HealthKit when the user has opted in.
+    // Self-guarding and best-effort: a health-store problem must never stop a
+    // drink being recorded here.
+    //
+    // NOT awaited: it is a platform round trip — a preferences read, a
+    // permission query and a Health Connect write — and every one of those
+    // milliseconds sat between tapping "+" and the Undo toast being offered.
+    // The call is still made on every single add, so a drink still reaches the
+    // health store; only the waiting on it is gone. It swallows its own
+    // failures, so there is nothing here that could want the result.
+    unawaited(HydrationHealthSync.onLogAdded(log));
+
+    // Usage is log-derived, and the log that changed it is right here — so
+    // fold it in rather than re-running the grouped COUNT over every row ever
+    // logged, which is what `_refreshUsage()` did on every add.
+    _bumpUsage(log);
+    _lastNewlyUnlocked = await _evaluateAchievements();
+
+    // Same reason as the delete path below: the home-screen widget only ever
+    // changes when something pushes. The push used to live in the water
+    // dashboard's "+" handler, so a drink added anywhere else — the home
+    // "Log something" sheet, the history editor, the calendar — left the widget
+    // on its last number. Not awaited: "+" is the app's hottest write path and
+    // the push is best-effort (HomeWidgetService swallows its own failures),
+    // which is exactly how the dashboard called it.
+    unawaited(HomeWidgetService.pushSnapshot());
 
     return updatedData;
   }
@@ -742,29 +1087,23 @@ class WaterService {
     // edits silently reverted on the next launch (init() reloads from Drift).
     if (editedLog != null) {
       final l = editedLog!;
+      // An edit can move the drink to a different beverage or cup, so it is a
+      // removal of the old one and an add of the new as far as the patched
+      // usage counts are concerned.
+      _dropUsage(data.logs.firstWhere((o) => o.id == logId));
+      _bumpUsage(l);
       try {
-        await _dao.updateWaterLog(db.EnhancedWaterLogsCompanion(
-          id: Value(l.id),
-          dailyDataId: Value(key),
-          time: Value(l.time),
-          amountMl: Value(l.amountMl),
-          effectiveHydrationMl: Value(l.effectiveHydrationMl),
-          beverageId: Value(l.beverageId),
-          beverageName: Value(l.beverageName),
-          beverageEmoji: Value(l.beverageEmoji),
-          hydrationPercent: Value(l.hydrationPercent),
-          containerId: Value(l.containerId),
-          containerName: Value(l.containerName),
-          caffeineAmount: Value(l.caffeineAmount),
-          isAlcoholic: Value(l.isAlcoholic),
-          note: Value(l.note),
-        ));
+        await _dao.updateWaterLog(_logCompanion(key, l));
       } catch (e) {
         debugPrint('⚠️ update log failed: $e');
       }
     }
     await _persistDay(updatedData);
     await _evaluateAchievements();
+
+    // Editing an entry changes the day's totals just as much as adding or
+    // removing one, so the widget has to hear about it too.
+    unawaited(HomeWidgetService.pushSnapshot());
 
     return updatedData;
   }
@@ -783,8 +1122,42 @@ class WaterService {
       if (log.isAlcoholic) alcoholCount++;
     }
 
-    final goalReached = effectiveHydration >= data.dailyGoalMl;
-    final goalReachedAt = goalReached && !data.goalReached ? DateTime.now() : data.goalReachedAt;
+    // Under a fluid RESTRICTION `dailyGoalMl` is a CEILING, not a target — see
+    // HydrationProfile.effectiveGoalMl, which returns fluidCeilingMl in that
+    // mode. Crossing it is the failure the restriction exists to prevent, so it
+    // must never be recorded as the day's goal being reached: `goalReached`
+    // feeds daysGoalMet, lastGoalMetDate, the StreakEngine and every
+    // streak/perfectWeek/perfectMonth badge. A dialysis patient drinking 1600 ml
+    // against a 1500 ml limit was shown a seven-day streak with a flame, a
+    // "Goal Achieved!" card and an unlocked badge.
+    //
+    // Deliberately not inverted into "success = stayed under": at 10:00 a
+    // restricted user has trivially "stayed under", and a day with no logs at
+    // all would score. Rewarding restraint correctly needs a completed day and
+    // a product decision; the honest feedback under a restriction is the dial
+    // showing intake against the limit, which is unaffected by this flag. The
+    // "overachiever" badge already refuses to fire in this mode (see below) —
+    // this extends the same rule to the rest.
+    final goalReached =
+        !_profile.isRestricted && effectiveHydration >= data.dailyGoalMl;
+
+    // Stamp the moment the goal was crossed — but on the day being
+    // recalculated, not wall-clock now. Back-filling a log into last Tuesday
+    // used to record that Tuesday's goal as reached at today's time. The last
+    // log that took the day over the line is the honest answer; fall back to
+    // the day's own date when there is none.
+    //
+    // Also clear it when the goal is no longer met: deleting or editing a log
+    // can drop a day back under its target, and the old code only ever set
+    // this field, never unset it — leaving a "reached at" on an unmet day.
+    final DateTime? goalReachedAt;
+    if (!goalReached) {
+      goalReachedAt = null;
+    } else if (data.goalReached && data.goalReachedAt != null) {
+      goalReachedAt = data.goalReachedAt;
+    } else {
+      goalReachedAt = logs.isNotEmpty ? logs.last.time : data.date;
+    }
 
     return data.copyWith(
       totalIntakeMl: totalIntake,
@@ -794,6 +1167,7 @@ class WaterService {
       alcoholicDrinksCount: alcoholCount,
       goalReached: goalReached,
       goalReachedAt: goalReachedAt,
+      clearGoalReachedAt: goalReachedAt == null,
     );
   }
 
@@ -882,21 +1256,77 @@ class WaterService {
 
   /// Update achievements based on activity. Re-evaluates all achievements from
   /// persisted daily data and returns any that were newly unlocked.
-  static Future<List<WaterAchievement>> _updateAchievements(
-    DailyWaterData todayData,
-    BeverageType beverage,
-    DateTime now,
-  ) async {
-    return _evaluateAchievements();
-  }
-
   static DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// Days (in persisted history) whose hydration goal was reached — the input
+  /// Lifetime day aggregates, keyed by the day's `yyyy-MM-dd` id.
+  ///
+  /// A `SplayTreeMap` because [_computeLongestRun] and [_goalReachedDays] both
+  /// want the rows in date order, and the id's zero-padded `yyyy-MM-dd` sorts
+  /// lexicographically into exactly that — the same order
+  /// [WaterDao.lifetimeDayAggregates]'s `ORDER BY d.date ASC` produces.
+  ///
+  /// Null means "not loaded" and triggers one whole-table read. It used to be
+  /// read on EVERY write: each "+" ran `lifetimeDayAggregates()`, a full scan
+  /// of `daily_water_data` with two correlated subqueries per row, before the
+  /// Undo toast could appear. The write path already holds the updated day, so
+  /// the snapshot is patched instead ([_patchAggregate], called from
+  /// [_persistDay] and [restoreDayWithLogs] — every path that writes a day row).
+  static SplayTreeMap<String, WaterDayAggregate>? _aggregates;
+
+  /// Local hour before which a drink counts as an "early" one. Must match the
+  /// `earlyDrinkBeforeHour` default [WaterDao.lifetimeDayAggregates] applies,
+  /// or a patched day would disagree with a re-read one.
+  static const int _earlyDrinkBeforeHour = 7;
+
+  /// [d] as the engines see it — the in-memory equivalent of one
+  /// `lifetimeDayAggregates` row.
+  static WaterDayAggregate _aggregateOf(DailyWaterData d) => WaterDayAggregate(
+        date: d.date,
+        totalIntakeMl: d.totalIntakeMl,
+        effectiveHydrationMl: d.effectiveHydrationMl,
+        dailyGoalMl: d.dailyGoalMl,
+        goalReached: d.goalReached,
+        totalCaffeineMg: d.totalCaffeineMg,
+        alcoholicDrinksCount: d.alcoholicDrinksCount,
+        logCount: d.logs.length,
+        earlyLogCount:
+            d.logs.where((l) => l.time.hour < _earlyDrinkBeforeHour).length,
+      );
+
+  /// Fold a just-written day into the lifetime snapshot. No-op while the
+  /// snapshot is unloaded — the next read builds it from the table anyway.
+  ///
+  /// Keyed by `_getDateKey(d.date)`, not by `d.id`, so it is the SAME
+  /// derivation [_lifetimeAggregates] uses on the rows it reads back. The two
+  /// agree for every day the app creates, but deriving the key twice different
+  /// ways is how a patched day and a read one would end up as two entries for
+  /// one date.
+  static void _patchAggregate(DailyWaterData d) {
+    _aggregates?[_getDateKey(d.date)] = _aggregateOf(d);
+  }
+
+  /// The lifetime snapshot, read from Drift once and patched on every write
+  /// thereafter.
+  static Future<List<WaterDayAggregate>> _lifetimeAggregates() async {
+    final cached = _aggregates;
+    if (cached != null) return cached.values.toList(growable: false);
+    final rows = await _dao.lifetimeDayAggregates();
+    _aggregates = SplayTreeMap<String, WaterDayAggregate>()
+      ..addEntries(rows.map((r) => MapEntry(_getDateKey(r.date), r)));
+    return rows;
+  }
+
+  /// Days whose hydration goal was reached, read from [aggregates] — the input
   /// to the shared, forgiving [StreakEngine].
-  static Set<DateTime> _goalReachedDays() {
+  ///
+  /// This used to fold the 90-day warm cache, which meant a long-running user's
+  /// "longest streak" silently capped at 90 and their lifetime totals shrank as
+  /// history aged out — and `_evaluateAchievements` then *persisted* the
+  /// shrunken numbers over the good ones. It now reads the whole table via
+  /// [WaterDao.lifetimeDayAggregates].
+  static Set<DateTime> _goalReachedDays(List<WaterDayAggregate> aggregates) {
     final out = <DateTime>{};
-    for (final d in _dailyWaterNotifier.value.values) {
+    for (final d in aggregates) {
       if (d.goalReached) out.add(_dayOnly(d.date));
     }
     return out;
@@ -908,27 +1338,27 @@ class WaterService {
   /// streak to 0 on a single missed day. Today still only counts once its goal
   /// is reached (it may be in progress); the engine starts from yesterday when
   /// today isn't complete, so an unfinished today never breaks the run.
-  static StreakResult _streakResult() => StreakEngine.compute(
-        completedDays: _goalReachedDays(),
-        today: DateTime.now(),
+  static StreakResult _streakResult(List<WaterDayAggregate> aggregates) =>
+      StreakEngine.compute(
+        completedDays: _goalReachedDays(aggregates),
+        today: clock.now(),
         graceDaysPerWeek: 1,
       );
 
-  /// Consecutive (grace-forgiven) goal-reached days ending at or just before
-  /// today.
-  static int _computeCurrentStreak() => _streakResult().current;
-
-  /// Longest run of consecutive calendar days satisfying [predicate].
-  static int _computeLongestRun(bool Function(DailyWaterData) predicate) {
-    final entries = _dailyWaterNotifier.value.values.toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
+  /// Longest run of consecutive calendar days satisfying [predicate], over the
+  /// full persisted history.
+  static int _computeLongestRun(
+    List<WaterDayAggregate> aggregates,
+    bool Function(WaterDayAggregate) predicate,
+  ) {
+    // [aggregates] already arrives ordered by date ascending (SQL ORDER BY).
     var longest = 0;
     var run = 0;
     DateTime? prevDay;
-    for (final d in entries) {
+    for (final d in aggregates) {
       final day = _dayOnly(d.date);
       if (predicate(d)) {
-        if (prevDay != null && day.difference(prevDay).inDays == 1) {
+        if (prevDay != null && calendarDaysBetween(prevDay, day) == 1) {
           run++;
         } else {
           run = 1;
@@ -943,51 +1373,67 @@ class WaterService {
     return longest;
   }
 
-  /// Longest goal-reached run, from the same [StreakEngine] pass as the current
-  /// streak so the two can never disagree (a forgiven current streak must not
-  /// be able to exceed the "longest" it is part of).
-  static int _computeLongestStreak() => _streakResult().longest;
-
-  /// Recompute every achievement against persisted daily data, flip
+  /// Recompute every achievement against **persisted** daily data, flip
   /// [WaterAchievement.isUnlocked], accumulate points, and persist. Returns the
   /// achievements that flipped from locked to unlocked in this pass.
+  ///
+  /// Whole-history, but over the [_lifetimeAggregates] snapshot: one row per
+  /// day, read from the table on the first pass and patched in place by every
+  /// write after it. Called from `init()` and from every write path, which is
+  /// also what keeps [getCurrentStreak] (a synchronous read of the stored
+  /// value) fresh.
   static Future<List<WaterAchievement>> _evaluateAchievements(
       {bool persist = true}) async {
-    final days = _dailyWaterNotifier.value.values.toList();
+    final List<WaterDayAggregate> days;
+    try {
+      days = await _lifetimeAggregates();
+    } catch (e) {
+      // A failed aggregate read must never overwrite good stored achievements
+      // with zeros — that was the old init() failure mode.
+      debugPrint('WaterService._evaluateAchievements: aggregate read failed: $e');
+      return const [];
+    }
+
+    // Every beverage ever logged. These are the keys of the usage map, which
+    // `_refreshUsage` has already built from the same table — so no separate
+    // DISTINCT query, which matters because this runs before the first frame.
+    final beverageTypes = _beverageUsage.keys.toSet();
 
     // ---- Aggregate metrics across all persisted days --------------------
     var totalMl = 0;
     var totalDrinks = 0;
     var daysGoalMet = 0;
     var overachieverDays = 0;
-    final beverageTypes = <String>{};
-    final earlyMorningDays = <String>{}; // distinct days with a pre-7AM drink
+    var earlyMorningDays = 0;
     DateTime? lastGoalMetDate;
 
     for (final d in days) {
       totalMl += d.totalIntakeMl;
-      totalDrinks += d.logs.length;
+      totalDrinks += d.logCount;
       if (d.goalReached) {
         daysGoalMet++;
         if (lastGoalMetDate == null || d.date.isAfter(lastGoalMetDate)) {
           lastGoalMetDate = d.date;
         }
       }
-      if (d.dailyGoalMl > 0 && d.effectiveHydrationMl >= d.dailyGoalMl * 1.2) {
+      // "Overachiever" means 20% past the goal. Under a fluid restriction the
+      // goal is a CEILING, so this would be a badge for exceeding a clinical
+      // limit. Never award it in that mode.
+      if (!_profile.isRestricted &&
+          d.dailyGoalMl > 0 &&
+          d.effectiveHydrationMl >= d.dailyGoalMl * 1.2) {
         overachieverDays++;
       }
-      for (final log in d.logs) {
-        beverageTypes.add(log.beverageId);
-        if (log.time.hour < 7) earlyMorningDays.add(d.id);
-      }
+      if (d.hasEarlyLog) earlyMorningDays++;
     }
 
-    final currentStreak = _computeCurrentStreak();
-    final longestStreak = _computeLongestStreak();
-    final caffeineFreeRun =
-        _computeLongestRun((d) => d.logs.isNotEmpty && d.totalCaffeineMg == 0);
+    final streak = _streakResult(days);
+    final currentStreak = streak.current;
+    final longestStreak = streak.longest;
+    final caffeineFreeRun = _computeLongestRun(
+        days, (d) => d.hasLogs && d.totalCaffeineMg == 0);
     final alcoholFreeRun = _computeLongestRun(
-        (d) => d.logs.isNotEmpty && d.alcoholicDrinksCount == 0);
+        days, (d) => d.hasLogs && d.alcoholicDrinksCount == 0);
 
     // ---- Evaluate each achievement definition ---------------------------
     final prevById = {for (final a in _achievements.achievements) a.id: a};
@@ -1013,7 +1459,7 @@ class WaterService {
           currentValue = beverageTypes.length;
           break;
         case AchievementType.earlyBird:
-          currentValue = earlyMorningDays.length;
+          currentValue = earlyMorningDays;
           break;
         case AchievementType.overachiever:
           currentValue = overachieverDays;
@@ -1033,7 +1479,7 @@ class WaterService {
       final nowUnlocked = wasUnlocked || currentValue >= def.targetValue;
       final unlockedAt = wasUnlocked
           ? prev?.unlockedAt
-          : (nowUnlocked ? DateTime.now() : null);
+          : (nowUnlocked ? clock.now() : null);
 
       final ach = def.copyWith(
         currentValue: currentValue,
@@ -1057,19 +1503,391 @@ class WaterService {
       lastGoalMetDate: lastGoalMetDate,
       caffeineFreeDays: caffeineFreeRun,
       alcoholFreeDays: alcoholFreeRun,
-      earlyMorningDrinks: earlyMorningDays.length,
+      earlyMorningDrinks: earlyMorningDays,
     );
 
     if (persist) await _persistAchievements();
     return newlyUnlocked;
   }
 
+  /// Apply drinks the user logged from a water reminder's action button, or
+  /// from the home-screen widget's quick-add.
+  ///
+  /// The notification action runs in a background isolate with no Drift, so it
+  /// only queues the intent ([WaterActionQueue]); this is where it becomes a
+  /// real log. Returns what was written, newest last, so the caller can report
+  /// the true volume and offer an Undo that removes each drink FROM THE DAY IT
+  /// WAS FILED UNDER — [at] is the tap time, which for a reminder answered at
+  /// 23:30 and an app opened next morning is yesterday, not today.
+  ///
+  /// Only the entries that actually landed are acked, so a failure mid-way
+  /// leaves the rest queued for the next resume instead of dropping them.
+  /// True while a drain is in flight.
+  ///
+  /// The queue is now read-then-ack rather than read-and-clear, which fixed
+  /// losing drinks on a failed write — but it also means the entries stay
+  /// visible until they are acked, so two overlapping drains (AppShell drains
+  /// on cold start AND on resume, and a resume can land while the first is
+  /// still awaiting its DB writes) would each apply the same taps and log every
+  /// drink twice.
+  static bool _draining = false;
+
+  static Future<List<AppliedWaterAction>> drainPendingWaterActions() async {
+    if (_draining) return const [];
+    _draining = true;
+    try {
+      return await _drainPendingWaterActions();
+    } finally {
+      _draining = false;
+    }
+  }
+
+  static Future<List<AppliedWaterAction>> _drainPendingWaterActions() async {
+    final pending = await WaterActionQueue.drain();
+    if (pending.isEmpty) return const [];
+
+    final beverage =
+        getBeverage('water') ?? BeverageType.defaultBeverages.first;
+    final applied = <AppliedWaterAction>[];
+    for (final p in pending) {
+      try {
+        // Logged at the time the button was actually tapped, not at resume —
+        // otherwise a drink taken at 9am shows up on the timeline at 6pm and
+        // the pacing maths is wrong all day.
+        final day = await addWaterLogForDate(
+          date: p.at,
+          amountMl: p.amountMl,
+          beverage: beverage,
+          time: p.at,
+        );
+        if (day.logs.isNotEmpty) {
+          applied.add((id: day.logs.last.id, at: p.at, amountMl: p.amountMl));
+        }
+        // Acked one at a time, immediately: being killed half way through then
+        // leaves the untouched entries queued and the written ones forgotten,
+        // so a restart neither loses a drink nor logs one twice.
+        await WaterActionQueue.ack([p]);
+      } catch (e) {
+        debugPrint('⚠️ applying queued water action failed: $e');
+      }
+    }
+    return applied;
+  }
+
+  /// How much fluid was logged in the hour ending at [now].
+  ///
+  /// Input to the over-hydration guardrail. Uses raw [EnhancedWaterLog.amountMl]
+  /// — the physiological load on the kidney is the volume swallowed, not our
+  /// beverage-adjusted figure.
+  static int intakeInLastHourMl({DateTime? now}) {
+    final end = now ?? clock.now();
+    final start = end.subtract(const Duration(hours: 1));
+    // A window that straddles midnight has its earlier half in YESTERDAY's row.
+    // Reading only the end day made the guard blind for the first hour after
+    // midnight — precisely when someone drinking a litre in ten minutes at
+    // 23:55 gets no warning at 00:05, which is the case it exists for.
+    final days = <DailyWaterData>[];
+    final endDay = getDataForDate(end);
+    if (endDay != null) days.add(endDay);
+    if (_getDateKey(start) != _getDateKey(end)) {
+      final startDay = getDataForDate(start);
+      if (startDay != null) days.add(startDay);
+    }
+    var sum = 0;
+    for (final day in days) {
+      for (final log in day.logs) {
+        if (log.time.isAfter(start) && !log.time.isAfter(end)) {
+          sum += log.amountMl;
+        }
+      }
+    }
+    return sum;
+  }
+
+  /// Whether the last hour's intake has passed the renal ceiling.
+  ///
+  /// Every app in this category, this one included, has been built on the
+  /// assumption that more is always better. It is not: maximal free-water
+  /// clearance is ~800–1000 mL/h, and drinking past it is how exercise-
+  /// associated hyponatremia happens. IOM's stated reason for setting no
+  /// Tolerable Upper Level on water is precisely that healthy kidneys handle
+  /// "more than 0.7 L per hour" — an upper bound, quietly stated.
+  ///
+  /// WaterMinder is the only competitor that ships an alert for this. Nobody
+  /// else warns at all, and our achievements actively rewarded drinking more.
+  static bool isDrinkingTooFast({DateTime? now}) =>
+      intakeInLastHourMl(now: now) >
+      HydrationGoalCalculator.safeHourlyCeilingMl;
+
+  /// The size of a typical drink for this user, in millilitres.
+  ///
+  /// Median of recent logs rather than mean, so one 1.5 L bottle does not drag
+  /// the estimate. Falls back to 250 ml — the category's canonical serving and
+  /// the value Samsung Health expects for one "glass".
+  ///
+  /// Used to decide HOW MANY reminders are actually needed to close the day's
+  /// remaining deficit, which is what turns a fixed schedule into a pace-aware
+  /// one.
+  static int typicalDrinkMl({int sampleSize = 30}) {
+    final amounts = <int>[];
+    final days = _dailyWaterNotifier.value.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    for (final d in days) {
+      for (final l in d.logs.reversed) {
+        if (l.amountMl > 0) amounts.add(l.amountMl);
+        if (amounts.length >= sampleSize) break;
+      }
+      if (amounts.length >= sampleSize) break;
+    }
+    if (amounts.isEmpty) return 250;
+    amounts.sort();
+    return amounts[amounts.length ~/ 2];
+  }
+
+  /// Refresh the weather reading and, if the goal moved, re-stamp today with it.
+  ///
+  /// Historical days keep the goal they were created with — a past day must not
+  /// silently become "missed" because today got hotter.
+  static Future<void> refreshWeatherGoal() async {
+    try {
+      if (_profile.isRestricted) return; // a ceiling is not weather-dependent
+      // A custom goal is an explicit user override, so the weather does not get
+      // to overwrite it. It did: someone who set 2000 ml and left "adjust for
+      // the weather" on had their day silently re-stamped at ~3800 ml on a hot
+      // afternoon, and no screen offered any explanation.
+      if (_profile.useCustomGoal) return;
+      final weather = await HydrationWeatherService.current();
+      if (weather == null) return;
+      final goal = _profile.goalBreakdown(ambientC: weather.apparentC).totalMl;
+
+      final key = _getDateKey(clock.now());
+      final today = await _ensureDayLoaded(key);
+      if (today == null || today.dailyGoalMl == goal) return;
+      final updated = _recalculateDailyData(
+          today.copyWith(dailyGoalMl: goal), today.logs);
+      _dailyWaterNotifier.value[key] = updated;
+      _notifyListeners();
+      await _persistDay(updated);
+    } catch (e) {
+      debugPrint('⚠️ weather goal refresh failed: $e');
+    }
+  }
+
+  /// The user's real waking window, as minutes since midnight.
+  ///
+  /// Every [HydrationPacer.compute] call site used the function's default
+  /// 07:00–23:00, so pacing was computed against a window nobody had agreed to:
+  /// a night-shift worker was measured against office hours, and the profile's
+  /// own `wakeUpHour`/`bedtimeHour` — which are persisted and round-tripped —
+  /// were read by nothing.
+  ///
+  /// Resolution order matches `ReminderRescheduleService.rescheduleWaterReminders`
+  /// so pacing and reminders can never disagree about when the user is awake:
+  /// a real sleep average when there is enough history, then the stated sleep
+  /// schedule, then the hydration profile's hours.
+  static ({int wakeMinutes, int sleepMinutes}) wakingWindow() {
+    try {
+      final avg = SleepService.averageActualSchedule();
+      if (avg != null) {
+        return (
+          wakeMinutes: avg.wakeHour * 60 + avg.wakeMinute,
+          sleepMinutes: avg.bedHour * 60 + avg.bedMinute,
+        );
+      }
+      final schedule = SleepService.getSchedule();
+      return (
+        wakeMinutes: schedule.wakeHour * 60 + schedule.wakeMinute,
+        sleepMinutes: schedule.bedtimeHour * 60 + schedule.bedtimeMinute,
+      );
+    } catch (_) {
+      final p = _profile;
+      return (
+        wakeMinutes: (p.wakeUpHour ?? 7) * 60,
+        sleepMinutes: (p.bedtimeHour ?? 22) * 60,
+      );
+    }
+  }
+
+  /// The goal a given day should be JUDGED against.
+  ///
+  /// Every history surface used to divide by `getDailyGoal()` — TODAY's goal —
+  /// so raising the goal on Friday retroactively rewrote Monday from "goal
+  /// achieved" to 70%, and lowering it awarded goals that were never met. The
+  /// day row already stores the goal that was in force (`dailyGoalMl`) and a
+  /// persisted `goalReached` flag computed against it, which is why the
+  /// statistics badge and the bars beside it could disagree on one screen.
+  ///
+  /// Falls back to today's goal only for a day with no row at all.
+  static int goalForDay(DailyWaterData? day) {
+    final stored = day?.dailyGoalMl ?? 0;
+    return stored > 0 ? stored : getDailyGoal();
+  }
+
+  // ============ FLUID RESTRICTION ============
+
+  /// True when the user is on a prescribed daily fluid ceiling rather than a
+  /// target. See [HydrationProfile.fluidCeilingMl].
+  static bool get isFluidRestricted => _profile.isRestricted;
+
+  /// How much of the ceiling is left today. Negative once it is exceeded.
+  ///
+  /// Uses RAW intake, not the hydration-adjusted figure: a clinician's fluid
+  /// limit is about the volume of liquid swallowed. Crediting a coffee at less
+  /// than its volume, or letting a spirit's negative coefficient buy back
+  /// headroom, would understate the load against a limit that exists for
+  /// cardiac or renal reasons.
+  static int fluidHeadroomMl({DateTime? on}) {
+    final ceiling = _profile.fluidCeilingMl;
+    if (ceiling == null || ceiling <= 0) return 0;
+    final day = getDataForDate(on ?? clock.now());
+    return ceiling - (day?.totalIntakeMl ?? 0);
+  }
+
+  /// Whether today's intake has passed the prescribed ceiling.
+  static bool hasExceededFluidCeiling({DateTime? on}) =>
+      isFluidRestricted && fluidHeadroomMl(on: on) < 0;
+
+  // ============ BACKUP ============
+
+  /// Every stored day, with its logs, read from Drift.
+  ///
+  /// Backup export used to snapshot `listenToDailyData()?.value` — the in-memory
+  /// warm cache — so a backup silently contained only the last
+  /// [warmCacheWindow] days no matter how long the person had been using the
+  /// app. Restoring it then looked successful while quietly dropping years.
+  static Future<List<DailyWaterData>> exportAllDaysForBackup() async {
+    try {
+      // A backup carries each day's tombstones too, so restoring it cannot
+      // resurrect a drink the user deleted before taking it.
+      await _ensureTombstonesLoaded();
+      final rows = await _dao.getAllDailyData();
+      if (rows.isEmpty) return const [];
+      final byDay = await _dao.getLogsForDays(rows.map((r) => r.id).toList());
+      return [
+        for (final row in rows)
+          _dailyFromRow(row, (byDay[row.id] ?? const []).map(_logFromRow).toList()),
+      ];
+    } catch (e) {
+      debugPrint('⚠️ WaterService backup export failed: $e');
+      return const [];
+    }
+  }
+
+  /// Restore one day *and its per-drink logs*, as a single atomic replacement.
+  ///
+  /// [saveDailyData] persists only the day row, so restoring through it left
+  /// every day's totals with no entries behind them — the day said "2,300 ml
+  /// across 8 drinks" and the history screen showed nothing. Because a restore
+  /// may run after `clearRestorableData()` has emptied the log table, this
+  /// replaces the day's logs rather than merging.
+  ///
+  /// The replacement runs in ONE transaction because it is three writes —
+  /// delete the logs, write the day row, re-insert the logs one by one — that
+  /// are only correct together. Interrupted part-way (a failing row, a crash,
+  /// the process being killed mid-restore) the old sequence left the day's
+  /// totals standing over logs it had just deleted, and nothing ever repaired
+  /// it: the next read saw a day claiming eight drinks with none behind it.
+  /// A caller that gets an exception from here now knows the day is untouched.
+  static Future<void> restoreDayWithLogs(DailyWaterData day) async {
+    await _dao.transaction(() async {
+      await _dao.deleteLogsForDay(day.id);
+      // Deliberately not [_persistDay]: it swallows its own failures, which
+      // inside a transaction means committing logs with no day row to match.
+      await _dao.saveDailyData(_dayCompanion(day));
+      for (final log in day.logs) {
+        await _dao.upsertWaterLog(_logCompanion(day.id, log));
+      }
+    });
+    // A backup and a cloud day both carry the drinks that were deleted from
+    // them; adopting them here is what stops the merge resurrecting a drink
+    // this device has never seen deleted.
+    await _recordDeletedLogs(day.id, day.deletedLogIds);
+    // Keep the in-memory view consistent with what was just written — after
+    // the transaction, so a failed restore leaves the cache alone too. The
+    // lifetime snapshot is patched here for the same reason [_persistDay] does
+    // it: this is the one other path that writes a day row.
+    _dailyWaterNotifier.value[day.id] = day;
+    _patchAggregate(day);
+    _notifyListeners();
+  }
+
+  /// Called once after a restore finishes, so favourites and achievements
+  /// reflect the imported history instead of the pre-restore state.
+  static Future<void> refreshAfterRestore() async {
+    await _refreshUsage();
+    await _evaluateAchievements();
+  }
+
+  /// Canonical `yyyy-MM-dd` key for [date]. Public because the cloud sync must
+  /// address a day by exactly the same id the local store uses — it used to
+  /// build its own `'${y}-${m}-${d}'`, which is unpadded, so August wrote
+  /// `2026-8-21` where everything local expects `2026-08-21`. A day row created
+  /// under the short key was unreachable by every reader in the app.
+  static String dateKeyFor(DateTime date) => _getDateKey(date);
+
+  /// Merge a day that came from the cloud into local history and return the
+  /// result.
+  ///
+  /// The old sync was unconditional cloud-wins: if the cloud document existed,
+  /// the local day was overwritten by it. Log four drinks on your phone while
+  /// the cloud still held one, sync, and three were gone — and because it wrote
+  /// through `saveDailyData`, whichever logs did survive were not persisted at
+  /// all, only the totals.
+  ///
+  /// The merge is a union by log id, then a recompute of the totals from the
+  /// merged set — never a copy of either side's totals, which is what let the
+  /// two disagree. The union is the right shape for an append-mostly log and
+  /// means concurrent drinks on two devices both survive.
+  ///
+  /// Deletion is the one thing a union cannot express, so it travels as a
+  /// tombstone ([DailyWaterData.deletedLogIds]): the two sides' sets are
+  /// unioned, every id in that union is dropped from BOTH copies' logs, and the
+  /// union is carried into the merged day so it reaches the cloud — and from
+  /// there the other device. Without it a deleted drink came back on the next
+  /// launch even with a single device in play, because the cloud still held the
+  /// copy uploaded before the delete.
+  ///
+  /// The local day's [DailyWaterData.dailyGoalMl] wins, because the goal follows
+  /// the profile on this device.
+  static Future<DailyWaterData> mergeCloudDay(DailyWaterData cloud) async {
+    final key = cloud.id;
+    await _ensureTombstonesLoaded();
+    final local = await _ensureDayLoaded(key);
+
+    final deleted = <String>{..._tombstonesFor(key), ...cloud.deletedLogIds};
+
+    final byId = <String, EnhancedWaterLog>{};
+    for (final l in local?.logs ?? const <EnhancedWaterLog>[]) {
+      if (deleted.contains(l.id)) continue;
+      byId[l.id] = l;
+    }
+    for (final l in cloud.logs) {
+      if (deleted.contains(l.id)) continue;
+      byId.putIfAbsent(l.id, () => l);
+    }
+    final merged = byId.values.toList()..sort((a, b) => a.time.compareTo(b.time));
+
+    final base = (local ??
+            DailyWaterData(
+              id: key,
+              date: cloud.date,
+              dailyGoalMl: cloud.dailyGoalMl,
+            ))
+        .copyWith(deletedLogIds: deleted);
+    final result = _recalculateDailyData(base, merged);
+
+    await restoreDayWithLogs(result);
+    await _refreshUsage();
+    await _evaluateAchievements();
+    return result;
+  }
+
   // ============ STATISTICS ============
 
   /// Get weekly statistics
   static Map<String, dynamic> getWeeklyStats() {
-    final now = DateTime.now();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    final now = clock.now();
+    final weekStart = startOfWeek(now);
     final data = getDataForRange(weekStart, now);
 
     int totalMl = 0;
@@ -1151,13 +1969,57 @@ class WaterService {
 
   /// Get current streak.
   ///
-  /// Derived from persisted [DailyWaterData] (survives restart) and computed by
-  /// the shared, forgiving [StreakEngine]: consecutive goal-reached days ending
-  /// at today, with one missed day forgiven per rolling week. Today may still be
-  /// in progress, so it only adds to the streak once already reached; the streak
-  /// otherwise counts from yesterday backwards.
+  /// Computed by the shared, forgiving [StreakEngine] over the WHOLE persisted
+  /// history: consecutive goal-reached days ending at today, with one missed day
+  /// forgiven per rolling week. Today may still be in progress, so it only adds
+  /// to the streak once already reached; the streak otherwise counts from
+  /// yesterday backwards.
+  ///
+  /// Returns the value stored by the last [_evaluateAchievements] pass rather
+  /// than recomputing. That pass runs on `init()` and on every write, i.e. at
+  /// every point the streak could have changed — and it reads Drift, so this is
+  /// no longer capped by the 90-day warm cache the way the old recompute was.
+  /// Keeping it synchronous matters: five UI call sites read it during build.
   static int getCurrentStreak() {
-    return _computeCurrentStreak();
+    return _achievements.currentStreak;
+  }
+
+  /// The full streak picture, including how many grace days are still in hand.
+  ///
+  /// Recomputed on demand rather than stored, because only `current`/`longest`
+  /// are persisted on the achievements row — `gracesRemaining` (the shield the
+  /// dashboard shows) is not. Still cheap: a walk over dates already in memory.
+  ///
+  /// The day set is the LIFETIME snapshot, not the 90-day warm cache it used to
+  /// fold. [StreakEngine] stops walking at the earliest day it is given and
+  /// treats everything before that as prehistory rather than as misses, so a
+  /// truncated set both capped `current`/`longest` at the cache width and
+  /// mis-reported the shield: a run whose break lies just outside the window
+  /// looked like the start of history, and the grace day that had in fact
+  /// already been spent was reported as still in hand.
+  static StreakResult getStreakResult() => StreakEngine.compute(
+        completedDays: _completedStreakDays(),
+        today: clock.now(),
+        graceDaysPerWeek: 1,
+      );
+
+  /// Goal-reached days for [getStreakResult].
+  ///
+  /// Falls back to the warm cache only while the lifetime snapshot is unloaded
+  /// — i.e. before `init()` or after its aggregate read threw. Degrading to the
+  /// old, capped answer beats showing a streak of zero to someone who has one.
+  static Set<DateTime> _completedStreakDays() {
+    final snapshot = _aggregates;
+    if (snapshot != null) {
+      return {
+        for (final d in snapshot.values)
+          if (d.goalReached) _dayOnly(d.date),
+      };
+    }
+    return {
+      for (final d in _dailyWaterNotifier.value.values)
+        if (d.goalReached) _dayOnly(d.date),
+    };
   }
 
   // ============ INSIGHTS ============
@@ -1173,27 +2035,53 @@ class WaterService {
       todayProgress: todayData.progress,
       caffeineToday: todayData.totalCaffeineMg,
       alcoholToday: todayData.alcoholicDrinksCount,
-      hourOfDay: DateTime.now().hour,
+      hourOfDay: clock.now().hour,
       avgDailyMl: weeklyStats['averageMl'] as int,
       goalMl: todayData.dailyGoalMl,
+      // Suppresses "Goal Achieved!" and the afternoon catch-up nudge when the
+      // number is a ceiling rather than a target.
+      isRestricted: _profile.isRestricted,
     );
   }
 
   // ============ EXPORT ============
 
-  /// Export water data as CSV
-  static String exportToCsv({DateTime? startDate, DateTime? endDate}) {
-    final start = startDate ?? DateTime.now().subtract(const Duration(days: 30));
-    final end = endDate ?? DateTime.now();
-    final data = getDataForRange(start, end);
+  /// Whether [date] is inside the optional [start]..[end] export window,
+  /// compared by calendar day so a time-of-day on either bound cannot clip the
+  /// first or last day.
+  static bool _inExportWindow(DateTime date, DateTime? start, DateTime? end) {
+    final day = startOfDay(date);
+    if (start != null && day.isBefore(startOfDay(start))) return false;
+    if (end != null && day.isAfter(startOfDay(end))) return false;
+    return true;
+  }
+
+  /// Export water data as CSV — every stored day, oldest first.
+  ///
+  /// Asynchronous, and read straight from Drift, because the sync readers see
+  /// only [warmCacheWindow]. Both exports used to default to the last 30 days
+  /// of the in-memory cache while the export sheet offered "Daily totals" and
+  /// "All drink logs" and shared a file called `water-summary.csv` — so a
+  /// two-year history exported as one month and nothing said so.
+  ///
+  /// [startDate] / [endDate] still narrow the window when a caller wants one;
+  /// with neither, it is the whole history.
+  static Future<String> exportToCsv(
+      {DateTime? startDate, DateTime? endDate}) async {
+    // One query for the day rows AND their log counts — the summary needs no
+    // log bodies, and this is the same aggregate the achievements pass reads.
+    final days = (await _dao.lifetimeDayAggregates())
+        .where((d) => _inExportWindow(d.date, startDate, endDate));
 
     final buffer = StringBuffer();
     buffer.writeln('Date,Total Intake (ml),Effective Hydration (ml),Goal (ml),Progress %,Drinks Count,Caffeine (mg),Alcoholic Drinks');
 
-    for (final day in data) {
+    for (final day in days) {
+      final progress =
+          day.dailyGoalMl > 0 ? day.effectiveHydrationMl / day.dailyGoalMl : 0.0;
       buffer.writeln(
-        '${day.id},${day.totalIntakeMl},${day.effectiveHydrationMl},${day.dailyGoalMl},'
-        '${(day.progress * 100).toStringAsFixed(1)},${day.drinksCount},'
+        '${_getDateKey(day.date)},${day.totalIntakeMl},${day.effectiveHydrationMl},${day.dailyGoalMl},'
+        '${(progress * 100).toStringAsFixed(1)},${day.logCount},'
         '${day.totalCaffeineMg},${day.alcoholicDrinksCount}',
       );
     }
@@ -1201,23 +2089,33 @@ class WaterService {
     return buffer.toString();
   }
 
-  /// Export detailed log data
-  static String exportDetailedCsv({DateTime? startDate, DateTime? endDate}) {
-    final start = startDate ?? DateTime.now().subtract(const Duration(days: 30));
-    final end = endDate ?? DateTime.now();
-    final data = getDataForRange(start, end);
+  /// Export detailed log data — every drink ever logged, oldest day first.
+  ///
+  /// Same widening as [exportToCsv]; see its doc.
+  static Future<String> exportDetailedCsv(
+      {DateTime? startDate, DateTime? endDate}) async {
+    final rows = (await _dao.getAllDailyData())
+        .where((r) => _inExportWindow(r.date, startDate, endDate))
+        .toList();
 
     final buffer = StringBuffer();
     buffer.writeln('Date,Time,Beverage,Amount (ml),Effective (ml),Hydration %,Caffeine (mg),Alcoholic,Note');
 
-    for (final day in data) {
-      for (final log in day.logs) {
-        buffer.writeln(
-          '${day.id},${log.time.hour}:${log.time.minute.toString().padLeft(2, '0')},'
-          '${log.beverageName},${log.amountMl},${log.effectiveHydrationMl},'
-          '${log.hydrationPercent},${log.caffeineAmount},${log.isAlcoholic},'
-          '"${log.note ?? ''}"',
-        );
+    // Chunked: `getLogsForDays` binds one SQLite variable per day id and the
+    // limit is 999, so a long history cannot go in a single `IN (...)`.
+    const chunkSize = 400;
+    for (var i = 0; i < rows.length; i += chunkSize) {
+      final chunk = rows.skip(i).take(chunkSize).toList();
+      final byDay = await _dao.getLogsForDays(chunk.map((r) => r.id).toList());
+      for (final row in chunk) {
+        for (final log in byDay[row.id] ?? const []) {
+          buffer.writeln(
+            '${row.id},${log.time.hour}:${log.time.minute.toString().padLeft(2, '0')},'
+            '${log.beverageName},${log.amountMl},${log.effectiveHydrationMl},'
+            '${log.hydrationPercent},${log.caffeineAmount},${log.isAlcoholic},'
+            '"${log.note ?? ''}"',
+          );
+        }
       }
     }
 
@@ -1228,16 +2126,52 @@ class WaterService {
   /// The Drift rows are removed by [CleanStorageService.clearAllPersistentData];
   /// this resets the reactive notifier and cached custom beverages/containers so
   /// the water UI drops to an empty state without needing an app restart.
+  ///
+  /// Also resets the profile and achievements: leaving them behind meant that
+  /// after a wipe the UI still showed the old streak, points and unlocked
+  /// badges, and the next write would persist those stale numbers back into the
+  /// freshly emptied tables.
   static void clearInMemory() {
     _dailyWaterNotifier.value = {};
+    // Emptied, and deliberately left marked as loaded: after a wipe there is
+    // nothing for a tombstone to protect, so the row must not be read back in.
+    // The row itself outlives the wipe — it lives in the key-value table, which
+    // the wipe does not clear — but every id in it ages out of
+    // [_persistDeletedLogIds]'s window, and points at a day that no longer
+    // exists until it does.
+    _deletedLogIds = {};
+    _tombstonesLoaded = true;
     _customBeverages.clear();
     _customContainers.clear();
+    _profile = HydrationProfile(id: 'profile', createdAt: clock.now());
+    _achievements = UserAchievements(id: 'user');
+    _beverageUsage = const {};
+    _containerUsage = const {};
+    // Dropped rather than emptied: null means "re-read the table", which is the
+    // right answer whether the wipe emptied it or not.
+    _aggregates = null;
   }
 
-  /// Reset service state for testing
+  /// Reset every piece of static state so one test cannot leak into the next.
+  ///
+  /// Previously this only flipped [_isInitialized], so the cached days, custom
+  /// beverages, profile and — most misleadingly — the achievements survived
+  /// between tests: a suite that seeded a streak in one test saw it in the next.
+  /// The Drift rows themselves are the caller's business (tests hand the service
+  /// a fresh in-memory database).
   @visibleForTesting
   static Future<void> resetForTesting() async {
     _isInitialized = false;
-    // TODO: Reset Drift storage state
+    clearInMemory();
+    _tombstonesLoaded = false;
+    _lastNewlyUnlocked = [];
   }
+
+  /// Recompute achievements on demand. Exists so tests can assert what a
+  /// recompute does — including that a failed read does *not* overwrite good
+  /// stored values with zeros.
+  @visibleForTesting
+  static Future<List<WaterAchievement>> evaluateAchievementsForTesting(
+          {bool persist = true}) =>
+      _evaluateAchievements(persist: persist);
 }

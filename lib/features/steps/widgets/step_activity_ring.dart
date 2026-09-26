@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../theme/steps_theme.dart';
+import '../utils/step_format.dart';
 
 /// Bespoke activity ring for the steps hero: a bold progress arc around a big
 /// tabular step count. When [progress] exceeds 1 a lighter "second lap" arc is
@@ -85,7 +86,7 @@ class StepActivityRing extends StatelessWidget {
                     size: 22, color: ext.mark(s)),
                 const SizedBox(height: 4),
                 Text(
-                  _fmt(steps),
+                  formatThousands(steps),
                   style: tt.displayLarge?.copyWith(
                     color: ext.textPrimary,
                     fontWeight: FontWeight.w800,
@@ -95,7 +96,7 @@ class StepActivityRing extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'of ${_fmt(goalSteps)} steps',
+                  'of ${formatThousands(goalSteps)} steps',
                   style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
                 ),
                 const SizedBox(height: 10),
@@ -139,16 +140,6 @@ class StepActivityRing extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  static String _fmt(int n) {
-    final str = n.abs().toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buf.write(',');
-      buf.write(str[i]);
-    }
-    return '${n < 0 ? '-' : ''}$buf';
   }
 }
 

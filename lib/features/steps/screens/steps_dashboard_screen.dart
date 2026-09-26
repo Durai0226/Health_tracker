@@ -25,7 +25,10 @@ import '../widgets/step_manual_entry_sheet.dart';
 import '../widgets/steps_permission_card.dart';
 import 'steps_goal_settings_screen.dart';
 import 'steps_history_screen.dart';
+import '../utils/step_format.dart';
 import '../../../core/health/coach_text.dart';
+import '../../../core/utils/calendar_day.dart';
+import 'package:clock/clock.dart';
 
 /// Steps home: hero activity ring, key stats, streak, weekly + hourly charts,
 /// a deterministic insight, and a permission/manual-entry fallback. Works with
@@ -86,9 +89,19 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
   /// Apple Health consent UI), so resume is the only reliable moment to notice
   /// it. Without this the permission card kept offering "Enable" long after the
   /// user had allowed access.
+  ///
+  /// Leaving the foreground is the mirror case: live step persistence is
+  /// throttled ([StepService.livePersistInterval]), and backgrounding is the
+  /// last moment Dart is guaranteed to run before the OS may kill us — so the
+  /// queued day is written out here rather than waiting for a timer that may
+  /// never fire.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshAvailability();
+    if (state == AppLifecycleState.resumed) {
+      _refreshAvailability();
+      return;
+    }
+    unawaited(StepService.flushPendingLiveDay());
   }
 
   Future<void> _refreshAvailability() async {
@@ -155,32 +168,35 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
   /// Fire a calm celebration only on a genuine false→true goal crossing observed
   /// while this screen is open, and only once per calendar day. Opening the app
   /// already-past-goal never retro-celebrates (the crossing happened off-screen).
-  void _maybeCelebrate(StepDailyData today) {
+  void _maybeCelebrate(
+      StepDailyData today, ScaffoldMessengerState messenger, bool reduceMotion) {
     final reached = today.goalReached;
     final prev = _lastGoalReached;
     _lastGoalReached = reached;
     if (prev != false || !reached) return;
     final key = _todayKey();
     if (CleanStorageService.getAppPreference(_kCelebratedDay, '') == key) return;
-    CleanStorageService.setAppPreference(_kCelebratedDay, key);
+    // `mounted` BEFORE the write, not after: marking the day celebrated and
+    // then bailing would spend the once-per-day token on a celebration the
+    // user never saw.
     if (!mounted) return;
+    CleanStorageService.setAppPreference(_kCelebratedDay, key);
 
     final met = (StepService.getWeeklyStats()['daysGoalMet'] as int?) ?? 0;
     HapticFeedback.mediumImpact();
-    if (!MediaQuery.of(context).disableAnimations) {
+    if (!reduceMotion) {
       _celebrateCtrl.forward(from: 0);
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(_celebrationLine(met)),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ));
+    // showAppToastVia, not context.toastSuccess: this runs in a post-frame
+    // callback, where the element can be deactivated while `mounted` is still
+    // true — see the comment at the call site and the doc on showAppToastVia.
+    // The kit hides the current toast itself, so the explicit hide is gone.
+    showAppToastVia(messenger, _celebrationLine(met),
+        duration: const Duration(seconds: 3));
   }
 
   static String _todayKey() {
-    final n = DateTime.now();
+    final n = clock.now();
     return '${n.year}-${n.month}-${n.day}';
   }
 
@@ -192,17 +208,16 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
   }
 
   Future<void> _enableHealth() async {
-    // Capture the messenger before awaiting so we never use context across an
-    // async gap; always give explicit feedback (the old handler was silent).
-    final messenger = ScaffoldMessenger.of(context);
+    // Always give explicit feedback (the old handler was silent).
 
     // Health Connect missing/outdated: the consent sheet can't open at all, so
     // send the user to the Play Store rather than failing silently.
     if (_availability == HealthAvailability.needsProviderUpdate) {
       await HealthDataService.instance.installHealthConnect();
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Install Health Connect, then come back to connect.'),
-      ));
+      // This is an ordinary async gap in a State method, so a mounted guard is
+      // sufficient and the toast may take `context`.
+      if (!mounted) return;
+      context.toastInfo('Install Health Connect, then come back to connect.');
       return;
     }
 
@@ -227,13 +242,13 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     } else {
       msg = "Connected. No step data found yet — it'll sync as it appears.";
     }
-    messenger.showSnackBar(SnackBar(content: Text(msg)));
+    context.toastInfo(msg);
   }
 
   /// Resolve the once-a-week fresh-start recap. Marks the week as seen so it
   /// won't re-appear on later opens, and only surfaces when last week has data.
   void _resolveFreshStart() {
-    final now = DateTime.now();
+    final now = clock.now();
     final weekStart = DateTime(now.year, now.month, now.day)
         .subtract(Duration(days: now.weekday - 1));
     final weekKey = '${weekStart.year}-${weekStart.month}-${weekStart.day}';
@@ -282,13 +297,12 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
   Future<void> _checkMilestones() async {
     final r = await MilestonesService.sync();
     if (!mounted || r.newlyEarned.isEmpty) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('Milestone reached · ${r.newlyEarned.first.title}'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ));
+    showAppToast(
+      context,
+      'Milestone reached · ${r.newlyEarned.first.title}',
+      variant: AppToastVariant.success,
+      duration: const Duration(seconds: 3),
+    );
   }
 
   void _openHistory() {
@@ -387,8 +401,17 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     final healthy = _healthAvailable;
 
     // Check for a fresh goal crossing after this frame paints.
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _maybeCelebrate(today));
+    //
+    // The messenger and the reduce-motion flag are resolved HERE, during build,
+    // and handed to the callback. Looking them up inside it instead threw
+    // "Looking up a deactivated widget's ancestor is unsafe": a post-frame
+    // callback can run after the element has been deactivated — removed from
+    // the tree but not yet unmounted — and `mounted` is still true at that
+    // point, so the guard below does not cover it.
+    final messenger = ScaffoldMessenger.of(context);
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _maybeCelebrate(today, messenger, reduceMotion));
 
     return RefreshIndicator(
       color: ext.mark(ext.steps),
@@ -434,7 +457,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
             tiles: [
               StatTile(
                 icon: Symbols.directions_walk_rounded,
-                value: _fmt(today.effectiveSteps),
+                value: formatThousands(today.effectiveSteps),
                 label: 'Steps',
                 accent: ext.steps,
               ),
@@ -447,7 +470,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
               ),
               StatTile(
                 icon: Symbols.local_fire_department_rounded,
-                value: _fmt(today.activeCalories.round()),
+                value: formatThousands(today.activeCalories.round()),
                 label: 'Kcal',
                 accent: ext.steps,
               ),
@@ -466,7 +489,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
             const SizedBox(height: AppSpacing.md),
             PersonalBestCard(
               icon: Symbols.emoji_events_rounded,
-              value: '${_fmt(best.steps)} steps',
+              value: '${formatThousands(best.steps)} steps',
               sublabel: 'Best day · ${_shortDate(best.date)}',
               isNew: StepService.isTodayNewBest(),
               accent: AppColorsExt.of(context).steps,
@@ -563,7 +586,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
         steps: today.effectiveSteps,
         goal: today.goalSteps,
         streakDays: streak,
-        hour: DateTime.now().hour,
+        hour: clock.now().hour,
       ),
     );
   }
@@ -577,12 +600,12 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
   /// Build the seven Mon→Sun bars for the current week.
   List<StepDayBar> _weekBars() {
     const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
-    final weekStart = today.subtract(Duration(days: now.weekday - 1));
+    final weekStart = startOfWeek(now);
     final bars = <StepDayBar>[];
     for (int i = 0; i < 7; i++) {
-      final date = weekStart.add(Duration(days: i));
+      final date = dayOffset(weekStart, i);
       final d = StepService.getDataForDate(date);
       final isToday = date == today;
       bars.add(StepDayBar(
@@ -624,10 +647,10 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
             ? '$streak-day streak going strong'
             : 'Goal reached today',
         detail:
-            'You hit ${_fmt(steps)} steps — $pctText of your ${_fmt(goal)} goal. Keep the momentum up.',
+            'You hit ${formatThousands(steps)} steps — $pctText of your ${formatThousands(goal)} goal. Keep the momentum up.',
         metric: pctText,
         why:
-            'Effective steps (${_fmt(steps)}) reached or passed today\'s goal (${_fmt(goal)}).',
+            'Effective steps (${formatThousands(steps)}) reached or passed today\'s goal (${formatThousands(goal)}).',
       );
     }
 
@@ -638,10 +661,10 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
           progress >= 0.6 ? InsightSeverity.info : InsightSeverity.attention,
       title: progress >= 0.6 ? 'Almost there' : 'Room to move today',
       detail:
-          '${_fmt(remaining)} steps to your ${_fmt(goal)} goal — about a ${_walkMinutes(remaining)} min walk.',
+          '${formatThousands(remaining)} steps to your ${formatThousands(goal)} goal — about a ${_walkMinutes(remaining)} min walk.',
       metric: pctText,
       why:
-          'Effective steps (${_fmt(steps)}) are below today\'s goal (${_fmt(goal)}).',
+          'Effective steps (${formatThousands(steps)}) are below today\'s goal (${formatThousands(goal)}).',
       actionLabel: 'Add steps',
     );
   }
@@ -654,22 +677,12 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     return m;
   }
 
-  static String _fmt(int n) {
-    final str = n.abs().toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buf.write(',');
-      buf.write(str[i]);
-    }
-    return '${n < 0 ? '-' : ''}$buf';
-  }
-
   static String _shortDate(DateTime d) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final that = DateTime(d.year, d.month, d.day);
     if (that == today) return 'Today';
@@ -721,11 +734,7 @@ class _StreakStrip extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'THIS WEEK',
-                  style: tt.labelSmall
-                      ?.copyWith(color: ext.textTertiary, letterSpacing: 0.6),
-                ),
+                const AppEyebrow('THIS WEEK'),
                 const SizedBox(height: 2),
                 Text('$daysGoalMet/7 goals met', style: tt.titleLarge),
                 const SizedBox(height: 2),

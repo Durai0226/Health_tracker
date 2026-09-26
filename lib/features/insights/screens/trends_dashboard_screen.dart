@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/services/active_profile_service.dart';
@@ -86,8 +87,52 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
     ActiveProfileService().addListener(_onDataChanged);
   }
 
+  /// A data change arrived while this screen was a HIDDEN tab; [_onPainted]
+  /// flushes it the moment the tab is actually shown.
+  bool _staleWhileHidden = false;
+
   void _onDataChanged() {
-    if (mounted) _reload();
+    if (!mounted) return;
+    // As a root tab this screen is a permanent `IndexedStack` child: it stays
+    // BUILT and LAID OUT while another tab is on screen. So logging a dose on
+    // Today re-ran the entire bundle — four service `init()`s, four async
+    // series, nine aggregations — for a screen nobody was looking at, on the
+    // critical path of the tap that triggered it. Defer instead. The user sees
+    // no difference: what they see is decided at the moment the tab appears,
+    // and that is exactly when this reloads.
+    if (!_isShowing) {
+      _staleWhileHidden = true;
+      return;
+    }
+    _reload();
+  }
+
+  /// Whether this screen is the SHOWN child of the shell's [IndexedStack].
+  ///
+  /// `IndexedStack` wraps every child in a [Visibility] and paints only the
+  /// selected one — hidden children still build and still lay out, so neither
+  /// `build` nor `didChangeDependencies` can tell the difference. That wrapper
+  /// widget is the one signal there is.
+  ///
+  /// Pushed as a route, or in a widget test, there is no such ancestor and this
+  /// reports visible — which is the behaviour this screen has always had.
+  bool get _isShowing =>
+      context.findAncestorWidgetOfExactType<Visibility>()?.visible ?? true;
+
+  /// Called every time this screen's subtree is actually painted.
+  ///
+  /// Coming to the front does not rebuild this widget: the shell hands
+  /// `IndexedStack` the same `const TrendsDashboardScreen(isRoot: true)` every
+  /// time, so `Element.updateChild` short-circuits and `build` never runs. A
+  /// paint, though, only happens for the child on top — which makes it the
+  /// arrival signal.
+  void _onPainted() {
+    if (!_staleWhileHidden) return;
+    _staleWhileHidden = false;
+    // We are inside the paint phase; setState here would be illegal.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _reload();
+    });
   }
 
   @override
@@ -116,7 +161,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
 
-    return AppScaffold(
+    final scaffold = AppScaffold(
       body: Column(
         children: [
           AppHeader(
@@ -170,6 +215,10 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         ],
       ),
     );
+
+    // The probe is a paint listener, nothing more — it adds no box, no layer
+    // and no layout. See [_onPainted].
+    return _PaintProbe(onPaint: _onPainted, child: scaffold);
   }
 
   // --------------------------------------------------------------- DASHBOARD
@@ -262,21 +311,23 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
             : '—',
         onTap: () => _open(const SleepDashboardScreen()),
       ),
-      // FOCUS — ring vs a sensible daily focus target.
-      TrendGoalCard.build(
-        ext: ext,
+      // FOCUS — a BAR, never a ring. This card used to draw a ring against
+      // "target 60m/day" and report progress towards it; no such target exists
+      // anywhere in the app, so it was this screen's own number presented as
+      // the user's. A ring implies a denominator, and inventing one is the most
+      // confident-looking way to be wrong. The Weekly Recap made the same call
+      // for the same reason.
+      TrendChartCard(
         accent: ext.focus,
         icon: Symbols.self_improvement_rounded,
         title: 'Focus',
+        headline: b.focus.hasData ? _fmtDuration(b.focus.total!) : '—',
+        trend: TrendGoalCard.goodTrend(b.focus),
         series: b.focus,
-        days: days,
+        kind: TrendChartKind.bar,
+        rangeDays: days,
         featureName: 'focus',
         formatValue: (v) => '${v.round()} min',
-        centerValue: (_) => _fmtDuration(b.focus.average!),
-        centerCaption: 'avg/day',
-        ringHeadline: (_) =>
-            'target ${kFocusDailyGoalMinutes.round()}m/day · ${_fmtDuration(b.focus.total!)} total',
-        barHeadline: b.focus.hasData ? _fmtDuration(b.focus.total!) : '—',
         onTap: () => _open(const FocusScreen()),
       ),
       // BLOOD PRESSURE — 2-line chart with a healthy-range band behind it.
@@ -380,10 +431,20 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
 
   /// Rebuild the bundle from storage. Used by pull-to-refresh and by the
   /// medicine-revision listener.
+  ///
+  /// The body is a BLOCK, not `setState(() => _future = …)`. An arrow closure
+  /// returns the value it assigns, `setState` asserts in debug that its
+  /// callback returned nothing, and `TrendsDataService.build` returns a Future
+  /// — so in a debug build every refresh threw "setState() callback argument
+  /// returned a Future" before it had refreshed anything. Release builds skip
+  /// the assert, which is why it went unnoticed.
   Future<void> _reload() async {
     if (!mounted) return;
-    setState(() => _future = TrendsDataService.build(_range));
-    await _future;
+    final next = TrendsDataService.build(_range);
+    setState(() {
+      _future = next;
+    });
+    await next;
   }
 
   /// A calm at-a-glance header: how many areas are tracked this range + the one
@@ -405,7 +466,8 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
     addGoal('Water', b.water.goalProgress);
     addGoal('Steps', b.steps.goalProgress);
     addGoal('Sleep', b.sleep.goalProgress);
-    addGoal('Focus', b.focus.goalProgress);
+    // Focus is absent on purpose: it has no stored goal, so it can never be
+    // "most on track" against one.
     goals.sort((a, c) => c.value.compareTo(a.value));
     final top = goals.isNotEmpty ? goals.first : null;
 
@@ -427,11 +489,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'LAST ${_range.label.toUpperCase()}',
-                      style: tt.labelSmall?.copyWith(
-                          color: ext.textTertiary, letterSpacing: 0.6),
-                    ),
+                    AppEyebrow('LAST ${_range.label.toUpperCase()}'),
                     const SizedBox(height: 2),
                     Text('Tracking $tracked of ${allSeries.length} areas',
                         style: tt.titleLarge),
@@ -468,8 +526,13 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
 
   // ------------------------------------------------------------------ STATES
 
-  void _retry() =>
-      setState(() => _future = TrendsDataService.build(_range));
+  /// Block body for the same reason as [_reload].
+  void _retry() {
+    final next = TrendsDataService.build(_range);
+    setState(() {
+      _future = next;
+    });
+  }
 
   // ------------------------------------------------------------------ HELPERS
 
@@ -511,5 +574,41 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
       default:
         return '—';
     }
+  }
+}
+
+/// Calls [onPaint] whenever its subtree is painted.
+///
+/// A hidden `IndexedStack` child is built and laid out like any other, but it
+/// is never painted — `RenderIndexedStack` paints only the child at `index`,
+/// and the `Visibility` wrapper around it returns early as well. So "my paint
+/// ran" is the one thing a tab can observe that means *I am on screen now*.
+///
+/// [RenderProxyBox] with nothing but a `paint` override: no extra box, no
+/// layer, no effect on layout or hit testing.
+class _PaintProbe extends SingleChildRenderObjectWidget {
+  const _PaintProbe({required this.onPaint, required Widget super.child});
+
+  final VoidCallback onPaint;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderPaintProbe(onPaint);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderPaintProbe renderObject) {
+    renderObject.onPaint = onPaint;
+  }
+}
+
+class _RenderPaintProbe extends RenderProxyBox {
+  _RenderPaintProbe(this.onPaint);
+
+  VoidCallback onPaint;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    onPaint();
+    super.paint(context, offset);
   }
 }

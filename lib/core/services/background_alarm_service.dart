@@ -25,6 +25,7 @@ import '../../features/reminders/models/reminder_kind.dart';
 // use it, but every existing consumer imports it from here.
 export '../../features/reminders/models/reminder_kind.dart';
 import 'dose_action_queue.dart';
+import 'notification_scheduler.dart';
 import 'water_action_queue.dart';
 
 /// When the user acts on the reminder from the NOTIFICATION (not the on-screen
@@ -190,22 +191,14 @@ int resolveSnoozeBaseId(int notificationId, Object? carriedBaseId) =>
 /// treated as "permitted" so behaviour is unchanged when the check itself is
 /// unavailable (e.g. a background isolate without the plugin attached).
 ///
-/// Public because `notification_service.dart`'s `zonedScheduleGuarded` needs the
-/// same answer: the AlarmManager track and the `zonedSchedule` track must agree
-/// on whether exact scheduling is available, or the two disagree about whether a
-/// downgrade happened.
-Future<bool> exactAlarmsAllowed() async {
-  if (!Platform.isAndroid) return true;
-  try {
-    final impl = FlutterLocalNotificationsPlugin()
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-    return await impl?.canScheduleExactNotifications() ?? true;
-  } catch (e) {
-    debugPrint('⚠️ Exact-alarm capability check failed (assuming allowed): $e');
-    return true;
-  }
-}
+/// The AlarmManager track ([_registerAlarm]) and the `zonedSchedule` track
+/// ([zonedScheduleGuarded]) must agree on whether exact scheduling is available,
+/// or the two disagree about whether a downgrade happened. They therefore ask
+/// the one implementation below — `zonedScheduleGuarded` through its injected
+/// [NotificationScheduler], so a test can answer for it; `_registerAlarm`
+/// through this free function, which is the same code on the real plugin.
+Future<bool> exactAlarmsAllowed() =>
+    PluginNotificationScheduler().exactAlarmsAllowed();
 
 /// Single registration point for every [alarmCallback] alarm in this file.
 ///
@@ -289,7 +282,7 @@ Future<bool> _registerAlarm(
 /// exactly as before.
 @pragma('vm:entry-point')
 Future<bool> zonedScheduleGuarded(
-  FlutterLocalNotificationsPlugin plugin,
+  NotificationScheduler scheduler,
   int id,
   String? title,
   String? body,
@@ -310,15 +303,13 @@ Future<bool> zonedScheduleGuarded(
   final wantsExact = exactModes.contains(androidScheduleMode);
   final tracksDowngrade = recordDowngrade ?? wantsExact;
 
-  Future<void> attempt(AndroidScheduleMode mode) => plugin.zonedSchedule(
+  Future<void> attempt(AndroidScheduleMode mode) => scheduler.zonedSchedule(
         id,
         title,
         body,
         when,
         details,
         androidScheduleMode: mode,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: matchDateTimeComponents,
         payload: payload,
       );
@@ -339,7 +330,9 @@ Future<bool> zonedScheduleGuarded(
   }
 
   // Pre-check: avoids provoking a throw at all on the common Android 14+ path.
-  if (!await exactAlarmsAllowed()) {
+  // Asked of the SAME seam that does the arming — a check on one object and an
+  // arm on another is two answers to one question.
+  if (!await scheduler.exactAlarmsAllowed()) {
     await noteDowngrade(downgraded: true);
     await attempt(AndroidScheduleMode.inexactAllowWhileIdle);
     debugPrint(
@@ -352,8 +345,14 @@ Future<bool> zonedScheduleGuarded(
     await noteDowngrade(downgraded: false);
     return true;
   } on PlatformException catch (e) {
-    // Racy revocation between the check above and the call.
+    // ONLY a permission refusal falls back. Anything else — a bad argument, a
+    // channel failure — is a real error and must propagate: swallowing it here
+    // would report "armed inexactly" for a notification that was never armed at
+    // all, which is the silent-false-success shape this whole helper exists to
+    // prevent.
     if (e.code != 'exact_alarms_not_permitted') rethrow;
+
+    // Racy revocation between the check above and the call.
     await noteDowngrade(downgraded: true);
     await attempt(AndroidScheduleMode.inexactAllowWhileIdle);
     debugPrint(
@@ -513,9 +512,7 @@ DateTime doseInstantFromAlarmPayload(
 Future<void> _scheduleSnoozeNotification(int originalId) async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    final snoozeMinutes = prefs.getInt(snoozeIntervalMinutesKey) ??
-        defaultSnoozeIntervalMinutes;
-    
+
     // Get original alarm data
     final alarmDataJson = prefs.getString('alarm_$originalId');
     if (alarmDataJson == null) {
@@ -524,6 +521,16 @@ Future<void> _scheduleSnoozeNotification(int originalId) async {
     }
     
     final alarmData = jsonDecode(alarmDataJson) as Map<String, dynamic>;
+
+    // This reminder's OWN snooze duration wins over the global preference.
+    // The button the user tapped is LABELLED with the per-reminder value (see
+    // the `snoozeDuration` override in [alarmCallback]), so rescheduling off
+    // the global one brought a reminder configured for 30 minutes back in 5 —
+    // the button promised one thing and the alarm did another. Read as `num`
+    // because a value that survived a JSON round-trip may be either.
+    final snoozeMinutes = (alarmData['snoozeDuration'] as num?)?.toInt() ??
+        prefs.getInt(snoozeIntervalMinutesKey) ??
+        defaultSnoozeIntervalMinutes;
     final isWindowNudge = alarmData['isWindowNudge'] == true;
     final title = isWindowNudge
         ? 'Time for ${alarmData['medicineName'] ?? 'your medicine'}'
@@ -766,6 +773,7 @@ AlarmPresentation alarmPresentationFor(
   ReminderKind kind, {
   bool isGroup = false,
   required int snoozeMinutes,
+  bool snoozeEnabled = true,
   String? requestedChannelId,
   String? requestedChannelName,
 }) {
@@ -801,7 +809,10 @@ AlarmPresentation alarmPresentationFor(
     vibrationPattern: alarmGrade
         ? const [0, 1000, 500, 1000, 500, 1000]
         : const [0, 250, 250, 250],
-    actions: _actionsFor(kind, isGroup: isGroup, snoozeMinutes: snoozeMinutes),
+    actions: _actionsFor(kind,
+        isGroup: isGroup,
+        snoozeMinutes: snoozeMinutes,
+        snoozeEnabled: snoozeEnabled),
   );
 }
 
@@ -809,11 +820,18 @@ AlarmPresentation alarmPresentationFor(
 ///
 /// Android caps a notification at 3 action buttons; a 4th makes the last one
 /// silently disappear. Every list below is at that limit, so adding to one means
-/// removing from it.
+/// removing from it. Dropping one (as [snoozeEnabled] false does) is always
+/// safe.
+///
+/// [snoozeEnabled] is the user's "Snooze enabled" setting. It was mirrored into
+/// the alarm isolate and then read by nothing, so someone who had turned
+/// snoozing OFF was still handed a Snooze button on every alert — the setting
+/// appeared to do nothing at all.
 List<AndroidNotificationAction> _actionsFor(
   ReminderKind kind, {
   required bool isGroup,
   required int snoozeMinutes,
+  bool snoozeEnabled = true,
 }) {
   switch (kind) {
     case ReminderKind.gentle:
@@ -825,11 +843,12 @@ List<AndroidNotificationAction> _actionsFor(
       // A time the user chose. Nothing to log — "Mark done" needs a handler and
       // an occurrence row, which is a later change, not a button added here.
       return <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          'snooze',
-          '⏰ Snooze ${snoozeMinutes}min',
-          showsUserInterface: false,
-        ),
+        if (snoozeEnabled)
+          AndroidNotificationAction(
+            'snooze',
+            '⏰ Snooze ${snoozeMinutes}min',
+            showsUserInterface: false,
+          ),
         const AndroidNotificationAction(
           'dismiss',
           '✕ Dismiss',
@@ -854,11 +873,12 @@ List<AndroidNotificationAction> _actionsFor(
             showsUserInterface: false,
             cancelNotification: true,
           ),
-          AndroidNotificationAction(
-            'snooze',
-            '⏰ Snooze ${snoozeMinutes}min',
-            showsUserInterface: false,
-          ),
+          if (snoozeEnabled)
+            AndroidNotificationAction(
+              'snooze',
+              '⏰ Snooze ${snoozeMinutes}min',
+              showsUserInterface: false,
+            ),
         ];
       }
       return <AndroidNotificationAction>[
@@ -870,11 +890,12 @@ List<AndroidNotificationAction> _actionsFor(
           showsUserInterface: false,
           cancelNotification: true,
         ),
-        AndroidNotificationAction(
-          'snooze',
-          '⏰ Snooze ${snoozeMinutes}min',
-          showsUserInterface: false,
-        ),
+        if (snoozeEnabled)
+          AndroidNotificationAction(
+            'snooze',
+            '⏰ Snooze ${snoozeMinutes}min',
+            showsUserInterface: false,
+          ),
         // Dismiss must always be present for a solo reminder — this is the third
         // and final slot. Clears the alert without logging the dose; "Skip" (a
         // logged non-dose) lives in-app.
@@ -1028,7 +1049,19 @@ Future<void> alarmCallback(int alarmId) async {
         try {
           final schedule =
               MedicineSchedule.fromJson(jsonDecode(sj) as Map<String, dynamic>);
-          return schedule.isActiveOnDate(doseInstant);
+          if (!schedule.isActiveOnDate(doseInstant)) return false;
+          // Is this CLOCK TIME one of the medicine's slots for this day?
+          //
+          // The day gate alone is not enough once a weekend override exists:
+          // both the weekday and the weekend slot are armed (see
+          // groupRemindersBySlot), and only one of them belongs to any given
+          // day. Without this check a 07:00 weekday alarm also rang on
+          // Saturday, when the dose is actually due at 10:00.
+          if (slotHour == null || slotMinute == null) return true;
+          final todaysSlots = schedule.getScheduledTimesForDate(doseInstant);
+          if (todaysSlots.isEmpty) return true; // nothing to compare against
+          return todaysSlots
+              .any((t) => t.hour == slotHour && t.minute == slotMinute);
         } catch (e) {
           // On any parse error, fail OPEN (fire) — never silently drop a dose.
           debugPrint('⚠️ Schedule gate parse failed (firing anyway): $e');
@@ -1197,6 +1230,11 @@ Future<void> alarmCallback(int alarmId) async {
       kind,
       isGroup: isGroup,
       snoozeMinutes: snoozeMinutes,
+      // The user's "Snooze enabled" choice, mirrored out of UserSettings by
+      // saveUserSettings because this isolate has no Drift connection. Read
+      // here so turning snoozing off actually removes the button: it was
+      // mirrored and then read by nothing, so the setting did nothing.
+      snoozeEnabled: prefs.getBool(snoozeEnabledKey) ?? true,
       requestedChannelId: alarmData['channelId'] as String?,
       requestedChannelName: alarmData['channelName'] as String?,
     );
@@ -1957,9 +1995,32 @@ class BackgroundAlarmService {
 Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    final snoozeMinutes = prefs.getInt(snoozeIntervalMinutesKey) ??
+
+    // Parse the rich `alarm:{json}` payload for a clean title/body — otherwise
+    // the raw JSON would be shown as the notification body. Parsed FIRST
+    // because the reminder's own snooze duration rides in it too.
+    var snoozeTitle = '⏰ Snoozed Reminder';
+    var snoozeBody = 'Time for your reminder!';
+    Map<String, dynamic>? decodedPayload;
+    if (payload != null && payload.startsWith('alarm:')) {
+      try {
+        final decoded = jsonDecode(payload.substring('alarm:'.length));
+        if (decoded is Map) {
+          decodedPayload = Map<String, dynamic>.from(decoded);
+          snoozeTitle = '⏰ Snoozed: ${decoded['title'] ?? 'Reminder'}';
+          snoozeBody = (decoded['body'] ?? snoozeBody).toString();
+        }
+      } catch (_) {}
+    }
+
+    // This reminder's OWN snooze duration wins over the global preference, for
+    // the same reason as in [_scheduleSnoozeNotification]: the button the user
+    // tapped was labelled with the per-reminder value, so rescheduling off the
+    // global one brought a "Snooze 30min" reminder back in 5.
+    final snoozeMinutes = (decodedPayload?['snoozeDuration'] as num?)?.toInt() ??
+        prefs.getInt(snoozeIntervalMinutesKey) ??
         defaultSnoozeIntervalMinutes;
-    
+
     // Initialize timezone. Snooze uses a RELATIVE offset (now + minutes) so the
     // absolute instant is correct regardless, but keep tz.local honest instead
     // of the old hardcoded IST.
@@ -1978,22 +2039,6 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
     // id for the same notification — otherwise one path's reschedule could not
     // be cancelled by the other's, leaving two copies of one reminder.
     final snoozeId = (notificationId + snoozeIdOffset) & 0x7FFFFFFF;
-
-    // Parse the rich `alarm:{json}` payload for a clean title/body — otherwise
-    // the raw JSON would be shown as the notification body.
-    var snoozeTitle = '⏰ Snoozed Reminder';
-    var snoozeBody = 'Time for your reminder!';
-    Map<String, dynamic>? decodedPayload;
-    if (payload != null && payload.startsWith('alarm:')) {
-      try {
-        final decoded = jsonDecode(payload.substring('alarm:'.length));
-        if (decoded is Map) {
-          decodedPayload = Map<String, dynamic>.from(decoded);
-          snoozeTitle = '⏰ Snoozed: ${decoded['title'] ?? 'Reminder'}';
-          snoozeBody = (decoded['body'] ?? snoozeBody).toString();
-        }
-      } catch (_) {}
-    }
 
     // The ONE counter, shared with the AlarmManager path and with
     // NotificationService.snoozeReminder —
@@ -2043,7 +2088,7 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
     // `exact_alarms_not_permitted` is worst — the user asked to be reminded again
     // and silently was not.
     await zonedScheduleGuarded(
-      notifications,
+      PluginNotificationScheduler(notifications),
       snoozeId,
       snoozeTitle,
       snoozeBody,
@@ -2061,7 +2106,14 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
           vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
           fullScreenIntent: true,
           category: AndroidNotificationCategory.alarm,
-          visibility: NotificationVisibility.public,
+          // Honour 'Show on lock screen', default PRIVATE — the same policy
+          // `alarmCallback` applies a few hundred lines up. This path is a
+          // SNOOZED DOSE re-firing, so its title is a medicine name; pinning it
+          // public put "Take sertraline" on a locked screen for anyone walking
+          // past, whatever the user had chosen.
+          visibility: (prefs.getBool(kShowOnLockScreenPref) ?? false)
+              ? NotificationVisibility.public
+              : NotificationVisibility.private,
           audioAttributesUsage: AudioAttributesUsage.alarm,
           autoCancel: false,
           ongoing: true,

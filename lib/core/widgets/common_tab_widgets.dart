@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+
 import '../design/app_design.dart';
-import 'package:flutter/services.dart';
 
 /// Modern, compact TabBar widget with consistent styling
 class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
@@ -31,16 +31,21 @@ class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = AppColorsExt.of(context).isDark;
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColorsExt.of(context).surface,
+        color: ext.surface,
         border: Border(
           bottom: BorderSide(
-            color: isDark 
-                ? AppColorsExt.of(context).outline
-                : Colors.grey.withOpacity(0.1),
+            // One hairline for both themes. Dark read `ext.outline`; light read
+            // `Colors.grey.withOpacity(0.1)`, i.e. the only separator in the
+            // app that did not come from the token — and a fifth of the
+            // token's weight (1.09:1 against white, where `outline` is
+            // 1.25:1), so the tab strip's bottom edge effectively vanished on
+            // light.
+            color: ext.outline,
             width: 1,
           ),
         ),
@@ -48,22 +53,25 @@ class CommonTabBar extends StatelessWidget implements PreferredSizeWidget {
       child: TabBar(
         controller: controller,
         isScrollable: isScrollable,
-        labelColor: labelColor ?? AppColorsExt.of(context).mark(AppColorsExt.of(context).brand),
-        unselectedLabelColor: unselectedLabelColor ?? AppColorsExt.of(context).textSecondary,
-        indicatorColor: indicatorColor ??
-            AppColorsExt.of(context).mark(AppColorsExt.of(context).brand),
+        labelColor: labelColor ?? ext.mark(ext.brand),
+        unselectedLabelColor: unselectedLabelColor ?? ext.textSecondary,
+        indicatorColor: indicatorColor ?? ext.mark(ext.brand),
         indicatorWeight: indicatorWeight!,
         indicatorSize: indicatorSize ?? TabBarIndicatorSize.tab,
         labelPadding: labelPadding ?? const EdgeInsets.symmetric(horizontal: 16),
-        labelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.3,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
+        // Kept rather than deleted, and now derived from the scale.
+        //
+        // `tabBarTheme` already supplies `labelStyle: tt.labelLarge`, so the
+        // sizes here were redundant — a prior reviewer measured the difference
+        // and refuted it. What was NOT redundant is that `TabBar` *replaces*
+        // its label style rather than merging it, so a bare `TextStyle` dropped
+        // the family too: tab labels rendered in the platform default instead
+        // of Inter, and lost the scale's line height.
+        //
+        // The weight pair stays explicit because it is the selected/unselected
+        // contrast this widget exists for, which no theme expresses.
+        labelStyle: tt.labelLarge?.copyWith(letterSpacing: 0.3),
+        unselectedLabelStyle: tt.labelLarge?.copyWith(fontWeight: FontWeight.w500),
         tabs: tabs.map((tab) => Tab(text: tab)).toList(),
       ),
     );

@@ -13,6 +13,7 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'clean_storage_service.dart';
+import 'notification_scheduler.dart';
 import 'water_action_queue.dart';
 import 'dose_action_queue.dart';
 import '../../features/medication/models/enhanced_medicine.dart';
@@ -40,16 +41,43 @@ class NotificationService {
 
   NotificationService._internal();
 
+  /// The concrete plugin, for the two things that are NOT scheduling decisions:
+  /// `initialize` and `resolvePlatformSpecificImplementation` (channels,
+  /// permission queries, exact-alarm settings intents). Everything that arms,
+  /// shows or cancels goes through [_scheduler] instead.
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
+  /// The scheduling seam. Lazily created, for the same reason `AudioService`'s
+  /// engine is: a field initialiser would construct the real adapter before a
+  /// test could substitute one.
+  NotificationScheduler? _schedulerOverride;
+  NotificationScheduler get _scheduler =>
+      _schedulerOverride ??= PluginNotificationScheduler(_notifications);
+
+  /// Substitute the OS scheduler in tests. See [NotificationScheduler] for why
+  /// this exists at all.
+  ///
+  /// Also marks the service initialised. `init()` is otherwise reached from
+  /// `checkPermissions()` on the first schedule, and it drives four platform
+  /// channels (plugin init, `flutter_timezone`, AlarmManager, channel creation)
+  /// that are unregistered headlessly. Every one of those failures is caught and
+  /// only `debugPrint`ed, so the test would still pass — it would just spend the
+  /// round trips and log four warnings that look like defects. A caller that
+  /// wants the init path itself can still invoke `init()` directly.
+  @visibleForTesting
+  set schedulerForTesting(NotificationScheduler scheduler) {
+    _schedulerOverride = scheduler;
+    _isInitialized = true;
+  }
+
   /// Instance-side shorthand for [zonedScheduleGuarded]. **Every** scheduling
   /// path in this class goes through here rather than touching
-  /// `_notifications.zonedSchedule` directly, so the exact-to-inexact fallback
+  /// `_scheduler.zonedSchedule` directly, so the exact-to-inexact fallback
   /// cannot be forgotten at a new call site.
   ///
   /// `uiLocalNotificationDateInterpretation` is accepted and ignored: every call
-  /// site passed `absoluteTime` and the helper hardcodes it. The parameter stays
+  /// site passed `absoluteTime` and the adapter hardcodes it. The parameter stays
   /// so the call sites read the same as the plugin API they replaced.
   Future<bool> _zonedSchedule(
     int id,
@@ -66,7 +94,7 @@ class NotificationService {
     String debugLabel = 'notification',
   }) =>
       zonedScheduleGuarded(
-        _notifications,
+        _scheduler,
         id,
         title,
         body,
@@ -607,7 +635,7 @@ class NotificationService {
       snoozeReminder(response.id ?? 0, settings.snoozeIntervalMinutes,
           title: t, body: b);
     } else if (response.actionId == 'dismiss') {
-       _notifications.cancel(response.id ?? 0);
+       _scheduler.cancel(response.id ?? 0);
        debugPrint('✓ Notification dismissed via tap: ${response.id}');
     } else if (response.actionId == 'take' || response.actionId == 'skip') {
       // Android routes every `showsUserInterface: false` action through
@@ -831,15 +859,28 @@ class NotificationService {
   /// medicine), no full-screen intent, a reminder category, and its own reserved
   /// id — so it can never hide, replace, or out-rank a medicine reminder. Fires
   /// daily at [minuteOfDay]. Passing `enabled: false` just cancels it.
-  Future<void> scheduleBedtimeReminder({
+  /// Returns whether the reminder is actually armed.
+  ///
+  /// This used to return `void` and bail on a permission refusal with only a
+  /// `debugPrint`, so the Sleep and Steps settings screens persisted the
+  /// toggle, left the switch ON and printed "Rings at 7:00 AM" while NOTHING
+  /// was scheduled. A user who declined the notification permission at
+  /// onboarding (or revoked it later) slept through their alarm with the app
+  /// insisting it was set. `scheduleHealthCheckReminder` already returned a
+  /// bool; these three are now consistent with it.
+  ///
+  /// `false` means "not armed" — including the deliberate `enabled: false`
+  /// case, where the caller asked for exactly that; callers should only treat
+  /// `false` as an error when they asked for `enabled: true`.
+  Future<bool> scheduleBedtimeReminder({
     required bool enabled,
     required int minuteOfDay,
   }) async {
     try {
-      await _notifications.cancel(bedtimeReminderId);
+      await _scheduler.cancel(bedtimeReminderId);
       if (!enabled) {
         debugPrint('✓ Bedtime reminder cancelled');
-        return;
+        return false;
       }
       if (!_isInitialized) {
         try {
@@ -848,7 +889,7 @@ class NotificationService {
       }
       if (!await checkPermissions()) {
         debugPrint('❌ Bedtime reminder: notifications not permitted');
-        return;
+        return false;
       }
 
       final hour = (minuteOfDay ~/ 60) % 24;
@@ -885,8 +926,10 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
       debugPrint('✓ Bedtime reminder at $hour:$minute (inexact, sleep_channel)');
+      return true;
     } catch (e) {
       debugPrint('❌ Bedtime reminder schedule failed: $e');
+      return false;
     }
   }
 
@@ -900,7 +943,20 @@ class NotificationService {
   /// through the same reliable [BackgroundAlarmService] the medicine core uses —
   /// but with its OWN reserved id so it never collides with a dose alarm. This
   /// is the plain-window tier only; no sleep-stage detection is claimed.
-  Future<void> scheduleWakeAlarm({
+  /// Returns whether the reminder is actually armed.
+  ///
+  /// This used to return `void` and bail on a permission refusal with only a
+  /// `debugPrint`, so the Sleep and Steps settings screens persisted the
+  /// toggle, left the switch ON and printed "Rings at 7:00 AM" while NOTHING
+  /// was scheduled. A user who declined the notification permission at
+  /// onboarding (or revoked it later) slept through their alarm with the app
+  /// insisting it was set. `scheduleHealthCheckReminder` already returned a
+  /// bool; these three are now consistent with it.
+  ///
+  /// `false` means "not armed" — including the deliberate `enabled: false`
+  /// case, where the caller asked for exactly that; callers should only treat
+  /// `false` as an error when they asked for `enabled: true`.
+  Future<bool> scheduleWakeAlarm({
     required bool enabled,
     required int hour,
     required int minute,
@@ -909,10 +965,10 @@ class NotificationService {
       if (Platform.isAndroid) {
         await BackgroundAlarmService().cancelAlarm(wakeAlarmId);
       }
-      await _notifications.cancel(wakeAlarmId);
+      await _scheduler.cancel(wakeAlarmId);
       if (!enabled) {
         debugPrint('✓ Wake alarm cancelled');
-        return;
+        return false;
       }
       if (!_isInitialized) {
         try {
@@ -921,7 +977,7 @@ class NotificationService {
       }
       if (!await checkPermissions()) {
         debugPrint('❌ Wake alarm: notifications not permitted');
-        return;
+        return false;
       }
 
       const title = 'Wake up ☀️';
@@ -929,7 +985,10 @@ class NotificationService {
       final payload = _buildAlarmPayload(wakeAlarmId, title, body, null);
 
       if (Platform.isAndroid) {
-        await BackgroundAlarmService().scheduleDailyAlarm(
+        // Report what the OS actually accepted, not that we asked. This is the
+        // path where SCHEDULE_EXACT_ALARM can be denied — an alarm the user
+        // sleeps through is precisely the failure worth surfacing.
+        final armed = await BackgroundAlarmService().scheduleDailyAlarm(
           id: wakeAlarmId,
           hour: hour,
           minute: minute,
@@ -940,8 +999,10 @@ class NotificationService {
           kind: ReminderKind.alarm,
           payload: payload,
         );
-        debugPrint('✓ Wake alarm scheduled at $hour:$minute');
-        return;
+        debugPrint(armed
+            ? '✓ Wake alarm scheduled at $hour:$minute'
+            : '❌ Wake alarm refused by the OS at $hour:$minute');
+        return armed;
       }
 
       // iOS fallback (dev only — release is Android): exact daily zonedSchedule.
@@ -962,8 +1023,10 @@ class NotificationService {
         payload: payload,
       );
       debugPrint('✓ Wake alarm scheduled (iOS) at $hour:$minute');
+      return true;
     } catch (e) {
       debugPrint('❌ Wake alarm schedule failed: $e');
+      return false;
     }
   }
 
@@ -977,15 +1040,28 @@ class NotificationService {
   /// stale number). This is a calm, generic, opt-in nudge at a user-set time —
   /// Importance.high (not max), inexact, no full-screen, its own id — so it can
   /// never crowd out or clobber a medicine reminder.
-  Future<void> scheduleStepReminder({
+  /// Returns whether the reminder is actually armed.
+  ///
+  /// This used to return `void` and bail on a permission refusal with only a
+  /// `debugPrint`, so the Sleep and Steps settings screens persisted the
+  /// toggle, left the switch ON and printed "Rings at 7:00 AM" while NOTHING
+  /// was scheduled. A user who declined the notification permission at
+  /// onboarding (or revoked it later) slept through their alarm with the app
+  /// insisting it was set. `scheduleHealthCheckReminder` already returned a
+  /// bool; these three are now consistent with it.
+  ///
+  /// `false` means "not armed" — including the deliberate `enabled: false`
+  /// case, where the caller asked for exactly that; callers should only treat
+  /// `false` as an error when they asked for `enabled: true`.
+  Future<bool> scheduleStepReminder({
     required bool enabled,
     required int minuteOfDay,
   }) async {
     try {
-      await _notifications.cancel(stepReminderId);
+      await _scheduler.cancel(stepReminderId);
       if (!enabled) {
         debugPrint('✓ Step reminder cancelled');
-        return;
+        return false;
       }
       if (!_isInitialized) {
         try {
@@ -994,7 +1070,7 @@ class NotificationService {
       }
       if (!await checkPermissions()) {
         debugPrint('❌ Step reminder: notifications not permitted');
-        return;
+        return false;
       }
 
       final hour = (minuteOfDay ~/ 60) % 24;
@@ -1030,8 +1106,10 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
       debugPrint('✓ Step reminder at $hour:$minute (inexact, steps_channel)');
+      return true;
     } catch (e) {
       debugPrint('❌ Step reminder schedule failed: $e');
+      return false;
     }
   }
 
@@ -1171,6 +1249,21 @@ class NotificationService {
     int? snoozeDuration,
     String? sound,
     String? payload,
+    /// How insistent this reminder is allowed to be.
+    ///
+    /// Every generic reminder used to be armed alarm-grade: `ReminderKind.alarm`
+    /// on the Android branch, and a hardcoded `alarm_channel` /
+    /// `Importance.max` / `fullScreenIntent: true` /
+    /// `AudioAttributesUsage.alarm` block on the cross-platform one. Meanwhile
+    /// the picker promised "Quiet — a silent notification", and
+    /// `ReminderEscalation.kind` / `wantsFullScreen` / `wantsExactAlarm` had no
+    /// callers outside their own file. So a Quiet "water the plants" at 22:30
+    /// rang at alarm volume through Do Not Disturb and took over the screen.
+    ///
+    /// Defaults to [ReminderEscalation.standard] rather than the old behaviour
+    /// on purpose: an un-migrated caller should get the gentler treatment, not
+    /// the loudest one.
+    ReminderEscalation escalation = ReminderEscalation.standard,
   }) async {
     try {
       if (!await checkPermissions()) {
@@ -1207,23 +1300,35 @@ class NotificationService {
         // Strategy: Base ID + offset for custom days.
         
         switch (repeatType) {
+          // Both branches RETURN THE OS RESULT.
+          //
+          // They used to `await` the call, discard its bool and `return true`.
+          // `scheduleOneTimeAlarm`/`scheduleDailyAlarm` return false when
+          // AlarmManager refuses — which is exactly what happens with
+          // SCHEDULE_EXACT_ALARM revoked, the failure mode
+          // `docs/bug-hunt.md` records as "medicine alarms were silently never
+          // scheduled". Reporting success there meant the Add Reminder screen
+          // popped with a saved reminder that would never fire.
           case RepeatType.none:
-             await alarmService.scheduleOneTimeAlarm(
+             final armed = await alarmService.scheduleOneTimeAlarm(
               id: id,
               dateTime: scheduledTime,
               title: title,
               body: body,
               channelId: 'reminders_channel',
               channelName: 'General Reminders',
-              kind: ReminderKind.alarm,
+              kind: escalation.kind,
               snoozeDuration: snoozeDuration,
               sound: sound,
               payload: basePayload,
             );
-            return true;
+            debugPrint(armed
+                ? '✓ One-time reminder alarm armed'
+                : '❌ One-time reminder alarm refused by the OS');
+            return armed;
 
           case RepeatType.daily:
-            await alarmService.scheduleDailyAlarm(
+            final armed = await alarmService.scheduleDailyAlarm(
               id: id,
               hour: scheduledTime.hour,
               minute: scheduledTime.minute,
@@ -1231,13 +1336,16 @@ class NotificationService {
               body: body,
               channelId: 'reminders_channel',
               channelName: 'General Reminders',
-              kind: ReminderKind.alarm,
+              kind: escalation.kind,
               snoozeDuration: snoozeDuration,
               sound: sound,
               payload: basePayload,
             );
-            return true;
-            
+            debugPrint(armed
+                ? '✓ Daily reminder alarm armed'
+                : '❌ Daily reminder alarm refused by the OS');
+            return armed;
+
           case RepeatType.weekly:
              // AndroidAlarmManager doesn't have native weekly, we might need to use recurring
              // or schedule for next occurrence and use StorageService to reschedule
@@ -1278,42 +1386,44 @@ class NotificationService {
       // Unified Logic using flutter_local_notifications for consistency and complex schedules
       // (AlarmManager is great for exact background, but `zonedSchedule` is also good)
 
-      // Use alarm_channel for proper alarm sound behavior
-      // The channel has audioAttributesUsage: alarm configured
+      // Presentation from the SHARED helper, keyed on the escalation tier —
+      // not a hardcoded alarm-grade block.
+      //
+      // This used to pin alarm_channel / Importance.max / fullScreenIntent /
+      // AudioAttributesUsage.alarm for every weekly, weekdays, weekends and
+      // custom reminder regardless of tier, which is how a "Quiet" reminder
+      // ended up ringing on the alarm stream (which ignores Do Not Disturb)
+      // and taking over the lock screen.
+      final look = alarmPresentationFor(
+        escalation.kind,
+        snoozeMinutes: snoozeDuration ?? 5,
+      );
+      // Default PRIVATE, matching alarmCallback: for a health app the safe
+      // default is not putting "Take sertraline" on a locked screen. The
+      // 'Show on lock screen' toggle was already mirrored to SharedPreferences
+      // for the alarm isolate; this path simply never read it.
+      final prefs = await SharedPreferences.getInstance();
+      final lockScreenVisibility = (prefs.getBool(kShowOnLockScreenPref) ?? false)
+          ? NotificationVisibility.public
+          : NotificationVisibility.private;
       final androidDetails = AndroidNotificationDetails(
-        'alarm_channel', // Use dedicated alarm channel
-        'Alarm Reminders',
-        channelDescription: 'High priority alarm reminders',
-        importance: Importance.max,
-        priority: Priority.max,
+        look.channelId,
+        look.channelName,
+        channelDescription: look.channelDescription,
+        importance: look.importance,
+        priority: look.priority,
         playSound: true,
-        sound: null, // Use system default alarm sound from channel
+        sound: null, // the channel supplies the sound
         enableVibration: true,
-        vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
-        // Always request full-screen intent on the alarm channel so the
-        // AlarmScreen (which loops the chosen sound) launches when the device is
-        // locked/idle — the whole point of a reminder alarm.
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.alarm,
-        visibility: NotificationVisibility.public,
-        audioAttributesUsage: AudioAttributesUsage.alarm,
-        actions: <AndroidNotificationAction>[
-          AndroidNotificationAction(
-            'snooze',
-            '⏰ Snooze ${snoozeDuration ?? 5}min',
-            showsUserInterface: false,
-          ),
-          const AndroidNotificationAction(
-            'dismiss',
-            '❌ Dismiss',
-            showsUserInterface: false,
-            cancelNotification: true,
-          ),
-        ],
-        // Persistent alarm settings - stays until user interacts
-        ongoing: priority == ReminderPriority.high, 
-        autoCancel: priority != ReminderPriority.high, 
-        timeoutAfter: priority == ReminderPriority.high ? 300000 : null,
+        vibrationPattern: Int64List.fromList(look.vibrationPattern),
+        fullScreenIntent: look.fullScreenIntent,
+        category: look.category,
+        visibility: lockScreenVisibility,
+        audioAttributesUsage: look.audioUsage,
+        actions: look.actions,
+        ongoing: look.ongoing,
+        autoCancel: look.autoCancel,
+        timeoutAfter: look.timeoutAfterMs,
       );
 
       final iOSDetails = DarwinNotificationDetails(
@@ -1523,7 +1633,7 @@ class NotificationService {
   tz.TZDateTime _nextInstanceOfDay(int dayOfWeek, DateTime time) {
     tz.TZDateTime scheduledDate = _nextInstanceOfTime(time);
     while (scheduledDate.weekday != dayOfWeek) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+      scheduledDate = _tzNextDay(scheduledDate, time);
     }
     return scheduledDate;
   }
@@ -1533,10 +1643,21 @@ class NotificationService {
     tz.TZDateTime scheduledDate =
         tz.TZDateTime(tz.local, now.year, now.month, now.day, time.hour, time.minute);
     if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+      scheduledDate = _tzNextDay(scheduledDate, time);
     }
     return scheduledDate;
   }
+
+  /// The next calendar day at the SAME wall-clock time, in the local zone.
+  ///
+  /// `TZDateTime.add(Duration(days: 1))` adds 24 absolute hours, so seeding a
+  /// weekly/weekdays/custom reminder across a DST transition shifted its wall
+  /// clock by an hour — and because the platform then repeats on
+  /// `dayOfWeekAndTime`, every later occurrence inherited the wrong minute.
+  /// Constructing the date re-resolves the offset and keeps 08:00 at 08:00.
+  static tz.TZDateTime _tzNextDay(tz.TZDateTime d, DateTime time) =>
+      tz.TZDateTime(
+          tz.local, d.year, d.month, d.day + 1, time.hour, time.minute);
 
   Future<void> _scheduleDaily(
     int id,
@@ -1664,13 +1785,17 @@ class NotificationService {
       // drifting upward. The rescheduled notification carries a RICH alarm
       // payload so re-firing still opens the AlarmScreen with the real content.
       final snoozeId = _safeId(baseId + 100000);
-      await _notifications.cancel(notificationId);
+      await _scheduler.cancel(notificationId);
       await _zonedSchedule(
         snoozeId,
         '⏰ Snoozed: $cleanTitle',
         cleanBody,
         snoozeTime,
-        _notificationDetails(priority: priority),
+        // Dose actions only when this snooze belongs to a medicine — without
+        // them the re-fire has no Take button at all, so the only route back
+        // is opening the app.
+        _notificationDetails(
+            priority: priority, doseActions: medicineId != null),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
@@ -1689,7 +1814,7 @@ class NotificationService {
   Future<void> _showFinalCappedNotification(
       int id, String title, String body) async {
     try {
-      await _notifications.show(
+      await _scheduler.show(
         id,
         title,
         body,
@@ -1856,7 +1981,7 @@ class NotificationService {
   }
 
   Future<void> cancelNotification(int id) async {
-    await _notifications.cancel(id);
+    await _scheduler.cancel(id);
     // On Android many reminders (generic none/daily, medicine, health, water)
     // are AndroidAlarmManager alarms, which flutter_local_notifications' cancel
     // does NOT touch. Tear that down too so cancelling/editing never leaves an
@@ -1870,20 +1995,20 @@ class NotificationService {
 
   Future<void> cancelFitnessNotification(int baseId, String frequency) async {
     if (frequency == 'daily') {
-      await _notifications.cancel(baseId);
+      await _scheduler.cancel(baseId);
     } else if (frequency == 'weekdays') {
       for (int i = 1; i <= 5; i++) {
-        await _notifications.cancel(baseId * 10 + i);
+        await _scheduler.cancel(baseId * 10 + i);
       }
     } else if (frequency == 'weekends') {
       for (int i = 6; i <= 7; i++) {
-        await _notifications.cancel(baseId * 10 + i);
+        await _scheduler.cancel(baseId * 10 + i);
       }
     }
   }
 
   Future<void> cancelAllNotifications() async {
-    await _notifications.cancelAll();
+    await _scheduler.cancelAll();
   }
 
   // Debug method to show immediate notification
@@ -1897,7 +2022,7 @@ class NotificationService {
       // Use a unique ID for test notifications
       final testId = DateTime.now().millisecondsSinceEpoch % 100000;
       
-      await _notifications.show(
+      await _scheduler.show(
         testId,
         'Test Notification 🔔',
         'Your reminders are working! Time: ${DateTime.now().toString().substring(11, 19)}',
@@ -1926,7 +2051,7 @@ class NotificationService {
       
       final id = DateTime.now().millisecondsSinceEpoch % 100000;
       
-      await _notifications.show(
+      await _scheduler.show(
         id,
         title,
         body,
@@ -1977,7 +2102,7 @@ class NotificationService {
       );
 
       final id = 920000 + (dedupeKey.hashCode.abs() % 1000);
-      await _notifications.show(id, title, body, details);
+      await _scheduler.show(id, title, body, details);
       debugPrint('✓ Caregiver alert shown: $title');
       return true;
     } catch (e) {
@@ -2016,7 +2141,7 @@ class NotificationService {
   }) async {
     try {
       if (!_isInitialized) await init();
-      await _notifications.show(
+      await _scheduler.show(
           focusSessionEndId, title, body, _focusDetails());
       debugPrint('✓ Focus notification shown: $title');
       return true;
@@ -2072,7 +2197,7 @@ class NotificationService {
     bool repeatDaily = false,
   }) async {
     try {
-      // cancelNotification, not _notifications.cancel: an older build scheduled
+      // cancelNotification, not _scheduler.cancel: an older build scheduled
       // these ids through AlarmManager, and only this tears that registration
       // down. It is a no-op for ids AlarmManager never held.
       await cancelNotification(id);
@@ -2162,19 +2287,19 @@ class NotificationService {
 
   /// Cancel a pending focus-end notification.
   ///
-  /// `_notifications.cancel`, deliberately not [cancelNotification]: these ids are
+  /// `_scheduler.cancel`, deliberately not [cancelNotification]: these ids are
   /// never registered with AlarmManager, so reaching into `BackgroundAlarmService`
   /// for them would be a no-op that implies otherwise.
   Future<void> cancelFocusCompletion(int id) async {
     try {
-      await _notifications.cancel(id);
+      await _scheduler.cancel(id);
     } catch (e) {
       debugPrint('Focus completion cancel failed for $id: $e');
     }
   }
 
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {
-    return await _notifications.pendingNotificationRequests();
+    return await _scheduler.pendingNotificationRequests();
   }
   
   Future<int> getPendingNotificationCount() async {
@@ -2263,9 +2388,12 @@ class NotificationService {
     required int id,
     required int hour,
     required int minute,
+    /// Set by [scheduleWaterReminderTimes], which checks once for the batch.
+    /// Defaults to false so a lone caller still checks for itself.
+    bool permissionsAlreadyChecked = false,
   }) async {
     try {
-      if (!await checkPermissions()) {
+      if (!permissionsAlreadyChecked && !await checkPermissions()) {
         debugPrint('❌ Cannot schedule: Permissions not granted');
         return false;
       }
@@ -2342,7 +2470,7 @@ class NotificationService {
 
   Future<void> cancelWaterReminders(List<int> ids) async {
     for (final id in ids) {
-      await _notifications.cancel(id);
+      await _scheduler.cancel(id);
     }
     debugPrint('✓ Cancelled ${ids.length} water reminders');
   }
@@ -2383,17 +2511,60 @@ class NotificationService {
     900023, // vitals: mood
   };
 
+  /// Every id a water sweep is allowed to cancel: the reserved block, plus the
+  /// legacy block minus the ids other features own there.
+  static Set<int> get _sweepableWaterIds => {
+        for (int i = 0; i < maxWaterReminders; i++) waterReminderBaseId + i,
+        for (int i = 0; i < maxWaterReminders; i++)
+          if (!_foreignIdsInLegacyWaterBlock
+              .contains(legacyWaterReminderBaseId + i))
+            legacyWaterReminderBaseId + i,
+      };
+
   /// Cancel every interval water reminder in the reserved id range — plus any
   /// left over in the legacy range, minus the ids other features own there.
-  Future<void> cancelAllWaterReminders() async {
-    await cancelWaterReminders(
-      List.generate(maxWaterReminders, (i) => waterReminderBaseId + i),
-    );
-    await cancelWaterReminders([
-      for (int i = 0; i < maxWaterReminders; i++)
-        if (!_foreignIdsInLegacyWaterBlock.contains(legacyWaterReminderBaseId + i))
-          legacyWaterReminderBaseId + i,
-    ]);
+  ///
+  /// Cancels only ids the OS actually holds. This used to issue 195 `cancel()`
+  /// calls every time — one per id in both blocks — on every launch and every
+  /// Save, whether or not a single water reminder existed. Cancelling an id
+  /// that was never scheduled is a no-op with a platform round trip attached,
+  /// so the work was real and the effect was nil. A user with ten slots now
+  /// pays ten.
+  ///
+  /// Returns how many were cancelled, so a caller that already read the pending
+  /// list can adjust its own count without a second round trip.
+  Future<int> cancelAllWaterReminders() async {
+    return _cancelPendingWaterReminders(await getPendingNotifications());
+  }
+
+  /// Which of [pendingIds] a water sweep may cancel.
+  ///
+  /// Pure and public because the decision of WHAT to cancel is the part that had
+  /// the bug in it, and it is just a set intersection — testable with no service
+  /// and no scheduler.
+  ///
+  /// Two properties matter and both are asserted in
+  /// `test/notifications/water_reminder_sweep_test.dart`:
+  /// an id that is not pending is never cancelled (that is the whole saving),
+  /// and an id another feature owns inside the legacy block is never cancelled
+  /// even though it sits in the range.
+  ///
+  /// That the sweep actually cancels what this returns — and cancels it before
+  /// arming the replacements — is a separate claim, asserted against the
+  /// [NotificationScheduler] seam in
+  /// `test/notifications/water_reminder_schedule_test.dart`.
+  @visibleForTesting
+  static List<int> staleWaterIdsIn(Iterable<int> pendingIds) {
+    final sweepable = _sweepableWaterIds;
+    return pendingIds.where(sweepable.contains).toList(growable: false);
+  }
+
+  /// The sweep itself, over a pending list the caller has already read.
+  Future<int> _cancelPendingWaterReminders(
+      List<PendingNotificationRequest> pending) async {
+    final stale = staleWaterIdsIn(pending.map((p) => p.id));
+    await cancelWaterReminders(stale);
+    return stale.length;
   }
 
   /// Schedule a set of daily-repeating water reminders at the given
@@ -2401,14 +2572,29 @@ class NotificationService {
   /// cancelled first so re-saving/rescheduling never leaves orphans. Returns the
   /// number of reminders successfully scheduled.
   Future<int> scheduleWaterReminderTimes(List<int> minutesSinceMidnight) async {
-    await cancelAllWaterReminders();
+    // Check once for the whole batch. `scheduleWaterReminder` checks per call,
+    // which meant up to 100 permission round trips for one reschedule — and the
+    // answer cannot change midway through a loop that takes milliseconds.
+    if (!await checkPermissions()) {
+      debugPrint('❌ Cannot schedule water reminders: permissions not granted');
+      return 0;
+    }
+
+    // ONE read of the pending list, used for both the stale sweep and the
+    // headroom budget below. It was already being fetched here and thrown away
+    // except for its length.
+    final pendingBefore = await getPendingNotifications();
+    final cancelled = await _cancelPendingWaterReminders(pendingBefore);
 
     // Truncate against what the OS will actually keep, not just this family's
     // own cap. On iOS the system keeps the soonest-firing 64 pending requests
     // and silently discards the rest — so 100 water reminders do not merely fail
     // to arm, they evict a user's dose reminders, which are further out. Water
     // is a `gentle` nudge: it yields first, by design.
-    final pending = await getPendingNotificationCount();
+    //
+    // Counted AFTER the sweep, matching the original order: the slots just
+    // cancelled must not count against the headroom they are about to reuse.
+    final pending = pendingBefore.length - cancelled;
     final headroom = ReminderBudget.headroomFor(
       ReminderKind.gentle,
       pending: pending,
@@ -2428,6 +2614,7 @@ class NotificationService {
         id: waterReminderBaseId + i,
         hour: m ~/ 60,
         minute: m % 60,
+        permissionsAlreadyChecked: true,
       );
       if (ok) count++;
     }
@@ -2465,7 +2652,7 @@ class NotificationService {
       const testId = 99998; // Fixed ID for quick test
       
       // Cancel any existing test notification
-      await _notifications.cancel(testId);
+      await _scheduler.cancel(testId);
       
       await _zonedSchedule(
         testId,
@@ -2502,7 +2689,7 @@ class NotificationService {
       const testId = 99999; // Fixed ID for test
       
       // Cancel any existing test notification
-      await _notifications.cancel(testId);
+      await _scheduler.cancel(testId);
       
       await _zonedSchedule(
         testId,

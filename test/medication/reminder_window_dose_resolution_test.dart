@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,15 @@ import 'package:tablet_remainder/features/medication/services/reminder_window_nu
 /// path the main isolate exposes — must set the SAME resolved-flag key a
 /// window nudge checks before firing, and stale flags must eventually be
 /// pruned rather than accumulating forever.
+///
+/// TQ-22 — the prune test's clock is pinned.
+///
+/// It used to seed its two flags off `DateTime.now()`, with a comment claiming
+/// `reconcileMissedDoses` "always uses DateTime.now() internally". That stopped
+/// being true: the reconciler reads `clock.now()`, so the seeds and the cutoff
+/// can now be pinned to the same instant instead of both chasing the real one.
+/// Pinning also lets the boundary itself be tested — 47h59m survives, 48h01m
+/// does not — which a wall-clock seed could only approach, never land on.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late AppDatabase db;
@@ -73,21 +83,54 @@ void main() {
 
   test('reconcileMissedDoses prunes resolved flags older than 48h but '
       'leaves recent ones alone', () async {
-    final prefs = await SharedPreferences.getInstance();
-    // reconcileMissedDoses always uses DateTime.now() internally for the
-    // prune cutoff, so the flags must be seeded relative to the REAL now, or
-    // the test would depend on when it happens to run.
-    final now = DateTime.now();
-    final old = now.subtract(const Duration(hours: 72));
-    final recent = now.subtract(const Duration(hours: 2));
-    await prefs.setBool(nudgeResolvedKey('m1', old), true);
-    await prefs.setBool(nudgeResolvedKey('m1', recent), true);
+    // The cutoff is `clock.now() - 48h`, so both the seeds and the sweep are
+    // pinned to one instant. Nothing here is relative to the real clock any
+    // more, and the two flags are placed either side of the boundary by
+    // minutes rather than by days.
+    final at = DateTime(2026, 3, 12, 14, 30);
+    await withClock(Clock.fixed(at), () async {
+      final prefs = await SharedPreferences.getInstance();
+      final old = at.subtract(const Duration(hours: 72));
+      final justOld = at.subtract(const Duration(hours: 48, minutes: 1));
+      final justRecent = at.subtract(const Duration(hours: 47, minutes: 59));
+      final recent = at.subtract(const Duration(hours: 2));
+      for (final t in [old, justOld, justRecent, recent]) {
+        await prefs.setBool(nudgeResolvedKey('m1', t), true);
+      }
 
-    await MedicineCleanStorageService.reconcileMissedDoses();
+      await MedicineCleanStorageService.reconcileMissedDoses();
 
-    expect(prefs.getBool(nudgeResolvedKey('m1', old)), isNull,
-        reason: 'a 72h-old flag must be pruned');
-    expect(prefs.getBool(nudgeResolvedKey('m1', recent)), isTrue,
-        reason: 'a 2h-old flag must survive');
+      expect(prefs.getBool(nudgeResolvedKey('m1', old)), isNull,
+          reason: 'a 72h-old flag must be pruned');
+      expect(prefs.getBool(nudgeResolvedKey('m1', justOld)), isNull,
+          reason: '48h01m is past the cutoff and must be pruned');
+      expect(prefs.getBool(nudgeResolvedKey('m1', justRecent)), isTrue,
+          reason: '47h59m is inside the cutoff and must survive');
+      expect(prefs.getBool(nudgeResolvedKey('m1', recent)), isTrue,
+          reason: 'a 2h-old flag must survive');
+    });
+  });
+
+  test('the prune leaves every other preference alone', () async {
+    // `prefs.getKeys()` is walked in full, so a prefix check that is too loose
+    // would delete unrelated keys — silently, and only for users old enough to
+    // have any.
+    final at = DateTime(2026, 3, 12, 14, 30);
+    await withClock(Clock.fixed(at), () async {
+      final prefs = await SharedPreferences.getInstance();
+      final stale = at.subtract(const Duration(hours: 72));
+      await prefs.setBool(nudgeResolvedKey('m1', stale), true);
+      await prefs.setBool('darkMode', true);
+      await prefs.setInt(
+          'some_other_${stale.millisecondsSinceEpoch}', 1);
+
+      await MedicineCleanStorageService.reconcileMissedDoses();
+
+      expect(prefs.getBool(nudgeResolvedKey('m1', stale)), isNull);
+      expect(prefs.getBool('darkMode'), isTrue,
+          reason: 'an unrelated preference was pruned');
+      expect(prefs.getInt('some_other_${stale.millisecondsSinceEpoch}'), 1,
+          reason: 'a key that merely ends in a timestamp was pruned');
+    });
   });
 }

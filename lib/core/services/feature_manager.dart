@@ -62,7 +62,7 @@ class FeatureManager extends ChangeNotifier {
       name: 'Medicine Tracker',
       icon: Symbols.medication_rounded,
       color: Color(0xFF6366F1),
-      description: 'Track medications, dosages, schedules, and get timely reminders',
+      description: 'Track medicines, dosages, schedules, and get timely reminders',
       tier: FeatureTier.core,
       isRequired: true,
     ),

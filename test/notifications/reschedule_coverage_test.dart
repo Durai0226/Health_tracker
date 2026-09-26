@@ -71,18 +71,13 @@ void main() {
           reason: 'a duplicate would double-arm and double-count');
     });
 
-    test('one family throwing does not stop the others', () {
-      // The difference between losing one family's reminders and losing all of
-      // them. Asserted against the loop rather than by running it, because
-      // every rearm here reaches a platform channel.
-      final loop = reschedule.substring(
-        reschedule.indexOf('for (final family in _families)'),
-        reschedule.indexOf('debugPrint(\'✓ Rescheduled'),
-      );
-      expect(loop, contains('try {'));
-      expect(loop, contains('catch (e)'));
-      expect(loop, contains('failed++'));
-    });
+    // Family isolation — one family throwing must not stop the rest — used to be
+    // asserted here by slicing this file's own source for the substrings
+    // `try {`, `catch (e)` and `failed++`. That passes on a `try` whose `catch`
+    // rethrows and fails on a rename that changed nothing. It is now driven, in
+    // the 'each family is isolated from the others' group below, against
+    // `rearmFamilies` — which takes its families as an argument precisely so a
+    // test can supply ones that do not reach a platform channel.
 
     test('vitals — four daily nudges nothing used to re-arm', () {
       expect(reschedule, contains('VitalsReminderService.rescheduleAll'));
@@ -147,4 +142,96 @@ void main() {
               'settings, so resume is the moment that matters');
     });
   });
+
+  group('each family is isolated from the others', () {
+    /// A family that records that it ran and re-arms [armed] reminders.
+    ReminderFamily ok(String name, List<String> log, {int armed = 1}) =>
+        ReminderFamily(name, () async {
+          log.add(name);
+          return armed;
+        });
+
+    /// A family that throws, as a real one does when its platform channel is
+    /// unavailable or its table is mid-restore.
+    ReminderFamily boom(String name, List<String> log) =>
+        ReminderFamily(name, () async {
+          log.add(name);
+          throw StateError('$name is broken');
+        });
+
+    test('a family that throws does not stop the ones after it', () async {
+      // The whole point: losing one family's reminders instead of every
+      // reminder in the app. Without the per-family catch, 'water' never runs.
+      final ran = <String>[];
+      final outcome = await ReminderRescheduleService.rearmFamilies([
+        ok('medicines', ran),
+        boom('appointments', ran),
+        ok('water', ran),
+      ]);
+
+      expect(ran, ['medicines', 'appointments', 'water']);
+      expect(outcome.attempted, 3);
+      expect(outcome.failed, 1);
+      expect(outcome.succeeded, 2);
+    });
+
+    test('the failure is counted, not swallowed', () async {
+      // A pass that silently reported success for a family it never armed is
+      // the shape this whole audit is about.
+      final ran = <String>[];
+      final outcome = await ReminderRescheduleService.rearmFamilies([
+        boom('medicines', ran),
+        boom('water', ran),
+      ]);
+
+      expect(outcome.failed, 2);
+      expect(outcome.succeeded, 0);
+    });
+
+    test('a thrown family contributes no armed count', () async {
+      final ran = <String>[];
+      final outcome = await ReminderRescheduleService.rearmFamilies([
+        ok('medicines', ran, armed: 4),
+        boom('appointments', ran),
+        ok('water', ran, armed: 3),
+      ]);
+
+      expect(outcome.armed, 7,
+          reason: 'only the families that completed may count toward armed');
+    });
+
+    test('every family succeeding reports no failures', () async {
+      final ran = <String>[];
+      final outcome = await ReminderRescheduleService.rearmFamilies([
+        ok('medicines', ran, armed: 2),
+        ok('water', ran, armed: 5),
+      ]);
+
+      expect(outcome.failed, 0);
+      expect(outcome.armed, 7);
+      expect(outcome.succeeded, 2);
+    });
+
+    test('families run in the order given', () async {
+      // Order is the budget guarantee: doses are armed before nudges, so if the
+      // OS ceiling is reached it is a hydration nudge that does not fit.
+      final ran = <String>[];
+      await ReminderRescheduleService.rearmFamilies([
+        ok('medicines', ran),
+        ok('appointments', ran),
+        ok('water', ran),
+      ]);
+
+      expect(ran, ['medicines', 'appointments', 'water']);
+    });
+
+    test('no families is a clean no-op', () async {
+      final outcome = await ReminderRescheduleService.rearmFamilies([]);
+
+      expect(outcome.armed, 0);
+      expect(outcome.failed, 0);
+      expect(outcome.attempted, 0);
+    });
+  });
+
 }

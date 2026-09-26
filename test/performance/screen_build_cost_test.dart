@@ -138,6 +138,14 @@ final _screens = <List<dynamic>>[
 /// time + priority marker each. Budgeting a list at its zero-row size is the
 /// same defect this file's header warns about, one level up.
 ///
+/// **Re-baselined again for INS-09: Insights/trends 988 -> 1137 (measured 989).**
+/// The Focus card was a ring reporting progress against "60 min/day" — a target
+/// that exists nowhere in the app, i.e. this screen's own invented number shown
+/// as the user's goal. It is now a bar chart, which draws one element per day
+/// instead of a single ring, so the screen legitimately grew ~130 elements.
+/// Recorded rather than absorbed: a budget quietly raised is a budget that has
+/// stopped measuring anything.
+///
 /// `Focus/stats` moved again, 1148 -> 1328 (measured 1155), when its bespoke
 /// insight rendering was replaced by the shared `InsightCard`:
 ///
@@ -224,9 +232,24 @@ const Map<String, int> _elementBudget = {
   'Medication/condition_library': 1243,
   'Vitals/blood_sugar': 940,
   'Focus/stats': 1328,
-  'Insights/weekly_recap': 856,
+  // Day-of-week dependent, and this number is the observed HIGH.
+  //
+  // Neither the seed nor the pump pins a clock here: `seedQaData` anchors to
+  // `clock.now()`, so the dataset moves with the wall clock, and the recap's
+  // 7-day window then lands on a different set of seeded days depending on
+  // which weekday the suite runs. An empty section (icon-in-circle + copy +
+  // CTA) is not the same size as a populated row, so the element count swings:
+  // 856 was measured on a Saturday, 925 on a Wednesday, with identical code.
+  //
+  // Raised to the high rather than pinned, because pinning properly needs the
+  // registered dashboards to read `clock.now()` instead of `DateTime.now()`
+  // (7 screens, ~28 call sites — tracked as TQ-02). Wrapping just this harness
+  // in `withClock` was tried and rejected: it shifts the async zone enough to
+  // surface an unrelated dispose-time ancestor lookup in Steps/dashboard, so it
+  // would trade a soft flake for a hard failure in code this test does not own.
+  'Insights/weekly_recap': 940,
   'Vitals/blood_pressure': 854,
-  'Insights/trends': 988,
+  'Insights/trends': 1137,
   'Period/dashboard': 819,
   'Medication/list': 780,
   'Water/caffeine': 731,

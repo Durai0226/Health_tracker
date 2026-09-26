@@ -66,7 +66,13 @@ class _AlarmScreenState extends State<AlarmScreen>
   late final AnimationController _breath; // glyph breathing (~4.6s)
   late final AnimationController _entrance; // staggered reveal
   Timer? _timer;
-  DateTime _now = DateTime.now();
+  /// The wall clock, published on its own so the ticker rebuilds ONLY the time.
+  ///
+  /// This was a plain field driven by `setState`, so every second rebuilt the
+  /// entire full-screen alarm — while three AnimationControllers (a 24s
+  /// ambient, a 4.6s breath and a 900ms entrance) were already driving
+  /// repaints. Nothing outside the clock cluster depends on it.
+  final ValueNotifier<DateTime> _now = ValueNotifier<DateTime>(DateTime.now());
 
   // Cross-isolate "stop ringing" channel: the notification-action handlers run
   // in the alarm/background isolate and can't touch this screen's audio player
@@ -83,7 +89,7 @@ class _AlarmScreenState extends State<AlarmScreen>
     _setShowWhenLocked(true);
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
+      if (mounted) _now.value = DateTime.now();
     });
     _registerStopPort();
 
@@ -183,6 +189,7 @@ class _AlarmScreenState extends State<AlarmScreen>
     IsolateNameServer.removePortNameMapping(_kAlarmStopPort);
     _stopPort?.close();
     _timer?.cancel();
+    _now.dispose();
     _ambient.dispose();
     _breath.dispose();
     _entrance.dispose();
@@ -244,8 +251,25 @@ class _AlarmScreenState extends State<AlarmScreen>
     _exit(); // close instantly; the logging/cancel below can never block it
     for (final medId in medIds) {
       try {
+        // Resolve the REAL dose amount, exactly as the in-app take path and the
+        // queue drain do — including titration.
+        //
+        // `markMedicineTaken` defaults `dosageTaken` to 1, so this path
+        // under-decremented stock for every medicine whose dose is not a single
+        // unit ("2 tablets" removed 1), which drifts the refill prediction and
+        // runs the patient out early. The queue drain was fixed for this; the
+        // full-screen alarm's Take was not.
+        final med = await MedicineCleanStorageService.getMedicine(medId);
         await MedicineCleanStorageService.markMedicineTaken(
-            medicineId: medId, scheduledTime: scheduled);
+          medicineId: medId,
+          scheduledTime: scheduled,
+          // A medicine we cannot read keeps the historical default of 1
+          // rather than failing the take outright.
+          dosageTaken: med == null
+              ? 1
+              : med.schedule
+                  .effectiveDosageAmount(scheduled, med.dosageAmount),
+        );
       } catch (_) {}
     }
     if (id != null) {
@@ -438,14 +462,16 @@ class _AlarmScreenState extends State<AlarmScreen>
           // a time must never wrap or ellipsise. Shrink the whole cluster to fit
           // instead; scaleDown never enlarges, so every phone that already fit
           // renders pixel-identically.
-          FittedBox(
+          ValueListenableBuilder<DateTime>(
+            valueListenable: _now,
+            builder: (context, now, _) => FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  DateFormats.timeNoMeridiem.format(_now),
+                  DateFormats.timeNoMeridiem.format(now),
                   maxLines: 1,
                   softWrap: false,
                   style: TextStyle(
@@ -460,7 +486,7 @@ class _AlarmScreenState extends State<AlarmScreen>
                 const SizedBox(width: 6),
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(DateFormats.meridiem.format(_now),
+                  child: Text(DateFormats.meridiem.format(now),
                       maxLines: 1,
                       softWrap: false,
                       style: tt.labelMedium?.copyWith(
@@ -471,10 +497,15 @@ class _AlarmScreenState extends State<AlarmScreen>
               ],
             ),
           ),
+          ),
           const SizedBox(height: 2),
-          Text(DateFormats.weekdayDayMonthLong.format(_now),
-              style: tt.bodySmall?.copyWith(
-                  color: ext.textSecondary, letterSpacing: 1)),
+          ValueListenableBuilder<DateTime>(
+            valueListenable: _now,
+            builder: (context, now, _) =>
+                Text(DateFormats.weekdayDayMonthLong.format(now),
+                    style: tt.bodySmall?.copyWith(
+                        color: ext.textSecondary, letterSpacing: 1)),
+          ),
         ],
       ),
     );
@@ -502,7 +533,7 @@ class _AlarmScreenState extends State<AlarmScreen>
           : [Colors.white.withOpacity(0.55), Colors.white.withOpacity(0.40)],
       child: Semantics(
         header: true,
-        label: 'Medication reminder. $title. $body.',
+        label: 'Medicine reminder. $title. $body.',
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

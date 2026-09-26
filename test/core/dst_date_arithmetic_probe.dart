@@ -18,6 +18,7 @@ import 'dart:io';
 
 import 'package:clock/clock.dart';
 import 'package:tablet_remainder/core/health/streak_engine.dart';
+import 'package:tablet_remainder/core/utils/calendar_day.dart';
 import 'package:rrule/rrule.dart';
 import 'package:tablet_remainder/features/reminders/models/reminder_model.dart';
 import 'package:tablet_remainder/features/reminders/models/reminder_recurrence.dart';
@@ -142,6 +143,8 @@ void main() {
     exit(2);
   }
 
+  _calendarDayHelpers();
+  _daySteppingLoops();
   _streakEngine();
   _medicineSchedule();
   _cyclePredictor();
@@ -160,6 +163,79 @@ void main() {
 }
 
 // ---------------------------------------------------------------------------
+
+/// The shared helpers in lib/core/utils/calendar_day.dart.
+///
+/// Every day-stepping loop and week bound in the app now routes through these,
+/// so pinning them in a real DST zone protects all of those call sites at once.
+void _calendarDayHelpers() {
+  // Spring forward: Sun 8 Mar 2026 is 23 hours long.
+  _expect(dayOffset(_d(2026, 3, 7), 1), _d(2026, 3, 8),
+      'dayOffset: Mar 7 + 1 == Mar 8 (23h day)');
+  _expect(dayOffset(_d(2026, 3, 8), 1), _d(2026, 3, 9),
+      'dayOffset: Mar 8 + 1 == Mar 9');
+  _expect(dayOffset(_d(2026, 3, 9), -1), _d(2026, 3, 8),
+      'dayOffset: Mar 9 - 1 == Mar 8');
+  // Fall back: Sun 1 Nov 2026 is 25 hours long.
+  _expect(dayOffset(_d(2026, 10, 31), 1), _d(2026, 11, 1),
+      'dayOffset: Oct 31 + 1 == Nov 1 (25h day)');
+  _expect(dayOffset(_d(2026, 11, 2), -1), _d(2026, 11, 1),
+      'dayOffset: Nov 2 - 1 == Nov 1');
+
+  // The whole-window differences a Duration would get wrong by one.
+  _expect(calendarDaysBetween(_d(2026, 3, 1), _d(2026, 3, 31)), 30,
+      'calendarDaysBetween spans spring forward');
+  _expect(calendarDaysBetween(_d(2026, 10, 25), _d(2026, 11, 8)), 14,
+      'calendarDaysBetween spans fall back');
+  // Time of day must not leak into the count.
+  _expect(calendarDaysBetween(_at(2026, 3, 7, 23, 30), _at(2026, 3, 8, 0, 30)),
+      1, 'calendarDaysBetween ignores time of day across spring forward');
+
+  // A week start must be midnight on Monday even in a transition week.
+  _expect(startOfWeek(_at(2026, 3, 8, 13, 5)), _d(2026, 3, 2),
+      'startOfWeek: the DST Sunday belongs to the Monday before it');
+  _expect(startOfWeek(_at(2026, 11, 1, 13, 5)), _d(2026, 10, 26),
+      'startOfWeek: the fall-back Sunday belongs to the Monday before it');
+
+  // A wall clock moved across a transition keeps its clock time.
+  _expect(shiftCalendarDays(_at(2026, 3, 8, 23, 0), -1), _at(2026, 3, 7, 23, 0),
+      'shiftCalendarDays: a 23:00 bedtime stays 23:00 across spring forward');
+  _expect(shiftCalendarDays(_at(2026, 11, 1, 23, 0), -1),
+      _at(2026, 10, 31, 23, 0),
+      'shiftCalendarDays: a 23:00 bedtime stays 23:00 across fall back');
+}
+
+/// The loop shape that broke: `for (d = start; !d.isAfter(today); d = next(d))`.
+///
+/// With `add(const Duration(days: 1))` the cursor drifts to 01:00 (spring) or
+/// 23:00 of the previous day (fall) once a transition is inside the window, so
+/// the final step is `isAfter(today)` and the loop exits WITHOUT VISITING
+/// TODAY. That silently dropped today from the medicine streak, from the
+/// adherence denominator, from missed-dose reconciliation and from the step
+/// history — for the rest of the year, not just on the transition day.
+void _daySteppingLoops() {
+  void walk(DateTime start, DateTime today, String what) {
+    final visited = <DateTime>[];
+    for (var day = start; !day.isAfter(today); day = dayOffset(day, 1)) {
+      visited.add(day);
+      if (visited.length > 400) break; // runaway guard
+    }
+    _expect(visited.isEmpty ? null : visited.last, today,
+        '$what: visits today');
+    _expect(visited.length, calendarDaysBetween(start, today) + 1,
+        '$what: visits every day exactly once');
+    _expect(visited.toSet().length, visited.length, '$what: no day twice');
+  }
+
+  // Spring forward inside the window (the medicine streak's 180-day case).
+  walk(_d(2026, 3, 1), _d(2026, 3, 14), 'spring-forward walk');
+  // Fall back inside the window — the 25-hour day used to be visited twice.
+  walk(_d(2026, 10, 25), _d(2026, 11, 8), 'fall-back walk');
+  // Both transitions at once.
+  walk(_d(2026, 1, 1), _d(2026, 12, 31), 'full-year walk');
+  // Single-day window still visits that day.
+  walk(_d(2026, 3, 8), _d(2026, 3, 8), 'single DST day walk');
+}
 
 void _streakEngine() {
   // Spring forward (Mar 8 is a 23-hour day). Every day Mar 1..Mar 15 completed.
@@ -416,6 +492,69 @@ void _rruleFloatingTime() {
       _failures.add('RRULE instances must be reinterpreted as local'
           '\n    expected: isUtc == false\n    actual:   $d');
       break;
+    }
+  }
+
+  // --- Focus weekly stats (F4) and the water 7-day series (W-11) ---------
+  //
+  // Neither WeeklyFocusStats.calculate nor the water chart can be imported
+  // here: both reach package:flutter through their model/widget layers, and
+  // this probe must stay pure Dart. What IS reproduced is the exact arithmetic
+  // those call sites now use, against the shape they used before — so the
+  // defect is pinned even though the classes are not constructed. The call
+  // sites themselves are held by
+  // test/features/calendar_stepping_guard_test.dart.
+
+  // getLastWeekStats: a week back from a midnight week-start.
+  for (final anchor in [_d(2026, 11, 4), _d(2026, 3, 11)]) {
+    final weekStart = startOfWeek(anchor);
+    final lastWeek = dayOffset(weekStart, -7);
+    _expect(lastWeek, _d(lastWeek.year, lastWeek.month, lastWeek.day),
+        'getLastWeekStats start is midnight-aligned from $anchor');
+    // The old shape drifts off midnight across a transition; that is what let
+    // the Monday row sort before the window and vanish.
+    _expect(lastWeek.hour, 0,
+        'getLastWeekStats start keeps hour 0 from $anchor '
+        '(Duration stepping yielded 01:00/23:00 here)');
+  }
+
+  // getLast4Weeks: four consecutive week starts, each still midnight, each
+  // exactly seven calendar days apart.
+  var wk = startOfWeek(_d(2026, 11, 4));
+  for (var i = 0; i < 4; i++) {
+    _expect(wk.hour, 0, 'getLast4Weeks week $i start keeps hour 0');
+    final next = dayOffset(wk, -7);
+    _expect(calendarDaysBetween(next, wk), 7,
+        'getLast4Weeks week $i is 7 calendar days from the previous');
+    wk = next;
+  }
+
+  // WeeklyFocusStats.calculate's window: weekStart..weekStart+6 must contain
+  // all seven of that week's day keys, including across both transitions.
+  for (final anchor in [_d(2026, 3, 11), _d(2026, 11, 4)]) {
+    final weekStart = startOfWeek(anchor);
+    final weekEnd = dayOffset(weekStart, 6);
+    var contained = 0;
+    for (var i = 0; i < 7; i++) {
+      final day = dayOffset(weekStart, i);
+      if (!day.isBefore(weekStart) && !day.isAfter(weekEnd)) contained++;
+    }
+    _expect(contained, 7,
+        'the week window holds all 7 day keys for the week of $anchor');
+  }
+
+  // The water / caffeine 7-day series: oldest -> newest, seven DISTINCT
+  // consecutive calendar days. The old `now.subtract(Duration(days: 6 - i))`
+  // repeated a weekday and skipped another across spring forward, which is how
+  // the bar chart rendered M T W T F S M.
+  for (final today in [_d(2026, 3, 9), _d(2026, 11, 2)]) {
+    final series = List<DateTime>.generate(7, (i) => dayOffset(today, i - 6));
+    final keys = series.map((d) => '${d.year}-${d.month}-${d.day}').toSet();
+    _expect(keys.length, 7, 'the 7-day series has 7 distinct days from $today');
+    _expect(series.last, today, 'the 7-day series ends on today from $today');
+    for (var i = 1; i < 7; i++) {
+      _expect(calendarDaysBetween(series[i - 1], series[i]), 1,
+          'series step $i is one calendar day from $today');
     }
   }
 }

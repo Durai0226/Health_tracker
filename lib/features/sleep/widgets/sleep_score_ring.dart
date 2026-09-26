@@ -65,13 +65,10 @@ class SleepScoreRing extends StatelessWidget {
                   letterSpacing: -1,
                 ),
               ),
-              Text(
-                _word(s).toUpperCase(),
-                style: tt.labelSmall?.copyWith(
-                  color: hasData ? band : ext.textTertiary,
-                  letterSpacing: 0.5,
-                ),
-              ),
+              // `color: null` when there is no data falls back to the
+              // widget's AA-safe default; the copy used textTertiary, which is
+              // under the 4.5:1 floor at 11pt.
+              AppEyebrow(_word(s), color: hasData ? band : null),
             ],
           ),
         ),

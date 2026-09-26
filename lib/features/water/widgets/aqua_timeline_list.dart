@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
+import '../../../core/design/app_design.dart';
 import '../theme/aqua_theme.dart';
 import '../models/enhanced_water_log.dart';
 
@@ -52,6 +53,7 @@ class AquaTimelineList extends StatelessWidget {
   }
 
   Widget _buildEmptyState(BuildContext context, bool isDark) {
+    final ext = AppColorsExt.of(context);
     return Container(
       padding: const EdgeInsets.all(AquaTheme.spacingXL),
       decoration: AquaTheme.getCardDecoration(context),
@@ -60,27 +62,27 @@ class AquaTimelineList extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AquaTheme.waterPrimary.withOpacity(0.1),
+              color: ext.water.container,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Symbols.water_drop_rounded,
               size: 40,
-              color: AquaTheme.waterPrimary.withOpacity(0.5),
+              color: ext.water.onContainer,
             ),
           ),
           const SizedBox(height: AquaTheme.spacingM),
           Text(
             'No drinks logged yet',
-            style: AquaTheme.bodyMedium.copyWith(
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
               color: AquaTheme.getTextSecondary(context),
             ),
           ),
           const SizedBox(height: AquaTheme.spacingXS),
           Text(
             'Tap the buttons above to add water',
-            style: AquaTheme.bodySmall.copyWith(
-              color: AquaTheme.textTertiary,
+            style: Theme.of(context).textTheme.bodySmall!.copyWith(
+              color: ext.textTertiary,
             ),
           ),
         ],
@@ -89,15 +91,14 @@ class AquaTimelineList extends StatelessWidget {
   }
 
   Widget _buildViewAllButton(BuildContext context, bool isDark) {
+    final ext = AppColorsExt.of(context);
     return GestureDetector(
       onTap: onViewAll,
       child: Container(
         padding: const EdgeInsets.all(AquaTheme.spacingM),
         decoration: BoxDecoration(
           border: Border(
-            top: BorderSide(
-              color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
-            ),
+            top: BorderSide(color: ext.outline),
           ),
         ),
         // `mainAxisSize.min` plus `Flexible` on the label. Centred is not the
@@ -113,8 +114,8 @@ class AquaTimelineList extends StatelessWidget {
                 'View all ${logs.length} entries',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AquaTheme.labelMedium.copyWith(
-                  color: AquaTheme.waterPrimary,
+                style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                  color: ext.mark(ext.water),
                 ),
               ),
             ),
@@ -122,7 +123,7 @@ class AquaTimelineList extends StatelessWidget {
             Icon(
               Symbols.arrow_forward_ios_rounded,
               size: 12,
-              color: AquaTheme.waterPrimary,
+              color: ext.mark(ext.water),
             ),
           ],
         ),
@@ -151,28 +152,10 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
   double _dragOffset = 0;
   bool _showDelete = false;
 
-  String _getBeverageId(String beverageId) {
-    // Map common beverage IDs to theme IDs
-    final mapping = {
-      'water': 'water',
-      'coffee': 'coffee',
-      'tea': 'tea',
-      'juice': 'juice',
-      'soda': 'soda',
-      'milk': 'milk',
-      'smoothie': 'smoothie',
-      'alcohol': 'alcohol',
-      'energy': 'energy',
-      'energy_drink': 'energy',
-    };
-    return mapping[beverageId.toLowerCase()] ?? 'water';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final beverageId = _getBeverageId(widget.log.beverageId);
-    final beverage = AquaTheme.getBeverage(beverageId);
-    final timeStr = _formatTime(widget.log.time);
+    final ext = AppColorsExt.of(context);
+    final timeStr = TimeOfDay.fromDateTime(widget.log.time).format(context);
 
     return GestureDetector(
       onHorizontalDragUpdate: widget.onDelete != null ? (details) {
@@ -199,10 +182,10 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
               child: Container(
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.only(right: 20),
-                color: AquaTheme.error.withOpacity(0.1),
+                color: ext.error.container,
                 child: Icon(
                   Symbols.delete_rounded,
-                  color: AquaTheme.error,
+                  color: ext.error.onContainer,
                 ),
               ),
             ),
@@ -211,31 +194,45 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
           Transform.translate(
             offset: Offset(_dragOffset, 0),
             child: Container(
-              color: AquaTheme.getCardBg(context),
+              color: ext.surface,
               padding: const EdgeInsets.all(AquaTheme.spacingM),
               child: Row(
                 children: [
                   // Timeline indicator
                   Column(
                     children: [
+                      // DS-17. The emoji, the beverage gradient and the
+                      // same-hue glow all go together, and the replacement is
+                      // deliberately NOT "the gradient with a white glyph": the
+                      // milk gradient is #FAFAFA -> #E0E0E0, so a white icon on
+                      // it measures 1.04:1. The AA-verified `container` /
+                      // `onContainer` pair works in both themes, and the drink
+                      // is still identified twice over — by the glyph's shape
+                      // and by its name in the line below.
                       Container(
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          gradient: beverage.gradient,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: beverage.primary.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
+                          color: ext.water.container,
+                          borderRadius: AppRadius.brMd,
                         ),
                         child: Center(
-                          child: Text(
-                            beverage.emoji,
-                            style: const TextStyle(fontSize: 20),
+                          child: Icon(
+                            // The log's OWN beverage id. This used to go
+                            // through a local map of ten ids that fell back to
+                            // 'water', while the catalogue defines beer, wine,
+                            // spirits, cocktail, espresso, the three teas,
+                            // orange juice, lemonade, coconut water, sports
+                            // drink, diet soda and sparkling water — none of
+                            // which were in it. `AquaTheme.iconFor` has cases
+                            // for all of them and its own water-drop default,
+                            // so the map could only ever lose information: a
+                            // beer and an espresso were both drawn as a drop of
+                            // water in Today's Log.
+                            AquaTheme.iconFor(widget.log.beverageId),
+                            size: 22,
+                            color: ext.water.onContainer,
+                            applyTextScaling: false,
                           ),
                         ),
                       ),
@@ -244,16 +241,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                           width: 2,
                           height: 20,
                           margin: const EdgeInsets.only(top: 8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                beverage.primary.withOpacity(0.3),
-                                beverage.primary.withOpacity(0.1),
-                              ],
-                            ),
-                          ),
+                          color: ext.outline,
                         ),
                     ],
                   ),
@@ -284,8 +272,8 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                                 '+${widget.log.amountMl} ml',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AquaTheme.heading3.copyWith(
-                                  color: AquaTheme.getTextPrimary(context),
+                                style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                                  color: ext.textPrimary,
                                 ),
                               ),
                             ),
@@ -297,7 +285,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: AquaTheme.success.withOpacity(0.1),
+                                color: ext.success.container,
                                 borderRadius: BorderRadius.circular(AquaTheme.radiusFull),
                               ),
                               child: Row(
@@ -306,7 +294,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                                   Icon(
                                     Symbols.check_rounded,
                                     size: 12,
-                                    color: AquaTheme.success,
+                                    color: ext.success.onContainer,
                                   ),
                                   const SizedBox(width: 4),
                                   // The 12pt tick stays; the word gives way.
@@ -319,9 +307,8 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                                       'Logged',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: AquaTheme.caption.copyWith(
-                                        color: AquaTheme.success,
-                                        fontWeight: FontWeight.w600,
+                                      style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                        color: ext.success.onContainer,
                                       ),
                                     ),
                                   ),
@@ -334,16 +321,16 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                         const SizedBox(height: 4),
                         Text(
                           '$timeStr • ${widget.log.beverageName}',
-                          style: AquaTheme.bodySmall.copyWith(
-                            color: AquaTheme.getTextSecondary(context),
+                          style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                            color: ext.textSecondary,
                           ),
                         ),
                         if (widget.log.effectiveHydrationMl != widget.log.amountMl) ...[
                           const SizedBox(height: 4),
                           Text(
                             'Hydration: ${widget.log.effectiveHydrationMl} ml',
-                            style: AquaTheme.caption.copyWith(
-                              color: beverage.primary,
+                            style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                              color: ext.mark(ext.water),
                             ),
                           ),
                         ],
@@ -357,14 +344,6 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
         ],
       ),
     );
-  }
-
-  String _formatTime(DateTime time) {
-    final hour = time.hour;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    return '$displayHour:$minute $period';
   }
 }
 
@@ -381,9 +360,11 @@ class AquaCompactLogEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final beverageId = _getBeverageId(log.beverageId);
-    final beverage = AquaTheme.getBeverage(beverageId);
-    final timeStr = _formatTime(log.time);
+    final ext = AppColorsExt.of(context);
+    // W15: the app formats a drink time exactly one way — the user's own 12/24h
+    // locale setting — instead of the three hand-rolled variants this feature
+    // had.
+    final timeStr = TimeOfDay.fromDateTime(log.time).format(context);
 
     return GestureDetector(
       onTap: onTap,
@@ -398,13 +379,18 @@ class AquaCompactLogEntry extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                gradient: beverage.gradient,
-                borderRadius: BorderRadius.circular(10),
+                color: ext.water.container,
+                borderRadius: AppRadius.brSm,
               ),
               child: Center(
-                child: Text(
-                  beverage.emoji,
-                  style: const TextStyle(fontSize: 16),
+                child: Icon(
+                  // Same ten-id lossy map as the timeline tile above, same
+                  // removal: `AquaTheme.iconFor` already knows every catalogue
+                  // id and defaults to the drop.
+                  AquaTheme.iconFor(log.beverageId),
+                  size: 18,
+                  color: ext.water.onContainer,
+                  applyTextScaling: false,
                 ),
               ),
             ),
@@ -415,15 +401,15 @@ class AquaCompactLogEntry extends StatelessWidget {
                 children: [
                   Text(
                     '${log.amountMl} ml ${log.beverageName}',
-                    style: AquaTheme.bodyMedium.copyWith(
-                      color: AquaTheme.getTextPrimary(context),
+                    style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                      color: ext.textPrimary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   Text(
                     timeStr,
-                    style: AquaTheme.caption.copyWith(
-                      color: AquaTheme.getTextSecondary(context),
+                    style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                      color: ext.textSecondary,
                     ),
                   ),
                 ],
@@ -433,29 +419,5 @@ class AquaCompactLogEntry extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _getBeverageId(String beverageId) {
-    final mapping = {
-      'water': 'water',
-      'coffee': 'coffee',
-      'tea': 'tea',
-      'juice': 'juice',
-      'soda': 'soda',
-      'milk': 'milk',
-      'smoothie': 'smoothie',
-      'alcohol': 'alcohol',
-      'energy': 'energy',
-      'energy_drink': 'energy',
-    };
-    return mapping[beverageId.toLowerCase()] ?? 'water';
-  }
-
-  String _formatTime(DateTime time) {
-    final hour = time.hour;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    return '$displayHour:$minute $period';
   }
 }

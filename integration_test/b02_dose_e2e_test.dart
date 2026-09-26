@@ -48,7 +48,7 @@ void main() {
     expect(stockBefore, isNotEmpty,
         reason: 'no seeded medicines — run with --dart-define=E2E_SEED=true');
 
-    // 'Take Now' on the next dose, 'Take' on the others — one code path
+    // 'Take now' on the next dose, 'Take' on the others — one code path
     // (_onTakeMedication), two labels.
     //
     // EXACT match on either, not `textContaining('Take')`: that also matches
@@ -56,7 +56,7 @@ void main() {
     // stopped immediately and the tap landed on a statistic.
     final takeButton = find.byWidgetPredicate(
       (w) => w is Text && (w.data == kMedsTake || w.data == kMedsTakeNow),
-      description: 'a Take / Take Now dose action',
+      description: 'a Take / Take now dose action',
     );
 
     // The dose list is below the fold: at 411x731 the Meds screen opens on its

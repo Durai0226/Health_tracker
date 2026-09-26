@@ -1,8 +1,10 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/sleep_schedule.dart';
 import '../models/sleep_session.dart';
+import '../../../core/utils/calendar_day.dart';
 
 /// The result of the manual-log sheet — resolved bed/wake [DateTime]s (the sheet
 /// handles the midnight wrap), a 1–5 quality rating, and an optional note.
@@ -25,6 +27,40 @@ class SleepManualLogResult {
 /// rating + a note, on the flat [AppBottomSheet].
 class SleepManualLogSheet {
   const SleepManualLogSheet._();
+
+  /// Why this night cannot be logged, or null when it is sound.
+  ///
+  /// Both rejections used to be silent acceptances. Bed == wake fell straight
+  /// through the midnight wrap in [_ManualLogFormState._bedDateTime] — the
+  /// bedtime was pushed to the previous evening and the sheet cheerfully
+  /// recorded a 24-hour "night". A wake time later today was recorded as
+  /// sleep that has not happened yet. Either one is then averaged into the
+  /// sleep-debt total and the regularity index, so one careless tap moves a
+  /// health figure the user has no way to reconcile.
+  ///
+  /// Works on the RESOLVED bed/wake instants rather than on the two pickers,
+  /// so the 24-hour case is caught by its duration regardless of how the wrap
+  /// produced it. 20 hours is comfortably past any real night — the longest a
+  /// human could mean here is an early-evening bedtime and a late-afternoon
+  /// wake, still under 20.
+  static String? validate({
+    required DateTime bedtime,
+    required DateTime wakeTime,
+    required DateTime now,
+  }) {
+    final minutes = wakeTime.difference(bedtime).inMinutes;
+    if (minutes <= 0) {
+      return 'Wake time has to be after bedtime.';
+    }
+    if (minutes >= 20 * 60) {
+      return 'That is a ${(minutes / 60).round()}-hour night. Check the '
+          'bedtime and wake time — they may be set to the same moment.';
+    }
+    if (wakeTime.isAfter(now)) {
+      return 'That wake time has not happened yet. Pick a time that is already past.';
+    }
+    return null;
+  }
 
   static Future<SleepManualLogResult?> show(
     BuildContext context, {
@@ -58,7 +94,9 @@ class _ManualLogFormState extends State<_ManualLogForm> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
+    // `clock.now()` rather than `DateTime.now()` throughout: the future-wake
+    // check below is only testable if "now" can be pinned.
+    final now = clock.now();
     _wakeDate = DateTime(now.year, now.month, now.day);
     _bed = widget.schedule.bedtime;
     _wake = widget.schedule.wake;
@@ -78,7 +116,7 @@ class _ManualLogFormState extends State<_ManualLogForm> {
         _wakeDate.year, _wakeDate.month, _wakeDate.day, _bed.hour, _bed.minute);
     // Bedtime is the evening before wake when it lands at/after the wake time.
     if (!bed.isBefore(_wakeDateTime())) {
-      bed = bed.subtract(const Duration(days: 1));
+      bed = shiftCalendarDays(bed, -1);
     }
     return bed;
   }
@@ -86,8 +124,14 @@ class _ManualLogFormState extends State<_ManualLogForm> {
   int get _durationMinutes =>
       _wakeDateTime().difference(_bedDateTime()).inMinutes;
 
+  String? get _validationError => SleepManualLogSheet.validate(
+        bedtime: _bedDateTime(),
+        wakeTime: _wakeDateTime(),
+        now: clock.now(),
+      );
+
   Future<void> _pickDate() async {
-    final now = DateTime.now();
+    final now = clock.now();
     final picked = await AppDatePicker.show(
       context,
       initial: _wakeDate,
@@ -130,6 +174,7 @@ class _ManualLogFormState extends State<_ManualLogForm> {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     final sleep = ext.sleep;
+    final error = _validationError;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -183,6 +228,22 @@ class _ManualLogFormState extends State<_ManualLogForm> {
             ],
           ),
         ),
+        if (error != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Symbols.error_rounded, size: 16, color: ext.mark(ext.error)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  error,
+                  style: tt.bodySmall?.copyWith(color: ext.mark(ext.error)),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         Text('How rested do you feel?',
             style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
@@ -207,7 +268,10 @@ class _ManualLogFormState extends State<_ManualLogForm> {
           leadingIcon: Symbols.check_rounded,
           fullWidth: true,
           accent: sleep,
-          onPressed: _durationMinutes > 0 ? _save : null,
+          // `_durationMinutes > 0` is subsumed by [SleepManualLogSheet.validate],
+          // which rejects the zero-length night the old guard let through as a
+          // 24-hour one.
+          onPressed: error == null ? _save : null,
         ),
         const SizedBox(height: AppSpacing.sm),
       ],
@@ -233,7 +297,7 @@ class _ManualLogFormState extends State<_ManualLogForm> {
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     if (d == today) return 'Today';
     if (d == today.subtract(const Duration(days: 1))) return 'Yesterday';
@@ -260,15 +324,39 @@ class _QualitySelector extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         for (var i = 1; i <= 5; i++)
-          GestureDetector(
-            onTap: () => onChanged(i),
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Icon(
-                i <= value ? Symbols.star_rounded : Symbols.star_rounded,
-                size: 34,
-                color: i <= value ? ext.mark(accent) : ext.outlineStrong,
+          Semantics(
+            button: true,
+            // Every star up to the current rating reads as selected, which is
+            // how a screen-reader user hears the value back: five unlabelled
+            // taps with no state told them nothing at all. Same wrapper the
+            // refill stepper carries (nunito_medication_detail_screen.dart) —
+            // an icon-only GestureDetector reaches the semantics tree with an
+            // EMPTY label otherwise.
+            selected: i <= value,
+            label: 'Rate $i of 5',
+            child: GestureDetector(
+              onTap: () => onChanged(i),
+              behavior: HitTestBehavior.opaque,
+              // 44pt, not the 34pt glyph plus 4pt of vertical padding: these
+              // are the control that sets the rating, and they were 8pt under
+              // the floor in both axes.
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Icon(
+                    Symbols.star_rounded,
+                    // The two arms of this used to be the SAME constant, so
+                    // the only thing separating a filled star from an empty
+                    // one was its colour — unreadable to anyone who cannot
+                    // distinguish the accent from the outline, and invisible
+                    // to a screen reader either way. `fill` is the variable
+                    // font axis the theme already drives (app_theme.dart).
+                    fill: i <= value ? 1 : 0,
+                    size: 34,
+                    color: i <= value ? ext.mark(accent) : ext.outlineStrong,
+                  ),
+                ),
               ),
             ),
           ),

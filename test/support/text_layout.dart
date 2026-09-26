@@ -2,6 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// Line-counting helpers, shared by the headless sweeps and the device suite.
+///
+/// There used to be two copies — this one and `integration_test/support/
+/// text_layout.dart` — on the reasoning that the duplication was deliberate
+/// because "the headless copy cannot answer this question anyway". That
+/// confused the MEASUREMENT with the MEASURING TOOL. What differs between the
+/// two runs is the font: headless tests lay out in the square-em test font,
+/// while a device lays out in Nunito's real advance widths at the user's real
+/// Dynamic Type setting. The arithmetic for "how many lines did this paragraph
+/// occupy" is identical in both, so a second copy bought nothing and cost
+/// drift: the device copy hard-coded an allowance of 1, printed each offending
+/// string in full rather than eliding it, and never grew [collectTruncatedText]
+/// at all — so the device suite had no truncation dimension and nobody knew.
+///
+/// `integration_test/` imports this file by relative path. Neither directory is
+/// under `lib/`, so nothing here ships in the app.
+
 /// Measures how many lines a `Text` **actually rendered**.
 ///
 /// This exists because the responsive harness could not see the bug it was
@@ -55,8 +72,11 @@ int renderedLineCount(WidgetTester tester, Finder finder) {
 /// A `Text` with `maxLines == null` is held to [defaultAllowance]. "Unbounded"
 /// is not a design decision for header chrome — it is an omission, and it is
 /// exactly what let the Home greeting run to three lines.
+///
+/// Takes no `WidgetTester`: it reads render objects straight off the element
+/// tree via `find.…evaluate()`. The old signature accepted one and never used
+/// it, which is half of why the device copy looked like a different function.
 List<String> collectWrappedText(
-  WidgetTester tester,
   Finder scope, {
   int defaultAllowance = 1,
 }) {
@@ -119,7 +139,6 @@ void expectSingleLine(
   );
 }
 
-
 /// Every `Text` under [scope] that was CUT OFF with an ellipsis.
 ///
 /// Different signal from [collectWrappedText]. Wrapping is text with no
@@ -135,7 +154,7 @@ void expectSingleLine(
 /// slot, never a narrower font.
 ///
 /// Returns descriptions so a sweep can collect across screens and report once.
-List<String> collectTruncatedText(WidgetTester tester, Finder scope) {
+List<String> collectTruncatedText(Finder scope) {
   final out = <String>[];
   for (final element
       in find.descendant(of: scope, matching: find.byType(RichText)).evaluate()) {

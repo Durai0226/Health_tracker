@@ -32,6 +32,36 @@ void showAppToast(
 }) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
+  showAppToastVia(
+    messenger,
+    message,
+    variant: variant,
+    title: title,
+    action: action,
+    duration: duration,
+  );
+}
+
+/// The same toast, shown through a messenger the caller already holds.
+///
+/// Use this — not [showAppToast] — from a post-frame callback or anywhere the
+/// only available context may be DEACTIVATED. An element removed from the tree
+/// but not yet unmounted still reports `mounted == true`, so a mounted guard
+/// does not protect an ancestor lookup there; `ScaffoldMessenger.of(context)`
+/// throws "Looking up a deactivated widget's ancestor is unsafe". Resolving the
+/// messenger during build and handing it to the callback is the fix, and it is
+/// why this entry point exists at all.
+///
+/// For an ordinary async gap inside a `State` method, a `if (!mounted) return;`
+/// before [showAppToast] is simpler and correct — prefer that.
+void showAppToastVia(
+  ScaffoldMessengerState messenger,
+  String message, {
+  AppToastVariant variant = AppToastVariant.success,
+  String? title,
+  AppToastAction? action,
+  Duration? duration,
+}) {
   messenger.hideCurrentSnackBar(); // M3: toasts should not stack
   _haptic(variant);
   final dur = duration ?? _defaultDuration(variant, action != null);

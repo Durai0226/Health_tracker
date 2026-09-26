@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
+import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:tablet_remainder/features/medication/models/enhanced_medicine.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_enums.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_schedule.dart';
@@ -17,10 +18,13 @@ import 'package:tablet_remainder/features/medication/services/medicine_storage_s
 /// prior round. What's new here is the FRICTION: overriding a caregiver's
 /// safety limit on a dependent's medicine must require a deliberate
 /// checkbox acknowledgment, not the same one-tap "Log anyway" a self-owned
-/// medicine gets.
+/// medicine gets. DS-13 moved both branches off `AlertDialog` — the self-owned
+/// one onto ConfirmationBottomSheet, the dependent-owned one onto the
+/// [AppBottomSheet] it is built on — so the override control these tests probe
+/// is an [AppButton] now rather than a `TextButton`.
 ///
 /// NOTE on pumping: _takeMedication sets _isLoading (an indeterminate
-/// spinner) BEFORE awaiting the PRN dialog, and that spinner never settles on
+/// spinner) BEFORE awaiting the PRN sheet, and that spinner never settles on
 /// its own — pumpAndSettle() hangs for as long as it's on screen. Every pump
 /// from the first tap until the sheet is actually popped uses a bounded
 /// pump() instead; pumpAndSettle() is only safe once the flow has resolved
@@ -61,6 +65,9 @@ void main() {
     );
   }
 
+  Future<int> loggedDoses(String medicineId) async =>
+      (await MedicineCleanStorageService.getLogsForMedicine(medicineId)).length;
+
   /// Opens the sheet the way the real app does — via showModalBottomSheet,
   /// pushing an actual route — so the sheet's own Navigator.pop() has
   /// somewhere valid to pop back to.
@@ -100,12 +107,12 @@ void main() {
     await seedOneTakenDoseToday(med.id);
     await openSheet(tester, med);
 
-    await tapAndPumpBounded(tester, find.text('Take Medication'));
+    await tapAndPumpBounded(tester, find.text('Take medicine'));
 
     expect(find.text('PRN limit reached'), findsOneWidget);
     expect(find.byType(CheckboxListTile), findsNothing);
 
-    await tapAndPumpBounded(tester, find.widgetWithText(TextButton, 'Log anyway'));
+    await tapAndPumpBounded(tester, find.widgetWithText(AppButton, 'Log anyway'));
     await tester.pumpAndSettle();
     expect(find.text('PRN limit reached'), findsNothing);
   });
@@ -120,14 +127,14 @@ void main() {
     await ActiveProfileService().setActiveDependent('dep1');
     await openSheet(tester, med);
 
-    await tapAndPumpBounded(tester, find.text('Take Medication'));
+    await tapAndPumpBounded(tester, find.text('Take medicine'));
 
     expect(find.text('Caregiver safety limit reached'), findsOneWidget);
-    final logAnywayFinder = find.widgetWithText(TextButton, 'Log anyway');
-    expect(tester.widget<TextButton>(logAnywayFinder).onPressed, isNull,
+    final logAnywayFinder = find.widgetWithText(AppButton, 'Log anyway');
+    expect(tester.widget<AppButton>(logAnywayFinder).onPressed, isNull,
         reason: 'must be disabled before the checkbox is ticked');
 
-    // Tapping "Log anyway" while disabled must do nothing — the dialog stays up.
+    // Tapping "Log anyway" while disabled must do nothing — the sheet stays up.
     await tapAndPumpBounded(tester, logAnywayFinder, warnIfMissed: false);
     expect(find.text('Caregiver safety limit reached'), findsOneWidget);
   });
@@ -139,16 +146,48 @@ void main() {
     await ActiveProfileService().setActiveDependent('dep1');
     await openSheet(tester, med);
 
-    await tapAndPumpBounded(tester, find.text('Take Medication'));
+    await tapAndPumpBounded(tester, find.text('Take medicine'));
     await tapAndPumpBounded(tester, find.byType(CheckboxListTile));
 
-    final logAnywayFinder = find.widgetWithText(TextButton, 'Log anyway');
-    expect(tester.widget<TextButton>(logAnywayFinder).onPressed, isNotNull,
+    final logAnywayFinder = find.widgetWithText(AppButton, 'Log anyway');
+    expect(tester.widget<AppButton>(logAnywayFinder).onPressed, isNotNull,
         reason: 'ticking the checkbox must enable the override');
 
     await tapAndPumpBounded(tester, logAnywayFinder);
     await tester.pumpAndSettle();
 
     expect(find.text('Caregiver safety limit reached'), findsNothing);
+    // The sheet closing is not the outcome — the dose being written is. Without
+    // this the whole caregiver branch could collapse to `return false` (confirm
+    // becomes a no-op: sheet closes, nothing logged) and every assertion above
+    // would still hold.
+    expect(await loggedDoses(med.id), 2,
+        reason: 'the acknowledged override must log the over-limit dose');
+  });
+
+  testWidgets(
+      'negative (dependent-owned): dismissing the override sheet logs nothing',
+      (tester) async {
+    final med = await seedPrnMedicine(dependentId: 'dep1');
+    await seedOneTakenDoseToday(med.id);
+    await ActiveProfileService().setActiveDependent('dep1');
+    await openSheet(tester, med);
+
+    await tapAndPumpBounded(tester, find.text('Take medicine'));
+    expect(find.text('Caregiver safety limit reached'), findsOneWidget);
+
+    // Tap the barrier above the sheet — the dismissal that returns null, which
+    // is the case `proceed ?? false` exists for. An override nobody
+    // acknowledged must not slip through the way an unticked checkbox can't.
+    await tester.tapAt(const Offset(400, 20));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Caregiver safety limit reached'), findsNothing);
+    expect(await loggedDoses(med.id), 1,
+        reason: 'a dismissed override must not log the over-limit dose');
+    expect(find.text('Take medicine'), findsOneWidget,
+        reason: 'the take sheet stays open so the caregiver can decide again');
   });
 }

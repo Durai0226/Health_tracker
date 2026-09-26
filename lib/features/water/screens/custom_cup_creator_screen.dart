@@ -6,6 +6,7 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../models/beverage_type.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
+import '../theme/aqua_theme.dart';
 
 /// Screen for creating and customizing cups/containers
 class CustomCupCreatorScreen extends StatefulWidget {
@@ -23,33 +24,51 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
   final _capacityController = TextEditingController();
 
   String _selectedEmoji = '🥛';
-  Color _selectedColor = const Color(0xFF3B82F6);
+  Color _selectedColor = AppPalette.info;
   bool _isSaving = false;
 
   // Multi-ingredient support
   final List<CupIngredient> _ingredients = [];
   bool _isMultiIngredient = false;
 
+  /// The cup glyphs a user can pick from.
+  ///
+  /// emoji-content-ok: unlike every other emoji in this feature these are not
+  /// chrome — the picked one is PERSISTED on the container and rendered back
+  /// wherever that cup appears, so it is a user choice, not a decoration this
+  /// code owns.
+  ///
+  /// DS-17 pruned it rather than replaced it. Gone: 🧴 (a lotion bottle), 🏃 (a
+  /// runner), 🥝 (a kiwi fruit) — none of which is a vessel — and 🍺 🍷 🥃 🍹,
+  /// which offered four ways to label a cup as alcohol inside a HYDRATION
+  /// tracker whose own model scores alcohol at a NEGATIVE hydration factor.
+  /// Alcohol is still loggable as a beverage; what it no longer gets is a
+  /// promoted spot in the "make your everyday cup" picker.
   final List<String> _emojiOptions = [
-    '🥛', '☕', '🍵', '🧃', '🧴', '🍼', '🥤', '🫗', '🫖', '🏃',
-    '💧', '🧊', '🥥', '🍺', '🍷', '🥃', '🧋', '🫧', '🍹', '🥝',
+    '🥛', '☕', '🍵', '🧃', '🍼', '🥤', '🫗', '🫖',
+    '💧', '🧊', '🥥', '🧋', '🫧',
   ];
 
-  final List<Color> _colorOptions = [
-    const Color(0xFF3B82F6),
-    Colors.lightBlue,
-    Colors.cyan,
-    Colors.teal,
-    Colors.green,
-    Colors.lime,
-    Colors.amber,
-    Colors.orange,
-    Colors.deepOrange,
-    Colors.pink,
-    Colors.purple,
-    Colors.indigo,
-    Colors.brown,
-    Colors.blueGrey,
+  /// The colours a cup can be tinted with.
+  ///
+  /// This was fourteen `Colors.*` constants — the only place in the feature
+  /// where the Material palette was still being offered to the user. It is the
+  /// app's OWN accents now, so a cup the user makes is the same blue, teal or
+  /// amber as everything else on screen. The value is persisted as hex, so
+  /// existing cups keep exactly the colour they were saved with.
+  static const List<Color> _colorOptions = [
+    AppPalette.info,
+    AppPalette.water,
+    AppPalette.brand,
+    AppPalette.steps,
+    AppPalette.success,
+    AppPalette.reminders,
+    AppPalette.warningStrong,
+    AppPalette.period,
+    AppPalette.focus,
+    AppPalette.medicine,
+    AppPalette.sleep,
+    AppPalette.error,
   ];
 
   @override
@@ -65,7 +84,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           _selectedColor = Color(int.parse(c.colorHex!.replaceFirst('#', '0xFF')));
         } catch (e) {
           debugPrint('Error parsing color: $e');
-          _selectedColor = const Color(0xFF3B82F6);
+          _selectedColor = AppPalette.info;
         }
       }
     } else {
@@ -292,7 +311,10 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                 border: Border.all(color: _selectedColor, width: 2),
               ),
               child: Center(
-                child: Text(_selectedEmoji, style: const TextStyle(fontSize: 42)),
+                // emoji-content-ok: the cup glyph the user picked, previewed at
+                // the scale's largest step (42 has no slot).
+                child: Text(_selectedEmoji,
+                    style: Theme.of(context).textTheme.displayLarge),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -381,7 +403,10 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                     ),
                   ),
                   child: Center(
-                    child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                    // emoji-content-ok: the persisted cup glyph, shown as the
+                    // user will see it.
+                    child: Text(emoji,
+                        style: Theme.of(context).textTheme.displaySmall),
                   ),
                 ),
               );
@@ -436,9 +461,10 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     );
   }
 
-  // Contrast-safe check mark color on top of an arbitrary swatch.
-  Color _onColor(Color c) =>
-      c.computeLuminance() > 0.5 ? const Color(0xFF1A1A1A) : Colors.white;
+  // Contrast-safe check mark colour on top of an arbitrary swatch. The same
+  // measured white-or-ink choice `AquaTheme.onBeverage` makes, and now the same
+  // implementation rather than a second copy of the rule.
+  Color _onColor(Color c) => AquaTheme.onBeverage(c);
 
   Widget _buildCapacityCard(AppColorsExt ext, AccentSwatch water) {
     final tt = Theme.of(context).textTheme;
@@ -625,9 +651,13 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                 ),
                 child: Row(
                   children: [
-                    Text(
-                      beverage?.emoji ?? '💧',
-                      style: const TextStyle(fontSize: 24),
+                    // DS-17: the ingredient's drink glyph is chrome in a
+                    // tinted row — from the icon font, like every other one.
+                    Icon(
+                      AquaTheme.iconFor(ingredient.beverageId),
+                      size: 24,
+                      color: ext.mark(ext.water),
+                      applyTextScaling: false,
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
@@ -647,6 +677,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                     ),
                     IconButton(
                       icon: Icon(Symbols.remove_circle_rounded, color: ext.error.base),
+                      tooltip: 'Remove ingredient',
                       onPressed: () => _removeIngredient(index),
                     ),
                   ],
@@ -735,7 +766,14 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(bev.emoji, style: const TextStyle(fontSize: 26)),
+                      Icon(
+                        AquaTheme.iconFor(bev.id),
+                        size: 26,
+                        color: isSelected
+                            ? water.onContainer
+                            : ext.textSecondary,
+                        applyTextScaling: false,
+                      ),
                       const SizedBox(height: 4),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -785,7 +823,7 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
         ),
         const SizedBox(height: AppSpacing.xl),
         AppButton(
-          label: 'Add Ingredient',
+          label: 'Add ingredient',
           accent: water,
           size: AppButtonSize.lg,
           fullWidth: true,

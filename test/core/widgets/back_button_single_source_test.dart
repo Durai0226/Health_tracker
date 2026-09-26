@@ -47,6 +47,12 @@ const _exempt = <String, String>{
   'period_calendar_screen.dart': 'hand-rolled header row',
   'cycle_history_screen.dart': 'hand-rolled header row',
   'relaxation_screen.dart': 'hand-rolled full-screen chrome',
+  // Confirms before popping when the editor is dirty. The static pops
+  // IMPERATIVELY, which bypasses PopScope, so routing the arrow through it
+  // would leave the discard guard covering the system back gesture and not
+  // the button beside the unsaved text. Same glyph, same `filled: false`,
+  // same neutral `textPrimary`, same tooltip — only `maybePop` differs.
+  'diary_entry_screen.dart': 'confirms an unsaved discard before popping',
   // Pops with a RESULT. The static pops without one, so folding this in would
   // silently drop the value the caller awaits.
   'water_history_edit_screen.dart': 'pops with a result',

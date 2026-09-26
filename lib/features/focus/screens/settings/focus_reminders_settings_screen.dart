@@ -75,17 +75,28 @@ class _FocusRemindersSettingsScreenState
 
   /// Toggle mindfulness write-back.
   ///
-  /// `setMindfulnessSync` re-checks the real OS grant, so a user who revoked the
-  /// permission in the Health Connect app gets the switch bounced back off rather
-  /// than left stuck on, silently writing nothing. The busy flag stops a double
-  /// tap racing two permission checks.
+  /// `setMindfulnessSync` requests the grant and then re-checks the real OS
+  /// answer, so a user who revoked the permission in the Health Connect app gets
+  /// the switch bounced back off rather than left stuck on, silently writing
+  /// nothing. The busy flag stops a double tap racing two permission checks.
+  ///
+  /// The toast is the point of the return value: without it the switch slid back
+  /// off on its own with no explanation, which reads as a broken control rather
+  /// than as a permission the user can go and grant.
   Future<void> _toggleMindfulness(bool value) async {
     if (_mindfulnessBusy) return;
     setState(() => _mindfulnessBusy = true);
     HapticService().toggle();
-    await FocusService().setMindfulnessSync(value);
+    final applied = await FocusService().setMindfulnessSync(value);
     if (!mounted) return;
     setState(() => _mindfulnessBusy = false);
+    if (!applied) {
+      context.toastWarning(
+        FocusService().mindfulnessDenialReason ??
+            'Health Connect has not granted permission to save mindful minutes.',
+        title: 'Permission needed',
+      );
+    }
   }
 
   Future<void> _persist() async {
