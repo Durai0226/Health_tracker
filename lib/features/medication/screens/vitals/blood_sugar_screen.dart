@@ -321,7 +321,11 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
           AppCard(
             child: VitalsTrendChart(
               series: [
-                VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Blood sugar'),
+                VitalsSeries(
+                    values: series,
+                    times: [for (final r in trend) r.takenAt],
+                    color: ext.chartMark(accent),
+                    label: 'Blood sugar'),
               ],
               minY: minY,
               maxY: maxY,

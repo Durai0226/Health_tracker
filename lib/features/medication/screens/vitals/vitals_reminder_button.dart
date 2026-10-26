@@ -66,6 +66,20 @@ class _VitalsReminderButtonState extends State<VitalsReminderButton> {
     final picked = await AppTimePicker.show(
       context,
       initial: TimeOfDay(hour: _hour, minute: _min),
+      // The vital's OWN accent, the one already on the button that opened it.
+      //
+      // Without this `AppTimePicker.show` falls back to
+      // `AccentScope.swatchOf(context)` (`app_pickers.dart:24`), which made the
+      // sheet's colour depend on how the user reached the screen rather than on
+      // what they were measuring. Mood, for instance: opened from the Health
+      // hub it arrives inside `AccentScope(FeatureAccent.medicine)`
+      // (`health_browse_screen.dart:85`) and the picker came up medicine
+      // purple; opened from the "Log something" sheet it arrives on a bare
+      // `MaterialPageRoute` (`log_something_sheet.dart:189`) with no scope at
+      // all and the picker came up brand teal. Neither is the amber this
+      // screen uses everywhere else. The same applies to weight, blood sugar
+      // and blood pressure, which all mount this widget.
+      accent: widget.accent,
       title: 'Remind me to measure',
     );
     if (picked == null) return;

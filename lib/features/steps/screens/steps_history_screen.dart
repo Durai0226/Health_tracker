@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/calendar_day.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/step_daily_data.dart';
@@ -134,7 +135,11 @@ class _DayCard extends StatelessWidget {
     final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final that = DateTime(d.year, d.month, d.day);
-    final diff = today.difference(that).inDays;
+    // Calendar days — see the same fix in `app_date_time_field`. Across a
+    // spring-forward boundary the truncated elapsed diff came back 0 for
+    // BOTH the 8th and the 9th, so the history list rendered two consecutive
+    // rows headed "Today".
+    final diff = calendarDaysBetween(that, today);
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
     const weekdays = [

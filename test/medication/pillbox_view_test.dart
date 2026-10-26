@@ -62,6 +62,11 @@ void main() {
   }
 
   Future<void> pumpDashboard(WidgetTester tester) async {
+    // Tall enough that the "yesterday wasn't logged" banner (this fixture's dose
+    // is three days old) does not push the schedule below the fold.
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.lightTheme,
       home: const NunitoMedicationDashboard(),

@@ -7,6 +7,10 @@ import '../models/flow_intensity.dart';
 import '../models/period_day.dart';
 import '../models/period_symptom.dart';
 import '../services/period_service.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
+import '../../../core/health/day_mood.dart';
+import '../../medication/models/mood_entry.dart';
+import '../../medication/services/vitals_storage_service.dart';
 
 /// Bottom sheet to log/edit a single day: flow, symptoms, mood, energy, BBT,
 /// intercourse and notes. Writes through [PeriodService.logDay].
@@ -46,6 +50,16 @@ class _LogTodaySheetState extends State<LogTodaySheet> {
   late int _flowIndex;
   final Set<String> _symptoms = {};
   int? _mood;
+
+  /// Set once the user taps a mood face, so a late-arriving prefill from the
+  /// mood log can never overwrite what they just chose.
+  bool _moodTouched = false;
+
+  /// The day's latest entry in the mood log, if any. The period sheet and the
+  /// mood screen are ONE mood per day: this is how the sheet sees the other
+  /// half, and what it compares against so it never logs the same answer twice.
+  MoodEntry? _dayEntry;
+  Future<void>? _loadingDayMood;
   int? _energy;
   bool _intercourse = false;
   late final TextEditingController _bbtController;
@@ -65,6 +79,62 @@ class _LogTodaySheetState extends State<LogTodaySheet> {
         TextEditingController(text: existing?.bbtCelsius?.toString() ?? '');
     _noteController = TextEditingController(text: existing?.note ?? '');
     _hadExisting = existing?.hasData ?? false;
+    _loadingDayMood = _loadDayMood();
+  }
+
+  /// Pull in the mood already logged for this day on the mood screen, so the
+  /// user is not asked for it twice. The one written last wins (see
+  /// [DayMood.resolve]).
+  Future<void> _loadDayMood() async {
+    try {
+      final start =
+          DateTime(widget.date.year, widget.date.month, widget.date.day);
+      final entries = await VitalsStorageService.getMoodForRange(
+          start, DateTime(start.year, start.month, start.day + 1));
+      if (entries.isEmpty) return;
+      entries.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      final latest = entries.last;
+      _dayEntry = latest;
+      final existing = PeriodService.getDay(widget.date);
+      final resolved = DayMood.resolve(
+        periodMood: existing?.mood,
+        periodUpdatedAt: existing?.updatedAt,
+        latestEntryIndex: latest.moodIndex,
+        latestEntryAt: latest.createdAt,
+      );
+      if (mounted && !_moodTouched && resolved != _mood) {
+        setState(() => _mood = resolved);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Loading the day\'s mood failed: $e');
+    }
+  }
+
+  /// Write a changed mood into the mood log, so it shows on the mood screen,
+  /// the trends and the weekly recap as that day's mood. Best effort: the
+  /// period day is already saved, and a mood-log failure must not undo it.
+  Future<void> _logDayMood() async {
+    await _loadingDayMood;
+    if (!DayMood.needsLogEntry(
+        periodMood: _mood, latestEntryIndex: _dayEntry?.moodIndex)) {
+      return;
+    }
+    try {
+      final now = DateTime.now();
+      final isToday = widget.date.year == now.year &&
+          widget.date.month == now.month &&
+          widget.date.day == now.day;
+      await VitalsStorageService.saveMood(MoodEntry(
+        id: 'mood_${now.microsecondsSinceEpoch}',
+        moodIndex: DayMood.toMoodIndex(_mood)!,
+        takenAt: isToday
+            ? now
+            : DateTime(widget.date.year, widget.date.month, widget.date.day, 12),
+        createdAt: now,
+      ));
+    } catch (e) {
+      debugPrint('⚠️ Logging the day\'s mood failed: $e');
+    }
   }
 
   @override
@@ -76,12 +146,39 @@ class _LogTodaySheetState extends State<LogTodaySheet> {
 
   Future<void> _save() async {
     HapticFeedback.mediumImpact();
+
+    // A light day only a week or two after the last period began is far more
+    // often spotting than a new period, and starting one quietly skews every
+    // average and prediction. Ask — never decide — and let a genuinely short
+    // cycle go straight through.
+    var flow = _flowIndex;
+    final soon = PeriodService.newPeriodTooSoon(widget.date, flow);
+    if (soon != null) {
+      final startNew = await ConfirmationBottomSheet.show(
+        context: context,
+        title: 'Start a new period?',
+        message: 'This is only $soon ${soon == 1 ? 'day' : 'days'} after your '
+            'last period began. If it is spotting, log it as spotting and it '
+            'will not change your cycle.',
+        confirmText: 'Start a new period',
+        cancelText: 'Log as spotting',
+        icon: Symbols.help_rounded,
+      );
+      if (!mounted) return;
+      // Dismissed without choosing: save nothing, leave the sheet open.
+      if (startNew == null) return;
+      if (!startNew) {
+        flow = FlowIntensity.spotting.flowIndex;
+        setState(() => _flowIndex = flow);
+      }
+    }
+
     final bbt = double.tryParse(_bbtController.text.trim().replaceAll(',', '.'));
     final note = _noteController.text.trim();
     final day = PeriodDay(
       id: PeriodDay.keyFor(widget.date),
       date: widget.date,
-      flowIndex: _flowIndex,
+      flowIndex: flow,
       mood: _mood,
       energy: _energy,
       bbtCelsius: bbt,
@@ -90,6 +187,7 @@ class _LogTodaySheetState extends State<LogTodaySheet> {
       note: note.isEmpty ? null : note,
     );
     await PeriodService.logDay(day);
+    await _logDayMood();
     if (mounted) Navigator.pop(context, true);
   }
 
@@ -127,7 +225,10 @@ class _LogTodaySheetState extends State<LogTodaySheet> {
           _MoodFaces(
             value: _mood,
             accent: ext.period,
-            onChanged: (v) => setState(() => _mood = v),
+            onChanged: (v) => setState(() {
+              _mood = v;
+              _moodTouched = true;
+            }),
           ),
 
           const SizedBox(height: AppSpacing.lg),

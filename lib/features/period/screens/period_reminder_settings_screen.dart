@@ -62,6 +62,12 @@ class _PeriodReminderSettingsScreenState
                   ? Symbols.radio_button_checked_rounded
                   : Symbols.radio_button_unchecked_rounded,
               title: '${_plural(o, 'day')} before',
+              // The same `acc` the sheet above was given. A sheet builder runs
+              // on the sheet's own route, so it inherits no AccentScope from
+              // this screen; without this the five radio rows resolved
+              // `FeatureAccent.brand` and drew teal glyphs inside a sheet
+              // whose own title and icon were period pink.
+              accent: acc,
               onTap: () => Navigator.pop(context, o),
             ),
         ],

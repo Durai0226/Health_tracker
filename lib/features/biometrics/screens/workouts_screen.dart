@@ -1,8 +1,10 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/health/health_windows.dart';
 import '../../../core/services/health_data_service.dart';
+import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/workout_session.dart';
 import '../services/biometrics_service.dart';
@@ -154,12 +156,7 @@ class _WorkoutsScreenState extends State<WorkoutsScreen>
     );
   }
 
-  String _dayLabel(String dateKey) {
-    final today = dateKeyOf(DateTime.now());
-    if (dateKey == today) return 'Today';
-    if (dateKey == dateKeyOf(previousDay(DateTime.now()))) return 'Yesterday';
-    return dateKey;
-  }
+  String _dayLabel(String dateKey) => workoutDayLabel(dateKey);
 
   Widget _row(BuildContext context, WorkoutSession w) {
     final ext = AppColorsExt.of(context);
@@ -176,10 +173,57 @@ class _WorkoutsScreenState extends State<WorkoutsScreen>
     if (w.avgHr != null) parts.add('${w.avgHr} bpm avg');
 
     return AppListTile(
-      icon: Symbols.exercise_rounded,
+      icon: workoutIconFor(w.activityType),
       iconColor: ext.mark(ext.steps),
       title: w.activityLabel,
       subtitle: parts.join(' · '),
     );
   }
+}
+
+/// "Today" / "Yesterday" / "Sep 26".
+///
+/// Anything older than yesterday used to fall through to the raw `dateKey`, so
+/// the list read "2026-09-28" — a storage key shown to the user, directly above
+/// rows that say "32 min · 5.20 km". [DateFormats.dayLabel] is the same
+/// year-aware formatter the rest of the app groups by.
+@visibleForTesting
+String workoutDayLabel(String dateKey) {
+  final now = clock.now();
+  if (dateKey == dateKeyOf(now)) return 'Today';
+  if (dateKey == dateKeyOf(previousDay(now))) return 'Yesterday';
+  final parsed = DateTime.tryParse(dateKey);
+  // A key that doesn't parse is better shown as-is than dropped.
+  return parsed == null ? dateKey : DateFormats.dayLabel(parsed, reference: now);
+}
+
+/// The glyph for a workout type, by family.
+///
+/// Every row used to carry one `exercise_rounded` dumbbell, so a run, a walk and
+/// a strength session were indistinguishable at a glance — the icon column
+/// carried no information at all.
+///
+/// Matched by substring against the plugin's SCREAMING_SNAKE names, which is
+/// what makes `RUNNING_TREADMILL` and `STRENGTH_TRAINING` land correctly. There
+/// are 80+ of those and the list grows, so this covers the common families and
+/// falls back to the generic dumbbell — the same reasoning as
+/// [WorkoutSession.activityLabel], which derives a label rather than keeping a
+/// map that silently goes stale.
+@visibleForTesting
+IconData workoutIconFor(String activityType) {
+  final t = activityType.toUpperCase();
+  bool has(String s) => t.contains(s);
+
+  if (has('RUN') || has('JOG')) return Symbols.directions_run_rounded;
+  if (has('WALK') || has('HIK')) return Symbols.directions_walk_rounded;
+  if (has('BIK') || has('CYCL')) return Symbols.directions_bike_rounded;
+  if (has('SWIM')) return Symbols.pool_rounded;
+  if (has('ROW')) return Symbols.rowing_rounded;
+  if (has('YOGA') || has('PILATES') || has('MEDITAT')) {
+    return Symbols.self_improvement_rounded;
+  }
+  if (has('STRENGTH') || has('WEIGHT')) return Symbols.fitness_center_rounded;
+  if (has('STAIR') || has('ELLIPTICAL')) return Symbols.stairs_rounded;
+  if (has('DANC')) return Symbols.music_note_rounded;
+  return Symbols.exercise_rounded;
 }

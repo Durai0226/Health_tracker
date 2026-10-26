@@ -20,6 +20,9 @@ import '../../../core/services/water_action_queue.dart';
 import 'hydration_health_sync.dart';
 import 'hydration_weather_service.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../../core/services/clean_storage_service.dart';
+import '../../../core/services/health_data_service.dart';
+import '../../../core/services/vacation_mode.dart';
 
 /// One queued drink after it became a real log: the row's id, the moment it was
 /// filed under (which is when the button was tapped, not when the app resumed)
@@ -707,7 +710,7 @@ class WaterService {
     // Recompute today's daily goal from the profile's effective goal and
     // persist the day so progress/goal-reached stay consistent.
     final key = _getDateKey(clock.now());
-    final newGoal = profile.effectiveGoalMl;
+    final newGoal = await _goalNowFor(profile);
     final today = _dailyWaterNotifier.value[key];
     if (today != null) {
       if (today.dailyGoalMl != newGoal) {
@@ -722,6 +725,25 @@ class WaterService {
         DailyWaterData(id: key, date: clock.now(), dailyGoalMl: newGoal),
       );
     }
+  }
+
+  /// Today's goal for [profile], keeping what the day has already earned.
+  ///
+  /// The profile's own number is the base. Saving the profile used to stamp THAT
+  /// onto today, which silently dropped the hot-day adjustment and any activity
+  /// top-up until the next app open recomputed them — so editing your weight at
+  /// 3pm on a hot day lowered the target you were mid-way through. Both are
+  /// re-applied from what is already known on the device (the cached
+  /// temperature and today's saved top-up), with no network or health read, and
+  /// under exactly the rules [refreshDailyGoal] uses: a custom goal and a fluid
+  /// ceiling are never adjusted.
+  static Future<int> _goalNowFor(HydrationProfile profile) async {
+    if (profile.isRestricted || profile.useCustomGoal) {
+      return profile.effectiveGoalMl;
+    }
+    final c = await HydrationWeatherService.cachedApparentC();
+    final base = profile.goalBreakdown(ambientC: c).totalMl;
+    return base + (todayActivityGoalNote?.deltaMl ?? 0);
   }
 
   /// Get calculated daily goal
@@ -1343,6 +1365,8 @@ class WaterService {
         completedDays: _goalReachedDays(aggregates),
         today: clock.now(),
         graceDaysPerWeek: 1,
+        // Days spent on vacation are neither completions nor misses.
+        frozenDays: VacationMode.frozenDays(),
       );
 
   /// Longest run of consecutive calendar days satisfying [predicate], over the
@@ -1644,32 +1668,109 @@ class WaterService {
     return amounts[amounts.length ~/ 2];
   }
 
-  /// Refresh the weather reading and, if the goal moved, re-stamp today with it.
+  /// Preference holding today's activity top-up as `day|deltaMl|activeKcal`.
+  static const _activityNoteKey = 'water_activity_goal_note';
+
+  /// What today's goal was raised by for measured activity, and why — or null
+  /// when it was not raised (no health data, no activity beyond the usual, a
+  /// custom goal or a fluid limit). Always for TODAY: a note from another day
+  /// is ignored, so it can never explain a goal it did not produce.
+  static ({int deltaMl, int activeKcal})? get todayActivityGoalNote {
+    final raw = CleanStorageService.getAppPreference(_activityNoteKey, '');
+    if (raw is! String) return null;
+    final parts = raw.split('|');
+    if (parts.length != 3 || parts[0] != _getDateKey(clock.now())) return null;
+    final delta = int.tryParse(parts[1]);
+    final kcal = int.tryParse(parts[2]);
+    if (delta == null || kcal == null || delta <= 0) return null;
+    return (deltaMl: delta, activeKcal: kcal);
+  }
+
+  /// Stands in for the health store in tests, which have no platform channel.
+  @visibleForTesting
+  static Future<int?> Function()? activeKcalReaderForTesting;
+
+  /// Today's measured active energy in kcal, or null when the health store has
+  /// none (not connected, not permitted, nothing recorded yet).
+  ///
+  /// Read from the store directly. The steps module's own `activeCalories`
+  /// falls back to an estimate derived from step count when there is no sensor
+  /// figure, in the same field, and a goal raised by an estimate would be
+  /// presented as if it were measured.
+  static Future<int?> _measuredActiveKcalToday() async {
+    final override = activeKcalReaderForTesting;
+    if (override != null) return override();
+    try {
+      final now = clock.now();
+      final kcal = await HealthDataService.instance
+          .readActiveEnergy(DateTime(now.year, now.month, now.day), now);
+      if (kcal == null || kcal <= 0) return null;
+      return kcal.round();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Refresh the weather reading and today's measured activity and, if the goal
+  /// moved, re-stamp today with it. Kept under its old name for its callers.
   ///
   /// Historical days keep the goal they were created with — a past day must not
-  /// silently become "missed" because today got hotter.
-  static Future<void> refreshWeatherGoal() async {
+  /// silently become "missed" because today got hotter or more active.
+  static Future<void> refreshWeatherGoal() => refreshDailyGoal();
+
+  /// The goal for TODAY from weather and measured activity.
+  ///
+  /// Activity only ever RAISES the goal during the day, and never below what
+  /// the profile's own activity level already gave: see
+  /// [HydrationProfile.activityDeltaMl]. If an earlier refresh already added
+  /// more than this one computes (a glitchy read, or the source changing), the
+  /// larger top-up is kept.
+  static Future<void> refreshDailyGoal() async {
     try {
       if (_profile.isRestricted) return; // a ceiling is not weather-dependent
-      // A custom goal is an explicit user override, so the weather does not get
-      // to overwrite it. It did: someone who set 2000 ml and left "adjust for
-      // the weather" on had their day silently re-stamped at ~3800 ml on a hot
-      // afternoon, and no screen offered any explanation.
+      // A custom goal is an explicit user override, so neither the weather nor
+      // activity gets to overwrite it. It did: someone who set 2000 ml and left
+      // "adjust for the weather" on had their day silently re-stamped at ~3800
+      // ml on a hot afternoon, and no screen offered any explanation.
       if (_profile.useCustomGoal) return;
       final weather = await HydrationWeatherService.current();
-      if (weather == null) return;
-      final goal = _profile.goalBreakdown(ambientC: weather.apparentC).totalMl;
+      final kcal = await _measuredActiveKcalToday();
+      if (weather == null && kcal == null) return;
+
+      final c = weather?.apparentC;
+      final base = _profile.goalBreakdown(ambientC: c).totalMl;
+      final saved = todayActivityGoalNote;
+      var delta = kcal == null
+          ? 0
+          : _profile.activityDeltaMl(activeKcal: kcal, ambientC: c);
+      var shownKcal = kcal ?? 0;
+      if (saved != null && saved.deltaMl > delta) {
+        delta = saved.deltaMl;
+        shownKcal = saved.activeKcal;
+      }
+      final goal = base + delta;
 
       final key = _getDateKey(clock.now());
+      final note = delta > 0 ? '$key|$delta|$shownKcal' : '';
+      final noteChanged =
+          CleanStorageService.getAppPreference(_activityNoteKey, '') != note;
+      if (noteChanged) {
+        await CleanStorageService.setAppPreference(_activityNoteKey, note);
+      }
+
       final today = await _ensureDayLoaded(key);
-      if (today == null || today.dailyGoalMl == goal) return;
+      if (today == null) return;
+      if (today.dailyGoalMl == goal) {
+        if (noteChanged) _notifyListeners();
+        return;
+      }
       final updated = _recalculateDailyData(
           today.copyWith(dailyGoalMl: goal), today.logs);
       _dailyWaterNotifier.value[key] = updated;
       _notifyListeners();
       await _persistDay(updated);
     } catch (e) {
-      debugPrint('⚠️ weather goal refresh failed: $e');
+      debugPrint('⚠️ daily goal refresh failed: $e');
     }
   }
 
@@ -2001,6 +2102,8 @@ class WaterService {
         completedDays: _completedStreakDays(),
         today: clock.now(),
         graceDaysPerWeek: 1,
+        // Days spent on vacation are neither completions nor misses.
+        frozenDays: VacationMode.frozenDays(),
       );
 
   /// Goal-reached days for [getStreakResult].

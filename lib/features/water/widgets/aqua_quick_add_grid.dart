@@ -5,19 +5,37 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../theme/aqua_theme.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
+import '../../../core/health/usual_drink.dart';
 
 /// Quick add buttons grid for beverages
 class AquaQuickAddGrid extends StatefulWidget {
   final String selectedBeverageId;
   final Function(int amount, String beverageId) onQuickAdd;
   final VoidCallback onCustomAmount;
-  final VoidCallback onBeverageSelect;
+
+  /// Called with the id of the beverage chip that was tapped.
+  ///
+  /// Found on device: this used to be a `VoidCallback` that opened the full
+  /// beverage picker no matter which chip you hit, so tapping "Coffee"
+  /// selected nothing — it opened a sheet and asked again. The strip renders
+  /// *every* beverage, marks one `selected:` and labels it "…, select
+  /// beverage", so both sighted and screen-reader users are told the chip is
+  /// the selector. It has to actually be one. The picker is still reachable by
+  /// tapping the hero gauge, which is where the full grid belongs.
+  final ValueChanged<String> onBeverageSelect;
 
   /// Called when a saved container/cup chip is tapped for one-tap logging.
   final void Function(WaterContainer container)? onContainerAdd;
 
   /// Called to open the custom cup creator.
   final VoidCallback? onCreateCup;
+
+  /// What the person usually drinks around now, when they have a habit — a
+  /// one-tap tile above everything else. Null shows nothing.
+  final UsualDrink? usual;
+
+  /// Called with [usual] when its tile is tapped.
+  final ValueChanged<UsualDrink>? onUsual;
 
   const AquaQuickAddGrid({
     super.key,
@@ -27,10 +45,57 @@ class AquaQuickAddGrid extends StatefulWidget {
     required this.onBeverageSelect,
     this.onContainerAdd,
     this.onCreateCup,
+    this.usual,
+    this.onUsual,
   });
 
   @override
   State<AquaQuickAddGrid> createState() => _AquaQuickAddGridState();
+}
+
+/// "Your usual · ☕ Coffee 200 ml" — one tap logs it.
+class _UsualDrinkTile extends StatelessWidget {
+  final UsualDrink usual;
+  final ValueChanged<UsualDrink> onTap;
+  const _UsualDrinkTile({required this.usual, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Semantics(
+      button: true,
+      label: 'Log your usual: ${usual.amountMl} millilitres of ${usual.name}',
+      child: AppCard(
+        onTap: () => onTap(usual),
+        color: ext.water.container,
+        child: Row(
+          children: [
+            // The beverage's own icon: the water feature renders no emoji as
+            // chrome (DS-17), and an icon takes the accent colour.
+            Icon(AquaTheme.iconFor(usual.beverageId),
+                color: ext.water.onContainer, size: 26),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Your usual',
+                      style: tt.labelMedium
+                          ?.copyWith(color: ext.water.onContainer)),
+                  Text('${usual.name} · ${usual.amountMl} ml',
+                      style: tt.titleMedium?.copyWith(
+                          color: ext.water.onContainer,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            Icon(Symbols.add_circle_rounded, color: ext.water.onContainer),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
@@ -59,6 +124,10 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.usual != null && widget.onUsual != null) ...[
+          _UsualDrinkTile(usual: widget.usual!, onTap: widget.onUsual!),
+          const SizedBox(height: AquaTheme.spacingM),
+        ],
         // Beverage selector row (the only place the beverage color appears)
         _buildBeverageSelector(beverage, isDark),
         const SizedBox(height: AquaTheme.spacingM),
@@ -255,7 +324,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
             child: GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
-              widget.onBeverageSelect();
+              widget.onBeverageSelect(bev.id);
             },
             child: AnimatedContainer(
               duration: AquaTheme.animationFast,

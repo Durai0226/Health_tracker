@@ -9,7 +9,13 @@ import 'package:tablet_remainder/features/medication/models/enhanced_medicine.da
 import 'package:tablet_remainder/features/medication/models/medicine_enums.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_log.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_schedule.dart';
+import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/features/medication/services/medicine_storage_service.dart';
+import 'package:tablet_remainder/features/medication/services/refill_reminder_service.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
+
+import '../support/recording_notification_scheduler.dart';
 
 /// A carer tracking a parent's medicines got no refill warning for them.
 ///
@@ -46,7 +52,10 @@ void main() {
 
   /// Mum's blood-pressure tablet, owned by dependent `dep1`, with a week of
   /// real dose history — everything the refill forecast needs.
-  Future<void> seedDependentMedicineWithHistory() async {
+  ///
+  /// [stock] defaults to a week's worth, which is already past its refill date
+  /// at one a day; the arming tests ask for more so there is a date to arm.
+  Future<void> seedDependentMedicineWithHistory({int stock = 6}) async {
     final now = DateTime.now();
     await MedicineCleanStorageService.addMedicine(EnhancedMedicine(
       id: 'mum-bp',
@@ -54,7 +63,7 @@ void main() {
       strength: '5mg',
       dosageForm: DosageForm.tablet,
       dosageAmount: 1,
-      currentStock: 6,
+      currentStock: stock,
       refillReminderEnabled: true,
       dependentId: 'dep1',
       createdAt: DateTime(now.year, now.month, now.day - 10),
@@ -117,29 +126,52 @@ void main() {
   });
 
   group('the refill sweep reads logs unscoped', () {
-    /// The body of `rescheduleAll`, bounded by the next declaration rather
-    /// than a character count so the window cannot silently stop covering the
-    /// method.
-    String rescheduleAllBody() {
-      final source = File(
-              'lib/features/medication/services/refill_reminder_service.dart')
-          .readAsStringSync()
-          .split('\n')
-          .where((l) => !l.trimLeft().startsWith('//'))
-          .join('\n');
-      final from = source.indexOf('static Future<int> rescheduleAll()');
-      expect(from, greaterThan(-1), reason: 'rescheduleAll was renamed');
-      final next = source.indexOf('\n  static ', from + 1);
-      return source.substring(from, next > from ? next : source.length);
-    }
+    // The sweep itself can now be driven headlessly through the notification
+    // scheduler seam, so the behaviour is asserted directly; the source scan
+    // below stays as a second, cheaper guard on the exact argument.
+    test('a dependent\'s refill reminder arms while "Me" is active', () async {
+      tz_data.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('UTC'));
+      final scheduler = RecordingNotificationScheduler();
+      NotificationService().schedulerForTesting = scheduler;
 
-    test('every log read in it opts out of active-profile scoping', () {
-      final body = rescheduleAllBody();
-      final reads = RegExp(r'getLogsForMedicine\(').allMatches(body).length;
+      await seedDependentMedicineWithHistory(stock: 40);
+      final armed = await RefillReminderService.rescheduleAll();
+
+      expect(armed, 1,
+          reason: 'with the logs filtered out, `taken` is empty and the '
+              "parent's reminder never arms at all");
+      expect(scheduler.scheduled.single.id,
+          RefillReminderService.notificationIdFor('mum-bp'));
+    });
+
+    test('and so does re-arming just that medicine', () async {
+      tz_data.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('UTC'));
+      final scheduler = RecordingNotificationScheduler();
+      NotificationService().schedulerForTesting = scheduler;
+
+      await seedDependentMedicineWithHistory(stock: 40);
+      expect(await RefillReminderService.rescheduleFor('mum-bp'), isTrue);
+    });
+
+    /// Every non-comment line of the service, so a read added anywhere in it is
+    /// held to the same rule.
+    String serviceSource() => File(
+            'lib/features/medication/services/refill_reminder_service.dart')
+        .readAsStringSync()
+        .split('\n')
+        .where((l) => !l.trimLeft().startsWith('//'))
+        .join('\n');
+
+    test('every log read in the service opts out of active-profile scoping', () {
+      final src = serviceSource();
+      final reads =
+          RegExp(r'getLogsFor(?:Medicine|DateRange)\(').allMatches(src).length;
       expect(reads, greaterThan(0), reason: 'the forecast needs dose history');
       final unscoped = RegExp(
-              r'getLogsForMedicine\([^;]*scopeToActiveProfile:\s*false')
-          .allMatches(body)
+              r'getLogsFor(?:Medicine|DateRange)\([^;]*scopeToActiveProfile:\s*false')
+          .allMatches(src)
           .length;
       expect(unscoped, reads,
           reason: 'a default-scoped read returns zero logs for a dependent\'s '
@@ -151,7 +183,7 @@ void main() {
       // logs is exactly the mismatch that produced the bug.
       expect(
           RegExp(r'getAllMedicines\(\s*scopeToActiveProfile:\s*false')
-              .hasMatch(rescheduleAllBody()),
+              .hasMatch(serviceSource()),
           isTrue);
     });
   });

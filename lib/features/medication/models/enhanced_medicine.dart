@@ -115,6 +115,26 @@ class EnhancedMedicine {
   }) : createdAt = createdAt ?? DateTime.now();
 
   // Computed properties
+
+  /// Whether this medicine's supply is being tracked at all.
+  ///
+  /// One definition, because three screens each had their own and all three
+  /// were wrong in a different way.
+  ///
+  /// The honest test would be "did the user type a quantity", but that is not
+  /// recoverable: `currentStock` is `integer().withDefault(const Constant(0))`
+  /// — NOT NULL — the write coerces `currentStock ?? 0` and the read maps the
+  /// column straight back, so a blank quantity and a deliberate zero are the
+  /// same row. `currentStock == null` therefore never holds after a reload,
+  /// which is what made the medicine detail screen print a fabricated
+  /// "0 pill(s) remaining" on every medicine added without one.
+  ///
+  /// So: tracked if the user opted into refill reminders, OR if there is stock
+  /// to report. The first half is what keeps a tracked medicine visible once
+  /// `reduceStock` clamps it to 0 — the exact moment it needs refilling, and
+  /// the moment a `> 0` test dropped it off the Refill screen.
+  bool get isStockTracked => refillReminderEnabled || (currentStock ?? 0) > 0;
+
   bool get isLowStock {
     // Refill/stock tracking is opt-in (refillReminderEnabled, default off). An
     // untracked medicine's stock is persisted as 0, so without this gate every

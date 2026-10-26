@@ -303,4 +303,62 @@ void main() {
         reason: 'the populated Today dashboard overflowed:\n'
             '${overflows.join('\n')}');
   });
+
+  /// The nudge strip and the Medicine card must not describe the same doses
+  /// two incompatible ways.
+  ///
+  /// Found on device: the Today screen showed "You still have 5 doses left — a
+  /// good moment to take them before the evening winds down." directly above a
+  /// Medicine card reading "Nothing left today · 1 of 6 taken". Both numbers
+  /// came from ONE `DailyMedicineSummary`; they disagreed because the card
+  /// branched on `outstanding` (`total - taken - skipped - missed`) while the
+  /// strip was handed `taken` and subtracted it from `total` itself, which
+  /// counts a resolved dose as one you still owe. Urging someone to take five
+  /// doses they deliberately skipped is the part that makes this more than a
+  /// wording bug.
+  testWidgets('the nudge never claims doses are left once all are resolved',
+      (tester) async {
+    // 19:00: the strip's highest-priority branch is "unfinished doses after
+    // 18:00", which is the sentence that appeared on the device.
+    final evening = () {
+      final n = DateTime.now();
+      return DateTime(n.year, n.month, n.day, 19, 0);
+    }();
+
+    await withClock(Clock.fixed(evening), () async {
+      // Six doses, all already due. One taken, five deliberately skipped —
+      // so nothing is outstanding, but `total - taken` is still 5.
+      final slots = await seedMed(past: 6);
+      expect(slots.past, hasLength(6),
+          reason: 'the scenario needs six past slots to be expressible');
+
+      await markTaken(slots.past.first);
+      for (final slot in slots.past.skip(1)) {
+        await MedicineCleanStorageService.addLog(MedicineLog.skipped(
+          id: MedicineCleanStorageService.doseLogId('m1', slot),
+          medicineId: 'm1',
+          scheduledTime: slot,
+          reason: SkipReason.notNeeded,
+        ));
+      }
+
+      final texts = await pumpHome(tester);
+      final joined = texts.join(' | ');
+
+      // Premise: this really is the state that produced the contradiction.
+      // Without it the assertions below would pass on a screen with no doses.
+      expect(joined, contains('1 of 6 taken'),
+          reason: 'the Medicine card must be in the resolved-but-not-all-taken '
+              'state for this test to be able to fail. Screen was:\n$joined');
+
+      expect(joined, isNot(contains('doses left')),
+          reason: 'every dose is resolved — five of them skipped on purpose. '
+              'Nothing is left to take. Screen was:\n$joined');
+      expect(joined, isNot(contains('still have')),
+          reason: 'the strip must not urge a dose that was deliberately '
+              'skipped. Screen was:\n$joined');
+      expect(joined, isNot(contains('next dose')),
+          reason: 'there is no next dose today. Screen was:\n$joined');
+    });
+  });
 }

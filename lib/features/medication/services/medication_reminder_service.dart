@@ -17,6 +17,7 @@ import '../models/medicine_log.dart';
 import 'medicine_storage_service.dart';
 import 'reminder_slot_grouping.dart';
 import 'reminder_window_nudges.dart';
+import 'critical_follow_up.dart';
 
 /// Service for managing medication reminder notifications
 /// Handles scheduling, updating, and canceling push notifications for medicines
@@ -394,19 +395,20 @@ class MedicationReminderService {
           timeIndex < times.length && timeIndex < maxSlotsPerMedicinePerDay;
           timeIndex++) {
         final time = times[timeIndex];
-        if (!time.hasWindow) continue;
+        if (effectiveWindowMinutes(medicine, time) == null) continue;
 
         for (int n = 0; n < maxNudgesPerTime; n++) {
           neededIds.add(windowNudgeId(medicineIndex, timeIndex, n));
         }
 
-        final adaptiveMinutes = _adaptiveSuggestionMinutes(
-            takeMinutes[medicine.id] ?? const <int>[], time);
-        final nudgeMinutes = windowNudgeMinutes(
-          startMinuteOfDay: time.hour * 60 + time.minute,
-          windowMinutes: time.windowMinutes!,
-          adaptiveSuggestedMinutes: adaptiveMinutes,
-        );
+        final nudgeMinutes = nudgeMinutesForDose(
+          medicine,
+          time,
+          adaptiveSuggestedMinutes: time.hasWindow
+              ? _adaptiveSuggestionMinutes(
+                  takeMinutes[medicine.id] ?? const <int>[], time)
+              : null,
+        )!;
         final scheduleJson = jsonEncode(medicine.schedule.toJson());
         final id = windowNudgeId(medicineIndex, timeIndex, 0);
         try {

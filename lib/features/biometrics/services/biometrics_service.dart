@@ -149,6 +149,27 @@ class BiometricsService {
     return out;
   }
 
+  /// One metric's daily values over the last [days] days, oldest first, skipping
+  /// days that have none. [pick] returns null for a day without the metric, so
+  /// a gap stays a gap — never a zero nobody measured.
+  ///
+  /// [now] is the clock-free seam for tests.
+  static List<({DateTime date, double value})> dailySeries(
+    double? Function(BiometricDay day) pick, {
+    int days = 30,
+    DateTime? now,
+  }) {
+    final today = dayOnly(now ?? DateTime.now());
+    final out = <({DateTime date, double value})>[];
+    for (var i = days - 1; i >= 0; i--) {
+      final d = DateTime(today.year, today.month, today.day - i);
+      final row = _daysNotifier.value[dateKeyOf(d)];
+      final v = row == null ? null : pick(row);
+      if (v != null) out.add((date: d, value: v));
+    }
+    return out;
+  }
+
   /// HRV trend restricted to a SINGLE [HrvMetric].
   ///
   /// The metric is a parameter rather than an option because mixing RMSSD and

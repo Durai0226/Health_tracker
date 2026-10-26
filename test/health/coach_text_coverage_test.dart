@@ -64,7 +64,7 @@ void main() {
     // numbers as a four-up pulse row immediately below the strip.
     test('dailyBriefing returns advice, not a recap of the pulse row', () {
       final t = e.dailyBriefing(
-        medsTaken: 1,
+        medsOutstanding: 1,
         medsTotal: 2,
         waterPct: 50,
         focusMinutes: 25,

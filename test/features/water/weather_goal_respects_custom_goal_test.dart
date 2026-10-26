@@ -80,8 +80,10 @@ void main() {
     await withClock(Clock.fixed(now), () async {
       await seedWeather(38, now);
       await WaterService.saveProfile(profile);
-      expect(WaterService.getDataForDate(now)!.dailyGoalMl,
-          profile.effectiveGoalMl);
+      // Saving the profile keeps the hot-day adjustment from the cached
+      // reading. It used to stamp the bare profile goal here and wait for the
+      // next refresh to put the weather back.
+      expect(WaterService.getDataForDate(now)!.dailyGoalMl, hotGoal);
 
       await WaterService.refreshWeatherGoal();
 

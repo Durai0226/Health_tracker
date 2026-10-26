@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../models/focus_coins.dart';
 
@@ -18,7 +19,23 @@ class CoinsService extends ChangeNotifier {
   List<RealTreePlanting> get plantedTrees => _coins.plantedTrees;
   List<CoinTransaction> get transactions => _coins.transactions;
 
+  /// Guarded, like `RelaxationService.init`.
+  ///
+  /// `PlantRealTreesScreen.initState` calls this on every mount and
+  /// `FocusService.init` calls it again, so an unguarded `init` re-read the
+  /// store and re-notified every listener each time the shop was opened.
+  /// Zero the balance and the shop history after "Delete all data" — the
+  /// singleton would otherwise keep them in memory and save them again.
+  void resetAfterWipe() {
+    _coins = const FocusCoins();
+    notifyListeners();
+  }
+
+  bool _didInit = false;
+
   Future<void> init() async {
+    if (_didInit) return;
+    _didInit = true;
     await _loadData();
     debugPrint('✓ CoinsService initialized');
   }
@@ -30,9 +47,32 @@ class CoinsService extends ChangeNotifier {
       if (coinsJson != null && coinsJson is Map) {
         _coins = FocusCoins.fromJson(Map<String, dynamic>.from(coinsJson));
       }
-      notifyListeners();
+      _notifyWhenSafe();
     } catch (e) {
       debugPrint('Error loading coins data: $e');
+    }
+  }
+
+  /// Notify without tripping "setState() called during build".
+  ///
+  /// `init()` is called from `initState`, and everything above reads a
+  /// SYNCHRONOUS cache — `getAppPreferences` returns the in-memory map, so
+  /// despite the `async` signature nothing yields before this point and the
+  /// notification lands inside the frame that is still building. A
+  /// `ListenableBuilder` already listening to this service (the coin badge on
+  /// the Focus screen) is then marked dirty mid-build, which the framework
+  /// reports as `setState() or markNeedsBuild() called during build` — a
+  /// caught exception on every open of the shop.
+  ///
+  /// Only the LOAD path needs this. The other four notify sites run from user
+  /// actions — earning, spending, bonuses — which are never inside a build.
+  void _notifyWhenSafe() {
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance
+          .addPostFrameCallback((_) => notifyListeners());
+    } else {
+      notifyListeners();
     }
   }
 
@@ -172,6 +212,10 @@ class CoinsService extends ChangeNotifier {
   @visibleForTesting
   void resetForTesting() {
     _coins = const FocusCoins();
+    // Without this the `_didInit` guard survives the reset, so the SECOND
+    // test in a file would get a silent no-op `init()` and assert against
+    // whatever the first one left behind.
+    _didInit = false;
   }
 
   bool canAfford(RealTreeType treeType) {

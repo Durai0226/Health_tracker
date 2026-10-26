@@ -91,25 +91,38 @@ void main() {
       await pumpRunningSession(tester);
 
       try {
-        final clock = find.byType(ValueListenableBuilder<int>);
-        expect(clock, findsOneWidget,
+        // Every per-tick listener on this screen. There are two: the clock,
+        // and the progress bar with its "% complete" label. The bar was added
+        // later — it had been reading `progress` from the outer build, which
+        // fires only on state transitions, so it sat at 0% for whole sessions
+        // under a clock that counted down correctly beside it.
+        //
+        // Two narrow listeners is what this test is protecting, not one: the
+        // thing it forbids is the WHOLE display rebuilding on a quiet vsync.
+        final ticking = find.byType(ValueListenableBuilder<int>);
+        expect(ticking, findsWidgets,
             reason: 'sanity: the locked session screen really is up');
 
-        final before = tester.widget(clock);
+        final before = tester.widgetList(ticking).toList();
         for (var frame = 0; frame < 5; frame++) {
           await tester.pump(const Duration(milliseconds: 16));
         }
-        expect(identical(tester.widget(clock), before), isTrue,
-            reason: 'five vsyncs with no state change must not rebuild the '
-                'timer display — BEFORE THE FIX a repeating controller drove '
-                'an AnimatedBuilder around all of it whose builder never read '
-                'the value');
+        final after = tester.widgetList(ticking).toList();
+        expect(after.length, before.length);
+        for (var i = 0; i < before.length; i++) {
+          expect(identical(after[i], before[i]), isTrue,
+              reason: 'five vsyncs with no state change must not rebuild the '
+                  'timer display — BEFORE THE FIX a repeating controller drove '
+                  'an AnimatedBuilder around all of it whose builder never read '
+                  'the value');
+        }
 
-        // The control: a real state change DOES rebuild it, so the assertion
+        // The control: a real state change DOES rebuild them, so the assertion
         // above cannot be passing because nothing is capable of rebuilding.
         service.pauseSession();
         await tester.pump();
-        expect(identical(tester.widget(clock), before), isFalse,
+        final paused = tester.widgetList(ticking).toList();
+        expect(identical(paused.first, before.first), isFalse,
             reason: 'pausing changes what the screen shows');
       } finally {
         service.resetForTesting();

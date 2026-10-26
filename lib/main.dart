@@ -40,6 +40,7 @@ import 'core/services/app_check_service.dart';
 import 'core/services/health_rationale_channel.dart';
 import 'features/settings/screens/app_lock_gate.dart';
 import 'core/constants/app_strings.dart';
+import 'features/medication/services/refill_loop.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -357,6 +358,7 @@ void main() async {
     
     if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
       final payload = notificationAppLaunchDetails?.notificationResponse?.payload;
+      RefillLoop.pendingOpen.value = RefillLoop.medicineIdFromPayload(payload);
       if (payload != null && payload.startsWith('alarm:')) {
         initialRoute = '/alarm';
         // The payload is `alarm:{json}` carrying the real title/body/id so the

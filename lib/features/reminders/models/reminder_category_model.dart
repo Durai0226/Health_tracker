@@ -15,6 +15,16 @@ class ReminderCategory {
     this.isDefault = false,
   });
 
+  /// The ids of the three categories every install is seeded with.
+  static const Set<String> starterIds = {'personal', 'work', 'health'};
+
+  /// Whether this is one of the built-in categories.
+  ///
+  /// By id as well as by flag: the seed never set `isDefault`, so on every
+  /// install that already exists the flag is false for all three and the
+  /// "Default" chip and the delete guard it was meant to drive never applied.
+  bool get isStarter => isDefault || starterIds.contains(id);
+
   /// Colors offered by the category editor (ARGB ints).
   static const List<int> availableColors = [
     0xFF4CAF50, // green

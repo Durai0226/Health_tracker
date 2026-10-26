@@ -12,6 +12,7 @@ import '../../focus/services/focus_service.dart';
 import '../../period/services/period_service.dart';
 import '../../period/models/cycle_phase.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../medication/services/bp_sessions.dart';
 
 /// ADA Time-in-Range thresholds (mg/dL): <70 low, 70–180 in-range, >180 high.
 const int kGlucoseLowThreshold = 70;
@@ -399,7 +400,9 @@ class TrendsDataService {
     final readings = await VitalsStorageService.getBpForRange(start, to);
     final sys = <String, List<int>>{};
     final dia = <String, List<int>>{};
-    for (final r in readings) {
+    // A day's average is over measurement SESSIONS, so a doubled-up morning
+    // does not outweigh a single evening reading.
+    for (final r in BpSessions.collapse(readings)) {
       final k = _ymd(r.takenAt);
       (sys[k] ??= []).add(r.systolic);
       (dia[k] ??= []).add(r.diastolic);

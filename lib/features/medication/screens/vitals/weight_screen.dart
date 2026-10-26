@@ -10,7 +10,11 @@ import '../../../../core/services/clean_storage_service.dart';
 import '../../../../core/services/health_data_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
+import '../../../../core/health/weight_trend.dart';
 import '../../models/weight_reading.dart';
+import '../../services/weight_goal.dart';
+import '../../services/weight_trend_text.dart';
+import 'weight_goal_sheet.dart';
 import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_reminder_button.dart';
@@ -32,6 +36,7 @@ class WeightScreen extends StatefulWidget {
 class _WeightScreenState extends State<WeightScreen> {
   static const _unitKey = 'weight_unit';
   List<WeightReading> _readings = [];
+  double? _goalKg;
   _WeightUnit _unit = _WeightUnit.kg;
   bool _loading = true;
   bool _importing = false;
@@ -52,6 +57,7 @@ class _WeightScreenState extends State<WeightScreen> {
     if (!mounted) return;
     setState(() {
       _readings = data; // newest first (DAO orders desc)
+      _goalKg = WeightGoal.get();
       _unit = unit == 'lb' ? _WeightUnit.lb : _WeightUnit.kg;
       _loading = false;
     });
@@ -66,6 +72,11 @@ class _WeightScreenState extends State<WeightScreen> {
 
   double _toUnit(double kg) => _isLb ? kg * 2.2046226218 : kg;
   String _display(double kg) => _toUnit(kg).toStringAsFixed(1);
+
+  Future<void> _openGoalSheet() async {
+    final accent = VitalsColors.weightAccent(AppColorsExt.of(context).isDark);
+    if (await WeightGoalSheet.show(context, accent: accent, lb: _isLb)) _load();
+  }
 
   Future<void> _openLogSheet({WeightReading? edit}) async {
     final accent = VitalsColors.weightAccent(AppColorsExt.of(context).isDark);
@@ -224,7 +235,22 @@ class _WeightScreenState extends State<WeightScreen> {
   Widget _buildBody(AppColorsExt ext, AccentSwatch accent) {
     final latest = _readings.first;
     final prev = _readings.length > 1 ? _readings[1] : null;
-    final deltaKg = prev != null ? latest.valueKg - prev.valueKg : null;
+    // Subtract what is DISPLAYED, not the raw kg.
+    //
+    // `_display` rounds each reading to one decimal, and this delta was taken
+    // at full precision and rounded separately — two independent roundings of
+    // the same comparison. With 70.44 and 70.36 stored, the screen showed
+    // "70.4" and "70.4" and a delta of "+0.1 vs last": an arithmetic
+    // contradiction between three numbers in one card.
+    //
+    // The difference is therefore already IN the display unit. It used to be
+    // named `deltaKg` and passed through `_display` again for the label, which
+    // converts kg to lb a second time: in pounds the change read 2.2 times too
+    // large (a 1 kg drop showed as "-4.9 lb" instead of "-2.2 lb").
+    final delta = prev != null
+        ? double.parse(_display(latest.valueKg)) -
+            double.parse(_display(prev.valueKg))
+        : null;
 
     final now = DateTime.now();
     final last7 = _readings.where((r) => now.difference(r.takenAt).inDays < 7);
@@ -234,6 +260,12 @@ class _WeightScreenState extends State<WeightScreen> {
 
     final trend = _readings.take(20).toList().reversed.toList();
     final series = trend.map((r) => _toUnit(r.valueKg)).toList();
+    final smoothed = WeightTrend.compute(
+        [for (final r in _readings) WeightPoint(r.takenAt, r.valueKg)]);
+    // The smoothed value after each of the 20 plotted readings, oldest first.
+    final trendSeries = smoothed == null
+        ? const <double>[]
+        : [for (final v in smoothed.perPoint.take(20).toList().reversed) _toUnit(v)];
     final minY = series.isEmpty
         ? 0.0
         : (series.reduce((a, b) => a < b ? a : b) - 3).clamp(0, 1000).toDouble();
@@ -253,9 +285,9 @@ class _WeightScreenState extends State<WeightScreen> {
             accent: accent,
             valueLabel: _display(latest.valueKg),
             unitLabel: _unitLabel,
-            deltaLabel: (deltaKg == null || deltaKg == 0)
+            deltaLabel: (delta == null || delta.abs() < 0.05)
                 ? null
-                : '${deltaKg > 0 ? '+' : '-'}${_display(deltaKg.abs())} $_unitLabel vs last',
+                : '${delta > 0 ? '+' : '-'}${delta.abs().toStringAsFixed(1)} $_unitLabel vs last',
             subtitle: 'Last logged · ${RelativeTime.since(latest.takenAt)}',
           ),
           const SizedBox(height: AppSpacing.md),
@@ -279,13 +311,39 @@ class _WeightScreenState extends State<WeightScreen> {
               accent: accent,
             ),
           ]),
+          if (smoothed != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            _TrendCard(
+              ext: ext,
+              accent: accent,
+              trendLabel: '${_display(smoothed.trendKg)} $_unitLabel',
+              rateLabel: weightRateLabel(smoothed.ratePerWeekKg, lb: _isLb),
+              goalLine: _goalKg == null
+                  ? null
+                  : weightGoalLine(
+                      smoothed.forecast(_goalKg!, today: DateTime.now()),
+                      _goalKg!,
+                      lb: _isLb),
+              onGoal: _openGoalSheet,
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           SectionHeader(title: 'Trend', icon: Symbols.show_chart_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             child: VitalsTrendChart(
               series: [
-                VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Weight'),
+                VitalsSeries(
+                    values: series,
+                    times: [for (final r in trend) r.takenAt],
+                    color: ext.chartMark(accent),
+                    label: 'Weight'),
+                if (trendSeries.length == series.length && series.length > 1)
+                  VitalsSeries(
+                      values: trendSeries,
+                      times: [for (final r in trend) r.takenAt],
+                      color: ext.chartMark(ext.info),
+                      label: 'Trend'),
               ],
               minY: minY,
               maxY: maxY,
@@ -353,6 +411,63 @@ class _WeightScreenState extends State<WeightScreen> {
     return list.reduce((a, b) => a + b) / list.length;
   }
 
+}
+
+/// The smoothed weight, its weekly rate, and the goal line — or the prompt to set
+/// a goal.
+class _TrendCard extends StatelessWidget {
+  final AppColorsExt ext;
+  final AccentSwatch accent;
+  final String trendLabel;
+  final String? rateLabel;
+  final String? goalLine;
+  final VoidCallback onGoal;
+
+  const _TrendCard({
+    required this.ext,
+    required this.accent,
+    required this.trendLabel,
+    required this.rateLabel,
+    required this.goalLine,
+    required this.onGoal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
+      onTap: onGoal,
+      child: Row(
+        children: [
+          Icon(Symbols.trending_down_rounded, color: ext.mark(accent)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  rateLabel == null
+                      ? 'Trend $trendLabel'
+                      : 'Trend $trendLabel · $rateLabel',
+                  style: tt.titleMedium?.copyWith(
+                      color: ext.textPrimary, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  goalLine ?? 'Set a goal weight',
+                  style: tt.bodySmall?.copyWith(
+                      color: goalLine == null
+                          ? ext.mark(accent)
+                          : ext.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
+        ],
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -176,15 +176,20 @@ const Map<String, int> _rowCutBaseline = {
   // Newly registered, so these 13 were always there and simply unmeasured.
   // All harness-font: it cuts "Blood pressure" — 14 characters — across two
   // lines of a 134pt column, which real Inter fits on one.
-  'vitals_reminders': 13,
+  'vitals_reminders': 11,
   // Newly VISIBLE to this gate rather than newly broken: `early_access` had no
   // SettingsTiles at all until its three hand-rolled feature-flag cards were
   // migrated onto the shared row, so the scope finder matched nothing there.
   // All harness-font — it cuts "May be unstable", fifteen characters, on one
   // line of a 134pt column.
   'early_access': 55,
-  'focus_reminders': 13,
-  'haptics': 12,
+  'focus_reminders': 10,
+  // 8, down from 12: the Feature-haptics section now generates six rows from
+  // `HapticFeature.values` instead of seven hand-written ones, and the
+  // generated titles ("Medicine", "Water", "Focus") are shorter than the
+  // pairs they replaced ("Medicine reminder", "Water added", "Focus start").
+  // The row count and the label lengths both came down.
+  'haptics': 8,
   'notif_settings': 8,
   // Newly registered (TQ-05), so these were always there and simply unmeasured
   // — the same shape as `vitals_reminders` above. Both are harness-font: the
@@ -195,7 +200,12 @@ const Map<String, int> _rowCutBaseline = {
   // 51 rather than a handful because this screen is four reminder rows at four
   // widths and three scales, each contributing a title and a status.
   'period_reminders': 51,
-  'health_source_detail': 27,
+  // 27 -> 23: AppListTile's subtitle now wraps to two lines instead of
+  // ellipsizing at one. Found on a real device at DEFAULT text size, which is
+  // the part worth recording — this baseline's own note attributes row cuts to
+  // the test fallback font being ~2x Inter's advance, and that explanation does
+  // not cover a cut that reproduces on hardware at 1.0x.
+  'health_source_detail': 23,
 };
 
 /// The instant every seeded screen is rendered at.

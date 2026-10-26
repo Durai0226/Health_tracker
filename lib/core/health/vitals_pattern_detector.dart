@@ -70,10 +70,19 @@ class VitalsPatternDetector {
           feature: InsightFeature.bloodPressure,
           severity: InsightSeverity.info,
           title: morningsHigher ? 'Mornings run higher' : 'Evenings run higher',
+          // Says WHICH days it is talking about.
+          //
+          // This card renders directly beneath the Morning / Evening stat
+          // tiles on the Blood pressure screen, and those are computed over
+          // the last SEVEN days while this walks [recentWindow] — thirty. The
+          // two comparisons can reach opposite conclusions, and neither the
+          // detail nor the `why` said what it covered, so the screen simply
+          // contradicted itself with no way to tell why.
           detail:
-              'Your ${morningsHigher ? 'morning' : 'evening'} systolic averages about ${diff.abs().round()} mmHg above the other half of the day.',
+              'Over the last ${recentWindow.inDays} days your ${morningsHigher ? 'morning' : 'evening'} systolic averages about ${diff.abs().round()} mmHg above the other half of the day.',
           metric: '${mAvg.round()} AM · ${eAvg.round()} PM',
-          why: 'Average systolic for AM readings vs PM readings.',
+          why:
+              'Average systolic for AM vs PM readings over the last ${recentWindow.inDays} days — the tiles above cover the last 7.',
           rank: 45,
         ));
       }
@@ -91,7 +100,15 @@ class VitalsPatternDetector {
         id: 'bp_outofrange',
         feature: InsightFeature.bloodPressure,
         severity: frac >= 0.7 ? InsightSeverity.attention : InsightSeverity.info,
-        title: 'Most readings above target',
+        // This card fires from 40%, so "Most" was stating a majority that
+        // often wasn't there. On device it read "Most readings above target"
+        // directly above its own detail line saying "50% of your recent
+        // readings are Stage 1 or higher" — the headline contradicting the
+        // number underneath it. "Most" means more than half, and this is
+        // blood-pressure guidance, so it has to be the arithmetic.
+        title: frac > 0.5
+            ? 'Most readings above target'
+            : 'Many readings above target',
         detail:
             '${(frac * 100).round()}% of your recent readings are Stage 1 or higher. Consistency + your doctor\'s plan help most.',
         metric: '${(frac * 100).round()}%',

@@ -21,6 +21,8 @@ import 'nunito_medication_list_screen.dart';
 import 'refill_overview_screen.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
+import '../services/late_dose_recovery.dart';
+import '../widgets/late_dose_sheets.dart';
 import 'appointments/nunito_appointment_list_screen.dart';
 import 'doctors/nunito_doctor_list_screen.dart';
 import 'clinics/nunito_clinic_list_screen.dart';
@@ -39,6 +41,9 @@ class NunitoMedicationDashboard extends StatefulWidget {
 class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   List<EnhancedMedicine> _medicines = [];
+  /// Yesterday's doses the sweep wrote down as missed, for the next-morning
+  /// tidy-up banner. Empty once the person has dismissed it for that day.
+  List<MissedDose> _yesterdayMissed = [];
   List<_ScheduledDose> _todaysDoses = [];
   final Map<String, bool> _takenStatus = {};
   bool _isLoading = true;
@@ -198,6 +203,7 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       _adherenceScheduled = (stats['scheduled'] as int?) ?? 0;
 
       await _buildTodaySchedule();
+      await _loadYesterdayMissed();
       _fadeController.forward();
     } catch (e) {
       debugPrint('Error loading data: $e');
@@ -415,6 +421,79 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     }
   }
 
+  static const String _tidyDismissedKey = 'lateTidyDismissedDay';
+
+  static String _dayKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Yesterday's missed doses, unless the person has already dismissed the
+  /// banner for that day. Reads the logs again rather than reusing the
+  /// timeline's, since the timeline may be showing a day the user picked.
+  Future<void> _loadYesterdayMissed() async {
+    final now = clock.now();
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final dismissed =
+        CleanStorageService.getAppPreference(_tidyDismissedKey, '');
+    if (dismissed == _dayKey(yesterday)) {
+      _yesterdayMissed = [];
+      return;
+    }
+    final logs = _withoutReopenedSlots(
+        await MedicineCleanStorageService.getLogsForDate(yesterday));
+    _yesterdayMissed = LateDoseRecovery.missedOn(yesterday, logs, _medicines);
+  }
+
+  Future<void> _dismissYesterdayTidy() async {
+    final now = clock.now();
+    await CleanStorageService.setAppPreference(
+        _tidyDismissedKey, _dayKey(DateTime(now.year, now.month, now.day - 1)));
+    if (mounted) setState(() => _yesterdayMissed = []);
+  }
+
+  Future<void> _onTidyYesterday() async {
+    _hapticService.light();
+    final doses = List<MissedDose>.of(_yesterdayMissed);
+    final changes = await YesterdayTidySheet.show(context, doses);
+    if (changes == null || changes.isEmpty) return;
+    final written = await LateDoseRecovery.applyTidy(doses, changes);
+    await _loadData(showLoader: false);
+    if (!mounted || written.isEmpty) return;
+    context.toastSuccess(
+      written.length == 1 ? 'Yesterday updated' : '${written.length} doses updated',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          for (final log in written) {
+            await LateDoseRecovery.undo(log);
+          }
+          await _loadData(showLoader: false);
+        },
+      ),
+    );
+  }
+
+  /// A tap on a dose the sweep wrote down as missed: it may have been taken on
+  /// time and never logged, taken late, or forgotten.
+  Future<void> _onRecoverMissed(_ScheduledDose dose) async {
+    final log = dose.log;
+    if (log == null || !log.isMissed) return;
+    _hapticService.light();
+    final choice =
+        await LateDoseSheet.show(context, MissedDose(log, dose.medicine));
+    if (choice == null || !mounted) return;
+    final written =
+        await LateDoseRecovery.apply(MissedDose(log, dose.medicine), choice);
+    _applyLogLocally(dose, written);
+    await _loadData(showLoader: false);
+    if (!mounted) return;
+    // reopensSlot: false — Undo deletes the row and the next sweep writes the
+    // missed one back, which is exactly the state being returned to.
+    _confirmDoseOutcome(
+        '${dose.medicine.name} ${written.isSkipped ? 'skipped' : 'taken'}',
+        written,
+        reopensSlot: false);
+  }
+
   /// Optimistically swap the dose's log in place so the timeline flips to
   /// Taken/Skipped on the same frame the sheet closes.
   void _applyLogLocally(_ScheduledDose dose, MedicineLog log) {
@@ -532,6 +611,13 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 if (_interactions.isNotEmpty)
                   SliverToBoxAdapter(child: _buildInteractionBanner()),
                 SliverToBoxAdapter(child: _buildRefillBanner()),
+                SliverToBoxAdapter(
+                  child: YesterdayTidyBanner(
+                    count: _yesterdayMissed.length,
+                    onTidy: _onTidyYesterday,
+                    onDismiss: _dismissYesterdayTidy,
+                  ),
+                ),
                 SliverToBoxAdapter(child: _buildSummaryCard()),
                 // Date selector before the stats so the numbers sit next to the
                 // picker that scopes them (the stats follow the selected date).
@@ -1001,8 +1087,22 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
   Widget _buildDateSelector() {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    final now = DateTime.now();
-    final dates = List.generate(7, (i) => now.add(Duration(days: i - 3)));
+    // `dayOffset`, not `add(Duration(days: n))`, and `clock.now()`, not
+    // `DateTime.now()` — both are this project's rules and this line broke
+    // both.
+    //
+    // A local civil day is 23 or 25 hours across a DST transition, so adding a
+    // fixed 24-hour Duration seven times steps onto the wrong calendar date
+    // exactly once per transition: the strip renders the same weekday twice,
+    // or skips one, and the chip the user taps is not the day it is labelled
+    // with. `_onDateChanged` then loads that wrong day's doses.
+    //
+    // The wall clock matters too: `_onDateChanged` right below decides
+    // `_selectionWasToday` from `clock.now()`, so under a pinned clock this
+    // strip was building its days from a different "now" than the handler that
+    // consumes them.
+    final now = clock.now();
+    final dates = List.generate(7, (i) => dayOffset(now, i - 3));
 
     // The strip used to be a fixed `height: 80` Container around a horizontal
     // ListView. That height was the viewport, so every one of the seven chips
@@ -1265,10 +1365,12 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: MergeSemantics(
                   child: Semantics(
-                  button: actionable,
+                  button: actionable || isMissed,
                   child: AppCard(
                   color: cardColor,
-                  onTap: actionable ? () => _onTakeMedication(dose) : null,
+                  onTap: actionable
+                      ? () => _onTakeMedication(dose)
+                      : (isMissed ? () => _onRecoverMissed(dose) : null),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
@@ -1580,7 +1682,9 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
             padding: const EdgeInsets.symmetric(
                 vertical: AppSpacing.sm, horizontal: 6),
             color: cellColor,
-            onTap: actionable ? () => _onTakeMedication(dose) : null,
+            onTap: actionable
+                ? () => _onTakeMedication(dose)
+                : (isMissed ? () => _onRecoverMissed(dose) : null),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

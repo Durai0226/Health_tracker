@@ -63,7 +63,12 @@ void main() {
 
     final home =
         File('lib/features/home/screens/home_dashboard.dart').readAsStringSync();
-    expect(home, contains('ProactiveNudge(onOpenTrends: widget.onOpenTrends)'),
+    // Bounded to the ProactiveNudge( call — a bare contains() would also match
+    // the unrelated `onOpenTrends: widget.onOpenTrends` elsewhere in the file.
+    final nudgeAt = home.indexOf('ProactiveNudge(');
+    expect(nudgeAt, greaterThan(-1), reason: 'ProactiveNudge call not found');
+    final nudgeCall = home.substring(nudgeAt, home.indexOf(');', nudgeAt));
+    expect(nudgeCall, contains('onOpenTrends: widget.onOpenTrends'),
         reason: 'Home must hand the shell callback to the nudge');
 
     final nudge = File('lib/features/insights/screens/proactive_nudge.dart')

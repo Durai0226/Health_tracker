@@ -2,6 +2,8 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/foundation.dart';
 
 import '../../../core/database/app_database.dart' as db;
+import '../../medication/models/clinic.dart';
+import '../../medication/services/medicine_storage_service.dart';
 
 /// The doctors / appointments / household-profiles half of the app backup.
 ///
@@ -41,6 +43,12 @@ class MedicationBackupSerializer {
   static const String appointmentsKey = 'appointments';
   static const String dependentsKey = 'dependents';
 
+  /// Clinics and hospitals. Unlike the rest of this file they are not Drift
+  /// rows — they live in SharedPreferences — so they were in no backup and
+  /// survived "Delete all data". They ride the same section rules as the other
+  /// three: exported always, restored by id, cleared only when the file has them.
+  static const String clinicsKey = 'clinics';
+
   static db.AppDatabase get _db => db.AppDatabase.instance;
 
   /// Every profile's records, not the active one's.
@@ -69,10 +77,13 @@ class MedicationBackupSerializer {
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .get();
 
+    final clinics = await MedicineCleanStorageService.getAllClinics();
+
     return <String, dynamic>{
       doctorsKey: doctors.map((r) => r.toJson()).toList(),
       appointmentsKey: appointments.map((r) => r.toJson()).toList(),
       dependentsKey: dependents.map((r) => r.toJson()).toList(),
+      clinicsKey: clinics.map((c) => c.toJson()).toList(),
     };
   }
 
@@ -103,6 +114,15 @@ class MedicationBackupSerializer {
                 .toCompanion(false));
       } catch (e) {
         debugPrint('Import dependent profile failed: $e');
+      }
+    }
+
+    for (final raw in (data[clinicsKey] as List? ?? const [])) {
+      try {
+        await MedicineCleanStorageService.saveClinic(
+            Clinic.fromJson(Map<String, dynamic>.from(raw as Map)));
+      } catch (e) {
+        debugPrint('Import clinic failed: $e');
       }
     }
 
@@ -143,5 +163,6 @@ class MedicationBackupSerializer {
     // Appointments first: they reference the doctors below.
     if (carries(appointmentsKey)) await d.delete(d.appointments).go();
     if (carries(doctorsKey)) await d.delete(d.doctors).go();
+    if (carries(clinicsKey)) await MedicineCleanStorageService.clearClinics();
   }
 }

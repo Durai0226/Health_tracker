@@ -135,9 +135,25 @@ class _FocusScreenState extends State<FocusScreen> {
       if (!mounted) return;
       _hapticService.focusComplete();
       _vitaVibeService.celebrate();
-      FocusToast.sessionComplete(context, minutes: session.actualMinutes);
+      FocusToast.sessionComplete(
+        context,
+        minutes: session.actualMinutes,
+        onAnotherRound: _anotherRound,
+      );
       _celebrateStreakMilestone();
     });
+  }
+
+  /// "Another round": start the next session with the SAME settings, one tap
+  /// from the completion toast.
+  ///
+  /// Guarded, because the toast outlives the moment it appeared: by the time
+  /// it is tapped the user may have started something themselves, or left the
+  /// screen, and a second `startSession()` over a running one would corrupt the
+  /// timer.
+  void _anotherRound() {
+    if (!mounted || _focusService.isRunning) return;
+    _startSession();
   }
 
   /// A quiet nod at 7, 14, 30, 60, 100, 180 and 365 days.
@@ -360,6 +376,9 @@ class _FocusScreenState extends State<FocusScreen> {
       // same word twice, and the running/idle state it encoded is already
       // unmistakable from the timer directly below it.
       title: 'Focus',
+      // Pushed from a Today insight or the Trends screen it needs a way back;
+      // as the Focus tab there is nothing to go back to, so none is drawn.
+      leading: Navigator.canPop(context) ? AppHeader.backButton(context) : null,
       actions: [
         AppIconButton(
           icon: Symbols.spa_rounded,
@@ -416,9 +435,29 @@ class _FocusScreenState extends State<FocusScreen> {
     );
   }
 
+  /// Carries the Focus accent ACROSS the route boundary.
+  ///
+  /// A pushed route is a child of the Navigator, not of the widget that pushed
+  /// it, so the `AccentScope` this screen wraps its own body in (see `build`)
+  /// does not reach any of these seven destinations. `AccentScope.featureOf`
+  /// falls back to `FeatureAccent.brand` SILENTLY, so every component on them
+  /// that resolves its own swatch — `AppButton`, `StatTile`, `SegmentedToggle`,
+  /// `SectionHeader`, `EmptyState`, `AppListTile`, `ProgressRing`,
+  /// `AppBottomSheet` — rendered brand teal on a violet feature unless the call
+  /// site happened to pass `accent:` by hand.
+  ///
+  /// `health_browse_screen.dart:39-45` already does exactly this for every
+  /// tracker it opens; this is the same move for the Focus hub. Screens that
+  /// declare their own scope (`DetailedStatsScreen`,
+  /// `FocusRemindersSettingsScreen`) are unaffected — the inner scope wins —
+  /// and an explicit `accent:` still beats both, which is what keeps the
+  /// semantic greens on the tree shop.
   PageRoute _buildPageRoute(Widget page) {
     return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
+      pageBuilder: (context, animation, secondaryAnimation) => AccentScope(
+        feature: FeatureAccent.focus,
+        child: page,
+      ),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: animation,
@@ -761,10 +800,15 @@ class _FocusScreenState extends State<FocusScreen> {
     final intention = _focusService.pendingIntention;
     final parts = <String>[
       if (intention != null) '“$intention”',
-      if (_focusService.mode == FocusMode.pomodoro)
-        'Pomodoro ${_focusService.workMinutes}/${_focusService.shortBreakMinutes}'
-      else
-        'Single session',
+      // Every mode named. This was a two-way branch on `pomodoro`, so
+      // `FocusMode.flow` fell into the else and the collapsed setup row read
+      // "Single session" while the button under it said Flow.
+      switch (_focusService.mode) {
+        FocusMode.pomodoro =>
+          'Pomodoro ${_focusService.workMinutes}/${_focusService.shortBreakMinutes}',
+        FocusMode.flow => 'Flow',
+        FocusMode.single => 'Single session',
+      },
       _focusService.selectedActivity.name,
       if (_focusService.selectedSound == AmbientSoundType.none)
         'no sound'
@@ -1984,7 +2028,7 @@ class _FocusScreenState extends State<FocusScreen> {
               ),
               StatTile(
                 icon: Symbols.local_florist_rounded,
-                value: '${_focusService.todayPlants.length}',
+                value: '${_focusService.todayGrownPlants.length}',
                 label: 'Plants',
                 accent: ext.success,
               ),
@@ -2504,7 +2548,13 @@ class _FocusScreenState extends State<FocusScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Time remaining: ${_focusService.formattedTime}',
+              // `formattedTime` counts UP in Flow — `FocusService.isCountUp`,
+              // whose own comment says "Flow mode shows time SPENT, not time
+              // left. Same formatting, opposite meaning". Labelling elapsed
+              // time "Time remaining" told a user who had focused for 40
+              // minutes that they had 40 minutes left to go.
+              '${_focusService.isCountUp ? 'Time focused' : 'Time remaining'}: '
+              '${_focusService.formattedTime}',
               style: Theme.of(dialogCtx).textTheme.titleLarge?.copyWith(
                     color: ext.mark(ext.focus),
                   ),

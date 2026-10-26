@@ -203,7 +203,7 @@ void main() {
   group('dailyBriefing cross-signal', () {
     test('water behind + dose left → pairs the suggestion', () {
       final b = engine.dailyBriefing(
-        medsTaken: 1, medsTotal: 2, waterPct: 30, focusMinutes: 0,
+        medsOutstanding: 1, medsTotal: 2, waterPct: 30, focusMinutes: 0,
         remindersLeft: 0, hour: 14,
       );
       expect(b.toLowerCase(), contains('glass of water'));
@@ -212,7 +212,7 @@ void main() {
 
     test('unfinished doses in the evening is the top signal', () {
       final b = engine.dailyBriefing(
-        medsTaken: 0, medsTotal: 2, waterPct: 100, focusMinutes: 30,
+        medsOutstanding: 2, medsTotal: 2, waterPct: 100, focusMinutes: 30,
         remindersLeft: 1, hour: 20,
       );
       expect(b.toLowerCase(), contains('dose'));
@@ -221,7 +221,7 @@ void main() {
 
     test('all on track → positive close', () {
       final b = engine.dailyBriefing(
-        medsTaken: 2, medsTotal: 2, waterPct: 100, focusMinutes: 50,
+        medsOutstanding: 0, medsTotal: 2, waterPct: 100, focusMinutes: 50,
         remindersLeft: 0, hour: 15,
       );
       expect(b.toLowerCase(), contains('on track'));

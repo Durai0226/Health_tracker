@@ -67,22 +67,35 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
     }
   }
 
-  Future<void> _callDoctor(Doctor doctor) async {
-    if (doctor.phone == null || doctor.phone!.isEmpty) return;
-
-    final uri = Uri.parse('tel:${doctor.phone}');
+  /// Hand [uri] to the OS, and say so when nothing can take it.
+  ///
+  /// Both of these used to be a bare `if (await canLaunchUrl(uri))` with no
+  /// else, so a refusal was indistinguishable from a button that isn't wired
+  /// up: no launch, no error, nothing.
+  ///
+  /// That was not hypothetical for mail. Android 11+ package visibility hides
+  /// every app that is not declared in the manifest's `<queries>`, and only
+  /// the dialer was — so `canLaunchUrl('mailto:…')` answered false on a phone
+  /// with Gmail on it and the Email button did nothing at all. The manifest
+  /// now declares SENDTO/mailto as well; this is the other half, for the
+  /// device that genuinely has no mail app.
+  Future<void> _launchOrExplain(Uri uri, String whatIsMissing) async {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
+      return;
     }
+    if (!mounted) return;
+    context.toastError('No $whatIsMissing app is available on this device.');
+  }
+
+  Future<void> _callDoctor(Doctor doctor) async {
+    if (doctor.phone == null || doctor.phone!.isEmpty) return;
+    await _launchOrExplain(Uri.parse('tel:${doctor.phone}'), 'phone');
   }
 
   Future<void> _emailDoctor(Doctor doctor) async {
     if (doctor.email == null || doctor.email!.isEmpty) return;
-
-    final uri = Uri.parse('mailto:${doctor.email}');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+    await _launchOrExplain(Uri.parse('mailto:${doctor.email}'), 'email');
   }
 
   Future<void> _deleteDoctor(Doctor doctor) async {

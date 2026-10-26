@@ -10,6 +10,7 @@ import '../../services/condition_library_service.dart';
 import '../../services/condition_search_index.dart';
 import '../../services/medicine_storage_service.dart';
 import 'condition_detail_screen.dart';
+import '../../../../core/services/active_profile_service.dart';
 
 /// Browsable, searchable library of common-condition reference entries —
 /// general education only (see [ConditionInfo]'s doc). Grouped by category;
@@ -37,11 +38,14 @@ class _ConditionLibraryScreenState extends State<ConditionLibraryScreen> {
     _loadPersonalisation();
     // Adding a medicine should change what is pinned here without a restart.
     MedicineCleanStorageService.revision.addListener(_loadPersonalisation);
+    // Switching to a family member changes the list without writing a medicine.
+    ActiveProfileService().addListener(_loadPersonalisation);
   }
 
   @override
   void dispose() {
     MedicineCleanStorageService.revision.removeListener(_loadPersonalisation);
+    ActiveProfileService().removeListener(_loadPersonalisation);
     _searchController.dispose();
     super.dispose();
   }

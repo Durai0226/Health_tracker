@@ -58,9 +58,18 @@ class PredictionCard extends StatelessWidget {
 
     final days = p.daysUntilNextPeriod ?? 0;
     final String countdown;
-    if (p.state == CycleState.late) {
+    // Branch on the number of days, not on [CycleState].
+    //
+    // `CycleState.late` only starts once today is past the *window* end, while
+    // this line sits under the point estimate ("Next period · Tue, Sep 29").
+    // Between those two dates the old `days <= 0` arm caught every overdue day
+    // and called it "Due today": on device, on Sep 30, under a heading reading
+    // Sep 29, beside "Day 30 of ~28 days". The `late` state is a subset of
+    // `days < 0` — its window end is never before the predicted start — so one
+    // signed comparison covers both and keeps the existing wording.
+    if (days < 0) {
       countdown = '${days.abs()} day${days.abs() == 1 ? '' : 's'} late';
-    } else if (days <= 0) {
+    } else if (days == 0) {
       countdown = 'Due today';
     } else {
       countdown = 'in $days day${days == 1 ? '' : 's'}';

@@ -147,11 +147,13 @@ class ReminderAdherence {
   static StreakResult streak(
     Iterable<ReminderOccurrence> occurrences, {
     required DateTime today,
+    Set<DateTime> frozenDays = const {},
   }) =>
       StreakEngine.compute(
         completedDays:
             byDay(occurrences).where((d) => d.covered).map((d) => d.date).toSet(),
         today: today,
+        frozenDays: frozenDays,
       );
 
   /// Rows for a CSV or PDF export, oldest first.

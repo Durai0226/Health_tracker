@@ -111,15 +111,104 @@ void main() {
     });
   });
 
-  test('the fire-time gate compares the slot, not just the day', () {
-    // The gate lives in the alarm isolate and needs SharedPreferences plus a
-    // platform channel, so its decision is pinned by source — the repo already
-    // uses this idiom for alarm-isolate behaviour.
-    final src =
-        File('lib/core/services/background_alarm_service.dart').readAsStringSync();
-    expect(src, contains('schedule.getScheduledTimesForDate(doseInstant)'),
-        reason: 'isActiveOnDate alone cannot tell 07:00 from 10:00 on a '
-            'Saturday');
-    expect(src, contains('t.hour == slotHour && t.minute == slotMinute'));
+  /// The fire-time gate, asserted by BEHAVIOUR.
+  ///
+  /// This used to grep `background_alarm_service.dart` for two substrings,
+  /// because the gate was written inline inside the alarm isolate. It is now
+  /// [slotBelongsToDay], called by both fire-time gates, so the decision can
+  /// be exercised directly instead of pattern-matched.
+  group('the fire-time gate compares the slot, not just the day', () {
+    final saturday = DateTime(2026, 3, 7);
+    final wednesday = DateTime(2026, 3, 4);
+
+    test('premise: those dates really are a Saturday and a Wednesday', () {
+      expect(saturday.weekday, DateTime.saturday);
+      expect(wednesday.weekday, DateTime.wednesday);
+    });
+
+    final overridden = MedicineSchedule(
+      frequencyType: FrequencyType.onceDaily,
+      times: [ScheduledTime(hour: 7, minute: 0)],
+      weekendTimes: [ScheduledTime(hour: 10, minute: 0)],
+    );
+
+    test('the weekday slot is suppressed on Saturday', () {
+      expect(slotBelongsToDay(overridden, saturday, 7, 0), isFalse,
+          reason: 'isActiveOnDate alone cannot tell 07:00 from 10:00, and the '
+              '07:00 alarm is armed every day');
+    });
+
+    test('the weekend slot fires on Saturday', () {
+      expect(slotBelongsToDay(overridden, saturday, 10, 0), isTrue);
+    });
+
+    test('and the reverse on a weekday', () {
+      expect(slotBelongsToDay(overridden, wednesday, 7, 0), isTrue);
+      expect(slotBelongsToDay(overridden, wednesday, 10, 0), isFalse);
+    });
+
+    test('a medicine with no override is unaffected on either day', () {
+      final plain = MedicineSchedule(
+        frequencyType: FrequencyType.onceDaily,
+        times: [ScheduledTime(hour: 7, minute: 0)],
+      );
+      expect(slotBelongsToDay(plain, saturday, 7, 0), isTrue);
+      expect(slotBelongsToDay(plain, wednesday, 7, 0), isTrue);
+    });
+
+    test('it fails OPEN when the comparison cannot be made', () {
+      // No slot time on the alarm payload, and a schedule yielding nothing —
+      // never silently drop a dose over a comparison that could not be made.
+      expect(slotBelongsToDay(overridden, saturday, null, null), isTrue);
+      expect(slotBelongsToDay(overridden, saturday, 7, null), isTrue);
+    });
+
+    /// Both fire-time gates are actually wired to it.
+    ///
+    /// The behaviour above is tested directly, but the two CALL SITES live
+    /// inside the alarm isolate, which needs SharedPreferences and a platform
+    /// channel to reach — so removing the call from either gate leaves every
+    /// assertion above green. That is the gap this closes, and it is why the
+    /// original version of this test read the source at all.
+    ///
+    /// Comments are stripped first: this file explains the gate at length, and
+    /// a guard that its own prose satisfies is not a guard. (The registry
+    /// guard in `e2e_string_registry_test.dart` was found passing for exactly
+    /// that reason.)
+    test('both gates in the alarm isolate call it', () {
+      final src = File('lib/core/services/background_alarm_service.dart')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'^\s*//.*$', multiLine: true), '')
+          .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
+
+      final calls = RegExp(r'slotBelongsToDay\(').allMatches(src).length;
+      expect(calls, 2,
+          reason: 'one gate for the medicine slot alarm and one for the '
+              'reminder-window nudges. Found $calls. The nudge gate is the '
+              'one that shipped without it, so a windowed weekday dose nudged '
+              'three times across the weekend morning the user had moved the '
+              'dose away from.');
+    });
+
+    /// The window nudges had only the `isActiveOnDate` half of this gate.
+    ///
+    /// `_recomputeWindowNudges` builds nudges from the raw weekday
+    /// `schedule.times`, so a windowed 08:00 dose with a 10:00 weekend
+    /// override nudged at 08:00 / 08:30 / 09:00 on Saturday — three times, at
+    /// the hour the override existed to avoid — alongside the real 10:00
+    /// reminder. A Take from one of those wrote a log at an instant that is
+    /// not a Saturday slot, decrementing stock while Today still showed the
+    /// 10:00 dose pending.
+    test('a windowed weekday slot does not nudge across the weekend', () {
+      final windowed = MedicineSchedule(
+        frequencyType: FrequencyType.onceDaily,
+        times: [ScheduledTime(hour: 8, minute: 0, windowMinutes: 60)],
+        weekendTimes: [ScheduledTime(hour: 10, minute: 0)],
+      );
+      expect(slotBelongsToDay(windowed, saturday, 8, 0), isFalse,
+          reason: 'the 08:00 nudge chain must be suppressed on Saturday');
+      expect(slotBelongsToDay(windowed, wednesday, 8, 0), isTrue,
+          reason: 'and must still fire on a weekday');
+    });
   });
 }

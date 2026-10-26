@@ -15,6 +15,11 @@ import '../models/step_manual_entry.dart';
 import '../models/step_source.dart';
 import '../utils/step_format.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../../core/health/step_goal.dart';
+import '../../../core/utils/date_formats.dart';
+import '../../../core/services/vacation_mode.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/services/rest_day_store.dart';
 
 /// Reactive step-count service, mirroring the water service contract: all-static,
 /// a single [ValueNotifier] of the date-keyed day map for the UI to listen on,
@@ -163,6 +168,32 @@ class StepService {
 
   // ============ MANUAL PATH ============
 
+  /// How much of [steps] can actually be recorded against [day].
+  ///
+  /// A trim takes the day down to zero and stops there. That floor used to
+  /// exist only in [_recompute], which derives the total that gets *displayed*
+  /// — the entry list itself kept the whole over-subtraction. So a day trimmed
+  /// past zero showed 0 while carrying hidden debt, and the user's next
+  /// addition went into paying it off instead of onto the total.
+  ///
+  /// Found on device: a 4,200-step day trimmed by 7,500 read 0, and adding
+  /// 4,000 to it produced 700 — 3,300 steps that were never reported missing.
+  ///
+  /// Clamping the entry as it is written keeps the ledger and the display
+  /// telling the same story. The floor in [_recompute] stays as well, since
+  /// days stored before this change may already hold debt.
+  static int _recordableDelta(StepDailyData day, int steps) {
+    if (steps >= 0) return steps;
+    final raw = _rawSensorSteps(day);
+    // With no sensor there is nothing to trim from below zero; with one, at
+    // most the whole device reading.
+    final floor = raw == null ? 0 : -raw;
+    final current = day.manualEntries.fold<int>(0, (s, e) => s + e.steps);
+    // Never trim past the floor, never trim more than asked, never turn a
+    // trim into an addition (which is what a day already in debt would do).
+    return (floor - current).clamp(steps, 0);
+  }
+
   /// Add (or, with a negative [steps], trim) manual steps to today. Returns the
   /// updated day. Works with zero health permissions.
   static Future<StepDailyData> addManualSteps(int steps, {String? note}) async {
@@ -171,11 +202,15 @@ class StepService {
     final key = _dateKey(now);
     var day = _dailyNotifier.value[key] ?? _newDay(now);
 
+    final delta = _recordableDelta(day, steps);
+    // The day is already at zero and this was a trim — nothing to record.
+    if (delta == 0) return day;
+
     final entry = StepManualEntry(
       id: _uuid.v4(),
       dailyDataId: key,
       time: now,
-      steps: steps,
+      steps: delta,
       note: note,
       createdAt: now,
     );
@@ -216,12 +251,17 @@ class StepService {
 
     final key = _dateKey(day0);
     var day = _dailyNotifier.value[key] ?? _newDay(day0);
+
+    // Same floor as today's path — see [_recordableDelta].
+    final delta = _recordableDelta(day, steps);
+    if (delta == 0) return day;
+
     // Stamp the entry at noon of that day so it clearly belongs to it.
     final entry = StepManualEntry(
       id: _uuid.v4(),
       dailyDataId: key,
       time: DateTime(day0.year, day0.month, day0.day, 12),
-      steps: steps,
+      steps: delta,
       note: note,
       createdAt: clock.now(),
     );
@@ -241,9 +281,18 @@ class StepService {
 
   /// Remove a manual entry from today and re-tally.
   static Future<void> removeManualEntry(String entryId) async {
-    final key = _dateKey(clock.now());
-    final day = _dailyNotifier.value[key];
-    if (day == null) return;
+    // On whichever day holds it. This looked at today only, so an entry typed
+    // in for an earlier day (the sheet allows the last week) could never be
+    // taken back — including by the Undo on the confirmation that follows it.
+    final today = _dailyNotifier.value[_dateKey(clock.now())];
+    final holder = (today != null && today.manualEntries.any((e) => e.id == entryId))
+        ? today
+        : _dailyNotifier.value.values
+            .where((d) => d.manualEntries.any((e) => e.id == entryId))
+            .firstOrNull;
+    if (holder == null) return;
+    final key = _dateKey(holder.date);
+    final day = holder;
     final entries = day.manualEntries.where((e) => e.id != entryId).toList();
     if (entries.length == day.manualEntries.length) return; // nothing removed
 
@@ -371,6 +420,9 @@ class StepService {
   static StreakResult getStreakResult() => StreakEngine.compute(
         completedDays: _completedDays(),
         today: clock.now(),
+        // Days spent on vacation, or marked rest / unwell, are neither
+        // completions nor misses.
+        frozenDays: {...VacationMode.frozenDays(), ...RestDayStore.frozenDays()},
       );
 
   /// Consecutive (grace-forgiven) goal-reached days. Kept as an int for existing
@@ -378,6 +430,37 @@ class StepService {
   static int getCurrentStreak() => getStreakResult().current;
 
   // ============ EVENING REMINDER (opt-in) ============
+
+  /// When today's step count was last actually observed: a live sensor step, a
+  /// Health sync, or a manual entry. Null until one has happened this run — what
+  /// was read back from the database is not an observation of today.
+  static DateTime? _observedAt;
+
+  /// Re-plan the evening reminder from today's numbers.
+  ///
+  /// Nothing fires today once the goal is met, and a fresh count is quoted. With
+  /// no observation yet this run there is nothing to plan from — an empty
+  /// in-memory day would otherwise read as "8,000 to go" — so it leaves whatever
+  /// is armed alone, unless [rearmIfUnknown] asks for the plain generic reminder
+  /// (the screen that keeps the reminder alive across app opens). Safe to call
+  /// often; a no-op while the reminder is off.
+  static Future<bool> replanReminder({bool rearmIfUnknown = false}) async {
+    if (!getReminderEnabled()) return false;
+    final asOf = _observedAt;
+    final today = getTodayData();
+    final known = asOf != null && isSameCalendarDay(asOf, clock.now());
+    final resting = RestDayStore.kindToday() != null;
+    // A marked day needs no step numbers to know what to do.
+    if (!known && !resting && !rearmIfUnknown) return false;
+    return NotificationService().scheduleStepReminder(
+      enabled: true,
+      restToday: resting,
+      minuteOfDay: getReminderMinuteOfDay(),
+      stepsToday: known ? today.effectiveSteps : null,
+      goal: known ? today.goalSteps : null,
+      stepsAsOf: known ? asOf : null,
+    );
+  }
 
   static const _kReminderEnabled = 'steps.reminderEnabled';
   static const _kReminderMinute = 'steps.reminderMinute';
@@ -398,21 +481,29 @@ class StepService {
 
   // ============ ADAPTIVE GOAL ============
 
-  /// The goal to aim for today: the user's custom goal when set, otherwise the
-  /// last-14-day median effective steps nudged up ~10% and clamped 4,000–15,000.
-  /// Falls back to [_defaultGoal] until there's enough history.
-  static int computeAdaptiveGoal() {
+  /// The goal to aim for on [forDate] (default today): the user's custom goal
+  /// when set, otherwise [adaptiveGoalResult]'s weekday-aware figure.
+  static int computeAdaptiveGoal({DateTime? forDate}) {
     if (_profile.useCustomStepGoal &&
         _profile.customStepGoal != null &&
         _profile.customStepGoal! > 0) {
       return _profile.customStepGoal!;
     }
-    final samples = _recentEffectiveSamples(14);
-    if (samples.length < 3) return _defaultGoal;
-    final sorted = [...samples]..sort();
-    final median = _median(sorted);
-    final nudged = (median * 1.1).round();
-    return nudged.clamp(4000, 15000);
+    return adaptiveGoalResult(forDate: forDate).goal;
+  }
+
+  /// The adaptive goal and the reasoning behind it, ignoring any custom goal.
+  /// The settings screen previews this while the user is still deciding whether
+  /// to switch to a custom one.
+  ///
+  /// Blends the last-14-day median with the median of the same weekday as
+  /// [forDate] over the last eight weeks — see [AdaptiveStepGoal].
+  static StepGoalResult adaptiveGoalResult({DateTime? forDate}) {
+    final date = _dayOnly(forDate ?? clock.now());
+    return AdaptiveStepGoal.compute(
+      recent: _recentEffectiveSamples(14),
+      sameWeekday: _sameWeekdaySamples(date),
+    );
   }
 
   /// Plain-language "why this goal" explainer for the settings screen.
@@ -422,24 +513,51 @@ class StepService {
         _profile.customStepGoal! > 0) {
       return 'Using your custom goal of ${formatThousands(_profile.customStepGoal!)} steps.';
     }
-    final samples = _recentEffectiveSamples(14);
-    if (samples.length < 3) {
+    final r = adaptiveGoalResult();
+    if (r.recentMedian == null) {
       return 'Starting at ${formatThousands(_defaultGoal)} steps while we learn your routine. '
           'Log a few days and your goal adapts automatically.';
     }
-    final sorted = [...samples]..sort();
-    final median = _median(sorted);
-    final goal = computeAdaptiveGoal();
-    return 'Adapted from your ${samples.length}-day median of ${formatThousands(median)} steps, '
+    final today = clock.now();
+    final weekday = DateFormats.weekdayLong.format(today);
+    if (r.usedWeekday) {
+      return "Today's goal fits your ${weekday}s: it blends the median of your "
+          'last ${r.weekdayCount} ${weekday}s (${formatThousands(r.weekdayMedian!)} steps) '
+          'with your ${r.recentCount}-day median (${formatThousands(r.recentMedian!)}), '
+          'nudged up ~10% — kept within 4,000–15,000. '
+          "Today's goal: ${formatThousands(r.goal)}.";
+    }
+    return 'Adapted from your ${r.recentCount}-day median of ${formatThousands(r.recentMedian!)} steps, '
         'nudged up ~10% to keep you progressing — kept within 4,000–15,000. '
-        "Today's goal: ${formatThousands(goal)}.";
+        "Today's goal: ${formatThousands(r.goal)}.";
+  }
+
+  /// Effective steps on the days that fall on the same weekday as [date], over
+  /// the last [AdaptiveStepGoal.weekdayLookbackDays] days, [date]'s own day and
+  /// anything later excluded and days with no steps left out (as for the
+  /// 14-day samples).
+  static List<int> _sameWeekdaySamples(DateTime date) {
+    final out = <int>[];
+    final today = _dayOnly(clock.now());
+    // A rest or unwell day says nothing about what this person usually walks.
+    final resting = RestDayStore.frozenDays();
+    for (int i = 1; i <= AdaptiveStepGoal.weekdayLookbackDays; i++) {
+      final d = dayOffset(today, -i);
+      if (d.weekday != date.weekday) continue;
+      if (resting.contains(d)) continue;
+      final day = _dailyNotifier.value[_dateKey(d)];
+      if (day != null && day.effectiveSteps > 0) out.add(day.effectiveSteps);
+    }
+    return out;
   }
 
   static List<int> _recentEffectiveSamples(int days) {
     final out = <int>[];
     final today = _dayOnly(clock.now());
+    final resting = RestDayStore.frozenDays();
     for (int i = 1; i <= days; i++) {
       final date = dayOffset(today, -i);
+      if (resting.contains(date)) continue;
       final d = _dailyNotifier.value[_dateKey(date)];
       if (d != null && d.effectiveSteps > 0) out.add(d.effectiveSteps);
     }
@@ -718,10 +836,12 @@ class StepService {
     unawaited(stopLiveTracking(flush: false));
     _dailyNotifier.value = {};
     _profile = const HealthProfile();
+    _observedAt = null;
   }
 
   @visibleForTesting
   static Future<void> resetForTesting() async {
+    _observedAt = null;
     _isInitialized = false;
     _livePersistWindow = livePersistInterval;
     await stopLiveTracking(flush: false);
@@ -732,13 +852,17 @@ class StepService {
   // ============ INTERNALS ============
 
   static void _notifyListeners() {
+    // Every caller has just changed the numbers (a live step, a Health sync, a
+    // manual entry) — unlike `reloadFromDb`, which assigns the map directly
+    // because what it read may be hours old.
+    _observedAt = clock.now();
     _dailyNotifier.value = Map.from(_dailyNotifier.value);
   }
 
   static StepDailyData _newDay(DateTime date) => StepDailyData(
         id: _dateKey(date),
         date: _dayOnly(date),
-        goalSteps: computeAdaptiveGoal(),
+        goalSteps: computeAdaptiveGoal(forDate: date),
         createdAt: clock.now(),
       );
 
@@ -854,13 +978,6 @@ class StepService {
     } catch (e) {
       debugPrint('⚠️ persist health profile failed: $e');
     }
-  }
-
-  static int _median(List<int> sorted) {
-    if (sorted.isEmpty) return 0;
-    final mid = sorted.length ~/ 2;
-    if (sorted.length.isOdd) return sorted[mid];
-    return ((sorted[mid - 1] + sorted[mid]) / 2).round();
   }
 
   static String _dateKey(DateTime date) =>

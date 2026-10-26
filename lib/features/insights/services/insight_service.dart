@@ -18,6 +18,7 @@ import '../../steps/services/step_service.dart';
 import '../../sleep/services/sleep_service.dart';
 import '../../../core/utils/calendar_day.dart';
 import 'package:clock/clock.dart';
+import '../../medication/services/bp_sessions.dart';
 
 /// Gathers the top deterministic insight from every feature and returns them
 /// ranked (urgent → good) for the Insights hub / proactive nudges. Reads the
@@ -87,6 +88,9 @@ class InsightService {
         streakDays: WaterService.getCurrentStreak(),
         behind: pace.behind,
         deficitMl: pace.deficitMl,
+        // Already in hand — it is passed to CycleHydrationInsight.forPhase
+        // further down this same method.
+        isRestricted: WaterService.isFluidRestricted,
       ));
     } catch (_) {}
 
@@ -117,7 +121,10 @@ class InsightService {
 
     // Vitals — BP + glucose pattern detection.
     try {
-      final bp = allBp;
+      // One point per measurement session: two readings a minute apart are one
+      // measurement, so they must not count as two toward the 3-point gate or
+      // double-weight a trend.
+      final bp = BpSessions.collapse(allBp);
       out.add(InsightEngine.bloodPressure(bp
           .map((r) => BpPoint(at: r.takenAt, systolic: r.systolic, diastolic: r.diastolic))
           .toList()));
@@ -265,6 +272,7 @@ class InsightService {
         lastNightMinutes: lastNight,
         targetMinutes: SleepService.getSchedule().targetMinutes,
         debtMinutes: SleepService.sleepDebtMinutes(),
+        weightedDebt: SleepService.sleepDebt(),
         regularity: SleepService.regularityIndex(),
         loggedNights: loggedNights,
       ));
@@ -382,7 +390,7 @@ class InsightService {
 
         try {
           final bpByDay = <String, List<int>>{};
-          for (final r in allBp) {
+          for (final r in BpSessions.collapse(allBp)) {
             (bpByDay[_dayKey(r.takenAt)] ??= []).add(r.systolic);
           }
           final bpDays = <DayMetric>[];

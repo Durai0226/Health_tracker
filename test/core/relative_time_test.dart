@@ -30,7 +30,37 @@ void main() {
 
     test('yesterday is named, not counted', () {
       expect(at(const Duration(hours: 24)), 'yesterday');
-      expect(at(const Duration(hours: 47)), 'yesterday');
+      // Jun 10 15:00 less 38h is Jun 9 01:00 — still the day before.
+      expect(at(const Duration(hours: 38)), 'yesterday');
+    });
+
+    /// The unit is the one on a calendar, not a truncated duration.
+    ///
+    /// `Duration.inDays` rounds 47 hours down to 1, so this said "yesterday"
+    /// for a timestamp two dates back. Found on the Weight screen, which read
+    /// "Last logged · yesterday" above a history whose newest row was dated
+    /// Sep 28, on Sep 30. Five screens share this helper, so all five said it.
+    test('spans are counted in calendar days, not elapsed hours', () {
+      // Jun 10 15:00 less 47h is Jun 8 16:00: two dates back.
+      expect(at(const Duration(hours: 47)), '2 days ago');
+
+      // The exact reading and moment from the device.
+      expect(
+        RelativeTime.since(DateTime(2026, 9, 28, 22, 26),
+            now: DateTime(2026, 9, 30, 0, 10)),
+        '2 days ago',
+        reason: 'a reading dated the 28th, read on the 30th, is two days old '
+            'however few hours have elapsed between the two clock times',
+      );
+
+      // ...and the boundary still lands where a reader expects: one minute
+      // past midnight is already a new day.
+      expect(
+        RelativeTime.since(DateTime(2026, 9, 29, 23, 59),
+            now: DateTime(2026, 9, 30, 0, 1)),
+        '2 min ago',
+        reason: 'under an hour is still reported precisely, not as a day',
+      );
     });
 
     test('days up to a week', () {

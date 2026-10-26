@@ -14,6 +14,7 @@ import '../models/sleep_session.dart';
 import '../models/sleep_schedule.dart';
 import '../models/sleep_stage.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../../core/health/sleep_debt.dart';
 
 /// Reactive sleep tracking service — the single source of truth for sleep
 /// sessions and the schedule.
@@ -327,6 +328,27 @@ class SleepService {
     return _schedule.targetMinutes * logged.length - slept;
   }
 
+  /// Sleep debt over the last [SleepDebt.windowDays] nights with recent nights
+  /// weighted more, a surplus night paying back at most an hour, and a plan to
+  /// clear it. See [SleepDebt] for why, and for how it differs from
+  /// [sleepDebtMinutes], which stays the plain seven-night figure that the
+  /// "rest in credit" side reports honestly (a capped credit would understate
+  /// how far ahead someone is).
+  ///
+  /// Only LOGGED nights count: an unlogged night is missing data, not zero sleep.
+  static SleepDebtResult sleepDebt() {
+    final today = startOfDay(clock.now());
+    final nights = <LoggedNight>[];
+    for (var i = 0; i < SleepDebt.windowDays; i++) {
+      final s = _sessionsNotifier.value[_dateKey(dayOffset(today, -i))];
+      if (s != null && s.asleepMinutes > 0) {
+        nights.add((ageDays: i, asleepMinutes: s.asleepMinutes));
+      }
+    }
+    return SleepDebt.compute(
+        nights: nights, targetMinutes: _schedule.targetMinutes);
+  }
+
   /// How many of the last seven nights have a session. The denominator behind
   /// [sleepDebtMinutes], so any copy quoting a debt can quote this too rather
   /// than claiming "the last 7 nights".
@@ -427,6 +449,19 @@ class SleepService {
       debugPrint('⚠️ SleepService logManualSession persist failed: $e');
     }
     return session;
+  }
+
+  /// Put [session] back exactly as it was — the other half of an Undo on a
+  /// night that was replaced. Unlike [logManualSession] it re-scores nothing and
+  /// re-stamps nothing: the night returns as it left.
+  static Future<void> restoreSession(SleepSession session) async {
+    _sessionsNotifier.value[session.dateKey] = session;
+    _notify();
+    try {
+      await _dao.upsert(session.toCompanion());
+    } catch (e) {
+      debugPrint('⚠️ SleepService restoreSession failed: $e');
+    }
   }
 
   static Future<void> deleteSession(String id) async {

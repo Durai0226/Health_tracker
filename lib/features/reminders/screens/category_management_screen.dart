@@ -76,7 +76,10 @@ class CategoryManagementScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Dismissible(
         key: Key(category.id),
-        direction: DismissDirection.endToStart,
+        // The built-in categories can be edited but not swiped away.
+        direction: category.isStarter
+            ? DismissDirection.none
+            : DismissDirection.endToStart,
         confirmDismiss: (_) async {
           final ok = await AppBottomSheet.confirm(
             context,
@@ -118,11 +121,20 @@ class CategoryManagementScreen extends StatelessWidget {
                 child: Icon(category.iconObj, size: 22, color: category.colorObj),
               ),
               const SizedBox(width: AppSpacing.lg),
+              // The "Default" marker sits under the name, not beside it: a chip
+              // in this row pushed it past the card at 320pt and large text.
               Expanded(
-                child: Text(category.name, style: tt.titleLarge),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(category.name, style: tt.titleLarge),
+                    if (category.isStarter)
+                      Text('Default',
+                          style: tt.bodySmall
+                              ?.copyWith(color: ext.textSecondary)),
+                  ],
+                ),
               ),
-              if (category.isDefault)
-                AppChip(label: 'Default', accent: ext.reminders),
               const SizedBox(width: AppSpacing.sm),
               Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
             ],

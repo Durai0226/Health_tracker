@@ -344,6 +344,25 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
               label: 'Missed',
               accent: ext.error,
             ),
+            // Only when there ARE skipped doses.
+            //
+            // `_AdherenceSummary` has parsed `skipped` all along and nothing
+            // rendered it, while the headline right above counts it in the
+            // denominator. So "17 of 36 scheduled doses taken" sat above tiles
+            // reading 17 and 16, and the three the user had deliberately
+            // skipped were unaccounted for — on the screen whose whole job is
+            // explaining that percentage. The doctor-facing PDF has always
+            // listed them.
+            //
+            // Conditional so the ordinary case stays three tiles rather than
+            // carrying a permanent "0 Skipped".
+            if (_summary.skipped > 0)
+              StatTile(
+                icon: Symbols.next_plan_rounded,
+                value: '${_summary.skipped}',
+                label: 'Skipped',
+                accent: ext.warning,
+              ),
           ],
         ),
       ],

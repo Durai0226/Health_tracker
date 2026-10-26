@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/core/services/notification_service.dart';
+import 'package:tablet_remainder/features/medication/services/vitals_reminder_service.dart';
 
 /// The water-reminder sweep used to cancel 195 ids on every launch and every
 /// Save — one `cancel()` platform round trip per id in both the current and the
@@ -54,10 +55,24 @@ void main() {
     // 900001 and 900020-900023 sit inside the legacy water range but belong to
     // onboarding and the four vitals reminders. A sweep that took them deleted
     // a user's blood-pressure reminder.
-    const squatters = [900001, 900020, 900021, 900022, 900023];
+    const squatters = [900001, 900020, 900021, 900022, 900023, 900024];
 
     test('a leftover legacy water reminder is still cancelled', () {
       expect(NotificationService.staleWaterIdsIn([legacy + 5]), [legacy + 5]);
+    });
+
+    test('every VitalsReminderService id is protected, however many are added',
+        () {
+      // Derived, not listed: the hard-coded list above is what let a new
+      // vitals id be added without anyone remembering this block exists.
+      for (final spec in VitalsReminderService.all) {
+        if (spec.id < legacy || spec.id >= legacy + NotificationService.maxWaterReminders) {
+          continue; // outside the swept range, nothing to protect against
+        }
+        expect(NotificationService.staleWaterIdsIn([spec.id]), isEmpty,
+            reason: '${spec.prefKey} (${spec.id}) would be cancelled by a '
+                'water sweep');
+      }
     });
 
     for (final id in squatters) {

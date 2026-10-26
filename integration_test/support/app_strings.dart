@@ -54,7 +54,7 @@ const kLogWeight = 'Weight'; // log_something_sheet.dart:53
 const kLogMood = 'Mood'; // log_something_sheet.dart:55
 const kLogSteps = 'Steps'; // log_something_sheet.dart:57
 const kLogSleep = 'Sleep'; // log_something_sheet.dart:59
-const kLogPeriod = 'Period / mood'; // log_something_sheet.dart:61
+const kLogPeriod = 'Period'; // log_something_sheet.dart:61
 
 // ── Health hub ────────────────────────────────────────────────────────────
 const kHealthTrackers = 'Your trackers'; // health_browse_screen.dart:128

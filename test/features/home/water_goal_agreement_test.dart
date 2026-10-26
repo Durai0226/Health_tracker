@@ -44,9 +44,17 @@ void main() {
     WaterService.clearInMemory();
     await WaterService.resetForTesting();
     await WaterService.init();
+    // These tests are about the WEATHER half of the goal. The activity half
+    // reads the health store over a platform channel that never replies under
+    // fake async, so it is answered "no data" here (see
+    // activity_aware_goal_test for the activity half).
+    WaterService.activeKcalReaderForTesting = () async => null;
   });
 
-  tearDown(() async => db.close());
+  tearDown(() async {
+    WaterService.activeKcalReaderForTesting = null;
+    await db.close();
+  });
 
   /// Today's real DATE at midday. The date is kept because every service the
   /// dashboard reads resolves "today" through its own calendar reads; the time

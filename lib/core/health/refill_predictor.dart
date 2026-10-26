@@ -73,7 +73,22 @@ class RefillPredictor {
           ? doseAmounts[i]
           : 1.0;
       consumed += amt;
-      earliestInWindow ??= t;
+      // The EARLIEST by time, not the first one iteration happens to reach.
+      //
+      // This was `earliestInWindow ??= t`, which takes element zero — and
+      // `getLogsForMedicine` orders `desc(scheduledTime)`, so element zero is
+      // the NEWEST dose. `observedDays` then measured the gap from now back to
+      // the most recent dose, a few hours, which the `.clamp(1.0, …)` below
+      // rounded up to a single day. The average daily rate became the whole
+      // window's total: a once-daily Metformin with 16 taken doses in 21 days
+      // reported "~16.3/day · runs out in 2 days" against 39 pills — about
+      // seven weeks of real supply — and that figure drives the "Refill soon
+      // … reorder now to avoid a gap" card and the refill reminders.
+      //
+      // Taking the minimum makes it independent of how the caller sorted.
+      if (earliestInWindow == null || t.isBefore(earliestInWindow)) {
+        earliestInWindow = t;
+      }
     }
 
     // Average over the ACTUAL observed span (min 1 day), not the full window, so

@@ -191,6 +191,14 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
   /// ever logged is gone, while the data still sits on disk. [EnumJson] keeps the
   /// ordinals survivable, and the split `try`s keep one bad section from taking
   /// the others with it.
+  /// A stored volume, whatever type it survived as. Never throws: a preference
+  /// that cannot be read is worth a default, not the three fields after it.
+  static double _asDouble(Object? raw, double fallback) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String) return double.tryParse(raw) ?? fallback;
+    return fallback;
+  }
+
   Future<void> _loadData() async {
     final prefs = CleanStorageService.getAppPreferences();
 
@@ -198,7 +206,20 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
       _selectedMinutes = prefs['relaxationSelectedMinutes'] ?? 15;
       _selectedCategory = EnumJson.at(RelaxationCategory.values,
           prefs['relaxationSelectedCategory'], RelaxationCategory.deepFocus);
-      _volume = (prefs['relaxationVolume'] ?? 0.7).toDouble();
+      // Tolerant of the type this actually comes back as.
+      //
+      // `CleanStorageService.setAppPreference` has typed paths for `bool`,
+      // `int` and `Map`/`List`, and sends everything else through
+      // `value?.toString()`. A `double` has no typed path, so the volume
+      // persists as the STRING "0.7"; `loadAppPreferences` then only
+      // `jsonDecode`s values starting with `{` or `[`, so it stays a String.
+      // `.toDouble()` on it threw `NoSuchMethodError: Class 'String' has no
+      // instance method 'toDouble'` — and because this is the third of four
+      // assignments under one `try`, the throw skipped `_selectedMusic`
+      // below, so the track the user picked was silently dropped on every
+      // launch. In-session it worked: the write-through cache holds the real
+      // double, so only a restart showed it.
+      _volume = _asDouble(prefs['relaxationVolume'], 0.7);
       // atOrNull, not at: no track selected is a real state, and substituting the
       // first one would put a track the user never picked under the play button.
       _selectedMusic = EnumJson.atOrNull(
@@ -612,6 +633,19 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
     _audioService.stop();
     super.dispose();
   }
+
+  /// Forget the history, stats and choices after "Delete all data". A session
+  /// that is running is left to finish.
+  void resetAfterWipe() {
+    _sessions = [];
+    _stats = const RelaxationStats();
+    _selectedMinutes = 15;
+    _selectedCategory = RelaxationCategory.deepFocus;
+    _selectedMusic = null;
+    _volume = 0.7;
+    notifyListeners();
+  }
+
   /// Fresh-install state between tests. See FocusService.resetForTesting.
   ///
   /// `tick` is reset, never disposed — disposing a singleton's notifier

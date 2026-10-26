@@ -17,6 +17,13 @@ class TagService extends ChangeNotifier {
   List<FocusTag> get defaultTags => _tags.where((t) => t.isDefault).toList();
   List<FocusTag> get customTags => _tags.where((t) => !t.isDefault).toList();
 
+  /// Back to the starter tags, and forget which were used on which session, after
+  /// "Delete all data" — custom tags are the person's own words.
+  void resetAfterWipe() {
+    _tags = DefaultTags.getDefaultTags();
+    _sessionTags = {};
+  }
+
   Future<void> init() async {
     await _loadData();
     if (_tags.isEmpty) {

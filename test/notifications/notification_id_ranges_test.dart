@@ -46,12 +46,10 @@ void main() {
       final others = <int>{
         ...waterIds(),
         NotificationService.waterReminderBaseId,
-        VitalsReminderService.bp.id,
-        VitalsReminderService.glucose.id,
-        VitalsReminderService.weight.id,
-        VitalsReminderService.mood.id,
+        for (final spec in VitalsReminderService.all) spec.id,
         NotificationService.bedtimeReminderId,
         NotificationService.stepReminderId,
+        NotificationService.stepReminderTodayId,
         NotificationService.wakeAlarmId,
         NotificationService.focusDailyReminderId,
         // Medicine slots: one per minute of the day, plus their snooze twins.
@@ -104,10 +102,7 @@ void main() {
       // waking day) had their blood-pressure and blood-sugar reminders
       // replaced by water ones, and every reschedule sweep deleted them.
       final vitals = <int>{
-        VitalsReminderService.bp.id,
-        VitalsReminderService.glucose.id,
-        VitalsReminderService.weight.id,
-        VitalsReminderService.mood.id,
+        for (final spec in VitalsReminderService.all) spec.id,
       };
       expect(waterIds().toSet().intersection(vitals), isEmpty);
     });
@@ -122,6 +117,7 @@ void main() {
         waterIds().toSet().intersection({
           NotificationService.bedtimeReminderId,
           NotificationService.stepReminderId,
+          NotificationService.stepReminderTodayId,
           NotificationService.wakeAlarmId,
         }),
         isEmpty,
@@ -183,10 +179,7 @@ void main() {
       expect(focusIds.intersection(waterIds().toSet()), isEmpty);
       expect(
         focusIds.intersection({
-          VitalsReminderService.bp.id,
-          VitalsReminderService.glucose.id,
-          VitalsReminderService.weight.id,
-          VitalsReminderService.mood.id,
+          for (final spec in VitalsReminderService.all) spec.id,
           NotificationService.bedtimeReminderId,
           NotificationService.stepReminderId,
           NotificationService.wakeAlarmId,

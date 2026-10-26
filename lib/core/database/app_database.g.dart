@@ -2593,6 +2593,21 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _criticalAlertMeta = const VerificationMeta(
+    'criticalAlert',
+  );
+  @override
+  late final GeneratedColumn<bool> criticalAlert = GeneratedColumn<bool>(
+    'critical_alert',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("critical_alert" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _deletedAtMeta = const VerificationMeta(
     'deletedAt',
   );
@@ -2646,6 +2661,7 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     minimumConsecutiveDays,
     customFieldsJson,
     reminderEnabled,
+    criticalAlert,
     deletedAt,
   ];
   @override
@@ -2971,6 +2987,15 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
         ),
       );
     }
+    if (data.containsKey('critical_alert')) {
+      context.handle(
+        _criticalAlertMeta,
+        criticalAlert.isAcceptableOrUnknown(
+          data['critical_alert']!,
+          _criticalAlertMeta,
+        ),
+      );
+    }
     if (data.containsKey('deleted_at')) {
       context.handle(
         _deletedAtMeta,
@@ -3146,6 +3171,10 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
         DriftSqlType.bool,
         data['${effectivePrefix}reminder_enabled'],
       )!,
+      criticalAlert: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}critical_alert'],
+      )!,
       deletedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}deleted_at'],
@@ -3212,6 +3241,13 @@ class EnhancedMedicine extends DataClass
   /// toggle back ON.
   final bool reminderEnabled;
 
+  /// A "must-take" medicine: its dose keeps ringing until taken or skipped.
+  ///
+  /// `EnhancedMedicine.criticalAlert` existed, the form carried it forward, and
+  /// nothing stored it — the same gap `reminderEnabled` had. Defaults to false
+  /// so no existing medicine changes how it rings.
+  final bool criticalAlert;
+
   /// Soft-delete tombstone, so a deletion can propagate through LWW cloud sync
   /// instead of looking like "this device has not downloaded it yet".
   final DateTime? deletedAt;
@@ -3256,6 +3292,7 @@ class EnhancedMedicine extends DataClass
     this.minimumConsecutiveDays,
     this.customFieldsJson,
     required this.reminderEnabled,
+    required this.criticalAlert,
     this.deletedAt,
   });
   @override
@@ -3347,6 +3384,7 @@ class EnhancedMedicine extends DataClass
       map['custom_fields_json'] = Variable<String>(customFieldsJson);
     }
     map['reminder_enabled'] = Variable<bool>(reminderEnabled);
+    map['critical_alert'] = Variable<bool>(criticalAlert);
     if (!nullToAbsent || deletedAt != null) {
       map['deleted_at'] = Variable<DateTime>(deletedAt);
     }
@@ -3439,6 +3477,7 @@ class EnhancedMedicine extends DataClass
           ? const Value.absent()
           : Value(customFieldsJson),
       reminderEnabled: Value(reminderEnabled),
+      criticalAlert: Value(criticalAlert),
       deletedAt: deletedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(deletedAt),
@@ -3501,6 +3540,7 @@ class EnhancedMedicine extends DataClass
       ),
       customFieldsJson: serializer.fromJson<String?>(json['customFieldsJson']),
       reminderEnabled: serializer.fromJson<bool>(json['reminderEnabled']),
+      criticalAlert: serializer.fromJson<bool>(json['criticalAlert']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
     );
   }
@@ -3550,6 +3590,7 @@ class EnhancedMedicine extends DataClass
       'minimumConsecutiveDays': serializer.toJson<int?>(minimumConsecutiveDays),
       'customFieldsJson': serializer.toJson<String?>(customFieldsJson),
       'reminderEnabled': serializer.toJson<bool>(reminderEnabled),
+      'criticalAlert': serializer.toJson<bool>(criticalAlert),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
     };
   }
@@ -3595,6 +3636,7 @@ class EnhancedMedicine extends DataClass
     Value<int?> minimumConsecutiveDays = const Value.absent(),
     Value<String?> customFieldsJson = const Value.absent(),
     bool? reminderEnabled,
+    bool? criticalAlert,
     Value<DateTime?> deletedAt = const Value.absent(),
   }) => EnhancedMedicine(
     id: id ?? this.id,
@@ -3652,6 +3694,7 @@ class EnhancedMedicine extends DataClass
         ? customFieldsJson.value
         : this.customFieldsJson,
     reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+    criticalAlert: criticalAlert ?? this.criticalAlert,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
   );
   EnhancedMedicine copyWithCompanion(EnhancedMedicinesCompanion data) {
@@ -3750,6 +3793,9 @@ class EnhancedMedicine extends DataClass
       reminderEnabled: data.reminderEnabled.present
           ? data.reminderEnabled.value
           : this.reminderEnabled,
+      criticalAlert: data.criticalAlert.present
+          ? data.criticalAlert.value
+          : this.criticalAlert,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
     );
   }
@@ -3797,6 +3843,7 @@ class EnhancedMedicine extends DataClass
           ..write('minimumConsecutiveDays: $minimumConsecutiveDays, ')
           ..write('customFieldsJson: $customFieldsJson, ')
           ..write('reminderEnabled: $reminderEnabled, ')
+          ..write('criticalAlert: $criticalAlert, ')
           ..write('deletedAt: $deletedAt')
           ..write(')'))
         .toString();
@@ -3844,6 +3891,7 @@ class EnhancedMedicine extends DataClass
     minimumConsecutiveDays,
     customFieldsJson,
     reminderEnabled,
+    criticalAlert,
     deletedAt,
   ]);
   @override
@@ -3890,6 +3938,7 @@ class EnhancedMedicine extends DataClass
           other.minimumConsecutiveDays == this.minimumConsecutiveDays &&
           other.customFieldsJson == this.customFieldsJson &&
           other.reminderEnabled == this.reminderEnabled &&
+          other.criticalAlert == this.criticalAlert &&
           other.deletedAt == this.deletedAt);
 }
 
@@ -3934,6 +3983,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
   final Value<int?> minimumConsecutiveDays;
   final Value<String?> customFieldsJson;
   final Value<bool> reminderEnabled;
+  final Value<bool> criticalAlert;
   final Value<DateTime?> deletedAt;
   final Value<int> rowid;
   const EnhancedMedicinesCompanion({
@@ -3977,6 +4027,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     this.minimumConsecutiveDays = const Value.absent(),
     this.customFieldsJson = const Value.absent(),
     this.reminderEnabled = const Value.absent(),
+    this.criticalAlert = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -4021,6 +4072,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     this.minimumConsecutiveDays = const Value.absent(),
     this.customFieldsJson = const Value.absent(),
     this.reminderEnabled = const Value.absent(),
+    this.criticalAlert = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -4071,6 +4123,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Expression<int>? minimumConsecutiveDays,
     Expression<String>? customFieldsJson,
     Expression<bool>? reminderEnabled,
+    Expression<bool>? criticalAlert,
     Expression<DateTime>? deletedAt,
     Expression<int>? rowid,
   }) {
@@ -4119,6 +4172,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
         'minimum_consecutive_days': minimumConsecutiveDays,
       if (customFieldsJson != null) 'custom_fields_json': customFieldsJson,
       if (reminderEnabled != null) 'reminder_enabled': reminderEnabled,
+      if (criticalAlert != null) 'critical_alert': criticalAlert,
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -4165,6 +4219,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Value<int?>? minimumConsecutiveDays,
     Value<String?>? customFieldsJson,
     Value<bool>? reminderEnabled,
+    Value<bool>? criticalAlert,
     Value<DateTime?>? deletedAt,
     Value<int>? rowid,
   }) {
@@ -4211,6 +4266,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
           minimumConsecutiveDays ?? this.minimumConsecutiveDays,
       customFieldsJson: customFieldsJson ?? this.customFieldsJson,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      criticalAlert: criticalAlert ?? this.criticalAlert,
       deletedAt: deletedAt ?? this.deletedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -4347,6 +4403,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     if (reminderEnabled.present) {
       map['reminder_enabled'] = Variable<bool>(reminderEnabled.value);
     }
+    if (criticalAlert.present) {
+      map['critical_alert'] = Variable<bool>(criticalAlert.value);
+    }
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
@@ -4399,6 +4458,7 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
           ..write('minimumConsecutiveDays: $minimumConsecutiveDays, ')
           ..write('customFieldsJson: $customFieldsJson, ')
           ..write('reminderEnabled: $reminderEnabled, ')
+          ..write('criticalAlert: $criticalAlert, ')
           ..write('deletedAt: $deletedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -32343,6 +32403,7 @@ typedef $$EnhancedMedicinesTableCreateCompanionBuilder =
       Value<int?> minimumConsecutiveDays,
       Value<String?> customFieldsJson,
       Value<bool> reminderEnabled,
+      Value<bool> criticalAlert,
       Value<DateTime?> deletedAt,
       Value<int> rowid,
     });
@@ -32388,6 +32449,7 @@ typedef $$EnhancedMedicinesTableUpdateCompanionBuilder =
       Value<int?> minimumConsecutiveDays,
       Value<String?> customFieldsJson,
       Value<bool> reminderEnabled,
+      Value<bool> criticalAlert,
       Value<DateTime?> deletedAt,
       Value<int> rowid,
     });
@@ -32598,6 +32660,11 @@ class $$EnhancedMedicinesTableFilterComposer
 
   ColumnFilters<bool> get reminderEnabled => $composableBuilder(
     column: $table.reminderEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get criticalAlert => $composableBuilder(
+    column: $table.criticalAlert,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -32816,6 +32883,11 @@ class $$EnhancedMedicinesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get criticalAlert => $composableBuilder(
+    column: $table.criticalAlert,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
@@ -33005,6 +33077,11 @@ class $$EnhancedMedicinesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get criticalAlert => $composableBuilder(
+    column: $table.criticalAlert,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 }
@@ -33089,6 +33166,7 @@ class $$EnhancedMedicinesTableTableManager
                 Value<int?> minimumConsecutiveDays = const Value.absent(),
                 Value<String?> customFieldsJson = const Value.absent(),
                 Value<bool> reminderEnabled = const Value.absent(),
+                Value<bool> criticalAlert = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EnhancedMedicinesCompanion(
@@ -33132,6 +33210,7 @@ class $$EnhancedMedicinesTableTableManager
                 minimumConsecutiveDays: minimumConsecutiveDays,
                 customFieldsJson: customFieldsJson,
                 reminderEnabled: reminderEnabled,
+                criticalAlert: criticalAlert,
                 deletedAt: deletedAt,
                 rowid: rowid,
               ),
@@ -33177,6 +33256,7 @@ class $$EnhancedMedicinesTableTableManager
                 Value<int?> minimumConsecutiveDays = const Value.absent(),
                 Value<String?> customFieldsJson = const Value.absent(),
                 Value<bool> reminderEnabled = const Value.absent(),
+                Value<bool> criticalAlert = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EnhancedMedicinesCompanion.insert(
@@ -33220,6 +33300,7 @@ class $$EnhancedMedicinesTableTableManager
                 minimumConsecutiveDays: minimumConsecutiveDays,
                 customFieldsJson: customFieldsJson,
                 reminderEnabled: reminderEnabled,
+                criticalAlert: criticalAlert,
                 deletedAt: deletedAt,
                 rowid: rowid,
               ),

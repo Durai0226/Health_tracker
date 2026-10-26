@@ -1,6 +1,7 @@
 import 'insight.dart';
 import 'focus_insights.dart';
 import 'vitals_pattern_detector.dart';
+import 'sleep_debt.dart';
 
 /// Cross-feature "one big thing" engine. Pure Dart: each builder turns a
 /// feature's already-computed stats (from AdherenceAnalyzer, StreakEngine,
@@ -88,7 +89,25 @@ class InsightEngine {
     int streakDays = 0,
     bool behind = false,
     int deficitMl = 0,
+    bool isRestricted = false,
   }) {
+    // Under a prescribed fluid ceiling `goalMl` is a LIMIT, not a target, and
+    // all three branches below read it as a target: `water_behind` tells the
+    // user a drink "catches you up", `water_goal` congratulates them for
+    // reaching it, and `water_streak` congratulates them for doing so
+    // repeatedly. `CoachText.hydrationTip` already refuses all three, and says
+    // why — "there is nothing to congratulate about approaching a limit".
+    //
+    // These feed `ProactiveNudge`, which puts the top attention-severity
+    // insight on the Home screen, so this is the banner a dialysis or heart
+    // failure patient would see. `InsightService.gatherAll` already holds
+    // `WaterService.isFluidRestricted` — it passes it to
+    // `CycleHydrationInsight.forPhase` a few lines below this call and simply
+    // never passed it here.
+    //
+    // Suppressing is the whole fix: the water screen still shows the correct
+    // limit-aware copy through `hydrationTip`. No nudge beats a harmful one.
+    if (isRestricted) return null;
     // Guard: don't cry "behind" from an empty day. With zero intake logged the
     // intraday pacer reports the whole day's expected amount as a deficit
     // (e.g. "1821ml behind"), which reads as alarming nonsense before the user
@@ -253,6 +272,11 @@ class InsightEngine {
     int debtMinutes = 0,
     double regularity = 1,
     int loggedNights = 0,
+
+    /// When given, the "behind on rest" note is judged and worded from this
+    /// weighted 14-night debt instead of [debtMinutes]. The credit side still
+    /// uses [debtMinutes], which is an honest plain total.
+    SleepDebtResult? weightedDebt,
   }) {
     if (lastNightMinutes > 0 && lastNightMinutes < targetMinutes - 60) {
       return Insight(
@@ -269,16 +293,27 @@ class InsightEngine {
     }
     // Sleep balance — a gentle, non-guilt note (never "debt"). Symmetric: we
     // also acknowledge a surplus so it's never only a downside frame.
-    if (debtMinutes >= 180 && loggedNights >= 4) {
+    final behind = weightedDebt;
+    if (behind != null
+        ? (behind.debtMinutes >= 180 && behind.nights >= SleepDebt.minNights)
+        : (debtMinutes >= 180 && loggedNights >= 4)) {
       return Insight(
         id: 'sleep_balance_low',
         feature: InsightFeature.sleep,
         severity: InsightSeverity.info,
         title: 'A little behind on rest',
-        detail:
-            "You're about ${(debtMinutes / 60).round()}h under your target across the week — an earlier night or two helps you get ahead.",
-        metric: '${(debtMinutes / 60).round()}h under',
-        why: 'What you slept over your logged nights vs your nightly target.',
+        detail: behind != null
+            ? behind.behindLine
+            : "You're about ${(debtMinutes / 60).round()}h under your target across the week — an earlier night or two helps you get ahead.",
+        metric: behind != null
+            ? '${_hm(behind.debtMinutes)} behind'
+            : '${(debtMinutes / 60).round()}h under',
+        why: behind != null
+            ? 'Your nightly target minus what you slept, over your logged '
+                'nights in the last 14. Recent nights count more, one long '
+                'night pays back at most an hour, and nights you did not log '
+                'are not counted.'
+            : 'What you slept over your logged nights vs your nightly target.',
         rank: 34,
       );
     }

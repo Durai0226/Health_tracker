@@ -13,7 +13,21 @@ import 'app_colors_ext.dart';
 /// ```
 ///
 /// Widgets read it via `AccentScope.swatchOf(context)` (or `.featureOf`).
-class AccentScope extends InheritedWidget {
+///
+/// An [InheritedTheme], not a plain `InheritedWidget`, so the accent survives a
+/// route boundary that the widget tree does not cross.
+///
+/// `showModalBottomSheet` and `showDialog` mount their content on a NEW route,
+/// a child of the Navigator rather than of the caller. Flutter carries styling
+/// across that gap with `InheritedTheme.capture`
+/// (`bottom_sheet.dart:1320`, `dialog.dart:1640`) — and that captures
+/// `InheritedTheme` subclasses ONLY. While this was a plain `InheritedWidget`
+/// every sheet and dialog in the app silently lost the accent and
+/// [featureOf] fell back to [FeatureAccent.brand], so a sheet opened from a
+/// pink screen drew teal rows under its own pink header. Call sites worked
+/// around it one at a time by passing `accent:` by hand; the ones that forgot
+/// are the whole family of defects this fixes at the source.
+class AccentScope extends InheritedTheme {
   final FeatureAccent feature;
 
   const AccentScope({
@@ -21,6 +35,11 @@ class AccentScope extends InheritedWidget {
     required this.feature,
     required super.child,
   });
+
+  /// How `InheritedTheme.capture` re-applies this scope inside the new route.
+  @override
+  Widget wrap(BuildContext context, Widget child) =>
+      AccentScope(feature: feature, child: child);
 
   static FeatureAccent featureOf(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<AccentScope>();

@@ -58,15 +58,28 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
   Future<void> _restoreBackup() async {
     if (_busy) return;
 
+    // Describes a MERGE, because that is what happens.
+    //
+    // `BackupService.restoreBackup` calls
+    // `CleanStorageService.restoreBackup(decoded)` and leaves `clearExisting`
+    // at its default of false — the service's own comment calls it
+    // "Restore (merge)". Nothing already on the device is deleted.
+    //
+    // The old copy said "This overwrites current data... Any changes not in
+    // the backup will be lost", labelled the button "Restore & overwrite" and
+    // marked it `isDangerous`. That is a warning about data loss that cannot
+    // happen, on the one screen a user reaches when they are already anxious
+    // about their data — and the kind of warning that stops someone restoring
+    // at all.
     final confirmed = await ConfirmationBottomSheet.show(
       context: context,
       title: 'Restore backup?',
       message:
-          'This overwrites current data with the backup file. Any changes not '
-          'in the backup will be lost.',
-      confirmText: 'Restore & overwrite',
+          'This merges the backup into what is already on this device. '
+          'Nothing here is deleted; where the backup has the same entry, its '
+          'copy is used.',
+      confirmText: 'Restore',
       icon: Symbols.restore_page_rounded,
-      isDangerous: true,
     );
     if (confirmed != true || !mounted) return;
 
@@ -154,8 +167,8 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                           icon: Symbols.restore_page_rounded,
                           title: 'Restore data',
                           subtitle:
-                              'Import data from a backup file. This overwrites '
-                              'current data.',
+                              'Import data from a backup file. Merges with '
+                              'what is already here — nothing is deleted.',
                           swatch: ext.warning,
                         ),
                         const SizedBox(height: AppSpacing.md),

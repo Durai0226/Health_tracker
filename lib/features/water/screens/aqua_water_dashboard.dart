@@ -33,6 +33,7 @@ import 'hydration_profile_screen.dart';
 import 'caffeine_insights_screen.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../../core/health/usual_drink.dart';
 
 /// Modern Aqua Water Dashboard
 /// Features: Animated droplet, dynamic beverage gradients, glassmorphism
@@ -124,6 +125,26 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   /// everyone, which is why it is only rendered when it has something to say.
   MedicationHydrationAdvice _medAdvice = MedicationHydrationAdvice.empty;
 
+  /// What the person usually drinks around now, or null until they have a habit.
+  UsualDrink? _usual;
+
+  /// Worked out from the last 30 days of logs, so it changes with the time of
+  /// day each time the screen reloads.
+  UsualDrink? _usualDrinkNow(DateTime now) {
+    final from = DateTime(now.year, now.month, now.day - UsualDrinkCalc.lookbackDays);
+    return UsualDrinkCalc.at(now, [
+      for (final day in WaterService.getDataForRange(from, now))
+        for (final l in day.logs)
+          PastDrink(
+            time: l.time,
+            beverageId: l.beverageId,
+            name: l.beverageName,
+            amountMl: l.amountMl,
+            isAlcoholic: l.isAlcoholic,
+          ),
+    ]);
+  }
+
   Future<void> _loadData({bool showLoading = false}) async {
     if (showLoading) setState(() => _isLoading = true);
 
@@ -162,6 +183,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           _todayData = todayData;
           _dailyGoal = goal;
           _weekData = weekData;
+          _usual = _usualDrinkNow(now);
           _isLoading = false;
         });
       }
@@ -296,6 +318,13 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
       context,
       MaterialPageRoute(builder: (_) => const CustomCupCreatorScreen()),
     ).then((_) => _loadData());
+  }
+
+  /// Selects a beverage from the inline chip strip, without a round trip
+  /// through the picker sheet.
+  void _selectBeverage(String id) {
+    if (id == _selectedBeverageId) return;
+    setState(() => _selectedBeverageId = id);
   }
 
   void _showBeverageSelector() async {
@@ -525,6 +554,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           goalMl: todayData.dailyGoalMl,
                           onTap: _showBeverageSelector,
                         ),
+                        _buildActivityGoalNote(),
 
                         const SizedBox(height: AquaTheme.spacingXL),
                         
@@ -539,9 +569,11 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           selectedBeverageId: _selectedBeverageId,
                           onQuickAdd: _addWater,
                           onCustomAmount: _showCustomAmountDialog,
-                          onBeverageSelect: _showBeverageSelector,
+                          onBeverageSelect: _selectBeverage,
                           onContainerAdd: _addWaterFromContainer,
                           onCreateCup: _openCupCreator,
+                          usual: _usual,
+                          onUsual: (u) => _addWater(u.amountMl, u.beverageId),
                         ),
                         
                         const SizedBox(height: AquaTheme.spacingXL),
@@ -741,14 +773,35 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
                             child: ShaderMask(
+                              // `srcIn`, because `ShaderMask` defaults to
+                              // `BlendMode.modulate` — which MULTIPLIES the
+                              // shader by the child rather than replacing it.
+                              //
+                              // The comment here used to claim the mask
+                              // replaced the text colour outright. It did not,
+                              // and the colour underneath is
+                              // `fillFg(water)` = `isDark ? s.on : white`. In
+                              // light mode that is white, and white x gradient
+                              // is the gradient, so this looked right and
+                              // shipped. In dark mode it is the swatch's dark
+                              // `on` colour, and dark x gradient collapsed the
+                              // title to rgb(0,27,38) on a rgb(12,67,80)
+                              // header — 1.63:1, measured on device. The word
+                              // "Hydration" was very nearly invisible.
+                              //
+                              // With `srcIn` the shader really does supply the
+                              // colour and the child only supplies coverage,
+                              // so the claim below is finally true.
+                              blendMode: BlendMode.srcIn,
                               shaderCallback: (bounds) => beverage.gradient.createShader(bounds),
                               child: Text(
                                 'Hydration',
                                 maxLines: 1,
                                 softWrap: false,
-                                // The ShaderMask replaces this colour outright;
-                                // it only has to be fully opaque. `fillFg` says
-                                // that without a raw literal.
+                                // Only this glyph's ALPHA is used now; the
+                                // colour is the shader's. It still has to be
+                                // fully opaque, which is what `fillFg` says
+                                // without a raw literal.
                                 style: tt.displayMedium?.copyWith(
                                     color: AppColorsExt.of(context)
                                         .fillFg(AppColorsExt.of(context).water)),
@@ -1065,6 +1118,26 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   /// Framed as "worth knowing", with the drug named and the source given —
   /// never as an instruction. The decision belongs to the user and whoever
   /// prescribed the drug.
+  /// "Goal +350 ml today for 420 active kcal" — why today's number is higher
+  /// than usual. Only when the goal was actually raised for measured activity;
+  /// absent otherwise, so a quiet day shows nothing.
+  Widget _buildActivityGoalNote() {
+    final note = WaterService.todayActivityGoalNote;
+    if (note == null) return const SizedBox.shrink();
+    final ext = AppColorsExt.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: AquaTheme.spacingS),
+      child: Text(
+        'Goal +${note.deltaMl} ml today for ${note.activeKcal} active kcal',
+        textAlign: TextAlign.center,
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: ext.textSecondary),
+      ),
+    );
+  }
+
   Widget _buildMedicationAdvice() {
     if (_medAdvice.isEmpty) return const SizedBox.shrink();
     final ext = AppColorsExt.of(context);

@@ -9,6 +9,14 @@ import 'package:tablet_remainder/core/utils/date_formats.dart';
 /// the user sees. These tests pin each shared formatter's output against a
 /// freshly-constructed formatter with the original pattern, so a wrong mapping
 /// (e.g. 'MMM d' where 'MMM d, h:mm a' was meant) fails loudly.
+///
+/// What it CANNOT catch is a wrong pattern, because the reference is that same
+/// pattern: the comparison is a tautology the moment the pattern itself is the
+/// bug. `'EEE, MMM d at h:mm a'` renders "Sat, Mar 14 AMt 8:05 AM" — intl
+/// reads the `a` of "at" as its am/pm character — and this file asserted that
+/// against itself and passed. Formatters carrying a literal word are pinned to
+/// their expected STRING instead; `date_formats_literals_test.dart` checks the
+/// whole set for meridiem leakage.
 void main() {
   final d = DateTime(2026, 3, 14, 8, 5);
   final dPm = DateTime(2026, 11, 2, 20, 45);
@@ -30,7 +38,11 @@ void main() {
     same('EEE, MMM d', DateFormats.weekdayDayMonthShort.format(d));
     same('EEEE, MMMM d', DateFormats.weekdayDayMonthLong.format(d));
     same('EEEE, MMM d', DateFormats.weekdayDayMonthMedium.format(d));
-    same('EEE, MMM d at h:mm a', DateFormats.weekdayDayMonthTime.format(d));
+    // NOT `same(...)` — see the note on the limits of this technique above.
+    // The original pattern left "at" unquoted, so the round-trip compared one
+    // wrong rendering against another and passed while the app printed
+    // "Sat, Mar 14 AMt 8:05 AM".
+    expect(DateFormats.weekdayDayMonthTime.format(d), 'Sat, Mar 14 at 8:05 AM');
     same('MMM d · h:mm a', DateFormats.dayMonthDotTime.format(d));
     same('d', DateFormats.dayOfMonth.format(d));
     same('M/d', DateFormats.numericShort.format(d));

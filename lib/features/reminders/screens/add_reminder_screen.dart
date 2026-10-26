@@ -18,6 +18,8 @@ import '../services/reminder_alarm.dart';
 import 'package:clock/clock.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../services/reminder_pause_until.dart';
+import '../widgets/reminder_end_pause_controls.dart';
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminder;
@@ -79,6 +81,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   String? _recurrenceRule;
   DateTime? _endsAt;
   int? _occurrenceLimit;
+
+  /// Paused keeps the reminder but arms nothing; [_pauseUntil] is the day it
+  /// comes back on by itself (kept in `ReminderPauseUntil`, not on the row).
+  bool _paused = false;
+  DateTime? _pauseUntil;
   ReminderEscalation _escalation = ReminderEscalation.standard;
 
   /// "You usually do this at 08:40 — move it?"
@@ -140,6 +147,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _recurrenceRule = widget.reminder!.recurrenceRule;
       _endsAt = widget.reminder!.endsAt;
       _occurrenceLimit = widget.reminder!.occurrenceLimit;
+      _paused = widget.reminder!.isPaused;
+      _pauseUntil = ReminderPauseUntil.get(widget.reminder!.id);
       _escalation = widget.reminder!.escalation;
       _loadTimeSuggestion();
       _snoozeDuration = widget.reminder?.snoozeDuration ?? 5;
@@ -351,6 +360,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         rolledForward = true;
       }
 
+      // An end before the first reminder means it would never fire at all.
+      final end = _endsAt;
+      if (end != null && !end.isAfter(scheduledDateTime)) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          context.toastWarning(
+              'The end date has to come after the first reminder.');
+        }
+        return;
+      }
+
       final reminderId = widget.reminder?.id ?? const Uuid().v4();
 
       final reminder = Reminder(
@@ -375,7 +395,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         recurrenceRule: _recurrenceRule,
         endsAt: _endsAt,
         occurrenceLimit: _occurrenceLimit,
-        isPaused: widget.reminder?.isPaused ?? false,
+        isPaused: _paused,
         escalation: _escalation,
       );
 
@@ -384,6 +404,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       // fixed blocks other features own.
       final saved =
           await CleanStorageService.saveReminderAllocatingId(reminder);
+
+      // The resume date goes with the pause: kept only while it is paused.
+      if (_paused && _pauseUntil != null) {
+        await ReminderPauseUntil.set(saved.id, _pauseUntil!);
+      } else {
+        await ReminderPauseUntil.clear(saved.id);
+      }
 
       // Through the ReminderAlarm seam, not straight at NotificationService.
       //
@@ -620,6 +647,47 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                             _buildDayToggle('S', 6),
                             _buildDayToggle('S', 7),
                           ],
+                        ),
+                      ],
+                      // ---- Ends ---- (only a repeating reminder has an end)
+                      if (_repeatType != RepeatType.none ||
+                          _recurrenceRule != null) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        SectionHeader(
+                          title: 'Ends',
+                          icon: Symbols.event_busy_rounded,
+                          accent: rem,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        ReminderEndsControl(
+                          endsAt: _endsAt,
+                          limit: _occurrenceLimit,
+                          firstDate: DateTime(_selectedDate.year,
+                              _selectedDate.month, _selectedDate.day),
+                          accent: rem,
+                          onChanged: (e, l) => setState(() {
+                            _endsAt = e;
+                            _occurrenceLimit = l;
+                          }),
+                        ),
+                      ],
+                      // ---- Pause ---- (an existing reminder only)
+                      if (widget.reminder != null) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        SectionHeader(
+                          title: 'Pause',
+                          icon: Symbols.pause_circle_rounded,
+                          accent: rem,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        ReminderPauseControl(
+                          paused: _paused,
+                          until: _pauseUntil,
+                          accent: rem,
+                          onChanged: (p, u) => setState(() {
+                            _paused = p;
+                            _pauseUntil = p ? u : null;
+                          }),
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl),

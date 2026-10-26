@@ -228,6 +228,38 @@ class WeeklyRecapScreen extends StatefulWidget {
 
   /// The cover card, for a hand-built recap.
   ///
+  /// Static and `@visibleForTesting` for the same reason [cardsFor] and
+  /// [coverFor] are: this card's whole defect was WHAT IT SAYS, and the screen
+  /// itself builds its own recap so a test cannot hand it one.
+  @visibleForTesting
+  static Widget emptyWeekFor(BuildContext context, AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // NOT "Nothing logged this week".
+          //
+          // This card renders only on `cards.isEmpty && r.hero.hasValue` —
+          // the comment at that branch says it outright: "Only when something
+          // WAS logged but nothing is chartable". So the one state that
+          // reaches this card is the state in which the old title was false,
+          // and it sat under a cover reporting the hero figure that proved it
+          // false.
+          Text('Nothing to chart this week',
+              style: tt.titleMedium?.copyWith(
+                  color: ext.textPrimary, fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'What you logged is saved — there just is not enough of any one '
+            'tracker yet to draw a week.',
+            style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Static and `@visibleForTesting` for the same reason [cardsFor] is: this
   /// repo's widget tests run against an empty in-memory database, so pumping
   /// the screen only ever exercises the *empty* week and any assertion about a
@@ -357,6 +389,19 @@ class WeeklyRecapScreen extends StatefulWidget {
         'Your week is below, day by day.',
       ];
     }
+    // "No cards" is not the same as "nothing logged".
+    //
+    // `_cards` builds rows for adherence, water, steps, sleep, focus, blood
+    // pressure, glucose and weight — but NOT for `bundle.period`, which the
+    // bundle carries and `WeeklyRecap.isEmptyWeek` counts as data. So a week
+    // in which somebody logged their cycle and nothing else reached this line
+    // and was told "Nothing logged yet this week."
+    if (!r.isEmptyWeek) {
+      return const [
+        'Nothing to chart this week yet.',
+        'What you logged is saved — a few more entries and these fill in.',
+      ];
+    }
     // The reassurance belongs here rather than in a second card saying the same
     // thing differently. Somebody returning after a gap wants to know their
     // history survived.
@@ -399,7 +444,16 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
     _future = WeeklyRecapService.load();
   }
 
-  void _reload() => setState(() => _future = WeeklyRecapService.load());
+  /// A BLOCK, not `setState(() => _future = …)`: an arrow closure returns the
+  /// Future it assigns, and `setState` asserts in debug that its callback
+  /// returned nothing. Release builds skip the assert, so Retry worked on a
+  /// phone and threw on every debug run — and a debug run is the only place it
+  /// could ever have been noticed.
+  void _reload() {
+    setState(() {
+      _future = WeeklyRecapService.load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -531,28 +585,8 @@ class _WeeklyRecapScreenState extends State<WeeklyRecapScreen> {
     );
   }
 
-  Widget _emptyWeek(AppColorsExt ext) {
-    final tt = Theme.of(context).textTheme;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Nothing logged this week',
-              style: tt.titleMedium?.copyWith(
-                  color: ext.textPrimary, fontWeight: FontWeight.w700)),
-          const SizedBox(height: AppSpacing.sm),
-          // "You stopped" and "you are new" are different messages, and the old
-          // screen said the second to both. This one says the history is still
-          // there, which is what somebody returning after a gap wants to know.
-          Text(
-            'Your history is still here. Log anything and this week starts '
-            'filling in.',
-            style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _emptyWeek(AppColorsExt ext) =>
+      WeeklyRecapScreen.emptyWeekFor(context, ext);
 
   // ------------------------------------------------------------------- CARDS
 }

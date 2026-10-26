@@ -101,7 +101,9 @@ class _DiaryScreenState extends State<DiaryScreen> {
 
   Widget _entryRow(AppColorsExt ext, DiaryEntry e) {
     final tt = Theme.of(context).textTheme;
-    final preview = e.body.trim();
+    final heading = e.displayTitle;
+    // Only what the heading hasn't already said — see [DiaryEntry.previewBody].
+    final preview = e.previewBody;
     return Dismissible(
       key: ValueKey(e.id),
       direction: DismissDirection.endToStart,
@@ -122,16 +124,18 @@ class _DiaryScreenState extends State<DiaryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(e.displayTitle,
+              Text(heading,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: tt.titleMedium
                       ?.copyWith(color: ext.textPrimary, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(preview,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+              if (preview.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(preview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+              ],
               const SizedBox(height: 6),
               Text(DateFormat('MMM d, y · h:mm a').format(e.entryAt),
                   style: tt.bodySmall?.copyWith(color: ext.textTertiary)),

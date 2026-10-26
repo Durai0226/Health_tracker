@@ -41,12 +41,29 @@ void main() {
         m.group(1)!: m.group(2)!,
     };
 
+    /// [source] with its comments removed.
+    ///
+    /// The corpus is searched for `'literal'`, so a *comment* naming the old
+    /// string satisfies the check and the rename goes unnoticed. That is not
+    /// hypothetical: this project's convention is to record what a string used
+    /// to be right where it changed, so "// 'Period', not 'Period / mood'."
+    /// sits directly above the renamed tile — and kept the stale registry
+    /// entry passing. Only code counts as evidence that a string is still on
+    /// screen.
+    ///
+    /// Deliberately naive about `//` and `/* */` inside string literals: a
+    /// URL in a UI string would lose its tail, which can only ever make this
+    /// check stricter, never laxer.
+    String stripComments(String source) => source
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+        .replaceAll(RegExp(r'^\s*//.*$', multiLine: true), '');
+
     final buf = StringBuffer();
     for (final f in Directory('$root/lib')
         .listSync(recursive: true)
         .whereType<File>()
         .where((f) => f.path.endsWith('.dart'))) {
-      buf.writeln(f.readAsStringSync());
+      buf.writeln(stripComments(f.readAsStringSync()));
     }
     libCorpus = buf.toString();
   });

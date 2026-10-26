@@ -3,15 +3,33 @@ import '../../../core/health/insight.dart';
 import '../../../core/health/nudge_scheduler.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../services/insight_destinations.dart';
 import '../services/insight_service.dart';
 import 'trends_dashboard_screen.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 /// A self-managing, frequency-capped proactive nudge for the Home screen. Loads
 /// the top actionable insight, shows it only if the frequency cap allows and it
 /// hasn't been dismissed, and records show/dismiss state in app preferences.
 /// Renders nothing (zero height) when there's nothing to nudge.
 class ProactiveNudge extends StatefulWidget {
-  const ProactiveNudge({super.key, this.onOpenTrends});
+  const ProactiveNudge({
+    super.key,
+    this.onOpenTrends,
+    this.refreshTick = 0,
+    this.loadInsights,
+  });
+
+  /// Bumped by the screen when the user pulls to refresh. A nudge that was
+  /// worked out when the tab first opened stayed exactly as it was however many
+  /// times the person refreshed, so it could go on describing a problem they had
+  /// since fixed.
+  final int refreshTick;
+
+  /// Where the insights come from. Defaults to [InsightService.gatherAll]; a
+  /// test supplies its own.
+  @visibleForTesting
+  final Future<List<Insight>> Function()? loadInsights;
 
   /// Switch to the Trends TAB, rather than pushing a second copy of it.
   ///
@@ -53,16 +71,7 @@ class _ProactiveNudgeState extends State<ProactiveNudge> {
       final now = DateTime.now();
       if (!NudgeScheduler.shouldShow(recentShows: shows, now: now)) return;
 
-      final dismissed = _readList(_dismissedKey).toSet();
-      final insights = await InsightService.gatherAll();
-      Insight? top;
-      for (final i in insights) {
-        if (i.severity.index < InsightSeverity.attention.index) break; // ranked
-        if (!dismissed.contains(i.id)) {
-          top = i;
-          break;
-        }
-      }
+      final top = await _topInsight();
       if (top == null || !mounted) return;
 
       // Record the show.
@@ -74,6 +83,40 @@ class _ProactiveNudgeState extends State<ProactiveNudge> {
               .map((t) => t.toIso8601String())
               .toList());
       setState(() => _insight = top);
+    } catch (_) {/* silent — nudges are best-effort */}
+  }
+
+  /// The most important insight worth interrupting for that has not been
+  /// dismissed, or null.
+  Future<Insight?> _topInsight() async {
+    final dismissed = _readList(_dismissedKey).toSet();
+    final insights = await (widget.loadInsights ?? InsightService.gatherAll)();
+    for (final i in insights) {
+      if (i.severity.index < InsightSeverity.attention.index) break; // ranked
+      if (!dismissed.contains(i.id)) return i;
+    }
+    return null;
+  }
+
+  @override
+  void didUpdateWidget(covariant ProactiveNudge old) {
+    super.didUpdateWidget(old);
+    if (old.refreshTick != widget.refreshTick) _refresh();
+  }
+
+  /// Pull to refresh. A nudge that is up is re-checked against the numbers as
+  /// they are now: swapped for a different top insight, or taken down when what
+  /// it described no longer holds. None of that records a new "show", so
+  /// refreshing cannot be used to use up the weekly allowance — and a refresh
+  /// with no nudge up goes through the same limits as opening the tab.
+  Future<void> _refresh() async {
+    try {
+      if (_insight == null) {
+        await _maybeLoad();
+        return;
+      }
+      final top = await _topInsight();
+      if (mounted) setState(() => _insight = top);
     } catch (_) {/* silent — nudges are best-effort */}
   }
 
@@ -100,7 +143,8 @@ class _ProactiveNudgeState extends State<ProactiveNudge> {
       child: ProactiveNudgeBanner(
         insight: _insight!,
         onDismiss: _dismiss,
-        onTap: widget.onOpenTrends ??
+        onTap: InsightDestinations.of(context, _insight!) ??
+            widget.onOpenTrends ??
             () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const TrendsDashboardScreen())),
       ),

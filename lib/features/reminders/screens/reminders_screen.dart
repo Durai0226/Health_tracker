@@ -1,4 +1,6 @@
 import 'package:clock/clock.dart';
+import '../../../core/database/app_database.dart' show ReminderOccurrence;
+import '../../../core/utils/calendar_day.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -14,6 +16,11 @@ import 'add_reminder_screen.dart';
 import '../services/reminder_adherence.dart';
 import '../services/reminder_service.dart';
 import '../services/reminder_alarm.dart';
+import '../services/reminder_pause_until.dart';
+import '../widgets/vacation_sheet.dart';
+import '../utils/reminder_later.dart';
+import '../services/reminder_tune_up.dart';
+import '../services/reminder_tune_up_service.dart';
 
 /// The occurrence a tick belongs to — the most recent one at or before [now].
 ///
@@ -120,6 +127,77 @@ class _RemindersScreenState extends State<RemindersScreen> {
       ..sort((a, b) => a.scheduledTime.compareTo(b.scheduledTime));
     setState(() => _reminders = all);
     _loadAdherence();
+    _loadTuneUps(all);
+  }
+
+  /// One suggestion per repeating reminder at most, from its own history.
+  Map<String, TuneUp> _tuneUps = const {};
+
+  Future<void> _loadTuneUps(List<Reminder> all) async {
+    final found = await ReminderTuneUpService.forAll(all);
+    if (mounted) setState(() => _tuneUps = found);
+  }
+
+  /// Apply a suggestion the user accepted, and say exactly what changed, with a
+  /// way back.
+  Future<void> _applyTuneUp(Reminder r, TuneUp t) async {
+    final changed = await ReminderTuneUpService.apply(r, t);
+    _load();
+    if (!mounted) return;
+    final what = switch (t.kind) {
+      TuneUpKind.move =>
+        'Moved to ${TimeOfDay.fromDateTime(changed.scheduledTime).format(context)}',
+      TuneUpKind.louder => 'Made louder',
+      TuneUpKind.pause => 'Paused',
+    };
+    context.toastSuccess(
+      what,
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await ReminderTuneUpService.saveAndRearm(r);
+          _load();
+        },
+      ),
+    );
+  }
+
+  Future<void> _dismissTuneUp(Reminder r, TuneUp t) async {
+    await ReminderTuneUpService.dismiss(r.id, t.kind);
+    _load();
+  }
+
+  /// The suggestion strip under a card: what the history says, the one-tap fix,
+  /// and "not now".
+  Widget _tuneUpRow(AppColorsExt ext, Reminder r, TuneUp t, TextTheme tt) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Container(
+        padding: const EdgeInsets.only(left: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: ext.reminders.container,
+          borderRadius: AppRadius.brSm,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(t.message,
+                  style: tt.bodySmall?.copyWith(color: ext.reminders.onContainer)),
+            ),
+            TextButton(
+              onPressed: () => _applyTuneUp(r, t),
+              child: Text(t.actionLabel),
+            ),
+            IconButton(
+              tooltip: 'Not now',
+              onPressed: () => _dismissTuneUp(r, t),
+              icon: Icon(Symbols.close_rounded,
+                  size: 18, color: ext.reminders.onContainer),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   ReminderAdherenceSummary? _adherence;
@@ -403,6 +481,17 @@ class _RemindersScreenState extends State<RemindersScreen> {
     return null;
   }
 
+  /// Start or end vacation mode. The list is reloaded afterwards: ending a
+  /// vacation re-arms reminders and starting one disarms them, and the banner
+  /// has to follow.
+  Future<void> _openVacation() async {
+    final changed = await VacationSheet.show(context);
+    if (changed && mounted) {
+      setState(() {});
+      _load();
+    }
+  }
+
   Future<void> _edit(Reminder r) async {
     await Navigator.push(
         context, MaterialPageRoute(builder: (_) => AddReminderScreen(reminder: r)));
@@ -565,6 +654,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
   }
 
   Future<void> _delete(Reminder r) async {
+    // Keep the history so Undo can put it back: a delete that could not be
+    // undone is the reason this used to be a swipe nobody could take back.
+    final history = await CleanStorageService.getReminderOccurrences(r.id);
     await CleanStorageService.deleteReminder(r.id);
     // The occurrence rows go with it. They are history, so this is the ONLY
     // place that clears them — never as routine cleanup.
@@ -581,6 +673,62 @@ class _RemindersScreenState extends State<RemindersScreen> {
       repeatType: r.repeatType,
       customDays: r.customDays,
     );
+    _load();
+    if (!mounted) return;
+    context.toastSuccess(
+      'Deleted "${r.title}"',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () => _undoDelete(r, history),
+      ),
+    );
+  }
+
+  /// Bring back a deleted reminder: the row (same id, so it keeps the alarm slot
+  /// it was armed under), its occurrence history, and its alarm.
+  Future<void> _undoDelete(Reminder r, List<ReminderOccurrence> history) async {
+    await CleanStorageService.saveReminder(r);
+    await CleanStorageService.restoreReminderOccurrences(history);
+    final request = ReminderArmRequest.forNextOccurrence(r);
+    if (request != null) {
+      try {
+        await const NotificationReminderAlarm().arm(request);
+      } catch (e) {
+        debugPrint('⚠️ Re-arming "${r.title}" after Undo failed: $e');
+      }
+    }
+    _load();
+  }
+
+  /// "Later": move a one-off to this evening, or tomorrow morning if the day is
+  /// nearly over, with a way back.
+  Future<void> _later(Reminder r) async {
+    final now = clock.now();
+    final target = ReminderLater.from(now);
+    await _reschedule(r, to: target);
+    if (!mounted) return;
+    context.toastSuccess(
+      'Moved to ${ReminderLater.label(now)}',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () => _reschedule(r, to: r.scheduledTime),
+      ),
+    );
+  }
+
+  Future<void> _reschedule(Reminder r, {required DateTime to}) async {
+    final moved = r.copyWith(scheduledTime: to, isCompleted: false);
+    await CleanStorageService.saveReminder(moved);
+    final request = ReminderArmRequest.forNextOccurrence(moved);
+    if (request != null) {
+      // Best-effort, like the tick: the move is saved, and the next launch's
+      // re-arm pass recovers anything the OS refused.
+      try {
+        await const NotificationReminderAlarm().arm(request);
+      } catch (e) {
+        debugPrint('⚠️ Re-arming "${moved.title}" after a move failed: $e');
+      }
+    }
     _load();
   }
 
@@ -605,6 +753,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
               title: 'Reminders',
               actions: [
                 IconButton(
+                  icon: Icon(Symbols.beach_access_rounded,
+                      color: ext.mark(ext.reminders)),
+                  tooltip: 'Vacation mode',
+                  onPressed: _openVacation,
+                ),
+                IconButton(
                   icon: Icon(Symbols.auto_awesome_rounded,
                       color: ext.mark(ext.reminders)),
                   tooltip: 'Smart Add',
@@ -612,6 +766,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 ),
               ],
             ),
+            VacationBanner(onTap: _openVacation),
             if (_reminders.isNotEmpty) _adherenceCard(ext),
             if (_reminders.isNotEmpty) _searchRow(ext),
             if (_reminders.isNotEmpty) _filterBar(ext),
@@ -745,7 +900,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
   List<Widget> _buildGroups(AppColorsExt ext) {
     final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
+    // `dayOffset`, not `add(Duration(days: 1))`. A civil day containing a
+    // fall-back transition is 25 hours, so adding 24 to local midnight lands
+    // on the SAME date — `DateTime(2026,11,1).add(Duration(days:1))` is
+    // 2026-11-01 23:00 under TZ=America/New_York. The "Tomorrow" bucket then
+    // matched today, and tomorrow's reminders were filed under "Upcoming".
+    final tomorrow = dayOffset(today, 1);
 
     final overdue = <Reminder>[];
     final dueToday = <Reminder>[];
@@ -894,6 +1054,23 @@ class _RemindersScreenState extends State<RemindersScreen> {
       items.add(_metaItem(
           Symbols.repeat_rounded, _repeatLabel(r.repeatType), ext, tt));
     }
+    if (r.isPaused) {
+      final back = ReminderPauseUntil.get(r.id);
+      items.add(_metaItem(
+          Symbols.pause_circle_rounded,
+          back == null
+              ? 'Paused'
+              : 'Paused until ${DateFormats.dayMonth.format(back)}',
+          ext,
+          tt));
+    }
+    if (r.endsAt != null) {
+      items.add(_metaItem(Symbols.event_busy_rounded,
+          'Ends ${DateFormats.dayMonth.format(r.endsAt!)}', ext, tt));
+    } else if (r.occurrenceLimit != null) {
+      items.add(_metaItem(
+          Symbols.event_busy_rounded, '${r.occurrenceLimit}×', ext, tt));
+    }
     if (r.note != null && r.note!.trim().isNotEmpty) {
       items.add(_metaItem(Symbols.sticky_note_2_rounded, null, ext, tt));
     }
@@ -920,19 +1097,44 @@ class _RemindersScreenState extends State<RemindersScreen> {
         ? DateFormats.time.format(r.scheduledTime)
         : DateFormats.dayMonthDotTime.format(r.scheduledTime);
 
+    // Swipe right finishes it, swipe left puts it off. Delete moved to the menu
+    // on the card, where it has an Undo: swipe-to-delete sat on the same gesture
+    // people reach for to tick things off.
+    //
+    // "Later" is offered for a one-off that is still open. A repeating
+    // reminder's time IS its schedule, so moving it would move every future
+    // occurrence; that one is edited, not swiped.
+    final canLater = r.repeatType == RepeatType.none &&
+        r.recurrenceRule == null &&
+        !r.isCompleted;
     return Dismissible(
       key: Key(r.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        decoration: BoxDecoration(
-          color: ext.error.container,
-          borderRadius: AppRadius.brCard,
-        ),
-        child: Icon(Symbols.delete_rounded, color: ext.error.onContainer),
-      ),
-      onDismissed: (_) => _delete(r),
+      direction:
+          canLater ? DismissDirection.horizontal : DismissDirection.startToEnd,
+      background: _swipeBackground(ext,
+          alignment: Alignment.centerLeft,
+          color: ext.success.container,
+          fg: ext.success.onContainer,
+          icon: Symbols.check_rounded,
+          label: r.isCompleted ? 'Not done' : 'Done'),
+      secondaryBackground: canLater
+          ? _swipeBackground(ext,
+              alignment: Alignment.centerRight,
+              color: ext.reminders.container,
+              fg: ext.reminders.onContainer,
+              icon: Symbols.schedule_rounded,
+              label: 'Later')
+          : null,
+      // Never removes the card itself: ticking or moving updates the list, and
+      // the card returns to wherever it now belongs.
+      confirmDismiss: (dir) async {
+        if (dir == DismissDirection.startToEnd) {
+          await _toggle(r);
+        } else {
+          await _later(r);
+        }
+        return false;
+      },
       child: AppCard(
         onTap: () => _edit(r),
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1033,12 +1235,84 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       ],
                     ),
                     ..._cardMeta(ext, r, tt),
+                    if (_tuneUps[r.id] != null)
+                      _tuneUpRow(ext, r, _tuneUps[r.id]!, tt),
                   ],
+                ),
+              ),
+              // A light trigger, not a PopupMenuButton: that is dozens of elements
+              // per card, and the list is the most element-hungry screen the
+              // build-cost budget measures. Same visible "more" affordance,
+              // and the 44pt target, for a handful of elements.
+              Semantics(
+                button: true,
+                label: 'More options for ${r.title}',
+                excludeSemantics: true,
+                child: InkResponse(
+                  onTap: () => _openCardMenu(r),
+                  radius: 22,
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Icon(Symbols.more_vert_rounded,
+                        color: ext.textTertiary),
+                  ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// The card's "more" menu. Delete lives here (not on a swipe) and is undoable.
+  Future<void> _openCardMenu(Reminder r) async {
+    final ext = AppColorsExt.of(context);
+    final choice = await AppBottomSheet.show<String>(
+      context,
+      title: r.title,
+      icon: Symbols.notifications_rounded,
+      accent: ext.reminders,
+      builder: (ctx) => AppListTile(
+        icon: Symbols.delete_rounded,
+        title: 'Delete',
+        iconColor: ext.error.strong,
+        titleColor: ext.error.strong,
+        onTap: () => Navigator.of(ctx).pop('delete'),
+      ),
+    );
+    if (choice == 'delete') await _delete(r);
+  }
+
+  /// The strip revealed under a card as it is swiped.
+  Widget _swipeBackground(
+    AppColorsExt ext, {
+    required Alignment alignment,
+    required Color color,
+    required Color fg,
+    required IconData icon,
+    required String label,
+  }) {
+    final left = alignment == Alignment.centerLeft;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(color: color, borderRadius: AppRadius.brCard),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: left
+            ? [
+                Icon(icon, color: fg),
+                const SizedBox(width: 8),
+                Text(label, style: tt.labelLarge?.copyWith(color: fg)),
+              ]
+            : [
+                Text(label, style: tt.labelLarge?.copyWith(color: fg)),
+                const SizedBox(width: 8),
+                Icon(icon, color: fg),
+              ],
       ),
     );
   }

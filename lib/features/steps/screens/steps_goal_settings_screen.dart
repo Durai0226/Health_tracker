@@ -52,45 +52,18 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
     super.dispose();
   }
 
-  int _previewGoal() {
-    if (_useCustom) return _customGoal;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final samples = <int>[];
-    for (int i = 1; i <= 14; i++) {
-      final d = StepService.getDataForDate(today.subtract(Duration(days: i)));
-      if (d != null && d.effectiveSteps > 0) samples.add(d.effectiveSteps);
-    }
-    if (samples.length < 3) return 8000;
-    samples.sort();
-    final mid = samples.length ~/ 2;
-    final median = samples.length.isOdd
-        ? samples[mid]
-        : ((samples[mid - 1] + samples[mid]) / 2).round();
-    final nudged = (median * 1.1).round();
-    if (nudged < 4000) return 4000;
-    if (nudged > 15000) return 15000;
-    return nudged;
-  }
+  /// The goal shown while editing. The adaptive half comes from the service,
+  /// not a copy of its formula: this screen used to carry its own, which would
+  /// have drifted the moment the real one learned about weekdays.
+  int _previewGoal() =>
+      _useCustom ? _customGoal : StepService.adaptiveGoalResult().goal;
 
   String _explanation() {
     if (_useCustom) {
       return 'Your goal is fixed at ${formatThousands(_customGoal)} steps until you switch '
           'back to Adaptive.';
     }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    var tracked = 0;
-    for (int i = 1; i <= 14; i++) {
-      final d = StepService.getDataForDate(today.subtract(Duration(days: i)));
-      if (d != null && d.effectiveSteps > 0) tracked++;
-    }
-    if (tracked < 3) {
-      return 'Starting at 8,000 steps while we learn your routine. Log a few '
-          'days and your goal adapts automatically.';
-    }
-    return 'Adapted from your last-14-day median, nudged up ~10% to keep you '
-        'progressing — kept within 4,000–15,000. It shifts as your routine does.';
+    return StepService.goalExplanation();
   }
 
   void _bumpCustom(int delta) {

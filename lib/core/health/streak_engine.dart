@@ -47,12 +47,22 @@ class StreakEngine {
   /// [completedDays] is the set of days the goal was met (time component
   /// ignored). [graceDaysPerWeek] misses are forgiven within any trailing
   /// 7-day span before the streak breaks.
+  ///
+  /// [frozenDays] are days that do not exist as far as the streak is concerned
+  /// — a holiday. A frozen day neither extends the streak (it was not
+  /// completed) nor breaks it (it was not missed), and it does not spend a
+  /// grace day or advance the "trailing week", so a fortnight away costs the
+  /// streak nothing and gives it nothing. A day that was both frozen and
+  /// completed still counts as completed: someone who logged water on holiday
+  /// keeps the credit.
   static StreakResult compute({
     required Set<DateTime> completedDays,
     required DateTime today,
     int graceDaysPerWeek = 1,
+    Set<DateTime> frozenDays = const {},
   }) {
     final done = completedDays.map(_d).toSet();
+    final frozen = {for (final f in frozenDays.map(_d)) if (!done.contains(f)) f};
     final t = _d(today);
 
     // Current streak: walk backward from today (or yesterday if today's not yet
@@ -60,6 +70,12 @@ class StreakEngine {
     // walk past the earliest recorded day (so we don't "forgive" prehistory).
     final earliest = done.isEmpty ? t : _earliest(done);
     var cursor = done.contains(t) ? t : _prevDay(t);
+    // Days at the very front that are frozen belong to the holiday, not to the
+    // streak: step over them so "today is frozen and not yet done" is not read
+    // as a miss.
+    while (frozen.contains(cursor) && !cursor.isBefore(earliest)) {
+      cursor = _prevDay(cursor);
+    }
     var current = 0;
     var usedGrace = false;
     var graceLeft = graceDaysPerWeek;
@@ -74,6 +90,11 @@ class StreakEngine {
     var capturedThisWeek = false;
 
     while (!cursor.isBefore(earliest)) {
+      if (frozen.contains(cursor)) {
+        // Not a step of the week, not a miss, not a completion.
+        cursor = _prevDay(cursor);
+        continue;
+      }
       if (stepsInWeek == 7) {
         if (!capturedThisWeek) {
           gracesThisWeek = graceLeft;
@@ -100,9 +121,10 @@ class StreakEngine {
     if (!capturedThisWeek) gracesThisWeek = graceLeft;
 
     // Longest streak across history, applying the same weekly-grace rule.
-    final longest = _longest(done, graceDaysPerWeek);
+    final longest = _longest(done, graceDaysPerWeek, frozen);
 
-    final atRisk = !done.contains(t) && current > 0;
+    // A frozen today cannot put the streak at risk: nothing is owed.
+    final atRisk = !done.contains(t) && !frozen.contains(t) && current > 0;
 
     return StreakResult(
       current: current,
@@ -114,13 +136,15 @@ class StreakEngine {
     );
   }
 
-  static int _longest(Set<DateTime> done, int gracePerWeek) {
+  static int _longest(
+      Set<DateTime> done, int gracePerWeek, Set<DateTime> frozen) {
     if (done.isEmpty) return 0;
     final sorted = done.toList()..sort();
     final first = sorted.first;
     final last = sorted.last;
     var best = 0, run = 0, graceLeft = gracePerWeek, stepsInWeek = 0;
     for (var day = first; !day.isAfter(last); day = _nextDay(day)) {
+      if (frozen.contains(day)) continue; // a holiday day is not a day
       if (stepsInWeek == 7) {
         stepsInWeek = 0;
         graceLeft = gracePerWeek;

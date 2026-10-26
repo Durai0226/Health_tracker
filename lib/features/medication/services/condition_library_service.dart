@@ -46,6 +46,8 @@ import 'condition_taxonomy.dart';
 import 'drug_name_catalog.dart';
 import 'medicine_storage_service.dart';
 import 'vitals_storage_service.dart';
+import 'bp_sessions.dart';
+import '../../../core/services/active_profile_service.dart';
 
 /// Why a medicine appears on a condition page.
 ///
@@ -176,6 +178,15 @@ abstract final class ConditionLibraryService {
       ConditionLibraryPersonalisation.empty;
   static int _cachedRevision = -1;
 
+  /// Whose medicines [_cache] was built from. The medicine list is per profile,
+  /// but `revision` only ticks on a medicine WRITE — switching to a family
+  /// member changes the list without writing anything, so a cache keyed on the
+  /// revision alone kept showing the previous person's medicines.
+  static String? _cachedProfile;
+
+  static String _profileKey() =>
+      ActiveProfileService().activeDependentId ?? ActiveProfileService.selfProfileId;
+
   /// The personalisation layer. Never throws.
   ///
   /// Cached against `MedicineCleanStorageService.revision`, which already ticks
@@ -185,7 +196,13 @@ abstract final class ConditionLibraryService {
     bool force = false,
   }) async {
     final revision = MedicineCleanStorageService.revision.value;
-    if (!force && _cachedRevision == revision && _cache.loaded) return _cache;
+    final profile = _profileKey();
+    if (!force &&
+        _cachedRevision == revision &&
+        _cachedProfile == profile &&
+        _cache.loaded) {
+      return _cache;
+    }
 
     try {
       await DrugNameCatalog.ensureLoaded();
@@ -196,11 +213,13 @@ abstract final class ConditionLibraryService {
           await MedicineCleanStorageService.getAllMedicines(includeArchived: true);
       _cache = buildFrom(medicines);
       _cachedRevision = revision;
+      _cachedProfile = profile;
     } catch (e) {
       debugPrint('ConditionLibraryService.load failed: $e');
       // Degrade to the plain encyclopedia rather than an error screen.
       _cache = const ConditionLibraryPersonalisation(loaded: true);
       _cachedRevision = revision;
+      _cachedProfile = profile;
     }
     return _cache;
   }
@@ -355,7 +374,8 @@ abstract final class ConditionLibraryService {
       if (conditionId == 'hypertension') {
         final rows = await VitalsStorageService.getBpForRange(from, to);
         if (rows.isEmpty) return const ConditionReadings(count: 0);
-        final latest = rows.reduce((a, b) => a.takenAt.isAfter(b.takenAt) ? a : b);
+        // The latest MEASUREMENT: a two-reading session shows its average.
+        final latest = BpSessions.collapse(rows).first;
         return ConditionReadings(
           count: rows.length,
           latestAt: latest.takenAt,
@@ -389,5 +409,6 @@ abstract final class ConditionLibraryService {
   static void resetForTesting() {
     _cache = ConditionLibraryPersonalisation.empty;
     _cachedRevision = -1;
+    _cachedProfile = null;
   }
 }

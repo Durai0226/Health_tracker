@@ -35,6 +35,22 @@ class VitalsReminderService {
     defaultHour: 9,
   );
 
+  /// The second blood-pressure slot of a morning-and-evening routine. Its own
+  /// spec (id, prefs, time) so the two can be switched and timed separately,
+  /// and so it is re-armed with the rest by [rescheduleAll].
+  ///
+  /// 900024 is inside the legacy water-reminder id block, so it MUST also be in
+  /// `NotificationService._foreignIdsInLegacyWaterBlock` or a water sweep
+  /// cancels it; `water_reminder_sweep_test.dart` derives that check from
+  /// [all].
+  static const VitalsReminderSpec bpEvening = VitalsReminderSpec(
+    id: 900024,
+    prefKey: 'vitals_bp_evening_reminder',
+    title: 'Blood pressure check',
+    body: 'Time for your evening blood pressure reading.',
+    defaultHour: 19,
+  );
+
   static const VitalsReminderSpec glucose = VitalsReminderSpec(
     id: 900021,
     prefKey: 'vitals_glucose_reminder',
@@ -63,7 +79,7 @@ class VitalsReminderService {
 
   /// Every spec, in a fixed order — so a caller can iterate them without
   /// hardcoding a list that silently goes stale when a fifth vital is added.
-  static const List<VitalsReminderSpec> all = [bp, glucose, weight, mood];
+  static const List<VitalsReminderSpec> all = [bp, bpEvening, glucose, weight, mood];
 
   /// Re-arm every enabled vitals reminder from persisted state.
   ///

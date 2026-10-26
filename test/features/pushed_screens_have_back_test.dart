@@ -13,6 +13,7 @@ import 'package:tablet_remainder/features/medication/screens/conditions/conditio
 import 'package:tablet_remainder/features/biometrics/screens/heart_dashboard_screen.dart';
 import 'package:tablet_remainder/features/biometrics/screens/workouts_screen.dart';
 import 'package:tablet_remainder/features/diary/screens/diary_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/focus_screen.dart';
 import 'package:tablet_remainder/features/period/screens/period_dashboard.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_dashboard_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_dashboard_screen.dart';
@@ -62,6 +63,8 @@ void main() {
     'Workouts': () => const WorkoutsScreen(),
     'Connected devices': () => const ConnectedDevicesScreen(),
     'Condition library': () => const ConditionLibraryScreen(),
+    // Pushed from a Today insight and from Trends; a tab in the shell.
+    'Focus': () => const FocusScreen(),
   };
 
   screens.forEach((name, build) {
@@ -103,6 +106,28 @@ void main() {
 
       await tester.pump(const Duration(seconds: 8)); // drain pending timers
     });
+  });
+
+  testWidgets('Focus as the shell tab (a route root) draws no dead back button',
+      (tester) async {
+    tester.view.physicalSize = const Size(411, 914);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final prev = FlutterError.onError;
+    FlutterError.onError = (_) {};
+    try {
+      await tester.pumpWidget(MaterialApp(
+          theme: AppTheme.lightTheme, home: const FocusScreen()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byIcon(Symbols.arrow_back_rounded), findsNothing,
+          reason: 'there is nothing to go back to from a tab, so an arrow there '
+              'would be a button that does nothing');
+    } finally {
+      FlutterError.onError = prev;
+    }
+    await tester.pump(const Duration(seconds: 8));
   });
 }
 

@@ -10,6 +10,8 @@ import '../../models/blood_pressure_reading.dart';
 import '../../services/vitals_storage_service.dart';
 import '../../services/vitals_report_service.dart';
 import 'vitals_trend_chart.dart';
+import '../../services/bp_sessions.dart';
+import '../../services/medicine_storage_service.dart';
 
 /// Blood-pressure report: period overview, trend, category breakdown, and a
 /// doctor-ready PDF export.
@@ -59,6 +61,7 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
         readings: data,
         from: _from,
         to: DateTime.now(),
+        patientName: await MedicineCleanStorageService.activePatientName(),
       );
       await Printing.sharePdf(bytes: bytes, filename: 'blood-pressure-report.pdf');
     } catch (_) {
@@ -127,10 +130,13 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
   }
 
   Widget _overview(AppColorsExt ext, AccentSwatch accent, List<BloodPressureReading> data) {
-    final avgSys = VitalsAnalyzer.mean(data.map((r) => r.systolic).toList());
-    final avgDia = VitalsAnalyzer.mean(data.map((r) => r.diastolic).toList());
+    // Averages are per measurement session; the Readings tile below stays the
+    // raw count of what was logged.
+    final sessions = BpSessions.collapse(data);
+    final avgSys = VitalsAnalyzer.mean(sessions.map((r) => r.systolic).toList());
+    final avgDia = VitalsAnalyzer.mean(sessions.map((r) => r.diastolic).toList());
     final avgPulse = VitalsAnalyzer.mean(
-        data.where((r) => r.pulse != null).map((r) => r.pulse!).toList());
+        sessions.where((r) => r.pulse != null).map((r) => r.pulse!).toList());
     return StatTileRow(tiles: [
       StatTile(
         value: avgSys != null ? '${avgSys.round()}/${avgDia!.round()}' : '—',
@@ -154,32 +160,97 @@ class _BloodPressureReportScreenState extends State<BloodPressureReportScreen> {
   }
 
   Widget _trend(AppColorsExt ext, AccentSwatch accent, List<BloodPressureReading> data) {
-    final trend = data.reversed.toList(); // oldest → newest
+    final trend = BpSessions.collapse(data, newestFirst: false); // oldest → newest
     final sys = trend.map((r) => r.systolic.toDouble()).toList();
     final dia = trend.map((r) => r.diastolic.toDouble()).toList();
     final all = [...sys, ...dia];
     final minY = all.isEmpty ? 40.0 : (all.reduce((a, b) => a < b ? a : b) - 10).clamp(30, 300).toDouble();
     final maxY = all.isEmpty ? 200.0 : (all.reduce((a, b) => a > b ? a : b) + 10).clamp(60, 320).toDouble();
-    return VitalsTrendChart(
-      series: [
-        VitalsSeries(values: sys, color: ext.chartMark(accent), label: 'Systolic'),
-        VitalsSeries(values: dia, color: ext.textSecondary, label: 'Diastolic'),
+    // One chart per series, each with its OWN normal band.
+    //
+    // This was a single chart carrying both lines under one band of 80–120.
+    // That is the SYSTOLIC normal range; diastolic normal is under 80. So a
+    // diastolic of 95 — stage 2 hypertension by `VitalsAnalyzer.classifyBp`,
+    // and shown as such on the hero card — was painted inside the green
+    // "normal" band on the chart beneath it, while a perfectly healthy
+    // diastolic of 70 fell below the band and read as abnormal. On a screen
+    // whose whole purpose is being shown to a clinician.
+    //
+    // Same shape as the main Blood pressure screen's `_seriesChart`, including
+    // the shared minY/maxY so the two lines stay directly comparable and a
+    // 2 mmHg diastolic wobble is not auto-scaled into a dramatic swing.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _seriesChart(ext,
+            title: 'Systolic',
+            values: sys,
+            times: [for (final r in trend) r.takenAt],
+            color: ext.chartMark(accent),
+            minY: minY,
+            maxY: maxY,
+            normalMax: 120),
+        const SizedBox(height: AppSpacing.lg),
+        _seriesChart(ext,
+            title: 'Diastolic',
+            values: dia,
+            times: [for (final r in trend) r.takenAt],
+            color: ext.textSecondary,
+            minY: minY,
+            maxY: maxY,
+            normalMax: 80),
       ],
-      minY: minY,
-      maxY: maxY,
-      bandLow: 80,
-      bandHigh: 120,
-      bandColor: VitalsColors.bpBand(ext.isDark, BpCategory.normal),
+    );
+  }
+
+  /// One series against its own normal ceiling — see [_trend].
+  Widget _seriesChart(
+    AppColorsExt ext, {
+    required String title,
+    required List<double> values,
+    required List<DateTime> times,
+    required Color color,
+    required double minY,
+    required double maxY,
+    required int normalMax,
+  }) {
+    final tt = Theme.of(context).textTheme;
+    // Nothing to shade when every reading on screen sits above the ceiling;
+    // labelling an invisible band would only mislead.
+    final bandVisible = normalMax > minY;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: 6),
+        VitalsTrendChart(
+          series: [
+            VitalsSeries(values: values, times: times, color: color, label: title)
+          ],
+          minY: minY,
+          maxY: maxY,
+          // Lower edge is the axis floor: `classifyBp` puts no lower bound on
+          // Normal, so inventing one would contradict the category the hero
+          // card shows for the same reading.
+          bandLow: minY,
+          bandHigh: normalMax.toDouble(),
+          bandColor: VitalsColors.bpBand(ext.isDark, BpCategory.normal),
+          bandLabel: bandVisible
+              ? 'Shaded band = normal ${title.toLowerCase()} (under $normalMax mmHg)'
+              : null,
+        ),
+      ],
     );
   }
 
   Widget _breakdown(AppColorsExt ext, List<BloodPressureReading> data) {
     final tt = Theme.of(context).textTheme;
     final counts = <BpCategory, int>{};
-    for (final r in data) {
+    final sessions = BpSessions.collapse(data);
+    for (final r in sessions) {
       counts[r.category] = (counts[r.category] ?? 0) + 1;
     }
-    final total = data.length;
+    final total = sessions.length;
     return AppCard(
       child: Column(
         children: BpCategory.values.map((c) {

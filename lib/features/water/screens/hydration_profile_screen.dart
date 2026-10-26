@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_colors_ext.dart';
+import '../../../core/services/health_store_name.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/hydration_profile.dart';
 import '../services/water_service.dart';
@@ -403,25 +404,55 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   Widget _buildGenderChip(String label, bool isMale) {
     final ext = AppColorsExt.of(context);
     final isSelected = _profile.isMale == isMale;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() {
-          _profile = _profile.copyWith(isMale: isMale);
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? ext.fillBg(ext.water) : ext.surfaceVariant,
-          borderRadius: AppRadius.brFull,
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: isSelected ? ext.fillFg(ext.water) : ext.textPrimary,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() {
+            _profile = _profile.copyWith(isMale: isMale);
+          });
+        },
+        // 44pt floor. Measured on device at 420dpi these came out 63x32 and
+        // 78x32 — `vertical: 8` around a ~16pt label lands at exactly 32,
+        // twelve short. They are the only way to set this value and they
+        // change the recommended goal, so a missed tap is not cosmetic.
+        //
+        // A `ConstrainedBox` rather than the Container's own `alignment`: these
+        // sit in a `Wrap`, and giving a Container an alignment makes it expand
+        // to the incoming maxWidth, which is the whole row. The first attempt
+        // at this floor did exactly that and put "Male" and "Female" on two
+        // separate lines. Nothing headless caught it — the audit measures the
+        // target's size, not where it landed, and a Wrap doesn't overflow, it
+        // wraps.
+        child: ConstrainedBox(
+          // Keyed so a test can read where this chip actually landed, not just
+          // how big it is.
+          key: ValueKey('genderChip$label'),
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? ext.fillBg(ext.water) : ext.surfaceVariant,
+              borderRadius: AppRadius.brFull,
+            ),
+            // `widthFactor: 1` shrink-wraps the width, so the chip still sizes
+            // to its label; the height is whatever the 44pt floor leaves, with
+            // the label centred in it.
+            child: Center(
+              widthFactor: 1.0,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: isSelected ? ext.fillFg(ext.water) : ext.textPrimary,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ),
               ),
+            ),
+          ),
         ),
       ),
     );
@@ -692,7 +723,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     return _buildSection(
-      title: 'Health Connect',
+      title: healthStoreName(),
       icon: Symbols.sync_rounded,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -738,7 +769,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         setState(() => _healthSyncEnabled = false);
         if (mounted) {
           context.toastWarning(
-              'Health Connect did not grant permission to write hydration');
+              '${healthStoreName()} did not grant permission to write hydration');
         }
       }
     } finally {

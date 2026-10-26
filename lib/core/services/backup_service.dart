@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'auth_service.dart';
 import 'clean_storage_service.dart';
+import 'backup_record.dart';
 
 class BackupService {
   static final BackupService _instance = BackupService._internal();
@@ -85,6 +86,7 @@ class BackupService {
           .doc(backupId);
 
       await backupRef.set(document);
+      await BackupRecord.markDone();
 
       debugPrint('Backup created successfully: '
           '$backupId (${document['sizeBytes']} B)');

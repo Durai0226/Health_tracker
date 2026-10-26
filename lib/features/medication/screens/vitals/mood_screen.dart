@@ -183,7 +183,11 @@ class _MoodScreenState extends State<MoodScreen> {
           AppCard(
             child: VitalsTrendChart(
               series: [
-                VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Mood'),
+                VitalsSeries(
+                    values: series,
+                    times: [for (final r in trend) r.takenAt],
+                    color: ext.chartMark(accent),
+                    label: 'Mood'),
               ],
               minY: 0,
               maxY: (moodRatingLabels.length - 1).toDouble(),

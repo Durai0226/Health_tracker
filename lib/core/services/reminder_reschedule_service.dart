@@ -12,6 +12,7 @@ import '../../features/medication/services/medication_reminder_service.dart';
 import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/sleep/services/sleep_service.dart';
 import '../../features/water/services/water_service.dart';
+import '../../features/reminders/services/reminder_pause_until.dart';
 
 /// One reminder family's contribution to the "rebuild everything" pass.
 ///
@@ -228,6 +229,10 @@ class ReminderRescheduleService {
     await CleanStorageService.recordDueReminderOccurrences();
     await CleanStorageService.reconcileMissedReminders();
 
+    // Bring back anything paused "until" a date that has now arrived, BEFORE the
+    // list is read, so it is armed in this very pass.
+    await ReminderPauseUntil.resumeDue();
+
     final reminders = await CleanStorageService.getAllReminders();
     final now = clock.now();
     var armed = 0;
@@ -271,8 +276,9 @@ class ReminderRescheduleService {
             : reminder;
         // Resolves the RRULE / endsAt / isPaused the six-value RepeatType
         // cannot express. Null means there is nothing left to arm — the
-        // reminder is paused, past its end date, or its rule has run out — and
-        // the disarm above has already taken it off the OS.
+        // reminder is paused, past its end date, its rule has run out, or the
+        // user is on vacation — and the disarm above has already taken it off
+        // the OS.
         final request = ReminderArmRequest.forNextOccurrence(stored);
         if (request == null) continue;
         final ok = await alarm.arm(request);

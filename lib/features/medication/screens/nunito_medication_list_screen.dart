@@ -12,7 +12,6 @@ import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../services/adherence_report_service.dart';
 import '../services/vitals_storage_service.dart';
-import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/haptic_service.dart';
 import 'nunito_medication_detail_screen.dart';
 import 'nunito_add_medication_flow.dart';
@@ -243,7 +242,7 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
         to: now,
         bpReadings: bpReadings,
         glucoseReadings: glucoseReadings,
-        patientName: await _activePatientName(),
+        patientName: await MedicineCleanStorageService.activePatientName(),
       );
       await Printing.sharePdf(bytes: bytes, filename: 'adherence-report.pdf');
     } catch (e) {
@@ -257,17 +256,6 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
   /// different dependents were visually indistinguishable except by reading
   /// every row's medicine names, an easy way to hand a doctor the wrong
   /// child's report.
-  Future<String?> _activePatientName() async {
-    final id = ActiveProfileService().activeDependentId;
-    if (id == null) return null;
-    try {
-      final deps = await MedicineCleanStorageService.getAllDependents();
-      return deps.where((d) => d.id == id).firstOrNull?.name;
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Export the last-30-day dose log as a CSV via the OS share sheet.
   Future<void> _exportCsv() async {
     _hapticService.medium();

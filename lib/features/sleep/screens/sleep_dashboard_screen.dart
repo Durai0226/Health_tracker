@@ -1,9 +1,12 @@
 import 'dart:io' show Platform;
 
+import 'package:clock/clock.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:tablet_remainder/core/health/insight.dart';
+import 'package:tablet_remainder/core/utils/calendar_day.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
 import 'package:tablet_remainder/core/services/home_widget_service.dart';
@@ -25,6 +28,7 @@ import '../widgets/sleep_weekly_trend.dart';
 import 'sleep_history_screen.dart';
 import 'sleep_schedule_settings_screen.dart';
 import '../../../core/health/coach_text.dart';
+import '../../../core/health/sleep_debt.dart';
 
 /// The Sleep home: last-night summary (score ring + duration/efficiency),
 /// an honest stage timeline, the 7-night trend vs target with a regularity
@@ -481,6 +485,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         lastNightMinutes: last.asleepMinutes,
         targetMinutes: schedule.targetMinutes,
         debtMinutes: debt,
+        weightedDebt: SleepService.sleepDebt(),
         regularity: regularity,
         // Suppresses the debt line on a partly-logged week — otherwise unlogged
         // nights read as sleep the user didn't get.
@@ -691,7 +696,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const AppEyebrow('LAST NIGHT'),
+                AppEyebrow(sleepSummaryEyebrow(night.wakeTime)),
                 const SizedBox(height: 6),
                 Text(
                   night.durationLabel,
@@ -767,23 +772,26 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
 
     // Sleep balance — a gentle, symmetric note. Never a guilt-inducing "debt"
     // headline; consistency ("your rhythm") is the real hero elsewhere.
-    if (debt >= 180 && loggedNights >= 4) {
+    // Judged and worded from the WEIGHTED 14-night debt: recent nights count
+    // more, one lie-in cannot erase a week, and the line says what would clear
+    // it. The credit side below stays on the plain figure, which reports a
+    // surplus honestly where a capped credit would not.
+    final behind = SleepService.sleepDebt();
+    if (behind.debtMinutes >= 180 && behind.nights >= SleepDebt.minNights) {
       return Insight(
         id: 'sleep_balance_low',
         feature: InsightFeature.sleep,
         severity: InsightSeverity.info,
         title: 'A little behind on rest',
-        detail:
-            'You\'re about ${SleepSession.formatMinutes(debt)} under your '
-            'target across the $loggedNights night${loggedNights == 1 ? '' : 's'} '
-            'you logged. An earlier night or two helps you get ahead.',
-        metric: '${SleepSession.formatMinutes(debt)} under',
-        // "× 7" was a lie whenever fewer than seven nights were logged, and
-        // the maths behind it was the bug: un-logged nights counted as zero
-        // sleep, so each one added a whole night of phantom debt.
-        why: 'Your ${schedule.targetLabel} nightly target × $loggedNights '
-            'logged night${loggedNights == 1 ? '' : 's'}, minus what you '
-            'actually slept. Nights you did not log are not counted.',
+        detail: behind.behindLine,
+        metric: '${SleepSession.formatMinutes(behind.debtMinutes)} behind',
+        // Unlogged nights are missing data, never zero sleep — the defect the
+        // old "× 7" total had, and the reason this says so.
+        why: 'Your ${schedule.targetLabel} nightly target minus what you '
+            'slept, over the ${behind.nights} night${behind.nights == 1 ? '' : 's'} '
+            'you logged in the last 14. Recent nights count more, one long '
+            'night pays back at most an hour, and nights you did not log are '
+            'not counted.',
         rank: 34,
       );
     }
@@ -884,3 +892,19 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     return '${weekdays[(d.weekday - 1) % 7]}, ${months[d.month - 1]} ${d.day}';
   }
 }
+
+/// "LAST NIGHT" only when the card really is showing last night.
+///
+/// The summary card renders the most recent *logged* session, which on a
+/// morning you have not logged yet is an older night. On device it read
+/// "LAST NIGHT · 7h 39m · Mon, Sep 28" on Sep 30 — directly beneath a "Log
+/// last night" button, which is only offered because last night has no
+/// session at all. The card and the button contradicted each other.
+///
+/// A wake time today is plainly last night. One yesterday still is, for
+/// somebody reading this after midnight and before they have slept.
+@visibleForTesting
+String sleepSummaryEyebrow(DateTime wakeTime, {DateTime? now}) =>
+    calendarDaysBetween(wakeTime, now ?? clock.now()) <= 1
+        ? 'LAST NIGHT'
+        : 'MOST RECENT';

@@ -284,5 +284,14 @@
             <action android:name="android.intent.action.DIAL"/>
             <data android:scheme="tel"/>
         </intent>
+        <!-- Mail apps, for the Email button on doctor cards. Same Android 11+
+             package-visibility rule as the dialer above: without this entry
+             `canLaunchUrl('mailto:…')` answers false on a phone with Gmail
+             installed, and the button did nothing at all — no launch, no
+             error, no feedback. -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="mailto"/>
+        </intent>
     </queries>
 </manifest>

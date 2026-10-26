@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
+import 'critical_follow_up.dart';
 
 /// Pure grouping logic behind Phase 1's "one reminder per time slot": no
 /// Flutter/platform/plugin imports, so it is usable from both the scheduling
@@ -149,7 +150,7 @@ List<ReminderSlot> groupRemindersBySlot(
       // at an exact minute — structurally incompatible with "collapse every
       // medicine due at this exact clock time into one slot." It's scheduled
       // separately; see reminder_window_nudges.dart.
-      if (time.hasWindow) continue;
+      if (effectiveWindowMinutes(medicine, time) != null) continue;
       final key = '${time.hour}:${time.minute}';
       hourMinuteOf[key] = [time.hour, time.minute];
       (byKey[key] ??= <SlotMedicine>[]).add(SlotMedicine(
@@ -192,4 +193,37 @@ List<String> medicineIdsFromAlarmPayload(String? payload) {
   } catch (_) {
     return const [];
   }
+}
+
+/// Whether the alarm armed for [slotHour]:[slotMinute] belongs to the calendar
+/// day of [when].
+///
+/// Once a weekend override exists BOTH the weekday and the weekend slot are
+/// armed — [groupRemindersBySlot] arms every slot the schedule can produce —
+/// and only one of them belongs to any given day. `isActiveOnDate` cannot tell
+/// them apart: it answers "is this medicine live today", not "is 07:00 one of
+/// today's times". Without this gate a 07:00 weekday alarm also rang on
+/// Saturday, when the dose is due at 10:00, and a Take from it wrote a log at
+/// an instant that is not a slot — decrementing stock while Today still showed
+/// the real dose pending.
+///
+/// Fails OPEN. A missing slot time, or a day the schedule yields nothing for,
+/// returns true: never silently drop a dose over a comparison that could not
+/// be made.
+///
+/// Used by both fire-time gates in `background_alarm_service` — the medicine
+/// slot alarm and the reminder-window nudges. The nudge one was added later:
+/// it had only the `isActiveOnDate` half, so a windowed weekday dose kept
+/// nudging three times across the weekend morning the user had moved away
+/// from.
+bool slotBelongsToDay(
+  MedicineSchedule schedule,
+  DateTime when,
+  int? slotHour,
+  int? slotMinute,
+) {
+  if (slotHour == null || slotMinute == null) return true;
+  final todaysSlots = schedule.getScheduledTimesForDate(when);
+  if (todaysSlots.isEmpty) return true;
+  return todaysSlots.any((t) => t.hour == slotHour && t.minute == slotMinute);
 }

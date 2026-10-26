@@ -499,7 +499,21 @@ class AppListTile extends StatelessWidget {
                             subtitle!,
                             style: tt.bodyMedium
                                 ?.copyWith(color: ext.textSecondary),
-                            maxLines: 1,
+                            // Two lines, matching the title above it.
+                            //
+                            // At one line this cut real copy on a 411dp phone
+                            // at DEFAULT text size — found on device, not in
+                            // the harness: "General reference for common
+                            // condit…". 27 subtitles in lib/ are long enough to
+                            // cut, and the two that matter most explain
+                            // irreversible actions — "Erase your account and
+                            // all cloud copies, including backups" lost the
+                            // word "backups", and "Permanently erase everything
+                            // on this device" was also over.
+                            //
+                            // The row only grows when the text actually needs
+                            // the second line, so short subtitles are unchanged.
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],

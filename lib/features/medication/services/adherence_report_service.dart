@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../core/health/vitals_analyzer.dart';
@@ -11,6 +12,8 @@ import 'drug_interaction_service.dart';
 import 'medicine_storage_service.dart';
 import 'symptom_report_aggregator.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/utils/calendar_day.dart';
+import 'bp_sessions.dart';
 
 /// One medicine + its logs for the report.
 class MedicineReportEntry {
@@ -35,8 +38,139 @@ class MedicineReportEntry {
 /// document folds all of those into one doctor-visit export instead of
 /// leaving them scattered across separate exports (or, for symptoms, nowhere
 /// at all — see `symptom_report_aggregator.dart`).
+/// The adherence numbers the report prints, separated from the PDF drawing so
+/// they can be asserted without parsing a PDF.
+///
+/// Extracted because a test that only pinned the denominator HELPER stayed
+/// green when the call site was reverted to counting log rows — the helper was
+/// still right, merely unused. The computation and the thing under test have
+/// to be the same code.
+class AdherenceTally {
+  final List<List<String>> rows;
+  final List<MedicineSymptomSummary> symptoms;
+  final int totalDue;
+  final int totalTaken;
+  const AdherenceTally({
+    required this.rows,
+    required this.symptoms,
+    required this.totalDue,
+    required this.totalTaken,
+  });
+
+  /// The headline percentage, as printed.
+  int get overallPct =>
+      totalDue > 0 ? (totalTaken / totalDue * 100).round() : 0;
+}
+
 class AdherenceReportService {
   const AdherenceReportService._();
+
+  /// Scheduled slots for [med] that actually came due inside the window.
+  ///
+  /// Mirrors the Adherence screen's denominator (`medicine_storage_service`'s
+  /// `scheduled` loop) so the PDF and the screen cannot disagree: past days in
+  /// full, today only up to [now], never before the medicine existed, and
+  /// PRN medicines excluded by the caller.
+  /// The denominator the report divides by, for one medicine.
+  ///
+  /// Scheduled slots that actually came due — NOT the number of log rows.
+  ///
+  /// This was `taken + missed + skipped`, which counts only slots that HAVE a
+  /// row. A slot the user simply ignored gets no row until
+  /// `reconcileMissedDoses` reaches it, and its lookback is 14 days while this
+  /// report's window is 30. So three weeks of ignored doses were invisible to
+  /// the denominator: the PDF read 100% while the Adherence screen — which
+  /// counts slots that came due, logged or not — read about half that. Both
+  /// print the identical phrase "scheduled doses taken", and the flattering
+  /// number is the one handed to a clinician.
+  ///
+  /// `medicine_storage_service.dart` states the rule this follows: "the number
+  /// of scheduled (non-PRN) doses that were actually due within the window,
+  /// NOT logs.length".
+  ///
+  /// A PRN medicine has no schedule to be due against, so its own logs are the
+  /// only measure there is.
+  @visibleForTesting
+  static int dueCountFor(
+    EnhancedMedicine med,
+    List<MedicineLog> windowedLogs,
+    DateTime? from,
+    DateTime? to,
+    DateTime now,
+  ) {
+    if (med.schedule.isPRN) {
+      return windowedLogs
+          .where((l) => l.countsAsTaken || l.isMissed || l.isSkipped)
+          .length;
+    }
+    return dueSlotCount(med, from, to, now);
+  }
+
+  @visibleForTesting
+  static int dueSlotCount(
+      EnhancedMedicine med, DateTime? from, DateTime? to, DateTime now) {
+    if (med.schedule.isPRN) return 0;
+    // An open-ended window still has to stop at the present: a slot later
+    // today has not come due yet.
+    final end = (to == null || to.isAfter(now)) ? now : to;
+    final start = from ?? med.createdAt;
+    if (end.isBefore(start)) return 0;
+
+    var count = 0;
+    for (var day = startOfDay(start);
+        !day.isAfter(startOfDay(end));
+        day = dayOffset(day, 1)) {
+      for (final slot in med.schedule.getScheduledTimesForDate(day)) {
+        if (slot.isBefore(start)) continue;
+        if (slot.isBefore(med.createdAt)) continue;
+        if (slot.isAfter(end)) continue;
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /// Every number the adherence section prints. See [AdherenceTally].
+  @visibleForTesting
+  static AdherenceTally tallyAdherence(
+    List<MedicineReportEntry> entries,
+    DateTime? from,
+    DateTime? to,
+    DateTime now,
+  ) {
+    var totalDue = 0, totalTaken = 0;
+    final rows = <List<String>>[];
+    final symptoms = <MedicineSymptomSummary>[];
+    for (final e in entries) {
+      // Deduped per slot — see MedicineCleanStorageService.dedupeByDose.
+      final logs = MedicineCleanStorageService.dedupeByDose(
+          _inWindow(e.logs, from, to));
+      final taken = logs.where((l) => l.countsAsTaken).length;
+      final missed = logs.where((l) => l.isMissed).length;
+      final skipped = logs.where((l) => l.isSkipped).length;
+      final due = dueCountFor(e.medicine, logs, from, to, now);
+      totalDue += due;
+      totalTaken += taken;
+      final pct = due > 0 ? (taken / due * 100).round() : 0;
+      rows.add([
+        _medLabel(e.medicine),
+        e.medicine.schedule.frequencyDescription,
+        due > 0 ? '$pct%' : '-',
+        '$taken',
+        '$missed',
+        '$skipped',
+      ]);
+      // Same deduped, windowed logs the adherence row above used — a slot
+      // superseded by a later action never counts toward symptoms twice.
+      symptoms.add(summarizeSymptoms(_medLabel(e.medicine), logs));
+    }
+    return AdherenceTally(
+      rows: rows,
+      symptoms: symptoms,
+      totalDue: totalDue,
+      totalTaken: totalTaken,
+    );
+  }
 
   static Future<Uint8List> buildPdf({
     required List<MedicineReportEntry> entries,
@@ -51,38 +185,20 @@ class AdherenceReportService {
     final now = generatedAt ?? DateTime.now();
 
     // Overall adherence across all entries in the (optional) window.
-    var totalDue = 0, totalTaken = 0;
-    final rows = <List<String>>[];
-    final symptomSummaries = <MedicineSymptomSummary>[];
-    for (final e in entries) {
-      // Deduped per slot — see MedicineCleanStorageService.dedupeByDose.
-      final logs = MedicineCleanStorageService.dedupeByDose(
-          _inWindow(e.logs, from, to));
-      final taken = logs.where((l) => l.countsAsTaken).length;
-      final missed = logs.where((l) => l.isMissed).length;
-      final skipped = logs.where((l) => l.isSkipped).length;
-      final due = taken + missed + skipped; // pending doesn't count as due yet
-      totalDue += due;
-      totalTaken += taken;
-      final pct = due > 0 ? (taken / due * 100).round() : 0;
-      rows.add([
-        _medLabel(e.medicine),
-        e.medicine.schedule.frequencyDescription,
-        due > 0 ? '$pct%' : '-',
-        '$taken',
-        '$missed',
-        '$skipped',
-      ]);
-      // Same deduped, windowed logs the adherence row above used — a slot
-      // superseded by a later action never counts toward symptoms twice.
-      symptomSummaries.add(summarizeSymptoms(_medLabel(e.medicine), logs));
-    }
-    final overall = totalDue > 0 ? (totalTaken / totalDue * 100).round() : 0;
+    final tally = tallyAdherence(entries, from, to, now);
+    final totalDue = tally.totalDue;
+    final totalTaken = tally.totalTaken;
+    final rows = tally.rows;
+    final symptomSummaries = tally.symptoms;
+    final overall = tally.overallPct;
     final reportedSymptoms =
         symptomSummaries.where((s) => s.hasAnyData).toList();
 
-    final avgSys = VitalsAnalyzer.mean(bpReadings.map((r) => r.systolic).toList());
-    final avgDia = VitalsAnalyzer.mean(bpReadings.map((r) => r.diastolic).toList());
+    // Averaged per measurement session; `bpCount` below stays the raw number
+    // of readings, which is what the clinician is told was taken.
+    final bpSessions = BpSessions.collapse(bpReadings);
+    final avgSys = VitalsAnalyzer.mean(bpSessions.map((r) => r.systolic).toList());
+    final avgDia = VitalsAnalyzer.mean(bpSessions.map((r) => r.diastolic).toList());
     final avgGlucose =
         VitalsAnalyzer.mean(glucoseReadings.map((r) => r.valueMgdl).toList());
     final glucoseInRange = VitalsAnalyzer.inRangePercent(

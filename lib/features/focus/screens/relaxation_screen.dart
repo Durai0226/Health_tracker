@@ -864,23 +864,41 @@ class _RelaxationScreenState extends State<RelaxationScreen>
         // Progress bar
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Column(
-            children: [
-              ClipRRect(
-                borderRadius: AppRadius.brSm,
-                child: LinearProgressIndicator(
-                  value: _relaxationService.progress,
-                  backgroundColor: ext.surfaceVariant,
-                  valueColor: AlwaysStoppedAnimation(mark),
-                  minHeight: 10,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '${(_relaxationService.progress * 100).toInt()}% complete',
-                style: tt.bodySmall?.copyWith(color: ext.textSecondary),
-              ),
-            ],
+          // On `tick`, like the clock above.
+          //
+          // `progress` advances once a second and nothing else moves it, but
+          // these two widgets sat OUTSIDE any tick listener — reading it from
+          // the outer build, which by design now fires only on real state
+          // transitions. So the bar and the "% complete" label held whatever
+          // they read when the session started: 0%, for the whole session,
+          // under a clock counting down correctly beside them.
+          //
+          // Rebuilding just these two per second is what the outer
+          // optimisation was protecting; it is the screen it did not want
+          // rebuilt.
+          child: ValueListenableBuilder<int>(
+            valueListenable: _relaxationService.tick,
+            builder: (context, _, __) {
+              final progress = _relaxationService.progress;
+              return Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: AppRadius.brSm,
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: ext.surfaceVariant,
+                      valueColor: AlwaysStoppedAnimation(mark),
+                      minHeight: 10,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${(progress * 100).toInt()}% complete',
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],

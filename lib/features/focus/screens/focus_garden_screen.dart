@@ -215,7 +215,15 @@ class FocusGardenScreen extends StatelessWidget {
     } else if (isYesterday) {
       dateLabel = 'Yesterday';
     } else {
-      dateLabel = DateFormats.weekdayDayMonthLong.format(date);
+      // `weekdayDayMonthMedium` ("Monday, Sep 28"), not the Long form.
+      //
+      // The row below caps this at one line with an ellipsis so it cannot push
+      // the minutes total off the right edge — which is right — but at the
+      // DEFAULT text size on a 411dp phone "Monday, September 28" was already
+      // too wide, so every day older than yesterday rendered as
+      // "Monday, Septemb…" and lost the one thing the header is for.
+      // Abbreviating the month keeps the date; ellipsising it did not.
+      dateLabel = DateFormats.weekdayDayMonthMedium.format(date);
     }
     
     final totalMinutes = plants.fold(0, (sum, p) => sum + p.durationMinutes);
@@ -251,72 +259,104 @@ class FocusGardenScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
-          children: plants.map((plant) => _buildPlantCard(context, plant)).toList(),
+        AppListGroup(
+          children: [
+            for (final plant in plants) _buildPlantRow(context, plant),
+          ],
         ),
         const SizedBox(height: AppSpacing.xl),
       ],
     );
   }
 
-  Widget _buildPlantCard(BuildContext context, FocusPlant plant) {
+  /// One session, as a full-width row on the house metrics.
+  ///
+  /// Was a `width: 100` tile in a `Wrap`. A session writes exactly one plant
+  /// (`FocusService` appends one per completed or abandoned session), so a day
+  /// section almost always held a single tile: 100pt of a 363pt content row,
+  /// leaving 72% of the row blank under a full-width header. A `Wrap` with one
+  /// fixed-width child is a `Row` with one child and no alignment.
+  ///
+  /// Every other per-session history in the app is already a full-width row —
+  /// `steps_history_screen`, `sleep_history_screen`, `workouts_screen`, and
+  /// both list tabs of Plant Trees. This follows `workouts_screen`'s anatomy
+  /// (day eyebrow, then one card of rows) so the Garden stops being the only
+  /// tile grid in `lib/`.
+  ///
+  /// The species tint moves onto the leading chip. `PlantType.primaryColor` is
+  /// a raw light-mode Material hex with no dark variant, so it belongs at MARK
+  /// scale — a 36pt chip — not washed across a card ground. The emoji is the
+  /// only thing drawn on it, so the tint carries no text-contrast obligation.
+  Widget _buildPlantRow(BuildContext context, FocusPlant plant) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    return Container(
-      width: 100,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: plant.isAlive
-            ? plant.type.primaryColor.withOpacity(0.1)
-            : ext.surfaceVariant,
-        borderRadius: AppRadius.brLg,
-        border: Border.all(
-          color: plant.isAlive
-              ? plant.type.primaryColor.withOpacity(0.3)
-              : ext.outline,
+    final alive = plant.isAlive;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppRowMetrics.minHeight),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppRowMetrics.horizontalPadding,
+          vertical: AppSpacing.sm,
         ),
-      ),
-      child: Column(
-        children: [
-          Opacity(
-            opacity: plant.isAlive ? 1 : 0.5,
-            child: Text(plant.isAlive ? plant.type.emoji : '🥀', // emoji-content-ok: the species, or the withered marker that shares its slot
-                style: const TextStyle(fontSize: 32)),
-          ),
-          const SizedBox(height: 6),
-          // The card is a fixed 100 wide, so the duration and timestamp use
-          // scaleDown (never enlarges — default rendering is untouched) rather
-          // than wrapping "12:30 PM" onto two lines at large text sizes.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
+        child: Row(
+          children: [
+            Container(
+              width: AppRowMetrics.iconBox,
+              height: AppRowMetrics.iconBox,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: alive
+                    ? plant.type.primaryColor.withOpacity(ext.isDark ? 0.22 : 0.12)
+                    : ext.surfaceVariant,
+                borderRadius: AppRadius.brMd,
+              ),
+              child: Opacity(
+                opacity: alive ? 1 : 0.5,
+                child: Text(alive ? plant.type.emoji : '🥀', // emoji-content-ok: the species, or the withered marker that shares its slot
+                    style: const TextStyle(fontSize: 20)),
+              ),
+            ),
+            const SizedBox(width: AppRowMetrics.iconGap),
+            // The row has the whole width now, so the species name fits beside
+            // the number instead of being left to the emoji alone.
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    alive ? plant.type.name : 'Given up',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.titleSmall?.copyWith(
+                      color: alive ? ext.textPrimary : ext.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    DateFormats.time.format(plant.plantedAt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w400,
+                      color: ext.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppRowMetrics.trailingGap),
+            // Was `plant.type.primaryColor` as text: sakura's #F8BBD9 measures
+            // 1.31:1 and sunflower's #FFC107 1.90:1 on the card. The species
+            // reads from the emoji and the chip tint; the NUMBER has to be
+            // legible.
+            Text(
               '${plant.durationMinutes}m',
               maxLines: 1,
-              softWrap: false,
-              // Was `plant.type.primaryColor` as text: sakura's #F8BBD9
-              // measures 1.31:1 and sunflower's #FFC107 1.90:1 on the card. The
-              // species reads from the emoji and the surrounding tint; the
-              // NUMBER has to be legible.
               style: tt.titleSmall?.copyWith(
-                color: plant.isAlive ? ext.textPrimary : ext.textSecondary,
+                color: alive ? ext.textPrimary : ext.textSecondary,
               ),
             ),
-          ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              DateFormats.time.format(plant.plantedAt),
-              maxLines: 1,
-              softWrap: false,
-              style: tt.labelSmall?.copyWith(
-                fontWeight: FontWeight.w400,
-                color: ext.textSecondary,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -342,6 +382,17 @@ class FocusGardenScreen extends StatelessWidget {
       action: AppButton(
         label: 'Start a session',
         leadingIcon: Symbols.play_arrow_rounded,
+        // Explicit, like the EmptyState above it.
+        //
+        // `AppButton` falls back to `AccentScope.swatchOf(context)`, and this
+        // screen is a pushed route — a child of the Navigator, not of the
+        // widget that pushed it — so for a long time it resolved to `brand`
+        // and this empty state drew a violet icon above a teal button, four
+        // lines apart. `_buildPageRoute` now scopes the route, so this would
+        // inherit `focus` anyway; it stays explicit because an empty state
+        // that states its own accent cannot be broken again by how it is
+        // opened, and `focus_routes_carry_the_accent_test` guards the route.
+        accent: ext.focus,
         onPressed: () => Navigator.pop(context),
       ),
     );

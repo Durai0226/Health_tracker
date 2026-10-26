@@ -599,58 +599,82 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
           // file from a backup to get back to a known state. The probe that
           // printed the real `debugCreator` chain took two minutes and would
           // have skipped all of it.
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 80),
+          // Bars and hour labels are two separate rows, each with its own
+          // baseline. They used to be one row of 24 `Column`s — and `Row`
+          // defaults to `CrossAxisAlignment.center`, so every column was
+          // sized to its own bar and then centred. Nothing shared a baseline:
+          // on device the 0 and 4 labels sat 79px above the 8/12/16 labels,
+          // 20 sat between them, and the short evening bars floated in
+          // mid-air instead of standing on the axis. A histogram whose bars
+          // don't start from a common line can't be read at all — height is
+          // the only thing it encodes.
+          //
+          // Keep the bar row's height fixed at the 60 the bars are scaled
+          // against, and let the label row grow on its own. That's what the
+          // old flat 80 got wrong in the other direction: one box had to
+          // absorb both the bar and a label that grows with Dynamic Type,
+          // which overflowed by +6px at 1.0x and +30px at 2.0x.
+          SizedBox(
+            // The bars are scaled against 60, so the plot area is 60 — and it
+            // stays 60 when every hour is empty, instead of collapsing the
+            // chart to nothing.
+            height: 60,
             child: Row(
-              children: List.generate(24, (hour) {
-                final amount = hourlyData[hour] ?? 0;
-                final height = maxValue > 0 ? (amount / maxValue) * 60 : 0.0;
-                final isActive = hour >= 6 && hour <= 22;
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(24, (hour) {
+              final amount = hourlyData[hour] ?? 0;
+              final height = maxValue > 0 ? (amount / maxValue) * 60 : 0.0;
+              final isActive = hour >= 6 && hour <= 22;
 
-                return Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Container(
-                        // Keyed so a test can read a single hour's bar height
-                        // and prove which days this chart is drawn from.
-                        key: ValueKey('waterHourBar$hour'),
-                        height: height,
-                        margin: const EdgeInsets.symmetric(horizontal: 1),
-                        decoration: BoxDecoration(
-                          color: amount > 0
-                              ? ext.chartMark(ext.water)
-                              : isActive
-                                  ? ext.surfaceVariant
-                                  : ext.surfaceVariant.withOpacity(0.5),
-                          // 2 and 4 have no slot on the 5-step scale; `sm` (8)
-                          // is the nearest, and Flutter clamps a corner to half
-                          // the shortest side, so on a ~10pt-wide bar this
-                          // paints a rounded cap rather than an 8pt corner.
-                          borderRadius: AppRadius.brSm,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      if (hour % 4 == 0)
-                        // 8pt was less than half the 11pt floor. labelSmall
-                        // shrink-to-fits into the 1/24th-width column instead.
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            '$hour',
-                            maxLines: 1,
-                            softWrap: false,
-                            style: tt.labelSmall
-                                ?.copyWith(color: ext.textSecondary),
-                          ),
-                        )
-                      else
-                        const SizedBox(height: 10),
-                    ],
+              return Expanded(
+                child: Container(
+                  // Keyed so a test can read a single hour's bar height
+                  // and prove which days this chart is drawn from.
+                  key: ValueKey('waterHourBar$hour'),
+                  height: height,
+                  margin: const EdgeInsets.symmetric(horizontal: 1),
+                  decoration: BoxDecoration(
+                    color: amount > 0
+                        ? ext.chartMark(ext.water)
+                        : isActive
+                            ? ext.surfaceVariant
+                            : ext.surfaceVariant.withOpacity(0.5),
+                    // 2 and 4 have no slot on the 5-step scale; `sm` (8)
+                    // is the nearest, and Flutter clamps a corner to half
+                    // the shortest side, so on a ~10pt-wide bar this
+                    // paints a rounded cap rather than an 8pt corner.
+                    borderRadius: AppRadius.brSm,
                   ),
-                );
-              }),
-            ),
+                ),
+              );
+            }),
+          ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            // `scaleDown` shrinks "12"/"16"/"20" but not "0"/"4" once the
+            // column gets narrow, so the label boxes are not all the same
+            // height. Centred, that put the axis on two lines 2.8px apart.
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(24, (hour) {
+              if (hour % 4 != 0) return const Expanded(child: SizedBox());
+              return Expanded(
+                // 8pt was less than half the 11pt floor. labelSmall
+                // shrink-to-fits into the 1/24th-width column instead.
+                child: FittedBox(
+                  // Keyed for the same reason as the bars: so a test can read
+                  // where this label actually landed.
+                  key: ValueKey('waterHourLabel$hour'),
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '$hour',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: tt.labelSmall?.copyWith(color: ext.textSecondary),
+                  ),
+                ),
+              );
+            }),
           ),
         ],
       ),

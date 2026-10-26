@@ -176,9 +176,10 @@ class _ThrowsInBuild extends StatelessWidget {
 ///    two `GestureDetector`s inside it, at each of the three text scales — so
 ///    most of these counts are a switch count in disguise: five switches on
 ///    `vitals_reminders`, two on `focus_reminders`, one each on
-///    `connected_devices` and add-medicine steps 2, 3 and 5. Nine is not a
-///    switch signature on its own — `add_medicine_4`'s nine are chips — so read
-///    the per-entry comment rather than the arithmetic.
+///    `connected_devices` and add-medicine steps 2, 3 and 5. Nine was not a
+///    switch signature on its own either — `add_medicine_4`'s nine were shape
+///    chips, since fixed — so read the per-entry comment rather than the
+///    arithmetic.
 /// The `period_calendar` day cells used to be the other one, at 41x41, waived
 /// on the reasoning that seven columns on a 390pt screen cannot each be 44pt
 /// wide. Only the 20pt card padding and the 4pt grid spacing made that true:
@@ -198,17 +199,31 @@ class _ThrowsInBuild extends StatelessWidget {
 /// two it assumes the whole file ran — under a name filter the screens that
 /// were never pumped all read as "fixed entirely".
 final Map<String, int> _comfortBaseline = {
-  'vitals_reminders': 45, // 5 switches
-  'focus_reminders': 18, // 2 switches
-  // 1 switch, plus the one real finding on this STEP: the reminder-window
-  // caption row, 346x32 at 1.0x. Step 4 has real ones of its own.
-  'add_medicine_3': 10,
+  // 6 switches (the evening blood-pressure reminder is the sixth). Every entry
+  // is the 59x39 CupertinoSwitch pattern above; the row is the real target.
+  'vitals_reminders': 51,
+  // 3 switches (Best hour is the third). Every entry is the 59x39
+  // CupertinoSwitch pattern above; the row is the real target.
+  'focus_reminders': 24,
+  // 9: one switch, nothing else. Step 4 has real ones of its own.
+  //
+  // Was 10 — the tenth was the reminder-window caption row at 346x32, and on
+  // a 420dpi device it measured 12-16dp tall: a control that opens a duration
+  // picker, rendered as a grey hint with a 15px icon. Its quietness is
+  // deliberate and documented at `_buildWindowToggle` (an advanced option
+  // that should not compete with the time chip), so the fix grew the hit area
+  // to 44 and left the type, colour and icon exactly as they were.
+  'add_medicine_3': 9,
   'connected_devices': 9, // 1 switch
   'add_medicine_2': 9, // 1 switch
-  // NOT a switch: nine shape chips ('Round', 'Oval', 'Capsule'...) at 42pt.
-  // They clear 44 at 1.3x and above, so this is the 1.0x row only.
-  'add_medicine_4': 9,
-  'add_medicine_5': 9, // 1 switch
+  // add_medicine_4 is gone from this map: its nine were the shape chips
+  // ('Round', 'Oval', 'Capsule'...) at 42pt, measured at 41.9dp on a 420dpi
+  // device. `_buildSelectablePill` now carries a 44 floor, so the screen has
+  // no undersized targets left at any scale.
+  // 2 switches (the Must-take switch is the second). Both are the 59x39
+  // CupertinoSwitch pattern above; the whole row is the real target, and the
+  // switch is disabled outright where follow-ups do not apply.
+  'add_medicine_5': 18,
   // The dose-summary row — "N of 6 taken today · See all" — 32pt at 1.0x and
   // 42pt at 1.3x. Fine at 2.0x.
   'home': 2,
@@ -223,11 +238,13 @@ final Map<String, int> _comfortBaseline = {
   // tappable — is the real target. Only two of the fourteen are anything else,
   // and both are named.
   //
-  // 67: seven switches (63), plus the SEX CHIPS, which are a real finding —
-  // "Male" 84x32 and "Female" 111x32 at 1.0x, 100x37 and 134x37 at 1.3x. They
-  // clear 44 at 2.0x, so this is a chip with no minimum height rather than a
-  // clipped one.
-  'hydration_profile': 67,
+  // 63: seven switches, nothing else.
+  //
+  // Was 67 — the extra four were the SEX CHIPS, at 84x32 and 111x32 at 1.0x
+  // and 100x37 and 134x37 at 1.3x, clearing 44 only at 2.0x: a chip with no
+  // minimum height rather than a clipped one. Confirmed on a 420dpi device at
+  // 63x32 and 78x32, then given a `minHeight: 44`.
+  'hydration_profile': 63,
   'add_clinic': 63, // seven switches, nothing else
   // Six switches at 1.0x and 1.3x, five at 2.0x — the sixth is outside the
   // built extent by then, which is why this is 51 and not 54.

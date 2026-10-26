@@ -22,6 +22,7 @@ import 'focus_reminder_scheduler.dart';
 import 'focus_session_alarm.dart';
 import 'tag_service.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../../core/services/vacation_mode.dart';
 
 /// Shortest session the app will run. Below this a "session" is not measurable.
 const int kMinSessionMinutes = 1;
@@ -178,6 +179,11 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
   // Getters
   bool get isRunning => _isRunning;
+
+  /// When the running session started — lets a test tell whether a second
+  /// `startSession()` ran over the first.
+  @visibleForTesting
+  DateTime? get sessionStartedAtForTesting => _startTime;
   bool get isPaused => _isPaused;
   int get remainingSeconds => _remainingSeconds;
   int get selectedMinutes => _selectedMinutes;
@@ -260,13 +266,61 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
         .fold(0, (sum, s) => sum + s.actualMinutes);
   }
 
-  List<FocusPlant> get todayPlants {
+  /// Plants GROWN today — the ones a completed session earned.
+  ///
+  /// `isAlive` is the point. [abandonSession] appends a withered
+  /// `FocusPlant(isAlive: false)` for every session given up on, and the only
+  /// consumer of this is the "Plants" tile in Today's Progress, beside
+  /// "Minutes" and "Streak". Without the filter, starting a 25-minute session
+  /// and tapping "Give up" five minutes in read `Minutes 0 · Plants 1 ·
+  /// Streak 0` — crediting a plant for the session you abandoned, next to two
+  /// counters correctly reporting that nothing happened.
+  ///
+  /// The garden screen deliberately shows withered plants; it reads [garden]
+  /// directly and is unaffected.
+  List<FocusPlant> get todayGrownPlants {
     final today = clock.now();
-    return _garden.where((p) => _isSameDay(p.plantedAt, today)).toList();
+    return _garden
+        .where((p) => p.isAlive && _isSameDay(p.plantedAt, today))
+        .toList();
   }
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  /// Drop everything held in memory after "Delete all data".
+  ///
+  /// The rows and preferences are removed, but this singleton keeps its
+  /// sessions, garden, stats and achievements for the life of the process and
+  /// writes them straight back on its next save — so the first focus session
+  /// after a wipe brought the whole deleted history back. Timers and the
+  /// lifecycle observer are left alone: a session that is running is not this
+  /// method's to end.
+  void resetAfterWipe() {
+    _sessions = [];
+    _garden = [];
+    _stats = const FocusStats();
+    _achievements.clear();
+    _initAchievements();
+    _unlockedPlants = {PlantType.seedling, PlantType.sprout};
+    _usedSounds = {};
+    _selectedTagIds = [];
+    _pendingIntention = null;
+    _selectedMinutes = 25;
+    _mode = FocusMode.single;
+    _workMinutes = 25;
+    _shortBreakMinutes = 5;
+    _longBreakMinutes = 15;
+    _roundsBeforeLongBreak = 4;
+    _totalRounds = 4;
+    _selectedPlant = PlantType.seedling;
+    _selectedActivity = FocusActivityType.work;
+    _selectedSound = AmbientSoundType.none;
+    _soundVolume = 0.5;
+    _breathingPreroll = false;
+    _mindfulnessSync = false;
+    notifyListeners();
   }
 
   bool _didInit = false;
@@ -2084,6 +2138,8 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       completedDays: _completedSessionDays(),
       today: clock.now(),
       graceDaysPerWeek: 1,
+      // Days spent on vacation are neither completions nor misses.
+      frozenDays: VacationMode.frozenDays(),
     );
     final newStreak = result.current;
     _streakUsedGrace = result.usedGrace;
@@ -2095,6 +2151,14 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       // recompute shrink a longest streak the user already earned.
       longestStreak: max(_stats.longestStreak, max(result.longest, newStreak)),
     );
+
+    // Re-plan the reminders now that the sessions have changed: the adaptive
+    // nudge is a one-shot that has to skip today once the user has focused, and
+    // the streak-at-risk nudge has to be cancelled the moment it stops being
+    // true. Fire-and-forget, like the startup migration — a reminder that stays
+    // wrong until the next launch is better than blocking a completion on
+    // notification I/O.
+    unawaited(FocusReminderScheduler.apply());
 
     if (newStreak > 0) {
       _updateAchievement(AchievementType.firstStreak, newStreak);

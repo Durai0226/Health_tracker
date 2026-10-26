@@ -1,5 +1,6 @@
 import 'package:clock/clock.dart';
 
+import 'calendar_day.dart';
 import 'date_formats.dart';
 
 /// "4 hours ago" — one implementation, replacing five that had drifted.
@@ -46,8 +47,18 @@ class RelativeTime {
       final h = delta.inHours;
       return h == 1 ? '1 hour ago' : '$h hours ago';
     }
-    if (delta.inDays == 1) return 'yesterday';
-    if (delta.inDays <= 6) return '${delta.inDays} days ago';
+    // Calendar days, not elapsed ones.
+    //
+    // `delta.inDays` truncates a duration, so a reading taken at 22:26 on the
+    // 28th was still "1" at 00:10 on the 30th — 25.7 hours — and the Weight
+    // screen said "Last logged · yesterday" above a history whose newest row
+    // was dated Sep 28. Nobody looking at those two dates calls that
+    // yesterday. Once the delta is past 24h the only honest unit is the one
+    // the user reads off a calendar, which is what the rest of this project
+    // uses [calendarDaysBetween] for.
+    final days = calendarDaysBetween(at, ref);
+    if (days == 1) return 'yesterday';
+    if (days <= 6) return '$days days ago';
 
     // Past a week a relative phrase stops being useful — give the date.
     //

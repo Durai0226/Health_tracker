@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/health/usual_range.dart';
 import '../../../core/services/health_data_service.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/biometric_day.dart';
 import '../models/biometric_metric.dart';
 import '../services/biometrics_service.dart';
 import '../widgets/biometrics_permission_card.dart';
+import '../widgets/usual_range_chart_card.dart';
 
 /// Resting heart rate, heart-rate variability, blood oxygen and breathing rate
 /// — one screen rather than four thin trackers, because most users will have
@@ -152,6 +154,7 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
             _restingCard(context, restingTrend),
             const SizedBox(height: AppSpacing.lg),
             _hrvCard(context, baseline),
+            ..._extraMetricCards(context),
           ],
           const SizedBox(height: AppSpacing.lg),
           Text(
@@ -240,26 +243,25 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
     final avg = (values.reduce((a, b) => a + b) / values.length).round();
     final anyDerived = trend.any((e) => e.derived);
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Resting heart rate',
-              style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
-          const SizedBox(height: AppSpacing.xs),
-          Text('$avg bpm average over ${trend.length} '
-              '${trend.length == 1 ? 'day' : 'days'} · $lo–$hi',
-              style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
-          if (anyDerived) ...[
-            const SizedBox(height: AppSpacing.xs),
-            // Said plainly rather than buried: some of these were inferred from
-            // overnight heart rate because the wearable did not report a
-            // resting value of its own.
-            Text('Some days are estimated from your overnight heart rate.',
-                style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
-          ],
-        ],
-      ),
+    return UsualRangeChartCard(
+      title: 'Resting heart rate',
+      unit: 'bpm',
+      today: DateTime.now(),
+      // A steady sleeper's range would otherwise be a hairline and 1 bpm of
+      // ordinary wobble would read as outside it.
+      minHalfWidth: 2,
+      points: [for (final e in trend) (date: e.date, value: e.bpm.toDouble())],
+      lines: [
+        Text('$avg bpm average over ${trend.length} '
+            '${trend.length == 1 ? 'day' : 'days'} · $lo–$hi',
+            style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+        if (anyDerived)
+          // Said plainly rather than buried: some of these were inferred from
+          // overnight heart rate because the wearable did not report a
+          // resting value of its own.
+          Text('Some days are estimated from your overnight heart rate.',
+              style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
+      ],
     );
   }
 
@@ -283,26 +285,77 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
             '(${baseline.nights} so far).'
         : '${baseline.ms!.round()} ms average over ${baseline.nights} nights.';
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Heart-rate variability',
-              style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(body, style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
-          const SizedBox(height: AppSpacing.xs),
-          // The metric is named because Android reports RMSSD and iOS SDNN.
-          // They are different statistics over different ranges, so a number
-          // without its metric is not comparable to one from another phone.
-          Text(
-            baseline.metric == HrvMetric.rmssd
-                ? 'Measured as RMSSD, from Health Connect.'
-                : 'Measured as SDNN, from Apple Health.',
-            style: tt.bodySmall?.copyWith(color: ext.textTertiary),
-          ),
-        ],
+    final now = DateTime.now();
+    // ONE metric only: Android reports RMSSD and iOS SDNN, different statistics
+    // over different ranges, so a mixed series would invent a step change.
+    final series = BiometricsService.hrvTrend(days: 30, metric: baseline.metric);
+    final status = HrvStatus.evaluate(
+        BiometricsService.hrvTrend(days: 28, metric: baseline.metric),
+        today: now);
+
+    final lines = <Widget>[
+      Text(body, style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+      if (status != null)
+        Text(status.message,
+            style: tt.bodyMedium?.copyWith(
+                color: ext.textPrimary, fontWeight: FontWeight.w600)),
+      // The metric is named because the two are not comparable between phones.
+      Text(
+        baseline.metric == HrvMetric.rmssd
+            ? 'Measured as RMSSD, from Health Connect.'
+            : 'Measured as SDNN, from Apple Health.',
+        style: tt.bodySmall?.copyWith(color: ext.textTertiary),
       ),
+    ];
+
+    if (series.isEmpty) {
+      return AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Heart-rate variability',
+                style: tt.titleMedium?.copyWith(color: ext.textPrimary)),
+            for (final l in lines) ...[const SizedBox(height: AppSpacing.xs), l],
+          ],
+        ),
+      );
+    }
+    return UsualRangeChartCard(
+      title: 'Heart-rate variability',
+      unit: 'ms',
+      today: now,
+      minHalfWidth: HrvStatus.minHalfWidthMs,
+      points: [for (final p in series) (date: p.date, value: p.ms)],
+      lines: lines,
     );
+  }
+
+  /// Blood oxygen and breathing rate: same 30-day chart and personal band, only
+  /// drawn when the wearable has reported the metric at all.
+  List<Widget> _extraMetricCards(BuildContext context) {
+    final now = DateTime.now();
+    final spo2 = BiometricsService.dailySeries((d) => d.spo2Avg, now: now);
+    final resp =
+        BiometricsService.dailySeries((d) => d.respiratoryRateAvg, now: now);
+    return [
+      if (spo2.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.lg),
+        UsualRangeChartCard(
+            title: 'Blood oxygen',
+            unit: '%',
+            today: now,
+            minHalfWidth: 1,
+            points: [for (final p in spo2) (date: p.date, value: p.value)]),
+      ],
+      if (resp.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.lg),
+        UsualRangeChartCard(
+            title: 'Breathing rate',
+            unit: 'breaths/min',
+            today: now,
+            minHalfWidth: 1,
+            points: [for (final p in resp) (date: p.date, value: p.value)]),
+      ],
+    ];
   }
 }

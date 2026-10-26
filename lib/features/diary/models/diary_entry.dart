@@ -27,6 +27,22 @@ class DiaryEntry {
     return firstLine.isNotEmpty ? firstLine : 'Untitled entry';
   }
 
+  /// The part of [body] that [displayTitle] has not already shown.
+  ///
+  /// [displayTitle] falls back to the body's FIRST LINE when the entry has no
+  /// title of its own, so a list row that renders the heading and then the
+  /// whole body prints the same sentence twice. That is what the Diary list
+  /// did on device, for every entry — a one-line note with no title is the
+  /// ordinary way to use a diary, not an edge case.
+  ///
+  /// Empty when the heading already said everything, so the caller can leave
+  /// the row out rather than render a blank line.
+  String get previewBody {
+    final heading = displayTitle;
+    final b = body.trim();
+    return b.startsWith(heading) ? b.substring(heading.length).trim() : b;
+  }
+
   DiaryEntry copyWith({
     String? dependentId,
     // See MoodEntry.copyWith's clearDependentId doc — same reason:

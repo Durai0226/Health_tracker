@@ -3,6 +3,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:uuid/uuid.dart';
+import '../widgets/measurement_plan_sheet.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
@@ -20,9 +21,21 @@ import '../../../core/health/med_safety_checker.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../../core/design/on_arbitrary_fill.dart';
+import '../services/critical_follow_up.dart';
 
 /// How the end of a medication course is expressed in the wizard.
 enum _DurationMode { ongoing, endDate, duration }
+
+/// What the "Current quantity" field shows when editing [m].
+///
+/// An untracked medicine is persisted with a stock of 0 (the mapper cannot store
+/// null), so a bare `> 0` test is what kept the field blank for those. It also
+/// blanked a TRACKED medicine that had run out — the one case where the 0 is the
+/// point — and saving that form then wrote it back as untracked, quietly
+/// dropping its refill reminders. Tracked means [EnhancedMedicine.isStockTracked].
+@visibleForTesting
+String stockFieldText(EnhancedMedicine m) =>
+    m.isStockTracked ? '${m.currentStock ?? 0}' : '';
 
 class NunitoAddMedicationFlow extends StatefulWidget {
   final EnhancedMedicine? editMedicine;
@@ -164,6 +177,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   final _instructionsController = TextEditingController();
   final _purposeController = TextEditingController();
   bool _reminderEnabled = true;
+  bool _criticalAlert = false;
 
 
   final HapticService _hapticService = HapticService();
@@ -259,6 +273,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       _instructionsController.text,
       _purposeController.text,
       '$_reminderEnabled',
+      '$_criticalAlert',
       // NUL separator: no field can contain one, so two different forms can
       // never collide on the same signature by running fields together.
     ].join('\u0000');
@@ -317,10 +332,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         : m.dosageAmount.toString();
     _strengthController.text = m.strength ?? '';
     _dosageUnit = m.dosageUnit ?? m.dosageForm.unit;
-    // Stock: treat a stored 0 as "untracked" so the field starts blank rather
-    // than pre-filling a meaningless zero (the mapper defaults untracked to 0).
-    _stockController.text =
-        (m.currentStock != null && m.currentStock! > 0) ? '${m.currentStock}' : '';
+    _stockController.text = stockFieldText(m);
     _lowStockThreshold = m.lowStockThreshold ?? 7;
     _refillReminderEnabled = m.refillReminderEnabled;
     final sched = m.schedule;
@@ -362,6 +374,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _instructionsController.text = m.instructions ?? '';
     _purposeController.text = m.purpose ?? '';
     _reminderEnabled = m.reminderEnabled;
+    _criticalAlert = m.criticalAlert;
     _titrationEnabled = sched.isTitrating;
     if (_titrationEnabled) {
       for (final step in sched.titrationSteps!) {
@@ -759,6 +772,16 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       _hapticService.success();
     } catch (_) {}
 
+    // A new BP, diabetes or water pill is when its home reading is most worth
+    // setting up. Offered, never switched on silently, and never on an edit.
+    if (!_isEditing && mounted) {
+      try {
+        await MeasurementPlanSheet.maybeShow(context, medicine);
+      } catch (e) {
+        debugPrint('⚠️ Measurement plan offer failed (medicine saved): $e');
+      }
+    }
+
     if (mounted) Navigator.pop(context, true);
     // Guard: the success path pops this screen, so it may be unmounted here.
     if (mounted) setState(() => _isLoading = false);
@@ -854,7 +877,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         prescribedDate: existing?.prescribedDate,
         refillsRemaining: existing?.refillsRemaining,
         reminderSound: existing?.reminderSound,
-        criticalAlert: existing?.criticalAlert ?? false,
+        criticalAlert: _criticalAlert && _reminderEnabled && !_isPRN,
         snoozeMinutes: existing?.snoozeMinutes ?? 10,
         drugInfo: existing?.drugInfo,
         warnings: existing?.warnings,
@@ -1046,7 +1069,23 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('What medicine are you adding?', style: tt.headlineMedium),
+          // The only step header that assumed ADDING.
+          //
+          // This flow doubles as the edit flow — `_isEditing`, which the app
+          // bar title and the final button both already branch on ("Edit
+          // medicine", "Save changes"). This line did not, so editing
+          // Metformin showed "Edit medicine" in the bar and "What medicine are
+          // you adding?" directly beneath it, above a name field prefilled
+          // with "Metformin".
+          //
+          // The other four step headers ("How much do you take?", "When do you
+          // take it?", …) read correctly either way and are left alone.
+          Text(
+            _isEditing
+                ? 'What are you changing?'
+                : 'What medicine are you adding?',
+            style: tt.headlineMedium,
+          ),
           const SizedBox(height: AppSpacing.xl),
           _buildSmartAddSection(context),
           const SizedBox(height: AppSpacing.xl),
@@ -2633,34 +2672,60 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final window = _windowMinutesByTime[key];
     final on = window != null;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, left: 4),
-      child: GestureDetector(
-        onTap: () => _selectWindowDuration(key),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              on ? Symbols.hourglass_top_rounded : Symbols.hourglass_empty_rounded,
-              size: 15,
-              color: on ? ext.mark(med) : ext.textTertiary,
-            ),
-            const SizedBox(width: 6),
-            // This caption is long; unbounded in a min-width Row it shot off
-            // the right edge at large Dynamic Type. Flexible lets it wrap
-            // inside the row's real width instead.
-            Flexible(
-              child: Text(
-                on
-                    ? 'Reminds across a ${_formatWindow(window)} window · 3 nudges'
-                    : 'Use a reminder window instead of one exact time',
-                style: tt.bodySmall?.copyWith(
+    return GestureDetector(
+      onTap: () => _selectWindowDuration(key),
+      // The padding has to be inside the detector and hit-testable, or it is
+      // decoration rather than target.
+      behavior: HitTestBehavior.opaque,
+      child: ConstrainedBox(
+        // 44pt floor. Measured on device this row was 12-16dp tall — a third
+        // of the minimum — because a 15px icon beside `bodySmall` is all it
+        // is.
+        //
+        // Being visually quiet here is deliberate and documented above: this
+        // is an advanced option and it is not meant to compete with the time
+        // chip. That is a statement about how much it should ATTRACT the eye,
+        // not about how hard it should be to hit once found — the users this
+        // option exists for still have to land on it. So the type, the colour
+        // and the icon are untouched and only the hit area grows.
+        //
+        // `widthFactor: 1` keeps the target the width of its own text: an
+        // unbounded Align would stretch across the column and make the empty
+        // space to its right open the duration picker.
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: 1.0,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  on
+                      ? Symbols.hourglass_top_rounded
+                      : Symbols.hourglass_empty_rounded,
+                  size: 15,
                   color: on ? ext.mark(med) : ext.textTertiary,
-                  decoration: on ? TextDecoration.underline : null,
                 ),
-              ),
+                const SizedBox(width: 6),
+                // This caption is long; unbounded in a min-width Row it shot
+                // off the right edge at large Dynamic Type. Flexible lets it
+                // wrap inside the row's real width instead.
+                Flexible(
+                  child: Text(
+                    on
+                        ? 'Reminds across a ${_formatWindow(window)} window · 3 nudges'
+                        : 'Use a reminder window instead of one exact time',
+                    style: tt.bodySmall?.copyWith(
+                      color: on ? ext.mark(med) : ext.textTertiary,
+                      decoration: on ? TextDecoration.underline : null,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -3295,6 +3360,62 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               ],
             ),
           ),
+          if (_reminderEnabled && !_isPRN) ...[
+            const SizedBox(height: AppSpacing.md),
+            _buildCriticalCard(context),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// "Must-take" switch: this medicine keeps ringing (at +15 and +30 minutes)
+  /// until the dose is taken or skipped. Off by default, so no existing
+  /// medicine changes behaviour; unavailable — and said so — for the schedules
+  /// the follow-up path cannot cover (see `canFollowUpSchedule`).
+  Widget _buildCriticalCard(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    final available = canFollowUpWhen(
+        weekendOverride: _weekendOverrideEnabled, frequencyType: _frequencyType);
+    final on = _criticalAlert && available;
+
+    void set(bool v) {
+      _hapticService.toggle();
+      setState(() => _criticalAlert = v);
+    }
+
+    return AppCard(
+      onTap: available ? () => set(!on) : null,
+      child: Row(
+        children: [
+          Icon(Symbols.priority_high_rounded,
+              color: on ? ext.mark(med) : ext.textTertiary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Must-take', style: tt.titleLarge),
+                Text(
+                  !available
+                      ? 'Follow-ups aren\'t available with weekend times or '
+                          'every-few-hours schedules.'
+                      : on
+                          ? 'Rings again after 15 and 30 minutes until you '
+                              'take or skip it'
+                          : 'Rings once, like any reminder',
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          AppSwitch(
+            value: on,
+            onChanged: available ? set : null,
+            accent: med,
+          ),
         ],
       ),
     );
@@ -3385,15 +3506,28 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     final med = ext.medicine;
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppMotion.fast,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? med.container : ext.surfaceVariant,
-          borderRadius: AppRadius.brSm,
-          border: Border.all(color: selected ? med.base : ext.outline),
+      child: ConstrainedBox(
+        // 44pt floor. `vertical: 12` around a `labelMedium` lands at 42 — two
+        // short, and measured at exactly 41.9dp on a 420dpi device across all
+        // nine shape chips.
+        //
+        // A `ConstrainedBox` rather than giving the container an `alignment`:
+        // these sit in a `Wrap`, and a Container with an alignment expands to
+        // the incoming maxWidth, which would make one chip swallow the row and
+        // silently break the line. `widthFactor: 1` on the `Center` keeps each
+        // chip the width of its own label while centring it in whatever height
+        // the floor leaves.
+        constraints: const BoxConstraints(minHeight: 44),
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? med.container : ext.surfaceVariant,
+            borderRadius: AppRadius.brSm,
+            border: Border.all(color: selected ? med.base : ext.outline),
+          ),
+          child: Center(widthFactor: 1.0, child: child),
         ),
-        child: child,
       ),
     );
   }

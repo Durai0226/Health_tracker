@@ -24,8 +24,13 @@ import 'package:tablet_remainder/features/water/services/water_service.dart';
 /// said so.
 ///
 /// These tests seed one row in every table the backup claims to cover, run the
-/// real export → wipe → import that "Restore & overwrite" runs, and demand the
-/// data come back. The round trip is the only assertion that can catch a
+/// real export → wipe → import that a CLEARING restore runs
+/// (`restoreBackup(..., clearExisting: true)`, which is the cloud restore in
+/// `core/services/backup_service.dart`), and demand the data come back.
+///
+/// Named for the behaviour rather than a button: the local file restore on
+/// `backup_settings_screen` leaves `clearExisting` at false and is a pure
+/// merge, and used to be mislabelled "Restore & overwrite" for it. The round trip is the only assertion that can catch a
 /// section being added to the export but not the import, or cleared by the
 /// restore but not restored by it.
 void main() {
@@ -459,10 +464,10 @@ void main() {
   });
 
   /// The other half of the contract, and the one the round trip above cannot
-  /// see: `clearRestorableData` is what "Restore & overwrite" wipes first, and
-  /// a section added to the export but not to that list turns an overwrite
+  /// see: `clearRestorableData` is what a clearing restore wipes first, and a
+  /// section added to the export but not to that list turns an overwrite
   /// restore into a silent merge.
-  test('"Restore & overwrite" really overwrites doctors and appointments',
+  test('a clearing restore really overwrites doctors and appointments',
       () async {
     final backup = await CleanStorageService.exportAllData();
 

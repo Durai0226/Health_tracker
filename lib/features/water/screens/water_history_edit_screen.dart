@@ -95,9 +95,13 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
     final ext = AppColorsExt.of(context);
     // The goal THIS day had, not today's — see WaterService.goalForDay.
     final goal = WaterService.goalForDay(_dayData);
-    final progress = _dayData != null && goal > 0
-        ? (_dayData!.effectiveHydrationMl / goal).clamp(0.0, 1.5)
-        : 0.0;
+    // UNCLAMPED. `_buildProgressCard` already clamps at both places it FILLS
+    // a ring from this; what it must not do is clamp the number it PRINTS.
+    // This used to arrive pre-clamped at 1.5, so 5000ml against a 2000ml goal
+    // drew "150%" in the ring centre with "5000ml / of 2000ml goal" printed
+    // beside it.
+    final progress =
+        _dayData != null && goal > 0 ? _dayData!.effectiveHydrationMl / goal : 0.0;
 
     return AppScaffold(
       floatingActionButton: AppFab(
@@ -619,8 +623,23 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
                 onTap: () {
                   HapticFeedback.selectionClick();
                   setState(() {
+                    // Prefill the amount ONLY while it is still the outgoing
+                    // beverage's default — i.e. a number the user has not
+                    // chosen.
+                    //
+                    // This used to overwrite unconditionally, and this sheet
+                    // is the EDIT sheet as well as the add one. Correcting
+                    // only the drink type on an existing entry therefore threw
+                    // the logged volume away: "Coffee 400ml" retyped as Tea
+                    // silently became 200ml, with nothing on screen to say the
+                    // amount had changed.
+                    final untouched = _amountController.text.trim() ==
+                        _selectedBeverage.defaultAmountMl.toString();
                     _selectedBeverage = beverage;
-                    _amountController.text = beverage.defaultAmountMl.toString();
+                    if (untouched) {
+                      _amountController.text =
+                          beverage.defaultAmountMl.toString();
+                    }
                   });
                 },
                 child: Container(
@@ -701,7 +720,15 @@ class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
                   const SizedBox(height: AppSpacing.sm),
                   GestureDetector(
                     onTap: () async {
-                      final time = await AppTimePicker.show(context, initial: _selectedTime);
+                      // `accent:`, like the other fourteen call sites on this
+                      // screen. Without it `AppTimePicker.show` falls back to
+                      // `AccentScope.swatchOf(context)` (app_pickers.dart:24),
+                      // and this screen provides no scope and is pushed on a
+                      // bare `MaterialPageRoute` from both of its callers — so
+                      // the "Select time" sheet came up brand teal inside an
+                      // otherwise water-cyan flow.
+                      final time = await AppTimePicker.show(context,
+                          initial: _selectedTime, accent: ext.water);
                       if (time != null) {
                         setState(() => _selectedTime = time);
                       }

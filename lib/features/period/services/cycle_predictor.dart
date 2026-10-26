@@ -43,13 +43,29 @@ class CyclePredictor {
 
   // ---- Public API --------------------------------------------------------
 
-  /// Group flow days into cycles. Consecutive bleeding days form one period run,
-  /// tolerating a single skipped day (gap ≤ 2 days). A cycle runs from one
-  /// run's start to the day before the next run's start.
+  /// Flow at or above this starts, and forms the body of, a period: LIGHT. A
+  /// day of spotting is not a period — it is the lead-in, the tail or a
+  /// mid-cycle bleed, and counting it as a start invented a cycle out of one
+  /// brown smear, skewing the average length and the next prediction.
+  static const int periodFlowMin = 2;
+
+  /// Group flow days into cycles. Consecutive light-or-heavier days form one
+  /// period run, tolerating a single skipped day (gap ≤ 2 days). A cycle runs
+  /// from one run's start to the day before the next run's start.
+  ///
+  /// Spotting never starts a run. Spotting that CONTINUES straight on from a
+  /// run's last day is its tail and counts toward that period's length, since
+  /// that is how most people describe the end of their period; spotting
+  /// anywhere else is ignored here.
   static List<DerivedCycle> deriveCycles(List<FlowDay> days) {
     final flow = <DateTime>[];
+    final spotting = <DateTime>{};
     for (final d in days) {
-      if (d.flowIndex > 0) flow.add(_dayOnly(d.date));
+      if (d.flowIndex >= periodFlowMin) {
+        flow.add(_dayOnly(d.date));
+      } else if (d.flowIndex == 1) {
+        spotting.add(_dayOnly(d.date));
+      }
     }
     flow.sort();
     if (flow.isEmpty) return const [];
@@ -68,6 +84,17 @@ class CyclePredictor {
         runs.last.add(d);
       } else {
         runs.add([d]);
+      }
+    }
+
+    // The tail: spotting on the days straight after a run, stopping short of the
+    // next run so two periods can never be bridged by it.
+    for (var i = 0; i < runs.length; i++) {
+      final limit = i < runs.length - 1 ? runs[i + 1].first : null;
+      var next = _addDays(runs[i].last, 1);
+      while (spotting.contains(next) && (limit == null || next.isBefore(limit))) {
+        runs[i].add(next);
+        next = _addDays(next, 1);
       }
     }
 

@@ -8,6 +8,7 @@ import 'package:clock/clock.dart';
 
 import '../models/reminder_model.dart';
 import 'reminder_adherence.dart';
+import '../../../core/services/vacation_mode.dart';
 
 /// Live reminder state, so a screen no longer has to guess when to reload.
 ///
@@ -80,7 +81,8 @@ class ReminderService extends ChangeNotifier {
       proportionOfOccurrencesDone:
           ReminderAdherence.proportionOfOccurrencesDone(rows),
       daysCounted: ReminderAdherence.byDay(rows).length,
-      streak: ReminderAdherence.streak(rows, today: now),
+      streak: ReminderAdherence.streak(rows,
+          today: now, frozenDays: VacationMode.frozenDays(now: now)),
     );
   }
 

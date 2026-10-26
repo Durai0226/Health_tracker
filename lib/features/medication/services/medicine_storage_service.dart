@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
@@ -21,6 +22,8 @@ import '../../../core/services/background_alarm_service.dart';
 import 'appointment_reminder_service.dart';
 import 'reminder_window_nudges.dart';
 import 'vitals_storage_service.dart';
+import 'refill_loop.dart';
+import 'refill_reminder_service.dart';
 
 /// Enhanced Medicine Storage Service with all premium features
 /// Migrated to Drift (SQLite) storage
@@ -85,6 +88,7 @@ class MedicineCleanStorageService {
       isActive: data.isActive,
       isArchived: data.isArchived,
       reminderEnabled: data.reminderEnabled,
+      criticalAlert: data.criticalAlert,
       notes: data.notes,
       healthCategories: data.healthCategoriesJson != null 
           ? (jsonDecode(data.healthCategoriesJson!) as List).map((e) => HealthCategory.values[e]).toList()
@@ -132,6 +136,7 @@ class MedicineCleanStorageService {
       isActive: drift.Value(medicine.isActive),
       isArchived: drift.Value(medicine.isArchived),
       reminderEnabled: drift.Value(medicine.reminderEnabled),
+      criticalAlert: drift.Value(medicine.criticalAlert),
       notes: drift.Value(medicine.notes),
       healthCategoriesJson: drift.Value(medicine.healthCategories != null 
           ? jsonEncode(medicine.healthCategories!.map((e) => e.index).toList()) 
@@ -349,13 +354,26 @@ class MedicineCleanStorageService {
           kind: ReminderKind.gentle,
         );
       }
+      _refreshRunOutReminder(medicineId);
     }
+  }
+
+  /// The run-out reminder was only recomputed at app start, so a dose taken at
+  /// noon or stock added at four left the morning's date armed. Re-arm just this
+  /// medicine now, off the take path: nothing here waits on it, and it swallows
+  /// its own errors.
+  static void _refreshRunOutReminder(String medicineId) {
+    unawaited(RefillReminderService.rescheduleFor(medicineId));
   }
 
   static Future<void> refillStock(String medicineId, int amount) async {
     final med = await getMedicine(medicineId);
     if (med != null) {
       await updateMedicine(med.addStock(amount));
+      // Stock arrived, by whichever route: a pending "did you pick it up?"
+      // is no longer a question.
+      await RefillLoop.onRefilled(medicineId);
+      _refreshRunOutReminder(medicineId);
     }
   }
 
@@ -365,6 +383,7 @@ class MedicineCleanStorageService {
     final med = await getMedicine(medicineId);
     if (med != null && med.currentStock != null) {
       await updateMedicine(med.restoreStock(amount));
+      _refreshRunOutReminder(medicineId);
     }
   }
 
@@ -469,6 +488,10 @@ class MedicineCleanStorageService {
     int? moodRating,
     int? effectivenessRating,
     Map<String, dynamic>? vitals,
+
+    /// When the dose was actually swallowed, for one logged after the fact.
+    /// Defaults to now. The slot (and so the log id) is still [scheduledTime].
+    DateTime? takenAt,
   }) async {
     // A log inherits its medicine's owner — not necessarily whatever profile
     // happens to be active right now — so it stays correctly scoped even if
@@ -486,6 +509,7 @@ class MedicineCleanStorageService {
       effectivenessRating: effectivenessRating,
       dependentId: medicine?.dependentId,
       vitals: vitals,
+      actionTime: takenAt,
     );
     // Was this exact slot ALREADY recorded as taken?
     //
@@ -1041,6 +1065,30 @@ class MedicineCleanStorageService {
       debugPrint('Error saving clinic: $e');
       rethrow;
     }
+  }
+
+  /// The active household member's name, or null for the account holder.
+  ///
+  /// What a printed report names as its patient. Null leaves the "Patient:" line
+  /// out, the right default for a single-person household; for a family member
+  /// it is what stops two exported reports for two people being
+  /// indistinguishable except by reading the rows.
+  static Future<String?> activePatientName() async {
+    final id = ActiveProfileService().activeDependentId;
+    if (id == null) return null;
+    try {
+      final deps = await getAllDependents();
+      return deps.where((d) => d.id == id).firstOrNull?.name;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Remove every clinic. Clinics live in SharedPreferences rather than Drift,
+  /// so "Delete all data" and an overwrite restore have to reach them here.
+  static Future<void> clearClinics() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_clinicsKey);
   }
 
   static Future<void> deleteClinic(String id) async {
@@ -1704,7 +1752,16 @@ class MedicineCleanStorageService {
     List<MedicineLog>? logs,
   }) async {
     final now = clock.now();
-    final startDate = now.subtract(Duration(days: days));
+    // [days] CALENDAR days ending today, not an elapsed span of days x 24h.
+    //
+    // This was `now.subtract(Duration(days: days))`, which is both the
+    // DST-unsafe pattern this project bans and a window that disagrees with
+    // every calendar-day consumer. On the Adherence report the ring called
+    // this with days: 7 while the "Daily adherence" chart beneath it built its
+    // bars from `dayOffset(now, -(7 - 1))` — seven whole days. At 14:00 the
+    // ring's window opened at 14:00 eight days ago, so a slot at 20:00 that
+    // evening counted toward the headline and appeared on no bar at all.
+    final startDate = dayOffset(now, -(days - 1));
     final source = logs ?? await getLogsForDateRange(startDate, now);
     medicines ??= await getAllMedicines();
 

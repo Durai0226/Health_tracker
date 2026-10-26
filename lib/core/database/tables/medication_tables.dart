@@ -58,6 +58,14 @@ class EnhancedMedicines extends Table {
   BoolColumn get reminderEnabled =>
       boolean().withDefault(const Constant(true))();
 
+  /// A "must-take" medicine: its dose keeps ringing until taken or skipped.
+  ///
+  /// `EnhancedMedicine.criticalAlert` existed, the form carried it forward, and
+  /// nothing stored it — the same gap `reminderEnabled` had. Defaults to false
+  /// so no existing medicine changes how it rings.
+  BoolColumn get criticalAlert =>
+      boolean().withDefault(const Constant(false))();
+
   /// Soft-delete tombstone, so a deletion can propagate through LWW cloud sync
   /// instead of looking like "this device has not downloaded it yet".
   DateTimeColumn get deletedAt => dateTime().nullable()();

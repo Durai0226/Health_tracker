@@ -121,8 +121,10 @@ void main() {
       matching: find.byWidgetPredicate(
           (w) => w is SizedBox && w.width == 44 && w.height == 44),
     );
-    expect(tick, findsOneWidget);
-    await tester.tap(tick);
+    // The card also carries a 44pt More trigger, LAST in the row; the tick is
+    // the first of the two.
+    expect(tick, findsNWidgets(2));
+    await tester.tap(tick.first);
     await settle(tester);
   }
 

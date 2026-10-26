@@ -38,6 +38,7 @@ class DateFormats {
   /// "M" / "Mon" / "Monday" — weekday at three widths.
   static final weekdayNarrow = DateFormat('E');
   static final weekdayShort = DateFormat('EEE');
+  static final weekdayLong = DateFormat('EEEE');
 
   /// "Mon, Mar 14" and "Monday, March 14" — dated headers.
   static final weekdayDayMonthShort = DateFormat('EEE, MMM d');
@@ -45,7 +46,12 @@ class DateFormats {
   static final weekdayDayMonthMedium = DateFormat('EEEE, MMM d');
 
   /// "Mon, Mar 14 at 8:05 AM"
-  static final weekdayDayMonthTime = DateFormat('EEE, MMM d at h:mm a');
+  ///
+  /// The `at` is QUOTED. Unquoted, intl reads the `a` of "at" as its am/pm
+  /// pattern character and only the `t` survives as a literal, so this
+  /// rendered "Mon, Mar 14 PMt 8:05 PM" — on the medicine detail screen's
+  /// Schedule card, under the heading "Next Dose".
+  static final weekdayDayMonthTime = DateFormat("EEE, MMM d 'at' h:mm a");
 
   /// "Mar 14 · 8:05 AM" — mid-dot variant used in log rows.
   static final dayMonthDotTime = DateFormat('MMM d · h:mm a');

@@ -313,6 +313,34 @@ void main() {
     );
   }
 
+  /// A week with NOTHING in it — every series empty, so `isEmptyWeek` holds.
+  ///
+  /// [weekWithoutDoses] is not this: it carries water, steps, sleep and weight
+  /// and exists to model "no doses, plenty else". The empty-week assertion
+  /// below used to run against it with `hasCards: false` passed by hand, which
+  /// tested the cover's reaction to a flag rather than to an empty week — and
+  /// stopped being true once the cover learned to tell the two apart.
+  WeeklyRecap emptyWeek() => WeeklyRecap(
+        bundle: const TrendsBundle(
+          range: TrendRange.d7,
+          adherence: TrendSeries([]),
+          water: TrendSeries([]),
+          steps: TrendSeries([]),
+          sleep: TrendSeries([]),
+          focus: TrendSeries([]),
+          bloodPressure: TrendSeries([]),
+          glucose: TrendSeries([]),
+          glucoseTir: GlucoseTir.empty,
+          weight: TrendSeries([]),
+          period: TrendSeries([]),
+          cycle: null,
+        ),
+        hero: const RecapHero(kind: RecapHeroKind.daysLogged),
+        highlights: const [],
+        from: DateTime(2026, 8, 20),
+        to: DateTime(2026, 8, 26),
+      );
+
   Future<void> pumpCover(WidgetTester tester, WeeklyRecap r,
       {required bool hasCards}) async {
     await tester.pumpWidget(MaterialApp(
@@ -350,9 +378,65 @@ void main() {
     });
 
     testWidgets('a genuinely empty week still says so', (tester) async {
-      await pumpCover(tester, weekWithoutDoses(), hasCards: false);
+      final r = emptyWeek();
+      expect(r.isEmptyWeek, isTrue,
+          reason: 'premise: this fixture really is empty. The old one was '
+              'weekWithoutDoses(), which carries water, steps and sleep.');
+      await pumpCover(tester, r, hasCards: false);
       expect(find.text('Nothing logged yet this week.'), findsOneWidget);
       expect(find.textContaining('history is still here'), findsOneWidget);
+    });
+
+    /// "No cards" is not "nothing logged".
+    ///
+    /// `_cards` builds no row for `bundle.period`, though the bundle carries it
+    /// and `isEmptyWeek` counts it as data. So a week in which somebody logged
+    /// their cycle and nothing else produced no cards, and the cover told them
+    /// they had logged nothing.
+    testWidgets('a week with data but no cards is not called empty',
+        (tester) async {
+      final r = weekWithoutDoses();
+      expect(r.isEmptyWeek, isFalse, reason: 'premise: this week has data');
+
+      await pumpCover(tester, r, hasCards: false);
+
+      expect(find.textContaining('Nothing logged yet this week'), findsNothing,
+          reason: 'the user logged things; only nothing was chartable');
+      expect(find.textContaining('Nothing to chart'), findsOneWidget);
+    });
+
+
+    /// The card shown when something WAS logged but nothing is chartable.
+    ///
+    /// Its branch is `cards.isEmpty && r.hero.hasValue`, and the comment there
+    /// says exactly that: "Only when something WAS logged but nothing is
+    /// chartable". The card nevertheless read "Nothing logged this week" — the
+    /// one claim its own condition rules out — directly under a cover printing
+    /// the hero figure that disproves it.
+    testWidgets('the no-cards card does not claim nothing was logged',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => WeeklyRecapScreen.emptyWeekFor(
+                context, AppColorsExt.of(context)),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      final texts = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data ?? '')
+          .join(' | ');
+
+      expect(texts, isNotEmpty, reason: 'the card rendered nothing');
+      expect(texts, isNot(contains('Nothing logged this week')),
+          reason: 'this card only appears when something WAS logged. Card '
+              'said:\n' + r'$texts');
+      expect(texts, contains('Nothing to chart this week'),
+          reason: 'card said:\n' + r'$texts');
     });
 
     testWidgets('a failed adherence read is not reported as a quiet week',

@@ -24,7 +24,10 @@ import '../../../core/constants/app_strings.dart';
 /// ## Keeping this honest
 ///
 /// The lists below must match what `HealthDataService` actually requests —
-/// `readTypesFor` / `vitalsWriteTypes` / `hydrationWriteTypes`. They are written out in plain language
+/// `readTypesFor` / `biometricTypesFor` / `vitalsWriteTypes` /
+/// `hydrationWriteTypes`. `biometricTypesFor` is easy to forget because it
+/// sits behind its own consent sheet, and it was: this screen named four read
+/// types while the app requested twelve. They are written out in plain language
 /// rather than generated from those constants, because a reviewer (and a user)
 /// needs "how long you slept", not `SLEEP_REM`. **If you add a data type,
 /// change this screen in the same commit.** Claiming less than you read is the
@@ -102,6 +105,40 @@ class HealthPrivacyScreen extends StatelessWidget {
                         title: 'Water logged in other apps',
                         subtitle: 'So your daily total counts drinks you '
                             'recorded elsewhere',
+                      ),
+                      // The biometrics tier. This screen listed four read
+                      // types while `HealthDataService.biometricTypesFor`
+                      // requested eight more — heart rate, resting heart rate,
+                      // HRV, blood oxygen, respiratory rate, body and skin
+                      // temperature, and workouts — every one of them declared
+                      // in AndroidManifest.xml.
+                      //
+                      // The contract at the top of this file named
+                      // `readTypesFor` / `vitalsWriteTypes` /
+                      // `hydrationWriteTypes`, which is the list as it stood
+                      // before biometrics added a THIRD read tier behind its
+                      // own consent sheet. Being a separate sheet is why it
+                      // was missed and is not a reason to leave it out: the
+                      // disclosure has to cover everything the app can ask
+                      // for, not everything one sheet asks for.
+                      AppListTile(
+                        icon: Symbols.ecg_heart_rounded,
+                        iconColor: ext.mark(ext.medicine),
+                        title: 'Heart rate, variability and blood oxygen',
+                        // Two lines, because `AppListTile` ellipsises after
+                        // that and a disclosure that visibly trails off reads
+                        // badly to the reviewer it exists for. The consent
+                        // point this used to end on is already the section
+                        // footer's job.
+                        subtitle: 'Plus breathing rate, body and skin '
+                            'temperature — fills the Heart tracker',
+                      ),
+                      AppListTile(
+                        icon: Symbols.exercise_rounded,
+                        iconColor: ext.mark(ext.steps),
+                        title: 'Workouts recorded by your watch or band',
+                        subtitle: 'Their type, duration, distance, calories '
+                            'and average heart rate — fills the Workouts list',
                       ),
                     ],
                   ),

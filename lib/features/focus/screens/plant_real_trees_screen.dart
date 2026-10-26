@@ -7,8 +7,15 @@ import '../models/focus_coins.dart';
 import '../services/coins_service.dart';
 
 /// Height a shop tile needs at 1.0x text: 32 padding + 48pt emoji line +
-/// 12 + name + 4 + two description lines + the price chip.
-const double _treeTileMinExtent = 208;
+/// 12 + name + 4 + THREE description lines + the price chip.
+///
+/// 208 with a 2-line cap truncated every one of the eight blurbs — "Strong and
+/// long-lasting, absorbs tons of CO2 o…" — while a bare `Spacer` below them
+/// held 34.33pt of dead tile, about 2.4 unused `labelSmall` lines. The third
+/// line costs one 14pt line box, so this is 208 + 14. Above ~376dp the tile is
+/// already taller than this (the 0.75 ratio wins) and the constant does not
+/// bind; below it, the extra line has to be paid for here or the tile overflows.
+const double _treeTileMinExtent = 222;
 
 class PlantRealTreesScreen extends StatefulWidget {
   const PlantRealTreesScreen({super.key});
@@ -80,204 +87,153 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
     );
   }
 
-  /// The coin balance, on the AA-verified `steps` fill pair.
+  /// The coin balance, on the `success` CONTAINER pair.
   ///
-  /// `steps` rather than `focus`: this header is green because the reward is a
-  /// tree, and the Focus violet on a green card was what produced the previous
-  /// mismatch (violet coin icons on a hardcoded #4CAF50). The two inner panels
-  /// are OUTLINED rather than filled with translucent white on purpose — a
-  /// white@0.15 wash lifts the ground under its own labels to 3.82:1, where the
-  /// solid fill leaves every label at the pair's measured 5.02:1 (light) /
-  /// 8.55:1 (dark).
+  /// Green, not the Focus violet: this header is green because the reward is a
+  /// tree, and violet on a green card was what produced the previous mismatch
+  /// (violet coin icons on a hardcoded #4CAF50).
+  ///
+  /// `success` rather than `steps`, which this screen used to reach for. Green
+  /// here means "a good outcome", which is what the semantic token is for;
+  /// `steps` is the Steps FEATURE's identity colour, and `FeatureAccent` exists
+  /// precisely so two features do not share one. The card the user taps to get
+  /// here is already `accent: ext.success` (`focus_screen.dart`), so the
+  /// destination now matches the door. The two swatches are both green and
+  /// measure comparably (6.78:1 for the success pair), so this costs nothing
+  /// visually and stops the screen claiming to be part of Steps.
+  ///
+  /// The pair is `container`/`onContainer`, not `fillBg`/`fillFg`. `fillBg` is
+  /// documented as the ground for a FILLED CONTROL, and `mark()` returns the
+  /// identical expression (`isDark ? s.base : s.strong`) — it is a colour sized
+  /// for a button or a 20pt glyph. At 363x241pt it made this card #4ADE80,
+  /// measuring 10.69:1 against the page where every other card on the screen
+  /// measures 1.08:1: the header was an order of magnitude brighter than
+  /// anything else on it. `app_palette.dart` had already measured that exact
+  /// band and rejected it — "dark ALL SEVEN sit at L 0.68–0.80, outside the
+  /// dark band 0.48–0.67" — but scoped the finding to chart marks, so no gate
+  /// caught a surface. The container pair is the accent's large-area token:
+  /// 1.05:1 (light) / 2.42:1 (dark) against the page, labels at 6.78:1.
+  ///
+  /// The two outlined inner panels are gone, and with them a hand-rolled
+  /// `_buildImpactStat`. They were a re-implementation of `StatTile` /
+  /// `StatTileRow`, which already give equal-width cells, a token divider and
+  /// shrink-to-fit on both lines — and the outline they used, `fg@0.4`,
+  /// measured 2.04:1 (light) / 2.10:1 (dark) against its own ground, under the
+  /// 3:1 WCAG 1.4.11 asks of a component boundary. The row sits OUTSIDE the
+  /// tinted card because `StatTile`'s label is `textSecondary`, measured
+  /// against `ext.surface`.
+  ///
+  /// "Lifetime Coins" is gone because it was never independent:
+  /// `lifetimeCoins == totalCoins + coinsSpentOnTrees` is an exact invariant of
+  /// `CoinsService` — every credit adds to both, and the single debit
+  /// subtracts from `totalCoins`, adds to `coinsSpentOnTrees` and never touches
+  /// `lifetimeCoins`. Before any tree is bought that makes it equal to the
+  /// balance, so the header printed the same number twice under two labels.
   Widget _buildCoinsHeader() {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    final fg = ext.fillFg(ext.steps);
-    return Container(
-      margin: const EdgeInsets.all(AppSpacing.xl),
+    final fg = ext.success.onContainer;
+    return Padding(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: ext.fillBg(ext.steps),
-        borderRadius: AppRadius.brCard,
-        boxShadow: AppShadows.card(context),
-      ),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // The coin balance takes the leftover width; the trees badge
-              // keeps its natural size but may shrink its label.
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            decoration: BoxDecoration(
+              color: ext.success.container,
+              borderRadius: AppRadius.brCard,
+              // Matches AppCard: on dark, a hairline carries the edge that a
+              // shadow cannot against a near-black page.
+              border:
+                  ext.isDark ? Border.all(color: ext.outline, width: 1) : null,
+              boxShadow: AppShadows.card(context),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(Symbols.toll_rounded, size: 30, color: fg),
-                        const SizedBox(width: AppSpacing.md),
-                        Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '${_coinsService.totalCoins}',
-                              maxLines: 1,
-                              softWrap: false,
-                              style: tt.displayMedium?.copyWith(color: fg),
-                            ),
-                          ),
+                    Icon(Symbols.toll_rounded, size: 30, color: fg),
+                    const SizedBox(width: AppSpacing.md),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${_coinsService.totalCoins}',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: tt.displayMedium?.copyWith(color: fg),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Available Coins',
-                        maxLines: 1,
-                        softWrap: false,
-                        style: tt.bodyMedium?.copyWith(color: fg),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  decoration: BoxDecoration(
-                    borderRadius: AppRadius.brLg,
-                    border: Border.all(color: fg.withOpacity(0.4)),
+                const SizedBox(height: AppSpacing.xs),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Available Coins',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: tt.bodyMedium?.copyWith(color: fg),
                   ),
-                  child: Column(
-                    children: [
-                      Icon(Symbols.park_rounded, size: 22, color: fg),
-                      const SizedBox(height: AppSpacing.xs),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '${_coinsService.treesPlanted}',
-                          maxLines: 1,
-                          softWrap: false,
-                          style: tt.headlineMedium?.copyWith(color: fg),
-                        ),
-                      ),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          'Trees Planted',
-                          maxLines: 1,
-                          softWrap: false,
-                          style: tt.labelSmall?.copyWith(color: fg),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.gutter),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              borderRadius: AppRadius.brLg,
-              border: Border.all(color: fg.withOpacity(0.4)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Expanded(
-                  child: _buildImpactStat(
-                      '${_coinsService.coins.coinsSpentOnTrees}', 'Coins Spent'),
-                ),
-                Container(width: 1, height: 30, color: fg.withOpacity(0.4)),
-                Expanded(
-                  child: _buildImpactStat(
-                      '${_coinsService.lifetimeCoins}', 'Lifetime Coins'),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          // Outside the tinted card on purpose: StatTile draws its label in
+          // `textSecondary`, which is measured against `ext.surface` and falls
+          // below AA on a coloured fill.
+          StatTileRow(
+            tiles: [
+              StatTile(
+                icon: Symbols.park_rounded,
+                value: '${_coinsService.treesPlanted}',
+                label: 'Trees planted',
+                accent: ext.success,
+              ),
+              StatTile(
+                icon: Symbols.toll_rounded,
+                value: '${_coinsService.coins.coinsSpentOnTrees}',
+                label: 'Coins spent',
+                accent: ext.success,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildImpactStat(String value, String label) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    final fg = ext.fillFg(ext.steps);
-    return Column(
-      children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            value,
-            maxLines: 1,
-            softWrap: false,
-            style: tt.headlineSmall?.copyWith(color: fg),
-          ),
-        ),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            maxLines: 1,
-            softWrap: false,
-            style: tt.bodySmall?.copyWith(color: fg),
-          ),
-        ),
-      ],
-    );
-  }
-
+  /// The shared toggle, on the screen's own accent.
+  ///
+  /// Was a hand-rolled 3-up `Row` of `GestureDetector`s. Two defects came with
+  /// it. The labels had no `maxLines`, no `softWrap: false` and no `Flexible`,
+  /// so at 411dp "My Forest" wrapped to two lines and the strip measured a
+  /// ragged 46/62/46 — the exact bug `SegmentedToggle` documents having already
+  /// fixed for its own segments. And the selected fill was `fillBg(ext.focus)`,
+  /// the Focus violet, sitting directly beneath a green header on a screen
+  /// whose header comment says violet-on-green was the mismatch it removed:
+  /// the rule was applied to the card and not to the control under it.
+  ///
+  /// `accent: ext.success` keeps the one accent this screen commits to. The
+  /// toggle also brings the selection haptic the hand-rolled version had not.
   Widget _buildTabBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-      child: Row(
-        children: [
-          _buildTab('Shop', 0),
-          const SizedBox(width: AppSpacing.md),
-          _buildTab('My Forest', 1),
-          const SizedBox(width: AppSpacing.md),
-          _buildTab('History', 2),
+      child: SegmentedToggle(
+        accent: AppColorsExt.of(context).success,
+        index: _selectedTab,
+        onChanged: (i) => setState(() => _selectedTab = i),
+        items: const [
+          SegmentItem(icon: Symbols.storefront_rounded, label: 'Shop'),
+          SegmentItem(icon: Symbols.park_rounded, label: 'My Forest'),
+          SegmentItem(icon: Symbols.receipt_long_rounded, label: 'History'),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTab(String label, int index) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    final isSelected = _selectedTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTab = index),
-        child: Container(
-          // 14 + 16 (labelLarge line box) + 14 = 44. At AppSpacing.md this
-          // measured 42x42 — under the Apple HIG comfort minimum, on the
-          // control that switches the whole screen.
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: isSelected ? ext.fillBg(ext.focus) : ext.surface,
-            borderRadius: AppRadius.brMd,
-            border: Border.all(
-              color: isSelected ? ext.fillBg(ext.focus) : ext.outline,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: tt.labelLarge?.copyWith(
-                color: isSelected ? ext.fillFg(ext.focus) : ext.textPrimary,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -329,9 +285,16 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
         decoration: BoxDecoration(
           color: ext.surface,
           borderRadius: AppRadius.brCard,
-          border: Border.all(
-            color: canAfford ? treeType.color.withOpacity(0.3) : ext.outline,
-          ),
+          // One token border for every species, affordable or not.
+          //
+          // Was `treeType.color.withOpacity(0.3)`, eight raw literals from the
+          // model. Composited on the card they measured 1.16:1 (oak) to 2.13:1
+          // (cherry) — an 84% spread carrying no meaning. With enough coins
+          // every tile is in the SAME state, yet Maple drew a visible warm
+          // border while Oak drew almost nothing, so the grid read as though
+          // some tiles were selected. Affordability is already carried twice:
+          // the 0.4 opacity below and the price chip.
+          border: Border.all(color: ext.outline),
           boxShadow: AppShadows.resting(context),
         ),
         child: Column(
@@ -360,7 +323,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 fontWeight: FontWeight.w400,
                 color: canAfford ? ext.textSecondary : ext.textTertiary,
               ),
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
             const Spacer(),
@@ -368,9 +331,15 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               decoration: BoxDecoration(
-                color: canAfford
-                    ? treeType.color.withOpacity(0.1)
-                    : ext.surfaceVariant,
+                // Was `treeType.color.withOpacity(0.1)`: measured against the
+                // card that is 1.05:1 (oak) to 1.24:1 (cherry) — Oak's chip
+                // resolved to #1E1F24, three units of lift over the #171B22
+                // card, i.e. no chip at all. The 0.1 alpha came from a
+                // light-mode reading where a pale tint is legible; on dark it
+                // vanishes. The accent's container token is the fill that is
+                // meant to be seen at this size (1.90:1 dark / 1.10:1 light
+                // against the card) and it pairs with `onContainer` below.
+                color: canAfford ? ext.success.container : ext.surfaceVariant,
                 borderRadius: AppRadius.brSm,
               ),
               // The chip is only ~72pt wide inside a 320pt-phone tile, so the
@@ -383,13 +352,16 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                   children: [
                     // The price reads in a TOKEN colour, not the species tint.
                     // `RealTreeType.color` is decoration — Cherry's #F8BBD9
-                    // measures 1.31:1 as text on the card surface — so the tint
-                    // stays on the chip fill and the number takes `mark(steps)`
-                    // (5.02:1 light / 8.03:1 dark).
+                    // measures 1.31:1 as text on the card surface — so the
+                    // species never reaches the number. Now that the chip is
+                    // filled with `container`, the number takes its documented
+                    // partner `onContainer` (6.49:1 light / 7.52:1 dark on that
+                    // fill) rather than `mark`, which is measured against the
+                    // card surface and not against a chip sitting on it.
                     Icon(Symbols.toll_rounded,
                         size: 14,
                         color: canAfford
-                            ? ext.mark(ext.steps)
+                            ? ext.success.onContainer
                             : ext.textSecondary),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
@@ -398,7 +370,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                       softWrap: false,
                       style: tt.labelLarge?.copyWith(
                         color: canAfford
-                            ? ext.mark(ext.steps)
+                            ? ext.success.onContainer
                             : ext.textSecondary,
                       ),
                     ),
@@ -489,7 +461,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 Row(
                   children: [
                     Icon(Symbols.toll_rounded,
-                        size: 14, color: ext.mark(ext.steps)),
+                        size: 14, color: ext.mark(ext.success)),
                     const SizedBox(width: AppSpacing.xs),
                     Flexible(
                       child: Text(
@@ -516,14 +488,14 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                 decoration: BoxDecoration(
-                  color: ext.steps.container,
+                  color: ext.success.container,
                   borderRadius: AppRadius.brSm,
                 ),
                 // Was a hardcoded '🌱 Growing' badge on every row — a live
                 // status for a tree that does not exist anywhere.
                 child: Text(
                   'In your garden',
-                  style: tt.labelSmall?.copyWith(color: ext.steps.onContainer),
+                  style: tt.labelSmall?.copyWith(color: ext.success.onContainer),
                 ),
               ),
             ],
@@ -599,7 +571,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
     final isEarned = transaction.type != CoinTransactionType.spent;
     // Earned/spent is the only distinction this row makes, so it takes the two
     // semantic swatches rather than a hardcoded green/blue pair.
-    final swatch = isEarned ? ext.steps : ext.info;
+    final swatch = isEarned ? ext.success : ext.info;
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -654,7 +626,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
   void _showPlantConfirmation(RealTreeType treeType) {
     AppBottomSheet.show(
       context,
-      accent: AppColorsExt.of(context).steps,
+      accent: AppColorsExt.of(context).success,
       builder: (sheetContext) {
         final ext = AppColorsExt.of(sheetContext);
         final tt = Theme.of(sheetContext).textTheme;
@@ -676,11 +648,11 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Symbols.toll_rounded, size: 22, color: ext.mark(ext.steps)),
+                Icon(Symbols.toll_rounded, size: 22, color: ext.mark(ext.success)),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   '${treeType.coinCost} coins',
-                  style: tt.headlineSmall?.copyWith(color: ext.mark(ext.steps)),
+                  style: tt.headlineSmall?.copyWith(color: ext.mark(ext.success)),
                 ),
               ],
             ),
@@ -698,7 +670,7 @@ class _PlantRealTreesScreenState extends State<PlantRealTreesScreen> {
                 Expanded(
                   child: AppButton(
                     label: 'Add to garden',
-                    accent: ext.steps,
+                    accent: ext.success,
                     onPressed: () async {
                       Navigator.pop(sheetContext);
                       final success =

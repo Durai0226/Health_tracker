@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/utils/relative_time.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -6,13 +7,16 @@ import '../../../../core/utils/date_formats.dart';
 import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/health/vitals_analyzer.dart';
+import '../../../../core/utils/calendar_day.dart';
 import '../../../../core/health/insight_engine.dart';
 import '../../../../core/health/vitals_pattern_detector.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
 import '../../../../core/widgets/app/vitals_widgets.dart';
 import '../../models/blood_pressure_reading.dart';
+import '../../services/bp_sessions.dart';
 import '../../services/vitals_storage_service.dart';
+import 'bp_second_reading_sheet.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_emergency_call.dart';
 import 'vitals_reminder_button.dart';
@@ -55,6 +59,23 @@ class BloodPressureScreen extends StatefulWidget {
   static bool showsCrisisEmergency(BloodPressureReading latest, DateTime now) =>
       latest.isCrisis && now.difference(latest.takenAt) < emergencyCardWindow;
 
+  /// Whether a just-saved NEW reading should be followed by the offer of a
+  /// second one.
+  ///
+  /// No for a crisis (the emergency card's own advice is a five-minute rest,
+  /// not sixty seconds), no for a back-dated reading (a rest minute only makes
+  /// sense for one taken just now), and no when it already has a partner inside
+  /// the session window — that is the second reading, and it must not chain
+  /// into a third.
+  @visibleForTesting
+  static bool shouldOfferSecondReading(BloodPressureReading saved,
+      List<BloodPressureReading> readings, DateTime now) {
+    if (saved.isCrisis) return false;
+    if (now.difference(saved.takenAt) > BpSessions.window) return false;
+    final session = BpSessions.containing(readings, saved.id);
+    return session != null && !session.isAveraged;
+  }
+
   @override
   State<BloodPressureScreen> createState() => _BloodPressureScreenState();
 }
@@ -78,16 +99,39 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     });
   }
 
-  Future<void> _openLogSheet({BloodPressureReading? edit}) async {
+  /// [secondOf] opens the form as the SECOND reading of a session: arm and
+  /// position carry over from the first, since a second reading on the other
+  /// arm or standing up would not be comparable.
+  Future<void> _openLogSheet(
+      {BloodPressureReading? edit, BloodPressureReading? secondOf}) async {
     final accent = VitalsColors.bpAccent(AppColorsExt.of(context).isDark);
-    final saved = await AppBottomSheet.show<bool>(
+    final saved = await AppBottomSheet.show<BloodPressureReading>(
       context,
-      title: edit == null ? 'Log blood pressure' : 'Edit reading',
+      title: edit != null
+          ? 'Edit reading'
+          : (secondOf != null ? 'Second reading' : 'Log blood pressure'),
       icon: Symbols.favorite_rounded,
       accent: accent,
-      builder: (_) => _BpLogForm(accent: accent, existing: edit),
+      builder: (_) =>
+          _BpLogForm(accent: accent, existing: edit, secondOf: secondOf),
     );
-    if (saved == true) _load();
+    if (saved == null) return;
+    await _load();
+    if (edit == null) _offerSecondReading(saved);
+  }
+
+  /// After a NEW reading, offer the second one that makes an average.
+  Future<void> _offerSecondReading(BloodPressureReading saved) async {
+    if (!mounted) return;
+    if (!BloodPressureScreen.shouldOfferSecondReading(
+        saved, _readings, DateTime.now())) {
+      return;
+    }
+
+    final accent = VitalsColors.bpAccent(AppColorsExt.of(context).isDark);
+    final wantsSecond =
+        await BpSecondReadingSheet.show(context, first: saved, accent: accent);
+    if (wantsSecond && mounted) _openLogSheet(secondOf: saved);
   }
 
   Future<void> _delete(BloodPressureReading r) async {
@@ -167,14 +211,33 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
   }
 
   Widget _buildBody(AppColorsExt ext, AccentSwatch accent) {
+    // `latest` is the latest RAW reading and feeds only the emergency card:
+    // averaging must never be able to hide one dangerously high value, and the
+    // card's own "rest and re-measure" advice is cleared by the next raw
+    // reading. Everything else reads the MEASUREMENT sessions, newest first.
     final latest = _readings.first;
-    final cat = latest.category;
+    final sessions = BpSessions.collapse(_readings);
+    final allSessions = BpSessions.group(_readings);
+    final latestSession = allSessions.last;
+    // reading id -> size of the averaged session it belongs to, so History can
+    // say why two rows add up to the one number on the card above.
+    final inSession = <String, int>{
+      for (final s in allSessions)
+        if (s.isAveraged)
+          for (final r in s.readings) r.id: s.readings.length,
+    };
+    final current = sessions.first;
+    final cat = current.category;
     final band = VitalsColors.bpBand(ext.isDark, cat);
 
-    // Averages over the last 7 days.
-    final now = DateTime.now();
-    final last7 = _readings
-        .where((r) => now.difference(r.takenAt).inDays < 7)
+    // Averages over the last 7 CALENDAR days.
+    //
+    // `now.difference(r.takenAt).inDays < 7` truncates an elapsed span, so a
+    // reading from eight dates ago taken later in the day still counted — the
+    // same elapsed-vs-calendar mix-up `calendar_day.dart` exists for.
+    final now = clock.now();
+    final last7 = sessions
+        .where((r) => calendarDaysBetween(r.takenAt, now) < 7)
         .toList();
     final avgSys = VitalsAnalyzer.mean(last7.map((r) => r.systolic).toList());
     final avgDia = VitalsAnalyzer.mean(last7.map((r) => r.diastolic).toList());
@@ -182,7 +245,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     final pmAvg = _amPmAvg(last7, morning: false);
 
     // Trend: last 14 readings, oldest → newest.
-    final trend = _readings.take(14).toList().reversed.toList();
+    final trend = sessions.take(14).toList().reversed.toList();
     final sysSeries = trend.map((r) => r.systolic.toDouble()).toList();
     final diaSeries = trend.map((r) => r.diastolic.toDouble()).toList();
     final allVals = [...sysSeries, ...diaSeries];
@@ -190,7 +253,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     final maxY = allVals.isEmpty ? 200.0 : (allVals.reduce((a, b) => a > b ? a : b) + 10).clamp(60, 320).toDouble();
 
     // Deterministic pattern insight over the user's own readings.
-    final insight = InsightEngine.bloodPressure(_readings
+    final insight = InsightEngine.bloodPressure(sessions
         .map((r) => BpPoint(at: r.takenAt, systolic: r.systolic, diastolic: r.diastolic))
         .toList());
 
@@ -217,7 +280,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
             const SizedBox(height: AppSpacing.md),
           ],
           VitalsStatusHero(
-            bigValue: '${latest.systolic}/${latest.diastolic}',
+            bigValue: '${current.systolic}/${current.diastolic}',
             unitLabel: 'mmHg',
             // Ring convention (shared with the glucose screen): FULL = healthy,
             // the ring empties as the reading worsens. normal→1.0 … crisis→0.2.
@@ -226,8 +289,9 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
             categoryIcon: VitalsColors.bpIcon(cat),
             categoryLabel: VitalsAnalyzer.bpLabel(cat),
             meaning: VitalsAnalyzer.bpMeaning(cat),
-            subtitle: 'Last reading · ${RelativeTime.since(latest.takenAt)}'
-                '${latest.pulse != null ? ' · ${latest.pulse} bpm' : ''}',
+            subtitle: '${latestSession.isAveraged ? 'Average of ${latestSession.readings.length} readings' : 'Last reading'}'
+                ' · ${RelativeTime.since(latestSession.readings.last.takenAt)}'
+                '${current.pulse != null ? ' · ${current.pulse} bpm' : ''}',
           ),
           const SizedBox(height: AppSpacing.md),
           StatTileRow(tiles: [
@@ -269,6 +333,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
                   ext,
                   title: 'Systolic',
                   values: sysSeries,
+                  times: [for (final r in trend) r.takenAt],
                   color: ext.chartMark(accent),
                   minY: minY,
                   maxY: maxY,
@@ -279,6 +344,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
                   ext,
                   title: 'Diastolic',
                   values: diaSeries,
+                  times: [for (final r in trend) r.takenAt],
                   color: ext.textSecondary,
                   minY: minY,
                   maxY: maxY,
@@ -290,7 +356,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
           const SizedBox(height: AppSpacing.lg),
           SectionHeader(title: 'History', icon: Symbols.history_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
-          ..._readings.map((r) => _logRow(ext, r)),
+          ..._readings.map((r) => _logRow(ext, r, inAverageOf: inSession[r.id])),
         ],
       ),
     );
@@ -307,6 +373,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     AppColorsExt ext, {
     required String title,
     required List<double> values,
+    required List<DateTime> times,
     required Color color,
     required double minY,
     required double maxY,
@@ -322,7 +389,11 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
         Text(title, style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
         const SizedBox(height: 6),
         VitalsTrendChart(
-          series: [VitalsSeries(values: values, color: color, label: title)],
+          // Stamped, so readings lay out on a real time axis: a burst an hour
+          // apart is a cluster and a week's gap is a gap, not evenly spaced.
+          series: [
+            VitalsSeries(values: values, times: times, color: color, label: title)
+          ],
           minY: minY,
           maxY: maxY,
           // Lower edge is the axis floor: `classifyBp` puts no lower bound on
@@ -339,7 +410,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     );
   }
 
-  Widget _logRow(AppColorsExt ext, BloodPressureReading r) {
+  Widget _logRow(AppColorsExt ext, BloodPressureReading r, {int? inAverageOf}) {
     final tt = Theme.of(context).textTheme;
     final cat = r.category;
     final band = VitalsColors.bpBand(ext.isDark, cat);
@@ -375,7 +446,8 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
                             color: ext.textPrimary, fontWeight: FontWeight.w700)),
                     Text(
                       '${VitalsAnalyzer.bpLabel(cat)} · ${DateFormats.dayMonthTime.format(r.takenAt)}'
-                      '${r.pulse != null ? ' · ${r.pulse} bpm' : ''}',
+                      '${r.pulse != null ? ' · ${r.pulse} bpm' : ''}'
+                      '${inAverageOf != null ? ' · in a $inAverageOf-reading average' : ''}',
                       style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                     ),
                   ],
@@ -478,7 +550,11 @@ class _EmptyState extends StatelessWidget {
 class _BpLogForm extends StatefulWidget {
   final AccentSwatch accent;
   final BloodPressureReading? existing;
-  const _BpLogForm({required this.accent, this.existing});
+
+  /// Set when this is the second reading of a session — see
+  /// [_BloodPressureScreenState._openLogSheet].
+  final BloodPressureReading? secondOf;
+  const _BpLogForm({required this.accent, this.existing, this.secondOf});
 
   @override
   State<_BpLogForm> createState() => _BpLogFormState();
@@ -503,8 +579,9 @@ class _BpLogFormState extends State<_BpLogForm> {
     _dia = TextEditingController(text: e?.diastolic.toString() ?? '');
     _pulse = TextEditingController(text: e?.pulse?.toString() ?? '');
     _note = TextEditingController(text: e?.note ?? '');
-    _arm = e?.arm?.index ?? 0;
-    _position = e?.position ?? BpPosition.sitting;
+    final carry = e ?? widget.secondOf;
+    _arm = carry?.arm?.index ?? 0;
+    _position = carry?.position ?? BpPosition.sitting;
     _takenAt = e?.takenAt ?? DateTime.now();
   }
 
@@ -576,7 +653,7 @@ class _BpLogFormState extends State<_BpLogForm> {
       return;
     }
     if (VitalsAnalyzer.isBpCrisis(s, d)) HapticFeedback.heavyImpact();
-    if (mounted) Navigator.pop(context, true);
+    if (mounted) Navigator.pop(context, reading);
   }
 
   @override

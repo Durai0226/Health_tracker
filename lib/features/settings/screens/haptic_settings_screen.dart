@@ -78,42 +78,34 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
                           title: 'Feature haptics',
                           footer:
                               'Tune the feel of each feature. Tap a row to adjust.',
+                          // One row per HapticFeature, generated from the
+                          // enum.
+                          //
+                          // This was a hand-written list of SEVEN rows
+                          // covering only FOUR features: "Medicine taken" and
+                          // "Medicine reminder" both wrote
+                          // `HapticFeature.medication`, "Water added" and
+                          // "Water goal" both wrote `.water`, "Focus start"
+                          // and "Focus done" both wrote `.focus`. Three pairs
+                          // were one setting wearing two names, so adjusting
+                          // either half silently moved the other — and the
+                          // twin row went on showing the old value until the
+                          // screen rebuilt.
+                          //
+                          // Meanwhile `.fitness` and `.notifications` had no
+                          // row at all and could not be reached, although both
+                          // fire haptics elsewhere in the app.
+                          //
+                          // Driving this off `HapticFeature.values`, with
+                          // exhaustive switches below, makes a new feature a
+                          // compile error here instead of a missing row.
                           children: [
-                            _featureTile(
-                              feature: HapticFeature.medication,
-                              title: 'Medicine taken',
-                              icon: Symbols.medication_rounded,
-                            ),
-                            _featureTile(
-                              feature: HapticFeature.medication,
-                              title: 'Medicine reminder',
-                              icon: Symbols.alarm_rounded,
-                            ),
-                            _featureTile(
-                              feature: HapticFeature.water,
-                              title: 'Water added',
-                              icon: Symbols.water_drop_rounded,
-                            ),
-                            _featureTile(
-                              feature: HapticFeature.water,
-                              title: 'Water goal',
-                              icon: Symbols.trophy_rounded,
-                            ),
-                            _featureTile(
-                              feature: HapticFeature.focus,
-                              title: 'Focus start',
-                              icon: Symbols.self_improvement_rounded,
-                            ),
-                            _featureTile(
-                              feature: HapticFeature.focus,
-                              title: 'Focus done',
-                              icon: Symbols.check_circle_rounded,
-                            ),
-                            _featureTile(
-                              feature: HapticFeature.navigation,
-                              title: 'Navigation',
-                              icon: Symbols.touch_app_rounded,
-                            ),
+                            for (final f in HapticFeature.values)
+                              _featureTile(
+                                feature: f,
+                                title: _featureTitle(f),
+                                icon: _featureIcon(f),
+                              ),
                           ],
                         ),
                         const SizedBox(height: AppSpacing.xl),
@@ -168,6 +160,26 @@ class _HapticSettingsScreenState extends State<HapticSettingsScreen> {
   }
 
   /// A feature row: neutral tile + title + current intensity (or "Off") + chevron.
+  /// Display name for [f]. Exhaustive: adding a `HapticFeature` fails here.
+  String _featureTitle(HapticFeature f) => switch (f) {
+        HapticFeature.water => 'Water',
+        HapticFeature.medication => 'Medicine',
+        HapticFeature.focus => 'Focus',
+        HapticFeature.fitness => 'Fitness',
+        HapticFeature.navigation => 'Navigation',
+        HapticFeature.notifications => 'Notifications',
+      };
+
+  /// Glyph for [f]. Exhaustive, for the same reason as [_featureTitle].
+  IconData _featureIcon(HapticFeature f) => switch (f) {
+        HapticFeature.water => Symbols.water_drop_rounded,
+        HapticFeature.medication => Symbols.medication_rounded,
+        HapticFeature.focus => Symbols.self_improvement_rounded,
+        HapticFeature.fitness => Symbols.directions_run_rounded,
+        HapticFeature.navigation => Symbols.touch_app_rounded,
+        HapticFeature.notifications => Symbols.notifications_rounded,
+      };
+
   Widget _featureTile({
     required HapticFeature feature,
     required String title,

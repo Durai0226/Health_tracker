@@ -8,6 +8,12 @@ import '../../medication/services/medicine_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/reminder_reschedule_service.dart';
 import '../../../core/services/home_widget_service.dart';
+import '../../../core/services/app_lock_service.dart';
+import '../../../core/services/app_shortcuts.dart';
+import '../../../core/services/dose_action_queue.dart';
+import '../../../core/services/water_action_queue.dart';
+import '../../medication/screens/vitals/blood_pressure_screen.dart';
+import '../../medication/services/today_schedule_service.dart';
 import '../../water/services/water_service.dart';
 import '../../../core/services/health_sync_queue.dart';
 import '../../steps/services/step_service.dart';
@@ -20,6 +26,9 @@ import '../../insights/screens/trends_dashboard_screen.dart';
 import 'home_dashboard.dart';
 import 'health_browse_screen.dart';
 import '../widgets/log_something_sheet.dart';
+import '../../medication/services/refill_loop.dart';
+import '../../medication/widgets/refill_request_sheet.dart';
+import '../../water/screens/aqua_water_dashboard.dart';
 
 /// The single persistent shell — one bottom nav with a center action:
 /// **Today · Meds · ➕ Log · Health · Insights** over an [IndexedStack].
@@ -69,10 +78,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   static const int _tabCount = 4;
 
+  final AppShortcutsService _shortcuts = AppShortcutsService();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Registers the long-press launcher shortcuts and receives their taps,
+    // including the one that cold-started the app.
+    _shortcuts.init(_onShortcut);
+    // A refill reminder that cold-started the app has already set this; one
+    // tapped while the app is alive sets it later.
+    RefillLoop.pendingOpen.addListener(_onRefillTap);
     // Cold start needs draining too — and it is the MOST likely case, since a
     // notification action tapped while the app was dead is exactly what fills
     // the queue. `didChangeAppLifecycleState` does not fire for the initial
@@ -83,15 +100,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // mounted Scaffold.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _onRefillTap();
       _drainQueuedDoseActions();
       _drainQueuedWaterActions();
       _drainBackgroundHealthSync();
       _refreshAmbientData();
+      _shortcuts.refresh();
     });
   }
 
   @override
   void dispose() {
+    RefillLoop.pendingOpen.removeListener(_onRefillTap);
+    _cancelPendingShortcut();
     for (final c in _tabScrollControllers) {
       c.dispose();
     }
@@ -114,6 +135,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   /// behalf depended on which tab they happened to open.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The launcher menu is read while the app is NOT running, so the shortcut
+    // list has to be fresh at the moment the user leaves, not when they return.
+    if (state == AppLifecycleState.paused) {
+      _shortcuts.refresh();
+      return;
+    }
     if (state != AppLifecycleState.resumed) return;
     _drainQueuedDoseActions();
     _drainQueuedWaterActions();
@@ -165,6 +192,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     try {
       if (!await HealthSyncQueue.takeDirty()) return;
       await StepService.syncFromHealth();
+      // Fresh step numbers: the evening reminder can now say how far is left.
+      unawaited(StepService.replanReminder());
       await SleepService.syncFromHealth();
       await BiometricsService.syncFromHealth();
     } catch (e) {
@@ -172,7 +201,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _drainQueuedDoseActions() async {
+  Future<void> _drainQueuedDoseActions({String from = 'your reminder'}) async {
     List<String> ids;
     try {
       ids = await MedicineCleanStorageService.drainPendingDoseActions();
@@ -186,7 +215,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // dose silently from a notification tap is not something to leave unsaid.
     final n = ids.length;
     context.toastSuccess(
-      'Logged $n dose${n == 1 ? '' : 's'} from your reminder',
+      'Logged $n dose${n == 1 ? '' : 's'} from $from',
       action: AppToastAction(
         label: 'Undo',
         onPressed: () async {
@@ -243,6 +272,140 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         },
       ),
     );
+  }
+
+  /// A launcher-shortcut tap held back while app lock is engaged.
+  VoidCallback? _pendingShortcutListener;
+
+  void _cancelPendingShortcut() {
+    final l = _pendingShortcutListener;
+    if (l != null) {
+      AppLockService().isLockedNotifier.removeListener(l);
+      _pendingShortcutListener = null;
+    }
+  }
+
+  /// A long-press shortcut was tapped.
+  ///
+  /// Deferred one frame, then held until unlock: the launcher menu works on a
+  /// locked app, and a shortcut must not log a dose or a drink behind the PIN
+  /// screen. The frame defer matters on resume, where the lock engages in the
+  /// same breath as the tap arrives.
+  void _onShortcut(AppShortcutTarget target) =>
+      _runWhenUnlocked(() => _runShortcut(target));
+
+  /// A tapped refill reminder: show the refill sheet for that medicine.
+  void _onRefillTap() {
+    final id = RefillLoop.pendingOpen.value;
+    if (id == null) return;
+    // Cleared first, so tapping the same notification again fires again.
+    RefillLoop.pendingOpen.value = null;
+    _runWhenUnlocked(() {
+      if (mounted) RefillRequestFlow.run(context, id);
+    });
+  }
+
+  /// Run [run] on the next frame, or — when app lock is engaged — once it
+  /// releases. Shared by launcher shortcuts and notification taps: both work on
+  /// a locked app, and neither may open health data behind the PIN screen.
+  void _runWhenUnlocked(VoidCallback run) {
+    // A post-frame callback only runs when a frame does, and an idle app may not
+    // be drawing one.
+    WidgetsBinding.instance.ensureVisualUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final lock = AppLockService().isLockedNotifier;
+      if (!lock.value) {
+        run();
+        return;
+      }
+      _cancelPendingShortcut();
+      void whenUnlocked() {
+        if (lock.value) return;
+        _cancelPendingShortcut();
+        if (mounted) run();
+      }
+
+      _pendingShortcutListener = whenUnlocked;
+      lock.addListener(whenUnlocked);
+    });
+  }
+
+  void _runShortcut(AppShortcutTarget target) {
+    switch (target.kind) {
+      case AppShortcutKind.takeDose:
+        _takeDoseFromShortcut(target.medicineId!, target.scheduledTime!);
+      case AppShortcutKind.logWater:
+        _logWaterFromShortcut();
+      case AppShortcutKind.logBloodPressure:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => const AccentScope(
+                  feature: FeatureAccent.medicine,
+                  child: BloodPressureScreen())),
+        );
+      case AppShortcutKind.startFocus:
+        _legacyNavigate(2);
+    }
+  }
+
+  /// Same hand-off as a notification's Take button, so the dose is written by
+  /// the one code path that resolves its amount and titration, and the user
+  /// gets the same "Logged · Undo" confirmation.
+  ///
+  /// The shortcut's label was written when the app last went to the
+  /// background, so the slot is re-checked first: taken in the app since, or
+  /// out of its window, and the tap explains instead of logging a second time.
+  Future<void> _takeDoseFromShortcut(String medicineId, DateTime at) async {
+    ScheduledDose? dose;
+    try {
+      final doses = await TodayScheduleService.getTodaysDoses(at);
+      for (final d in doses) {
+        if (d.medicine.id == medicineId && d.scheduledTime.isAtSameMomentAs(at)) {
+          dose = d;
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Reading doses for a shortcut failed: $e');
+    }
+    if (!mounted) return;
+    if (dose == null) {
+      context.toastInfo('That dose is no longer scheduled');
+      return;
+    }
+    if (dose.isTaken || dose.isSkipped || dose.isPreLogged) {
+      context.toastInfo('${dose.medicine.name} is already logged');
+      return;
+    }
+    if (AppShortcuts.dueDose([dose], DateTime.now()) == null) {
+      context.toastInfo(
+          'That dose is outside its window. Open Medicines to log it.');
+      return;
+    }
+    await DoseActionQueue.enqueue(
+      medicineId: medicineId,
+      scheduledTime: at,
+      action: DoseActionQueue.actionTake,
+    );
+    await _drainQueuedDoseActions(from: 'the shortcut');
+    _shortcuts.refresh();
+  }
+
+  /// One tap, 250 ml, unless a fluid limit is set — the same rule the Quick
+  /// Settings tile and the widget follow.
+  Future<void> _logWaterFromShortcut() async {
+    if (WaterService.isFluidRestricted) {
+      context.toastInfo(
+          'A fluid limit is set. Log drinks in Water to see your total.');
+      return;
+    }
+    await WaterActionQueue.enqueue(
+      amountMl: WaterActionQueue.defaultQuickAddMl,
+      at: DateTime.now(),
+    );
+    await _drainQueuedWaterActions();
   }
 
   /// Last time the home-screen widget was refreshed, for the debounce below.
@@ -315,11 +478,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   /// Translation shim for [HomeDashboard]'s legacy `onNavigate(index,{healthTab})`
   /// call sites (Batch 2 rewrites Today to call the new IA directly):
-  /// meds → Meds tab; water → Health tab; focus/reminders → pushed screens.
+  /// meds → Meds tab; water, focus and reminders → pushed screens.
   void _legacyNavigate(int index, {int? healthTab}) {
-    if (index == 1) {
+    if (index == 1 && healthTab == 1) {
+      // Hydration: the card and its "Set goal" button said "water" and landed on
+      // the Health list, one tap short of the water screen. Open it.
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const AccentScope(
+              feature: FeatureAccent.water, child: AquaWaterDashboard()),
+        ),
+      );
+    } else if (index == 1) {
       setState(() {
-        _slot = (healthTab == 1) ? 3 : 1;
+        _slot = 1;
         _mounted.add(_slot < 2 ? _slot : _slot - 1);
       });
     } else if (index == 2) {

@@ -4,6 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/notification_service.dart';
 import 'focus_service.dart';
 import '../../../core/utils/calendar_day.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import '../../../core/health/focus_insights.dart';
+import '../../../core/health/focus_nudge_planner.dart';
 
 /// The one place Focus reminders are scheduled from.
 ///
@@ -19,6 +22,11 @@ class FocusReminderScheduler {
   static const _kDailyEnabled = 'focus_daily_reminder';
   static const _kDailyTime = 'focus_reminder_time';
   static const _kStreakEnabled = 'focus_streak_reminder';
+
+  /// "Match my best focus hour": move the nudge to where the user's own
+  /// history says they focus, instead of a fixed time. On by default; it only
+  /// takes effect once there is a best hour to aim at.
+  static const kAdaptive = 'focus_adaptive_nudge';
 
   /// Set once the 918_4xx ids have been taken off AlarmManager.
   static const _kMigratedV2 = 'focus_reminders_migrated_v2';
@@ -37,14 +45,32 @@ class FocusReminderScheduler {
     final hour = int.tryParse(parts.first) ?? 9;
     final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
 
-    await notifications.scheduleFocusReminder(
-      id: NotificationService.focusDailyReminderId,
-      enabled: dailyEnabled,
-      title: 'Time to focus',
-      body: 'A short session is enough.',
-      when: nextOccurrence(hour, minute),
-      repeatDaily: true,
-    );
+    // Adaptive: ONE nudge, ten minutes before the best hour, on a day the user
+    // usually focuses and not today if they already have. It is a one-shot, so
+    // it has to be re-planned after every session — see
+    // `FocusService._checkAndUpdateStreak`. Without a best hour yet it falls
+    // back to the fixed daily time below.
+    final planned =
+        (prefs.getBool(kAdaptive) ?? true) ? planNextNudge() : null;
+    if (planned != null) {
+      await notifications.scheduleFocusReminder(
+        id: NotificationService.focusDailyReminderId,
+        enabled: dailyEnabled,
+        title: 'Time to focus',
+        body: 'This is usually your best hour. A short session is enough.',
+        when: planned,
+        repeatDaily: false,
+      );
+    } else {
+      await notifications.scheduleFocusReminder(
+        id: NotificationService.focusDailyReminderId,
+        enabled: dailyEnabled,
+        title: 'Time to focus',
+        body: 'A short session is enough.',
+        when: nextOccurrence(hour, minute),
+        repeatDaily: true,
+      );
+    }
 
     // "At risk" is a fact about today, so this is re-decided every time rather
     // than left standing from yesterday. It can only go stale while the app is
@@ -61,6 +87,31 @@ class FocusReminderScheduler {
       // week, so this is information rather than a threat.
       body: 'A session today keeps it going. One missed day is forgiven.',
       when: nextOccurrence(20, 0),
+    );
+  }
+
+  /// The next adaptive nudge from the user's own sessions, or null while there
+  /// is no best hour to aim at.
+  ///
+  /// Uses the same session-to-ref mapping as the Focus screen and the insight
+  /// engine, so the hour a nudge aims at is the hour the screen calls "your best".
+  @visibleForTesting
+  static DateTime? planNextNudge({DateTime? now}) {
+    final sessions = FocusService().sessions;
+    final refs = [
+      for (final s in sessions)
+        FocusSessionRef(
+            startHour: s.startedAt.hour,
+            minutes: s.actualMinutes,
+            completed: s.wasCompleted),
+    ];
+    return FocusNudgePlanner.next(
+      now: now ?? clock.now(),
+      bestHour: FocusInsights.bestFocusHour(refs),
+      focusedAt: [
+        for (final s in sessions)
+          if (s.wasCompleted) s.startedAt,
+      ],
     );
   }
 

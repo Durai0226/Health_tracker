@@ -34,6 +34,13 @@ import '../../features/biometrics/services/biometrics_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/water/models/water_reminder_config.dart';
 import '../../features/reminders/models/reminder_recurrence.dart';
+import 'vacation_mode.dart';
+import '../../features/medication/services/vitals_reminder_service.dart';
+import 'notification_service.dart';
+import 'reminder_reschedule_service.dart';
+import '../../features/focus/services/coins_service.dart';
+import '../../features/focus/services/tag_service.dart';
+import '../../features/focus/services/relaxation_service.dart';
 
 /// Clean Drift-based storage service - unified storage using Drift DAOs
 class CleanStorageService {
@@ -150,6 +157,7 @@ class CleanStorageService {
         name: 'Personal',
         colorValue: 0xFF4CAF50,
         iconCodePoint: 0xe7fd, // Symbols.person_rounded
+        isDefault: const Value(true),
       ));
 
       await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
@@ -157,6 +165,7 @@ class CleanStorageService {
         name: 'Work',
         colorValue: 0xFF2196F3,
         iconCodePoint: 0xe89c, // Symbols.work_rounded
+        isDefault: const Value(true),
       ));
 
       await db.into(db.reminderCategories).insert(ReminderCategoriesCompanion.insert(
@@ -164,6 +173,7 @@ class CleanStorageService {
         name: 'Health',
         colorValue: 0xFFFF5722,
         iconCodePoint: 0xe3f4, // Symbols.health_and_safety_rounded
+        isDefault: const Value(true),
       ));
 
       debugPrint('✓ Default categories created');
@@ -339,6 +349,20 @@ class CleanStorageService {
     }
   }
 
+  /// Put back occurrence rows that [deleteReminderOccurrences] removed, so that
+  /// undoing a delete restores the reminder's adherence history too and not just
+  /// its title. Upserts on the rows' own ids, so restoring twice is harmless.
+  static Future<void> restoreReminderOccurrences(
+      Iterable<ReminderOccurrence> rows) async {
+    try {
+      for (final o in rows) {
+        await _remindersDao.recordOccurrence(o.toCompanion(false));
+      }
+    } catch (e) {
+      debugPrint('Error restoring reminder occurrences: $e');
+    }
+  }
+
   /// Drop a reminder's occurrence history, when the reminder itself is deleted.
   ///
   /// Only for a real delete. These rows ARE the adherence record, so nothing
@@ -421,6 +445,9 @@ class CleanStorageService {
         }
 
         for (final at in due) {
+          // A day spent on vacation is not a day anything was due: recording it
+          // would let the sweep later write it off as MISSED.
+          if (VacationMode.covers(at)) continue;
           // insertOrIgnore, NEVER an upsert: a `done` row the user created must
           // not be overwritten with a fresh `pending` one.
           final wrote = await _remindersDao.recordOccurrenceIfAbsent(
@@ -607,6 +634,12 @@ class CleanStorageService {
 
   /// Delete a reminder category and refresh the cache.
   static Future<void> deleteCategory(String id) async {
+    // The built-in three stay: deleting one strips the label from every
+    // reminder using it, and nothing brings the starter set back.
+    if (ReminderCategoryModel.ReminderCategory.starterIds.contains(id)) {
+      debugPrint('↩︎ Not deleting built-in category: $id');
+      return;
+    }
     try {
       await _remindersDao.deleteCategory(id);
       await getAllCategoriesAsync(); // refresh sync cache
@@ -1206,6 +1239,10 @@ class CleanStorageService {
       await db.delete(db.appointments).go();
       await db.delete(db.doctors).go();
       await db.delete(db.dependentProfiles).go();
+      // Clinics are SharedPreferences, not Drift, and were the one thing here
+      // the wipe never reached: names, addresses and phone numbers of every
+      // hospital the person had saved.
+      await MedicineCleanStorageService.clearClinics();
       // Water consumption data + logs + achievements
       await db.delete(db.enhancedWaterLogs).go();
       await db.delete(db.dailyWaterDataTable).go();
@@ -1248,10 +1285,40 @@ class CleanStorageService {
         await removeAppPreference(k);
       }
 
+      // Reminder switches and personal settings that live in preferences. The
+      // rows above are gone, but these would re-arm their notifications on the
+      // next launch (the reminder pass reads them), and an emergency contact is
+      // a name and a phone number.
+      for (final spec in VitalsReminderService.all) {
+        await removeAppPreference('${spec.prefKey}_on');
+      }
+      for (final k in const [
+        waterReminderConfigKey,
+        'steps.reminderEnabled',
+        'emergency_contact_name',
+        'emergency_contact_phone',
+        'rest_days',
+        'vacation_periods',
+        'weight_goal_kg',
+      ]) {
+        await removeAppPreference(k);
+      }
+      for (final k in _appPreferencesCache.keys
+          .where((k) => k.startsWith('refill_requested_'))
+          .toList()) {
+        await removeAppPreference(k);
+      }
+
+      // Everything already scheduled. Without this, "All data deleted" was
+      // followed by a morning of reminders for medicines that no longer exist.
+      await NotificationService().cancelEverythingScheduled();
+
       // Focus state persisted as app-preference JSON (focus* keys). App config
       // (theme, haptics, onboarding flags) is intentionally left untouched.
+      // Relaxation keeps its own `relaxation*` keys — history, stats and choices
+      // that "Delete all data" never reached.
       final focusKeys = _appPreferencesCache.keys
-          .where((k) => k.startsWith('focus'))
+          .where((k) => k.startsWith('focus') || k.startsWith('relaxation'))
           .toList();
       for (final k in focusKeys) {
         await _coreDao.deletePreference(k);
@@ -1272,6 +1339,11 @@ class CleanStorageService {
       // Drop in-memory caches and refresh reactive state so the UI updates now.
       _medicinesCache.clear();
       _remindersCache.clear();
+      // The focus singletons keep their own copies and would save them again.
+      FocusService().resetAfterWipe();
+      CoinsService().resetAfterWipe();
+      TagService().resetAfterWipe();
+      RelaxationService().resetAfterWipe();
       WaterService.clearInMemory();
       PeriodService.clearInMemory();
       StepService.clearInMemory();
@@ -1451,6 +1523,17 @@ class CleanStorageService {
       // Refresh sync caches so the UI reflects the restore immediately.
       await getAllMedicinesAsync();
       await getAllReminders();
+      // Re-arm. A restore brings medicines, reminders and the switches that
+      // drive vitals, water and step reminders back, but arms none of them —
+      // that happened only at the next app start, so the first day after a
+      // restore on a new phone had no reminders at all. Failures are swallowed:
+      // a restore that worked must not report failure because an alarm did not
+      // arm, and each family already isolates its own errors.
+      try {
+        await ReminderRescheduleService.rescheduleAllReminders();
+      } catch (e) {
+        debugPrint('Re-arming reminders after restore failed: $e');
+      }
       debugPrint('✓ Backup restored');
     } catch (e) {
       debugPrint('Import data failed: $e');

@@ -10,6 +10,7 @@ import '../../models/glucose_reading.dart';
 import '../../services/vitals_storage_service.dart';
 import '../../services/vitals_report_service.dart';
 import 'vitals_trend_chart.dart';
+import '../../services/medicine_storage_service.dart';
 
 /// Blood-sugar report: period overview (avg, in-range %, est. A1C), trend,
 /// class breakdown, and a doctor-ready PDF export.
@@ -58,6 +59,7 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
         readings: data,
         from: _from,
         to: DateTime.now(),
+        patientName: await MedicineCleanStorageService.activePatientName(),
       );
       await Printing.sharePdf(bytes: bytes, filename: 'blood-sugar-report.pdf');
     } catch (_) {
@@ -159,7 +161,11 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
     final maxY = series.isEmpty ? 250.0 : (series.reduce((a, b) => a > b ? a : b) + 20).clamp(120, 500).toDouble();
     return VitalsTrendChart(
       series: [
-        VitalsSeries(values: series, color: ext.chartMark(accent), label: 'Blood sugar'),
+        VitalsSeries(
+            values: series,
+            times: [for (final r in trend) r.takenAt],
+            color: ext.chartMark(accent),
+            label: 'Blood sugar'),
       ],
       minY: minY,
       maxY: maxY,

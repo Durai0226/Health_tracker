@@ -8,6 +8,7 @@ import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/services/health_store_name.dart';
 
 /// Focus reminder settings.
 ///
@@ -28,6 +29,7 @@ class FocusRemindersSettingsScreen extends StatefulWidget {
 class _FocusRemindersSettingsScreenState
     extends State<FocusRemindersSettingsScreen> {
   bool _dailyReminder = true;
+  bool _adaptive = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
   bool _streakReminder = true;
   bool _isLoading = true;
@@ -55,6 +57,7 @@ class _FocusRemindersSettingsScreenState
     if (!mounted) return;
     setState(() {
       _dailyReminder = prefs.getBool('focus_daily_reminder') ?? true;
+      _adaptive = prefs.getBool(FocusReminderScheduler.kAdaptive) ?? true;
       final timeStr = prefs.getString('focus_reminder_time') ?? '9:0';
       final parts = timeStr.split(':');
       _reminderTime = TimeOfDay(
@@ -93,7 +96,7 @@ class _FocusRemindersSettingsScreenState
     if (!applied) {
       context.toastWarning(
         FocusService().mindfulnessDenialReason ??
-            'Health Connect has not granted permission to save mindful minutes.',
+            '${healthStoreName()} has not granted permission to save mindful minutes.',
         title: 'Permission needed',
       );
     }
@@ -102,6 +105,7 @@ class _FocusRemindersSettingsScreenState
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('focus_daily_reminder', _dailyReminder);
+    await prefs.setBool(FocusReminderScheduler.kAdaptive, _adaptive);
     await prefs.setString(
       'focus_reminder_time',
       '${_reminderTime.hour}:${_reminderTime.minute}',
@@ -172,7 +176,12 @@ class _FocusRemindersSettingsScreenState
                       children: [
                         SettingsSection(
                           title: 'Daily',
-                          footer: 'Changes are saved automatically.',
+                          footer: 'Changes are saved automatically. With '
+                              'Best hour on, the reminder moves to 10 '
+                              'minutes before the hour you focus best, on the '
+                              'days you usually focus, and stays quiet once '
+                              'you have. Until there is enough history it uses '
+                              'the time below.',
                           children: [
                             SettingsTile(
                               icon: Symbols.notifications_rounded,
@@ -182,6 +191,15 @@ class _FocusRemindersSettingsScreenState
                               onSwitchChanged: (v) =>
                                   _update(() => _dailyReminder = v),
                             ),
+                            if (_dailyReminder)
+                              SettingsTile(
+                                icon: Symbols.auto_awesome_rounded,
+                                title: 'Best hour',
+                                accent: accent,
+                                switchValue: _adaptive,
+                                onSwitchChanged: (v) =>
+                                    _update(() => _adaptive = v),
+                              ),
                             if (_dailyReminder)
                               SettingsTile(
                                 icon: Symbols.access_time_rounded,
@@ -225,7 +243,7 @@ class _FocusRemindersSettingsScreenState
                         // is unsupported.
                         if (_mindfulnessAvailable)
                           SettingsSection(
-                            title: 'Health Connect',
+                            title: healthStoreName(),
                             footer: 'Only breathing and meditation are written. '
                                 'A work session is not a mindfulness session, so '
                                 'it is never saved as one.',
@@ -234,7 +252,7 @@ class _FocusRemindersSettingsScreenState
                                 icon: Symbols.self_improvement_rounded,
                                 title: 'Save mindful minutes',
                                 subtitle: 'Write completed breathing and '
-                                    'meditation to Health Connect',
+                                    'meditation to ${healthStoreName()}',
                                 accent: accent,
                                 switchValue: FocusService().mindfulnessSync,
                                 onSwitchChanged:

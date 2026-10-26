@@ -69,4 +69,77 @@ void main() {
     expect(p.daysRemaining, isNull);
     expect(p.summary.toLowerCase(), contains('out of stock'));
   });
+
+  /// The result must not depend on how the caller sorted its doses.
+  ///
+  /// `earliestInWindow` was assigned with `??=`, i.e. element ZERO — and the
+  /// production caller feeds `getLogsForMedicine`, which orders
+  /// `desc(scheduledTime)`. Element zero is therefore the NEWEST dose, so the
+  /// observed span measured now back to the most recent dose — a few hours —
+  /// which the `clamp(1.0, …)` rounded up to one day. The average daily rate
+  /// became the whole window's total.
+  ///
+  /// Every existing test above fed doses oldest-first, where `??=` happens to
+  /// pick the right one, so none of them could see it.
+  group('dose order does not change the answer', () {
+    test('newest-first gives the same rate as oldest-first', () {
+      final ascending = dosesPerDay(10);
+      final descending = ascending.reversed.toList();
+
+      final a = RefillPredictor.predict(
+          currentStock: 30, doseTimes: ascending, now: now);
+      final d = RefillPredictor.predict(
+          currentStock: 30, doseTimes: descending, now: now);
+
+      expect(d.avgDailyRate, closeTo(a.avgDailyRate, 0.001),
+          reason: 'the same ten doses, listed the other way round, reported '
+              '${d.avgDailyRate}/day instead of ${a.avgDailyRate}/day');
+      expect(d.daysRemaining, a.daysRemaining);
+    });
+
+    /// The case seen on the device.
+    ///
+    /// A once-daily Metformin with 16 taken doses across 21 days and 39 pills
+    /// left reported "~16.3/day · runs out in 2 days" — against roughly seven
+    /// weeks of real supply — and that figure drives the "Refill soon …
+    /// reorder now to avoid a gap" card and the refill reminders.
+    test('a once-daily medicine is not reported as a 16-a-day habit', () {
+      final doses = <DateTime>[
+        for (var d = 20; d >= 5; d--) now.subtract(Duration(days: d)),
+      ];
+      expect(doses, hasLength(16));
+
+      final p = RefillPredictor.predict(
+        currentStock: 39,
+        doseTimes: doses.reversed.toList(), // newest-first, as the DAO returns
+        windowDays: 21,
+        now: now,
+      );
+
+      expect(p.avgDailyRate, lessThan(1.5),
+          reason: 'sixteen doses over sixteen days is about one a day, not '
+              '${p.avgDailyRate}');
+      expect(p.daysRemaining, greaterThan(20),
+          reason: '39 pills at ~1/day is over a month. It said '
+              '${p.daysRemaining} days, which is what makes the app shout '
+              '"reorder now".');
+      expect(p.summary, isNot(contains('runs out in 2 days')));
+    });
+
+    test('a genuinely fast rate is still reported', () {
+      // Four a day for the last four days, newest-first. The guard must not
+      // have flattened real over-consumption.
+      final doses = <DateTime>[
+        for (var d = 1; d <= 4; d++)
+          for (var k = 0; k < 4; k++) now.subtract(Duration(days: d, hours: k)),
+      ];
+      final p = RefillPredictor.predict(
+        currentStock: 20,
+        doseTimes: doses,
+        now: now,
+      );
+      expect(p.avgDailyRate, closeTo(4.0, 0.6),
+          reason: 'sixteen doses across four days really is four a day');
+    });
+  });
 }

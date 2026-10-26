@@ -24,6 +24,7 @@ import '../../reminders/screens/add_reminder_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../insights/screens/proactive_nudge.dart';
 import '../widgets/log_something_sheet.dart';
+import '../widgets/setup_checklist_card.dart';
 import '../../../widgets/smart_ad_widgets.dart';
 import '../../../core/utils/calendar_day.dart';
 
@@ -151,10 +152,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
     }
   }
 
+  /// Bumped on every pull to refresh; see [ProactiveNudge.refreshTick].
+  int _nudgeTick = 0;
+
   Future<void> _refreshAll() async {
     setState(() {
       _medFuture = null; // force a fresh medicine query
       _briefingFuture = null; // re-run the daily briefing
+      _nudgeTick++; // re-check the health nudge against the numbers now
     });
     await Future.delayed(const Duration(milliseconds: 300));
   }
@@ -743,8 +748,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 delegate: SliverChildListDelegate([
                   // 2 — self-gating attention/urgent nudge. Stays on top: it
                   // is absent unless something genuinely needs attention.
-                  ProactiveNudge(onOpenTrends: widget.onOpenTrends),
+                  ProactiveNudge(
+                      onOpenTrends: widget.onOpenTrends,
+                      refreshTick: _nudgeTick),
                   const SizedBox(height: AppSpacing.md),
+                  // Self-gating: absent once reminders are fully set up or the
+                  // user hides it.
+                  const SetupChecklistCard(),
                   // 3 — the single elevated focal card. Promoted above the
                   // briefing so the FIRST thing under the title is the next
                   // action, not an ambient sentence about it.
@@ -937,7 +947,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return _briefingFuture = () async {
       final d = await _briefingData();
       return const CoachText().dailyBriefing(
-        medsTaken: d.medsTaken,
+        medsOutstanding: d.medsOutstanding,
+        // Without this the strip reads a prescribed fluid CEILING as a goal
+        // and tells a restricted user to drink more. See _crossSignal.
+        isRestricted: WaterService.isFluidRestricted,
         medsTotal: d.medsTotal,
         waterPct: d.waterPct,
         focusMinutes: d.focusMinutes,
@@ -958,13 +971,18 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
     final med = await _medicineData(MedicineCleanStorageService.revision.value);
     final s = med.summary;
-    // CoachText derives `medsLeft = medsTotal - medsTaken`, and its
-    // highest-priority nudge is "unfinished doses after 18:00". On the
-    // due-so-far denominator that subtraction was always 0 for a dose that had
-    // not come round yet, so the one sentence this strip exists to say could
-    // never fire for an evening dose.
+    // The nudge's highest-priority sentence is "unfinished doses after 18:00",
+    // so it needs the count of doses with no outcome yet. That is exactly
+    // `outstanding` — the same number the Medicine card below it branches on.
+    // It used to pass `taken` and let CoachText subtract, which counts missed
+    // and skipped doses as unfinished and made the two disagree on screen.
+    //
+    // `totalPlanned`, not the due-so-far denominator: on that one the
+    // subtraction was always 0 for a dose that had not come round yet, so the
+    // one sentence this strip exists to say could never fire for an evening
+    // dose.
     final medsTotal = s.totalPlanned;
-    final medsTaken = s.taken;
+    final medsOutstanding = s.outstanding;
 
     final water = WaterService.getTodayData();
     // Today's stored goal, for the reason spelled out in _pillarStats: the
@@ -991,7 +1009,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     } catch (_) {}
 
     return _BriefingData(
-      medsTaken: medsTaken,
+      medsOutstanding: medsOutstanding,
       medsTotal: medsTotal,
       waterPct: waterPct,
       focusMinutes: focusMinutes,
@@ -1568,7 +1586,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
 /// Numeric roll-up of today's four features, fed to [AiAssistant.dailyBriefing].
 class _BriefingData {
-  final int medsTaken;
+  final int medsOutstanding;
   final int medsTotal;
   final int waterPct;
   final int focusMinutes;
@@ -1578,7 +1596,7 @@ class _BriefingData {
   final int sleepMinutes;
 
   const _BriefingData({
-    required this.medsTaken,
+    required this.medsOutstanding,
     required this.medsTotal,
     required this.waterPct,
     required this.focusMinutes,

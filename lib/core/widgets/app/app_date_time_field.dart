@@ -1,4 +1,5 @@
 import 'package:clock/clock.dart';
+import '../../utils/calendar_day.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../design/app_design.dart';
@@ -75,7 +76,12 @@ class AppDateTimeField extends StatelessWidget {
     final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final day = DateTime(value.year, value.month, value.day);
-    final diff = today.difference(day).inDays;
+    // Calendar days, not elapsed ones. A civil day containing a
+    // spring-forward transition is 23 hours, so `difference().inDays`
+    // truncates to one short on the day after — verified under
+    // TZ=America/New_York, where a reading dated the 8th read "Today" on the
+    // 9th. This field is the shared Date & time input on every vitals screen.
+    final diff = calendarDaysBetween(day, today);
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
     return DateFormats.dayLabel(day, reference: today);

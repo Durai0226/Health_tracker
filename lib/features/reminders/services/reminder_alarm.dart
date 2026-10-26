@@ -7,6 +7,7 @@ import '../../../core/services/notification_service.dart';
 import '../models/reminder_model.dart';
 import 'package:clock/clock.dart';
 import '../utils/reminder_helper.dart';
+import '../../../core/services/vacation_mode.dart';
 
 /// What to arm. A value type rather than a long parameter list, so adding a
 /// field later does not break every implementation and every call site.
@@ -87,6 +88,12 @@ class ReminderArmRequest {
   /// alarm assert the decision in a headless test.
   static ReminderArmRequest? forNextOccurrence(Reminder reminder) {
     if (reminder.isPaused) return null;
+    // On vacation nothing in the Reminders feature fires. Null is the same
+    // answer a paused reminder gets — "nothing to arm right now" — which every
+    // caller already handles by disarming. They are armed again by the re-arm
+    // pass once the vacation is over. (Medicine reminders do not come through
+    // here, and are deliberately never paused.)
+    if (VacationMode.isActive()) return null;
 
     final needsPerOccurrence =
         reminder.recurrenceRule != null || reminder.endsAt != null;

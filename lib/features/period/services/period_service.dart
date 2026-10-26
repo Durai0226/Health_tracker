@@ -12,6 +12,7 @@ import '../models/period_day.dart';
 import '../models/period_settings.dart';
 import 'cycle_predictor.dart';
 import 'period_reminder_service.dart';
+import 'new_period_check.dart';
 
 /// Reactive menstrual-cycle service. Mirrors `WaterService`: an all-static class
 /// with a static [ValueNotifier], an idempotent [init] guarded by
@@ -135,6 +136,13 @@ class PeriodService {
     await _recomputeCycles();
     unawaited(PeriodReminderService.reschedule()); // prediction shifted
   }
+
+  /// How many days after the previous period began, if logging [flowIndex] on
+  /// [date] would start a new period suspiciously soon (see [NewPeriodCheck]);
+  /// null when there is nothing to ask. The sheet asks the user before saving.
+  static int? newPeriodTooSoon(DateTime date, int flowIndex) =>
+      NewPeriodCheck.tooSoon(
+          days: _flowDays(), date: date, flowIndex: flowIndex);
 
   /// Set just the flow for [date], preserving anything else already logged.
   static Future<void> setFlow(DateTime date, FlowIntensity flow) async {

@@ -141,6 +141,25 @@ class HydrationProfile {
 
   int get calculatedGoalMl => goalBreakdown().totalMl;
 
+  /// Extra millilitres for [activeKcal] of MEASURED activity today, over the
+  /// goal the profile already gives (which assumes the usual activity level).
+  ///
+  /// Never negative. A measured figure below what the activity level assumes —
+  /// early in the day, or on a rest day — adds nothing rather than lowering the
+  /// goal: the day starts at the level-based number, and activity can only add
+  /// to it. A target that shrinks because you have not moved yet would read as
+  /// the app telling you to drink less.
+  ///
+  /// Differences of two full calculations rather than the activity term alone,
+  /// so the clamps and condition floors inside the calculator are respected and
+  /// `baseline + delta` is exactly the goal a caller will stamp.
+  int activityDeltaMl({required int activeKcal, double? ambientC}) {
+    final base = goalBreakdown(ambientC: ambientC).totalMl;
+    final withActivity =
+        goalBreakdown(activeKcal: activeKcal, ambientC: ambientC).totalMl;
+    return withActivity > base ? withActivity - base : 0;
+  }
+
   /// Get the effective daily goal (custom or calculated)
   /// The number shown on the dial.
   ///

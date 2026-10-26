@@ -144,6 +144,13 @@ void main() {
           reason: 'an upgrade must not silence reminders someone relies on');
     });
 
+    test('positive: a pre-existing row is NOT made a must-take medicine (v21)',
+        () async {
+      final m = await db.medicationDao.getMedicine('m-old');
+      expect(m!.criticalAlert, isFalse,
+          reason: 'an upgrade must not make every existing medicine insistent');
+    });
+
     test('positive: a pre-existing row is not tombstoned', () async {
       final m = await db.medicationDao.getMedicine('m-old');
       expect(m!.deletedAt, isNull,
@@ -176,5 +183,21 @@ void main() {
     expect(row.data.values.first, db.schemaVersion);
     final m = await db.medicationDao.getMedicine('m-old');
     expect(m!.reminderEnabled, isTrue);
+  });
+
+  test('negative: a database that ALREADY has critical_alert still opens',
+      () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory(
+        setup: (raw) {
+          seed(raw, withNewColumns: true);
+          raw.execute('ALTER TABLE enhanced_medicines '
+              'ADD COLUMN critical_alert INTEGER NOT NULL DEFAULT 0');
+        },
+        logStatements: false));
+    addTearDown(() async => db.close());
+
+    await db.customSelect('SELECT 1').get();
+    final m = await db.medicationDao.getMedicine('m-old');
+    expect(m!.criticalAlert, isFalse);
   });
 }

@@ -156,4 +156,51 @@ void main() {
       expect(find.text('This Week'), findsOneWidget);
     });
   });
+
+  testWidgets('bars stand on one baseline and hour labels on another',
+      (tester) async {
+    await withClock(Clock.fixed(now), () async {
+      // Three drinks in the selected month, at three hours, in three sizes, so
+      // the bars come out at three different heights. A baseline bug is only
+      // visible when the bars disagree about how tall they are.
+      await seedDay(DateTime(2026, 9, 10),
+          logId: 'tall', hour: 8, amountMl: 900);
+      await seedDay(DateTime(2026, 9, 11),
+          logId: 'mid', hour: 12, amountMl: 500);
+      await seedDay(DateTime(2026, 9, 12),
+          logId: 'short', hour: 20, amountMl: 200);
+      await WaterService.init();
+
+      await openScreen(tester);
+
+      // The premise: the heights really do differ. Without this the alignment
+      // assertions below would pass on a chart of 24 identical bars.
+      expect({barHeight(tester, 8), barHeight(tester, 12), barHeight(tester, 20)}
+          .length, 3,
+          reason: 'the three seeded hours must produce three distinct bar '
+              'heights for this test to be able to fail');
+
+      final barBottoms = <double>{
+        for (var hour = 0; hour < 24; hour++)
+          tester.getRect(find.byKey(ValueKey('waterHourBar$hour'))).bottom,
+      };
+      expect(barBottoms.length, 1,
+          reason: 'a histogram encodes its value as height, which is only '
+              'readable if every bar starts from the same line. These '
+              'bottoms: $barBottoms');
+
+      final labelBottoms = <double>{
+        for (final hour in const [0, 4, 8, 12, 16, 20])
+          tester.getRect(find.byKey(ValueKey('waterHourLabel$hour'))).bottom,
+      };
+      expect(labelBottoms.length, 1,
+          reason: 'the hour axis is one row of labels and must sit on one '
+              'baseline. These bottoms: $labelBottoms');
+
+      // ...and the axis belongs under the bars, not through them.
+      expect(labelBottoms.single,
+          greaterThan(barBottoms.single),
+          reason: 'the hour labels label the axis, so they sit below it');
+    });
+  });
 }

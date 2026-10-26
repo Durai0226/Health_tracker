@@ -114,7 +114,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -493,6 +493,19 @@ class AppDatabase extends _$AppDatabase {
           }
           debugPrint('✓ Added enhanced_medicines.reminderEnabled/deletedAt '
               'and the occurrence/manual-entry indexes (v20)');
+        }
+        if (from < 21) {
+          // `criticalAlert`: the "must-take" flag had no column, so it could
+          // not persist. Guarded with PRAGMA like v20 — a database that already
+          // has the column must not fail on ADD COLUMN.
+          final medCols = await customSelect(
+                  "PRAGMA table_info('enhanced_medicines')")
+              .get()
+              .then((rows) => rows.map((r) => r.read<String>('name')).toSet());
+          if (!medCols.contains('critical_alert')) {
+            await m.addColumn(enhancedMedicines, enhancedMedicines.criticalAlert);
+          }
+          debugPrint('✓ Added enhanced_medicines.criticalAlert (v21)');
         }
       },
     );

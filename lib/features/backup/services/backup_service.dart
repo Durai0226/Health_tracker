@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/services/backup_record.dart';
 
 class BackupService {
   
@@ -34,6 +35,10 @@ class BackupService {
       final zipBytes = zipEncoder.encode(archive);
       
       await file.writeAsBytes(zipBytes);
+      // The file exists, so a backup was made. (Whether it was then shared is
+      // the share sheet's business; making it is what the checklist asks of
+      // the user.)
+      await BackupRecord.markDone();
       return file;
       
     } catch (e) {

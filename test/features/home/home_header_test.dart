@@ -134,7 +134,7 @@ void main() {
 
     test('does not repeat the greeting the header used to show', () {
       final s = coach.dailyBriefing(
-        medsTaken: 0,
+        medsOutstanding: 2,
         medsTotal: 2,
         waterPct: 0,
         focusMinutes: 0,
@@ -150,7 +150,7 @@ void main() {
 
     test('does not recap the numbers the pulse row already renders', () {
       final s = coach.dailyBriefing(
-        medsTaken: 1,
+        medsOutstanding: 1,
         medsTotal: 2,
         waterPct: 40,
         focusMinutes: 25,
@@ -168,7 +168,7 @@ void main() {
     test('leads with the actionable clause and fits two lines', () {
       // The exact state from the screenshot: water at 0%, doses outstanding.
       final s = coach.dailyBriefing(
-        medsTaken: 0,
+        medsOutstanding: 2,
         medsTotal: 2,
         waterPct: 0,
         focusMinutes: 0,

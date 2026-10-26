@@ -104,9 +104,17 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       await _backupService.restoreBackup(backup.id);
       if (!mounted) return;
-      context.toastSuccess('Backup restored successfully');
-      // Maybe navigate to home or restart app logic?
-      // Navigator.pop(context); // Optional
+      // The restart is part of the contract, not a nicety.
+      //
+      // `CleanStorageService.importData` documents it: the SleepService /
+      // PeriodService / StepService singletons hold their own in-memory copy
+      // and reload it in `init()`, "so the restored nights, cycles and step
+      // days appear after the app restart the restore screens already ask
+      // for". The LOCAL restore screen does ask ("Data restored. Please
+      // restart the app."); this one reported plain success, so a user came
+      // back to Sleep and Period still showing their pre-restore values and
+      // every reason to think the restore had silently failed.
+      context.toastSuccess('Backup restored. Please restart the app.');
     } catch (e) {
       _showError('Failed to restore backup: $e');
     } finally {

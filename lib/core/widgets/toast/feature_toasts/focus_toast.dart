@@ -21,8 +21,13 @@ class FocusToast {
     );
   }
 
-  /// Show session completed toast
-  static String sessionComplete(BuildContext context, {required int minutes}) {
+  /// Show session completed toast.
+  ///
+  /// With [onAnotherRound] the toast carries an "Another round" button that runs
+  /// it, and stays up longer: a one-tap restart is a decision, and five seconds
+  /// is a short window to make one while the celebration is still playing.
+  static String sessionComplete(BuildContext context,
+      {required int minutes, VoidCallback? onAnotherRound}) {
     return ToastService.show(
       context,
       type: ToastType.achievement,
@@ -30,7 +35,10 @@ class FocusToast {
       title: '🎉 Session Complete!',
       message: 'Great job! You focused for $minutes minutes',
       showParticles: true,
-      duration: const Duration(seconds: 5),
+      action: onAnotherRound == null
+          ? null
+          : ToastAction(label: 'Another round', onPressed: onAnotherRound),
+      duration: Duration(seconds: onAnotherRound == null ? 5 : 9),
     );
   }
 

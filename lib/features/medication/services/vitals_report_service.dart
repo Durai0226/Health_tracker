@@ -5,6 +5,7 @@ import '../../../core/health/vitals_analyzer.dart';
 import '../models/blood_pressure_reading.dart';
 import '../models/glucose_reading.dart';
 import '../../../core/constants/app_strings.dart';
+import 'bp_sessions.dart';
 
 /// Doctor-ready PDF exports for the vitals trackers. Pure Dart (the `pdf`
 /// package needs no Flutter bindings) so it is unit-testable headlessly; the UI
@@ -25,11 +26,15 @@ class VitalsReportService {
     final now = generatedAt ?? DateTime.now();
     final sorted = [...readings]..sort((a, b) => b.takenAt.compareTo(a.takenAt));
 
-    final avgSys = VitalsAnalyzer.mean(sorted.map((r) => r.systolic).toList());
-    final avgDia = VitalsAnalyzer.mean(sorted.map((r) => r.diastolic).toList());
+    // Average and breakdown are per measurement SESSION (readings taken within
+    // 10 minutes count once); the table below still lists every raw reading.
+    final sessions = BpSessions.collapse(sorted);
+    final averaged = sessions.length != sorted.length;
+    final avgSys = VitalsAnalyzer.mean(sessions.map((r) => r.systolic).toList());
+    final avgDia = VitalsAnalyzer.mean(sessions.map((r) => r.diastolic).toList());
 
     final counts = <BpCategory, int>{};
-    for (final r in sorted) {
+    for (final r in sessions) {
       counts[r.category] = (counts[r.category] ?? 0) + 1;
     }
 
@@ -42,14 +47,18 @@ class VitalsReportService {
         _summaryBox(
           big: avgSys != null ? '${avgSys.round()}/${avgDia!.round()}' : '-',
           unit: 'mm Hg',
-          caption: 'Average of ${sorted.length} readings',
+          caption: averaged
+              ? 'Average of ${sessions.length} measurements '
+                  '(${sorted.length} readings; readings within 10 minutes '
+                  'are averaged into one)'
+              : 'Average of ${sorted.length} readings',
         ),
         pw.SizedBox(height: 18),
         pw.Text('Category breakdown',
             style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
         _table(
-          ['Category', 'Readings'],
+          ['Category', averaged ? 'Measurements' : 'Readings'],
           BpCategory.values
               .where((c) => (counts[c] ?? 0) > 0)
               .map((c) => [VitalsAnalyzer.bpLabel(c), '${counts[c]}'])

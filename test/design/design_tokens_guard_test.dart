@@ -108,6 +108,87 @@ List<int> _linesMatching(String src, RegExp re) {
 
 // ─────────────────────────────── the rules ───────────────────────────────
 
+
+/// Comment text, blanked to spaces — same length, same newlines, so byte
+/// offsets and therefore line numbers are unchanged.
+///
+/// The only rule in this file that needs it. Every other rule looks for a
+/// token that prose has no reason to contain, so the file's note is right that
+/// none of them strip comments. This one looks for an API NAME, and the fix
+/// for each offender leaves behind a comment explaining which API was wrong —
+/// so without blanking, fixing a site would keep it flagged forever.
+String _blankComments(String src) {
+  final out = src.split('');
+  var i = 0;
+  String? quote;
+  while (i < out.length) {
+    final c = out[i];
+    if (quote != null) {
+      if (c == r'\') {
+        i += 2;
+        continue;
+      }
+      if (c == quote) quote = null;
+      i++;
+      continue;
+    }
+    if (c == "'" || c == '"') {
+      quote = c;
+      i++;
+      continue;
+    }
+    if (c == '/' && i + 1 < out.length && out[i + 1] == '/') {
+      while (i < out.length && out[i] != '\n') {
+        out[i] = ' ';
+        i++;
+      }
+      continue;
+    }
+    if (c == '/' && i + 1 < out.length && out[i + 1] == '*') {
+      while (i < out.length && !(out[i] == '*' && i + 1 < out.length && out[i + 1] == '/')) {
+        if (out[i] != '\n') out[i] = ' ';
+        i++;
+      }
+      if (i + 1 < out.length) {
+        out[i] = ' ';
+        out[i + 1] = ' ';
+        i += 2;
+      }
+      continue;
+    }
+    i++;
+  }
+  return out.join();
+}
+
+final _reShowCall =
+    RegExp(r'\b(?:AppTimePicker|AppDatePicker|AppBottomSheet)\.show\s*(?:<[^>(]*>)?\s*\(');
+
+/// `.show(` call sites whose own argument list carries no `accent:`.
+List<int> _findUnaccentedShow(String rawSrc) {
+  final src = _blankComments(rawSrc);
+  final starts = _lineStarts(src);
+  final hits = <int>[];
+  for (final m in _reShowCall.allMatches(src)) {
+    // Walk to the matching close paren so a nested call's `accent:` cannot
+    // satisfy an outer call that has none — and vice versa.
+    var depth = 0;
+    var j = m.end - 1;
+    while (j < src.length) {
+      final c = src[j];
+      if (c == '(') depth++;
+      if (c == ')') {
+        depth--;
+        if (depth == 0) break;
+      }
+      j++;
+    }
+    final call = src.substring(m.start, j < src.length ? j + 1 : src.length);
+    if (!call.contains('accent:')) hits.add(_lineAt(starts, m.start));
+  }
+  return hits;
+}
+
 typedef _Finder = List<int> Function(String src);
 
 class _Rule {
@@ -541,6 +622,32 @@ final _rules = <_Rule>[
     budget: _productNameBudget,
     scope: (p) => _allOfLib(p) && p != _productNameExempt,
   ),
+  _Rule(
+    id: 'picker/sheet opened without an accent',
+    remedy: 'pass `accent:` to AppTimePicker.show / AppDatePicker.show / '
+        'AppBottomSheet.show. They resolve `accent ?? '
+        'AccentScope.swatchOf(context)` (app_pickers.dart:24, '
+        'app_bottom_sheet.dart:98), and a sheet builder runs on the sheet\'s '
+        'OWN route, so it inherits no AccentScope from the screen that opened '
+        'it. Where the screen is also pushed without a scope the fallback is '
+        '`FeatureAccent.brand` — which is how one Mood reminder picker came up '
+        'medicine purple from the Health hub and brand teal from the Log '
+        'sheet, on a screen that is amber throughout.',
+    find: _findUnaccentedShow,
+    positives: [
+      'final t = await AppTimePicker.show(context, initial: x);',
+      'await AppBottomSheet.show<int>(context, title: 1, builder: (_) => y);',
+    ],
+    negatives: [
+      'final t = await AppTimePicker.show(context, accent: ext.water);',
+      'await AppBottomSheet.show<int>(context, accent: acc, builder: (_) => y);',
+      // The reason this rule blanks comments: prose naming the API is not a
+      // call. Every fix for this rule leaves a comment behind that says so.
+      '// AppTimePicker.show(context) without accent: was the bug here.',
+    ],
+    budget: _pickerAccentBudget,
+    scope: _isFeatureUi,
+  ),
 ];
 
 /// The one file the product-name rule exempts: it defines the replacement, and
@@ -647,6 +754,25 @@ void main() {
 
 // 265 raw type declarations. The water and focus features are where the two
 // pre-token design languages ('Aqua', 'Nunito') survive.
+/// Picker/sheet call sites with no explicit `accent:`, counted 2026-10-01.
+///
+/// Each is only WRONG where the route it opens from carries no scope, or
+/// carries one that is not the colour the screen uses — which is why this is a
+/// ratchet rather than a ban. It may only go down.
+const _pickerAccentBudget = <String, int>{
+  'lib/features/water/screens/water_reminder_settings_screen.dart': 3,
+  'lib/features/sleep/screens/sleep_schedule_settings_screen.dart': 2,
+  'lib/features/sleep/widgets/sleep_manual_log_sheet.dart': 2,
+  'lib/features/period/screens/period_dashboard.dart': 1,
+  'lib/features/focus/screens/settings/focus_reminders_settings_screen.dart': 1,
+  'lib/features/steps/screens/steps_goal_settings_screen.dart': 1,
+  'lib/features/steps/widgets/step_manual_entry_sheet.dart': 1,
+  'lib/features/medication/screens/dependents/add_edit_dependent_screen.dart': 1,
+  'lib/features/medication/screens/clinics/nunito_add_edit_clinic_screen.dart': 1,
+  'lib/features/medication/screens/nunito_add_medication_flow.dart': 4,
+  'lib/features/reminders/screens/add_reminder_screen.dart': 2,
+};
+
 const _textStyleBudget = <String, int>{
   'lib/features/focus/screens/app_allow_list_screen.dart': 12,
   'lib/features/focus/screens/custom_tags_screen.dart': 26,

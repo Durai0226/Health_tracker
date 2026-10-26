@@ -4,6 +4,7 @@ import 'focus_insights.dart';
 import 'focus_readiness.dart';
 import 'health_types.dart';
 import 'hydration_pacer.dart';
+import 'sleep_debt.dart';
 
 /// Pure-Dart, deterministic AI engine. Zero cost, zero infra, offline, private —
 /// runs on every device and scales to unlimited users for free. It is the
@@ -893,6 +894,10 @@ class CoachText {
     /// Nights actually logged in the debt window. Below 4 the debt figure is
     /// dominated by missing data, so it is not mentioned.
     int loggedNights = 7,
+
+    /// When given, the debt line is judged and worded from the weighted
+    /// 14-night debt (with its catch-up plan) instead of [debtMinutes].
+    SleepDebtResult? weightedDebt,
   }) {
     if (lastNightMinutes <= 0) {
       return 'Log last night\'s sleep and I\'ll track your duration, consistency and sleep debt.';
@@ -904,7 +909,12 @@ class CoachText {
     // Only mention debt when the week is actually well logged. `sleepDebtMinutes`
     // totals target-minus-actual across the window, so 2 logged nights out of 7
     // produced a "debt" that was really just 5 unlogged nights.
-    if (debtMinutes >= 180 && loggedNights >= 4) {
+    final behind = weightedDebt;
+    if (behind != null) {
+      if (behind.debtMinutes >= 180 && behind.nights >= SleepDebt.minNights) {
+        return '$dur last night. ${behind.behindLine}';
+      }
+    } else if (debtMinutes >= 180 && loggedNights >= 4) {
       return '$dur last night, and about ${(debtMinutes / 60).round()}h of sleep debt this week. An earlier night or two helps you recover.';
     }
     if (regularity < 0.5) {
@@ -955,12 +965,24 @@ class CoachText {
   }
 
   String dailyBriefing({
-    required int medsTaken,
+    /// Doses with no outcome yet — not `total - taken`.
+    ///
+    /// It used to be `medsTaken`, and this derived `medsTotal - medsTaken`,
+    /// which counts a *missed* or deliberately *skipped* dose as one you still
+    /// have to take. On device that put "You still have 5 doses left — a good
+    /// moment to take them" directly above a Medicine card reading "Nothing
+    /// left today · 1 of 6 taken": the same five doses, described two
+    /// incompatible ways, from one summary object. Telling someone to take a
+    /// dose they deliberately skipped is the worse half of that.
+    required int medsOutstanding,
     required int medsTotal,
     required int waterPct,
     required int focusMinutes,
     required int remindersLeft,
     required int hour,
+    /// True when the user is under a prescribed fluid ceiling rather than
+    /// working toward a hydration goal. See [_crossSignal].
+    bool isRestricted = false,
     int steps = 0,
     int stepGoal = 0,
     int sleepMinutes = 0,
@@ -975,12 +997,13 @@ class CoachText {
     // pulse row renders directly beneath it. The nudge alone fits with room to
     // spare and is the only part that isn't already on screen.
     return _crossSignal(
-      medsLeft: medsTotal - medsTaken,
+      medsLeft: medsOutstanding,
       medsTotal: medsTotal,
       waterPct: waterPct,
       focusMinutes: focusMinutes,
       remindersLeft: remindersLeft,
       hour: hour,
+      isRestricted: isRestricted,
     );
   }
 
@@ -994,8 +1017,21 @@ class CoachText {
     required int focusMinutes,
     required int remindersLeft,
     required int hour,
+    bool isRestricted = false,
   }) {
-    final waterBehind = waterPct < 60;
+    // `waterPct` is progress toward a GOAL for most users and progress toward
+    // a prescribed CEILING for a fluid-restricted one — [HydrationProfile]
+    // returns `fluidCeilingMl` as the effective goal under a restriction. The
+    // two read identically here, so "behind" on a ceiling means "safely under
+    // the limit your clinician set", and every water line below would urge a
+    // dialysis or heart-failure patient toward that limit.
+    //
+    // [hydrationTip] in this same file already refuses to do that, in as many
+    // words: "Under a prescribed fluid ceiling every line below is wrong —
+    // they all encourage drinking more, which is the opposite of the clinical
+    // advice the user is following." This strip is on the Home screen, above
+    // the fold, and it had no such guard.
+    final waterBehind = !isRestricted && waterPct < 60;
     // Unfinished doses late in the day is the highest-priority health signal.
     if (medsTotal > 0 && medsLeft > 0 && hour >= 18) {
       return 'You still have $medsLeft dose${medsLeft == 1 ? '' : 's'} left — '

@@ -31,6 +31,9 @@ import 'reminder_budget.dart';
 export 'background_alarm_service.dart'
     show notificationTapBackground, handleSnoozeAction, waterLogActionId;
 import '../../main.dart';
+import 'snooze_log.dart';
+import '../../features/medication/services/refill_loop.dart';
+import '../health/step_reminder_plan.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -666,6 +669,10 @@ class NotificationService {
       if (p != null && p.startsWith('alarm:')) {
         final args = parseAlarmPayload(p, response.id);
         navigatorKey.currentState?.pushNamed('/alarm', arguments: args);
+      } else if (RefillLoop.medicineIdFromPayload(p) != null) {
+        // The run-out reminder (or its follow-up): the app shell shows the
+        // refill sheet, after the app lock if one is engaged.
+        RefillLoop.pendingOpen.value = RefillLoop.medicineIdFromPayload(p);
       }
     }
   }
@@ -1033,6 +1040,10 @@ class NotificationService {
   /// Reserved id for the evening step reminder (own block, clear of medicine).
   static const int stepReminderId = 910001;
 
+  /// Today's data-aware step reminder: a one-off beside the repeating
+  /// [stepReminderId], which then starts tomorrow. See [StepReminderPlanner].
+  static const int stepReminderTodayId = 910003;
+
   /// Schedule (or cancel) a gentle daily evening step reminder on [steps_channel].
   ///
   /// Deliberately NOT the data-aware "X steps to go" variant (that would need a
@@ -1053,12 +1064,23 @@ class NotificationService {
   /// `false` means "not armed" — including the deliberate `enabled: false`
   /// case, where the caller asked for exactly that; callers should only treat
   /// `false` as an error when they asked for `enabled: true`.
+  ///
+  /// With [stepsToday], [goal] and [stepsAsOf] the evening reminder knows how far
+  /// there is to go: nothing fires today once the goal is met, and a fresh count
+  /// is quoted ("1,800 steps to go"). Without them it is exactly the old generic
+  /// reminder. See [StepReminderPlanner] for why a figure is only quoted when it
+  /// will still be fresh.
   Future<bool> scheduleStepReminder({
     required bool enabled,
     required int minuteOfDay,
+    int? stepsToday,
+    int? goal,
+    DateTime? stepsAsOf,
+    bool restToday = false,
   }) async {
     try {
       await _scheduler.cancel(stepReminderId);
+      await _scheduler.cancel(stepReminderTodayId);
       if (!enabled) {
         debugPrint('✓ Step reminder cancelled');
         return false;
@@ -1075,10 +1097,15 @@ class NotificationService {
 
       final hour = (minuteOfDay ~/ 60) % 24;
       final minute = minuteOfDay % 60;
-      final now = tz.TZDateTime.now(tz.local);
-      var when =
-          tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-      if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+      final plan = StepReminderPlanner.plan(
+        now: clock.now(),
+        minuteOfDay: minuteOfDay,
+        stepsToday: stepsToday,
+        goal: goal,
+        stepsAsOf: stepsAsOf,
+        restDay: restToday,
+      );
+      final when = tz.TZDateTime.from(plan.repeatingFrom, tz.local);
 
       const details = NotificationDetails(
         android: AndroidNotificationDetails(
@@ -1093,6 +1120,21 @@ class NotificationService {
           visibility: NotificationVisibility.public,
         ),
       );
+
+      // Today's one-off, when the numbers say there is something to say.
+      if (plan.todayAt != null && plan.todayBody != null) {
+        await _zonedSchedule(
+          stepReminderTodayId,
+          'A little movement? 🚶',
+          plan.todayBody,
+          tz.TZDateTime.from(plan.todayAt!, tz.local),
+          details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          debugLabel: 'step reminder today',
+        );
+      }
 
       await _zonedSchedule(
         stepReminderId,
@@ -1772,6 +1814,7 @@ class NotificationService {
         return;
       }
       await prefs.setInt(snoozeCountKey, priorSnoozeCount + 1);
+      await SnoozeLog.record(prefs, baseId, DateTime.now());
 
       final now = tz.TZDateTime.now(tz.local);
       final snoozeTime = now.add(Duration(minutes: minutes));
@@ -2009,6 +2052,37 @@ class NotificationService {
 
   Future<void> cancelAllNotifications() async {
     await _scheduler.cancelAll();
+  }
+
+  /// Cancel everything this app has scheduled, on every route it can be armed.
+  ///
+  /// `cancelAll` on the plugin only reaches `zonedSchedule` registrations. On
+  /// Android most reminders — medicines, generic reminders, health checks — are
+  /// AlarmManager alarms with their data in `alarm_*` preferences, which it
+  /// does not touch, so they went on firing after "Delete all data". Returns how
+  /// many AlarmManager alarms were torn down.
+  Future<int> cancelEverythingScheduled() async {
+    var alarms = 0;
+    try {
+      await _scheduler.cancelAll();
+    } catch (e) {
+      debugPrint('⚠️ cancelAll failed: $e');
+    }
+    if (Platform.isAndroid) {
+      try {
+        final service = BackgroundAlarmService();
+        for (final a in await service.getScheduledAlarms()) {
+          final id = a['id'];
+          if (id is int) {
+            await service.cancelAlarm(id);
+            alarms++;
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Cancelling alarms failed: $e');
+      }
+    }
+    return alarms;
   }
 
   // Debug method to show immediate notification
@@ -2479,8 +2553,8 @@ class NotificationService {
   /// [waterReminderBaseId] + index, capped at [maxWaterReminders] slots.
   ///
   /// MOVED off 900000 (see [legacyWaterReminderBaseId]): that block was not
-  /// actually exclusive. Four vitals reminders (BP 900020, blood sugar 900021,
-  /// weight 900022, mood 900023 — `VitalsReminderService`) and onboarding's
+  /// actually exclusive. Five vitals reminders (BP 900020, blood sugar 900021,
+  /// weight 900022, mood 900023, evening BP 900024 — `VitalsReminderService`) and onboarding's
   /// daily check-in (900001 — `welcome_screen.dart`) sit inside it, and a
   /// notification id is last-write-wins: a user with 21+ interval water
   /// reminders (every 40 min across a normal waking day) silently REPLACED
@@ -2509,6 +2583,7 @@ class NotificationService {
     900021, // vitals: blood sugar
     900022, // vitals: weight
     900023, // vitals: mood
+    900024, // vitals: blood pressure, evening
   };
 
   /// Every id a water sweep is allowed to cancel: the reserved block, plus the
@@ -2934,6 +3009,10 @@ class NotificationService {
     required String body,
     required DateTime scheduledDate,
     ReminderKind kind = ReminderKind.gentle,
+
+    /// What a tap on the notification should open. Null keeps the old
+    /// behaviour: it just brings the app forward.
+    String? payload,
   }) async {
     try {
       if (!_isInitialized) {
@@ -2952,6 +3031,7 @@ class NotificationService {
           channelId: 'checkin_channel',
           channelName: 'Check-ins & Nudges',
           kind: kind,
+          payload: payload,
         );
       }
 
@@ -2966,6 +3046,7 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
         debugLabel: 'one-shot ${kind.name}',
       );
 

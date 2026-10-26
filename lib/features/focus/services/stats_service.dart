@@ -117,7 +117,21 @@ class StatsService extends ChangeNotifier {
   }
 
   void updateProductivityPattern(List<FocusSession> sessions) {
-    _productivityPattern = ProductivityPattern.analyze(sessions);
+    // Null when there is nothing to find a pattern in.
+    //
+    // `ProductivityPattern.analyze` returns a non-null object for an empty
+    // list: its two `forEach` loops never run and `mostProdHour = 0` /
+    // `mostProdDay = 1` come back as if they were answers. So the Statistics
+    // screen told a user with no completed sessions that their peak hour was
+    // 12 AM and their best day Monday — and the `pattern == null` guard the
+    // screen already has could never fire.
+    //
+    // The emptiness test matches `analyze`'s own filter: it walks
+    // `sessions.where((s) => s.wasCompleted)`, so a user whose only sessions
+    // were abandoned has no pattern either.
+    final hasCompleted = sessions.any((s) => s.wasCompleted);
+    _productivityPattern =
+        hasCompleted ? ProductivityPattern.analyze(sessions) : null;
     notifyListeners();
   }
 
@@ -193,16 +207,23 @@ class StatsService extends ChangeNotifier {
         !s.date.isBefore(start) && !s.date.isAfter(end)).toList();
   }
 
+  /// The last SEVEN calendar days, today included.
+  ///
+  /// `dayOffset(now, -6)`, not `-7`: [getStatsForRange] is inclusive at both
+  /// ends, so `-7` returned EIGHT days — and D-7 is the same weekday as today.
+  /// The Week bar chart folds rows by `date.weekday`, so that extra day was
+  /// summed into today's bar: 60 minutes last Tuesday and 30 today rendered as
+  /// a single 90-minute Tuesday, a number the user never had.
   List<DailyFocusStats> getLast7Days() {
     final now = clock.now();
-    final weekAgo = dayOffset(now, -7);
-    return getStatsForRange(weekAgo, now);
+    return getStatsForRange(dayOffset(now, -6), now);
   }
 
+  /// The last THIRTY calendar days, today included — see [getLast7Days] for
+  /// why the offset is one less than the count.
   List<DailyFocusStats> getLast30Days() {
     final now = clock.now();
-    final monthAgo = dayOffset(now, -30);
-    return getStatsForRange(monthAgo, now);
+    return getStatsForRange(dayOffset(now, -29), now);
   }
 
   List<WeeklyFocusStats> getLast4Weeks() {
@@ -236,11 +257,25 @@ class StatsService extends ChangeNotifier {
       case StatsPeriod.daily:
         relevantStats = [getTodayStats()];
         break;
+      // The SAME calendar periods `getTotalMinutes` uses, not rolling windows.
+      //
+      // The Overview hero two cards above calls `getTotalMinutes(period)`,
+      // which for weekly is `getWeekStats()` — the current Mon–Sun week — and
+      // for monthly is `getMonthStats()`, the current calendar month. This
+      // read `getLast7Days()` / `getLast30Days()`, which roll.
+      //
+      // On a Wednesday the hero covered Mon–Wed while the breakdown beneath it
+      // covered the previous Thursday onward, so the breakdown could total
+      // more minutes than the hero said existed at all — under one segmented
+      // control labelled "Week".
       case StatsPeriod.weekly:
-        relevantStats = getLast7Days();
+        relevantStats =
+            getStatsForRange(_getWeekStart(clock.now()), clock.now());
         break;
       case StatsPeriod.monthly:
-        relevantStats = getLast30Days();
+        final now = clock.now();
+        relevantStats =
+            getStatsForRange(DateTime(now.year, now.month, 1), now);
         break;
       case StatsPeriod.yearly:
         relevantStats = _dailyStats.where((s) => s.date.year == clock.now().year).toList();

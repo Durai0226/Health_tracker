@@ -27,6 +27,7 @@ export '../../features/reminders/models/reminder_kind.dart';
 import 'dose_action_queue.dart';
 import 'notification_scheduler.dart';
 import 'water_action_queue.dart';
+import 'snooze_log.dart';
 
 /// When the user acts on the reminder from the NOTIFICATION (not the on-screen
 /// buttons), tell a live full-screen [AlarmScreen] in the main isolate to stop
@@ -576,6 +577,7 @@ Future<void> _scheduleSnoozeNotification(int originalId) async {
     }
 
     await prefs.setInt(snoozeCountKeyFor(baseId), snoozeCount + 1);
+    await SnoozeLog.record(prefs, baseId, DateTime.now());
 
     // Schedule snooze alarm. Window nudges snooze inexactly too, matching
     // scheduleWindowNudge's own choice — a snooze is exactly as time-tolerant
@@ -1057,11 +1059,7 @@ Future<void> alarmCallback(int alarmId) async {
           // groupRemindersBySlot), and only one of them belongs to any given
           // day. Without this check a 07:00 weekday alarm also rang on
           // Saturday, when the dose is actually due at 10:00.
-          if (slotHour == null || slotMinute == null) return true;
-          final todaysSlots = schedule.getScheduledTimesForDate(doseInstant);
-          if (todaysSlots.isEmpty) return true; // nothing to compare against
-          return todaysSlots
-              .any((t) => t.hour == slotHour && t.minute == slotMinute);
+          return slotBelongsToDay(schedule, doseInstant, slotHour, slotMinute);
         } catch (e) {
           // On any parse error, fail OPEN (fire) — never silently drop a dose.
           debugPrint('⚠️ Schedule gate parse failed (firing anyway): $e');
@@ -1439,9 +1437,31 @@ Future<void> _handleWindowNudge(
   var activeToday = true;
   if (scheduleJson != null && scheduleJson.isNotEmpty) {
     try {
-      activeToday = MedicineSchedule.fromJson(
-              jsonDecode(scheduleJson) as Map<String, dynamic>)
-          .isActiveOnDate(scheduledTime);
+      final schedule = MedicineSchedule.fromJson(
+          jsonDecode(scheduleJson) as Map<String, dynamic>);
+      activeToday = schedule.isActiveOnDate(scheduledTime);
+
+      // Is the slot these nudges belong to actually one of TODAY'S slots?
+      //
+      // Same gate, and the same reason, as the medicine-slot path above: once
+      // a weekend override exists both the weekday and the weekend slot are
+      // armed and only one belongs to any given day. `_recomputeWindowNudges`
+      // builds these from the raw `schedule.times`, which is the WEEKDAY list,
+      // so without this a 08:00 weekday window kept nudging at 08:00 / 08:30 /
+      // 09:00 on Saturday — three times, at exactly the hour the user moved
+      // the weekend dose away from — while the real 10:00 reminder also fired.
+      //
+      // Worse than the noise: a Take from one of those nudges enqueues the
+      // 08:00 instant, which is not a Saturday slot, so it writes an orphan
+      // log and decrements stock while the 10:00 dose still shows pending.
+      if (activeToday) {
+        activeToday = slotBelongsToDay(
+          schedule,
+          scheduledTime,
+          (alarmData['hour'] as num?)?.toInt(),
+          (alarmData['minute'] as num?)?.toInt(),
+        );
+      }
     } catch (e) {
       debugPrint(
           '⚠️ Window nudge schedule gate parse failed (firing anyway): $e');
@@ -2072,6 +2092,7 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
       return;
     }
     await prefs.setInt(snoozeCountKey, snoozeCount + 1);
+    await SnoozeLog.record(prefs, baseId, DateTime.now());
     final nextPayload = decodedPayload == null
         ? payload
         : 'alarm:${jsonEncode({...decodedPayload, 'baseId': baseId})}';

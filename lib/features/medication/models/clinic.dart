@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:clock/clock.dart';
+
 /// Operating hours for a single day
 class DayHours {
   final bool isOpen;
@@ -120,7 +122,7 @@ class OperatingHours {
   }
 
   bool get isOpenNow {
-    final now = DateTime.now();
+    final now = clock.now();
     final todayHours = getDay(now.weekday);
     if (!todayHours.isOpen) return false;
 
@@ -136,7 +138,20 @@ class OperatingHours {
         int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
     final nowMinutes = now.hour * 60 + now.minute;
 
-    return nowMinutes >= openMinutes && nowMinutes <= closeMinutes;
+    // Hours that cross midnight are a normal entry — both chips are free
+    // time pickers, and a night pharmacy or an A&E is exactly "20:00 - 08:00".
+    //
+    // The single `>= open && <= close` test assumed close comes after open, so
+    // at 22:00 on a 20:00-08:00 day it computed `1320 >= 1200` (true) and
+    // `1320 <= 480` (false) and reported the clinic shut — a red "Closed" dot
+    // rendered directly beside the clinic's own "20:00 - 08:00" line.
+    if (closeMinutes > openMinutes) {
+      return nowMinutes >= openMinutes && nowMinutes <= closeMinutes;
+    }
+    // Wrapped: open from `open` to midnight, and from midnight to `close`.
+    // Equal times are left to the branch above, where they match only that
+    // one minute — inventing "24 hours" out of 09:00-09:00 would be guessing.
+    return nowMinutes >= openMinutes || nowMinutes <= closeMinutes;
   }
 
   String get todayHoursText => getDay(DateTime.now().weekday).displayText;

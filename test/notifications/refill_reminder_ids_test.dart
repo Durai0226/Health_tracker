@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/core/database/daos/reminders_dao.dart';
 import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/core/services/reminder_reschedule_service.dart';
+import 'package:tablet_remainder/features/medication/services/refill_loop.dart';
 import 'package:tablet_remainder/features/medication/services/refill_reminder_service.dart';
 import 'package:tablet_remainder/features/medication/services/reminder_slot_grouping.dart';
 import 'package:tablet_remainder/features/medication/services/reminder_window_nudges.dart';
@@ -44,6 +45,33 @@ void main() {
           genericReminderIdBase + i,
       };
       expect(refillIds().toSet().intersection(others), isEmpty);
+    });
+
+    test('the follow-up block is next door, disjoint, and below the nudges', () {
+      // "Did you pick it up?" ids sit in the 1000 right after the run-out ids.
+      expect(RefillLoop.followUpIdBase,
+          refillReminderIdBase + refillReminderCapacity);
+      expect(RefillLoop.followUpIdBase + RefillLoop.followUpCapacity,
+          lessThan(windowNudgeIdOffset));
+      for (final id in ['a', 'med-1', 'a-very-long-uuid-like-string', '']) {
+        expect(RefillLoop.followUpIdFor(id),
+            isNot(RefillReminderService.notificationIdFor(id)));
+      }
+      final others = <int>{
+        NotificationService.waterReminderBaseId,
+        NotificationService.bedtimeReminderId,
+        NotificationService.stepReminderId,
+        NotificationService.stepReminderTodayId,
+        NotificationService.wakeAlarmId,
+        NotificationService.focusDailyReminderId,
+        for (var m = 0; m < 1440; m++) slotIdOffset + m,
+        for (var m = 0; m < 1440; m++) slotIdOffset + m + 100000,
+        for (var i = 0; i < genericReminderIdCapacity; i++)
+          genericReminderIdBase + i,
+      };
+      for (var i = 0; i < RefillLoop.followUpCapacity; i++) {
+        expect(others.contains(RefillLoop.followUpIdBase + i), isFalse);
+      }
     });
 
     test('the id is stable for a given medicine', () {

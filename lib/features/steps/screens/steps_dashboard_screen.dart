@@ -13,7 +13,6 @@ import 'package:tablet_remainder/core/health/streak_engine.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/home_widget_service.dart';
-import 'package:tablet_remainder/core/services/notification_service.dart';
 import '../models/step_daily_data.dart';
 import '../models/step_source.dart';
 import '../services/step_service.dart';
@@ -22,7 +21,12 @@ import '../widgets/step_activity_ring.dart';
 import '../widgets/step_weekly_chart.dart';
 import '../widgets/step_hourly_chart.dart';
 import '../widgets/step_manual_entry_sheet.dart';
+import '../models/step_manual_entry.dart';
+import '../widgets/manual_step_entries_card.dart';
+import '../widgets/rest_day_card.dart';
 import '../widgets/steps_permission_card.dart';
+import 'package:tablet_remainder/core/health/rest_days.dart';
+import 'package:tablet_remainder/core/services/rest_day_store.dart';
 import 'steps_goal_settings_screen.dart';
 import 'steps_history_screen.dart';
 import '../utils/step_format.dart';
@@ -141,10 +145,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     // Keep the opt-in evening reminder alive across app opens (no prompt unless
     // already enabled).
     if (StepService.getReminderEnabled()) {
-      NotificationService().scheduleStepReminder(
-        enabled: true,
-        minuteOfDay: StepService.getReminderMinuteOfDay(),
-      );
+      unawaited(StepService.replanReminder(rearmIfUnknown: true));
     }
     HomeWidgetService.pushSnapshot(); // refresh the home-screen widget (if any)
     if (mounted) {
@@ -173,6 +174,8 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     final reached = today.goalReached;
     final prev = _lastGoalReached;
     _lastGoalReached = reached;
+    // The goal was just met: today's evening reminder has nothing left to say.
+    if (reached && prev != true) unawaited(StepService.replanReminder());
     if (prev != false || !reached) return;
     final key = _todayKey();
     if (CleanStorageService.getAppPreference(_kCelebratedDay, '') == key) return;
@@ -193,6 +196,33 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     // The kit hides the current toast itself, so the explicit hide is gone.
     showAppToastVia(messenger, _celebrationLine(met),
         duration: const Duration(seconds: 3));
+  }
+
+  /// Take one hand-typed entry off today's total, with a way back.
+  Future<void> _removeManualEntry(StepManualEntry entry) async {
+    await StepService.removeManualEntry(entry.id);
+    if (!mounted) return;
+    context.toastSuccess(
+      'Entry removed',
+      action: AppToastAction(
+        label: 'Undo',
+        // A new entry with the same amount and note: the id is not the point.
+        onPressed: () => StepService.addManualSteps(entry.steps, note: entry.note),
+      ),
+    );
+  }
+
+  Future<void> _markRest(RestKind kind) async {
+    await RestDayStore.markToday(kind);
+    // The evening reminder has nothing to say about a paused goal.
+    unawaited(StepService.replanReminder(rearmIfUnknown: true));
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _undoRest() async {
+    await RestDayStore.clear(clock.now());
+    unawaited(StepService.replanReminder(rearmIfUnknown: true));
+    if (mounted) setState(() {});
   }
 
   static String _todayKey() {
@@ -397,6 +427,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     final tt = Theme.of(context).textTheme;
     final streakResult = StepService.getStreakResult();
     final streak = streakResult.current;
+    final resting = RestDayStore.kindToday();
     final weekly = StepService.getWeeklyStats();
     final healthy = _healthAvailable;
 
@@ -446,10 +477,22 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
           const SizedBox(height: AppSpacing.sm),
           Center(
             child: Text(
-              '${today.source.label} · ${StepsTheme.bandLabel(today.progress)}',
+              resting != null
+                  ? '${resting.label} · goal paused'
+                  : '${today.source.label} · ${StepsTheme.bandLabel(today.progress)}',
               style: tt.bodySmall?.copyWith(color: ext.textTertiary),
             ),
           ),
+          // Offered until the goal is met, and always while a mark is on so it
+          // can be taken back.
+          if (resting != null || !today.goalReached) ...[
+            const SizedBox(height: AppSpacing.md),
+            RestDayCard(
+              marked: resting,
+              onMark: _markRest,
+              onUndo: _undoRest,
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
 
           // Key stats.
@@ -476,6 +519,13 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
               ),
             ],
           ),
+          if (today.manualEntries.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            ManualStepEntriesCard(
+              entries: today.manualEntries,
+              onRemove: _removeManualEntry,
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
 
           // Weekly goal-met headline + quiet forgiving streak line.

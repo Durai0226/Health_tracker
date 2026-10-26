@@ -58,6 +58,10 @@ void main() {
   }
 
   Future<void> skipTheDose(WidgetTester tester) async {
+    // The yesterday banner (a dose from before today went unlogged in this
+    // fixture) pushes the schedule down, so scroll the target into view first.
+    await tester.ensureVisible(find.textContaining('Take now').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.textContaining('Take now').first);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(InkWell, 'Skip').first);

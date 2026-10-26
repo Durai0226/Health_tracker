@@ -3,7 +3,10 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/widgets/app/app_widgets.dart';
 import '../models/enhanced_medicine.dart';
+import '../../../core/utils/date_formats.dart';
 import '../services/medicine_storage_service.dart';
+import '../services/refill_loop.dart';
+import '../widgets/refill_request_sheet.dart';
 
 /// A calm supply overview: per-medicine days-of-supply, low-stock and expiry
 /// flags, and a one-tap "Refill". All computed locally from the user's own
@@ -28,15 +31,23 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
   Future<void> _load() async {
     await MedicineCleanStorageService.init();
     final all = await MedicineCleanStorageService.getAllMedicines();
-    // Only meds where supply/expiry is meaningful. currentStock is persisted
-    // NOT-NULL (untracked coerces to 0), so `!= null` matched everything and the
-    // "No supply tracked" empty state was unreachable — gate on a positive stock
-    // count (or an expiry) instead so untracked meds drop out.
+    // Only meds where supply/expiry is meaningful.
+    //
+    // `refillReminderEnabled` is what "tracked" means in this model —
+    // `isLowStock` and `estimatedDaysRemaining` both gate on it, for the reason
+    // `isLowStock` records: currentStock is persisted NOT-NULL and untracked
+    // coerces to 0, so `currentStock != null` matched everything.
+    //
+    // The first fix for that was `(currentStock ?? 0) > 0`, which dropped
+    // untracked meds correctly but also dropped a TRACKED one the moment its
+    // stock reached zero — the exact moment it needs refilling. Every taken
+    // dose runs `reduceStock`, which clamps at 0, so a medicine would count
+    // down to "1 left" on this screen and then disappear from it entirely.
     final tracked = all
         .where((m) =>
             m.isActive &&
             !m.isArchived &&
-            ((m.currentStock ?? 0) > 0 || m.expiryDate != null))
+            (m.isStockTracked || m.expiryDate != null))
         .toList();
     // Flagged (low / expiring / expired) first, then by days remaining.
     int rank(EnhancedMedicine m) {
@@ -63,7 +74,7 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
     final amount = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _RefillAmountSheet(medicineName: m.name),
+      builder: (_) => RefillAmountSheet(medicineName: m.name),
     );
     if (amount == null) return;
     await MedicineCleanStorageService.refillStock(m.id, amount);
@@ -134,14 +145,23 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
     }
 
     final days = m.estimatedDaysRemaining;
+    final asked = RefillRequestState.requestedAt(m.id);
     final supply = <String>[
-      if (m.currentStock != null) '${m.currentStock} left',
-      if (m.currentStock != null && days >= 0) '~$days days',
+      if (asked != null) 'Asked ${DateFormats.dayMonth.format(asked)}',
+      // Same `refillReminderEnabled` gate as the filter above. This line was
+      // left on `currentStock != null`, which is never false, so an
+      // expiry-only medicine — one the user gave a use-by date and no
+      // quantity — printed a confident "0 left" beside it.
+      if (m.isStockTracked) '${m.currentStock ?? 0} left',
+      if (m.isStockTracked && days >= 0) '~$days days',
       if (m.expiryDate != null)
         'exp ${m.expiryDate!.day}/${m.expiryDate!.month}/${m.expiryDate!.year}',
     ].join(' · ');
 
     return AppCard(
+      // The whole row opens the refill sheet: pharmacy, "I've asked for it",
+      // "Picked up".
+      onTap: () => RefillRequestFlow.run(context, m.id).then((_) => _load()),
       child: Row(
         children: [
           Container(
@@ -193,7 +213,7 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
           ),
           const SizedBox(width: AppSpacing.sm),
           AppButton(
-            label: 'Refill',
+            label: asked != null ? 'Picked up' : 'Refill',
             variant: AppButtonVariant.ghost,
             size: AppButtonSize.sm,
             accent: ext.medicine,
@@ -206,10 +226,10 @@ class _RefillOverviewScreenState extends State<RefillOverviewScreen> {
   }
 }
 
-/// Preset stock-add amounts.
-class _RefillAmountSheet extends StatelessWidget {
+/// Preset stock-add amounts. Shared with the refill-request sheet.
+class RefillAmountSheet extends StatelessWidget {
   final String medicineName;
-  const _RefillAmountSheet({required this.medicineName});
+  const RefillAmountSheet({super.key, required this.medicineName});
 
   @override
   Widget build(BuildContext context) {

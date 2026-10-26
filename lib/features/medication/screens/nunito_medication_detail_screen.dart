@@ -945,8 +945,13 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
   }
 
   Widget _buildStockSection() {
-    // Untracked medicines (never given a stock count) don't show a stock card.
-    if (_medicine.currentStock == null) return const SizedBox.shrink();
+    // Untracked medicines don't show a stock card.
+    //
+    // See [EnhancedMedicine.isStockTracked]. The old `currentStock == null`
+    // test could never fire — the column is NOT NULL with a 0 default — so
+    // every medicine added without a quantity showed a fabricated
+    // "0 pill(s) remaining" card.
+    if (!_medicine.isStockTracked) return const SizedBox.shrink();
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
     final stock = _medicine.currentStock!;

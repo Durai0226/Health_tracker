@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 /// Relationship type for dependents
 enum RelationshipType {
   self,
@@ -91,7 +92,9 @@ class DependentProfile {
 
   int? get age {
     if (dateOfBirth == null) return null;
-    final now = DateTime.now();
+    // `clock.now()`, this project's convention — and the reason [displayAge]
+    // could not be tested against a pinned date before.
+    final now = clock.now();
     int years = now.year - dateOfBirth!.year;
     if (now.month < dateOfBirth!.month || 
         (now.month == dateOfBirth!.month && now.day < dateOfBirth!.day)) {
@@ -106,8 +109,21 @@ class DependentProfile {
     final a = age;
     if (a == null) return '';
     if (a < 1) {
-      final months = DateTime.now().difference(dateOfBirth!).inDays ~/ 30;
-      return '$months months';
+      // CALENDAR months, not elapsed days / 30.
+      //
+      // `age` above is already calendar-correct — it decrements the year when
+      // the birthday has not passed — and this branch fell back to
+      // `difference().inDays ~/ 30`. Twelve 30-day "months" is 360 days, so a
+      // child five days short of their first birthday was listed as
+      // "12 months". `clock.now()` for the same reason the rest of the app
+      // uses it.
+      final now = clock.now();
+      final dob = dateOfBirth!;
+      var months = (now.year - dob.year) * 12 + (now.month - dob.month);
+      // Not a full month until the day-of-month comes round.
+      if (now.day < dob.day) months--;
+      if (months < 0) months = 0;
+      return '$months month${months == 1 ? '' : 's'}';
     }
     return '$a years';
   }

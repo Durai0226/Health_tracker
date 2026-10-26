@@ -18,6 +18,8 @@ import '../../water/screens/aqua_water_dashboard.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../services/trends_data_service.dart';
 import '../widgets/trend_chart_card.dart';
+import '../widgets/patterns_section.dart';
+import 'weekly_recap_screen.dart';
 
 /// The unified "Trends" dashboard — every feature charted in one place with a
 /// 7 / 14 / 30-day range selector. One small-multiple card per feature (each in
@@ -152,6 +154,9 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
     });
   }
 
+  /// Whether the Patterns section has anything to show right now.
+  bool _hasPatterns = false;
+
   void _open(Widget screen) {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => screen));
@@ -170,6 +175,17 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
             leading: widget.isRoot
                 ? null
                 : AppHeader.backButton(context),
+            // The recap was reachable only from the Health tab's list, a screen
+            // away from where people go to look at how the week went.
+            actions: [
+              AppIconButton(
+                icon: Symbols.calendar_view_week_rounded,
+                filled: false,
+                accent: ext.brand,
+                tooltip: 'Weekly recap',
+                onPressed: () => _open(const WeeklyRecapScreen()),
+              ),
+            ],
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -304,8 +320,12 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         formatValue: _fmtHours,
         centerValue: (_) => _fmtHours(b.sleep.average!),
         centerCaption: 'avg/night',
-        ringHeadline: (gp) =>
-            'target ${_goalHours(b.sleep.goal!)} · ${(gp * 100).round()}% of goal',
+        // `goalPercent`, not the clamped `gp` the ring FILL is drawn from.
+        // With a 7h target and eight-hour nights the centre printed "8.0 h"
+        // and the line beneath it "100% of goal" — the card disagreeing with
+        // itself about a number it prints twice.
+        ringHeadline: (_) => 'target ${_goalHours(b.sleep.goal!)} · '
+            '${b.sleep.goalPercent!.round()}% of goal',
         barHeadline: b.sleep.hasData
             ? '${b.sleep.average!.toStringAsFixed(1)} h avg'
             : '—',
@@ -414,6 +434,17 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
     // medical disclaimer last — this is the app's main interpretation surface, so
     // it carries the same "not a diagnosis" footnote the Insights hub did.
     cards.insert(0, _summaryCard(ext, b));
+    // Right under the summary: what the logs say across days. Reloads with the
+    // bundle (same identity changes on every rebuild) and renders nothing when
+    // there is nothing to say.
+    cards.insert(
+        1,
+        PatternsSection(
+          reloadKey: b,
+          onResolved: (has) {
+            if (has != _hasPatterns) setState(() => _hasPatterns = has);
+          },
+        ));
     cards.add(const SafetyDisclaimerBar());
 
     return RefreshIndicator(
@@ -423,7 +454,10 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         padding: EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.lg,
             AppSpacing.gutter, AppInsets.pushed(context)),
         itemCount: cards.length,
-        separatorBuilder: (_, i) => const SizedBox(height: AppSpacing.lg),
+        // The gap after the Patterns item is dropped while that section is
+        // empty, so an empty section leaves no doubled gap behind it.
+        separatorBuilder: (_, i) =>
+            SizedBox(height: i == 1 && !_hasPatterns ? 0 : AppSpacing.lg),
         itemBuilder: (_, i) => cards[i],
       ),
     );
@@ -458,14 +492,26 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
     ];
     final tracked = allSeries.where((s) => s.hasData).length;
 
+    // `goalPercent`, not `goalProgress`.
+    //
+    // `goalProgress` is `.clamp(0.0, 1.0)` and exists for a ring's FILL;
+    // `goalPercent` is the uncapped one, documented on `TrendSeries` as being
+    // "for the ring's CENTRE label, so beating a goal reads honestly (e.g.
+    // 128%)". This line is a label, and the feature cards below it already
+    // print `goalPercent` — so one screen showed "Steps · 128%" on a card and
+    // "Best this period · Steps at 100% of goal" in the summary above it.
+    //
+    // It also decides WHICH feature is named: sorted on the clamped value,
+    // anything at or above goal ties at 1.0, so "best" was whichever happened
+    // to be added first rather than the one actually furthest ahead.
     final goals = <MapEntry<String, double>>[];
     void addGoal(String name, double? gp) {
       if (gp != null) goals.add(MapEntry(name, gp));
     }
-    addGoal('Medicine', b.adherence.goalProgress);
-    addGoal('Water', b.water.goalProgress);
-    addGoal('Steps', b.steps.goalProgress);
-    addGoal('Sleep', b.sleep.goalProgress);
+    addGoal('Medicine', b.adherence.goalPercent);
+    addGoal('Water', b.water.goalPercent);
+    addGoal('Steps', b.steps.goalPercent);
+    addGoal('Sleep', b.sleep.goalPercent);
     // Focus is absent on purpose: it has no stored goal, so it can never be
     // "most on track" against one.
     goals.sort((a, c) => c.value.compareTo(a.value));
@@ -510,7 +556,7 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Best this period · ${top.key} at ${(top.value * 100).round()}% of goal',
+                    'Best this period · ${top.key} at ${top.value.round()}% of goal',
                     style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
                   ),
                 ),
