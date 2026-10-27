@@ -14,6 +14,11 @@ import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_reminder_button.dart';
 import '../../services/vitals_reminder_service.dart';
+import 'mood_year_screen.dart';
+import '../../../../core/health/mood_tag_insights.dart';
+import '../../../../core/health/mood_tags.dart';
+import '../../services/mood_day_tags.dart';
+import '../../widgets/mood_pickers.dart';
 
 /// Mood tracker — a standalone daily mood log (independent of period tracking
 /// and of the per-dose mood already captured on medicine logs). Uses the same
@@ -97,6 +102,14 @@ class _MoodScreenState extends State<MoodScreen> {
             title: 'Mood',
             leading: AppHeader.backButton(context),
             actions: [
+              AppIconButton(
+                icon: Symbols.grid_view_rounded,
+                filled: false,
+                accent: accent,
+                tooltip: 'Year in pixels',
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const MoodYearScreen())),
+              ),
               VitalsReminderButton(
                 id: VitalsReminderService.mood.id,
                 prefKey: VitalsReminderService.mood.prefKey,
@@ -195,6 +208,7 @@ class _MoodScreenState extends State<MoodScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          ..._whatGoesWith(),
           SectionHeader(title: 'History', icon: Symbols.history_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
           ..._entries.map((r) => _logRow(ext, r)),
@@ -236,6 +250,7 @@ class _MoodScreenState extends State<MoodScreen> {
                             color: ext.textPrimary, fontWeight: FontWeight.w700)),
                     Text(
                       '${DateFormats.dayMonthTime.format(r.takenAt)}'
+                      '${r.tags.isEmpty ? '' : ' · ${r.tags.map(MoodTags.label).join(', ')}'}'
                       '${r.note != null ? ' · ${r.note}' : ''}',
                       style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                       maxLines: 1,
@@ -250,6 +265,44 @@ class _MoodScreenState extends State<MoodScreen> {
         ),
       ),
     );
+  }
+
+  /// "Mood tends to be better on days with a walk": what the entries' tags say,
+  /// when there are enough days on both sides to say it. Nothing at all
+  /// otherwise: no heading over an empty box.
+  List<Widget> _whatGoesWith() {
+    final byDay = <DateTime, List<MoodEntry>>{};
+    for (final e in _entries) {
+      final day = DateTime(e.takenAt.year, e.takenAt.month, e.takenAt.day);
+      (byDay[day] ??= []).add(e);
+    }
+    final days = [
+      for (final entry in byDay.entries)
+        DayMood(
+          day: entry.key,
+          // Higher is better: the log's 0 is "Great".
+          score: entry.value
+                  .map((e) => (moodRatingLabels.length - 1 - e.moodIndex))
+                  .reduce((a, b) => a + b) /
+              entry.value.length,
+          tags: {for (final e in entry.value) ...e.tags},
+        ),
+    ];
+    final insights = MoodTagInsights.insights(days);
+    if (insights.isEmpty) return const [];
+    final accent = VitalsColors.moodAccent(AppColorsExt.of(context).isDark);
+    return [
+      SectionHeader(
+          title: 'What goes with better days',
+          icon: Symbols.insights_rounded,
+          accent: accent),
+      const SizedBox(height: AppSpacing.sm),
+      for (final i in insights) ...[
+        InsightCard(insight: i),
+        const SizedBox(height: AppSpacing.md),
+      ],
+      const SizedBox(height: AppSpacing.sm),
+    ];
   }
 
   static double? _meanIndex(List<MoodEntry> list) {
@@ -328,6 +381,19 @@ class _MoodLogFormState extends State<_MoodLogForm> {
   String? _error;
   bool _saving = false;
 
+  /// The tags on this entry. An existing entry keeps its own; a new one starts
+  /// with what the day has earned (see [MoodDayTags]).
+  late Set<String> _tags;
+
+  /// The automatic tags offered, so they can be shown apart from the ones the
+  /// person picks.
+  List<String> _auto = const [];
+
+  /// Whether the hand-picked tags are showing. Closed to begin with, so Save
+  /// stays within reach on a small screen — the automatic tags are the common
+  /// case — and open for an entry that already has some.
+  late bool _manualOpen;
+
   @override
   void initState() {
     super.initState();
@@ -335,6 +401,22 @@ class _MoodLogFormState extends State<_MoodLogForm> {
     _note = TextEditingController(text: e?.note ?? '');
     _selected = e?.moodIndex;
     _takenAt = e?.takenAt ?? DateTime.now();
+    _tags = {...?e?.tags};
+    _manualOpen = _tags.any((t) => !MoodTags.isAutomatic(t));
+    if (e == null) _loadAuto();
+  }
+
+  /// A new entry is tagged from the day it is for. Re-read when the date is
+  /// changed, replacing the automatic tags only: whatever the person picked
+  /// stays.
+  Future<void> _loadAuto() async {
+    final auto = await MoodDayTags.forDate(_takenAt);
+    if (!mounted) return;
+    setState(() {
+      _tags.removeAll(_auto);
+      _auto = auto;
+      _tags.addAll(auto);
+    });
   }
 
   @override
@@ -358,7 +440,7 @@ class _MoodLogFormState extends State<_MoodLogForm> {
       dependentId: e?.dependentId,
       moodIndex: index,
       takenAt: _takenAt,
-      tags: e?.tags ?? const [],
+      tags: _tags.toList(),
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       createdAt: e?.createdAt ?? DateTime.now(),
     );
@@ -378,6 +460,49 @@ class _MoodLogFormState extends State<_MoodLogForm> {
     if (mounted) Navigator.pop(context, true);
   }
 
+  Widget _tagChip(String id) => MoodTagChip(
+        id: id,
+        accent: widget.accent,
+        selected: _tags.contains(id),
+        onTap: () => setState(() {
+          if (!_tags.remove(id)) _tags.add(id);
+        }),
+      );
+
+  /// "What went with it?" — the row that opens and closes the hand-picked tags.
+  Widget _manualHeader(AppColorsExt ext, TextTheme tt) {
+    final picked = _tags.where((t) => !MoodTags.isAutomatic(t)).length;
+    return Semantics(
+      button: true,
+      expanded: _manualOpen,
+      child: InkWell(
+        borderRadius: AppRadius.brSm,
+        onTap: () => setState(() => _manualOpen = !_manualOpen),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('What went with it?',
+                    style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+              ),
+              if (picked > 0 && !_manualOpen)
+                Text('$picked picked',
+                    style: tt.labelMedium?.copyWith(color: ext.mark(widget.accent))),
+              const SizedBox(width: AppSpacing.xs),
+              Icon(
+                  _manualOpen
+                      ? Symbols.expand_less_rounded
+                      : Symbols.expand_more_rounded,
+                  size: 20,
+                  color: ext.textTertiary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
@@ -390,30 +515,54 @@ class _MoodLogFormState extends State<_MoodLogForm> {
         Text('How are you feeling?',
             style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
         const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            for (var i = 0; i < moodRatingLabels.length; i++)
-              Expanded(
-                child: _MoodFaceButton(
-                  selected: _selected == i,
-                  icon: VitalsColors.moodIcon(i),
-                  label: moodRatingLabels[i],
-                  color: VitalsColors.moodBand(ext.isDark, i),
-                  onTap: () => setState(() {
-                    _selected = i;
-                    _error = null;
-                  }),
-                ),
-              ),
-          ],
+        MoodFaceRow(
+          selected: _selected,
+          onSelected: (i) => setState(() {
+            _selected = i;
+            _error = null;
+          }),
         ),
         const SizedBox(height: AppSpacing.md),
         AppDateTimeField(
           value: _takenAt,
           accent: widget.accent,
           noun: 'Entry',
-          onChanged: (v) => setState(() => _takenAt = v),
+          onChanged: (v) {
+            setState(() => _takenAt = v);
+            // A different day is a different day's sleep and steps.
+            if (widget.existing == null) _loadAuto();
+          },
         ),
+        const SizedBox(height: AppSpacing.sm),
+        _manualHeader(ext, tt),
+        if (_manualOpen) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final id in MoodTags.manual) _tagChip(id),
+            ],
+          ),
+        ],
+        // What the day says, already chosen, and removable.
+        if (_auto.isNotEmpty || _tags.any(MoodTags.isAutomatic)) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text('From your day',
+              style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final id in {
+                ..._auto,
+                ..._tags.where(MoodTags.isAutomatic),
+              })
+                _tagChip(id),
+            ],
+          ),
+        ],
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _note,
@@ -438,71 +587,6 @@ class _MoodLogFormState extends State<_MoodLogForm> {
         ),
         const SizedBox(height: AppSpacing.sm),
       ],
-    );
-  }
-}
-
-class _MoodFaceButton extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _MoodFaceButton({
-    required this.selected,
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    return Semantics(
-      button: true,
-      selected: selected,
-      container: true,
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: selected ? color.withOpacity(0.16) : ext.surfaceVariant,
-                shape: BoxShape.circle,
-                border:
-                    Border.all(color: selected ? color : ext.outline, width: 1.5),
-              ),
-              child:
-                  Icon(icon, color: selected ? color : ext.textTertiary, size: 26),
-            ),
-            const SizedBox(height: 4),
-            // The cell is width / 5 -- about 55pt on a 320pt sheet -- so the
-            // label has to shrink into it. scaleDown never enlarges, so at
-            // default sizes it renders exactly as before.
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(label,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: tt.labelSmall?.copyWith(
-                      color: selected ? color : ext.textTertiary,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.normal)),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

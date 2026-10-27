@@ -9,12 +9,14 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../models/workout_session.dart';
 import '../services/biometrics_service.dart';
 import '../widgets/biometrics_permission_card.dart';
+import '../widgets/workout_detail_sheet.dart';
+import '../widgets/workout_log_sheet.dart';
 
-/// Exercise sessions imported from Health Connect / Apple Health.
+/// Exercise sessions: imported from Health Connect / Apple Health, and any the
+/// person logged by hand — a run without the watch, a swim, a class.
 ///
-/// Read-only, like [HeartDashboardScreen] — the app does not offer manual
-/// workout logging, so the empty state points at the wearable rather than
-/// offering a form that would duplicate the watch's own.
+/// Tap one for the whole session. An imported one is the watch's to change; one
+/// you entered can be edited or deleted, with Undo.
 class WorkoutsScreen extends StatefulWidget {
   const WorkoutsScreen({super.key});
 
@@ -87,12 +89,69 @@ class _WorkoutsScreenState extends State<WorkoutsScreen>
     if (_hasGrant) await BiometricsService.syncFromHealth();
   }
 
+  /// "Log a workout": the form, then the save. [existing] edits one entered
+  /// earlier.
+  Future<void> _logWorkout({WorkoutSession? existing}) async {
+    final result = await WorkoutLogSheet.show(context, existing: existing);
+    if (result == null || !mounted) return;
+    final saved = await BiometricsService.saveEnteredWorkout(
+      activityType: result.activityType,
+      startedAt: result.startedAt,
+      durationMinutes: result.durationMinutes,
+      kcal: result.kcal,
+      distanceKm: result.distanceKm,
+      note: result.note,
+      replacing: existing,
+    );
+    if (!mounted) return;
+    context.toastSuccess(
+      existing == null ? 'Workout logged' : 'Workout updated',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          if (existing == null) {
+            await BiometricsService.deleteEnteredWorkout(saved.id);
+          } else {
+            if (saved.id != existing.id) {
+              await BiometricsService.deleteEnteredWorkout(saved.id);
+            }
+            await BiometricsService.restoreEnteredWorkout(existing);
+          }
+        },
+      ),
+    );
+  }
+
+  /// A workout in full — and, for one you entered, the way to change or remove it.
+  Future<void> _openWorkout(WorkoutSession w) async {
+    final action = await WorkoutDetailSheet.show(context, w);
+    if (action == null || !mounted) return;
+    switch (action) {
+      case WorkoutDetailAction.edit:
+        await _logWorkout(existing: w);
+      case WorkoutDetailAction.delete:
+        await BiometricsService.deleteEnteredWorkout(w.id);
+        if (!mounted) return;
+        context.toastSuccess(
+          'Workout deleted',
+          action: AppToastAction(
+            label: 'Undo',
+            onPressed: () => BiometricsService.restoreEnteredWorkout(w),
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
 
     return AccentScope(
       feature: FeatureAccent.steps,
       child: AppScaffold(
+        floatingActionButton: AppFab(
+          icon: Symbols.add_rounded,
+          onPressed: _logWorkout,
+        ),
         body: Column(
           children: [
             AppHeader(
@@ -177,6 +236,7 @@ class _WorkoutsScreenState extends State<WorkoutsScreen>
       iconColor: ext.mark(ext.steps),
       title: w.activityLabel,
       subtitle: parts.join(' · '),
+      onTap: () => _openWorkout(w),
     );
   }
 }

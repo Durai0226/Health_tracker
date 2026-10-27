@@ -262,6 +262,43 @@ class MedicineSchedule {
     return true;
   }
 
+  /// The clock times an "every X hours" schedule has on any day: the anchor and
+  /// every [intervalHours] after it, to the end of the day.
+  ///
+  /// Whole hours on the CLOCK, not elapsed hours added to a `DateTime`. Adding a
+  /// `Duration` counts real time, so on the day the clocks change every slot after
+  /// the change moved an hour (00:30, 06:30, 12:30 became 00:30, 07:30, 13:30), and
+  /// because the reminders are armed from one day's list and then repeat at those
+  /// times, the shift stayed until the next re-arm. Empty for a schedule that is not
+  /// "every X hours".
+  List<({int hour, int minute})> get everyXHoursClockTimes {
+    final every = intervalHours;
+    if (frequencyType != FrequencyType.everyXHours || every == null) {
+      return const [];
+    }
+    final anchor = times.isNotEmpty ? times.first : ScheduledTime(hour: 8, minute: 0);
+    return intervalSlotTimes(anchor.hour, anchor.minute, every);
+  }
+
+  /// [everyXHoursClockTimes] on [date]: empty on a day the schedule is not active
+  /// (before it starts, after it ends), which is what arming a day's reminders
+  /// wants.
+  List<({int hour, int minute})> everyXHoursClockTimesOn(DateTime date) =>
+      isActiveOnDate(date) ? everyXHoursClockTimes : const [];
+
+  /// [everyHours] apart from [anchorHour]:[anchorMinute] to the end of the day, as
+  /// clock times. Empty for an interval that is not positive.
+  static List<({int hour, int minute})> intervalSlotTimes(
+      int anchorHour, int anchorMinute, int everyHours) {
+    if (everyHours <= 0) return const [];
+    return [
+      for (var m = anchorHour * 60 + anchorMinute;
+          m < 24 * 60;
+          m += everyHours * 60)
+        (hour: m ~/ 60, minute: m % 60),
+    ];
+  }
+
   List<DateTime> getScheduledTimesForDate(DateTime date) {
     if (!isActiveOnDate(date)) return [];
 
@@ -274,17 +311,10 @@ class MedicineSchedule {
     if (frequencyType == FrequencyType.everyXHours &&
         intervalHours != null &&
         intervalHours! > 0) {
-      final anchor = times.isNotEmpty
-          ? times.first
-          : ScheduledTime(hour: 8, minute: 0);
-      final slots = <DateTime>[];
-      var slot = DateTime(date.year, date.month, date.day, anchor.hour, anchor.minute);
-      final endOfDay = DateTime(date.year, date.month, date.day, 23, 59);
-      while (!slot.isAfter(endOfDay)) {
-        slots.add(slot);
-        slot = slot.add(Duration(hours: intervalHours!));
-      }
-      return slots;
+      return [
+        for (final t in everyXHoursClockTimes)
+          DateTime(date.year, date.month, date.day, t.hour, t.minute),
+      ];
     }
 
     // Day-based filtering (specificDays / everyXDays / cyclical) is handled by

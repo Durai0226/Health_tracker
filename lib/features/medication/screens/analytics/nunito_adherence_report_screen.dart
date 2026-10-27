@@ -9,6 +9,7 @@ import '../../models/medicine_log.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/services/haptic_service.dart';
+import '../../widgets/adherence_export_sheet.dart';
 
 class NunitoAdherenceReportScreen extends StatefulWidget {
   const NunitoAdherenceReportScreen({super.key});
@@ -215,6 +216,17 @@ class _NunitoAdherenceReportScreenState extends State<NunitoAdherenceReportScree
             AppHeader(
               title: 'Adherence',
               leading: AppHeader.backButton(context),
+              actions: [
+                // The numbers someone would hand over are on this screen; the
+                // export used to live only on All medicines.
+                AppIconButton(
+                  icon: Symbols.ios_share_rounded,
+                  filled: false,
+                  accent: ext.medicine,
+                  tooltip: 'Share with your doctor',
+                  onPressed: () => AdherenceExportSheet.show(context),
+                ),
+              ],
               bottom: SegmentedToggle(
                 index: _selectedPeriod,
                 onChanged: _onPeriodChanged,

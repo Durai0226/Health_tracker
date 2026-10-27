@@ -20,12 +20,17 @@ import '../../features/medication/services/reminder_slot_grouping.dart';
 import '../../features/medication/services/reminder_window_nudges.dart';
 import '../../features/reminders/models/reminder_escalation.dart';
 import '../../features/reminders/models/reminder_kind.dart';
+// Pure-Dart too: where "Later" sends a reminder, and which reminder a payload is.
+import '../../features/reminders/utils/reminder_later.dart';
+import '../../features/reminders/utils/reminder_payload.dart';
 
 // Re-exported: ReminderKind moved to a pure file so plain-Dart entrypoints can
 // use it, but every existing consumer imports it from here.
 export '../../features/reminders/models/reminder_kind.dart';
 import 'dose_action_queue.dart';
 import 'notification_scheduler.dart';
+import 'nudge_answer_queues.dart';
+import 'reminder_action_queue.dart';
 import 'water_action_queue.dart';
 import 'snooze_log.dart';
 
@@ -403,7 +408,131 @@ void notificationTapBackground(NotificationResponse response) {
         amountMl: WaterActionQueue.defaultQuickAddMl,
         at: DateTime.now(),
       );
+    case ReminderActions.doneId:
+    case ReminderActions.laterId:
+      handleReminderAction(response.id ?? 0, response.payload, response.actionId);
+    default:
+      // A check-in nudge's answer button ("Good", "Started today"). Not in the
+      // switch above on purpose: one function owns every answer, and it is also
+      // called from the two other response handlers.
+      handleNudgeAnswerAction(response.actionId);
   }
+}
+
+/// A reminder's Done / Later button.
+///
+/// Runs in whichever isolate received the tap — a background one with the app
+/// closed, the main one with it open — so it touches only SharedPreferences and
+/// the notification plugin, never Drift. What was asked is queued
+/// ([ReminderActionQueue]) for the main isolate to write down on its next
+/// resume. What has to happen NOW, with nobody looking, happens here: a Later
+/// rings again at its time, and a Done stops the follow-up that would otherwise
+/// nag about something already finished.
+///
+/// Returns whether [actionId] was one of ours. Called from EVERY response
+/// handler — this file's two and the foreground one in `notification_service` —
+/// for the reason [notificationTapBackground] gives: copies drift apart.
+@pragma('vm:entry-point')
+Future<bool> handleReminderAction(
+  int notificationId,
+  String? payload,
+  String? actionId, {
+  DateTime? at,
+}) async {
+  if (actionId == null || !ReminderActions.ids.contains(actionId)) return false;
+  // A notification from before a reminder's id rode in its payload has nothing
+  // to say which reminder it was. The tap still cleared it; there is no more to do.
+  final reminderId = reminderIdFromAlarmPayload(payload);
+  if (reminderId == null) return true;
+  final when = at ?? DateTime.now();
+  try {
+    if (actionId == ReminderActions.doneId) {
+      await ReminderActionQueue.enqueue(
+        reminderId: reminderId,
+        action: ReminderNotificationAction.done,
+        at: when,
+      );
+      await _withdrawReminderFollowUps(reminderId);
+    } else {
+      final laterAt = ReminderLater.from(when);
+      // Queued first: the main isolate puts the reminder at this time on its
+      // next resume, even if ringing again fails here.
+      await ReminderActionQueue.enqueue(
+        reminderId: reminderId,
+        action: ReminderNotificationAction.later,
+        at: when,
+        laterAt: laterAt,
+      );
+      await handleSnoozeAction(notificationId, payload, ringAt: laterAt);
+    }
+  } catch (e) {
+    debugPrint('⚠️ Reminder action handling failed: $e');
+  }
+  return true;
+}
+
+/// Withdraw every pending "Still pending: …" follow-up of [reminderId].
+///
+/// The follow-up checks a resolved flag when it fires, but that flag is written
+/// by the main isolate once it has applied the Done — which may be hours away.
+/// So the Done that was just tapped stamps the flag itself, for the occurrence
+/// each follow-up was armed for, and takes the follow-up away.
+@pragma('vm:entry-point')
+Future<void> _withdrawReminderFollowUps(String reminderId) async {
+  final prefs = await SharedPreferences.getInstance();
+  for (final key in prefs.getKeys().where((k) => k.startsWith('alarm_')).toList()) {
+    final raw = prefs.getString(key);
+    if (raw == null) continue;
+    final Map<String, dynamic> blob;
+    try {
+      blob = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      continue;
+    }
+    if (blob['isReminderFollowUp'] != true || blob['reminderId'] != reminderId) {
+      continue;
+    }
+    final dueMs = (blob['occurrenceMs'] as num?)?.toInt();
+    if (dueMs != null) {
+      await prefs.setBool(
+          reminderResolvedKey(
+              reminderId, DateTime.fromMillisecondsSinceEpoch(dueMs)),
+          true);
+    }
+    await prefs.remove(key);
+    final id = int.tryParse(key.substring('alarm_'.length));
+    if (id == null) continue;
+    try {
+      await AndroidAlarmManager.cancel(id);
+    } catch (_) {}
+    try {
+      await FlutterLocalNotificationsPlugin().cancel(id);
+    } catch (_) {}
+  }
+}
+
+/// A check-in nudge's answer button: queue what was asked for, for the main
+/// isolate to apply on its next resume (Drift is unavailable here).
+///
+/// Returns whether [actionId] was one of ours. Called from EVERY response
+/// handler — this background one, the foreground one in `notification_service`
+/// and the one inside [alarmCallback] — for the reason [notificationTapBackground]
+/// gives: two copies of this drift apart.
+@pragma('vm:entry-point')
+Future<bool> handleNudgeAnswerAction(String? actionId, {DateTime? at}) async {
+  if (actionId == null || !NudgeAnswers.actionIds.contains(actionId)) {
+    return false;
+  }
+  final when = at ?? DateTime.now();
+  final mood = NudgeAnswers.moodIndexFor(actionId);
+  if (mood != null) {
+    await MoodAnswerQueue.enqueue(moodIndex: mood, at: when);
+  } else if (actionId == NudgeAnswers.periodStartedId) {
+    await PeriodStartQueue.enqueue(at: when);
+  }
+  // `period_not_yet` has nothing to record: the button already closed the
+  // notification, and the next reminder is the answer to "not yet".
+  return true;
 }
 
 /// Snooze whatever fired under [notificationId].
@@ -416,14 +545,15 @@ void notificationTapBackground(NotificationResponse response) {
 /// path rich: routing a dose through the payload path would drop hour/minute, and
 /// a "✓ Take" on the re-fire would then log it against midnight.
 @pragma('vm:entry-point')
-Future<void> handleSnoozeAction(int notificationId, String? payload) async {
+Future<void> handleSnoozeAction(int notificationId, String? payload,
+    {DateTime? ringAt}) async {
   try {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getString('alarm_$notificationId') != null) {
-      await _scheduleSnoozeNotification(notificationId);
+      await _scheduleSnoozeNotification(notificationId, ringAt: ringAt);
       return;
     }
-    await _snoozeFromPayload(notificationId, payload);
+    await _snoozeFromPayload(notificationId, payload, ringAt: ringAt);
   } catch (e) {
     debugPrint('❌ Snooze dispatch failed for $notificationId: $e');
   }
@@ -508,9 +638,17 @@ DateTime doseInstantFromAlarmPayload(
   return resolveDoseInstant(now, hour, minute);
 }
 
-/// Schedule a snoozed notification
+/// Schedule a snoozed notification.
+///
+/// With [ringAt] it is not a snooze but a "Later": it rings again at exactly
+/// that time, the snooze cap does not apply (it is not a snooze) and it is not
+/// counted or logged as one — the tune-up that reads the snooze log would
+/// otherwise tell the person they snooze a reminder they have only put off to
+/// the evening.
 @pragma('vm:entry-point')
-Future<void> _scheduleSnoozeNotification(int originalId) async {
+Future<void> _scheduleSnoozeNotification(int originalId,
+    {DateTime? ringAt}) async {
+  final isLater = ringAt != null;
   try {
     final prefs = await SharedPreferences.getInstance();
 
@@ -556,7 +694,7 @@ Future<void> _scheduleSnoozeNotification(int originalId) async {
             0;
     final maxSnoozeCount =
         prefs.getInt(maxSnoozeCountKey) ?? defaultMaxSnoozeCount;
-    if (snoozeCount >= maxSnoozeCount) {
+    if (!isLater && snoozeCount >= maxSnoozeCount) {
       // The tapped notification is ALREADY gone by this point — Android's
       // ActionBroadcastReceiver cancels it natively (cancelNotification
       // defaults to true for an action with showsUserInterface:false) before
@@ -576,13 +714,16 @@ Future<void> _scheduleSnoozeNotification(int originalId) async {
       return;
     }
 
-    await prefs.setInt(snoozeCountKeyFor(baseId), snoozeCount + 1);
-    await SnoozeLog.record(prefs, baseId, DateTime.now());
+    if (!isLater) {
+      await prefs.setInt(snoozeCountKeyFor(baseId), snoozeCount + 1);
+      await SnoozeLog.record(prefs, baseId, DateTime.now());
+    }
 
     // Schedule snooze alarm. Window nudges snooze inexactly too, matching
     // scheduleWindowNudge's own choice — a snooze is exactly as time-tolerant
     // as the window it belongs to.
-    final snoozeTime = DateTime.now().add(Duration(minutes: snoozeMinutes));
+    final snoozeTime =
+        ringAt ?? DateTime.now().add(Duration(minutes: snoozeMinutes));
     final snoozeId = (originalId + snoozeIdOffset) & 0x7FFFFFFF;
 
     // Android drops every pending alarm on reboot; _registerAlarm always sets
@@ -599,7 +740,8 @@ Future<void> _scheduleSnoozeNotification(int originalId) async {
 
     // Store snooze alarm data
     final snoozeData = {
-      'title': '⏰ $title',
+      // A Later is not a snooze: it keeps the reminder's own title.
+      'title': isLater ? title : '⏰ $title',
       'body': body,
       'channelId': alarmData['channelId'] ?? 'medicine_channel',
       'channelName': alarmData['channelName'] ?? 'Medicine Reminders',
@@ -646,7 +788,9 @@ Future<void> _scheduleSnoozeNotification(int originalId) async {
     final notifications = FlutterLocalNotificationsPlugin();
     await notifications.cancel(originalId);
     
-    debugPrint('✓ Snoozed for $snoozeMinutes min, ID: $snoozeId, result: $result');
+    debugPrint(isLater
+        ? '✓ Rings again at $ringAt, ID: $snoozeId, result: $result'
+        : '✓ Snoozed for $snoozeMinutes min, ID: $snoozeId, result: $result');
   } catch (e) {
     debugPrint('❌ Snooze scheduling failed: $e');
   }
@@ -714,6 +858,10 @@ Future<void> _handleBackgroundSnooze(int originalId, SharedPreferences prefs) as
   await _scheduleSnoozeNotification(originalId);
 }
 
+/// The channel a quiet reminder is posted to: low importance, no sound, no
+/// vibration. Created in `NotificationService.init`.
+const String quietChannelId = 'quiet_channel';
+
 /// Everything about *how* an alarm presents itself, derived from what it is.
 ///
 /// Pure and public so the invariant that matters can actually be asserted: a
@@ -737,6 +885,7 @@ class AlarmPresentation {
     required this.timeoutAfterMs,
     required this.vibrationPattern,
     required this.actions,
+    this.playSound = true,
   });
 
   final String channelId;
@@ -750,8 +899,16 @@ class AlarmPresentation {
   final bool autoCancel;
   final bool ongoing;
   final int? timeoutAfterMs;
+
+  /// Empty means no vibration at all.
   final List<int> vibrationPattern;
   final List<AndroidNotificationAction> actions;
+
+  /// False for a quiet reminder, whose channel carries no sound.
+  final bool playSound;
+
+  /// Whether the device should vibrate for this alert.
+  bool get vibrates => vibrationPattern.isNotEmpty;
 
   /// Whether any action button logs a dose. Nothing but a real dose may.
   bool get offersDoseLogging => actions.any((a) => a.id == 'take');
@@ -778,20 +935,40 @@ AlarmPresentation alarmPresentationFor(
   bool snoozeEnabled = true,
   String? requestedChannelId,
   String? requestedChannelName,
+
+  /// The answer buttons of a check-in nudge ("Good · Okay · Bad"). Only a
+  /// `gentle` nudge can carry them: an alarm-grade alert keeps its own set.
+  NudgeAnswers? answers,
+
+  /// Whether this is a reminder the person made, which has a "done" to mark and
+  /// a "later" to put it off to: an alarm-grade one carries Done, Snooze and
+  /// Later, a quiet one Done and Later (it never offered Snooze). A dose has its
+  /// own buttons and ignores it.
+  bool reminderActions = false,
 }) {
   final alarmGrade = kind.isAlarmGrade;
+  final quiet = kind == ReminderKind.quiet;
   return AlarmPresentation(
     channelId: alarmGrade
         ? (requestedChannelId ?? 'alarm_channel')
-        : 'checkin_channel',
+        : (quiet ? quietChannelId : 'checkin_channel'),
     channelName: alarmGrade
         ? (requestedChannelName ?? 'Alarm Reminders')
-        : 'Check-ins & Nudges',
+        : (quiet ? 'Quiet Reminders' : 'Check-ins & Nudges'),
     channelDescription: alarmGrade
         ? 'High priority alarm reminders'
-        : 'Gentle check-in and heads-up nudges',
-    importance: alarmGrade ? Importance.max : Importance.high,
-    priority: alarmGrade ? Priority.max : Priority.defaultPriority,
+        : (quiet
+            ? 'Reminders you asked to arrive without a sound'
+            : 'Gentle check-in and heads-up nudges'),
+    // A quiet reminder sits in the shade: low importance is what keeps the
+    // channel silent, and it is why it gets a channel of its own.
+    importance: alarmGrade
+        ? Importance.max
+        : (quiet ? Importance.low : Importance.high),
+    priority: alarmGrade
+        ? Priority.max
+        : (quiet ? Priority.low : Priority.defaultPriority),
+    playSound: !quiet,
     // A nudge must never take over the screen. Play can revoke
     // USE_FULL_SCREEN_INTENT for exactly that over-reach, and the manifest keeps
     // the permission solely for dose-grade alerts.
@@ -810,13 +987,80 @@ AlarmPresentation alarmPresentationFor(
     timeoutAfterMs: alarmGrade ? 300000 : null, // 5 minute safety timeout
     vibrationPattern: alarmGrade
         ? const [0, 1000, 500, 1000, 500, 1000]
-        : const [0, 250, 250, 250],
-    actions: _actionsFor(kind,
-        isGroup: isGroup,
-        snoozeMinutes: snoozeMinutes,
-        snoozeEnabled: snoozeEnabled),
+        : (quiet ? const <int>[] : const [0, 250, 250, 250]),
+    actions: kind == ReminderKind.gentle && answers != null
+        ? nudgeAnswerActions(answers)
+        : _actionsFor(kind,
+            isGroup: isGroup,
+            snoozeMinutes: snoozeMinutes,
+            snoozeEnabled: snoozeEnabled,
+            reminderActions: reminderActions),
   );
 }
+
+/// The buttons that answer a check-in nudge. Each closes the notification and
+/// runs without opening the app; the answer is queued for the main isolate (see
+/// [handleNudgeAnswerAction]).
+@pragma('vm:entry-point')
+List<AndroidNotificationAction> nudgeAnswerActions(NudgeAnswers answers) {
+  AndroidNotificationAction button(String id, String title) =>
+      AndroidNotificationAction(id, title,
+          showsUserInterface: false, cancelNotification: true);
+  switch (answers) {
+    case NudgeAnswers.mood:
+      return [
+        button(NudgeAnswers.moodGoodId, 'Good'),
+        button(NudgeAnswers.moodOkayId, 'Okay'),
+        button(NudgeAnswers.moodBadId, 'Bad'),
+      ];
+    case NudgeAnswers.period:
+      return [
+        button(NudgeAnswers.periodStartedId, 'Started today'),
+        button(NudgeAnswers.periodNotYetId, 'Not yet'),
+      ];
+  }
+}
+
+/// Done · Snooze · Later for a reminder the person made.
+///
+/// One list, used wherever such a reminder's notification is built — the fire,
+/// and each re-fire after a Snooze or a Later — so the three cannot drift apart.
+/// With Snooze switched off, Dismiss takes its place as the third button.
+@pragma('vm:entry-point')
+List<AndroidNotificationAction> reminderNotificationActions({
+  required int snoozeMinutes,
+  bool snoozeEnabled = true,
+
+  /// Whether Dismiss stands in as the third button when there is no Snooze.
+  bool dismiss = true,
+}) =>
+    <AndroidNotificationAction>[
+      const AndroidNotificationAction(
+        ReminderActions.doneId,
+        '✓ Done',
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+      if (snoozeEnabled)
+        AndroidNotificationAction(
+          'snooze',
+          '⏰ Snooze ${snoozeMinutes}min',
+          showsUserInterface: false,
+        ),
+      const AndroidNotificationAction(
+        ReminderActions.laterId,
+        'Later',
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+      if (!snoozeEnabled && dismiss)
+        const AndroidNotificationAction(
+          'dismiss',
+          '✕ Dismiss',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+    ];
 
 /// The action buttons an alarm of each [ReminderKind] carries.
 ///
@@ -834,16 +1078,29 @@ List<AndroidNotificationAction> _actionsFor(
   required bool isGroup,
   required int snoozeMinutes,
   bool snoozeEnabled = true,
+  bool reminderActions = false,
 }) {
   switch (kind) {
     case ReminderKind.gentle:
+    case ReminderKind.quiet:
+      // A quiet reminder the person made still has a "done" and a "later" —
+      // but never Snooze, which invites training oneself to dismiss it.
+      if (reminderActions) {
+        return reminderNotificationActions(
+            snoozeMinutes: snoozeMinutes, snoozeEnabled: false, dismiss: false);
+      }
       // No buttons at all. There is nothing to "take", and a nudge that offers
       // Snooze invites the user to train themselves to dismiss it.
       return const <AndroidNotificationAction>[];
 
     case ReminderKind.alarm:
-      // A time the user chose. Nothing to log — "Mark done" needs a handler and
-      // an occurrence row, which is a later change, not a button added here.
+      // A reminder the person made: Done · Snooze · Later, the three buttons
+      // Android allows. Each one clears the notification, so Dismiss is not
+      // needed beside them — and is only kept, as the third, when Snooze is
+      // switched off.
+      if (reminderActions) return reminderNotificationActions(snoozeMinutes: snoozeMinutes, snoozeEnabled: snoozeEnabled);
+      // A time the user chose that is not a reminder in the list (the wake
+      // alarm). Nothing to mark done.
       return <AndroidNotificationAction>[
         if (snoozeEnabled)
           AndroidNotificationAction(
@@ -1196,6 +1453,11 @@ Future<void> alarmCallback(int alarmId) async {
           await handleDoseNotificationAction(response.payload, DoseActionQueue.actionTake);
         } else if (response.actionId == 'skip') {
           await handleDoseNotificationAction(response.payload, DoseActionQueue.actionSkip);
+        } else if (ReminderActions.ids.contains(response.actionId)) {
+          await handleReminderAction(
+              response.id ?? 0, response.payload, response.actionId);
+        } else {
+          await handleNudgeAnswerAction(response.actionId);
         }
       },
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
@@ -1235,6 +1497,11 @@ Future<void> alarmCallback(int alarmId) async {
       snoozeEnabled: prefs.getBool(snoozeEnabledKey) ?? true,
       requestedChannelId: alarmData['channelId'] as String?,
       requestedChannelName: alarmData['channelName'] as String?,
+      answers: NudgeAnswers.fromBlob(alarmData),
+      // A reminder the person made carries its id in the payload — and, with it,
+      // Done and Later.
+      reminderActions: kind != ReminderKind.dose &&
+          reminderIdFromAlarmPayload(payload) != null,
     );
 
     final androidDetails = AndroidNotificationDetails(
@@ -1243,10 +1510,11 @@ Future<void> alarmCallback(int alarmId) async {
       channelDescription: look.channelDescription,
       importance: look.importance,
       priority: look.priority,
-      playSound: true,
+      playSound: look.playSound,
       sound: null, // Use system default sound from the channel
-      enableVibration: true,
-      vibrationPattern: Int64List.fromList(look.vibrationPattern),
+      enableVibration: look.vibrates,
+      vibrationPattern:
+          look.vibrates ? Int64List.fromList(look.vibrationPattern) : null,
       enableLights: true,
       ledColor: const Color(0xFF4CAF50),
       ledOnMs: 1000,
@@ -1278,10 +1546,10 @@ Future<void> alarmCallback(int alarmId) async {
       timeoutAfter: look.timeoutAfterMs,
     );
 
-    const iosDetails = DarwinNotificationDetails(
+    final iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: true,
+      presentSound: look.playSound,
       interruptionLevel: InterruptionLevel.timeSensitive,
     );
     
@@ -1734,6 +2002,9 @@ class BackgroundAlarmService {
     int? snoozeDuration,
     String? sound,
     String? payload,
+
+    /// Answer buttons for a `gentle` check-in nudge; see [NudgeAnswers].
+    NudgeAnswers? answers,
   }) async {
     try {
       await init();
@@ -1751,6 +2022,7 @@ class BackgroundAlarmService {
         'snoozeDuration': snoozeDuration,
         'sound': sound,
         'payload': payload,
+        if (answers != null) 'answers': answers.name,
       };
       await prefs.setString('alarm_$id', jsonEncode(alarmData));
       
@@ -1784,6 +2056,9 @@ class BackgroundAlarmService {
     String? payload,
     String? scheduleJson,
     List<Map<String, dynamic>>? medicines,
+
+    /// Answer buttons for a `gentle` check-in nudge; see [NudgeAnswers].
+    NudgeAnswers? answers,
   }) async {
     try {
       await init();
@@ -1810,6 +2085,7 @@ class BackgroundAlarmService {
         'snoozeDuration': snoozeDuration,
         'sound': sound,
         'payload': payload,
+        if (answers != null) 'answers': answers.name,
         // Legacy single-medicine active-day gate (still used by non-medicine
         // repeating alarms, e.g. water/sleep/fitness).
         'scheduleJson': scheduleJson,
@@ -1934,6 +2210,15 @@ class BackgroundAlarmService {
           'channelName': channelName,
           'kind': ReminderKind.alarm.name,
           'isRepeating': false,
+          // Names its reminder like the first notification does, so "Still
+          // pending: …" carries Done and Later (the place they matter most) and a
+          // tap on its body has something to open.
+          'payload': 'alarm:${jsonEncode({
+                'id': id,
+                'title': title,
+                'body': body,
+                'reminderId': reminderId,
+              })}',
           // The TIER, not a pre-computed flag: what it implies is decided by
           // [nextEscalationStep] at fire time, in one place.
           'escalation': escalation.name,
@@ -2011,8 +2296,12 @@ class BackgroundAlarmService {
 /// [_scheduleSnoozeNotification], which preserves hour/minute and the medicines
 /// list. Without those, a "✓ Take" on the snoozed re-fire would log the dose
 /// against midnight.
+///
+/// With [ringAt] it is a "Later" — see [_scheduleSnoozeNotification].
 @pragma('vm:entry-point')
-Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
+Future<void> _snoozeFromPayload(int notificationId, String? payload,
+    {DateTime? ringAt}) async {
+  final isLater = ringAt != null;
   try {
     final prefs = await SharedPreferences.getInstance();
 
@@ -2027,7 +2316,9 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
         final decoded = jsonDecode(payload.substring('alarm:'.length));
         if (decoded is Map) {
           decodedPayload = Map<String, dynamic>.from(decoded);
-          snoozeTitle = '⏰ Snoozed: ${decoded['title'] ?? 'Reminder'}';
+          snoozeTitle = isLater
+              ? '${decoded['title'] ?? 'Reminder'}'
+              : '⏰ Snoozed: ${decoded['title'] ?? 'Reminder'}';
           snoozeBody = (decoded['body'] ?? snoozeBody).toString();
         }
       } catch (_) {}
@@ -2054,7 +2345,9 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
     
     // Calculate snooze time
     final now = tz.TZDateTime.now(tz.local);
-    final snoozeTime = now.add(Duration(minutes: snoozeMinutes));
+    final snoozeTime = ringAt != null
+        ? tz.TZDateTime.from(ringAt, tz.local)
+        : now.add(Duration(minutes: snoozeMinutes));
     // Same clamp snoozeReminder applies, so both snooze paths land on the SAME
     // id for the same notification — otherwise one path's reschedule could not
     // be cancelled by the other's, leaving two copies of one reminder.
@@ -2081,7 +2374,7 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
     // Drift and is unsafe in this isolate; saveUserSettings mirrors it out.
     final maxSnoozeCount =
         prefs.getInt(maxSnoozeCountKey) ?? defaultMaxSnoozeCount;
-    if (snoozeCount >= maxSnoozeCount) {
+    if (!isLater && snoozeCount >= maxSnoozeCount) {
       // The tapped notification is ALREADY gone by this point (Android's
       // ActionBroadcastReceiver auto-cancels for a showsUserInterface:false
       // action) — show a final, snooze-less one rather than lose the
@@ -2091,8 +2384,10 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
       await _showFinalCappedPayloadNotification(notificationId, snoozeTitle, snoozeBody, payload);
       return;
     }
-    await prefs.setInt(snoozeCountKey, snoozeCount + 1);
-    await SnoozeLog.record(prefs, baseId, DateTime.now());
+    if (!isLater) {
+      await prefs.setInt(snoozeCountKey, snoozeCount + 1);
+      await SnoozeLog.record(prefs, baseId, DateTime.now());
+    }
     final nextPayload = decodedPayload == null
         ? payload
         : 'alarm:${jsonEncode({...decodedPayload, 'baseId': baseId})}';
@@ -2108,6 +2403,17 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
     // Guarded: a snooze re-fire is exactly the case where a swallowed
     // `exact_alarms_not_permitted` is worst — the user asked to be reminded again
     // and silently was not.
+    // A reminder set to Quiet comes back quiet. The re-fire is built from the
+    // payload alone, and used to be alarm-grade whatever the reminder was — so a
+    // Quiet reminder put off to Later returned as a full-screen alarm.
+    final quiet = decodedPayload?['quiet'] == true;
+    final quietLook = quiet
+        ? alarmPresentationFor(
+            ReminderKind.quiet,
+            snoozeMinutes: snoozeMinutes,
+            reminderActions: reminderIdFromAlarmPayload(nextPayload) != null,
+          )
+        : null;
     await zonedScheduleGuarded(
       PluginNotificationScheduler(notifications),
       snoozeId,
@@ -2115,7 +2421,23 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
       snoozeBody,
       snoozeTime,
       NotificationDetails(
-        android: AndroidNotificationDetails(
+        android: quietLook != null
+            ? AndroidNotificationDetails(
+                quietLook.channelId,
+                quietLook.channelName,
+                channelDescription: quietLook.channelDescription,
+                importance: quietLook.importance,
+                priority: quietLook.priority,
+                playSound: false,
+                enableVibration: false,
+                category: quietLook.category,
+                visibility: (prefs.getBool(kShowOnLockScreenPref) ?? false)
+                    ? NotificationVisibility.public
+                    : NotificationVisibility.private,
+                autoCancel: true,
+                actions: quietLook.actions,
+              )
+            : AndroidNotificationDetails(
           'alarm_channel', // Use alarm channel for proper alarm sound
           'Alarm Reminders',
           channelDescription: 'High priority alarm reminders',
@@ -2138,20 +2460,30 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
           audioAttributesUsage: AudioAttributesUsage.alarm,
           autoCancel: false,
           ongoing: true,
-          actions: <AndroidNotificationAction>[
-            AndroidNotificationAction(
-              'snooze',
-              '⏰ Snooze ${snoozeMinutes}min',
-              showsUserInterface: false,
-            ),
-            const AndroidNotificationAction(
-              'dismiss',
-              '❌ Dismiss',
-              showsUserInterface: false,
-              cancelNotification: true,
-            ),
-          ],
+          // The same buttons the reminder was first shown with: a re-fire that
+          // dropped Done would be the one place the person cannot say they did it.
+          actions: reminderIdFromAlarmPayload(nextPayload) != null
+              ? reminderNotificationActions(
+                  snoozeMinutes: snoozeMinutes,
+                  snoozeEnabled: prefs.getBool(snoozeEnabledKey) ?? true)
+              : <AndroidNotificationAction>[
+                  AndroidNotificationAction(
+                    'snooze',
+                    '⏰ Snooze ${snoozeMinutes}min',
+                    showsUserInterface: false,
+                  ),
+                  const AndroidNotificationAction(
+                    'dismiss',
+                    '❌ Dismiss',
+                    showsUserInterface: false,
+                    cancelNotification: true,
+                  ),
+                ],
         ),
+        iOS: quiet
+            ? const DarwinNotificationDetails(
+                presentAlert: true, presentBadge: true, presentSound: false)
+            : null,
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: nextPayload,
@@ -2161,7 +2493,9 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload) async {
     // Cancel the original notification
     await notifications.cancel(notificationId);
     
-    debugPrint('✓ Background snooze scheduled for $snoozeMinutes min (ID: $snoozeId)');
+    debugPrint(isLater
+        ? '✓ Background Later scheduled for $ringAt (ID: $snoozeId)'
+        : '✓ Background snooze scheduled for $snoozeMinutes min (ID: $snoozeId)');
   } catch (e) {
     debugPrint('❌ Background snooze failed: $e');
   }

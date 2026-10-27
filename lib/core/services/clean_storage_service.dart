@@ -25,6 +25,7 @@ import '../../features/medication/services/vitals_storage_service.dart';
 import '../../features/diary/services/diary_storage_service.dart';
 import '../../features/backup/services/health_backup_serializer.dart';
 import '../../features/backup/services/medication_backup_serializer.dart';
+import '../../features/backup/services/reminders_backup_serializer.dart';
 import '../../features/focus/services/focus_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/period/services/period_service.dart';
@@ -34,6 +35,7 @@ import '../../features/biometrics/services/biometrics_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 import '../../features/water/models/water_reminder_config.dart';
 import '../../features/reminders/models/reminder_recurrence.dart';
+import 'haptic_service.dart';
 import 'vacation_mode.dart';
 import '../../features/medication/services/vitals_reminder_service.dart';
 import 'notification_service.dart';
@@ -41,6 +43,7 @@ import 'reminder_reschedule_service.dart';
 import '../../features/focus/services/coins_service.dart';
 import '../../features/focus/services/tag_service.dart';
 import '../../features/focus/services/relaxation_service.dart';
+import 'health_caches.dart';
 
 /// Clean Drift-based storage service - unified storage using Drift DAOs
 class CleanStorageService {
@@ -1052,14 +1055,17 @@ class CleanStorageService {
     // is WaterService's 90-day warm cache, so backups silently contained only
     // the last three months of drinking for any longer-running user.
     final water = await WaterService.exportAllDaysForBackup();
+    final haptics = await HapticService.exportJson();
     return {
       // v4: adds a 'vitals' section (BP + glucose, later weight). v5 adds
       // 'diary'. v6 adds 'sleep', 'period', 'steps' and 'healthProfile' — the
       // four features that had never been in a backup at all. v7 adds
       // 'doctors', 'appointments' and 'dependents', which had never been in
-      // one either and, being hand-typed, exist nowhere else. Older backups
-      // simply omit sections and are restored non-destructively by importData.
-      'version': 7,
+      // one either and, being hand-typed, exist nowhere else. v8 adds the heart
+      // dashboard's 'biometrics' (with workouts and devices), the reminder
+      // categories and the haptic settings. Older backups simply omit sections
+      // and are restored non-destructively by importData.
+      'version': 8,
       'timestamp': DateTime.now().toIso8601String(),
       'settings': getUserSettings().toJson(),
       'medicines': await MedicineCleanStorageService.exportMedicinesJson(),
@@ -1072,6 +1078,8 @@ class CleanStorageService {
       'diary': await DiaryStorageService.exportJson(),
       ...await HealthBackupSerializer.exportJson(),
       ...await MedicationBackupSerializer.exportJson(),
+      ...await RemindersBackupSerializer.exportJson(),
+      if (haptics != null) 'haptics': haptics,
       'preferences': Map<String, dynamic>.fromEntries(
         _appPreferencesCache.entries
             .where((e) => !kNeverLeaveTheDevice.contains(e.key)),
@@ -1192,6 +1200,7 @@ class CleanStorageService {
         forBackup == null || forBackup.containsKey(section);
     try {
       if (carries('reminders')) await db.delete(db.reminders).go();
+      await RemindersBackupSerializer.clearRestorableRows(forBackup: forBackup);
       if (carries('medicines')) await db.delete(db.enhancedMedicines).go();
       if (carries('water')) {
         // Logs before day totals: the logs reference the day id.
@@ -1222,6 +1231,13 @@ class CleanStorageService {
     try {
       // Reminders
       await db.delete(db.reminders).go();
+      // The categories the person made: a name like "Therapy" says as much as a
+      // reminder does. The three built-in ones stay — they are the app's own,
+      // and are only ever seeded into an empty table.
+      await (db.delete(db.reminderCategories)
+            ..where((t) => t.id.isNotIn(
+                ReminderCategoryModel.ReminderCategory.starterIds)))
+          .go();
       // Medicines + their logs
       await db.delete(db.medicineLogs).go();
       await db.delete(db.enhancedMedicines).go();
@@ -1297,6 +1313,7 @@ class CleanStorageService {
         'steps.reminderEnabled',
         'emergency_contact_name',
         'emergency_contact_phone',
+        'care_offer_missed_dose',
         'rest_days',
         'vacation_periods',
         'weight_goal_kg',
@@ -1339,6 +1356,7 @@ class CleanStorageService {
       // Drop in-memory caches and refresh reactive state so the UI updates now.
       _medicinesCache.clear();
       _remindersCache.clear();
+      _categoriesCache.removeWhere((c) => !c.isStarter);
       // The focus singletons keep their own copies and would save them again.
       FocusService().resetAfterWipe();
       CoinsService().resetAfterWipe();
@@ -1439,6 +1457,13 @@ class CleanStorageService {
           debugPrint('Import focus failed: $e');
         }
       }
+      // Categories before the reminders that name them.
+      try {
+        await RemindersBackupSerializer.importJson(data);
+        await getAllCategoriesAsync();
+      } catch (e) {
+        debugPrint('Import reminder categories failed: $e');
+      }
       for (final r in (data['reminders'] as List? ?? const [])) {
         try {
           await saveReminder(
@@ -1488,13 +1513,15 @@ class CleanStorageService {
       // Sleep / period / steps / health profile (v6+). Each section is
       // independently optional, so a pre-v6 backup restores exactly as before.
       //
-      // These write Drift rows directly. The SleepService / PeriodService /
-      // StepService singletons hold their own in-memory copy and reload it in
-      // `init()`, so the restored nights, cycles and step days appear after the
-      // app restart the restore screens already ask for — the same known
-      // limitation FocusService has above.
+      // These write Drift rows directly, and the SleepService / PeriodService /
+      // StepService / BiometricsService singletons each hold their own in-memory
+      // copy, read once at start-up. They are reloaded here, so the restored
+      // nights, cycles, step days and heart data are on screen at once — a
+      // restore used to ask the person to restart the app for them, and until
+      // they did, Sleep and Period kept showing what they had before.
       try {
         await HealthBackupSerializer.importJson(data);
+        await HealthCaches.reloadAll();
       } catch (e) {
         debugPrint('Import sleep/period/steps failed: $e');
       }
@@ -1506,6 +1533,15 @@ class CleanStorageService {
         await MedicationBackupSerializer.importJson(data);
       } catch (e) {
         debugPrint('Import doctors/appointments/dependents failed: $e');
+      }
+      // Haptic settings (v8+). Missing key → leave the current ones alone.
+      if (data['haptics'] is Map) {
+        try {
+          await HapticService.importJson(
+              Map<String, dynamic>.from(data['haptics'] as Map));
+        } catch (e) {
+          debugPrint('Import haptics failed: $e');
+        }
       }
       if (data['preferences'] is Map) {
         for (final e in (data['preferences'] as Map).entries) {

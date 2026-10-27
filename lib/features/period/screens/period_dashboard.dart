@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'period_reminder_settings_screen.dart';
+import 'cycle_privacy_screen.dart';
 
 import '../models/cycle_phase.dart';
 import '../models/cycle_prediction.dart';
@@ -13,6 +14,17 @@ import '../widgets/cycle_phase_wheel.dart';
 import '../widgets/cycle_stats_card.dart';
 import '../widgets/log_today_sheet.dart';
 import '../widgets/prediction_card.dart';
+import '../widgets/cycle_lengths_sheet.dart';
+import '../widgets/cycle_import_button.dart';
+import '../widgets/cycle_pattern_card.dart';
+import '../widgets/pms_pattern_card.dart';
+import '../widgets/temperature_shift_card.dart';
+import '../services/temperature_shift.dart';
+import '../services/pms_pattern.dart';
+import '../services/cycle_pattern.dart';
+import '../services/cycle_predictor.dart' show DerivedCycle;
+import '../services/cycle_summary_report.dart';
+import 'package:printing/printing.dart';
 import 'cycle_history_screen.dart';
 import 'period_calendar_screen.dart';
 import '../../../core/health/coach_text.dart';
@@ -187,6 +199,14 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
           : null,
       actions: [
         AppIconButton(
+          icon: Symbols.lock_rounded,
+          filled: false,
+          accent: ext.period,
+          tooltip: 'Cycle privacy',
+          onPressed: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const CyclePrivacyScreen())),
+        ),
+        AppIconButton(
           icon: Symbols.notifications_rounded,
           filled: false,
           accent: ext.period,
@@ -270,6 +290,19 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
         ),
         const SizedBox(height: AppSpacing.lg),
         PredictionCard(prediction: p, emphasizeFertile: ttc),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => CycleLengthsSheet.show(context),
+            style: TextButton.styleFrom(
+                foregroundColor: ext.mark(ext.period),
+                // Not `VisualDensity.compact`: it subtracts 8pt from any
+                // minimum, so a 44pt floor became 36. A text link is still a
+                // tap target.
+                minimumSize: const Size(0, 44)),
+            child: const Text('Adjust cycle lengths'),
+          ),
+        ),
         if (ttc) ...[
           const SizedBox(height: AppSpacing.lg),
           _ttcBbtHint(context, p),
@@ -283,8 +316,64 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
           onAction: () => _openHistory(),
         ),
         CycleStatsCard(stats: stats, onTap: _openHistory),
+        if (_pattern() case final pattern?) ...[
+          const SizedBox(height: AppSpacing.lg),
+          CyclePatternCard(
+              pattern: pattern, onShare: () => _shareSummary(pattern)),
+        ],
+        if (_shifts() case final shifts when shifts.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          TemperatureShiftCard(
+              latest: shifts.last,
+              earlier: shifts.sublist(0, shifts.length - 1)),
+        ],
+        if (_pms() case final pms when pms.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          PmsPatternCard(symptoms: pms, nextPeriod: p.predictedStart),
+        ],
       ],
     );
+  }
+
+  /// The completed cycles as the predictor sees them.
+  List<DerivedCycle> _derivedCycles() => [
+        for (final c in PeriodService.getCycles())
+          DerivedCycle(
+            start: c.startDate,
+            end: c.endDate,
+            cycleLengthDays: c.cycleLengthDays,
+            periodLengthDays: c.periodLengthDays ?? 0,
+          ),
+      ];
+
+  CyclePattern? _pattern() => CyclePatternCheck.check(_derivedCycles());
+
+  /// The temperature shifts worth showing, oldest first (see
+  /// [TemperatureShiftCheck.recent]).
+  List<TemperatureShift> _shifts() => TemperatureShiftCheck.recent(
+        _derivedCycles(),
+        [
+          for (final d in PeriodService.days.values)
+            if (d.bbtCelsius != null) BbtReading(d.date, d.bbtCelsius!),
+        ],
+      );
+
+  List<PmsSymptom> _pms() => PmsPatternCheck.check(
+      days: PeriodService.days.values, cycles: _derivedCycles());
+
+  /// A one-page summary for a check-up. No patient name: this is the account
+  /// holder's own cycle data, and the active profile may be someone else's.
+  Future<void> _shareSummary(CyclePattern pattern) async {
+    try {
+      final bytes = await CycleSummaryReport.build(
+          cycles: _derivedCycles(), pattern: pattern);
+      await Printing.sharePdf(bytes: bytes, filename: 'cycle-summary.pdf');
+    } catch (e) {
+      debugPrint('Cycle summary export failed: $e');
+      if (mounted) {
+        context.toastError('Could not create the summary. Please try again.');
+      }
+    }
   }
 
   Widget _phasePill(BuildContext context, CyclePhase phase) {
@@ -454,11 +543,21 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
           'Log the first day of your period and ${AppStrings.productName} will learn your '
           'rhythm — predicting your next period, phases and fertile window with '
           'an honest confidence score.',
-      action: AppButton(
-        label: 'Log your period',
-        accent: ext.period,
-        leadingIcon: Symbols.add_rounded,
-        onPressed: () => _openLogSheet(),
+      // The second way in, for someone who already tracked elsewhere: past
+      // periods come from the phone's health store, so the predictions start with
+      // history instead of waiting for the first cycle to be logged here.
+      action: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppButton(
+            label: 'Log your period',
+            accent: ext.period,
+            leadingIcon: Symbols.add_rounded,
+            onPressed: () => _openLogSheet(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const CycleImportButton(),
+        ],
       ),
     );
   }

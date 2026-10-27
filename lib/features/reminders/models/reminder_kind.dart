@@ -36,7 +36,16 @@ enum ReminderKind {
   /// A nudge: vitals check-ins, the onboarding daily prompt, an appointment or
   /// cycle heads-up. Ordinary notification, ordinary audio stream, no
   /// full-screen takeover, no action buttons.
-  gentle;
+  gentle,
+
+  /// A reminder the person asked to be quiet about ("Quiet — a silent
+  /// notification"): it arrives in the shade with no sound and no vibration, never
+  /// takes over the screen, and can still be marked Done or put off to Later.
+  ///
+  /// Apart from [gentle] because Android fixes a channel's sound when the channel
+  /// is created, so "silent" needs a channel of its own — and because a Quiet
+  /// reminder and a check-in nudge only looked different on the picker.
+  quiet;
 
   static ReminderKind fromBlob(Map<String, dynamic> alarmData) {
     final wire = alarmData['kind'] as String?;
@@ -56,7 +65,79 @@ enum ReminderKind {
         : ReminderKind.alarm;
   }
 
-  bool get isAlarmGrade => this != ReminderKind.gentle;
+  bool get isAlarmGrade => this == ReminderKind.dose || this == ReminderKind.alarm;
+}
+
+/// Answer buttons a check-in nudge can carry, so the question it asks is
+/// answered from the notification without opening the app.
+///
+/// A nudge with answers carries NOTHING else: no Snooze (it would train the
+/// person to put the question off) and no Dismiss (a swipe does that). Android
+/// shows at most three buttons, and both sets here fit.
+///
+/// Serialised into the alarm blob by `.name`, like [ReminderKind].
+enum NudgeAnswers {
+  /// "How are you feeling?": Good · Okay · Bad.
+  mood,
+
+  /// "Today is around your predicted start": Started today · Not yet.
+  period;
+
+  static const String moodGoodId = 'mood_good';
+  static const String moodOkayId = 'mood_okay';
+  static const String moodBadId = 'mood_bad';
+  static const String periodStartedId = 'period_started';
+  static const String periodNotYetId = 'period_not_yet';
+
+  /// Every action id the answers can produce, for a handler to recognise.
+  static const Set<String> actionIds = {
+    moodGoodId,
+    moodOkayId,
+    moodBadId,
+    periodStartedId,
+    periodNotYetId,
+  };
+
+  /// The Mood log's own scale (0 = Great … 4 = Terrible): the three buttons are
+  /// its middle three values, so Good is 1, Okay is 2 and Bad is 3.
+  static int? moodIndexFor(String? actionId) {
+    switch (actionId) {
+      case moodGoodId:
+        return 1;
+      case moodOkayId:
+        return 2;
+      case moodBadId:
+        return 3;
+    }
+    return null;
+  }
+
+  /// Which answers an alarm blob asks for, if any.
+  static NudgeAnswers? fromBlob(Map<String, dynamic> alarmData) {
+    final wire = alarmData['answers'] as String?;
+    if (wire == null) return null;
+    for (final a in NudgeAnswers.values) {
+      if (a.name == wire) return a;
+    }
+    return null;
+  }
+}
+
+/// The buttons a general reminder's notification carries beyond Snooze: "Done"
+/// ("I did it") and "Later" ("not now, don't lose it").
+///
+/// Only a reminder the person made in the Reminders feature has them — one whose
+/// alarm payload names it ([reminderIdFromAlarmPayload]). Nothing else has a
+/// "done" to mark.
+class ReminderActions {
+  const ReminderActions._();
+
+  static const String doneId = 'reminder_done';
+  static const String laterId = 'reminder_later';
+
+  /// Every action id a reminder's notification can produce, for a handler to
+  /// recognise.
+  static const Set<String> ids = {doneId, laterId};
 }
 
 /// SharedPreferences key marking one *occurrence* of a generic reminder as

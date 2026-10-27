@@ -24,6 +24,8 @@ import '../widgets/step_manual_entry_sheet.dart';
 import '../models/step_manual_entry.dart';
 import '../widgets/manual_step_entries_card.dart';
 import '../widgets/rest_day_card.dart';
+import '../widgets/rain_walk_tip_card.dart';
+import '../widgets/walking_trend_card.dart';
 import '../widgets/steps_permission_card.dart';
 import 'package:tablet_remainder/core/health/rest_days.dart';
 import 'package:tablet_remainder/core/services/rest_day_store.dart';
@@ -33,6 +35,7 @@ import '../utils/step_format.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/utils/calendar_day.dart';
 import 'package:clock/clock.dart';
+import 'package:tablet_remainder/core/health/week_over_week.dart';
 
 /// Steps home: hero activity ring, key stats, streak, weekly + hourly charts,
 /// a deterministic insight, and a permission/manual-entry fallback. Works with
@@ -209,6 +212,21 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
         // A new entry with the same amount and note: the id is not the point.
         onPressed: () => StepService.addManualSteps(entry.steps, note: entry.note),
       ),
+    );
+  }
+
+  /// Today against the same hour a week ago, or null when last week cannot be
+  /// stood behind (see [WeekOverWeekCalc]).
+  WeekOverWeek? _weekOverWeek(StepDailyData today) {
+    final now = clock.now();
+    final lastWeek = StepService.getDataForDate(dayOffset(now, -7));
+    return WeekOverWeekCalc.compare(
+      // The sensor's count against the sensor's: last week's hourly buckets are
+      // sensor data, so hand-typed steps are left out of both sides.
+      stepsToday: today.sensorSteps ?? today.effectiveSteps,
+      now: now,
+      lastWeekHourly: lastWeek?.hourly ?? const [],
+      lastWeekTotal: lastWeek?.sensorSteps,
     );
   }
 
@@ -428,6 +446,8 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     final streakResult = StepService.getStreakResult();
     final streak = streakResult.current;
     final resting = RestDayStore.kindToday();
+    // Not on a rest day: the goal is paused, so how today compares is beside the point.
+    final wow = resting == null ? _weekOverWeek(today) : null;
     final weekly = StepService.getWeeklyStats();
     final healthy = _healthAvailable;
 
@@ -483,6 +503,15 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
               style: tt.bodySmall?.copyWith(color: ext.textTertiary),
             ),
           ),
+          if (wow != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Center(
+              child: Text(
+                weekOverWeekLine(wow),
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+              ),
+            ),
+          ],
           // Offered until the goal is met, and always while a mark is on so it
           // can be taken back.
           if (resting != null || !today.goalReached) ...[
@@ -493,6 +522,13 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
               onUndo: _undoRest,
             ),
           ],
+          // Only for someone clearly behind, with rain coming and a dry stretch to
+          // point at; nothing, and no gap, otherwise.
+          RainWalkTipCard(
+            steps: today.effectiveSteps,
+            goal: today.goalSteps,
+            restDay: resting != null,
+          ),
           const SizedBox(height: AppSpacing.xl),
 
           // Key stats.
@@ -564,6 +600,9 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
           ),
 
           const SizedBox(height: AppSpacing.lg),
+          // The last four weeks against the last ninety days.
+          const WalkingTrendCard(),
+
           // Hourly distribution.
           StepHourlyChart(hourly: today.hourly),
 

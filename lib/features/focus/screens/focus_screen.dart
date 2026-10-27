@@ -22,6 +22,8 @@ import '../widgets/ambient_sound_widget.dart';
 import '../models/ambient_sound.dart';
 import '../models/app_allow_list.dart';
 import '../models/custom_tag.dart';
+import 'breathing_history_screen.dart';
+import 'focus_achievements_screen.dart';
 import 'focus_garden_screen.dart';
 import 'relaxation_screen.dart';
 import 'plant_real_trees_screen.dart';
@@ -192,7 +194,10 @@ class _FocusScreenState extends State<FocusScreen> {
                 pattern: _selectedBreathingPattern!,
                 targetCycles: _selectedBreathingPattern!.recommendedCycles,
                 onComplete: () {
-                  _focusService.incrementBreathingCount();
+                  _focusService.incrementBreathingCount(
+                    pattern: _selectedBreathingPattern,
+                    cycles: _selectedBreathingPattern?.recommendedCycles,
+                  );
                   // Breathing is the clearest mindfulness case in the feature:
                   // guided practice with a real start and end. Unawaited, and a
                   // no-op unless the user opted in.
@@ -229,7 +234,9 @@ class _FocusScreenState extends State<FocusScreen> {
           }
 
           return PopScope(
-            canPop: !_focusService.isRunning,
+            // A rest break has no plant to lose, so leaving the screen during one
+            // is just leaving: the break carries on.
+            canPop: !_focusService.isRunning || _focusService.isRestBreak,
             onPopInvokedWithResult: (didPop, result) {
               if (!didPop && _focusService.isRunning) {
                 _showLeaveSessionDialog();
@@ -757,7 +764,18 @@ class _FocusScreenState extends State<FocusScreen> {
           // danger one. "Give Up" would be the app disagreeing with its own
           // premise: there is no target to fall short of, so the moment the user
           // chooses to stop IS the end of the session.
-          child: _focusService.isCountUp
+          child: _focusService.isRestBreak
+              // Ending a break early is not giving up on anything: no dialog, no
+              // withered plant.
+              ? AppButton(
+                  label: 'End break',
+                  leadingIcon: Symbols.check_rounded,
+                  accent: ext.info,
+                  size: AppButtonSize.lg,
+                  fullWidth: true,
+                  onPressed: _endRestBreak,
+                )
+              : _focusService.isCountUp
               ? AppButton(
                   label: 'Done',
                   leadingIcon: Symbols.check_rounded,
@@ -982,13 +1000,21 @@ class _FocusScreenState extends State<FocusScreen> {
       context,
       action: ToastAction(
         label: 'Start $rest min',
-        onPressed: () {
-          _focusService.setMode(FocusMode.single);
-          _focusService.setDuration(rest);
-          _startSession();
-        },
+        // A break, not a session: this used to switch to single mode and start a
+        // focus session of that length, which grew a plant and paid coins for
+        // resting and put the break in the history "your usual length" is the
+        // median of.
+        onPressed: () => _focusService.startRestBreak(rest),
       ),
     );
+  }
+
+  /// Stop a rest break before its time. Nothing was earned and nothing is lost,
+  /// so there is nothing to confirm.
+  void _endRestBreak() {
+    _hapticService.selection();
+    _focusService.abandonSession();
+    _showCompletionToast('Break ended.');
   }
 
   /// Start a session, optionally after a few breaths.
@@ -1994,6 +2020,31 @@ class _FocusScreenState extends State<FocusScreen> {
               },
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          // What has been practised, and when.
+          AppCard(
+            onTap: () {
+              _hapticService.navigation();
+              Navigator.pop(context);
+              Navigator.push(
+                  context, _buildPageRoute(const BreathingHistoryScreen()));
+            },
+            child: Row(
+              children: [
+                Icon(Symbols.history_rounded,
+                    size: 22, color: ext.mark(ext.focus)),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text('Your breathing history',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall),
+                ),
+                Icon(Symbols.chevron_right_rounded,
+                    size: 20, color: ext.textTertiary),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -2066,6 +2117,55 @@ class _FocusScreenState extends State<FocusScreen> {
           // keeps the same width and the whole grid stays intrinsically sized
           // inside the parent ListView.
           ..._featureRows(ext),
+          const SizedBox(height: AppSpacing.md),
+          _buildAchievementsLink(ext),
+        ],
+      ),
+    );
+  }
+
+  /// A full-width way into every achievement. A row of its own rather than a
+  /// seventh card, which would leave the grid with one card alone on its last
+  /// line.
+  Widget _buildAchievementsLink(AppColorsExt ext) {
+    final tt = Theme.of(context).textTheme;
+    final all = _focusService.achievements.values;
+    final earned = all.where((a) => a.isUnlocked).length;
+    return AppCard(
+      onTap: () {
+        _hapticService.navigation();
+        Navigator.push(
+            context, _buildPageRoute(const FocusAchievementsScreen()));
+      },
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: ext.warning.container,
+              borderRadius: AppRadius.brSm,
+            ),
+            child: Icon(Symbols.workspace_premium_rounded,
+                size: 22, color: ext.warning.onContainer),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Achievements',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.titleSmall?.copyWith(color: ext.textPrimary)),
+                Text('$earned of ${all.length} earned',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+              ],
+            ),
+          ),
+          Icon(Symbols.chevron_right_rounded,
+              size: 20, color: ext.textTertiary),
         ],
       ),
     );
@@ -2105,7 +2205,10 @@ class _FocusScreenState extends State<FocusScreen> {
       _buildFeatureCard(
         ext,
         icon: Symbols.park_rounded,
-        title: 'Plant Trees',
+        // "Garden Shop", the name of the screen it opens. It was "Plant Trees",
+        // which reads as planting real ones; these are virtual, bought with
+        // coins earned from focus sessions.
+        title: 'Garden Shop',
         subtitle: '${_coinsService.totalCoins} coins',
         accent: ext.success,
         onTap: () => Navigator.push(
@@ -2233,7 +2336,9 @@ class _FocusScreenState extends State<FocusScreen> {
     // Your plant is growing..." is the fallback, not the default.
     final String? intention = _focusService.pendingIntention;
     final String subtitle = onBreak
-        ? 'Relax and recharge — focus resumes soon.'
+        ? (_focusService.isRestBreak
+            ? 'Step away from the screen for a bit.'
+            : 'Relax and recharge — focus resumes soon.')
         : (intention ?? 'Stay focused! Your plant is growing...');
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),

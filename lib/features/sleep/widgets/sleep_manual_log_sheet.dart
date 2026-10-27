@@ -62,23 +62,26 @@ class SleepManualLogSheet {
     return null;
   }
 
+  /// [editing] opens the sheet on a night already logged, to change it.
   static Future<SleepManualLogResult?> show(
     BuildContext context, {
     required SleepSchedule schedule,
+    SleepSession? editing,
   }) {
     return AppBottomSheet.show<SleepManualLogResult>(
       context,
-      title: 'Log sleep',
+      title: editing == null ? 'Log sleep' : 'Edit night',
       icon: Symbols.nightlight_round_rounded,
       accent: AppColorsExt.of(context).sleep,
-      builder: (ctx) => _ManualLogForm(schedule: schedule),
+      builder: (ctx) => _ManualLogForm(schedule: schedule, editing: editing),
     );
   }
 }
 
 class _ManualLogForm extends StatefulWidget {
   final SleepSchedule schedule;
-  const _ManualLogForm({required this.schedule});
+  final SleepSession? editing;
+  const _ManualLogForm({required this.schedule, this.editing});
 
   @override
   State<_ManualLogForm> createState() => _ManualLogFormState();
@@ -97,9 +100,27 @@ class _ManualLogFormState extends State<_ManualLogForm> {
     // `clock.now()` rather than `DateTime.now()` throughout: the future-wake
     // check below is only testable if "now" can be pinned.
     final now = clock.now();
-    _wakeDate = DateTime(now.year, now.month, now.day);
     _bed = widget.schedule.bedtime;
     _wake = widget.schedule.wake;
+    // The night to log is the one that has already ended. Between midnight and
+    // the usual wake time, "today's" wake is still hours away, so defaulting to it
+    // opened the sheet on "That wake time has not happened yet" with Save
+    // disabled, for the one person likely to be logging a night at that hour.
+    var wakeDate = DateTime(now.year, now.month, now.day);
+    final wakeToday = DateTime(
+        wakeDate.year, wakeDate.month, wakeDate.day, _wake.hour, _wake.minute);
+    if (wakeToday.isAfter(now)) wakeDate = shiftCalendarDays(wakeDate, -1);
+    _wakeDate = wakeDate;
+
+    // Changing a night: open on what was logged, not on tonight's defaults.
+    final e = widget.editing;
+    if (e != null) {
+      _wakeDate = DateTime(e.wakeTime.year, e.wakeTime.month, e.wakeTime.day);
+      _bed = TimeOfDay.fromDateTime(e.bedtime);
+      _wake = TimeOfDay.fromDateTime(e.wakeTime);
+      _quality = e.qualityIndex ?? 4;
+      _noteController.text = e.note ?? '';
+    }
   }
 
   @override
@@ -135,7 +156,9 @@ class _ManualLogFormState extends State<_ManualLogForm> {
     final picked = await AppDatePicker.show(
       context,
       initial: _wakeDate,
-      first: now.subtract(const Duration(days: 90)),
+      // A night being changed may be a year old; a new one is for the last three
+      // months.
+      first: now.subtract(Duration(days: widget.editing == null ? 90 : 365 * 3)),
       last: DateTime(now.year, now.month, now.day),
     );
     if (picked != null) setState(() => _wakeDate = picked);
@@ -264,7 +287,7 @@ class _ManualLogFormState extends State<_ManualLogForm> {
         ),
         const SizedBox(height: AppSpacing.xl),
         AppButton(
-          label: 'Save sleep',
+          label: widget.editing == null ? 'Save sleep' : 'Save changes',
           leadingIcon: Symbols.check_rounded,
           fullWidth: true,
           accent: sleep,

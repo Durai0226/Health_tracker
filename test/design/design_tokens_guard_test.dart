@@ -785,7 +785,6 @@ const _textStyleBudget = <String, int>{
   'lib/features/focus/widgets/plant_animation_widget.dart': 7,
   'lib/features/medication/widgets/nunito_pill_visual.dart': 1,
   'lib/features/reminders/screens/alarm_screen.dart': 5,
-  'lib/features/sleep/screens/sleep_dashboard_screen.dart': 1,
   'lib/features/water/screens/aqua_water_dashboard.dart': 1,
 };
 

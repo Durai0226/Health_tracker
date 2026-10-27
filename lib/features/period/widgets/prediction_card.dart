@@ -18,6 +18,48 @@ String fmtPeriodDate(DateTime d) =>
 
 String fmtPeriodShort(DateTime d) => '${_kMonths[d.month - 1]} ${d.day}';
 
+/// "1st", "2nd", "3rd", "4th" … "11th", "12th", "13th", "21st".
+String periodOrdinal(int day) {
+  final teen = day % 100 >= 11 && day % 100 <= 13;
+  if (!teen) {
+    switch (day % 10) {
+      case 1:
+        return '${day}st';
+      case 2:
+        return '${day}nd';
+      case 3:
+        return '${day}rd';
+    }
+  }
+  return '${day}th';
+}
+
+/// The prediction, honestly: how wide it is, which day within it is the best
+/// guess, and what it rests on.
+///
+///   "Likely Oct 12 – Oct 16, most likely the 14th · based on 7 cycles"
+///
+/// A prediction from two cycles reads differently from one off a year of them,
+/// and the headline date above it looks equally sure either way, so the basis
+/// is said out loud, with "a rough guess" while the app is still learning.
+String predictionBasisLine(CyclePrediction p) {
+  final window = '${fmtPeriodShort(p.windowStart!)} – '
+      '${fmtPeriodShort(p.windowEnd!)}';
+  final likely = p.predictedStart == null
+      ? ''
+      : ', most likely the ${periodOrdinal(p.predictedStart!.day)}';
+  final n = p.completedCycles;
+  final String basis;
+  if (n == 0) {
+    basis = 'based on a typical ${p.cycleLengthEstimate ?? 28}-day cycle';
+  } else if (n < 3) {
+    basis = 'based on $n cycle${n == 1 ? '' : 's'}, a rough guess';
+  } else {
+    basis = 'based on $n cycles';
+  }
+  return 'Likely $window$likely · $basis';
+}
+
 /// The honest prediction summary: next period estimate + fertile-window estimate
 /// + confidence, always carrying the "estimate, not for contraception" caveat.
 class PredictionCard extends StatelessWidget {
@@ -124,9 +166,12 @@ class PredictionCard extends StatelessWidget {
             const SizedBox(height: 4),
             Padding(
               padding: const EdgeInsets.only(left: 34),
+              // Secondary, not tertiary: this is the honest half of the
+              // prediction (how wide it is and what it rests on), and tertiary
+              // text at this size is under the 4.5:1 AA asks of body copy.
               child: Text(
-                'Likely ${fmtPeriodShort(p.windowStart!)} – ${fmtPeriodShort(p.windowEnd!)}',
-                style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                predictionBasisLine(p),
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary),
               ),
             ),
           ],

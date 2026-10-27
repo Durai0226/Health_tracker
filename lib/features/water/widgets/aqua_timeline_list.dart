@@ -9,6 +9,9 @@ import '../models/enhanced_water_log.dart';
 class AquaTimelineList extends StatelessWidget {
   final List<EnhancedWaterLog> logs;
   final Function(EnhancedWaterLog)? onDelete;
+
+  /// Open a drink to change it. Null leaves the rows read-only.
+  final ValueChanged<EnhancedWaterLog>? onEdit;
   final VoidCallback? onViewAll;
   final int maxItems;
 
@@ -16,6 +19,7 @@ class AquaTimelineList extends StatelessWidget {
     super.key,
     required this.logs,
     this.onDelete,
+    this.onEdit,
     this.onViewAll,
     this.maxItems = 5,
   });
@@ -42,6 +46,7 @@ class AquaTimelineList extends StatelessWidget {
               log: log,
               isLast: isLast,
               onDelete: onDelete != null ? () => onDelete!(log) : null,
+              onTap: onEdit != null ? () => onEdit!(log) : null,
             );
           }),
           
@@ -137,11 +142,13 @@ class _AquaTimelineItem extends StatefulWidget {
   final EnhancedWaterLog log;
   final bool isLast;
   final VoidCallback? onDelete;
+  final VoidCallback? onTap;
 
   const _AquaTimelineItem({
     required this.log,
     required this.isLast,
     this.onDelete,
+    this.onTap,
   });
 
   @override
@@ -158,6 +165,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
     final timeStr = TimeOfDay.fromDateTime(widget.log.time).format(context);
 
     return GestureDetector(
+      onTap: widget.onTap,
       onHorizontalDragUpdate: widget.onDelete != null ? (details) {
         setState(() {
           _dragOffset = (_dragOffset + details.delta.dx).clamp(-80.0, 0.0);

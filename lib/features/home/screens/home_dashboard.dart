@@ -9,6 +9,11 @@ import '../../medication/models/dependent_profile.dart';
 import '../../medication/screens/dependents/dependent_list_screen.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../../../core/services/rest_day_store.dart';
+import '../../../core/services/vacation_mode.dart';
+import '../../../core/health/hydration_pacer.dart';
+import '../../medication/models/enhanced_medicine.dart';
+import '../../medication/services/as_needed_service.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/today_schedule_service.dart';
 import '../../medication/services/dose_undo.dart';
@@ -23,7 +28,10 @@ import '../../reminders/models/reminder_model.dart';
 import '../../reminders/screens/add_reminder_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../insights/screens/proactive_nudge.dart';
+import '../services/today_order.dart';
+import '../widgets/as_needed_card.dart';
 import '../widgets/log_something_sheet.dart';
+import '../widgets/morning_report_card.dart';
 import '../widgets/setup_checklist_card.dart';
 import '../../../widgets/smart_ad_widgets.dart';
 import '../../../core/utils/calendar_day.dart';
@@ -128,12 +136,24 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
     final doses =
         TodayScheduleService.dosesFrom(now, medicines: meds, logs: logs);
+    // Overdue or about to be due, and still open. A dose already marked missed
+    // is not "now" any more; it has its own way back (late dose recovery).
+    final soon = now.add(const Duration(minutes: TodayOrder.soonMinutes));
     return _MedicineHomeData(
       summary: MedicineCleanStorageService.summaryFrom(now,
           logs: logs, medicines: meds, now: now),
       hasMedicines: meds.isNotEmpty,
+      asNeeded: AsNeededService.asNeededOf(meds),
       streak: streak,
       nextDose: TodayScheduleService.nextDose(doses, now),
+      dosesDue: doses
+          .where((d) =>
+              !d.isTaken &&
+              !d.isSkipped &&
+              !d.isPreLogged &&
+              !d.isMissed &&
+              !d.scheduledTime.isAfter(soon))
+          .length,
     );
   }
 
@@ -538,22 +558,75 @@ class _HomeDashboardState extends State<HomeDashboard> {
     });
   }
 
-  // --- Today card customization (show/hide, persisted) ---------------------
-  static const List<String> _todayCardOrder = [
-    'medicine',
-    'water',
-    'weekly',
-    'activity'
-  ];
+  // --- Today card customization (order + show/hide, persisted) ------------
+  static const _orderPref = 'today_card_order';
+  static const _autoOrderPref = 'today_auto_order';
+
+  /// The person's own order, repaired against the cards that exist.
+  List<String> _userTodayOrder() => TodayOrder.normalise(
+      CleanStorageService.getAppPreference(_orderPref, const <String>[]));
+
+  /// Whether the card that needs the person moves to the top. On unless
+  /// switched off: the move is explained on screen, in words, every time.
+  bool _autoOrder() =>
+      CleanStorageService.getAppPreference(_autoOrderPref, true) != false;
+
+  /// What on Today wants the person right now, from the same live sources the
+  /// cards read.
+  TodayNeeds _todayNeeds(_MedicineHomeData? med) {
+    final now = clock.now();
+
+    // Open reminders that came due in the last day. Not while away: vacation
+    // mode doesn't arm reminders, so "overdue" would be a thing nobody was told.
+    var remindersOverdue = 0;
+    if (!VacationMode.isActive(now: now)) {
+      final since = now.subtract(TodayOrder.remindersWindow);
+      remindersOverdue = CleanStorageService.getReminders()
+          .where((r) =>
+              !r.isCompleted &&
+              !r.isPaused &&
+              r.scheduledTime.isBefore(now) &&
+              r.scheduledTime.isAfter(since))
+          .length;
+    }
+
+    // Water behind an even pace through the waking day. Never for someone on a
+    // fluid limit: that figure is a ceiling, and "behind" would urge them
+    // toward it. And never for someone who doesn't log water at all, who is not
+    // "behind" so much as not using it: that card would sit on top for ever.
+    var waterBehindMl = 0;
+    try {
+      final today = WaterService.getTodayData();
+      final tracksWater = WaterService.getDataForRange(
+              dayOffset(DateTime(now.year, now.month, now.day), -7), now)
+          .any((d) => d.effectiveHydrationMl > 0);
+      if (tracksWater && !WaterService.isFluidRestricted) {
+        final window = WaterService.wakingWindow();
+        final pace = HydrationPacer.compute(
+          intakeMl: today.effectiveHydrationMl,
+          goalMl: WaterService.goalForDay(today),
+          nowMinutes: now.hour * 60 + now.minute,
+          wakeMinutes: window.wakeMinutes,
+          sleepMinutes: window.sleepMinutes,
+        );
+        if (pace.behind) waterBehindMl = pace.deficitMl;
+      }
+    } catch (_) {}
+
+    return TodayNeeds(
+      dosesDue: med?.dosesDue ?? 0,
+      remindersOverdue: remindersOverdue,
+      waterBehindMl: waterBehindMl,
+    );
+  }
 
   List<String> _hiddenTodayCards() {
     final raw = CleanStorageService.getAppPreference(
         'today_hidden_cards', const <String>[]);
-    final list =
-        raw is List ? raw.map((e) => e.toString()).toList() : <String>[];
-    // 'activity' (Focus & Reminders) is their only home on the Today surface —
-    // never allow it to be hidden, or those features become unreachable.
-    return list.where((id) => id != 'activity').toList();
+    // 'activity' (Focus & Reminders) may be hidden like the rest: both have a row
+    // on the Health tab and an entry on the Log sheet, so switching the card off
+    // never leaves them unreachable.
+    return raw is List ? raw.map((e) => e.toString()).toList() : <String>[];
   }
 
   String _todayCardLabel(String id) {
@@ -604,42 +677,86 @@ class _HomeDashboardState extends State<HomeDashboard> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           final hidden = _hiddenTodayCards();
-          Future<void> setCardVisible(String id, bool v) async {
+          final order = _userTodayOrder();
+          final tt = Theme.of(ctx).textTheme;
+
+          Future<void> save(String key, Object value) async {
+            await CleanStorageService.setAppPreference(key, value);
+            setSheet(() {});
+            if (mounted) setState(() {});
+          }
+
+          Future<void> setCardVisible(String id, bool v) {
             final next = _hiddenTodayCards().toSet();
             if (v) {
               next.remove(id);
             } else {
               next.add(id);
             }
-            await CleanStorageService.setAppPreference(
-                'today_hidden_cards', next.toList());
-            setSheet(() {});
-            if (mounted) setState(() {});
+            return save('today_hidden_cards', next.toList());
+          }
+
+          Future<void> move(int from, int to) {
+            // ReorderableListView reports the slot AFTER the dragged row has
+            // been lifted out, so a downward drag is one too far.
+            final next = [...order];
+            final id = next.removeAt(from);
+            next.insert(to > from ? to - 1 : to, id);
+            return save(_orderPref, next);
           }
 
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Choose which cards show on Today.',
-                  style: Theme.of(ctx)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: ext.textSecondary)),
+              Text('Drag to reorder, and choose which cards show on Today.',
+                  style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
               const SizedBox(height: AppSpacing.xs),
-              // 'activity' (Focus & Reminders) is intentionally not toggleable —
-              // it's their only home, so it always stays on Today.
-              for (final id in _todayCardOrder)
-                if (id != 'activity')
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(_todayCardLabel(id)),
-                    trailing: AppSwitch(
-                      value: !hidden.contains(id),
-                      onChanged: (v) => setCardVisible(id, v),
+              ReorderableListView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                onReorder: move,
+                children: [
+                  for (var i = 0; i < order.length; i++)
+                    ListTile(
+                      key: ValueKey(order[i]),
+                      contentPadding: EdgeInsets.zero,
+                      leading: ReorderableDragStartListener(
+                        index: i,
+                        child: Icon(Symbols.drag_indicator_rounded,
+                            semanticLabel: 'Reorder',
+                            color: ext.textTertiary),
+                      ),
+                      title: Text(_todayCardLabel(order[i])),
+                      subtitle: order[i] == 'activity'
+                          ? Text('Also on the Health tab',
+                              style: tt.bodySmall
+                                  ?.copyWith(color: ext.textSecondary))
+                          : null,
+                      trailing: AppSwitch(
+                        value: !hidden.contains(order[i]),
+                        onChanged: (v) => setCardVisible(order[i], v),
+                      ),
+                      onTap: () =>
+                          setCardVisible(order[i], hidden.contains(order[i])),
                     ),
-                    onTap: () => setCardVisible(id, hidden.contains(id)),
-                  ),
+                ],
+              ),
+              const Divider(height: AppSpacing.xl),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Bring forward what needs you'),
+                subtitle: Text(
+                    'A due dose, an overdue reminder, or water well behind '
+                    'moves to the top. The rest keep your order.',
+                    style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+                trailing: AppSwitch(
+                  value: _autoOrder(),
+                  onChanged: (v) => save(_autoOrderPref, v),
+                ),
+                onTap: () => save(_autoOrderPref, !_autoOrder()),
+              ),
               const SizedBox(height: AppSpacing.sm),
             ],
           );
@@ -680,7 +797,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
-    final hidden = _hiddenTodayCards();
     return AppScaffold(
       body: RefreshIndicator(
         color: ext.brand.base,
@@ -760,9 +876,25 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   // action, not an ambient sentence about it.
                   _buildNextDoseHero(ext),
                   const SizedBox(height: AppSpacing.lg),
+                  // As-needed medicines: when each was last taken, how many in 24
+                  // hours, when the next is OK, and one tap to log it. Nothing
+                  // without any.
+                  ValueListenableBuilder<int>(
+                    valueListenable: MedicineCleanStorageService.revision,
+                    builder: (context, rev, _) => FutureBuilder<_MedicineHomeData>(
+                      future: _medicineData(rev),
+                      builder: (context, snap) => snap.hasData
+                          ? AsNeededCard(medicines: snap.data!.asNeeded)
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
                   // 4 — flat AI whisper (deterministic → time-of-day glyph).
                   _buildBriefingStrip(ext),
                   const SizedBox(height: AppSpacing.xl),
+                  // Until noon, once a day, when a night ended this morning:
+                  // last night against your usual, debt, body check, and at most
+                  // one suggestion. Self-gating: nothing otherwise.
+                  const MorningReportCard(),
                   // 5 — 4-up pulse row (Meds · Water · Focus · Reminders).
                   _buildPulseRow(ext),
                   const SizedBox(height: AppSpacing.xl),
@@ -771,19 +903,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   // row and the center "+ Log" action (three copies of the same
                   // four features). Quick logging still lives on "+ Log" and the
                   // feed cards.
-                  SectionHeader(
-                      // Not "Today" — the page itself is now titled Today, and
-                      // a section repeating its parent's name is noise.
-                      title: 'Your day',
-                      accent: ext.brand,
-                      actionLabel: 'Customize',
-                      onAction: _openCustomizeToday),
-                  const SizedBox(height: AppSpacing.xs),
-                  for (final id in _todayCardOrder)
-                    if (!hidden.contains(id)) ...[
-                      _todayCard(id, ext),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
+                  _buildYourDay(ext),
                   // 10 — Revenue banner: home overview only (never on the period,
                   // vitals, or sleep screens). Renders nothing until an ad loads.
                   const SmartDashboardBanner(),
@@ -792,6 +912,66 @@ class _HomeDashboardState extends State<HomeDashboard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ---- your day ------------------------------------------------------------
+
+  /// The header and the cards under it, in the person's order with at most one
+  /// card lifted to the top (see [TodayOrder]). Live with the same notifiers as
+  /// the cards themselves, since "what needs you" changes when a dose is taken
+  /// or a glass is logged.
+  Widget _buildYourDay(AppColorsExt ext) {
+    return _liveBuilder(ext, (rev) {
+      return FutureBuilder<_MedicineHomeData>(
+        future: _medicineData(rev),
+        builder: (context, snap) {
+          final arrangement = TodayOrder.arrange(
+            userOrder: _userTodayOrder(),
+            hidden: _hiddenTodayCards().toSet(),
+            needs: _todayNeeds(snap.data),
+            promote: _autoOrder(),
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SectionHeader(
+                  // Not "Today" — the page itself is now titled Today, and
+                  // a section repeating its parent's name is noise.
+                  title: 'Your day',
+                  accent: ext.brand,
+                  actionLabel: 'Customize',
+                  onAction: _openCustomizeToday),
+              if (arrangement.promoted != null) _movedUpNote(ext, arrangement),
+              const SizedBox(height: AppSpacing.xs),
+              for (final id in arrangement.order) ...[
+                _todayCard(id, ext),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+            ],
+          );
+        },
+      );
+    });
+  }
+
+  /// Says, in words, which card moved and why. A card that rearranges itself
+  /// without a word reads as a bug.
+  Widget _movedUpNote(AppColorsExt ext, TodayArrangement a) {
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(Symbols.arrow_upward_rounded,
+              size: 14, color: ext.textTertiary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text('${_todayCardLabel(a.promoted!)} moved up — ${a.reason}',
+                style: tt.bodySmall?.copyWith(color: ext.textSecondary)),
+          ),
+        ],
       ),
     );
   }
@@ -959,6 +1139,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
         steps: d.steps,
         stepGoal: d.stepGoal,
         sleepMinutes: d.sleepMinutes,
+        restDay: d.restDay,
       );
     }();
   }
@@ -1017,6 +1198,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
       steps: steps,
       stepGoal: stepGoal,
       sleepMinutes: sleepMinutes,
+      restDay: RestDayStore.kindToday(now: now) != null,
     );
   }
 
@@ -1054,13 +1236,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                // A Wrap, so a streak badge that does not fit beside the title
+                // drops under it instead of running off the card. The badge is
+                // fixed-width and the column it sits in is whatever the icon and
+                // the trailing widget leave, which at 320pt is under 80pt.
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(child: Text(title, style: tt.titleLarge)),
-                    if (badge != null) ...[
-                      const SizedBox(width: AppSpacing.sm),
-                      badge,
-                    ],
+                    Text(title, style: tt.titleLarge),
+                    if (badge != null) badge,
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -1312,18 +1497,31 @@ class _HomeDashboardState extends State<HomeDashboard> {
           : '${data.effectiveHydrationMl} / $goal ml · $remaining ml to go',
       onTap: () => widget.onNavigate(1, healthTab: 1),
       badge: streak > 0 ? _streakChip(ext.water, streak) : null,
-      trailing: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          WeekDotStrip(filled: daysHit, accent: ext.water),
-          const SizedBox(height: 6),
-          Text('${Pct.of(progress)}% today',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: ext.mark(ext.water),
-                  fontWeight: FontWeight.w800,
-                  fontFeatures: kTabular)),
-        ],
+      // Bounded, and the caption shrinks to fit it. This sits in a Row beside a
+      // fixed icon and an Expanded text column, so at a large text size an
+      // unbounded caption pushed the Row wider than the card (14px at 320pt and
+      // 2.0x). It went unseen while this card was a sliver of its own: a lazily
+      // built list never lays out a card that is off screen.
+      trailing: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 96),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            WeekDotStrip(filled: daysHit, accent: ext.water),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text('${Pct.of(progress)}% today',
+                  maxLines: 1,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: ext.mark(ext.water),
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: kTabular)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1594,6 +1792,7 @@ class _BriefingData {
   final int steps;
   final int stepGoal;
   final int sleepMinutes;
+  final bool restDay;
 
   const _BriefingData({
     required this.medsOutstanding,
@@ -1604,6 +1803,7 @@ class _BriefingData {
     this.steps = 0,
     this.stepGoal = 0,
     this.sleepMinutes = 0,
+    this.restDay = false,
   });
 }
 
@@ -1614,11 +1814,19 @@ class _MedicineHomeData {
   final int streak;
   final ScheduledDose? nextDose;
 
+  /// Open doses that are overdue or due within the hour; see [TodayOrder].
+  final int dosesDue;
+
+  /// The medicines taken only when needed, from the read this load already made.
+  final List<EnhancedMedicine> asNeeded;
+
   const _MedicineHomeData({
     required this.summary,
     required this.hasMedicines,
     required this.streak,
     this.nextDose,
+    this.dosesDue = 0,
+    this.asNeeded = const [],
   });
 }
 

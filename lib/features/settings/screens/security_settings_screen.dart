@@ -155,7 +155,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                     footer: enabled
                         ? 'A PIN is required every time ${AppStrings.productName} is '
                           'opened or returned to after being in the '
-                          'background for a while.'
+                          'background for a while. Its screen is also hidden '
+                          'in the recent-apps view, which means screenshots are '
+                          'blocked while the lock is on (Android).'
                         : 'Require a PIN to open ${AppStrings.productName}.',
                     children: [
                       SettingsTile(

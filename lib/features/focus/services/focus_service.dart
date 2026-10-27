@@ -17,6 +17,8 @@ import '../models/focus_plant.dart';
 import '../models/ambient_sound.dart';
 import '../models/focus_session.dart';
 import '../models/focus_achievement.dart';
+import '../models/breathing_exercise.dart' show BreathingPattern;
+import 'breathing_history.dart';
 import 'coins_service.dart';
 import 'focus_reminder_scheduler.dart';
 import 'focus_session_alarm.dart';
@@ -160,6 +162,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   // Pomodoro runtime state.
   bool _isOnBreak = false;
   bool _isLongBreak = false;
+
+  /// A break that stands alone ([startRestBreak]), not the one between pomodoro
+  /// rounds. Nothing follows it, and it is never a focus session.
+  bool _restBreak = false;
   int _currentRound = 0; // completed WORK rounds this session
   
   // Current Session Config
@@ -206,6 +212,9 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   int get roundsBeforeLongBreak => _roundsBeforeLongBreak;
   int get totalRounds => _totalRounds;
   bool get isOnBreak => _isOnBreak;
+
+  /// Whether the break running is a stand-alone one (see [startRestBreak]).
+  bool get isRestBreak => _restBreak;
   bool get isLongBreak => _isLongBreak;
   int get currentRound => _currentRound;
 
@@ -501,6 +510,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   /// events and a user who is away has only this text to tell them apart. The
   /// final round says "session"; any earlier one says which round.
   ({String title, String body}) _completionCopy() {
+    // A rest break has nothing to go back to: it ends, and that is all.
+    if (_restBreak) {
+      return (title: 'Break over ☕', body: 'Ready when you are.');
+    }
     if (_mode == FocusMode.pomodoro && _isOnBreak) {
       return (title: 'Break over ☕', body: 'Time to focus again.');
     }
@@ -534,6 +547,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
         'mode': _mode.index,
         'isOnBreak': _isOnBreak,
         'isLongBreak': _isLongBreak,
+        // Without it a rest break recovered after a kill would come back as a
+        // single-mode session that happens to be "on a break", and finishing it
+        // would be credited as a focus session.
+        'restBreak': _restBreak,
         'currentRound': _currentRound,
         'isPaused': _isPaused,
         // Remaining is persisted so a session killed WHILE PAUSED resumes with
@@ -593,6 +610,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
           .clamp(kMinSessionMinutes, kMaxSessionMinutes);
       _isOnBreak = data['isOnBreak'] == true;
       _isLongBreak = data['isLongBreak'] == true;
+      _restBreak = data['restBreak'] == true && _isOnBreak;
       _currentRound = (data['currentRound'] as int?) ?? 0;
       _startTime = startedAt;
       _endTime = endsAt;
@@ -1375,10 +1393,44 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     debugPrint('✓ Focus session started (${_mode.name}): $_phaseMinutes minutes, ends at $_endTime');
   }
 
+  /// Start a break on its own: [minutes] counting down, then it ends.
+  ///
+  /// Offered after a Flow session, whose suggested rest is its length divided by
+  /// five. It used to be started as a one-off FOCUS session of that length, so
+  /// resting grew a plant, paid coins, counted toward the streak, and went into
+  /// the history that "your usual length" is the median of — a break recorded as
+  /// the opposite of what it was. This is a break only: nothing earned, nothing
+  /// recorded, nothing starts after it.
+  Future<void> startRestBreak(int minutes) async {
+    if (_isRunning) return;
+    justCompleted.value = null;
+
+    _isRunning = true;
+    _isPaused = false;
+    _restBreak = true;
+    _isOnBreak = true;
+    _isLongBreak = false;
+    _currentRound = 0;
+    _finishing = false;
+
+    _phaseMinutes = minutes.clamp(1, 60);
+    _remainingSeconds = _phaseMinutes * 60;
+    _startTime = clock.now();
+    _pausedTotal = Duration.zero;
+    _endTime = _startTime!.add(Duration(minutes: _phaseMinutes));
+
+    _startTimer();
+    // Arm first, then snapshot: the snapshot records the armed instant.
+    _armCompletion();
+    await _saveActiveSession();
+    notifyListeners();
+    debugPrint('✓ Rest break started: $_phaseMinutes minutes, ends at $_endTime');
+  }
+
   /// Routes an elapsed interval to the correct completion handler. Break
   /// intervals never earn coins/plants; only work intervals do.
   Future<void> _onIntervalComplete() async {
-    if (_mode == FocusMode.pomodoro && _isOnBreak) {
+    if (_isOnBreak && (_mode == FocusMode.pomodoro || _restBreak)) {
       await _completeBreak();
     } else {
       await _completeSession();
@@ -1422,6 +1474,23 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     try {      _timer?.cancel();
       await _disarmCompletion();
       await _audioService.stop();
+
+      if (_restBreak) {
+        // A rest break ends with nothing after it: no work interval, no session,
+        // no coins. Whoever is looking at the screen can see it finish; only a
+        // backgrounded user needs telling, and only if the scheduled banner has
+        // not already told them.
+        final announce = !_isForeground && !_completionDelivered;
+        _resetSession();
+        if (announce) {
+          await NotificationService().showFocusNotification(
+            title: 'Break over ☕',
+            body: 'Ready when you are.',
+          );
+        }
+        return;
+      }
+
       _isOnBreak = false;
       _isLongBreak = false;
 
@@ -1683,10 +1752,10 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
       // Abandoning during a pomodoro break just ends the session — a break grows
       // no plant, so nothing withers and no abandoned session is recorded.
-      if (_mode == FocusMode.pomodoro && _isOnBreak) {
+      if (_isOnBreak && (_mode == FocusMode.pomodoro || _restBreak)) {
         _resetSession();
         await _saveData();
-        debugPrint('✓ Pomodoro ended during break');
+        debugPrint(_restBreak ? '✓ Rest break ended early' : '✓ Pomodoro ended during break');
         return;
       }
 
@@ -2004,6 +2073,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     _phaseMinutes = 0;
     _isOnBreak = false;
     _isLongBreak = false;
+    _restBreak = false;
     _currentRound = 0;
     notifyListeners();
   }
@@ -2169,11 +2239,17 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     await _saveData();
   }
 
-  void incrementBreathingCount() async {
+  /// A breathing exercise was finished. With [pattern] and [cycles] it is also
+  /// written to the history ([BreathingHistory]); the counter is all the
+  /// achievement needs.
+  void incrementBreathingCount({BreathingPattern? pattern, int? cycles}) async {
     final prefs = CleanStorageService.getAppPreferences();
     int breathingCount = prefs['focusBreathingCount'] ?? 0;
     breathingCount++;
     await CleanStorageService.setAppPreference('focusBreathingCount', breathingCount);
+    if (pattern != null && cycles != null) {
+      await BreathingHistory.record(pattern, cycles);
+    }
     _updateAchievement(AchievementType.breathingMaster, breathingCount);
     await _saveData();
   }
@@ -2284,6 +2360,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     _totalRounds = 4;
     _isOnBreak = false;
     _isLongBreak = false;
+    _restBreak = false;
     _currentRound = 0;
     _selectedMinutes = 25;
     _selectedPlant = PlantType.seedling;

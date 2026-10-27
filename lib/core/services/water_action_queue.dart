@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'keyed_lock.dart';
+import 'queue_signal.dart';
 
 /// Isolate-safe hand-off queue for drinks logged straight from a water
 /// reminder's action button.
@@ -34,20 +36,22 @@ class WaterActionQueue {
   static Future<void> enqueue({
     required int amountMl,
     required DateTime at,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList(_key) ?? <String>[];
-      list.add(jsonEncode({
-        'amountMl': amountMl,
-        'at': at.toIso8601String(),
-      }));
-      await prefs.setStringList(_key, list);
-      debugPrint('✓ Queued water action: ${amountMl}ml @ $at');
-    } catch (e) {
-      debugPrint('⚠️ enqueue water action failed: $e');
-    }
-  }
+  }) =>
+      KeyedLock.run(_key, () async {
+        try {
+          final prefs = await QueueSignal.freshPrefs();
+          final list = prefs.getStringList(_key) ?? <String>[];
+          list.add(jsonEncode({
+            'amountMl': amountMl,
+            'at': at.toIso8601String(),
+          }));
+          await prefs.setStringList(_key, list);
+          QueueSignal.notify();
+          debugPrint('✓ Queued water action: ${amountMl}ml @ $at');
+        } catch (e) {
+          debugPrint('⚠️ enqueue water action failed: $e');
+        }
+      });
 
   /// Read the queue WITHOUT clearing it. The caller applies the entries and
   /// then [ack]s the ones that actually landed.
@@ -60,9 +64,12 @@ class WaterActionQueue {
   ///
   /// Malformed records are still pruned immediately: nothing will ever ack them,
   /// so leaving them in place would strand them in the queue forever.
-  static Future<List<PendingWaterAction>> drain() async {
+  static Future<List<PendingWaterAction>> drain() =>
+      KeyedLock.run(_key, _drain);
+
+  static Future<List<PendingWaterAction>> _drain() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await QueueSignal.freshPrefs();
       final list = prefs.getStringList(_key) ?? const <String>[];
       if (list.isEmpty) return const [];
       final out = <PendingWaterAction>[];
@@ -103,10 +110,14 @@ class WaterActionQueue {
   ///
   /// Removes one stored record per acked action, so two identical taps need two
   /// acks and a tap that arrived DURING the drain survives to the next one.
-  static Future<void> ack(List<PendingWaterAction> applied) async {
-    if (applied.isEmpty) return;
+  static Future<void> ack(List<PendingWaterAction> applied) {
+    if (applied.isEmpty) return Future<void>.value();
+    return KeyedLock.run(_key, () => _ack(applied));
+  }
+
+  static Future<void> _ack(List<PendingWaterAction> applied) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await QueueSignal.freshPrefs();
       final list = (prefs.getStringList(_key) ?? const <String>[]).toList();
       if (list.isEmpty) return;
       for (final action in applied) {

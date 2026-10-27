@@ -226,28 +226,26 @@ void main() {
     // asserts the rendered toast, the Undo, and the roll-back.
     //
     // This stays as a source pin because it is cheap and it guards the WIRING
-    // (that Undo is handed the resolved occurrence rather than the anchor),
-    // which the widget test cannot see from outside.
-    test('the tick offers an Undo, and Undo reverts the occurrence', () {
+    // (that Undo is handed what the tick itself changed, occurrence included,
+    // rather than anything re-derived from the stored anchor), which the widget
+    // test cannot see from outside. What the tick and Undo actually do is
+    // asserted by behaviour in test/reminders/reminder_completion_test.dart,
+    // against the one implementation the screen and the notification's Done
+    // button share.
+    test('the tick offers an Undo, and Undo reverts what the tick changed', () {
       final src =
           File('lib/features/reminders/screens/reminders_screen.dart')
               .readAsStringSync();
       expect(src, contains("label: 'Undo'"),
           reason: 'a ticked card vanishes from Today with no other feedback');
-      expect(src, contains('_undoToggle(r, occurrence)'),
+      expect(src, contains('ReminderCompletion.markDone(r)'),
+          reason: 'the tick is the shared one, not a second implementation');
+      expect(src, contains('_undoToggle(done)'),
           reason: 'Undo must revert the SAME occurrence the tick recorded, not '
-              'the stored anchor');
-
-      // What _undoToggle must put back, asserted on its source so a future
-      // edit cannot quietly drop one of the three.
+              'the stored anchor: it travels in the DoneUndo the tick returned');
       final undo = src.substring(src.indexOf('Future<void> _undoToggle('));
       final body = undo.substring(0, undo.indexOf('\n  Future<'));
-      expect(body, contains('ReminderOutcome.pending'),
-          reason: 'the occurrence is evidence the reminder came due — it goes '
-              'back to pending, it is not deleted');
-      expect(body, contains('saveReminder'),
-          reason: 'a repeating tick rolled scheduledTime forward; Undo has to '
-              'roll it back');
+      expect(body, contains('ReminderCompletion.undo(done)'));
     });
   });
 }

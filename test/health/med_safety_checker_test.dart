@@ -76,4 +76,87 @@ void main() {
       expect(w, hasLength(1));
     });
   });
+
+  group('duplicateOf (a medicine about to be saved)', () {
+    test('names the candidate and what it shares an ingredient with', () {
+      final w = MedSafetyChecker.duplicateOf(
+        const MedRef(id: 'new', name: 'Panadol', genericName: 'Acetaminophen'),
+        const [
+          MedRef(id: '1', name: 'Tylenol', genericName: 'acetaminophen'),
+          MedRef(id: '2', name: 'Metformin', genericName: 'Metformin'),
+        ],
+      );
+      expect(w, isNotNull);
+      expect(w!.kind, 'duplicate');
+      expect(w.message, contains('Panadol'));
+      expect(w.message, contains('Tylenol'));
+      expect(w.message, isNot(contains('Metformin')));
+      expect(w.message, contains('check with your pharmacist'));
+    });
+
+    test('nothing when it shares nothing', () {
+      expect(
+          MedSafetyChecker.duplicateOf(
+            const MedRef(id: 'new', name: 'Aspirin', genericName: 'Aspirin'),
+            const [MedRef(id: '2', name: 'Metformin', genericName: 'Metformin')],
+          ),
+          isNull);
+      expect(MedSafetyChecker.duplicateOf(const MedRef(id: 'n', name: 'Aspirin'), const []),
+          isNull);
+    });
+
+    test('itself, among the others, is not a duplicate of itself', () {
+      expect(
+          MedSafetyChecker.duplicateOf(
+            const MedRef(id: '1', name: 'Aspirin', genericName: 'Aspirin'),
+            const [MedRef(id: '1', name: 'Aspirin', genericName: 'Aspirin')],
+          ),
+          isNull);
+    });
+
+    test('with no generic on either side, by name', () {
+      final w = MedSafetyChecker.duplicateOf(
+        const MedRef(id: 'new', name: 'Vitamin D'),
+        const [MedRef(id: '1', name: 'vitamin d')],
+      );
+      expect(w, isNotNull);
+    });
+
+    test('a generic outranks a name: two brands of one ingredient', () {
+      final w = MedSafetyChecker.duplicateOf(
+        const MedRef(id: 'new', name: 'Crocin', genericName: 'Paracetamol'),
+        const [MedRef(id: '1', name: 'Calpol', genericName: 'paracetamol')],
+      );
+      expect(w, isNotNull);
+    });
+
+    test('a brand that happens to read like another is not a match when the generics differ',
+        () {
+      final w = MedSafetyChecker.duplicateOf(
+        const MedRef(id: 'new', name: 'Brand', genericName: 'Ibuprofen'),
+        const [MedRef(id: '1', name: 'Brand', genericName: 'Paracetamol')],
+      );
+      expect(w, isNull);
+    });
+
+    test('several matches are all named, each once', () {
+      final w = MedSafetyChecker.duplicateOf(
+        const MedRef(id: 'new', name: 'Panadol', genericName: 'Paracetamol'),
+        const [
+          MedRef(id: '1', name: 'Calpol', genericName: 'paracetamol'),
+          MedRef(id: '2', name: 'Calpol', genericName: 'Paracetamol'),
+          MedRef(id: '3', name: 'Crocin', genericName: 'PARACETAMOL'),
+        ],
+      );
+      expect(w!.message, contains('share its active ingredient with Calpol and Crocin.'),
+          reason: 'each name once');
+    });
+
+    test('a blank medicine matches nothing', () {
+      expect(
+          MedSafetyChecker.duplicateOf(
+              const MedRef(id: 'n', name: ' '), const [MedRef(id: '1', name: ' ')]),
+          isNull);
+    });
+  });
 }

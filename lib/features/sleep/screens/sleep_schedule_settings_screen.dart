@@ -4,6 +4,7 @@ import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/sleep_schedule.dart';
 import '../services/sleep_service.dart';
+import '../services/wind_down_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Edit the nightly sleep schedule: target duration, bedtime, wake time,
@@ -42,7 +43,7 @@ class _SleepScheduleSettingsScreenState
     // alarm with the app insisting it was set.
     final bedtimeOk = await NotificationService().scheduleBedtimeReminder(
       enabled: next.reminderEnabled,
-      minuteOfDay: next.reminderMinuteOfDay,
+      minuteOfDay: WindDownService.minuteOfDay(),
     );
     final wakeOk = await NotificationService().scheduleWakeAlarm(
       enabled: next.alarmEnabled,
@@ -82,7 +83,7 @@ class _SleepScheduleSettingsScreenState
     if (!_schedule.reminderEnabled) {
       return 'A gentle nudge a little before bedtime';
     }
-    final m = _schedule.reminderMinuteOfDay;
+    final m = WindDownService.minuteOfDay();
     final t = TimeOfDay(hour: m ~/ 60, minute: m % 60);
     return 'At ${t.format(context)} · ${_schedule.windDownMinutes}m before bed';
   }
@@ -193,14 +194,30 @@ class _SleepScheduleSettingsScreenState
                   const SizedBox(height: AppSpacing.md),
                   AppCard(
                     padding: EdgeInsets.zero,
-                    child: AppListTile(
-                      icon: Symbols.notifications_active_rounded,
-                      title: 'Bedtime reminder',
-                      subtitle: _reminderSubtitle(context),
-                      accent: sleep,
-                      switchValue: _schedule.reminderEnabled,
-                      onSwitchChanged: (v) =>
-                          _update(_schedule.copyWith(reminderEnabled: v)),
+                    child: Column(
+                      children: [
+                        AppListTile(
+                          icon: Symbols.notifications_active_rounded,
+                          title: 'Bedtime reminder',
+                          subtitle: _reminderSubtitle(context),
+                          accent: sleep,
+                          switchValue: _schedule.reminderEnabled,
+                          onSwitchChanged: (v) =>
+                              _update(_schedule.copyWith(reminderEnabled: v)),
+                        ),
+                        if (_schedule.reminderEnabled) ...[
+                          Divider(height: 1, color: ext.outline),
+                          AppListTile(
+                            icon: Symbols.event_upcoming_rounded,
+                            title: "Follow tonight's plan",
+                            subtitle: 'Moves with the sleep you owe',
+                            accent: sleep,
+                            switchValue: _schedule.followPlan,
+                            onSwitchChanged: (v) =>
+                                _update(_schedule.copyWith(followPlan: v)),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),

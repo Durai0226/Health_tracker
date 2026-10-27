@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/foundation.dart';
 
 import '../../../core/database/app_database.dart' as db;
+import '../../period/services/cycle_privacy.dart';
 
 /// The sleep / period / steps / health-profile half of the app backup.
 ///
@@ -39,6 +40,16 @@ class HealthBackupSerializer {
   static const String periodKey = 'period';
   static const String stepsKey = 'steps';
   static const String healthProfileKey = 'healthProfile';
+
+  /// The heart dashboard's data: a row a day of heart rate, HRV, blood oxygen,
+  /// breathing and temperature, the workouts read from the health app, and the
+  /// devices those came from with the person's own choices about them.
+  ///
+  /// These are re-imported from Health Connect or Apple Health, but only for as
+  /// long as that app keeps them and only if it is the same one: on a new phone
+  /// the history behind every trend is simply gone, and the usual ranges the
+  /// dashboard compares tonight with go with it.
+  static const String biometricsKey = 'biometrics';
 
   /// Consent, not data. `PeriodSettingsTable.cloudSyncEnabled` is the opt-in
   /// that decides whether menstrual data leaves the device at all, so a restore
@@ -80,19 +91,40 @@ class HealthBackupSerializer {
 
     final profile = await d.stepsDao.getProfile();
 
+    final bioDays = await (d.select(d.biometricDailyData)
+          ..where((t) => t.deletedAt.isNull())
+          ..orderBy([(t) => OrderingTerm.asc(t.date)]))
+        .get();
+    final workouts = await (d.select(d.workoutSessions)
+          ..where((t) => t.deletedAt.isNull())
+          ..orderBy([(t) => OrderingTerm.asc(t.startedAt)]))
+        .get();
+    final sources = await (d.select(d.healthSources)
+          ..where((t) => t.deletedAt.isNull()))
+        .get();
+
     return <String, dynamic>{
       sleepKey: sleep.map((r) => r.toJson()).toList(),
-      periodKey: <String, dynamic>{
-        'days': periodDays.map((r) => r.toJson()).toList(),
-        if (periodSettings != null)
-          'settings': Map<String, dynamic>.from(periodSettings.toJson())
-            ..remove(periodConsentField),
-      },
+      // Left out entirely when the person said so (Cycle privacy). The section is
+      // ABSENT, not empty, so restoring a file made this way leaves any cycle
+      // data on the device exactly as it is.
+      if (!CyclePrivacy.excludeFromBackups)
+        periodKey: <String, dynamic>{
+          'days': periodDays.map((r) => r.toJson()).toList(),
+          if (periodSettings != null)
+            'settings': Map<String, dynamic>.from(periodSettings.toJson())
+              ..remove(periodConsentField),
+        },
       stepsKey: <String, dynamic>{
         'days': stepDays.map((r) => r.toJson()).toList(),
         'manualEntries': manualEntries.map((r) => r.toJson()).toList(),
       },
       if (profile != null) healthProfileKey: profile.toJson(),
+      biometricsKey: <String, dynamic>{
+        'days': bioDays.map((r) => r.toJson()).toList(),
+        'workouts': workouts.map((r) => r.toJson()).toList(),
+        'sources': sources.map((r) => r.toJson()).toList(),
+      },
     };
   }
 
@@ -174,6 +206,38 @@ class HealthBackupSerializer {
       }
     }
 
+    final biometrics = data[biometricsKey];
+    if (biometrics is Map) {
+      for (final raw in (biometrics['days'] as List? ?? const [])) {
+        try {
+          await d.into(d.biometricDailyData).insertOnConflictUpdate(
+              db.BiometricDayRow.fromJson(Map<String, dynamic>.from(raw as Map))
+                  .toCompanion(false));
+        } catch (e) {
+          debugPrint('Import biometric day failed: $e');
+        }
+      }
+      for (final raw in (biometrics['workouts'] as List? ?? const [])) {
+        try {
+          await d.into(d.workoutSessions).insertOnConflictUpdate(
+              db.WorkoutSessionRow.fromJson(
+                      Map<String, dynamic>.from(raw as Map))
+                  .toCompanion(false));
+        } catch (e) {
+          debugPrint('Import workout failed: $e');
+        }
+      }
+      for (final raw in (biometrics['sources'] as List? ?? const [])) {
+        try {
+          await d.into(d.healthSources).insertOnConflictUpdate(
+              db.HealthSourceRow.fromJson(Map<String, dynamic>.from(raw as Map))
+                  .toCompanion(false));
+        } catch (e) {
+          debugPrint('Import health source failed: $e');
+        }
+      }
+    }
+
     final profile = data[healthProfileKey];
     if (profile is Map) {
       try {
@@ -215,6 +279,11 @@ class HealthBackupSerializer {
       // Entries before days: the entries reference the day id.
       await d.delete(d.stepManualEntries).go();
       await d.delete(d.stepDailyData).go();
+    }
+    if (carries(biometricsKey)) {
+      await d.delete(d.biometricDailyData).go();
+      await d.delete(d.workoutSessions).go();
+      await d.delete(d.healthSources).go();
     }
   }
 }

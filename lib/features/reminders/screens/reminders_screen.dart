@@ -10,60 +10,22 @@ import '../../../core/services/clean_storage_service.dart';
 import '../../../core/health/coach_text.dart';
 import '../models/reminder_model.dart';
 import '../models/reminder_category_model.dart';
-import '../models/reminder_recurrence.dart';
-import '../utils/reminder_helper.dart';
 import 'add_reminder_screen.dart';
 import '../services/reminder_adherence.dart';
 import '../services/reminder_service.dart';
 import '../services/reminder_alarm.dart';
+import '../services/reminder_completion.dart';
 import '../services/reminder_pause_until.dart';
+import '../widgets/overdue_triage_sheet.dart';
 import '../widgets/vacation_sheet.dart';
+import '../services/overdue_triage.dart';
 import '../utils/reminder_later.dart';
 import '../services/reminder_tune_up.dart';
 import '../services/reminder_tune_up_service.dart';
 
-/// The occurrence a tick belongs to — the most recent one at or before [now].
-///
-/// `Reminder.scheduledTime` is an ANCHOR, not the instant that just came due:
-/// for a repeating reminder it is where the last roll-forward left it (or the
-/// creation time, for one that has never been ticked), which can be days behind
-/// the occurrence the user is actually ticking off. Recording `done` against the
-/// anchor wrote the outcome onto an occurrence that was already history and left
-/// the one that was genuinely due sitting `pending` — until the reconcile sweep
-/// wrote it off as MISSED. So a reminder answered every single day still
-/// reported poor adherence, and the "still pending" follow-up (keyed by
-/// occurrence instant) fired anyway for something already done.
-///
-/// The direct analogue of `resolveDoseInstant` on the medication side. Steps
-/// through [ReminderRecurrence] — the same walk
-/// `CleanStorageService.recordDueReminderOccurrences` uses — so the tick lands
-/// on the very row that pass derived, and by CALENDAR day, so an 08:00 reminder
-/// is still 08:00 across a DST transition.
-DateTime resolveReminderOccurrence(Reminder reminder, {DateTime? now}) {
-  final at = now ?? clock.now();
-  // Nothing has come due yet (or it is paused): the anchor IS the occurrence.
-  if (reminder.isPaused || !reminder.scheduledTime.isBefore(at)) {
-    return reminder.scheduledTime;
-  }
-  final recurrence = ReminderRecurrence.parse(
-    reminder.recurrenceRule,
-    fallback: reminder.repeatType,
-    fallbackDays: reminder.customDays,
-  );
-  if (!recurrence.repeats) return reminder.scheduledTime;
-
-  var latest = reminder.scheduledTime;
-  // Bounded exactly as the derive pass bounds its own walk: a malformed rule
-  // must not spin on a tap.
-  for (var i = 0; i < 400; i++) {
-    final next =
-        recurrence.nextAfter(start: reminder.scheduledTime, after: latest);
-    if (next == null || next.isAfter(at)) break;
-    if (reminder.endsAt != null && next.isAfter(reminder.endsAt!)) break;
-    latest = next;
-  }
-  return latest;
-}
+// Moved to a plain utility so the triage service can use it without importing a
+// screen. Still importable from here, where it has always been.
+export '../utils/reminder_occurrence.dart' show resolveReminderOccurrence;
 
 /// The Reminders destination — Calm Clarity, dark-aware, lists real reminders.
 class RemindersScreen extends StatefulWidget {
@@ -405,6 +367,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
             initialRecurrenceRule: result.recurrenceRule,
             initialEndsAt: result.endsAt,
             initialOccurrenceLimit: result.occurrenceLimit,
+            initialEscalation: result.escalation,
+            initialBody: result.body,
           ),
         ),
       );
@@ -434,6 +398,13 @@ class _RemindersScreenState extends State<RemindersScreen> {
       recurrenceRule: parsed.recurrenceRule,
       endsAt: parsed.endsAt,
       occurrenceLimit: parsed.occurrenceLimit,
+      // "until done" asks for the Insistent tier: a follow-up, then auto-snooze
+      // until it is acted on, capped so it cannot nag for ever.
+      escalation: parsed.untilDone ? ReminderEscalation.insistent : null,
+      // A heads-up fires early, so say what it is early for.
+      body: parsed.eventTime == null
+          ? null
+          : 'At ${DateFormats.time.format(parsed.eventTime!)}',
     );
   }
 
@@ -500,103 +471,26 @@ class _RemindersScreenState extends State<RemindersScreen> {
   }
 
   Future<void> _toggle(Reminder r) async {
-    final markingComplete = !r.isCompleted;
-
-    // Whether the NEXT occurrence is actually armed by the end of this tick.
-    //
-    // `arm` already returns the OS's answer — `scheduleGenericReminder` reports
-    // an AlarmManager refusal honestly, which is what happens on Android 14+
-    // with SCHEDULE_EXACT_ALARM revoked — and that answer used to be thrown
-    // away here. So a repeating reminder whose next occurrence was never
-    // scheduled still vanished from Today under a plain "Marked done": the
-    // confirmation said the one thing the user could not check.
-    var armed = true;
-
-    // Write the occurrence BEFORE anything mutates the reminder.
-    //
-    // The roll-forward below overwrites `scheduledTime`, and `isCompleted` is a
-    // single boolean it also resets — so until this row existed, completing a
-    // repeating reminder erased the only evidence it had ever been due. That is
-    // why no adherence rate, streak or digest was possible for these.
-    //
-    // Un-completing is a correction, not an event: it reverts the occurrence to
-    // pending rather than recording a second one.
-    //
-    // Against the occurrence the tick BELONGS to, never the stored anchor —
-    // see [resolveReminderOccurrence].
-    final occurrence = resolveReminderOccurrence(r);
-    await CleanStorageService.recordReminderOutcome(
-      reminderId: r.id,
-      scheduledFor: occurrence,
-      outcome: markingComplete
-          ? ReminderOutcome.done
-          : ReminderOutcome.pending,
-      source: 'app',
-    );
-
-    // Roll a repeating reminder forward to its next occurrence instead of
-    // letting it die in the Completed section. Same row (same id) is reused via
-    // copyWith + saveReminder upsert, so no duplicates are created.
-    if (markingComplete && r.repeatType != RepeatType.none) {
-      final next = ReminderHelper.getNextOccurrence(r);
-      final rolled = r.copyWith(
-        scheduledTime: next,
-        isCompleted: false,
-      );
-      await CleanStorageService.saveReminder(rolled);
-
-      // Reschedule the notification for the new time (consistent with the
-      // add/edit path which keys notifications off id.hashCode).
-      // Through the seam, so the follow-up rolls forward with the reminder
-      // instead of staying armed against the occurrence just ticked.
-      final request = ReminderArmRequest.forNextOccurrence(rolled);
-      if (request != null) {
-        // Arming is best-effort and MUST NOT abort the tick.
-        //
-        // The tick is already persisted by this point (the occurrence outcome
-        // and the rolled-forward row are both written above), so letting a
-        // scheduling failure propagate skipped `_load()` and the confirmation
-        // toast below: the card stayed on screen showing its old date, the
-        // user saw no feedback at all, and the only clue that anything had
-        // happened was that a second tap behaved differently. The re-arm pass
-        // retries at the next launch, which is the right place to recover.
-        try {
-          armed = await const NotificationReminderAlarm().arm(request);
-        } catch (e) {
-          armed = false;
-          debugPrint('⚠️ Re-arming "${rolled.title}" after a tick failed: $e');
-        }
-      }
-    } else {
-      // Non-repeating reminders keep the simple toggle behavior.
-      await CleanStorageService.toggleReminderCompletion(r);
-
-      // A completed one-off shouldn't keep a pending notification firing.
-      // (Repeating reminders are handled above via roll-forward reschedule.)
-      if (markingComplete) {
-        // disarm(), not cancelGenericReminder(): the latter clears the base and
-        // weekday sub-ids but leaves the +2000 follow-up armed, which then
-        // fires "Still pending: …" for something already done.
-        // Best-effort for the same reason as the arm above.
-        try {
-          await const NotificationReminderAlarm().disarm(
-            id: r.notificationSlot,
-            repeatType: r.repeatType,
-            customDays: r.customDays,
-          );
-        } catch (e) {
-          debugPrint('⚠️ Disarming "${r.title}" after a tick failed: $e');
-        }
-      }
+    // Un-completing is a correction, not an event: the occurrence goes back to
+    // pending rather than a second one being recorded.
+    if (r.isCompleted) {
+      await ReminderCompletion.reopen(r);
+      _load();
+      return;
     }
+
+    // Everything marking done changes — the occurrence log, a repeat's next time,
+    // what is armed — is in [ReminderCompletion], the one implementation the
+    // notification's Done button shares with this tick.
+    final done = await ReminderCompletion.markDone(r);
     _load();
 
     // A ticked card silently vanishes from Today — it either rolls forward to
     // its next occurrence or drops into Completed — with no confirmation and,
     // until now, no way back short of finding it again and un-ticking it. Say
     // what happened and offer one tap of regret.
-    if (!mounted || !markingComplete) return;
-    if (!armed) {
+    if (!mounted || done == null) return;
+    if (!done.armed) {
       // Say the part the user cannot see. The tick itself stuck — the row has
       // already rolled forward — so this is a warning about the schedule, not
       // an error about the tick, and it offers the one action that fixes it.
@@ -614,42 +508,16 @@ class _RemindersScreenState extends State<RemindersScreen> {
       'Marked done',
       action: AppToastAction(
         label: 'Undo',
-        onPressed: () => _undoToggle(r, occurrence),
+        onPressed: () => _undoToggle(done),
       ),
     );
   }
 
-  /// Put back everything [_toggle] changed: the reminder row (a repeating tick
-  /// has already rolled `scheduledTime` forward), the armed notification, and
-  /// the occurrence.
-  ///
-  /// The occurrence goes back to `pending`, not deleted: the row is the evidence
-  /// that the reminder came due, and the derive pass would recreate it anyway.
-  Future<void> _undoToggle(Reminder original, DateTime occurrence) async {
-    await CleanStorageService.recordReminderOutcome(
-      reminderId: original.id,
-      scheduledFor: occurrence,
-      outcome: ReminderOutcome.pending,
-      // Same shape the derive pass writes a pending row in, so an undone tick
-      // is indistinguishable from one that was never made.
-      firedAt: occurrence,
-      source: 'app',
-    );
-    // The row as it was BEFORE the tick — same id, so this is an upsert back to
-    // the old scheduledTime/isCompleted rather than a second reminder.
-    await CleanStorageService.saveReminder(original);
-    final request = ReminderArmRequest.forNextOccurrence(original);
-    if (request != null) {
-      // Guarded for the same reason [_toggle] guards its own arm, and more
-      // urgently: this runs from a toast action callback, so an escaping throw
-      // is an unhandled async error AND skips the `_load()` below — the row is
-      // restored in the database while the list keeps showing the ticked state.
-      try {
-        await const NotificationReminderAlarm().arm(request);
-      } catch (e) {
-        debugPrint('⚠️ Re-arming "${original.title}" after an undo failed: $e');
-      }
-    }
+  /// Put back everything [_toggle] changed. Run from a toast action, so
+  /// [ReminderCompletion.undo] guards its own arm: an escaping throw is an
+  /// unhandled async error AND would skip the reload below.
+  Future<void> _undoToggle(DoneUndo done) async {
+    await ReminderCompletion.undo(done);
     if (mounted) _load();
   }
 
@@ -712,6 +580,43 @@ class _RemindersScreenState extends State<RemindersScreen> {
       action: AppToastAction(
         label: 'Undo',
         onPressed: () => _reschedule(r, to: r.scheduledTime),
+      ),
+    );
+  }
+
+  /// Move or let go of the whole Overdue heap, with one Undo for all of it.
+  Future<void> _triage(List<Reminder> overdue) async {
+    final choice = await OverdueTriageSheet.show(context, overdue: overdue);
+    if (choice == null || !mounted) return;
+
+    final now = clock.now();
+    final TriageUndo done;
+    final String message;
+    switch (choice) {
+      case TriageChoice.tonight:
+        final slot = OverdueTriage.tonight(now);
+        if (slot == null) return;
+        done = await OverdueTriage.move(overdue, to: slot);
+        message =
+            'Moved ${done.count} to ${OverdueTriage.tonightLabel(slot).toLowerCase()}';
+      case TriageChoice.tomorrow:
+        done = await OverdueTriage.move(overdue,
+            to: OverdueTriage.tomorrowMorning(now));
+        message = 'Moved ${done.count} to tomorrow morning';
+      case TriageChoice.skip:
+        done = await OverdueTriage.skip(overdue);
+        message = 'Skipped ${done.count}';
+    }
+    _load();
+    if (!mounted || done.isEmpty) return;
+    context.toastSuccess(
+      message,
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await OverdueTriage.undo(done);
+          if (mounted) _load();
+        },
       ),
     );
   }
@@ -929,7 +834,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
 
     final widgets = <Widget>[];
     void section(String title, IconData icon, List<Reminder> items,
-        AccentSwatch accent) {
+        AccentSwatch accent,
+        {String? actionLabel, VoidCallback? onAction}) {
       if (items.isEmpty) return;
       widgets.add(Padding(
         padding: const EdgeInsets.only(
@@ -938,6 +844,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
           title: '$title (${items.length})',
           icon: icon,
           accent: accent,
+          actionLabel: actionLabel,
+          onAction: onAction,
         ),
       ));
       for (final r in items) {
@@ -948,7 +856,10 @@ class _RemindersScreenState extends State<RemindersScreen> {
       }
     }
 
-    section('Overdue', Symbols.error_rounded, overdue, ext.error);
+    // One card is a swipe. A heap — after a few days away — is a triage.
+    section('Overdue', Symbols.error_rounded, overdue, ext.error,
+        actionLabel: overdue.length >= 2 ? 'Catch up' : null,
+        onAction: overdue.length >= 2 ? () => _triage(overdue) : null);
     section('Today', Symbols.today_rounded, dueToday, ext.reminders);
     section('Tomorrow', Symbols.wb_sunny_rounded, dueTomorrow, ext.reminders);
     section('Upcoming', Symbols.event_rounded, upcoming, ext.reminders);
@@ -1335,6 +1246,12 @@ class _SmartReminder {
   final DateTime? endsAt;
   final int? occurrenceLimit;
 
+  /// Set by "until done"; null leaves the form's default.
+  final ReminderEscalation? escalation;
+
+  /// The message line, set by a heads-up ("At 3:00 PM").
+  final String? body;
+
   _SmartReminder({
     required this.title,
     this.time,
@@ -1345,6 +1262,8 @@ class _SmartReminder {
     this.recurrenceRule,
     this.endsAt,
     this.occurrenceLimit,
+    this.escalation,
+    this.body,
   });
 }
 

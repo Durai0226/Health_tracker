@@ -1737,7 +1737,8 @@ class WaterService {
       final kcal = await _measuredActiveKcalToday();
       if (weather == null && kcal == null) return;
 
-      final c = weather?.apparentC;
+      // The hotter of now and today's forecast high, not the 7 am reading.
+      final c = weather?.goalC;
       final base = _profile.goalBreakdown(ambientC: c).totalMl;
       final saved = todayActivityGoalNote;
       var delta = kcal == null

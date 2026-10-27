@@ -14,13 +14,17 @@ import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
 import '../../../../core/widgets/app/vitals_widgets.dart';
 import '../../models/blood_pressure_reading.dart';
+import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../services/bp_sessions.dart';
+import '../../services/home_bp_week_service.dart';
+import '../../widgets/home_bp_week_card.dart';
 import '../../services/vitals_storage_service.dart';
 import 'bp_second_reading_sheet.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_emergency_call.dart';
 import 'vitals_reminder_button.dart';
 import 'blood_pressure_report_screen.dart';
+import '../../../../core/health/bp_tags.dart';
 
 /// Blood Pressure tracker — log, classify (AHA/ACC), trend, and act on readings.
 class BloodPressureScreen extends StatefulWidget {
@@ -132,6 +136,42 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     final wantsSecond =
         await BpSecondReadingSheet.show(context, first: saved, accent: accent);
     if (wantsSecond && mounted) _openLogSheet(secondOf: saved);
+  }
+
+  Future<void> _startHomeWeek(AccentSwatch accent) async {
+    final chosen = await HomeBpWeekStartSheet.show(context, accent: accent);
+    if (chosen == null) return;
+    await HomeBpWeekService.begin(
+        morningReminder: chosen.morning, eveningReminder: chosen.evening);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _stopHomeWeek() async {
+    final ok = await ConfirmationBottomSheet.show(
+      context: context,
+      title: 'Stop this home week?',
+      message: 'Your readings stay where they are. Only the week\'s progress '
+          'is cleared.',
+      confirmText: 'Stop week',
+      cancelText: 'Keep going',
+      icon: Symbols.event_busy_rounded,
+      isDangerous: true,
+    );
+    if (ok != true) return;
+    await HomeBpWeekService.stop();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _closeHomeWeek() async {
+    await HomeBpWeekService.close();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _copyHomeWeek() async {
+    final p = HomeBpWeekService.current(_readings);
+    if (p == null) return;
+    await Clipboard.setData(ClipboardData(text: HomeBpWeekService.summaryText(p)));
+    if (mounted) context.toastSuccess('Summary copied');
   }
 
   Future<void> _delete(BloodPressureReading r) async {
@@ -318,6 +358,15 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
             const SizedBox(height: AppSpacing.md),
             InsightCard(insight: insight),
           ],
+          const SizedBox(height: AppSpacing.md),
+          HomeBpWeekCard(
+            accent: accent,
+            progress: HomeBpWeekService.current(_readings),
+            onStart: () => _startHomeWeek(accent),
+            onStop: _stopHomeWeek,
+            onCopy: _copyHomeWeek,
+            onClose: _closeHomeWeek,
+          ),
           const SizedBox(height: AppSpacing.lg),
           SectionHeader(title: 'Trend', icon: Symbols.show_chart_rounded, accent: accent),
           const SizedBox(height: AppSpacing.sm),
@@ -447,6 +496,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
                     Text(
                       '${VitalsAnalyzer.bpLabel(cat)} · ${DateFormats.dayMonthTime.format(r.takenAt)}'
                       '${r.pulse != null ? ' · ${r.pulse} bpm' : ''}'
+                      '${r.tags.isNotEmpty ? ' · ${BpTags.describe(r.tags)}' : ''}'
                       '${inAverageOf != null ? ' · in a $inAverageOf-reading average' : ''}',
                       style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                     ),
@@ -567,6 +617,9 @@ class _BpLogFormState extends State<_BpLogForm> {
   late final TextEditingController _note;
   int _arm = 0; // 0 left, 1 right
   BpPosition _position = BpPosition.sitting;
+
+  /// What was going on ([BpTags] ids), including any this build does not know.
+  List<String> _tags = const [];
   late DateTime _takenAt;
   String? _error;
   bool _saving = false;
@@ -582,6 +635,8 @@ class _BpLogFormState extends State<_BpLogForm> {
     final carry = e ?? widget.secondOf;
     _arm = carry?.arm?.index ?? 0;
     _position = carry?.position ?? BpPosition.sitting;
+    // A second reading is the same sitting: the circumstances carry over.
+    _tags = carry?.tags ?? const [];
     _takenAt = e?.takenAt ?? DateTime.now();
   }
 
@@ -631,9 +686,7 @@ class _BpLogFormState extends State<_BpLogForm> {
       arm: BpArm.values[_arm],
       position: _position,
       takenAt: _takenAt,
-      // Tags have no control on this form either — every edit through this
-      // screen used to silently wipe them.
-      tags: e?.tags ?? const [],
+      tags: BpTags.normalise(_tags),
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       createdAt: e?.createdAt ?? DateTime.now(),
     );
@@ -765,6 +818,26 @@ class _BpLogFormState extends State<_BpLogForm> {
           accent: widget.accent,
           noun: 'Reading',
           onChanged: (v) => setState(() => _takenAt = v),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // After the date: the figures and when they were taken come first, and
+        // what might have affected them is the optional part.
+        Text('Anything that might have affected it?',
+            style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final t in BpTags.all)
+              AppChip(
+                label: t.label,
+                selected: _tags.contains(t.id),
+                accent: widget.accent,
+                onTap: () => setState(() => _tags = BpTags.toggle(
+                    _tags, t.id, on: !_tags.contains(t.id))),
+              ),
+          ],
         ),
         const SizedBox(height: AppSpacing.md),
         AppTextField(

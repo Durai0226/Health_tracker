@@ -140,6 +140,16 @@ class HealthPrivacyScreen extends StatelessWidget {
                         subtitle: 'Their type, duration, distance, calories '
                             'and average heart rate — fills the Workouts list',
                       ),
+                      // Behind its own button on the Cycle screen, so it is
+                      // its own line here: reproductive health data is the
+                      // category a reviewer reads most closely.
+                      AppListTile(
+                        icon: Symbols.water_drop_rounded,
+                        iconColor: ext.mark(ext.period),
+                        title: 'Past periods',
+                        subtitle: 'Only when you tap "Import" on the Cycle '
+                            'screen — never in the background',
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),

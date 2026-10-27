@@ -12,6 +12,10 @@ import '../../../core/services/app_lock_service.dart';
 import '../../../core/services/app_shortcuts.dart';
 import '../../../core/services/dose_action_queue.dart';
 import '../../../core/services/water_action_queue.dart';
+import '../../medication/models/medicine_log.dart' show moodRatingLabels;
+import '../../medication/services/mood_answer_service.dart';
+import '../../period/services/period_answer_service.dart';
+import '../../reminders/services/reminder_action_service.dart';
 import '../../medication/screens/vitals/blood_pressure_screen.dart';
 import '../../medication/services/today_schedule_service.dart';
 import '../../water/services/water_service.dart';
@@ -27,8 +31,13 @@ import 'home_dashboard.dart';
 import 'health_browse_screen.dart';
 import '../widgets/log_something_sheet.dart';
 import '../../medication/services/refill_loop.dart';
+import '../../medication/services/visit_brief_link.dart';
+import '../../medication/screens/appointments/visit_brief_screen.dart';
+import '../../medication/models/doctor_pharmacy.dart' show Appointment;
 import '../../medication/widgets/refill_request_sheet.dart';
 import '../../water/screens/aqua_water_dashboard.dart';
+import '../../../core/services/cloud_sync_runner.dart';
+import '../../../core/services/queue_signal.dart';
 
 /// The single persistent shell — one bottom nav with a center action:
 /// **Today · Meds · ➕ Log · Health · Insights** over an [IndexedStack].
@@ -90,6 +99,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // A refill reminder that cold-started the app has already set this; one
     // tapped while the app is alive sets it later.
     RefillLoop.pendingOpen.addListener(_onRefillTap);
+    VisitBriefLink.pendingOpen.addListener(_onVisitBriefTap);
+    // A notification button tapped while the app is OPEN runs in a background
+    // isolate and only queues its answer; nothing resumes, so without this a Done
+    // tapped on a banner over the Reminders list would not show until the app was
+    // next backgrounded and returned to.
+    _stopListeningForQueues = QueueSignal.listen(_onQueueArrived);
     // Cold start needs draining too — and it is the MOST likely case, since a
     // notification action tapped while the app was dead is exactly what fills
     // the queue. `didChangeAppLifecycleState` does not fire for the initial
@@ -101,17 +116,32 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _onRefillTap();
+      _onVisitBriefTap();
       _drainQueuedDoseActions();
       _drainQueuedWaterActions();
+      _drainQueuedAnswers();
       _drainBackgroundHealthSync();
       _refreshAmbientData();
       _shortcuts.refresh();
     });
   }
 
+  /// Stops [_onQueueArrived] being called; set in [initState].
+  void Function()? _stopListeningForQueues;
+
+  /// Something was just queued by a notification button: apply it now.
+  void _onQueueArrived() {
+    if (!mounted) return;
+    _drainQueuedDoseActions();
+    _drainQueuedWaterActions();
+    _drainQueuedAnswers();
+  }
+
   @override
   void dispose() {
+    _stopListeningForQueues?.call();
     RefillLoop.pendingOpen.removeListener(_onRefillTap);
+    VisitBriefLink.pendingOpen.removeListener(_onVisitBriefTap);
     _cancelPendingShortcut();
     for (final c in _tabScrollControllers) {
       c.dispose();
@@ -144,9 +174,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) return;
     _drainQueuedDoseActions();
     _drainQueuedWaterActions();
+    _drainQueuedAnswers();
     _drainBackgroundHealthSync();
     _rearmIfExactAlarmsWereGranted();
     _refreshAmbientData();
+    // Back after a while: pick up what changed on other devices. Throttled, and
+    // behind the same gates as the start-up run.
+    unawaited(CloudSyncRunner.maybeSync());
   }
 
   /// Re-arm everything if the user has just granted SCHEDULE_EXACT_ALARM.
@@ -274,6 +308,73 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Apply the answers tapped on a notification — "Good / Okay / Bad" on the
+  /// mood check-in, "Started today" on the period reminder, "Done" / "Later" on a
+  /// reminder.
+  ///
+  /// The same hand-off as the dose and water drains above, confirmed the same
+  /// way: something was written on the person's behalf, so it is said, with a
+  /// way back. One toast for all of them, because a toast replaces the one before
+  /// it.
+  Future<void> _drainQueuedAnswers() async {
+    var moods = const <AppliedMood>[];
+    var reminders = const <AppliedReminderAction>[];
+    var period = const PeriodAnswerOutcome();
+    try {
+      moods = await MoodAnswers.drainPending();
+    } catch (e) {
+      debugPrint('⚠️ Draining queued mood answers on resume failed: $e');
+    }
+    try {
+      period = await PeriodAnswers.drainPending();
+    } catch (e) {
+      debugPrint('⚠️ Draining queued period starts on resume failed: $e');
+    }
+    try {
+      reminders = await ReminderActionService.drainPending();
+    } catch (e) {
+      debugPrint('⚠️ Draining queued reminder answers on resume failed: $e');
+    }
+    if ((moods.isEmpty && period.isEmpty && reminders.isEmpty) || !mounted) {
+      return;
+    }
+    // Today's Reminders card reads the list as it was when it last built.
+    if (reminders.isNotEmpty) setState(() => _homeTick++);
+
+    final said = <String>[
+      if (moods.length == 1)
+        'Logged your mood: ${moodRatingLabels[moods.single.moodIndex]}'
+      else if (moods.length > 1)
+        'Logged ${moods.length} moods',
+      if (period.applied.isNotEmpty)
+        'Period start logged'
+      else if (period.tooSoon != null)
+        // A start the Log sheet would have asked about; a button cannot ask.
+        'Period start not logged: only ${period.tooSoon} days after your last. '
+            'Open Period to log it',
+      ?ReminderActionService.say(reminders),
+    ];
+    if (said.isEmpty) return;
+    if (moods.isEmpty &&
+        period.applied.isEmpty &&
+        !ReminderActionService.canUndo(reminders)) {
+      context.toastInfo(said.join(' · '));
+      return;
+    }
+    context.toastSuccess(
+      said.join(' · '),
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await MoodAnswers.undo(moods);
+          await PeriodAnswers.undo(period.applied);
+          await ReminderActionService.undo(reminders);
+          if (mounted) setState(() => _homeTick++);
+        },
+      ),
+    );
+  }
+
   /// A launcher-shortcut tap held back while app lock is engaged.
   VoidCallback? _pendingShortcutListener;
 
@@ -302,6 +403,26 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     RefillLoop.pendingOpen.value = null;
     _runWhenUnlocked(() {
       if (mounted) RefillRequestFlow.run(context, id);
+    });
+  }
+
+  /// A tapped "your visit brief is ready" notice: open that visit's brief.
+  void _onVisitBriefTap() {
+    final id = VisitBriefLink.pendingOpen.value;
+    if (id == null) return;
+    // Cleared first, so tapping the same notification again fires again.
+    VisitBriefLink.pendingOpen.value = null;
+    _runWhenUnlocked(() async {
+      Appointment? appointment;
+      try {
+        final all = await MedicineCleanStorageService.getAllAppointments(
+            scopeToActiveProfile: false);
+        appointment = all.where((a) => a.id == id).firstOrNull;
+      } catch (_) {}
+      // A visit deleted since the notice was armed has no brief to open.
+      if (appointment == null || !mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => VisitBriefScreen(appointment: appointment!)));
     });
   }
 

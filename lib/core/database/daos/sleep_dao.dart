@@ -23,6 +23,16 @@ class SleepDao extends DatabaseAccessor<AppDatabase> with _$SleepDaoMixin {
         .get();
   }
 
+  /// Nights that ended before [before], newest first, at most [limit]: the
+  /// history past what the screen holds in memory.
+  Future<List<SleepSessionRow>> getBefore(DateTime before, int limit) {
+    return (select(sleepSessions)
+          ..where((t) => t.wakeTime.isSmallerThanValue(before) & t.deletedAt.isNull())
+          ..orderBy([(t) => OrderingTerm.desc(t.wakeTime)])
+          ..limit(limit))
+        .get();
+  }
+
   Future<SleepSessionRow?> getForDateKey(String dateKey) {
     return (select(sleepSessions)
           ..where((t) => t.dateKey.equals(dateKey) & t.deletedAt.isNull())

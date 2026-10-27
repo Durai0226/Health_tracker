@@ -15,6 +15,8 @@ import '../../medication/screens/vitals/weight_screen.dart';
 import '../../medication/screens/vitals/mood_screen.dart';
 import '../../medication/screens/conditions/condition_library_screen.dart';
 import '../../diary/screens/diary_screen.dart';
+import '../../focus/screens/focus_screen.dart';
+import '../../reminders/screens/reminders_screen.dart';
 import '../../../core/widgets/app/vitals_theme.dart';
 import '../../insights/screens/trends_dashboard_screen.dart';
 import '../../insights/screens/weekly_recap_screen.dart';
@@ -86,6 +88,18 @@ class HealthBrowseScreen extends StatelessWidget {
       _tile(ext, Symbols.auto_stories_rounded, ext.brand, 'Diary',
           'Your notes & reflections',
           () => open(const DiaryScreen(), FeatureAccent.brand)),
+      // Focus and Reminders live on Today's "Focus & reminders" card, which can be
+      // switched off — so they are here too, and never reachable only from there.
+      _tile(ext, Symbols.self_improvement_rounded, ext.focus, 'Focus',
+          'Timer, streaks & garden',
+          () => open(const FocusScreen(), FeatureAccent.focus)),
+      _tile(ext, Symbols.notifications_rounded, ext.reminders, 'Reminders',
+          'Your to-dos & alerts',
+          () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                    builder: (_) => const RemindersScreen()),
+              )),
     ];
 
     return AppScaffold(

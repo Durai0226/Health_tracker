@@ -5,6 +5,9 @@ import '../../../core/services/clean_storage_service.dart';
 import '../models/custom_tag.dart';
 import '../models/focus_session.dart';
 
+/// What [TagService.renameTag] did.
+enum TagRename { renamed, unchanged, empty, duplicate, notFound }
+
 class TagService extends ChangeNotifier {
   static final TagService _instance = TagService._internal();
   factory TagService() => _instance;
@@ -102,6 +105,28 @@ class TagService extends ChangeNotifier {
       await _saveData();
       notifyListeners();
     }
+  }
+
+  /// Rename a tag, default or custom. Sessions point at a tag by id, so every
+  /// session already tagged with it carries the new name with no further work.
+  ///
+  /// A name that another tag already has is refused, ignoring case: two tags
+  /// called "Deep Work" and "deep work" are one tag the person cannot tell
+  /// apart in the picker. Changing only the case of a tag's OWN name is fine.
+  Future<TagRename> renameTag(String tagId, String name) async {
+    final index = _tags.indexWhere((t) => t.id == tagId);
+    if (index == -1) return TagRename.notFound;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return TagRename.empty;
+    final lower = trimmed.toLowerCase();
+    final clash =
+        _tags.any((t) => t.id != tagId && t.name.trim().toLowerCase() == lower);
+    if (clash) return TagRename.duplicate;
+    if (_tags[index].name == trimmed) return TagRename.unchanged;
+    _tags[index] = _tags[index].copyWith(name: trimmed);
+    await _saveData();
+    notifyListeners();
+    return TagRename.renamed;
   }
 
   Future<void> deleteTag(String tagId) async {

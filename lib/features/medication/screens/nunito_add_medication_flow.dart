@@ -619,21 +619,19 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
   /// Warns (with a chance to cancel) if this medicine plausibly conflicts
   /// with an allergy on file for whoever it belongs to. Returns true to
-  /// proceed with the save, false to abort. A self-owned medicine is never
-  /// checked — [DependentProfile.allergies] is dependent-only data, matching
-  /// the same scope MedSafetyChecker already uses on the detail screen.
+  /// proceed with the save, false to abort. A medicine of your own is checked
+  /// against the allergies on your own profile ("Me"), as a dependent's is
+  /// against theirs.
   Future<bool> _confirmAllergySafety(EnhancedMedicine medicine) async {
     // NOT medicine.dependentId — a brand-new medicine's dependentId is still
     // null at this point (MedicineCleanStorageService.saveMedicine stamps the
     // active profile onto it AFTER this check runs), so that would only ever
     // fire for edits of an already dependent-owned medicine, missing the far
     // more common "adding a new medicine while a dependent is active" case.
-    final dependentId = _effectiveDependentId;
-    if (dependentId == null) return true;
     List<String> allergies;
     try {
-      final deps = await MedicineCleanStorageService.getAllDependents();
-      allergies = deps.where((d) => d.id == dependentId).firstOrNull?.allergies ??
+      allergies = (await MedicineCleanStorageService.profileFor(_effectiveDependentId))
+              ?.allergies ??
           const [];
     } catch (_) {
       return true; // best-effort — never block a save on a lookup failure.
@@ -653,6 +651,46 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       message: warnings.map((w) => w.message).join('\n\n'),
       confirmText: 'Save anyway',
       icon: Symbols.warning_amber_rounded,
+      isDangerous: true,
+    );
+    return proceed ?? false;
+  }
+
+  /// Warns (with a chance to cancel) if this medicine is, by ingredient or by
+  /// name, one that the same person already takes: the easy way to double a dose.
+  /// Returns true to proceed with the save, false to abort.
+  ///
+  /// An edit is asked about only when it changed what the medicine is called —
+  /// someone who knowingly keeps two strengths of one medicine should not be
+  /// asked again on every change to a time or a note.
+  Future<bool> _confirmDuplicateTherapy(EnhancedMedicine medicine) async {
+    final before = widget.editMedicine;
+    if (before != null &&
+        before.name == medicine.name &&
+        before.genericName == medicine.genericName) {
+      return true;
+    }
+    MedSafetyWarning? warning;
+    try {
+      final all = await MedicineCleanStorageService.getAllMedicines(
+          scopeToActiveProfile: false);
+      MedRef ref(EnhancedMedicine m) =>
+          MedRef(id: m.id, name: m.name, genericName: m.genericName);
+      warning = MedSafetyChecker.duplicateOf(ref(medicine), [
+        for (final m in all)
+          if (m.dependentId == _effectiveDependentId) ref(m),
+      ]);
+    } catch (_) {
+      return true; // best-effort — never block a save on a lookup failure.
+    }
+    if (warning == null || !mounted) return true;
+
+    final proceed = await ConfirmationBottomSheet.show(
+      context: context,
+      title: 'Possible duplicate',
+      message: warning.message,
+      confirmText: 'Save anyway',
+      icon: Symbols.content_copy_rounded,
       isDangerous: true,
     );
     return proceed ?? false;
@@ -730,6 +768,11 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
 
     final candidate = _buildMedicineFromForm();
     if (!await _confirmAllergySafety(candidate)) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    if (!mounted) return;
+    if (!await _confirmDuplicateTherapy(candidate)) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }

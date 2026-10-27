@@ -78,6 +78,20 @@ class AuthService extends ChangeNotifier {
   /// Returns false for offline guests and anonymous Firebase users
   bool get isAuthenticated => _currentUser != null && !_isGuestMode && _currentUser!.email.isNotEmpty;
 
+  /// Stands in for the Firestore deletion in [deleteCloudCopy], for a widget
+  /// test; returns the labels that could not be deleted.
+  @visibleForTesting
+  Future<List<String>> Function()? cloudCopyDeleterForTesting;
+
+  /// Put the service in a signed-in (or guest) state without Firebase, for a
+  /// widget test. Null signs out.
+  @visibleForTesting
+  void setUserForTesting(UserModel? user, {bool guest = false}) {
+    _currentUser = user;
+    _isGuestMode = guest;
+    notifyListeners();
+  }
+
   static const String _userPrefKey = 'current_user_data';
 
 
@@ -579,6 +593,31 @@ class AuthService extends ChangeNotifier {
   /// Failures are collected rather than swallowed — a delete that could not
   /// remove someone's cloud data must not report success.
   Future<List<String>> _deleteCloudData(String uid) async {
+    final failed = await _deleteCloudCollections(uid);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+    } catch (e) {
+      debugPrint('Account delete: user doc failed: $e');
+      failed.add('profile');
+    }
+    return failed;
+  }
+
+  /// Deletes the cloud copy of the person's data — every collection the app
+  /// syncs to — and keeps the account and its profile document. For "Delete all
+  /// data", where the person wants their records gone but is not leaving.
+  ///
+  /// Returns the labels of the collections that could NOT be deleted: empty
+  /// means all of it went. Signed out, there is no cloud copy, so it is empty.
+  Future<List<String>> deleteCloudCopy() async {
+    final override = cloudCopyDeleterForTesting;
+    if (override != null) return override();
+    final user = _firebaseAuth?.currentUser;
+    if (user == null) return const [];
+    return _deleteCloudCollections(user.uid);
+  }
+
+  Future<List<String>> _deleteCloudCollections(String uid) async {
     final db = FirebaseFirestore.instance;
     final failed = <String>[];
     for (final sub in kUserSubcollections) {
@@ -594,12 +633,6 @@ class AuthService extends ChangeNotifier {
         debugPrint('Account delete: subcollection $sub failed: $e');
         failed.add(sub);
       }
-    }
-    try {
-      await db.collection('users').doc(uid).delete();
-    } catch (e) {
-      debugPrint('Account delete: user doc failed: $e');
-      failed.add('profile');
     }
     return failed;
   }

@@ -24,6 +24,11 @@ class SleepSchedule {
   /// Wake alarm toggle — a plain daily alarm at [wake] (full-screen, alarm sound).
   final bool alarmEnabled;
 
+  /// The wind-down reminder follows tonight's bedtime plan (which moves with
+  /// the sleep the person owes) instead of sitting at a fixed time. Off until
+  /// they say so.
+  final bool followPlan;
+
   const SleepSchedule({
     this.targetMinutes = 480,
     this.bedtimeHour = 22,
@@ -33,6 +38,7 @@ class SleepSchedule {
     this.windDownMinutes = 30,
     this.reminderEnabled = false,
     this.alarmEnabled = false,
+    this.followPlan = false,
   });
 
   TimeOfDay get bedtime => TimeOfDay(hour: bedtimeHour, minute: bedtimeMinute);
@@ -67,6 +73,7 @@ class SleepSchedule {
     var windDown = 30;
     var reminder = false;
     var alarm = false;
+    var followPlan = false;
     final raw = r.extraJson;
     if (raw != null && raw.isNotEmpty) {
       try {
@@ -76,6 +83,7 @@ class SleepSchedule {
               (decoded['sleepWindDownMinutes'] as num?)?.toInt() ?? windDown;
           reminder = decoded['sleepReminderEnabled'] as bool? ?? reminder;
           alarm = decoded['sleepAlarmEnabled'] as bool? ?? alarm;
+          followPlan = decoded['sleepFollowPlan'] as bool? ?? followPlan;
         }
       } catch (_) {}
     }
@@ -88,6 +96,7 @@ class SleepSchedule {
       windDownMinutes: windDown,
       reminderEnabled: reminder,
       alarmEnabled: alarm,
+      followPlan: followPlan,
     );
   }
 
@@ -111,6 +120,7 @@ class SleepSchedule {
     extra['sleepWindDownMinutes'] = windDownMinutes;
     extra['sleepReminderEnabled'] = reminderEnabled;
     extra['sleepAlarmEnabled'] = alarmEnabled;
+    extra['sleepFollowPlan'] = followPlan;
 
     final now = DateTime.now();
     return db.HealthProfilesCompanion(
@@ -136,6 +146,7 @@ class SleepSchedule {
     int? windDownMinutes,
     bool? reminderEnabled,
     bool? alarmEnabled,
+    bool? followPlan,
   }) {
     return SleepSchedule(
       targetMinutes: targetMinutes ?? this.targetMinutes,
@@ -146,6 +157,7 @@ class SleepSchedule {
       windDownMinutes: windDownMinutes ?? this.windDownMinutes,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       alarmEnabled: alarmEnabled ?? this.alarmEnabled,
+      followPlan: followPlan ?? this.followPlan,
     );
   }
 }

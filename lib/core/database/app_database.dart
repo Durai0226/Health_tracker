@@ -114,7 +114,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -506,6 +506,27 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(enhancedMedicines, enhancedMedicines.criticalAlert);
           }
           debugPrint('✓ Added enhanced_medicines.criticalAlert (v21)');
+        }
+        if (from < 22) {
+          // A diary entry's own mood and tags. Guarded with PRAGMA like v16-v21,
+          // and for a table that is missing as well: the older fixtures never
+          // had `diary_entries`, and a missing table is better made (with the
+          // columns, since createTable uses the current definition) than left
+          // for the first diary read to trip over.
+          final diaryCols = await customSelect("PRAGMA table_info('diary_entries')")
+              .get()
+              .then((rows) => rows.map((r) => r.read<String>('name')).toSet());
+          if (diaryCols.isEmpty) {
+            await m.createTable(diaryEntries);
+          } else {
+            if (!diaryCols.contains('mood_index')) {
+              await m.addColumn(diaryEntries, diaryEntries.moodIndex);
+            }
+            if (!diaryCols.contains('tags_json')) {
+              await m.addColumn(diaryEntries, diaryEntries.tagsJson);
+            }
+          }
+          debugPrint('✓ Added diary_entries.mood_index/tags_json (v22)');
         }
       },
     );

@@ -77,7 +77,9 @@ void main() {
         'buildGlucosePdf'
       ),
       (
-        'lib/features/medication/screens/nunito_medication_list_screen.dart',
+        // Moved here from the Medicines list when the Adherence report gained the
+        // same export: one helper, opened from both.
+        'lib/features/medication/widgets/adherence_export_sheet.dart',
         'buildPdf'
       ),
     ]) {

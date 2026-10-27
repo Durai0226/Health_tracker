@@ -13,7 +13,7 @@ import 'core/services/app_lock_service.dart';
 import 'core/services/clean_storage_service.dart';
 import 'core/database/app_database.dart';
 import 'core/services/auth_service.dart';
-import 'core/services/cloud_sync_service.dart';
+import 'core/services/cloud_sync_runner.dart';
 import 'core/services/haptic_service.dart';
 import 'core/services/vitavibe_service.dart';
 import 'features/medication/services/medicine_storage_service.dart';
@@ -41,6 +41,7 @@ import 'core/services/health_rationale_channel.dart';
 import 'features/settings/screens/app_lock_gate.dart';
 import 'core/constants/app_strings.dart';
 import 'features/medication/services/refill_loop.dart';
+import 'features/medication/services/visit_brief_link.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -159,21 +160,10 @@ void _initDeferredServices() {
       // Two guards now:
       //   1. isAuthenticated — excludes anonymous users and offline guests
       //   2. cloudSyncEnabled — the user's own opt-in, default false
-      final auth = AuthService();
-      final userId = auth.currentUser?.id;
-      if (auth.isAuthenticated &&
-          CleanStorageService.cloudSyncEnabled &&
-          userId != null &&
-          userId.isNotEmpty) {
-        try {
-          await CloudSyncService().syncUserData(userId);
-          debugPrint('✓ Cloud sync completed in background');
-        } catch (e) {
-          debugPrint('⚠️ Cloud sync failed: $e');
-        }
-      } else {
-        debugPrint('• Cloud sync skipped — data stays on device');
-      }
+      // The same gates (a real account, and their own opt-in) now live in
+      // CloudSyncRunner, which also runs it when sync is switched on and when the
+      // app returns to the front — not only here.
+      await CloudSyncRunner.maybeSync(force: true);
 
       debugPrint('✓ All deferred services initialized');
     } catch (e) {
@@ -359,6 +349,7 @@ void main() async {
     if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
       final payload = notificationAppLaunchDetails?.notificationResponse?.payload;
       RefillLoop.pendingOpen.value = RefillLoop.medicineIdFromPayload(payload);
+      VisitBriefLink.pendingOpen.value = VisitBriefLink.appointmentIdFromPayload(payload);
       if (payload != null && payload.startsWith('alarm:')) {
         initialRoute = '/alarm';
         // The payload is `alarm:{json}` carrying the real title/body/id so the

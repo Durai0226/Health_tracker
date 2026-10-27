@@ -165,11 +165,18 @@ const Map<String, int> _elementBudget = {
   'Focus/timer': 1540,
   'Medication/dashboard': 1385,
   'Period/calendar': 1347,
-  'Home/home': 1263,
+  // 1263 -> 1465: measured 1274. Two self-gating cards (the Morning report and
+  // As needed) sit in the list; with nothing to say each is a handful of
+  // elements (a listener, a builder, an empty box), and when they have something
+  // to say they are cards like the others.
+  'Home/home': 1465,
   // 1116 -> 1320: measured 1145 after the Heart, Workouts and Connected
   // devices tiles were added to the browse grid. A legitimate growth, not
   // drift — three tiles at ~58 elements each.
-  'Home/health_browse': 1320,
+  // 1320 -> 1546: measured 1344 after Focus and Reminders got a row each, the
+  // way in once Today's "Focus & reminders" card can be switched off. Two rows,
+  // the same ~58 elements apiece.
+  'Home/health_browse': 1546,
   'Vitals/weight': 1116,
   'Water/statistics': 1090,
   'Vitals/mood': 1074,
@@ -253,7 +260,13 @@ const Map<String, int> _elementBudget = {
   'Period/dashboard': 819,
   'Medication/list': 780,
   'Water/caffeine': 731,
-  'Diary/list': 714,
+  // 714 -> 1068: measured 929. The seeded diary now has a mood and tags on
+  // every other row, an "On this day" card (the seed writes an entry for this
+  // date a year ago) and a search button, and every one of those is content, not
+  // chrome: a row that says how the day felt is a row with an icon and a line
+  // more in it. The list is a lazy builder, so what it costs is what the first
+  // viewport holds.
+  'Diary/list': 1068,
   'Medication/refill': 687,
   'Steps/dashboard': 394,
   'Reminders/list': 1354,

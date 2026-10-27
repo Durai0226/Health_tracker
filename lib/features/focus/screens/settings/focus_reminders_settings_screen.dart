@@ -28,10 +28,10 @@ class FocusRemindersSettingsScreen extends StatefulWidget {
 
 class _FocusRemindersSettingsScreenState
     extends State<FocusRemindersSettingsScreen> {
-  bool _dailyReminder = true;
+  bool _dailyReminder = false;
   bool _adaptive = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
-  bool _streakReminder = true;
+  bool _streakReminder = false;
   bool _isLoading = true;
 
   /// Whether this device can store mindfulness sessions at all.
@@ -56,7 +56,7 @@ class _FocusRemindersSettingsScreenState
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _dailyReminder = prefs.getBool('focus_daily_reminder') ?? true;
+      _dailyReminder = prefs.getBool('focus_daily_reminder') ?? false;
       _adaptive = prefs.getBool(FocusReminderScheduler.kAdaptive) ?? true;
       final timeStr = prefs.getString('focus_reminder_time') ?? '9:0';
       final parts = timeStr.split(':');
@@ -64,7 +64,7 @@ class _FocusRemindersSettingsScreenState
         hour: int.tryParse(parts.first) ?? 9,
         minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
       );
-      _streakReminder = prefs.getBool('focus_streak_reminder') ?? true;
+      _streakReminder = prefs.getBool('focus_streak_reminder') ?? false;
       _isLoading = false;
     });
     // Re-evaluate on every visit, not only on a toggle. "At risk" is a fact about

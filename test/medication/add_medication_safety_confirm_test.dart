@@ -7,6 +7,7 @@ import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart'
     show AppButton, AppTextField;
+import 'package:tablet_remainder/features/medication/models/dependent_profile.dart';
 import 'package:tablet_remainder/features/medication/models/enhanced_medicine.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_enums.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_schedule.dart';
@@ -176,5 +177,242 @@ void main() {
     final names = (await saved()).map((m) => m.name).toList();
     expect(names, containsAll(['Warfarin', 'Aspirin']),
         reason: 'confirming must save the medicine the warning was about');
+  });
+
+  group('your own allergies', () {
+    Future<void> profile(String id, RelationshipType who, List<String>? allergies) =>
+        MedicineCleanStorageService.addDependent(DependentProfile(
+          id: id,
+          name: who == RelationshipType.self ? 'Me' : 'Kid',
+          relationship: who,
+          allergies: allergies,
+        ));
+
+    /// Name the medicine and press the primary button.
+    Future<void> saveAspirin(WidgetTester tester) async {
+      await openFlow(tester);
+      await enterInto(tester, 'Medicine name', 'Aspirin');
+      await tapVisible(tester, button('Continue')); // Info -> Dosage
+      await tapVisible(tester, button('Continue')); // Dosage -> Schedule
+      await tapAndPumpBounded(tester, button('Add medicine'));
+    }
+
+    testWidgets('a medicine of your own is checked against the allergies on your profile',
+        (tester) async {
+      await profile('self', RelationshipType.self, ['Aspirin']);
+      await saveAspirin(tester);
+
+      expect(find.text('Possible allergy conflict'), findsOneWidget);
+      expect(find.textContaining('recorded allergy "Aspirin"'), findsOneWidget);
+      expect(await saved(), isEmpty, reason: 'nothing is written until you say so');
+    });
+
+    testWidgets('dismissing it saves nothing', (tester) async {
+      await profile('self', RelationshipType.self, ['Aspirin']);
+      await saveAspirin(tester);
+
+      await tester.tapAt(const Offset(400, 20));
+      await pumpBounded(tester);
+
+      expect(find.text('Possible allergy conflict'), findsNothing);
+      expect(await saved(), isEmpty);
+      expect(find.text('When do you take it?'), findsOneWidget);
+    });
+
+    testWidgets('"Save anyway" saves it: the warning informs, it does not forbid',
+        (tester) async {
+      await profile('self', RelationshipType.self, ['Aspirin']);
+      await saveAspirin(tester);
+
+      await tapAndPumpBounded(tester, button('Save anyway'));
+      expect((await saved()).map((m) => m.name), ['Aspirin']);
+    });
+
+    testWidgets('no allergies on your profile: no question', (tester) async {
+      await profile('self', RelationshipType.self, null);
+      await saveAspirin(tester);
+
+      expect(find.text('Possible allergy conflict'), findsNothing);
+      expect((await saved()).map((m) => m.name), ['Aspirin']);
+    });
+
+    testWidgets("someone else's allergy is not yours", (tester) async {
+      // Their row first, so that "the first profile" is not mistaken for yours.
+      await profile('kid', RelationshipType.child, ['Aspirin']);
+      await profile('self', RelationshipType.self, null);
+      await saveAspirin(tester);
+
+      expect(find.text('Possible allergy conflict'), findsNothing);
+      expect((await saved()).map((m) => m.name), ['Aspirin']);
+    });
+  });
+
+  group('a medicine you already take', () {
+    Future<void> already(String id, String name,
+            {String? dependentId, bool active = true, String? generic}) =>
+        MedicineCleanStorageService.addMedicine(
+          EnhancedMedicine(
+            id: id,
+            name: name,
+            genericName: generic,
+            dosageForm: DosageForm.tablet,
+            dosageAmount: 1,
+            createdAt: DateTime(2026),
+            dependentId: dependentId,
+            isActive: active,
+            schedule: MedicineSchedule.onceDaily(hour: 8, minute: 0),
+          ),
+          stampActiveProfile: false,
+        );
+
+    Future<void> saveNamed(WidgetTester tester, String name) async {
+      await openFlow(tester);
+      await enterInto(tester, 'Medicine name', name);
+      await tapVisible(tester, button('Continue')); // Info -> Dosage
+      await tapVisible(tester, button('Continue')); // Dosage -> Schedule
+      await tapAndPumpBounded(tester, button('Add medicine'));
+    }
+
+    testWidgets('the same medicine again asks first, and writes nothing yet',
+        (tester) async {
+      await already('m1', 'Metformin');
+      await saveNamed(tester, 'Metformin');
+
+      expect(find.text('Possible duplicate'), findsOneWidget);
+      expect(find.textContaining('share its active ingredient with Metformin'),
+          findsOneWidget);
+      expect((await saved()).map((m) => m.id), ['m1']);
+    });
+
+    testWidgets('dismissing it saves nothing and leaves the wizard open',
+        (tester) async {
+      await already('m1', 'Metformin');
+      await saveNamed(tester, 'Metformin');
+
+      await tester.tapAt(const Offset(400, 20));
+      await pumpBounded(tester);
+
+      expect((await saved()).map((m) => m.id), ['m1']);
+      expect(find.text('When do you take it?'), findsOneWidget);
+      expect(tester.widget<AppButton>(button('Add medicine')).onPressed, isNotNull,
+          reason: 'no stuck spinner');
+    });
+
+    testWidgets('"Save anyway" saves it: two strengths of one medicine are real',
+        (tester) async {
+      await already('m1', 'Metformin');
+      await saveNamed(tester, 'Metformin');
+
+      await tapAndPumpBounded(tester, button('Save anyway'));
+      expect((await saved()).map((m) => m.name), ['Metformin', 'Metformin']);
+    });
+
+    testWidgets('a different medicine: no question', (tester) async {
+      await already('m1', 'Metformin');
+      await saveNamed(tester, 'Vitamin D');
+
+      expect(find.text('Possible duplicate'), findsNothing);
+      expect((await saved()).map((m) => m.name), containsAll(['Metformin', 'Vitamin D']));
+    });
+
+    testWidgets("someone else's medicine of the same name is not yours", (tester) async {
+      await already('k1', 'Metformin', dependentId: 'kid');
+      await saveNamed(tester, 'Metformin');
+
+      expect(find.text('Possible duplicate'), findsNothing);
+      expect((await saved()).where((m) => m.dependentId == null), hasLength(1));
+    });
+
+    testWidgets('one you have stopped taking is not a duplicate', (tester) async {
+      await already('m1', 'Metformin', active: false);
+      await saveNamed(tester, 'Metformin');
+      expect(find.text('Possible duplicate'), findsNothing);
+    });
+
+    testWidgets('editing without changing the name does not ask again', (tester) async {
+      await already('m1', 'Metformin');
+      await already('m2', 'Metformin');
+      final edit = (await saved()).firstWhere((m) => m.id == 'm2');
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<bool>(
+                builder: (_) => NunitoAddMedicationFlow(editMedicine: edit),
+              )),
+              child: const Text('host page'),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('host page'));
+      await tester.pumpAndSettle();
+      await tapVisible(tester, button('Continue'));
+      await tapVisible(tester, button('Continue'));
+      await tapAndPumpBounded(tester, button('Save changes'));
+
+      expect(find.text('Possible duplicate'), findsNothing);
+    });
+
+    testWidgets('and giving it the generic name of one you take does too', (tester) async {
+      await already('m1', 'Metformin');
+      await already('m2', 'Glucophage');
+      final edit = (await saved()).firstWhere((m) => m.id == 'm2');
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<bool>(
+                builder: (_) => NunitoAddMedicationFlow(editMedicine: edit),
+              )),
+              child: const Text('host page'),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('host page'));
+      await tester.pumpAndSettle();
+      await enterInto(tester, 'Generic name (optional)', 'Metformin');
+      await tapVisible(tester, button('Continue'));
+      await tapVisible(tester, button('Continue'));
+      await tapAndPumpBounded(tester, button('Save changes'));
+
+      expect(find.text('Possible duplicate'), findsOneWidget);
+    });
+
+    testWidgets('but renaming it into one you take does', (tester) async {
+      await already('m1', 'Metformin');
+      await already('m2', 'Aspirin');
+      final edit = (await saved()).firstWhere((m) => m.id == 'm2');
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<bool>(
+                builder: (_) => NunitoAddMedicationFlow(editMedicine: edit),
+              )),
+              child: const Text('host page'),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('host page'));
+      await tester.pumpAndSettle();
+      await enterInto(tester, 'Medicine name', 'Metformin');
+      await tapVisible(tester, button('Continue'));
+      await tapVisible(tester, button('Continue'));
+      await tapAndPumpBounded(tester, button('Save changes'));
+
+      expect(find.text('Possible duplicate'), findsOneWidget);
+    });
   });
 }

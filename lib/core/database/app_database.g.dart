@@ -25687,6 +25687,28 @@ class $DiaryEntriesTable extends DiaryEntries
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _moodIndexMeta = const VerificationMeta(
+    'moodIndex',
+  );
+  @override
+  late final GeneratedColumn<int> moodIndex = GeneratedColumn<int>(
+    'mood_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
+    'tagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> tagsJson = GeneratedColumn<String>(
+    'tags_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -25695,6 +25717,8 @@ class $DiaryEntriesTable extends DiaryEntries
     body,
     entryAt,
     createdAt,
+    moodIndex,
+    tagsJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -25752,6 +25776,18 @@ class $DiaryEntriesTable extends DiaryEntries
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('mood_index')) {
+      context.handle(
+        _moodIndexMeta,
+        moodIndex.isAcceptableOrUnknown(data['mood_index']!, _moodIndexMeta),
+      );
+    }
+    if (data.containsKey('tags_json')) {
+      context.handle(
+        _tagsJsonMeta,
+        tagsJson.isAcceptableOrUnknown(data['tags_json']!, _tagsJsonMeta),
+      );
+    }
     return context;
   }
 
@@ -25785,6 +25821,14 @@ class $DiaryEntriesTable extends DiaryEntries
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      moodIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}mood_index'],
+      ),
+      tagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags_json'],
+      ),
     );
   }
 
@@ -25801,6 +25845,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
   final String body;
   final DateTime entryAt;
   final DateTime createdAt;
+  final int? moodIndex;
+  final String? tagsJson;
   const DiaryEntry({
     required this.id,
     this.dependentId,
@@ -25808,6 +25854,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     required this.body,
     required this.entryAt,
     required this.createdAt,
+    this.moodIndex,
+    this.tagsJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -25822,6 +25870,12 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     map['body'] = Variable<String>(body);
     map['entry_at'] = Variable<DateTime>(entryAt);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || moodIndex != null) {
+      map['mood_index'] = Variable<int>(moodIndex);
+    }
+    if (!nullToAbsent || tagsJson != null) {
+      map['tags_json'] = Variable<String>(tagsJson);
+    }
     return map;
   }
 
@@ -25837,6 +25891,12 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       body: Value(body),
       entryAt: Value(entryAt),
       createdAt: Value(createdAt),
+      moodIndex: moodIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(moodIndex),
+      tagsJson: tagsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tagsJson),
     );
   }
 
@@ -25852,6 +25912,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       body: serializer.fromJson<String>(json['body']),
       entryAt: serializer.fromJson<DateTime>(json['entryAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      moodIndex: serializer.fromJson<int?>(json['moodIndex']),
+      tagsJson: serializer.fromJson<String?>(json['tagsJson']),
     );
   }
   @override
@@ -25864,6 +25926,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       'body': serializer.toJson<String>(body),
       'entryAt': serializer.toJson<DateTime>(entryAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'moodIndex': serializer.toJson<int?>(moodIndex),
+      'tagsJson': serializer.toJson<String?>(tagsJson),
     };
   }
 
@@ -25874,6 +25938,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     String? body,
     DateTime? entryAt,
     DateTime? createdAt,
+    Value<int?> moodIndex = const Value.absent(),
+    Value<String?> tagsJson = const Value.absent(),
   }) => DiaryEntry(
     id: id ?? this.id,
     dependentId: dependentId.present ? dependentId.value : this.dependentId,
@@ -25881,6 +25947,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     body: body ?? this.body,
     entryAt: entryAt ?? this.entryAt,
     createdAt: createdAt ?? this.createdAt,
+    moodIndex: moodIndex.present ? moodIndex.value : this.moodIndex,
+    tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
   );
   DiaryEntry copyWithCompanion(DiaryEntriesCompanion data) {
     return DiaryEntry(
@@ -25892,6 +25960,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       body: data.body.present ? data.body.value : this.body,
       entryAt: data.entryAt.present ? data.entryAt.value : this.entryAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      moodIndex: data.moodIndex.present ? data.moodIndex.value : this.moodIndex,
+      tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
     );
   }
 
@@ -25903,14 +25973,24 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
           ..write('title: $title, ')
           ..write('body: $body, ')
           ..write('entryAt: $entryAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('moodIndex: $moodIndex, ')
+          ..write('tagsJson: $tagsJson')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, dependentId, title, body, entryAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    dependentId,
+    title,
+    body,
+    entryAt,
+    createdAt,
+    moodIndex,
+    tagsJson,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -25920,7 +26000,9 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
           other.title == this.title &&
           other.body == this.body &&
           other.entryAt == this.entryAt &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.moodIndex == this.moodIndex &&
+          other.tagsJson == this.tagsJson);
 }
 
 class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
@@ -25930,6 +26012,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
   final Value<String> body;
   final Value<DateTime> entryAt;
   final Value<DateTime> createdAt;
+  final Value<int?> moodIndex;
+  final Value<String?> tagsJson;
   final Value<int> rowid;
   const DiaryEntriesCompanion({
     this.id = const Value.absent(),
@@ -25938,6 +26022,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     this.body = const Value.absent(),
     this.entryAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.moodIndex = const Value.absent(),
+    this.tagsJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   DiaryEntriesCompanion.insert({
@@ -25947,6 +26033,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     required String body,
     required DateTime entryAt,
     required DateTime createdAt,
+    this.moodIndex = const Value.absent(),
+    this.tagsJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        body = Value(body),
@@ -25959,6 +26047,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     Expression<String>? body,
     Expression<DateTime>? entryAt,
     Expression<DateTime>? createdAt,
+    Expression<int>? moodIndex,
+    Expression<String>? tagsJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -25968,6 +26058,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
       if (body != null) 'body': body,
       if (entryAt != null) 'entry_at': entryAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (moodIndex != null) 'mood_index': moodIndex,
+      if (tagsJson != null) 'tags_json': tagsJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -25979,6 +26071,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     Value<String>? body,
     Value<DateTime>? entryAt,
     Value<DateTime>? createdAt,
+    Value<int?>? moodIndex,
+    Value<String?>? tagsJson,
     Value<int>? rowid,
   }) {
     return DiaryEntriesCompanion(
@@ -25988,6 +26082,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
       body: body ?? this.body,
       entryAt: entryAt ?? this.entryAt,
       createdAt: createdAt ?? this.createdAt,
+      moodIndex: moodIndex ?? this.moodIndex,
+      tagsJson: tagsJson ?? this.tagsJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -26013,6 +26109,12 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (moodIndex.present) {
+      map['mood_index'] = Variable<int>(moodIndex.value);
+    }
+    if (tagsJson.present) {
+      map['tags_json'] = Variable<String>(tagsJson.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -26028,6 +26130,8 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
           ..write('body: $body, ')
           ..write('entryAt: $entryAt, ')
           ..write('createdAt: $createdAt, ')
+          ..write('moodIndex: $moodIndex, ')
+          ..write('tagsJson: $tagsJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -43355,6 +43459,8 @@ typedef $$DiaryEntriesTableCreateCompanionBuilder =
       required String body,
       required DateTime entryAt,
       required DateTime createdAt,
+      Value<int?> moodIndex,
+      Value<String?> tagsJson,
       Value<int> rowid,
     });
 typedef $$DiaryEntriesTableUpdateCompanionBuilder =
@@ -43365,6 +43471,8 @@ typedef $$DiaryEntriesTableUpdateCompanionBuilder =
       Value<String> body,
       Value<DateTime> entryAt,
       Value<DateTime> createdAt,
+      Value<int?> moodIndex,
+      Value<String?> tagsJson,
       Value<int> rowid,
     });
 
@@ -43404,6 +43512,16 @@ class $$DiaryEntriesTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get moodIndex => $composableBuilder(
+    column: $table.moodIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -43446,6 +43564,16 @@ class $$DiaryEntriesTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get moodIndex => $composableBuilder(
+    column: $table.moodIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$DiaryEntriesTableAnnotationComposer
@@ -43476,6 +43604,12 @@ class $$DiaryEntriesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get moodIndex =>
+      $composableBuilder(column: $table.moodIndex, builder: (column) => column);
+
+  GeneratedColumn<String> get tagsJson =>
+      $composableBuilder(column: $table.tagsJson, builder: (column) => column);
 }
 
 class $$DiaryEntriesTableTableManager
@@ -43515,6 +43649,8 @@ class $$DiaryEntriesTableTableManager
                 Value<String> body = const Value.absent(),
                 Value<DateTime> entryAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<int?> moodIndex = const Value.absent(),
+                Value<String?> tagsJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DiaryEntriesCompanion(
                 id: id,
@@ -43523,6 +43659,8 @@ class $$DiaryEntriesTableTableManager
                 body: body,
                 entryAt: entryAt,
                 createdAt: createdAt,
+                moodIndex: moodIndex,
+                tagsJson: tagsJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -43533,6 +43671,8 @@ class $$DiaryEntriesTableTableManager
                 required String body,
                 required DateTime entryAt,
                 required DateTime createdAt,
+                Value<int?> moodIndex = const Value.absent(),
+                Value<String?> tagsJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DiaryEntriesCompanion.insert(
                 id: id,
@@ -43541,6 +43681,8 @@ class $$DiaryEntriesTableTableManager
                 body: body,
                 entryAt: entryAt,
                 createdAt: createdAt,
+                moodIndex: moodIndex,
+                tagsJson: tagsJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

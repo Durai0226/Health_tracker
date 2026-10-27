@@ -1,11 +1,19 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:intl/intl.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_colors_ext.dart';
+import '../../../core/health/mood_tags.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/app/vitals_theme.dart';
 import '../models/diary_entry.dart';
+import '../services/diary_prompt_signals.dart';
+import '../services/diary_prompts.dart';
+import '../services/diary_search.dart';
 import '../services/diary_storage_service.dart';
+import '../services/on_this_day.dart';
+import '../widgets/diary_cards.dart';
 import 'diary_entry_screen.dart';
 
 /// Diary/journal — free-form, timestamped entries. No trend chart or stat
@@ -22,27 +30,55 @@ class _DiaryScreenState extends State<DiaryScreen> {
   List<DiaryEntry> _entries = [];
   bool _loading = true;
 
+  bool _searching = false;
+  final TextEditingController _query = TextEditingController();
+
+  /// The question on offer today, if there is one (see [DiaryPromptSignals]).
+  DiaryPrompt? _prompt;
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final data = await DiaryStorageService.getAll();
+    final prompt = await DiaryPromptSignals.forToday(data);
     if (!mounted) return;
     setState(() {
       _entries = data; // newest first (DAO orders desc)
+      _prompt = prompt;
       _loading = false;
     });
   }
 
-  Future<void> _openEntry({DiaryEntry? existing}) async {
+  Future<void> _openEntry({DiaryEntry? existing, String? title}) async {
     final saved = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => DiaryEntryScreen(existing: existing)),
+      MaterialPageRoute(
+          builder: (_) =>
+              DiaryEntryScreen(existing: existing, initialTitle: title)),
     );
     if (saved == true) _load();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) _query.clear();
+    });
+  }
+
+  Future<void> _dismissPrompt() async {
+    await DiaryPromptSignals.dismissToday();
+    if (mounted) setState(() => _prompt = null);
   }
 
   Future<void> _delete(DiaryEntry e) async {
@@ -78,6 +114,16 @@ class _DiaryScreenState extends State<DiaryScreen> {
           AppHeader(
             title: 'Diary',
             leading: AppHeader.backButton(context),
+            actions: [
+              if (_entries.isNotEmpty)
+                AppIconButton(
+                  icon: _searching ? Symbols.close_rounded : Symbols.search_rounded,
+                  filled: false,
+                  accent: accent,
+                  tooltip: _searching ? 'Close search' : 'Search diary',
+                  onPressed: _toggleSearch,
+                ),
+            ],
           ),
           Expanded(
             child: _loading
@@ -90,13 +136,61 @@ class _DiaryScreenState extends State<DiaryScreen> {
                         child: ListView(
                           padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
                               AppSpacing.sm, AppSpacing.gutter, 120),
-                          children: _entries.map((e) => _entryRow(ext, e)).toList(),
+                          children: _listChildren(ext, accent),
                         ),
                       ),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _listChildren(AppColorsExt ext, AccentSwatch accent) {
+    final tt = Theme.of(context).textTheme;
+    if (_searching) {
+      final found = DiarySearch.filter(_entries, _query.text);
+      final typed = DiarySearch.words(_query.text).isNotEmpty;
+      return [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: AppSearchField(
+            controller: _query,
+            hint: 'Search your diary',
+            accent: accent,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        if (typed && found.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+            child: Text('Nothing in your diary matches \u201c${_query.text.trim()}\u201d.',
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+          )
+        else
+          ...found.map((e) => _entryRow(ext, e)),
+      ];
+    }
+
+    final now = clock.now();
+    final onThisDay = OnThisDay.forDay(_entries, DateTime(now.year, now.month, now.day));
+    return [
+      if (_prompt case final prompt?) ...[
+        DiaryPromptCard(
+          prompt: prompt,
+          onWrite: () => _openEntry(title: prompt.text),
+          onDismiss: _dismissPrompt,
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
+      if (onThisDay.isNotEmpty) ...[
+        OnThisDayCard(
+            items: onThisDay, onOpen: (e) => _openEntry(existing: e)),
+        const SizedBox(height: AppSpacing.md),
+      ],
+      ..._entries.map((e) => _entryRow(ext, e)),
+    ];
   }
 
   Widget _entryRow(AppColorsExt ext, DiaryEntry e) {
@@ -124,11 +218,23 @@ class _DiaryScreenState extends State<DiaryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(heading,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.titleMedium
-                      ?.copyWith(color: ext.textPrimary, fontWeight: FontWeight.w700)),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(heading,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleMedium?.copyWith(
+                            color: ext.textPrimary, fontWeight: FontWeight.w700)),
+                  ),
+                  if (e.moodIndex != null) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Icon(VitalsColors.moodIcon(e.moodIndex!),
+                        size: 20,
+                        color: VitalsColors.moodBand(ext.isDark, e.moodIndex!)),
+                  ],
+                ],
+              ),
               if (preview.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(preview,
@@ -137,7 +243,11 @@ class _DiaryScreenState extends State<DiaryScreen> {
                     style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
               ],
               const SizedBox(height: 6),
-              Text(DateFormat('MMM d, y · h:mm a').format(e.entryAt),
+              Text(
+                  '${DateFormat('MMM d, y · h:mm a').format(e.entryAt)}'
+                  '${e.tags.isEmpty ? '' : ' · ${e.tags.map(MoodTags.label).join(', ')}'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: tt.bodySmall?.copyWith(color: ext.textTertiary)),
             ],
           ),

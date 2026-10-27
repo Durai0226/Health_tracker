@@ -3,7 +3,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/services/haptic_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
+import '../../../../core/services/active_profile_service.dart';
 import '../../models/doctor_pharmacy.dart';
+import '../../models/enhanced_medicine.dart';
 import '../../services/medicine_storage_service.dart';
 
 /// Presets for [Appointment.reminderMinutesBefore] — common lead times a
@@ -38,6 +40,13 @@ class _NunitoAddEditAppointmentScreenState
   final _locationController = TextEditingController();
   final _notesController = TextEditingController();
 
+  /// The doctor on file this visit is with, and the medicines to talk about.
+  String? _doctorId;
+  final Set<String> _medicineIds = {};
+  List<Doctor> _doctors = const [];
+  List<EnhancedMedicine> _medicines = const [];
+  bool _choicesLoaded = false;
+
   late DateTime _date;
   late TimeOfDay _time;
   bool _reminderEnabled = true;
@@ -61,11 +70,62 @@ class _NunitoAddEditAppointmentScreenState
       _reminderEnabled = e.reminderEnabled;
       _reminderMinutesBefore = e.reminderMinutesBefore;
       _isCompleted = e.isCompleted;
+      _doctorId = e.doctorId;
+      _medicineIds.addAll(e.medicineIds ?? const []);
     } else {
       final now = DateTime.now().add(const Duration(hours: 1));
       _date = DateTime(now.year, now.month, now.day);
       _time = TimeOfDay(hour: now.hour, minute: 0);
     }
+    _loadChoices();
+  }
+
+  /// The doctors saved, and the medicines of the person the visit is for: the
+  /// choices the two pickers offer. Best-effort — without them the form is just
+  /// the text fields it always was.
+  Future<void> _loadChoices() async {
+    try {
+      final doctors = await MedicineCleanStorageService.getAllDoctors();
+      final owner = widget.editAppointment?.dependentId ??
+          ActiveProfileService().activeDependentId;
+      final medicines = (await MedicineCleanStorageService.getAllMedicines(
+              scopeToActiveProfile: false))
+          .where((m) => m.dependentId == owner)
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _doctors = doctors;
+        _medicines = medicines;
+        _choicesLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('⚠️ Appointment choices failed: $e');
+    }
+  }
+
+  void _chooseDoctor(Doctor d) {
+    _hapticService.light();
+    setState(() {
+      if (_doctorId == d.id) {
+        _doctorId = null;
+        return;
+      }
+      final before = _doctors.where((x) => x.id == _doctorId).firstOrNull;
+      final text = _doctorNameController.text.trim();
+      // Fill the name in when there is none, or only the last doctor's: a
+      // reason someone typed is theirs and stays.
+      if (text.isEmpty || text == before?.name) {
+        _doctorNameController.text = d.name;
+      }
+      _doctorId = d.id;
+    });
+  }
+
+  void _toggleMedicine(String id) {
+    _hapticService.light();
+    setState(() {
+      if (!_medicineIds.remove(id)) _medicineIds.add(id);
+    });
   }
 
   @override
@@ -101,6 +161,15 @@ class _NunitoAddEditAppointmentScreenState
     if (picked != null) setState(() => _time = picked);
   }
 
+  /// The medicines picked, in the order they are listed. One that is no longer
+  /// on the list is dropped — once the list has loaded to say so.
+  List<String>? _savedMedicineIds() {
+    final ids = _choicesLoaded
+        ? [for (final m in _medicines) if (_medicineIds.contains(m.id)) m.id]
+        : _medicineIds.toList();
+    return ids.isEmpty ? null : ids;
+  }
+
   Future<void> _save() async {
     if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
@@ -109,7 +178,7 @@ class _NunitoAddEditAppointmentScreenState
     try {
       final appointment = Appointment(
         id: _isEditing ? widget.editAppointment!.id : const Uuid().v4(),
-        doctorId: widget.editAppointment?.doctorId,
+        doctorId: _doctorId,
         doctorName: _doctorNameController.text.trim(),
         dateTime: _combinedDateTime,
         location: _locationController.text.trim().isEmpty
@@ -122,7 +191,7 @@ class _NunitoAddEditAppointmentScreenState
         reminderMinutesBefore: _reminderMinutesBefore,
         isCompleted: _isCompleted,
         dependentId: widget.editAppointment?.dependentId,
-        medicineIds: widget.editAppointment?.medicineIds,
+        medicineIds: _savedMedicineIds(),
       );
 
       if (_isEditing) {
@@ -202,6 +271,26 @@ class _NunitoAddEditAppointmentScreenState
                                 ? 'This field is required'
                                 : null,
                           ),
+                          if (_doctors.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            Text('Your doctors',
+                                style: tt.labelMedium?.copyWith(color: ext.textSecondary)),
+                            const SizedBox(height: AppSpacing.xs),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: [
+                                for (final d in _doctors)
+                                  AppChip(
+                                    label: d.name,
+                                    icon: Symbols.stethoscope_rounded,
+                                    selected: _doctorId == d.id,
+                                    accent: accent,
+                                    onTap: () => _chooseDoctor(d),
+                                  ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.lg),
                           AppTextField(
                             controller: _locationController,
@@ -300,6 +389,36 @@ class _NunitoAddEditAppointmentScreenState
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
+
+                    if (_medicines.isNotEmpty) ...[
+                      AppCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SectionHeader(
+                              title: 'Medicines to talk about',
+                              icon: Symbols.medication_rounded,
+                              accent: accent,
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: [
+                                for (final m in _medicines)
+                                  AppChip(
+                                    label: m.name,
+                                    selected: _medicineIds.contains(m.id),
+                                    accent: accent,
+                                    onTap: () => _toggleMedicine(m.id),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
 
                     AppCard(
                       child: Column(

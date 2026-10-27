@@ -1,20 +1,16 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:printing/printing.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
-import '../services/adherence_report_service.dart';
-import '../services/vitals_storage_service.dart';
 import '../../../core/services/haptic_service.dart';
 import 'nunito_medication_detail_screen.dart';
 import 'nunito_add_medication_flow.dart';
+import 'refill_overview_screen.dart';
+import '../widgets/adherence_export_sheet.dart';
 
 class NunitoMedicationListScreen extends StatefulWidget {
   const NunitoMedicationListScreen({super.key});
@@ -109,6 +105,14 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     ).then((_) => _loadMedicines());
   }
 
+  void _openRefills() {
+    _hapticService.light();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RefillOverviewScreen()),
+    ).then((_) => _loadMedicines(showLoader: false));
+  }
+
   void _navigateToAdd() {
     _hapticService.light();
     Navigator.push(
@@ -153,140 +157,6 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
     }
   }
 
-  Future<List<MedicineReportEntry>?> _buildReportEntries() async {
-    final active = _medicines.where((m) => m.isActive && !m.isArchived).toList();
-    if (active.isEmpty) {
-      if (mounted) {
-        context.toastInfo('No active medicines to report yet.');
-      }
-      return null;
-    }
-    final entries = <MedicineReportEntry>[];
-    for (final m in active) {
-      final logs = await MedicineCleanStorageService.getLogsForMedicine(m.id);
-      entries.add(MedicineReportEntry(medicine: m, logs: logs));
-    }
-    return entries;
-  }
-
-  /// One failure message for both exports — plus the log line that tells
-  /// whoever gets the bug report which step actually failed. The friendly
-  /// toast used to be all there was: the exception was dropped on the floor.
-  void _reportError(Object error) {
-    debugPrint('Report export failed: $error');
-    if (mounted) {
-      context.toastError('Could not create the report. Please try again.');
-    }
-  }
-
-  /// Let the user share their last-30-day record with a doctor/caregiver as a
-  /// polished PDF or a spreadsheet CSV. Strictly local — the OS share sheet
-  /// decides where it goes; nothing is uploaded by the app.
-  void _openExportChooser() {
-    _hapticService.light();
-    final ext = AppColorsExt.of(context);
-    AppBottomSheet.show<void>(
-      context,
-      title: 'Share with your doctor',
-      icon: Symbols.ios_share_rounded,
-      accent: ext.medicine,
-      builder: (sheetCtx) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AppListTile(
-            icon: Symbols.picture_as_pdf_rounded,
-            title: 'Adherence report (PDF)',
-            subtitle: 'A clean summary for a doctor visit',
-            accent: ext.medicine,
-            onTap: () {
-              Navigator.of(sheetCtx).pop();
-              _exportAdherenceReport();
-            },
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppListTile(
-            icon: Symbols.table_rows_rounded,
-            title: 'Dose log (CSV)',
-            subtitle: 'Every dose as a spreadsheet',
-            accent: ext.medicine,
-            onTap: () {
-              Navigator.of(sheetCtx).pop();
-              _exportCsv();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build a clinician-shareable adherence PDF over the last 30 days. Also
-  /// folds in the same window's BP/glucose readings (if any were logged) so a
-  /// doctor gets adherence, symptoms AND vitals in one document instead of
-  /// three separate exports.
-  Future<void> _exportAdherenceReport() async {
-    _hapticService.medium();
-    // Inside the try: reading every medicine's dose log is the step most
-    // likely to fail, and while it sat outside, a storage error escaped as an
-    // unhandled exception rather than reaching the catch below.
-    try {
-      final entries = await _buildReportEntries();
-      if (entries == null) return;
-      final now = DateTime.now();
-      final from = now.subtract(const Duration(days: 30));
-      final bpReadings = await VitalsStorageService.getBpForRange(from, now);
-      final glucoseReadings =
-          await VitalsStorageService.getGlucoseForRange(from, now);
-      final bytes = await AdherenceReportService.buildPdf(
-        entries: entries,
-        from: from,
-        to: now,
-        bpReadings: bpReadings,
-        glucoseReadings: glucoseReadings,
-        patientName: await MedicineCleanStorageService.activePatientName(),
-      );
-      await Printing.sharePdf(bytes: bytes, filename: 'adherence-report.pdf');
-    } catch (e) {
-      _reportError(e);
-    }
-  }
-
-  /// The active dependent's name, or null for self — buildPdf's header omits
-  /// the "Patient:" line entirely when null, which is the right default for a
-  /// single-person household. Without this, two exported reports for two
-  /// different dependents were visually indistinguishable except by reading
-  /// every row's medicine names, an easy way to hand a doctor the wrong
-  /// child's report.
-  /// Export the last-30-day dose log as a CSV via the OS share sheet.
-  Future<void> _exportCsv() async {
-    _hapticService.medium();
-    // Inside the try, for the reason given in _exportAdherenceReport.
-    try {
-      final entries = await _buildReportEntries();
-      if (entries == null) return;
-      if (entries.isEmpty) {
-        if (mounted) {
-          context.toastInfo('No doses logged in the last 30 days');
-        }
-        return;
-      }
-      final now = DateTime.now();
-      final csv = AdherenceReportService.buildCsv(
-        entries: entries,
-        from: now.subtract(const Duration(days: 30)),
-        to: now,
-      );
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/medication-log.csv');
-      await file.writeAsString(csv);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/csv')],
-        subject: 'Medicine log (last 30 days)',
-      );
-    } catch (e) {
-      _reportError(e);
-    }
-  }
-
   Future<void> _deleteMedicine(EnhancedMedicine medicine) async {
     // Dismissible, as the dialog it replaces was: a swipe-down or a tap on the
     // scrim returns null, which is not `true` and so deletes nothing. The
@@ -318,12 +188,22 @@ class _NunitoMedicationListScreenState extends State<NunitoMedicationListScreen>
               title: 'Medicines',
               leading: AppHeader.backButton(context),
               actions: [
+                // Always here. The Medicine screen only offers its refill
+                // overview while something is already flagged, so with
+                // everything fine there was no way to look at supply at all.
+                AppIconButton(
+                  icon: Symbols.inventory_2_rounded,
+                  filled: false,
+                  accent: ext.medicine,
+                  tooltip: 'Refill & supply',
+                  onPressed: _openRefills,
+                ),
                 AppIconButton(
                   icon: Symbols.ios_share_rounded,
                   filled: false,
                   accent: ext.medicine,
                   tooltip: 'Share with your doctor',
-                  onPressed: _openExportChooser,
+                  onPressed: () => AdherenceExportSheet.show(context),
                 ),
               ],
               bottom: Column(

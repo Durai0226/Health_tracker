@@ -2,11 +2,7 @@
 import 'package:clock/clock.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import '../../features/biometrics/services/biometrics_service.dart';
 import '../../features/focus/services/focus_service.dart';
-import '../../features/period/services/period_service.dart';
-import '../../features/sleep/services/sleep_service.dart';
-import '../../features/steps/services/step_service.dart';
 import '../../features/water/services/water_service.dart';
 import '../../features/water/models/enhanced_water_log.dart';
 // `EnhancedMedicine` here is the DRIFT ROW, not the domain model of the same
@@ -16,6 +12,7 @@ import '../database/app_database.dart';
 import 'clean_storage_service.dart';
 import 'health_cloud_sync_service.dart';
 import 'lww_collection_sync.dart';
+import 'health_caches.dart';
 
 class CloudSyncService {
   static final CloudSyncService _instance = CloudSyncService._internal();
@@ -85,23 +82,7 @@ class CloudSyncService {
   /// Medicines and focus each reload from their own pass, where the count IS
   /// available.
   @visibleForTesting
-  static Future<void> reloadCachesAfterHealthSync() async {
-    // Each is independently best-effort: one service failing to reload must not
-    // leave the other four showing stale data. They are all-static with a
-    // ValueNotifier cache, so a throw here would otherwise abort the rest.
-    for (final reload in <Future<void> Function()>[
-      StepService.reloadFromDb,
-      SleepService.reloadFromDb,
-      BiometricsService.reloadFromDb,
-      PeriodService.reloadFromDb,
-    ]) {
-      try {
-        await reload();
-      } catch (e) {
-        debugPrint('⚠️ Cache reload after sync failed: $e');
-      }
-    }
-  }
+  static Future<void> reloadCachesAfterHealthSync() => HealthCaches.reloadAll();
 
   /// Focus sessions — last-write-wins, tombstones included.
   ///

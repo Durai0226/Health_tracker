@@ -92,6 +92,7 @@ void main() {
         ReminderKind.dose: 20,
         ReminderKind.alarm: 10,
         ReminderKind.gentle: 30,
+        ReminderKind.quiet: 0,
       });
     });
 

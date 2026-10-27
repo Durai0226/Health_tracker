@@ -40,7 +40,10 @@ class FocusReminderScheduler {
     final prefs = await SharedPreferences.getInstance();
     final notifications = NotificationService();
 
-    final dailyEnabled = prefs.getBool(_kDailyEnabled) ?? true;
+    // Off until the person turns it on. These were on by default, so completing
+    // a first session armed a daily 9:00 "Time to focus" and a streak nudge
+    // nobody had asked for.
+    final dailyEnabled = prefs.getBool(_kDailyEnabled) ?? false;
     final parts = (prefs.getString(_kDailyTime) ?? '9:0').split(':');
     final hour = int.tryParse(parts.first) ?? 9;
     final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
@@ -75,7 +78,7 @@ class FocusReminderScheduler {
     // "At risk" is a fact about today, so this is re-decided every time rather
     // than left standing from yesterday. It can only go stale while the app is
     // unopened, and the streak can only advance by opening the app.
-    final streakEnabled = prefs.getBool(_kStreakEnabled) ?? true;
+    final streakEnabled = prefs.getBool(_kStreakEnabled) ?? false;
     final atRisk = FocusService().streakAtRisk;
     final streak = FocusService().stats.currentStreak;
 

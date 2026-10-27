@@ -1,8 +1,11 @@
 import 'dart:io';
 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    show Importance;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/core/services/background_alarm_service.dart';
 import 'package:tablet_remainder/features/reminders/models/reminder_escalation.dart';
+import 'package:tablet_remainder/features/reminders/models/reminder_kind.dart';
 
 /// Escalation tiers existed but never reached the OS.
 ///
@@ -36,8 +39,26 @@ void main() {
         expect(look.audioUsage.toString(), isNot(contains('alarm')),
             reason: '${e.name} must not use the alarm stream, which ignores '
                 'Do Not Disturb');
-        expect(look.channelId, 'checkin_channel');
+        // Normal is an ordinary notification; Quiet has a channel with no sound.
+        expect(look.channelId,
+            e == ReminderEscalation.gentle ? 'quiet_channel' : 'checkin_channel');
       }
+    });
+
+    test('Quiet is silent and Normal is not: that is the whole difference', () {
+      final quiet = alarmPresentationFor(ReminderEscalation.gentle.kind, snoozeMinutes: 5);
+      final normal = alarmPresentationFor(ReminderEscalation.standard.kind, snoozeMinutes: 5);
+
+      expect(quiet.playSound, isFalse);
+      expect(quiet.vibrates, isFalse, reason: 'no buzz either');
+      expect(quiet.importance, Importance.low,
+          reason: 'low importance is what keeps an Android channel silent');
+      expect(normal.playSound, isTrue);
+      expect(normal.vibrates, isTrue);
+      expect(normal.importance, isNot(Importance.low));
+      expect(quiet.channelId, isNot(normal.channelId),
+          reason: 'a channel\'s sound is fixed when it is created, so silence '
+              'needs a channel of its own');
     });
 
     test('negative: critical still gets the alarm treatment', () {
@@ -48,10 +69,16 @@ void main() {
       expect(look.audioUsage.toString(), contains('alarm'));
     });
 
-    test('insistent is alarm-grade too, and gentle/standard share a tier', () {
+    test('insistent is alarm-grade too, while Quiet and Normal are tiers of their own',
+        () {
       expect(ReminderEscalation.insistent.kind,
           ReminderEscalation.critical.kind);
-      expect(ReminderEscalation.gentle.kind, ReminderEscalation.standard.kind);
+      expect(ReminderEscalation.gentle.kind, ReminderKind.quiet);
+      expect(ReminderEscalation.standard.kind, ReminderKind.gentle);
+      expect(ReminderEscalation.gentle.kind,
+          isNot(ReminderEscalation.standard.kind),
+          reason: 'they used to share a channel, so "Quiet — a silent notification" '
+              'made the same sound as Normal');
     });
   });
 
@@ -111,8 +138,9 @@ void main() {
       // none of them may appear as a bare `visibility:` assignment.
       expect(bg, isNot(contains('visibility: NotificationVisibility.public')),
           reason: 'no unconditional public visibility on an alarm path');
-      expect('? NotificationVisibility.public'.allMatches(bg).length, 2,
-          reason: 'both alarmCallback and the snooze re-fire must be gated');
+      expect('? NotificationVisibility.public'.allMatches(bg).length, 3,
+          reason: 'alarmCallback, the snooze re-fire and the quiet re-fire must '
+              'each be gated');
     });
 
     test('the OS refusal is propagated, not swallowed as success', () {

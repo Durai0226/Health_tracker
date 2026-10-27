@@ -16,6 +16,18 @@ class StepsDao extends DatabaseAccessor<AppDatabase> with _$StepsDaoMixin {
         .get();
   }
 
+  /// The date of every day whose goal was reached, however long ago.
+  ///
+  /// The streak is a count of consecutive days, so it has to see all of them:
+  /// the in-memory window is the last ~35 days, which capped any streak at about
+  /// 35 however long it really was. Only the dates are needed, not the rows.
+  Future<List<DateTime>> getGoalReachedDates() async {
+    final rows = await (select(stepDailyData)
+          ..where((t) => t.goalReached.equals(true) & t.deletedAt.isNull()))
+        .get();
+    return [for (final r in rows) r.date];
+  }
+
   Future<StepDayRow?> getDay(String id) {
     return (select(stepDailyData)..where((t) => t.id.equals(id)))
         .getSingleOrNull();

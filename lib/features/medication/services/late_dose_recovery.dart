@@ -101,16 +101,27 @@ class LateDoseRecovery {
   static Future<MedicineLog> apply(MissedDose dose, LateChoice choice) {
     final id = dose.medicine.id;
     final slot = dose.scheduledTime;
+    // The amount the schedule calls for that day, as a take from the sheet or a
+    // notification records it. The default of one unit under-counted a
+    // two-tablet dose in the stock every time it was recovered.
+    final amount =
+        dose.medicine.schedule.effectiveDosageAmount(slot, dose.medicine.dosageAmount);
     switch (choice.outcome) {
       case LateOutcome.tookOnTime:
         return MedicineCleanStorageService.markMedicineTaken(
-            medicineId: id, scheduledTime: slot, takenAt: slot);
+            medicineId: id, scheduledTime: slot, takenAt: slot, dosageTaken: amount);
       case LateOutcome.tookAt:
         return MedicineCleanStorageService.markMedicineTaken(
-            medicineId: id, scheduledTime: slot, takenAt: choice.at ?? slot);
+            medicineId: id,
+            scheduledTime: slot,
+            takenAt: choice.at ?? slot,
+            dosageTaken: amount);
       case LateOutcome.takeNow:
         return MedicineCleanStorageService.markMedicineTaken(
-            medicineId: id, scheduledTime: slot, takenAt: clock.now());
+            medicineId: id,
+            scheduledTime: slot,
+            takenAt: clock.now(),
+            dosageTaken: amount);
       case LateOutcome.skipped:
         // This path exists for a dose that was never actioned, so "I forgot" is
         // the honest reason; the person who skipped on purpose does that from

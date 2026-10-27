@@ -137,6 +137,59 @@ class PeriodService {
     unawaited(PeriodReminderService.reschedule()); // prediction shifted
   }
 
+  /// Set many days at once: a day mapped to a [PeriodDay] is written, one mapped
+  /// to null is removed. The cycles are worked out and the reminders re-planned
+  /// ONCE, not once a day — an import of a year of periods through [logDay] would
+  /// have recomputed every cycle for each of a hundred days.
+  ///
+  /// All or nothing: the writes go in one transaction, so a failure leaves the
+  /// stored days (and what the screens show) exactly as they were and is thrown to
+  /// the caller, rather than being swallowed like [logDay]'s — an import that said
+  /// "added 40 days" over nothing saved would be worse than one that says it
+  /// could not. One commit also means one disk sync instead of one per day.
+  static Future<void> setDays(Map<String, PeriodDay?> changes) async {
+    if (changes.isEmpty) return;
+    final stamp = DateTime.now();
+    final write = <PeriodDay>[];
+    final remove = <String>[];
+    for (final e in changes.entries) {
+      final day = e.value;
+      if (day != null && day.hasData) {
+        write.add(day.copyWith(
+          createdAt: day.createdAt ?? _daysNotifier.value[e.key]?.createdAt ?? stamp,
+          updatedAt: stamp,
+        ));
+      } else if (_daysNotifier.value.containsKey(e.key)) {
+        remove.add(e.key);
+      }
+    }
+    try {
+      await db.AppDatabase.instance.transaction(() async {
+        for (final d in write) {
+          await _dao.upsertDay(d.toCompanion());
+        }
+        for (final id in remove) {
+          await _dao.deleteDay(id);
+        }
+      });
+    } catch (e) {
+      debugPrint('⚠️ PeriodService setDays failed, nothing changed: $e');
+      rethrow;
+    }
+    // Applied to the map as it is NOW, not as it was before the await: a day
+    // logged while the transaction ran must not be dropped from memory.
+    final map = Map<String, PeriodDay>.from(_daysNotifier.value);
+    for (final d in write) {
+      map[d.id] = d;
+    }
+    for (final id in remove) {
+      map.remove(id);
+    }
+    _daysNotifier.value = map;
+    await _recomputeCycles();
+    unawaited(PeriodReminderService.reschedule());
+  }
+
   /// How many days after the previous period began, if logging [flowIndex] on
   /// [date] would start a new period suspiciously soon (see [NewPeriodCheck]);
   /// null when there is nothing to ask. The sheet asks the user before saving.
@@ -207,6 +260,31 @@ class PeriodService {
   }
 
   // ---- Teardown ----------------------------------------------------------
+
+  /// Remove every logged day, every derived cycle and the cycle settings, from
+  /// the database and from memory, and take the reminders down with them.
+  ///
+  /// Rows are DELETED, not tombstoned: a tombstone keeps the dates and flow in
+  /// the database, and this is for the person who wants it gone rather than
+  /// hidden. Nothing can bring it back from elsewhere: period data has no cloud
+  /// copy (the sync switch that would create one is not reachable from any
+  /// screen), so there is no stale copy to be re-downloaded.
+  static Future<void> deleteAllCycleData() async {
+    final d = db.AppDatabase.instance;
+    try {
+      await d.delete(d.periodDays).go();
+      await d.delete(d.menstrualCycles).go();
+      await d.delete(d.periodSettingsTable).go();
+    } catch (e) {
+      debugPrint('⚠️ PeriodService delete all cycle data failed: $e');
+      rethrow;
+    }
+    _daysNotifier.value = {};
+    _cycles = const [];
+    _settings = PeriodSettings.defaults;
+    // Nothing left to predict from, so this cancels every reminder.
+    await PeriodReminderService.reschedule();
+  }
 
   /// Drop all in-memory state after a full data wipe (Drift rows removed
   /// elsewhere). Mirrors `WaterService.clearInMemory`.

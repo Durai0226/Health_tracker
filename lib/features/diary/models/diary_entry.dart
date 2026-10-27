@@ -1,5 +1,9 @@
-/// An immutable free-form journal entry. No rating/severity — just an
-/// optional title, a free-text body, and a timestamp.
+/// An immutable free-form journal entry: an optional title, a free-text body,
+/// a timestamp, and — both optional — how the writer was feeling and what the
+/// entry was about.
+///
+/// The mood is the Mood log's scale (0 = Great … 4 = Terrible) but is the
+/// entry's own: writing one here does not add a Mood log entry.
 class DiaryEntry {
   final String id;
   final String? dependentId;
@@ -8,6 +12,13 @@ class DiaryEntry {
   final DateTime entryAt;
   final DateTime createdAt;
 
+  /// 0 (Great) … 4 (Terrible), as in `moodRatingLabels`; null when not said.
+  final int? moodIndex;
+
+  /// Tag ids (see `MoodTags`). An id from a later version is kept and shown
+  /// title-cased rather than dropped.
+  final List<String> tags;
+
   DiaryEntry({
     required this.id,
     this.dependentId,
@@ -15,6 +26,8 @@ class DiaryEntry {
     required this.body,
     required this.entryAt,
     required this.createdAt,
+    this.moodIndex,
+    this.tags = const [],
   });
 
   /// A short preview for list rows — the title if set, else the first
@@ -52,6 +65,9 @@ class DiaryEntry {
     bool clearTitle = false,
     String? body,
     DateTime? entryAt,
+    int? moodIndex,
+    bool clearMood = false,
+    List<String>? tags,
   }) {
     return DiaryEntry(
       id: id,
@@ -60,6 +76,8 @@ class DiaryEntry {
       body: body ?? this.body,
       entryAt: entryAt ?? this.entryAt,
       createdAt: createdAt,
+      moodIndex: clearMood ? null : (moodIndex ?? this.moodIndex),
+      tags: tags ?? this.tags,
     );
   }
 
@@ -70,6 +88,8 @@ class DiaryEntry {
         'body': body,
         'entryAt': entryAt.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
+        'moodIndex': moodIndex,
+        'tags': tags,
       };
 
   factory DiaryEntry.fromJson(Map<String, dynamic> json) => DiaryEntry(
@@ -81,5 +101,8 @@ class DiaryEntry {
         createdAt: json['createdAt'] != null
             ? DateTime.parse(json['createdAt'] as String)
             : DateTime.parse(json['entryAt'] as String),
+        // Absent in a backup made before these existed.
+        moodIndex: (json['moodIndex'] as num?)?.toInt(),
+        tags: (json['tags'] as List?)?.whereType<String>().toList() ?? const [],
       );
 }

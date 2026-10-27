@@ -1,6 +1,10 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
+import '../../../core/health/visit_brief.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/utils/date_formats.dart';
 import '../models/doctor_pharmacy.dart';
+import 'visit_brief_link.dart';
 
 /// Schedules/cancels the one-time reminder notification for a single
 /// appointment, firing [Appointment.reminderMinutesBefore] minutes ahead of
@@ -22,6 +26,12 @@ class AppointmentReminderService {
   static int notificationIdFor(String appointmentId) =>
       appointmentId.hashCode & 0x7FFFFFFF;
 
+  /// The id of the "your visit brief is ready" notice for the same
+  /// appointment: its own, so cancelling or re-arming one never touches the
+  /// other.
+  static int briefNotificationIdFor(String appointmentId) =>
+      'visit-brief:$appointmentId'.hashCode & 0x7FFFFFFF;
+
   /// (Re)schedules [appointment]'s reminder, replacing any prior one for the
   /// same appointment. No-ops (after cancelling) when the reminder is off,
   /// the appointment is already marked done, or the fire time has passed.
@@ -35,6 +45,7 @@ class AppointmentReminderService {
     try {
       final id = notificationIdFor(appointment.id);
       await NotificationService().cancelNotification(id);
+      await _scheduleBrief(appointment);
       if (!appointment.reminderEnabled || appointment.isCompleted) return;
 
       final fireAt = appointment.dateTime
@@ -57,11 +68,37 @@ class AppointmentReminderService {
     }
   }
 
+  /// The notice two days ahead that the visit brief is ready. Opt-out is the
+  /// appointment's own reminder switch: with reminders off, so is this, and so
+  /// is it for a visit marked done.
+  ///
+  /// The words name the doctor and the day, no more — the same as the reminder
+  /// itself — and nothing about health.
+  static Future<void> _scheduleBrief(Appointment appointment) async {
+    final id = briefNotificationIdFor(appointment.id);
+    await NotificationService().cancelNotification(id);
+    if (!appointment.reminderEnabled || appointment.isCompleted) return;
+    final fireAt =
+        VisitBriefs.notifyAt(visitAt: appointment.dateTime, now: clock.now());
+    if (fireAt == null) return;
+    await NotificationService().scheduleNotification(
+      id: id,
+      title: 'Your visit brief is ready',
+      body: '${appointment.doctorName}, '
+          '${DateFormats.weekdayDayMonthShort.format(appointment.dateTime)}. '
+          'A summary to read before you go.',
+      scheduledDate: fireAt,
+      payload: VisitBriefLink.payloadFor(appointment.id),
+    );
+  }
+
   /// See [schedule]'s doc — best-effort, never throws.
   static Future<void> cancelById(String appointmentId) async {
     try {
       await NotificationService()
           .cancelNotification(notificationIdFor(appointmentId));
+      await NotificationService()
+          .cancelNotification(briefNotificationIdFor(appointmentId));
     } catch (e) {
       debugPrint('⚠️ Appointment reminder cancel failed: $e');
     }

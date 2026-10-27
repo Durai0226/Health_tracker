@@ -188,6 +188,20 @@ class VitalsAnalyzer {
   /// mmol/L → mg/dL (canonical integer).
   static int mmolToMgdl(double mmol) => (mmol * _mgdlPerMmol).round();
 
+  /// A glucose value as the person reads it: "126" in mg/dL, "7.0" in mmol/L.
+  static String formatGlucose(int mgdl, GlucoseUnit unit) =>
+      unit == GlucoseUnit.mmoll
+          ? mgdlToMmol(mgdl).toStringAsFixed(1)
+          : '$mgdl';
+
+  static String glucoseUnitLabel(GlucoseUnit unit) =>
+      unit == GlucoseUnit.mmoll ? 'mmol/L' : 'mg/dL';
+
+  /// The stored preference ('glucose_unit') as a unit; anything unrecognised is
+  /// mg/dL, the canonical one.
+  static GlucoseUnit glucoseUnitFromPref(Object? stored) =>
+      stored == 'mmoll' ? GlucoseUnit.mmoll : GlucoseUnit.mgdl;
+
   // ---- Aggregates (pure) ---------------------------------------------------
 
   /// Mean of ints, or null when empty.

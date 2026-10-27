@@ -38,6 +38,17 @@ class ParsedReminder {
   /// An explicit occurrence count from "5 times".
   final int? occurrenceLimit;
 
+  /// A heads-up from "30 min before" / "an hour before": how much earlier than
+  /// the event the reminder fires. When set, [time] is already that much
+  /// earlier and [eventTime] is the event itself.
+  final int? leadMinutes;
+
+  /// The event the heads-up is for, when [leadMinutes] is set.
+  final DateTime? eventTime;
+
+  /// "until done" / "keep reminding me": keep following up until it is acted on.
+  final bool untilDone;
+
   const ParsedReminder({
     required this.title,
     this.time,
@@ -49,7 +60,32 @@ class ParsedReminder {
     this.recurrenceRule,
     this.endsAt,
     this.occurrenceLimit,
+    this.leadMinutes,
+    this.eventTime,
+    this.untilDone = false,
   });
+
+  ParsedReminder copyWith({
+    DateTime? time,
+    int? leadMinutes,
+    DateTime? eventTime,
+    bool? untilDone,
+  }) =>
+      ParsedReminder(
+        title: title,
+        time: time ?? this.time,
+        repeat: repeat,
+        priority: priority,
+        categoryHint: categoryHint,
+        customDays: customDays,
+        durationMinutes: durationMinutes,
+        recurrenceRule: recurrenceRule,
+        endsAt: endsAt,
+        occurrenceLimit: occurrenceLimit,
+        leadMinutes: leadMinutes ?? this.leadMinutes,
+        eventTime: eventTime ?? this.eventTime,
+        untilDone: untilDone ?? this.untilDone,
+      );
 }
 
 

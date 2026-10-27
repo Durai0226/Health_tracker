@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'keyed_lock.dart';
+import 'queue_signal.dart';
 
 /// A tiny, isolate-safe hand-off queue for dose actions taken from a
 /// notification's action buttons ("Take" / "Skip").
@@ -25,26 +26,32 @@ class DoseActionQueue {
     required String medicineId,
     required DateTime scheduledTime,
     required String action,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList(_key) ?? <String>[];
-      list.add(jsonEncode({
-        'medicineId': medicineId,
-        'scheduledTime': scheduledTime.toIso8601String(),
-        'action': action,
-      }));
-      await prefs.setStringList(_key, list);
-      debugPrint('✓ Queued dose action: $action for $medicineId @ $scheduledTime');
-    } catch (e) {
-      debugPrint('⚠️ enqueue dose action failed: $e');
-    }
-  }
+  }) =>
+      KeyedLock.run(_key, () async {
+        try {
+          final prefs = await QueueSignal.freshPrefs();
+          final list = prefs.getStringList(_key) ?? <String>[];
+          list.add(jsonEncode({
+            'medicineId': medicineId,
+            'scheduledTime': scheduledTime.toIso8601String(),
+            'action': action,
+          }));
+          await prefs.setStringList(_key, list);
+          QueueSignal.notify();
+          debugPrint(
+              '✓ Queued dose action: $action for $medicineId @ $scheduledTime');
+        } catch (e) {
+          debugPrint('⚠️ enqueue dose action failed: $e');
+        }
+      });
 
   /// Read AND clear the queue (called by the main isolate on resume/open).
-  static Future<List<PendingDoseAction>> drain() async {
+  static Future<List<PendingDoseAction>> drain() =>
+      KeyedLock.run(_key, _drain);
+
+  static Future<List<PendingDoseAction>> _drain() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await QueueSignal.freshPrefs();
       final list = prefs.getStringList(_key) ?? const <String>[];
       if (list.isEmpty) return const [];
       await prefs.remove(_key);

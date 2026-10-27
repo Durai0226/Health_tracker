@@ -19,7 +19,12 @@ void main() {
 
   tearDown(() async => db.close());
 
-  DiaryEntry entry(String id, {String? title, String body = 'hello', String? dependentId}) =>
+  DiaryEntry entry(String id,
+          {String? title,
+          String body = 'hello',
+          String? dependentId,
+          int? mood,
+          List<String> tags = const []}) =>
       DiaryEntry(
         id: id,
         dependentId: dependentId,
@@ -27,6 +32,8 @@ void main() {
         body: body,
         entryAt: DateTime(2026, 1, 1, 20),
         createdAt: DateTime(2026, 1, 1, 20),
+        moodIndex: mood,
+        tags: tags,
       );
 
   group('DiaryEntry model', () {
@@ -61,6 +68,35 @@ void main() {
       expect(back.entryAt, e.entryAt);
     });
 
+    test('toJson/fromJson carries the mood and the tags', () {
+      final e = entry('d1', mood: 2, tags: ['walk', 'friends']);
+      final back = DiaryEntry.fromJson(e.toJson());
+      expect(back.moodIndex, 2);
+      expect(back.tags, ['walk', 'friends']);
+    });
+
+    test('a backup made before mood and tags existed reads as neither', () {
+      final old = entry('d1').toJson()
+        ..remove('moodIndex')
+        ..remove('tags');
+      final back = DiaryEntry.fromJson(old);
+      expect(back.moodIndex, isNull);
+      expect(back.tags, isEmpty);
+    });
+
+    test('a mistyped tags value is ignored rather than throwing', () {
+      final json = entry('d1').toJson()..['tags'] = ['walk', 7, null, 'rest'];
+      expect(DiaryEntry.fromJson(json).tags, ['walk', 'rest']);
+    });
+
+    test('copyWith: clearMood clears; leaving it out keeps it', () {
+      final e = entry('a', mood: 3, tags: ['work']);
+      expect(e.copyWith(clearMood: true).moodIndex, isNull);
+      expect(e.copyWith(title: 'x').moodIndex, 3);
+      expect(e.copyWith(title: 'x').tags, ['work']);
+      expect(e.copyWith(tags: const []).tags, isEmpty);
+    });
+
     test('copyWith clearTitle/clearDependentId actually clear (not a no-op)', () {
       final e = entry('a', title: 'x', dependentId: 'dep1');
       final cleared = e.copyWith(clearTitle: true, clearDependentId: true);
@@ -84,6 +120,56 @@ void main() {
       final all = await DiaryStorageService.getAll(scopeToActiveProfile: false);
       expect(all.where((e) => e.id == 'd1'), hasLength(1));
       expect(all.first.body, 'second');
+    });
+
+    test('the mood and tags survive storage', () async {
+      await DiaryStorageService.save(entry('d1', mood: 0, tags: ['walk', 'rest']),
+          stampActiveProfile: false);
+      final back = (await DiaryStorageService.getAll(scopeToActiveProfile: false))
+          .single;
+      expect(back.moodIndex, 0);
+      expect(back.tags, ['walk', 'rest']);
+    });
+
+    test('an entry with neither stores neither', () async {
+      await DiaryStorageService.save(entry('d1'), stampActiveProfile: false);
+      final row = (await db.diaryDao.getAll()).single;
+      expect(row.moodIndex, isNull);
+      expect(row.tagsJson, isNull,
+          reason: 'no tags is a null column, not the text "[]"');
+    });
+
+    test('a tags column that is not a list reads as no tags', () async {
+      await DiaryStorageService.save(entry('d1', tags: ['walk']),
+          stampActiveProfile: false);
+      await db.customStatement(
+          "UPDATE diary_entries SET tags_json = '{\"oops\": 1}'");
+      expect((await DiaryStorageService.getAll(scopeToActiveProfile: false))
+          .single
+          .tags, isEmpty);
+      await db.customStatement(
+          "UPDATE diary_entries SET tags_json = '[\"walk\", 7, null, \"rest\"]'");
+      expect((await DiaryStorageService.getAll(scopeToActiveProfile: false))
+          .single
+          .tags, ['walk', 'rest'],
+          reason: 'the strings are kept; what is not a string is dropped');
+      await db.customStatement("UPDATE diary_entries SET tags_json = 'not json'");
+      expect((await DiaryStorageService.getAll(scopeToActiveProfile: false))
+          .single
+          .tags, isEmpty);
+    });
+
+    test('mood and tags go through a backup and back', () async {
+      await DiaryStorageService.save(entry('d1', mood: 4, tags: ['family']),
+          stampActiveProfile: false);
+      final exported = await DiaryStorageService.exportJson();
+      await DiaryStorageService.delete('d1');
+
+      await DiaryStorageService.importJson(exported);
+      final back = (await DiaryStorageService.getAll(scopeToActiveProfile: false))
+          .single;
+      expect(back.moodIndex, 4);
+      expect(back.tags, ['family']);
     });
 
     test('delete removes the entry', () async {

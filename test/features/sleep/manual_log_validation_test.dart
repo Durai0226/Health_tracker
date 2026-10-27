@@ -162,15 +162,62 @@ void main() {
       });
     });
 
-    testWidgets('a wake time later today shows the reason and refuses to save',
+    testWidgets(
+        'before the usual wake time the sheet opens on LAST night, not on a '
+        'wake that has not happened', (tester) async {
+      await withClock(Clock.fixed(_now), () async {
+        await open(
+          tester,
+          // It is 09:30 and the usual wake is 23:00: "today's" wake is hours
+          // away. The sheet used to open on it anyway, showing "has not happened
+          // yet" with Save disabled — for the person logging a night in the
+          // small hours, which is exactly when someone does.
+          const SleepSchedule(
+              bedtimeHour: 15, bedtimeMinute: 0, wakeHour: 23, wakeMinute: 0),
+        );
+
+        expect(find.text('Yesterday'), findsOneWidget);
+        expect(find.textContaining('has not happened yet'), findsNothing);
+
+        await tester.tap(find.text('Save sleep'));
+        await tester.pumpAndSettle();
+        expect(find.text('Save sleep'), findsNothing,
+            reason: 'it saved, so the sheet closed');
+      });
+    });
+
+    testWidgets('after the usual wake time it opens on today, as it always did',
         (tester) async {
       await withClock(Clock.fixed(_now), () async {
         await open(
           tester,
-          // 22:00 → 23:00 on the wake DATE, which `_pickDate` pins to today.
           const SleepSchedule(
-              bedtimeHour: 22, bedtimeMinute: 0, wakeHour: 23, wakeMinute: 0),
+              bedtimeHour: 22, bedtimeMinute: 30, wakeHour: 7, wakeMinute: 0),
         );
+
+        expect(find.text('Today'), findsOneWidget);
+        expect(find.text('Yesterday'), findsNothing);
+      });
+    });
+
+    testWidgets(
+        'a wake time later today, chosen by hand, shows the reason and refuses '
+        'to save', (tester) async {
+      await withClock(Clock.fixed(_now), () async {
+        await open(
+          tester,
+          const SleepSchedule(
+              bedtimeHour: 15, bedtimeMinute: 0, wakeHour: 23, wakeMinute: 0),
+        );
+
+        // It opened on yesterday; the person moves it to today, where 23:00 is
+        // still ahead of the clock.
+        await tester.tap(find.text('Yesterday'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('10').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Set date'));
+        await tester.pumpAndSettle();
 
         expect(find.textContaining('has not happened yet'), findsOneWidget);
 

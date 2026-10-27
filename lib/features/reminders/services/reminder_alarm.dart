@@ -100,16 +100,29 @@ class ReminderArmRequest {
 
     var fireTime = reminder.scheduledTime;
     if (needsPerOccurrence) {
-      final next = ReminderHelper.nextOccurrenceFrom(
-        scheduledTime: reminder.scheduledTime,
-        repeatType: reminder.repeatType,
-        customDays: reminder.customDays,
-        recurrenceRule: reminder.recurrenceRule,
-        endsAt: reminder.endsAt,
-        isPaused: reminder.isPaused,
-      );
-      if (next == null) return null;
-      fireTime = next;
+      if (reminder.scheduledTime.isAfter(clock.now())) {
+        // Its own time has not come yet, so THAT is the next occurrence.
+        //
+        // `nextOccurrenceFrom` answers "the first occurrence strictly AFTER the
+        // one that is current" — right for rolling forward from a tick or from
+        // a stale anchor, wrong here. Asked about a reminder due at 18:00 today
+        // it said tomorrow, so a daily-until reminder never fired on its first
+        // day, a Smart Add "every 3 days" was armed three days late, and after
+        // every tick the next occurrence was skipped in the same way.
+        final end = reminder.endsAt;
+        if (end != null && reminder.scheduledTime.isAfter(end)) return null;
+      } else {
+        final next = ReminderHelper.nextOccurrenceFrom(
+          scheduledTime: reminder.scheduledTime,
+          repeatType: reminder.repeatType,
+          customDays: reminder.customDays,
+          recurrenceRule: reminder.recurrenceRule,
+          endsAt: reminder.endsAt,
+          isPaused: reminder.isPaused,
+        );
+        if (next == null) return null;
+        fireTime = next;
+      }
     }
 
     return ReminderArmRequest(
@@ -202,6 +215,8 @@ class NotificationReminderAlarm implements ReminderAlarm {
       // forwarding it is why every reminder — "Quiet" included — was armed
       // alarm-grade and full-screen.
       escalation: r.escalation,
+      // Which reminder this is, so its notification can carry Done and Later.
+      reminderId: r.reminderId,
     );
 
     // The Apple Health Medications pattern: a second notification if nothing is

@@ -39,7 +39,7 @@
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>We need notification access to remind you about your medicines, health checks, and fitness activities on time.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>DailyMinder reads your steps and sleep from Apple Health to show your activity and rest trends. This data stays on your device unless you turn on cloud sync in Settings.</string>
+	<string>DailyMinder reads your steps, sleep, heart rate, workouts and body readings from Apple Health to show your activity and rest trends, and — only if you tap Import on the Cycle screen — your past periods. This data stays on your device unless you turn on cloud sync in Settings.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>DailyMinder can save manually logged steps, sleep, blood pressure, blood glucose, and weight readings back to Apple Health.</string>
 	<key>NSMotionUsageDescription</key>

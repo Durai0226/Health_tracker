@@ -253,6 +253,7 @@ class HealthDataService {
   static List<HealthDataType> allReadTypesFor(bool android) => [
         ...readTypesFor(android),
         ...biometricTypesFor(android),
+        ...cycleTypesFor(android),
       ];
 
   static const String _biometricsPrefKey = 'health_biometrics_connected';
@@ -403,6 +404,88 @@ class HealthDataService {
     } catch (e) {
       debugPrint('HealthDataService.readWorkouts failed: $e');
       return [];
+    }
+  }
+
+  // ---- cycle history (menstrual flow, read) ----------------------------------
+  //
+  // A separate, opt-in read scope — offered from the Period screens when someone
+  // chooses to bring their past periods in, never at first launch. One type on
+  // both platforms; kept behind a per-platform function like every other scope
+  // so a platform that needs something different later has the place to say so.
+
+  static const String _cyclePrefKey = 'health_cycle_connected';
+
+  static List<HealthDataType> cycleTypesFor(bool android) =>
+      const [HealthDataType.MENSTRUATION_FLOW];
+
+  static List<HealthDataType> get cycleTypes => cycleTypesFor(Platform.isAndroid);
+
+  /// Whether menstrual flow may be read. iOS never discloses READ authorization,
+  /// so it falls back to the remembered answer.
+  Future<bool> hasCyclePermission() async {
+    try {
+      await _ensureConfigured();
+      final has = await _health.hasPermissions(cycleTypes,
+          permissions: _readAccessFor(cycleTypes));
+      if (has != null) return has;
+      return await _readFlag(_cyclePrefKey);
+    } catch (e) {
+      debugPrint('HealthDataService.hasCyclePermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Ask to read menstrual flow. True only when the grant is confirmed where the
+  /// platform will say.
+  Future<bool> requestCyclePermission() async {
+    try {
+      await _ensureConfigured();
+      final granted = await _health.requestAuthorization(cycleTypes,
+          permissions: _readAccessFor(cycleTypes));
+      final ok = granted == true;
+      await _writeFlag(_cyclePrefKey, ok);
+      return ok;
+    } catch (e) {
+      debugPrint('HealthDataService.requestCyclePermission failed: $e');
+      return false;
+    }
+  }
+
+  /// Menstrual flow samples in [from]..[to], or null when the read itself failed.
+  ///
+  /// Null rather than empty, unlike the other reads here: an import that cannot
+  /// tell "Health Connect has no periods" from "the read threw" would tell the
+  /// person they have none.
+  Future<List<HealthDataPoint>?> readCycleFlow(
+      DateTime from, DateTime to) async {
+    try {
+      await _ensureConfigured();
+      return await _health.getHealthDataFromTypes(
+          startTime: from, endTime: to, types: cycleTypes);
+    } catch (e) {
+      debugPrint('HealthDataService.readCycleFlow failed: $e');
+      return null;
+    }
+  }
+
+  /// Whether data older than about a month can be read, asking once if it can.
+  ///
+  /// Health Connect hands an app only the 30 days before it was first granted
+  /// access unless the person also allows history, so without this "bring in my
+  /// past periods" would quietly bring in one. Older Health Connect versions have
+  /// no such grant and cannot be asked; HealthKit has no such window. False means
+  /// the import will only reach back about a month, and says so.
+  Future<bool> ensureCycleHistoryAccess() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      await _ensureConfigured();
+      if (await _health.isHealthDataHistoryAuthorized()) return true;
+      if (!await _health.isHealthDataHistoryAvailable()) return false;
+      return await _health.requestHealthDataHistoryAuthorization();
+    } catch (e) {
+      debugPrint('HealthDataService.ensureCycleHistoryAccess failed: $e');
+      return false;
     }
   }
 

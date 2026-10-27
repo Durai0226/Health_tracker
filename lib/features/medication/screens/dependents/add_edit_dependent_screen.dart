@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/services/emergency_contact.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/dependent_profile.dart';
 import '../../services/medicine_storage_service.dart';
@@ -21,6 +22,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
   late TextEditingController _nameController;
   late TextEditingController _bloodTypeController;
   late TextEditingController _allergiesController;
+  late TextEditingController _conditionsController;
   late TextEditingController _notesController;
   late TextEditingController _emergencyContactController;
   late TextEditingController _emergencyPhoneController;
@@ -49,9 +51,15 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
     _nameController = TextEditingController(text: d?.name);
     _bloodTypeController = TextEditingController(text: d?.bloodType);
     _allergiesController = TextEditingController(text: d?.allergies?.join(', '));
+    _conditionsController = TextEditingController(text: d?.conditions?.join(', '));
     _notesController = TextEditingController(text: d?.notes);
-    _emergencyContactController = TextEditingController(text: d?.emergencyContact);
-    _emergencyPhoneController = TextEditingController(text: d?.emergencyPhone);
+    // Your own contact is the one the setup checklist and the emergency card
+    // read ([EmergencyContact]); this form shows and writes that one.
+    final own = (d?.isSelf ?? false) ? EmergencyContact.get() : null;
+    _emergencyContactController =
+        TextEditingController(text: own?.name ?? d?.emergencyContact);
+    _emergencyPhoneController =
+        TextEditingController(text: own?.phone ?? d?.emergencyPhone);
     _relationship = d?.relationship ?? RelationshipType.child;
     _dateOfBirth = d?.dateOfBirth;
     _dobController = TextEditingController(text: _formatDob(_dateOfBirth));
@@ -63,6 +71,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
     _nameController.dispose();
     _bloodTypeController.dispose();
     _allergiesController.dispose();
+    _conditionsController.dispose();
     _notesController.dispose();
     _emergencyContactController.dispose();
     _emergencyPhoneController.dispose();
@@ -97,8 +106,9 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
   static String _formatDob(DateTime? d) =>
       d == null ? '' : DateFormats.dayMonthYear.format(d);
 
-  List<String>? _parseAllergies() {
-    final raw = _allergiesController.text
+  /// "Penicillin, Peanuts" as a list; null when nothing is written.
+  static List<String>? _parseList(TextEditingController c) {
+    final raw = c.text
         .split(',')
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
@@ -112,7 +122,7 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // This form has no controls for weight/height/conditions/
+      // This form has no controls for weight/height/
       // primaryDoctorId/insuranceInfo/avatarPath at all — carry them forward
       // from the existing record on an edit, or every edit through this
       // screen (even just correcting a name) silently wiped them to null,
@@ -129,8 +139,8 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
         gender: _gender,
         weight: existing?.weight,
         height: existing?.height,
-        allergies: _parseAllergies(),
-        conditions: existing?.conditions,
+        allergies: _parseList(_allergiesController),
+        conditions: _parseList(_conditionsController),
         emergencyContact: _emergencyContactController.text.trim().isEmpty
             ? null
             : _emergencyContactController.text.trim(),
@@ -151,6 +161,16 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
         await MedicineCleanStorageService.updateDependent(dependent);
       } else {
         await MedicineCleanStorageService.addDependent(dependent);
+      }
+      // Your own contact is read from [EmergencyContact], so what is written
+      // here goes there as well; emptying both fields removes it.
+      if (_isEditingSelf) {
+        if (dependent.emergencyPhone == null) {
+          await EmergencyContact.clear();
+        } else {
+          await EmergencyContact.save(
+              name: dependent.emergencyContact ?? '', phone: dependent.emergencyPhone!);
+        }
       }
 
       if (mounted) {
@@ -321,6 +341,16 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                         accent: med,
                         textCapitalization: TextCapitalization.words,
                       ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppTextField(
+                        controller: _conditionsController,
+                        label: 'Conditions',
+                        hint: 'Asthma, Type 2 diabetes',
+                        helperText: 'Comma-separated — shown on the emergency card',
+                        prefixIcon: Symbols.stethoscope_rounded,
+                        accent: med,
+                        textCapitalization: TextCapitalization.words,
+                      ),
                       const SizedBox(height: AppSpacing.xl),
 
                       SectionHeader(
@@ -344,6 +374,13 @@ class _AddEditDependentScreenState extends State<AddEditDependentScreen> {
                         prefixIcon: Symbols.phone_rounded,
                         accent: med,
                         keyboardType: TextInputType.phone,
+                        // A number to ring: what cannot be dialled is not saved
+                        // as one.
+                        validator: (v) => v == null ||
+                                v.trim().isEmpty ||
+                                EmergencyContact.isDialable(v)
+                            ? null
+                            : 'Enter a phone number',
                       ),
                       const SizedBox(height: AppSpacing.xl),
 

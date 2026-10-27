@@ -25,9 +25,12 @@ void main() {
     });
 
     test('quiet and normal stay off the alarm channel entirely', () {
-      expect(ReminderEscalation.gentle.kind, ReminderKind.gentle);
+      expect(ReminderEscalation.gentle.kind, ReminderKind.quiet);
       expect(ReminderEscalation.standard.kind, ReminderKind.gentle);
-      // The difference between those two is follow-up behaviour, not loudness.
+      expect(ReminderEscalation.gentle.kind.isAlarmGrade, isFalse);
+      expect(ReminderEscalation.standard.kind.isAlarmGrade, isFalse);
+      // Neither follows up: Quiet differs from Normal in loudness, which is what
+      // its label says.
       expect(ReminderEscalation.gentle.hasFollowUp, isFalse);
       expect(ReminderEscalation.standard.hasFollowUp, isFalse);
     });

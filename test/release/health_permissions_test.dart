@@ -58,6 +58,49 @@ void main() {
     });
   });
 
+  group('cycle history', () {
+    test('the manifest declares the read and the history grant it needs', () {
+      expect(manifest, contains(perm('READ_MENSTRUATION')),
+          reason: 'importing past periods reads MenstruationFlowRecord');
+      // Without this, Health Connect shows an app only the 30 days before its
+      // first grant: "import two years of periods" would quietly bring in one
+      // month, and nothing would say so.
+      expect(manifest, contains(perm('READ_HEALTH_DATA_HISTORY')),
+          reason: 'older periods are invisible without the history grant');
+    });
+
+    test('it is read-only: menstrual data is never written back', () {
+      expect(manifest, isNot(contains('WRITE_MENSTRUATION')));
+    });
+
+    test('the service asks for the history grant before it reads', () {
+      expect(service, contains('isHealthDataHistoryAuthorized'));
+      expect(service, contains('requestHealthDataHistoryAuthorization'));
+    });
+
+    test('the privacy screen, the policy and the Play declaration all say so', () {
+      final privacy =
+          File('lib/features/settings/screens/health_privacy_screen.dart')
+              .readAsStringSync();
+      expect(privacy.toLowerCase(), contains('past periods'),
+          reason: 'the READ_MENSTRUATION disclosure is missing');
+
+      final checklist = File('docs/release-checklist.md').readAsStringSync();
+      expect(checklist, contains('`READ_MENSTRUATION`'));
+      expect(checklist, contains('`READ_HEALTH_DATA_HISTORY`'));
+
+      final policy = File('docs/privacy-policy.md').readAsStringSync();
+      expect(policy.toLowerCase(), contains('past period days'));
+    });
+
+    test('the iPhone purpose string names the cycle read', () {
+      final plist = File('ios/Runner/Info.plist').readAsStringSync();
+      final start = plist.indexOf('NSHealthShareUsageDescription');
+      final end = plist.indexOf('</string>', start);
+      expect(plist.substring(start, end).toLowerCase(), contains('past periods'));
+    });
+  });
+
   group('every declared write permission is one the app actually writes', () {
     test('the declared write set is exactly what is expected', () {
       // Declaring a health permission the app never uses is a Play Console

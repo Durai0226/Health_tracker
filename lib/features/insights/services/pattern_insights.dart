@@ -29,6 +29,24 @@ class PatternInsights {
     'correlation_hydration_adherence',
   };
 
+  /// "What goes with better days" makes one insight per tag, so its ids are
+  /// `mood_tag_walk`, `mood_tag_short_night` and so on: a family, not a list.
+  static const String moodTagPrefix = 'mood_tag_';
+
+  /// Blood sugar by meal and hour makes one insight per group
+  /// (`glucose_pattern_after_breakfast_high`): a family as well.
+  static const String glucosePrefix = 'glucose_pattern_';
+
+  /// What goes with longer and shorter nights, one insight per factor
+  /// (`sleep_mover_late_caffeine`).
+  static const String sleepMoverPrefix = 'sleep_mover_';
+
+  static bool isPattern(String id) =>
+      ids.contains(id) ||
+      id.startsWith(moodTagPrefix) ||
+      id.startsWith(glucosePrefix) ||
+      id.startsWith(sleepMoverPrefix);
+
   /// How many are shown, so the section stays a glance and not a feed.
   static const int maxShown = 6;
 
@@ -40,7 +58,7 @@ class PatternInsights {
   static PatternGroups group(Iterable<Insight> insights,
       {Set<String> hidden = const {}}) {
     final picked = insights
-        .where((i) => ids.contains(i.id) && !hidden.contains(i.id))
+        .where((i) => isPattern(i.id) && !hidden.contains(i.id))
         .toList()
       ..sort((a, b) => b.rank.compareTo(a.rank));
     final capped = picked.take(maxShown).toList();

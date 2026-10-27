@@ -6,6 +6,7 @@ import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
 import 'nunito_add_edit_appointment_screen.dart';
+import 'visit_brief_screen.dart';
 
 class NunitoAppointmentListScreen extends StatefulWidget {
   const NunitoAppointmentListScreen({super.key});
@@ -54,6 +55,16 @@ class _NunitoAppointmentListScreenState
       ),
     );
     if (result == true) _load();
+  }
+
+  void _openBrief(Appointment appointment) {
+    _hapticService.light();
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => VisitBriefScreen(appointment: appointment),
+      ),
+    );
   }
 
   Future<void> _toggleCompleted(Appointment appointment) async {
@@ -244,6 +255,16 @@ class _NunitoAppointmentListScreenState
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+                  // A summary to read before the visit, and to hand over at it.
+                  if (!a.isCompleted && a.isUpcoming)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => _openBrief(a),
+                        icon: const Icon(Symbols.summarize_rounded, size: 18),
+                        label: const Text('Visit brief'),
+                      ),
+                    ),
                 ],
               ),
             ),

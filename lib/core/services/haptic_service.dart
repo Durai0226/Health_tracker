@@ -213,6 +213,52 @@ class HapticService extends ChangeNotifier {
   Map<HapticFeature, bool> get featureEnabled => Map.unmodifiable(_featureEnabled);
   Map<HapticFeature, HapticIntensity> get featureIntensity => Map.unmodifiable(_featureIntensity);
 
+  /// The settings as stored, for a backup; null while they have never been
+  /// changed.
+  static Future<Map<String, dynamic>?> exportJson() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsKey);
+      if (raw == null) return null;
+      final decoded = jsonDecode(raw);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (e) {
+      debugPrint('Error exporting haptic settings: $e');
+      return null;
+    }
+  }
+
+  /// Restore settings from a backup, and apply them now.
+  ///
+  /// Only what makes sense is kept: an intensity outside the scale, or a
+  /// feature this build does not know, is dropped rather than stored to fail
+  /// every launch after it.
+  static Future<void> importJson(Map<String, dynamic> json) async {
+    final intensities = HapticIntensity.values.length;
+    int? intensity(Object? v) => v is int && v >= 0 && v < intensities ? v : null;
+
+    final features = <String, Map<String, dynamic>>{};
+    final given = json['features'];
+    if (given is Map) {
+      for (final feature in HapticFeature.values) {
+        final f = given[feature.name];
+        if (f is! Map) continue;
+        features[feature.name] = {
+          if (f['enabled'] is bool) 'enabled': f['enabled'],
+          if (intensity(f['intensity']) case final i?) 'intensity': i,
+        };
+      }
+    }
+    final clean = <String, dynamic>{
+      if (json['enabled'] is bool) 'enabled': json['enabled'],
+      if (intensity(json['globalIntensity']) case final i?) 'globalIntensity': i,
+      'features': features,
+    };
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, jsonEncode(clean));
+    await HapticService()._loadSettings();
+  }
+
   /// Initialize the haptic service
   Future<void> init() async {
     try {

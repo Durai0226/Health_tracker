@@ -1,9 +1,11 @@
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/delete_all_data.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import 'notification_settings_screen.dart';
@@ -18,6 +20,7 @@ import '../../medication/screens/vitals/vitals_reminder_settings_screen.dart';
 import '../../medication/screens/conditions/condition_library_screen.dart';
 import 'reminders_hub_screen.dart';
 import '../../medication/screens/dependents/dependent_list_screen.dart';
+import '../../home/screens/emergency_card_screen.dart';
 import 'security_settings_screen.dart';
 import 'health_privacy_screen.dart';
 import '../../backup/services/backup_service.dart' as local_backup;
@@ -25,7 +28,9 @@ import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
 import '../../onboarding/screens/welcome_screen.dart';
 import 'early_access_screen.dart';
+import '../widgets/delete_all_choice_sheet.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/services/cloud_sync_runner.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -142,6 +147,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _deleteAllData() async {
+    // With cloud sync on, a wipe that leaves the sync switched on is undone at the
+    // next start: the sync brings the cloud copy straight back. So the question
+    // is how far to go, not just whether.
+    final cloudAtStake = DeleteAllData.cloudCopyAtStake(
+      syncOn: CleanStorageService.cloudSyncEnabled,
+      signedIn: _authService.isAuthenticated,
+    );
+    final scope = cloudAtStake
+        ? await DeleteAllChoiceSheet.show(context)
+        : await _confirmDeviceOnlyDelete();
+    if (scope == null || !mounted) return;
+
+    setState(() => _isClearing = true);
+    try {
+      final error = await DeleteAllData.run(
+        scope: scope,
+        cloudCopyAtStake: cloudAtStake,
+        deleteCloudCopy: _authService.deleteCloudCopy,
+        turnSyncOff: () => CleanStorageService.setCloudSyncEnabled(false),
+        wipeLocal: _wipeLocal,
+      );
+      if (!mounted) return;
+      if (error != null) {
+        _showResultSnack(error, isError: true);
+        return;
+      }
+      _showResultSnack(
+          DeleteAllData.doneMessage(scope: scope, cloudCopyAtStake: cloudAtStake),
+          isError: false);
+    } catch (e) {
+      if (mounted) _showResultSnack('Delete failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isClearing = false);
+    }
+  }
+
+  /// The plain confirmation, for a device with no cloud copy to deal with.
+  Future<DeleteAllScope?> _confirmDeviceOnlyDelete() async {
     final confirm = await ConfirmationBottomSheet.show(
       context: context,
       title: 'Delete all data?',
@@ -153,20 +196,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       icon: Symbols.delete_forever_rounded,
       isDangerous: true,
     );
-    if (confirm != true || !mounted) return;
+    return confirm == true ? DeleteAllScope.deviceOnly : null;
+  }
 
-    setState(() => _isClearing = true);
-    try {
-      // Clears the in-memory caches, then the persistent Drift rows / focus prefs.
-      await CleanStorageService.clearAllData();
-      await CleanStorageService.clearAllPersistentData();
-      if (!mounted) return;
-      _showResultSnack('All data deleted.', isError: false);
-    } catch (e) {
-      if (mounted) _showResultSnack('Delete failed: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isClearing = false);
-    }
+  /// Clears the in-memory caches, then the persistent Drift rows / focus prefs.
+  Future<void> _wipeLocal() async {
+    await CleanStorageService.clearAllData();
+    await CleanStorageService.clearAllPersistentData();
   }
 
   void _showResultSnack(String message, {required bool isError}) {
@@ -283,6 +319,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             context,
                             MaterialPageRoute(
                                 builder: (_) => const DependentListScreen())),
+                      ),
+                      AppListTile(
+                        icon: Symbols.medical_information_rounded,
+                        iconColor: ext.mark(ext.error),
+                        title: 'Emergency card',
+                        subtitle: 'Allergies, medicines and who to call',
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const EmergencyCardScreen())),
                       ),
                     ],
                   ),
@@ -461,8 +507,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           await CleanStorageService.setCloudSyncEnabled(v);
                           if (!mounted) return;
                           setState(() => _cloudSyncEnabled = v);
+                          // Switching it on used to do nothing until the app was
+                          // next started. Start now, in the background.
+                          if (v) unawaited(CloudSyncRunner.maybeSync(force: true));
                           context.toastSuccess(v
-                              ? 'Cloud sync on'
+                              ? 'Cloud sync on — syncing now'
                               : 'Cloud sync off — data stays on this device');
                         },
                       ),

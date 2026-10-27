@@ -406,7 +406,6 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
   /// theme's `dragHandleColor` is a quiet one. AppBottomSheet owns all three,
   /// plus the keyboard inset and the Material that lets rows ink.
   void _showCreateTagSheet() {
-    final nameController = TextEditingController();
     Color selectedColor = FocusTag.availableColors.first;
     String? selectedEmoji;
 
@@ -415,7 +414,8 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
       title: 'Create Custom Tag',
       icon: Symbols.label_rounded,
       accent: AppColorsExt.of(context).focus,
-      builder: (sheetContext) => StatefulBuilder(
+      builder: (sheetContext) => _WithTextController(
+       builder: (sheetContext, nameController) => StatefulBuilder(
         builder: (sheetContext, setModalState) {
           final ext = AppColorsExt.of(sheetContext);
           final tt = Theme.of(sheetContext).textTheme;
@@ -521,8 +521,9 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
             ],
           );
         },
+       ),
       ),
-    ).whenComplete(nameController.dispose); // dispose the sheet controller
+    );
   }
 
   void _showTagDetails(FocusTag tag) {
@@ -578,9 +579,37 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              label: 'Rename',
+              leadingIcon: Symbols.edit_rounded,
+              variant: AppButtonVariant.tonal,
+              accent: ext.focus,
+              fullWidth: true,
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _showRenameSheet(tag);
+              },
+            ),
           ],
         );
       },
+    );
+  }
+
+  /// Rename a tag. Stays open with the reason when the name cannot be used, so
+  /// what was typed is not lost.
+  void _showRenameSheet(FocusTag tag) {
+    AppBottomSheet.show(
+      context,
+      title: 'Rename tag',
+      icon: Symbols.edit_rounded,
+      accent: AppColorsExt.of(context).focus,
+      builder: (sheetContext) => _RenameTagForm(
+        initial: tag.name,
+        rename: (name) => _tagService.renameTag(tag.id, name),
+        onDone: () => Navigator.pop(sheetContext),
+      ),
     );
   }
 
@@ -605,5 +634,109 @@ class _CustomTagsScreenState extends State<CustomTagsScreen> {
     );
     if (confirmed != true) return;
     await _tagService.deleteTag(tag.id);
+  }
+}
+
+/// A text controller owned by a sheet's own State.
+///
+/// Both tag sheets used to create the controller in the caller and dispose it in
+/// `whenComplete`, which runs the moment the sheet is popped — before its exit
+/// animation has finished. The `TextField` was still in the tree for those
+/// frames, and "A TextEditingController was used after being disposed" followed.
+/// A State disposes at unmount, which is after the transition.
+class _WithTextController extends StatefulWidget {
+  const _WithTextController({required this.builder});
+
+  final Widget Function(BuildContext context, TextEditingController controller)
+      builder;
+
+  @override
+  State<_WithTextController> createState() => _WithTextControllerState();
+}
+
+class _WithTextControllerState extends State<_WithTextController> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _controller);
+}
+
+/// The rename sheet's form. Its own State holds the controller (see
+/// [_WithTextController] for why) and the reason a name was refused, so neither
+/// is lost when the sheet rebuilds around a keyboard.
+class _RenameTagForm extends StatefulWidget {
+  const _RenameTagForm(
+      {required this.initial, required this.rename, required this.onDone});
+
+  final String initial;
+  final Future<TagRename> Function(String name) rename;
+  final VoidCallback onDone;
+
+  @override
+  State<_RenameTagForm> createState() => _RenameTagFormState();
+}
+
+class _RenameTagFormState extends State<_RenameTagForm> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final result = await widget.rename(_controller.text);
+    if (!mounted) return;
+    switch (result) {
+      case TagRename.renamed:
+      case TagRename.unchanged:
+      case TagRename.notFound:
+        widget.onDone();
+      case TagRename.empty:
+        setState(() => _error = 'Give the tag a name.');
+      case TagRename.duplicate:
+        setState(() => _error = 'You already have a tag with that name.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: (_) {
+            if (_error != null) setState(() => _error = null);
+          },
+          onSubmitted: (_) => _save(),
+          decoration: InputDecoration(
+            labelText: 'Tag Name',
+            errorText: _error,
+            border: const OutlineInputBorder(borderRadius: AppRadius.brMd),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(
+          label: 'Save',
+          fullWidth: true,
+          accent: ext.focus,
+          onPressed: _save,
+        ),
+      ],
+    );
   }
 }

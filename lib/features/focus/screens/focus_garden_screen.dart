@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../models/focus_coins.dart';
 import '../models/focus_plant.dart';
+import '../services/coins_service.dart';
 import '../services/focus_service.dart';
 import '../../../core/utils/calendar_day.dart';
 import 'package:clock/clock.dart';
@@ -13,20 +15,25 @@ class FocusGardenScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final focusService = FocusService();
+    final coinsService = CoinsService();
     
     return Scaffold(
       backgroundColor: AppColorsExt.of(context).background,
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: focusService,
+          // Both: a tree added with coins changes the garden without a session.
+          listenable: Listenable.merge([focusService, coinsService]),
           builder: (context, _) {
             final garden = focusService.garden;
             final groupedByDate = _groupPlantsByDate(garden);
+            // Newest first, like the days below them.
+            final trees = [...coinsService.coins.plantedTrees]
+              ..sort((a, b) => b.plantedAt.compareTo(a.plantedAt));
             
             return CustomScrollView(
               slivers: [
-                _buildAppBar(context, garden),
-                if (garden.isEmpty)
+                _buildAppBar(context, garden, trees.length),
+                if (garden.isEmpty && trees.isEmpty)
                   // hasScrollBody: false sizes the sliver to max(remaining
                   // space, the empty state's own height) instead of forcing it
                   // into the leftover viewport — at 200% text the illustration
@@ -42,11 +49,16 @@ class FocusGardenScreen extends StatelessWidget {
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
+                          if (trees.isNotEmpty) {
+                            if (index == 0) return _buildTreesSection(context, trees);
+                            index -= 1;
+                          }
                           final date = groupedByDate.keys.toList()[index];
                           final plants = groupedByDate[date]!;
                           return _buildDateSection(context, date, plants);
                         },
-                        childCount: groupedByDate.length,
+                        childCount:
+                            groupedByDate.length + (trees.isEmpty ? 0 : 1),
                       ),
                     ),
                   ),
@@ -58,7 +70,7 @@ class FocusGardenScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, List<FocusPlant> garden) {
+  Widget _buildAppBar(BuildContext context, List<FocusPlant> garden, int trees) {
     final alivePlants = garden.where((p) => p.isAlive).length;
     final deadPlants = garden.where((p) => !p.isAlive).length;
 
@@ -127,7 +139,8 @@ class FocusGardenScreen extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
-                              '$alivePlants alive • $deadPlants withered',
+                              '$alivePlants alive • $deadPlants withered'
+                              '${trees == 0 ? '' : ' • $trees added'}',
                               style: Theme.of(context).textTheme.bodyMedium,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -184,6 +197,117 @@ class FocusGardenScreen extends StatelessWidget {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  /// The trees added with coins.
+  ///
+  /// Redeeming spent the coins and wrote the tree down, and this screen only drew
+  /// what the sessions grew — so the garden a person had paid into had none of
+  /// it in it.
+  Widget _buildTreesSection(BuildContext context, List<RealTreePlanting> trees) {
+    final tt = Theme.of(context).textTheme;
+    final ext = AppColorsExt.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Added with coins',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.headlineSmall,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Flexible(
+              child: Text(
+                '${trees.length} ${trees.length == 1 ? 'tree' : 'trees'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppListGroup(
+          children: [for (final tree in trees) _buildTreeRow(context, tree)],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+      ],
+    );
+  }
+
+  /// One tree added with coins, on the same anatomy as a session's row.
+  Widget _buildTreeRow(BuildContext context, RealTreePlanting tree) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppRowMetrics.minHeight),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppRowMetrics.horizontalPadding,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: AppRowMetrics.iconBox,
+              height: AppRowMetrics.iconBox,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tree.treeType.color
+                    .withValues(alpha: ext.isDark ? 0.22 : 0.12),
+                borderRadius: AppRadius.brMd,
+              ),
+              child: Text(tree.treeType.emoji, // emoji-content-ok: the species IS the garden metaphor
+                  style: const TextStyle(fontSize: 20)),
+            ),
+            const SizedBox(width: AppRowMetrics.iconGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tree.treeType.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.titleSmall?.copyWith(color: ext.textPrimary),
+                  ),
+                  Text(
+                    '${DateFormats.dayLabel(tree.plantedAt, reference: clock.now())}'
+                    ' · ${DateFormats.time.format(tree.plantedAt)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w400,
+                      color: ext.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppRowMetrics.trailingGap),
+            // The cost shrinks to its slot rather than pushing the name out: at
+            // large text "550 coins" is the widest thing in the row.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${tree.coinsCost} coins',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: tt.titleSmall?.copyWith(color: ext.textSecondary),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

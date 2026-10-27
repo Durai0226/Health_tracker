@@ -27,6 +27,9 @@ import '../../../core/health/streak_engine.dart';
 import '../../../core/health/adaptive_timing.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
+import 'medicine_history_screen.dart';
+import '../widgets/dose_edit_flow.dart';
+import '../widgets/dose_log_row.dart';
 
 class NunitoMedicationDetailScreen extends StatefulWidget {
   final EnhancedMedicine medicine;
@@ -60,6 +63,9 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
     with SingleTickerProviderStateMixin {
   late EnhancedMedicine _medicine;
   List<MedicineLog> _recentLogs = [];
+
+  /// Every dose on record, for "Show all" — `_recentLogs` holds only the latest.
+  int _totalDoses = 0;
   bool _isLoading = true;
   Map<String, dynamic> _stats = {};
 
@@ -139,6 +145,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         ..sort((a, b) => b.scheduledTime.compareTo(a.scheduledTime));
       _recentLogs =
           allLogs.length > 10 ? allLogs.sublist(0, 10) : List.of(allLogs);
+      _totalDoses = allLogs.length;
 
       // Adherence = taken / SCHEDULED doses, never taken / number-of-log-rows:
       // log rows are outcomes, not the doses that were due, so the old ratio
@@ -243,14 +250,11 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
         .toList();
 
     List<String> allergies = const [];
-    if (_medicine.dependentId != null) {
-      try {
-        final deps = await MedicineCleanStorageService.getAllDependents();
-        final profile =
-            deps.where((d) => d.id == _medicine.dependentId).firstOrNull;
-        allergies = profile?.allergies ?? const [];
-      } catch (_) {/* best-effort */}
-    }
+    try {
+      final profile =
+          await MedicineCleanStorageService.profileFor(_medicine.dependentId);
+      allergies = profile?.allergies ?? const [];
+    } catch (_) {/* best-effort */}
 
     final warnings = <MedSafetyWarning>[
       ...MedSafetyChecker.checkAllergies(
@@ -1120,7 +1124,7 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 Icon(Symbols.warning_amber_rounded,
                     color: ext.mark(headerSwatch), size: 20),
                 const SizedBox(width: AppSpacing.sm),
-                Text('Interactions & Cautions', style: tt.titleLarge),
+                Expanded(child: Text('Interactions & Cautions', style: tt.titleLarge)),
               ],
             ),
             if (_interactions.isNotEmpty) ...[
@@ -1285,7 +1289,10 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
                 Icon(Symbols.health_and_safety_rounded,
                     color: ext.mark(ext.warning), size: 20),
                 const SizedBox(width: AppSpacing.sm),
-                Text('Warnings & Side Effects', style: tt.titleLarge),
+                // Expanded: at a large text size the title outran the card. This
+                // card appears only when there is a warning, so no layout test
+                // had ever drawn it.
+                Expanded(child: Text('Warnings & Side Effects', style: tt.titleLarge)),
               ],
             ),
             // AI safety checks (allergy conflict / duplicate therapy) first —
@@ -1368,76 +1375,28 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          ...(_recentLogs.take(5).map((log) => _buildLogItem(log))),
+          ...(_recentLogs.take(5).map((log) => DoseLogRow(
+                log: log,
+                // A dose written down wrong can be opened and put right.
+                onTap: () => DoseEditFlow.run(
+                  context,
+                  log: log,
+                  medicine: _medicine,
+                ),
+              ))),
+          if (_totalDoses > 5)
+            AppButton(
+              label: 'Show all $_totalDoses doses',
+              variant: AppButtonVariant.ghost,
+              fullWidth: true,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => MedicineHistoryScreen(medicine: _medicine),
+                ),
+              ),
+            ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLogItem(MedicineLog log) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    final status = log.isTaken
-        ? 'Taken'
-        : (log.isPreLogged
-            ? 'Pre-logged'
-            : (log.isSkipped ? 'Skipped' : 'Missed'));
-    // Status colours must match the medication dashboard exactly: Skipped reads
-    // as neutral grey, Missed as amber. They used to be swapped between the two
-    // surfaces (amber = "Missed" on the dashboard, amber = "Skipped" here),
-    // which is the sharpest comprehension failure for adherence data. A null
-    // swatch means "no accent" — the neutral grey used for Skipped.
-    final swatch = log.isTaken
-        ? ext.success
-        : (log.isPreLogged ? ext.info : (log.isSkipped ? null : ext.warning));
-    final statusDot = swatch?.base ?? ext.textTertiary;
-    final statusBg = swatch?.container ?? ext.textTertiary.withOpacity(0.12);
-    final statusFg = swatch?.onContainer ?? ext.textTertiary;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: statusDot,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    DateFormats.weekdayDayMonthShort.format(log.scheduledTime),
-                    style: tt.labelLarge?.copyWith(color: ext.textPrimary),
-                  ),
-                  Text(
-                    DateFormats.time.format(log.scheduledTime),
-                    style: tt.bodySmall?.copyWith(color: ext.textTertiary),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: statusBg,
-                borderRadius: AppRadius.brMd,
-              ),
-              child: Text(
-                status,
-                style: tt.labelMedium?.copyWith(
-                    color: statusFg, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

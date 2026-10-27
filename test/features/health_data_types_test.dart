@@ -194,7 +194,51 @@ void main() {
         expect(all.toSet().length, all.length, reason: 'duplicate type');
         expect(all, containsAll(HealthDataService.readTypesFor(android)));
         expect(all, containsAll(HealthDataService.biometricTypesFor(android)));
+        expect(all, containsAll(HealthDataService.cycleTypesFor(android)));
       }
+    });
+
+    group('cycle history', () {
+      test('Android cycle list ⊆ dataTypeKeysAndroid', () {
+        final unsupported = HealthDataService.cycleTypesFor(true)
+            .where((t) => !dataTypeKeysAndroid.contains(t))
+            .toList();
+        expect(unsupported, isEmpty,
+            reason: 'Health Connect would reject the permission request: '
+                '${unsupported.map((t) => t.name).join(', ')}');
+      });
+
+      test('iOS cycle list ⊆ dataTypeKeysIOS', () {
+        final unsupported = HealthDataService.cycleTypesFor(false)
+            .where((t) => !dataTypeKeysIOS.contains(t))
+            .toList();
+        expect(unsupported, isEmpty,
+            reason: 'HealthKit would map these to the wrong sample type: '
+                '${unsupported.map((t) => t.name).join(', ')}');
+      });
+
+      test('it is menstrual flow and nothing else, on both platforms', () {
+        for (final android in [true, false]) {
+          expect(HealthDataService.cycleTypesFor(android),
+              [HealthDataType.MENSTRUATION_FLOW]);
+        }
+      });
+
+      // Reproductive health data is the category a reviewer reads most closely,
+      // and it is its own opt-in on the Cycle screen: it must not ride the
+      // first-run sheet, the wearable sheet or the write scopes.
+      test('it is a scope of its own: not essential, not biometric, never written',
+          () {
+        for (final android in [true, false]) {
+          final cycle = HealthDataService.cycleTypesFor(android);
+          for (final t in cycle) {
+            expect(HealthDataService.readTypesFor(android), isNot(contains(t)));
+            expect(HealthDataService.biometricTypesFor(android),
+                isNot(contains(t)));
+            expect(HealthDataService.vitalsWriteTypes, isNot(contains(t)));
+          }
+        }
+      });
     });
 
     // Encodes a plugin constraint rather than our behaviour: health 13.3.2

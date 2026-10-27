@@ -71,6 +71,7 @@ class ReminderBudget {
       ReminderKind.dose,
       ReminderKind.alarm,
       ReminderKind.gentle,
+      ReminderKind.quiet,
     ]) {
       final want = demand[kind] ?? 0;
       if (kind == ReminderKind.dose) {

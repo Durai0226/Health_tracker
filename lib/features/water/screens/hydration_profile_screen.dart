@@ -1039,8 +1039,10 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     if (!mounted) return;
     // Re-read the profile-derived goal so the hero card updates.
     setState(() {});
+    final high = w.forecastMaxC;
     context.toastSuccess(
-        'It feels like ${w.apparentC.round()}°C in ${w.placeName}');
+        'It feels like ${w.apparentC.round()}°C in ${w.placeName}'
+        '${high != null && high.round() > w.apparentC.round() ? ', up to ${high.round()}°C today' : ''}');
   }
 
   Widget _buildToggleRow({

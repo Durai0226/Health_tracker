@@ -145,6 +145,10 @@ class CorrelationEngine {
           '${r.nonAdherentMean.toStringAsFixed(1)} on days with a missed/skipped dose, '
           'across ${r.adherentCount} adherent and ${r.nonAdherentCount} non-adherent days.',
       rank: 35,
+      evidence: PatternEvidence(
+          groupA: r.adherentCount,
+          groupB: r.nonAdherentCount,
+          effectRatio: r.delta / _moodMeaningfulDelta),
     );
   }
 
@@ -170,6 +174,10 @@ class CorrelationEngine {
           'vs ${r.nonAdherentMean.round()} mmHg on non-adherent days, across '
           '${r.adherentCount} adherent and ${r.nonAdherentCount} non-adherent days.',
       rank: 45,
+      evidence: PatternEvidence(
+          groupA: r.adherentCount,
+          groupB: r.nonAdherentCount,
+          effectRatio: r.delta / _bpMeaningfulDelta),
     );
   }
 
@@ -229,6 +237,10 @@ class CorrelationEngine {
       // Below focus_completion (42) — a concrete "try shorter sessions" is more
       // actionable than a pattern — and above focus_besthour (34).
       rank: 38,
+      evidence: PatternEvidence(
+          groupA: r.inGroupCount,
+          groupB: r.outGroupCount,
+          effectRatio: r.delta / _completionMeaningfulDelta),
     );
   }
 
@@ -284,6 +296,10 @@ class CorrelationEngine {
           '1.59 for inadequate hydration.',
       // Alongside the other cross-cutting pattern insights.
       rank: 37,
+      evidence: PatternEvidence(
+          groupA: r.inGroupCount,
+          groupB: r.outGroupCount,
+          effectRatio: r.delta / _hydrationMeaningfulDeltaMl),
     );
   }
 
@@ -324,6 +340,10 @@ class CorrelationEngine {
           '${ml(r.adherentMean)}, vs ${ml(r.nonAdherentMean)} on '
           '${r.nonAdherentCount} days with a missed dose.',
       rank: 36,
+      evidence: PatternEvidence(
+          groupA: r.adherentCount,
+          groupB: r.nonAdherentCount,
+          effectRatio: excessMl / _hydrationMeaningfulDeltaMl),
     );
   }
 }

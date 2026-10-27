@@ -1,11 +1,15 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import '../database/daos/reminders_dao.dart'
+    show genericReminderIdBase, genericReminderIdCapacity;
 import '../health/hydration_pacer.dart';
+import '../utils/reminder_slot_spacing.dart';
 import 'clean_storage_service.dart';
 import 'notification_service.dart';
 import '../../features/medication/services/appointment_reminder_service.dart';
 import '../../features/medication/services/refill_reminder_service.dart';
 import '../../features/medication/services/vitals_reminder_service.dart';
+import '../../features/sleep/services/wind_down_service.dart';
 import '../../features/reminders/models/reminder_model.dart';
 import '../../features/reminders/services/reminder_alarm.dart';
 import '../../features/medication/services/medication_reminder_service.dart';
@@ -76,6 +80,9 @@ class ReminderRescheduleService {
     ReminderFamily('vitals', VitalsReminderService.rescheduleAll),
     ReminderFamily('refills', RefillReminderService.rescheduleAll),
     ReminderFamily('water', rescheduleWaterReminders),
+    // After the rest: a wind-down reminder that follows tonight's plan moves
+    // with the sleep owed, so it is re-read here at every start.
+    ReminderFamily('sleep wind-down', WindDownService.rearm),
   ];
 
   /// Add a family. For anything defined outside this file's imports; the
@@ -233,7 +240,9 @@ class ReminderRescheduleService {
     // list is read, so it is armed in this very pass.
     await ReminderPauseUntil.resumeDue();
 
-    final reminders = await CleanStorageService.getAllReminders();
+    final reminders = await separateClashingSlots(
+        await CleanStorageService.getAllReminders(),
+        alarm: alarm);
     final now = clock.now();
     var armed = 0;
 
@@ -289,6 +298,64 @@ class ReminderRescheduleService {
     }
     debugPrint('✓ Generic reminders re-armed: $armed');
     return armed;
+  }
+
+  /// Move reminders whose slots share ids to places that do not.
+  ///
+  /// A reminder that repeats on chosen days is armed under its slot and the seven
+  /// after it, and the OS holds one pending notification per id. Slots used to be
+  /// handed out one apart, so a weekday reminder's Tuesday sat on the next
+  /// reminder's slot and one of the two never fired. New slots are spaced
+  /// ([ReminderSlotSpacing]); this puts right the ones already given out. The
+  /// oldest reminder in a clashing group keeps its slot, the others get a clear
+  /// one, and what was armed under the old slot is taken off first — the pass
+  /// that calls this arms every reminder again straight after.
+  ///
+  /// Returns [reminders] with the moved ones replaced. A reminder that finds no
+  /// clear place (the block is full) is left where it is.
+  @visibleForTesting
+  static Future<List<Reminder>> separateClashingSlots(
+    List<Reminder> reminders, {
+    required ReminderAlarm alarm,
+  }) async {
+    final slotted = [
+      for (final r in reminders)
+        if (r.notificationId != null) r
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final moving = ReminderSlotSpacing.clashing(slotted, (r) => r.notificationId!);
+    if (moving.isEmpty) return reminders;
+
+    final movingIds = {for (final r in moving) r.id};
+    final taken = <int>[
+      for (final r in slotted)
+        if (!movingIds.contains(r.id)) r.notificationId!
+    ];
+    final replaced = <String, Reminder>{};
+    for (final r in moving) {
+      final slot = ReminderSlotSpacing.lowestFree(taken,
+          base: genericReminderIdBase, capacity: genericReminderIdCapacity);
+      if (slot == null) {
+        debugPrint('⚠️ No clear reminder slot left for "${r.title}" — left as is');
+        continue;
+      }
+      try {
+        // Under the slot it is armed under now; its neighbour's alarm may go
+        // with it, and is armed again by the pass this runs in.
+        await alarm.disarm(
+          id: r.notificationSlot,
+          repeatType: r.repeatType,
+          customDays: r.customDays,
+        );
+        final moved = r.copyWith(notificationId: slot);
+        await CleanStorageService.saveReminder(moved);
+        taken.add(slot);
+        replaced[r.id] = moved;
+      } catch (e) {
+        debugPrint('⚠️ Moving reminder "${r.title}" to slot $slot failed: $e');
+      }
+    }
+    debugPrint('✓ Reminder slots separated: ${replaced.length} moved');
+    return [for (final r in reminders) replaced[r.id] ?? r];
   }
 
   /// (Re)schedule interval water reminders from the persisted config.

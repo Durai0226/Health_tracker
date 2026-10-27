@@ -12,6 +12,7 @@ import 'auth_service.dart';
 import 'clean_storage_service.dart';
 import 'package:clock/clock.dart';
 import '../../core/constants/app_strings.dart';
+import 'privacy_window.dart';
 
 /// App-wide PIN + optional biometric lock.
 ///
@@ -104,6 +105,9 @@ class AppLockService with WidgetsBindingObserver {
     if (isLockEnabled) {
       isLockedNotifier.value = true;
     }
+    // A lock that is already on from the last run: keep the recent-apps preview
+    // blank from the first frame, not only once it is next switched on.
+    unawaited(PrivacyWindow.apply(isLockEnabled));
   }
 
   @override
@@ -225,6 +229,7 @@ class AppLockService with WidgetsBindingObserver {
     await CleanStorageService.setAppPreference(keyPinSalt, salt);
     await CleanStorageService.setAppPreference(keyPinHash, hash);
     await CleanStorageService.setAppPreference(keyLockEnabled, true);
+    unawaited(PrivacyWindow.apply(true));
   }
 
   /// Constant-shape comparison against the stored salted hash. Returns
@@ -300,6 +305,7 @@ class AppLockService with WidgetsBindingObserver {
     await CleanStorageService.setAppPreference(keyFailedAttempts, 0);
     await CleanStorageService.setAppPreference(keyLockedUntil, 0);
     isLockedNotifier.value = false;
+    unawaited(PrivacyWindow.apply(false));
   }
 
   Future<void> setBiometricPreferred(bool preferred) async {

@@ -8,11 +8,13 @@ import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/health/vitals_analyzer.dart';
 import '../../../../core/health/insight_engine.dart';
 import '../../../../core/health/vitals_pattern_detector.dart';
+import '../../../../core/health/glucose_patterns.dart';
 import '../../../../core/services/clean_storage_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/app/vitals_theme.dart';
 import '../../../../core/widgets/app/vitals_widgets.dart';
 import '../../models/glucose_reading.dart';
+import '../../services/glucose_recheck.dart';
 import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_emergency_call.dart';
@@ -87,14 +89,23 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
 
   Future<void> _openLogSheet({GlucoseReading? edit}) async {
     final accent = VitalsColors.glucoseAccent(AppColorsExt.of(context).isDark);
-    final saved = await AppBottomSheet.show<bool>(
+    // `true` when saved, or — for a new low reading — the time its 15-minute
+    // recheck was set for.
+    final saved = await AppBottomSheet.show<Object>(
       context,
       title: edit == null ? 'Log blood sugar' : 'Edit reading',
       icon: Symbols.water_drop_rounded,
       accent: accent,
       builder: (_) => _GlucoseLogForm(accent: accent, unit: _unit, existing: edit),
     );
-    if (saved == true) _load();
+    if (saved == null) return;
+    _load();
+    if (saved is DateTime && mounted) {
+      context.toastInfo(
+        'Recheck reminder set for ${DateFormats.time.format(saved)}',
+        action: const AppToastAction(label: 'Cancel', onPressed: GlucoseRecheck.cancel),
+      );
+    }
   }
 
   Future<void> _delete(GlucoseReading r) async {
@@ -248,6 +259,14 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
         .map((r) => GlucosePoint(at: r.takenAt, mgdl: r.valueMgdl, context: r.context))
         .toList());
 
+    // Where in the day the readings tend to leave their range, named by meal or
+    // hour, in the unit this screen is showing.
+    final patterns = GlucosePatternCheck.check(
+      _readings.map((r) => GlucoseSample(r.valueMgdl, r.context, r.takenAt)),
+      now: clock.now(),
+      format: (mgdl) => '${_display(mgdl)} $_unitLabel',
+    );
+
     return RefreshIndicator(
       onRefresh: _load,
       color: ext.mark(accent),
@@ -314,6 +333,18 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
           if (insight != null) ...[
             const SizedBox(height: AppSpacing.md),
             InsightCard(insight: insight),
+          ],
+          if (patterns.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            SectionHeader(
+                title: 'By time of day',
+                icon: Symbols.schedule_rounded,
+                accent: accent),
+            const SizedBox(height: AppSpacing.sm),
+            for (final p in patterns) ...[
+              InsightCard(insight: p.toInsight()),
+              const SizedBox(height: AppSpacing.sm),
+            ],
           ],
           const SizedBox(height: AppSpacing.lg),
           SectionHeader(title: 'Trend', icon: Symbols.show_chart_rounded, accent: accent),
@@ -383,7 +414,8 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
                         style: tt.titleMedium?.copyWith(
                             color: ext.textPrimary, fontWeight: FontWeight.w700)),
                     Text(
-                      '${VitalsAnalyzer.glucoseLabel(cls)} · ${VitalsAnalyzer.glucoseContextLabel(r.context)} · ${DateFormats.dayMonthTime.format(r.takenAt)}',
+                      '${VitalsAnalyzer.glucoseLabel(cls)} · ${VitalsAnalyzer.glucoseContextLabel(r.context)} · ${DateFormats.dayMonthTime.format(r.takenAt)}'
+                      '${r.insulinUnits == null ? '' : ' · ${_GlucoseLogFormState._unitsText(r.insulinUnits)} units insulin'}',
                       style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                     ),
                   ],
@@ -508,6 +540,7 @@ class _GlucoseLogForm extends StatefulWidget {
 class _GlucoseLogFormState extends State<_GlucoseLogForm> {
   late final TextEditingController _value;
   late final TextEditingController _carbs;
+  late final TextEditingController _insulin;
   late final TextEditingController _note;
   GlucoseContext _context = GlucoseContext.fasting;
   late DateTime _takenAt;
@@ -528,18 +561,33 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
                 ? VitalsAnalyzer.mgdlToMmol(e.valueMgdl).toStringAsFixed(1)
                 : e.valueMgdl.toString()));
     _carbs = TextEditingController(text: e?.carbs?.toString() ?? '');
+    _insulin = TextEditingController(text: _unitsText(e?.insulinUnits));
     _note = TextEditingController(text: e?.note ?? '');
     _context = e?.context ?? GlucoseContext.fasting;
-    _takenAt = e?.takenAt ?? DateTime.now();
+    _takenAt = e?.takenAt ?? clock.now();
   }
 
   @override
   void dispose() {
     _value.dispose();
     _carbs.dispose();
+    _insulin.dispose();
     _note.dispose();
     super.dispose();
   }
+
+  /// "4" for 4.0 units, "4.5" for 4.5: no trailing ".0" on a whole number.
+  static String _unitsText(double? u) => u == null
+      ? ''
+      : (u == u.roundToDouble() ? u.toInt().toString() : u.toString());
+
+  /// The units typed, null when empty; NaN-free. Comma or point.
+  double? get _insulinUnits =>
+      double.tryParse(_insulin.text.trim().replaceAll(',', '.'));
+
+  /// The most one entry may say. Not a dosing limit: a guard against a typo
+  /// (a 400 where 4 was meant) landing in a record a doctor reads.
+  static const double maxInsulinUnits = 200;
 
   int? get _mgdl {
     final raw = _value.text.trim();
@@ -564,6 +612,14 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
       setState(() => _error = 'Enter a valid glucose value.');
       return;
     }
+    final unitsText = _insulin.text.trim();
+    final units = _insulinUnits;
+    if (unitsText.isNotEmpty &&
+        (units == null || units <= 0 || units > maxInsulinUnits)) {
+      setState(() => _error = 'Enter insulin units from 0.5 to '
+          '${maxInsulinUnits.toInt()}, or leave it empty.');
+      return;
+    }
     setState(() => _saving = true);
     HapticFeedback.mediumImpact();
     final e = widget.existing;
@@ -576,10 +632,10 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
       context: _context,
       takenAt: _takenAt,
       carbs: int.tryParse(_carbs.text),
-      // insulinUnits/medNote/tags have no control on this form — every edit
-      // through this screen used to silently wipe a diabetic user's insulin
-      // dose and medication-note history.
-      insulinUnits: e?.insulinUnits,
+      // What is in the field. Emptying it clears the units, and an entry
+      // that had none keeps none. (medNote and tags have no control here and
+      // are kept as they were: an edit used to silently wipe them.)
+      insulinUnits: unitsText.isEmpty ? null : units,
       medNote: e?.medNote,
       tags: e?.tags ?? const [],
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
@@ -601,7 +657,17 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
       return;
     }
     if (VitalsAnalyzer.isGlucoseEmergencyLow(v)) HapticFeedback.heavyImpact();
-    if (mounted) Navigator.pop(context, true);
+    // A NEW low reading arms the 15-minute recheck, and any new reading takes
+    // down the one a previous low set. An edit is not a new check.
+    DateTime? recheckAt;
+    if (e == null) {
+      try {
+        recheckAt = await GlucoseRecheck.afterSave(reading);
+      } catch (err) {
+        debugPrint('⚠️ Setting the glucose recheck failed: $err');
+      }
+    }
+    if (mounted) Navigator.pop(context, recheckAt ?? true);
   }
 
   @override
@@ -677,6 +743,15 @@ class _GlucoseLogFormState extends State<_GlucoseLogForm> {
           hint: 'grams',
           keyboardType: TextInputType.number,
           accent: widget.accent,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _insulin,
+          label: 'Insulin (units, optional)',
+          hint: 'units',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          accent: widget.accent,
+          onChanged: (_) => setState(() => _error = null),
         ),
         const SizedBox(height: AppSpacing.md),
         AppDateTimeField(

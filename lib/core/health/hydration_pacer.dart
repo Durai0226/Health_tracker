@@ -5,6 +5,10 @@
 /// the day* and nudge when you fall behind. This is deterministic math over data
 /// we already store (timestamped intake + goal + waking hours) — free, offline,
 /// and fully unit-testable.
+library;
+
+import 'dart:math' as math;
+
 class HydrationPace {
   /// How much you'd have drunk by now to be exactly on pace.
   final int expectedByNowMl;
@@ -37,6 +41,36 @@ class HydrationPace {
   bool get ahead => status == 'ahead';
 }
 
+/// How much of the day's goal is expected by a given point of the waking day.
+enum PaceCurve {
+  /// An even rate from waking to bedtime: half the goal at the midpoint.
+  linear,
+
+  /// Drinking weighted to the earlier hours, easing off towards bedtime — what
+  /// most people actually do, and kinder to sleep (less to get up for at night).
+  /// About 67% of the goal is expected by the midpoint of the waking day
+  /// (mid-afternoon, for 07:00-23:00), and only the last tenth in its final
+  /// quarter.
+  frontLoaded;
+
+  /// How strongly the front-loaded curve leans to the morning: at 1 it is the
+  /// straight line. 1.6 puts about 37% of the goal by a quarter of the day, 67%
+  /// by half and 89% by three quarters.
+  static const double frontLoadedExponent = 1.6;
+
+  /// The share of the goal expected once [elapsed] (0 to 1) of the waking day
+  /// has gone.
+  double expectedShare(double elapsed) {
+    final e = elapsed.clamp(0.0, 1.0);
+    switch (this) {
+      case PaceCurve.linear:
+        return e;
+      case PaceCurve.frontLoaded:
+        return 1 - math.pow(1 - e, frontLoadedExponent).toDouble();
+    }
+  }
+}
+
 class HydrationPacer {
   const HydrationPacer._();
 
@@ -50,6 +84,11 @@ class HydrationPacer {
     int wakeMinutes = 7 * 60,
     int sleepMinutes = 23 * 60,
     int toleranceMl = 250,
+
+    /// What "on pace" means. Front-loaded by default: expecting an even rate all
+    /// day told someone who had drunk well by mid-afternoon they were behind, and
+    /// pushed a litre at them before bed.
+    PaceCurve curve = PaceCurve.frontLoaded,
   }) {
     if (goalMl <= 0) {
       return const HydrationPace(
@@ -93,7 +132,8 @@ class HydrationPacer {
     // Fraction of the waking day elapsed (0 before waking, 1 at/after sleep).
     final elapsed = ((now - wake) / wakingSpan).clamp(0.0, 1.0);
 
-    final expected = (goalMl * elapsed).round();
+    final share = curve.expectedShare(elapsed);
+    final expected = (goalMl * share).round();
     final deficit = expected - intakeMl;
 
     // Already met the goal → nothing to chase.
@@ -108,8 +148,9 @@ class HydrationPacer {
       );
     }
 
-    // Linear end-of-day projection from the current rate.
-    final projected = elapsed > 0.05 ? (intakeMl / elapsed).round() : goalMl;
+    // End-of-day projection from where intake stands against where the curve
+    // says it should: on pace projects exactly the goal, whichever curve.
+    final projected = share > 0.05 ? (intakeMl / share).round() : goalMl;
 
     String status;
     if (deficit > toleranceMl) {

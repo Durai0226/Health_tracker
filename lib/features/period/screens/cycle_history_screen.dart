@@ -4,6 +4,7 @@ import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 
 import '../models/menstrual_cycle.dart';
 import '../services/period_service.dart';
+import '../widgets/cycle_import_button.dart';
 import '../widgets/cycle_stats_card.dart';
 import '../widgets/prediction_card.dart' show fmtPeriodDate, fmtPeriodShort;
 
@@ -65,6 +66,8 @@ class CycleHistoryScreen extends StatelessWidget {
             message:
                 'Once you log a couple of periods, each detected cycle will '
                 'appear here with its length.',
+            // Past periods can come from the phone's health store instead.
+            action: const CycleImportButton(),
           )
         else
           ...cycles.map((c) => _cycleTile(context, c)),

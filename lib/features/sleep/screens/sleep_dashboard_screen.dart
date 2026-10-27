@@ -11,6 +11,8 @@ import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
 import 'package:tablet_remainder/core/services/home_widget_service.dart';
 import 'package:tablet_remainder/core/services/notification_service.dart';
+import 'package:tablet_remainder/core/services/rest_day_store.dart';
+import 'package:tablet_remainder/core/health/rest_days.dart' show RestKind;
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:tablet_remainder/core/widgets/app/personal_best_card.dart';
 import 'package:tablet_remainder/core/milestones/milestones_screen.dart';
@@ -18,7 +20,14 @@ import 'package:tablet_remainder/core/milestones/milestones_service.dart';
 import '../models/sleep_schedule.dart';
 import '../models/sleep_session.dart';
 import '../models/sleep_consistency.dart';
+import '../services/overnight_body_service.dart';
+import '../services/sleep_mover_service.dart';
+import '../widgets/overnight_body_card.dart';
 import '../services/sleep_service.dart';
+import '../services/day_rhythm_service.dart';
+import '../services/wind_down_service.dart';
+import '../widgets/bedtime_plan_card.dart';
+import '../widgets/day_rhythm_card.dart';
 import '../widgets/sleep_consistency_card.dart';
 import '../widgets/sleep_manual_log_sheet.dart';
 import '../widgets/sleep_permission_card.dart';
@@ -29,6 +38,7 @@ import 'sleep_history_screen.dart';
 import 'sleep_schedule_settings_screen.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/health/sleep_debt.dart';
+import '../widgets/sleep_score_breakdown_sheet.dart';
 
 /// The Sleep home: last-night summary (score ring + duration/efficiency),
 /// an honest stage timeline, the 7-night trend vs target with a regularity
@@ -47,6 +57,19 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     with WidgetsBindingObserver {
   bool _loading = true;
   HealthAvailability _availability = HealthAvailability.notDetermined;
+
+  /// Today was marked a rest day from the overnight card, and can be taken back.
+  bool _restMarkedHere = false;
+
+  Future<void> _takeRestDay() async {
+    await RestDayStore.markToday(RestKind.rest);
+    if (mounted) setState(() => _restMarkedHere = true);
+  }
+
+  Future<void> _undoRestDay() async {
+    await RestDayStore.clear(clock.now());
+    if (mounted) setState(() => _restMarkedHere = false);
+  }
 
   @override
   void initState() {
@@ -94,7 +117,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     if (sched.reminderEnabled) {
       NotificationService().scheduleBedtimeReminder(
         enabled: true,
-        minuteOfDay: sched.reminderMinuteOfDay,
+        minuteOfDay: WindDownService.minuteOfDay(),
       );
     }
     if (sched.alarmEnabled) {
@@ -357,6 +380,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         ))
         ..add(const SizedBox(height: AppSpacing.md))
         ..add(_buildBedtimeTip(context))
+        ..add(_buildDayRhythm(context))
         ..add(const SizedBox(height: AppSpacing.md))
         ..add(_buildStatRow(context, lastNight))
         ..add(const SizedBox(height: AppSpacing.md))
@@ -379,6 +403,42 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         ..add(InsightCard(
           insight: _buildInsight(lastNight, debt, regularity, schedule),
         ));
+
+      // The body overnight, against the person's own usual — only when a
+      // wearable has given something to compare.
+      final body = OvernightBody.checkFor(clock.now());
+      final dip = OvernightBody.dipFor(clock.now());
+      if (body != null || dip != null) {
+        sections
+          ..add(const SizedBox(height: AppSpacing.lg))
+          ..add(OvernightBodyCard(
+            accent: ext.sleep,
+            check: body,
+            dip: dip,
+            offerRest: OvernightBody.restOffered(),
+            restMarked: _restMarkedHere,
+            onRest: _takeRestDay,
+            onUndoRest: _undoRestDay,
+          ));
+      }
+
+      // What goes with the person's longer and shorter nights (from five nights
+      // on each side of a factor). Nothing at all until there is something to say.
+      final movers = SleepMovers.insights();
+      if (movers.isNotEmpty) {
+        sections
+          ..add(const SizedBox(height: AppSpacing.lg))
+          ..add(SectionHeader(
+            title: 'What moves your sleep',
+            icon: Symbols.moving_rounded,
+            accent: ext.sleep,
+          ));
+        for (final m in movers) {
+          sections
+            ..add(const SizedBox(height: AppSpacing.sm))
+            ..add(InsightCard(insight: m));
+        }
+      }
 
       if (!_healthAvailable && _canConnect) {
         sections
@@ -403,7 +463,16 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         ));
     }
 
-    return ListView(
+    // Pull down to read the health app again: the import otherwise ran when the
+    // app started and nowhere else, so last night could be in the health app and
+    // not here until the next launch.
+    return RefreshIndicator(
+      color: ext.mark(ext.sleep),
+      onRefresh: () async {
+        await SleepService.syncFromHealth();
+      },
+      child: ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.only(bottom: AppInsets.underNav(context)),
       children: [
         if (!widget.embedded) ...[
@@ -470,6 +539,7 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
           ),
         ),
       ],
+    ),
     );
   }
 
@@ -494,44 +564,48 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
     );
   }
 
-  /// Gentle "aim for bed around HH:MM" tip — a soft target, never a hard time.
+  /// Tonight's bedtime, with its working. A soft target, never a hard time.
   Widget _buildBedtimeTip(BuildContext context) {
-    final ext = AppColorsExt.of(context);
-    final tt = Theme.of(context).textTheme;
-    final bed = SleepService.suggestedBedtimeMinuteOfDay();
-    return AppCard(
-      child: Row(
-        children: [
-          Icon(Symbols.nights_stay_rounded, size: 18, color: ext.mark(ext.sleep)),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
-                children: [
-                  const TextSpan(text: 'Aim for bed around '),
-                  TextSpan(
-                    text: _formatMinuteOfDay(bed),
-                    style: TextStyle(
-                        color: ext.textPrimary, fontWeight: FontWeight.w700),
-                  ),
-                  const TextSpan(text: ' to reach your wake goal.'),
-                ],
-              ),
-            ),
-          ),
-        ],
+    final s = SleepService.getSchedule();
+    return BedtimePlanCard(
+      plan: SleepService.bedtimePlan(),
+      windDownLeadMinutes: s.windDownMinutes,
+      reminderEnabled: s.reminderEnabled,
+      followPlan: s.followPlan,
+      fixedReminderMinuteOfDay: s.reminderMinuteOfDay,
+      onFollowPlan: () => _followPlan(true),
+    );
+  }
+
+  /// A typical day from the person's wake time. Carries its own top spacing so
+  /// it collapses cleanly when there is no day to lay it on.
+  Widget _buildDayRhythm(BuildContext context) {
+    final view = DayRhythmService.current();
+    if (view == null) return const SizedBox.shrink();
+    final now = clock.now();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: DayRhythmCard(
+        spans: view.spans,
+        wakeMinute: view.wakeMinute,
+        fromNights: view.fromNights,
+        nowMinute: now.hour * 60 + now.minute,
       ),
     );
   }
 
-  static String _formatMinuteOfDay(int m) {
-    final h24 = (m ~/ 60) % 24;
-    final min = m % 60;
-    final period = h24 >= 12 ? 'PM' : 'AM';
-    var h = h24 % 12;
-    if (h == 0) h = 12;
-    return '$h:${min.toString().padLeft(2, '0')} $period';
+  /// Have the wind-down reminder follow tonight's plan (or stop), and say so.
+  Future<void> _followPlan(bool follow) async {
+    await SleepService.saveSchedule(
+        SleepService.getSchedule().copyWith(followPlan: follow));
+    await WindDownService.rearm();
+    if (!mounted) return;
+    if (follow) {
+      context.toastSuccess(
+        'The wind-down reminder now follows tonight\'s plan.',
+        action: AppToastAction(label: 'Undo', onPressed: () => _followPlan(false)),
+      );
+    }
   }
 
   /// Most-rested night on record (self-referential personal best). Carries its
@@ -685,10 +759,19 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SleepScoreRing(
-            score: night.sleepScore,
-            measured: night.isMeasured,
-            size: 120,
+          // Tapping the ring says what the number is made of.
+          Semantics(
+            button: true,
+            label: 'Sleep score ${night.sleepScore}. Show how it is made',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => SleepScoreBreakdownSheet.show(context, night),
+              child: SleepScoreRing(
+                score: night.sleepScore,
+                measured: night.isMeasured,
+                size: 120,
+              ),
+            ),
           ),
           const SizedBox(width: AppSpacing.lg),
           Expanded(

@@ -4,7 +4,9 @@ import '../models/cycle_prediction.dart';
 import '../models/period_reminder_config.dart';
 import '../models/period_settings.dart';
 import 'period_service.dart';
+import 'cycle_privacy.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../reminders/models/reminder_kind.dart' show NudgeAnswers;
 
 // Stable notification ids in the period range, so a reschedule cleanly cancels
 // the previous arming before scheduling the (shifted) next one.
@@ -21,25 +23,36 @@ class PlannedReminder {
   final DateTime date;
   final String title;
   final String body;
+
+  /// Buttons that answer the reminder from the notification. Never set on a
+  /// private reminder: "Started today" on a lock screen says what it is about.
+  final NudgeAnswers? answers;
   const PlannedReminder({
     required this.id,
     required this.date,
     required this.title,
     required this.body,
+    this.answers,
   });
 }
 
 /// PURE: turns a [CyclePrediction] + [PeriodReminderConfig] into the concrete
 /// reminders to arm. No I/O, no clock of its own ([now] is passed in) — so it
-/// is fully unit-testable. Copy is discreet on purpose.
+/// is fully unit-testable. Copy is discreet on purpose, and with [private] on
+/// it says nothing about cycles at all.
 class PeriodReminderPlanner {
   const PeriodReminderPlanner._();
+
+  /// What a private reminder says, whichever one it is.
+  static const String privateTitle = 'Reminder';
+  static const String privateBody = 'Open the app to see it.';
 
   static List<PlannedReminder> plan({
     required CyclePrediction prediction,
     required TrackingMode mode,
     required PeriodReminderConfig config,
     required DateTime now,
+    bool private = false,
   }) {
     final out = <PlannedReminder>[];
     // Never nudge about cycles during pregnancy.
@@ -57,9 +70,16 @@ class PeriodReminderPlanner {
           d.year, d.month, d.day, config.reminderHour, config.reminderMinute);
     }
 
-    void add(bool enabled, int id, DateTime when, String title, String body) {
+    void add(bool enabled, int id, DateTime when, String title, String body,
+        {NudgeAnswers? answers}) {
       if (enabled && when.isAfter(now)) {
-        out.add(PlannedReminder(id: id, date: when, title: title, body: body));
+        out.add(PlannedReminder(
+          id: id,
+          date: when,
+          title: private ? privateTitle : title,
+          body: private ? privateBody : body,
+          answers: private ? null : answers,
+        ));
       }
     }
 
@@ -83,6 +103,8 @@ class PeriodReminderPlanner {
       at(start),
       'Anything to note today?',
       'Today is around your predicted start. Logging keeps your predictions accurate.',
+      // The one reminder that asks something with a yes-or-no answer.
+      answers: NudgeAnswers.period,
     );
 
     // Fertile window is only meaningful (and only offered) in TTC mode.
@@ -139,6 +161,7 @@ class PeriodReminderService {
         mode: PeriodService.getSettings().trackingMode,
         config: config,
         now: DateTime.now(),
+        private: CyclePrivacy.privateNotifications,
       );
       for (final r in planned) {
         await ns.scheduleNotification(
@@ -146,6 +169,7 @@ class PeriodReminderService {
           title: r.title,
           body: r.body,
           scheduledDate: r.date,
+          answers: r.answers,
         );
       }
     } catch (_) {

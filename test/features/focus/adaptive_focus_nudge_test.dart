@@ -112,6 +112,59 @@ void main() {
   });
 
   group('apply', () {
+    // Reminders are opt-in: the person has switched the daily one on. (They used
+    // to be on for everyone; see 'off until switched on' below.)
+    setUp(() => SharedPreferences.setMockInitialValues(
+        {'focus_daily_reminder': true}));
+
+    test('off until switched on: nothing is armed for someone who has not asked',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      await seed(pattern());
+      await withClock(Clock.fixed(now), () async {
+        await FocusReminderScheduler.apply();
+      });
+      expect(scheduler.armedIds,
+          isNot(contains(NotificationService.focusDailyReminderId)),
+          reason: 'completing a first session used to arm a daily 9:00 nudge '
+              'nobody had asked for');
+      expect(scheduler.armedIds,
+          isNot(contains(NotificationService.focusStreakReminderId)));
+    });
+
+    test('the streak nudge is off until switched on, even for a streak at risk',
+        () async {
+      // Three days running up to yesterday, nothing yet today: at risk.
+      final run = [
+        session('a', DateTime(2026, 3, 10, 10)),
+        session('b', DateTime(2026, 3, 9, 10)),
+        session('c', DateTime(2026, 3, 8, 10)),
+      ];
+
+      SharedPreferences.setMockInitialValues({});
+      // Imported and initialised at the pinned time, so the streak (and whether
+      // it is at risk) is worked out against it.
+      addTearDown(FocusService().resetForTesting);
+      await withClock(Clock.fixed(now), () async {
+        await seed(run);
+        await FocusService().init();
+      });
+      await withClock(Clock.fixed(now), () async {
+        await FocusReminderScheduler.apply();
+      });
+      expect(scheduler.armedIds,
+          isNot(contains(NotificationService.focusStreakReminderId)));
+
+      // The premise, proved: switched on, the same streak IS nudged.
+      SharedPreferences.setMockInitialValues({'focus_streak_reminder': true});
+      await withClock(Clock.fixed(now), () async {
+        await FocusReminderScheduler.apply();
+      });
+      expect(scheduler.armedIds,
+          contains(NotificationService.focusStreakReminderId),
+          reason: 'otherwise the test above proves nothing');
+    });
+
     test('arms ONE non-repeating nudge at the planned time', () async {
       await seed(pattern());
       await withClock(Clock.fixed(now), () async {
@@ -129,6 +182,7 @@ void main() {
 
     test('turned off, it keeps the fixed repeating daily reminder', () async {
       SharedPreferences.setMockInitialValues({
+        'focus_daily_reminder': true,
         FocusReminderScheduler.kAdaptive: false,
         'focus_reminder_time': '9:0',
       });

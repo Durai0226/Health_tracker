@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../../../core/health/bp_tags.dart';
 import '../../../core/health/vitals_analyzer.dart';
 import '../models/blood_pressure_reading.dart';
 import '../models/glucose_reading.dart';
@@ -68,14 +69,25 @@ class VitalsReportService {
         pw.Text('Readings',
             style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
+        // A "Circumstances" column only when some reading has any: a doctor reading
+        // a fortnight of numbers wants to know which were after a coffee or a run,
+        // and an empty column on a report with no tags is just noise.
         _table(
-          ['Date', 'BP (mm Hg)', 'Pulse', 'Category'],
+          [
+            'Date',
+            'BP (mm Hg)',
+            'Pulse',
+            'Category',
+            if (sorted.any((r) => r.tags.isNotEmpty)) 'Circumstances',
+          ],
           sorted
               .map((r) => [
                     _fmt(r.takenAt),
                     '${r.systolic}/${r.diastolic}',
                     r.pulse?.toString() ?? '-',
                     VitalsAnalyzer.bpLabel(r.category),
+                    if (sorted.any((x) => x.tags.isNotEmpty))
+                      r.tags.isEmpty ? '-' : BpTags.describe(r.tags),
                   ])
               .toList(),
         ),
@@ -97,10 +109,15 @@ class VitalsReportService {
     DateTime? to,
     String? patientName,
     DateTime? generatedAt,
+
+    /// The unit the person reads their own glucose in. Storage and every
+    /// calculation stay mg/dL; only what is printed changes.
+    GlucoseUnit unit = GlucoseUnit.mgdl,
   }) async {
     final doc = pw.Document();
     final now = generatedAt ?? DateTime.now();
     final sorted = [...readings]..sort((a, b) => b.takenAt.compareTo(a.takenAt));
+    final unitLabel = VitalsAnalyzer.glucoseUnitLabel(unit);
 
     final avg = VitalsAnalyzer.mean(sorted.map((r) => r.valueMgdl).toList());
     final eA1c = VitalsAnalyzer.estimatedA1c(
@@ -115,8 +132,8 @@ class VitalsReportService {
         _header('Blood Glucose Report', patientName, from, to, now),
         pw.SizedBox(height: 16),
         _summaryBox(
-          big: avg != null ? '${avg.round()}' : '-',
-          unit: 'mg/dL avg',
+          big: avg != null ? VitalsAnalyzer.formatGlucose(avg.round(), unit) : '-',
+          unit: '$unitLabel avg',
           caption: [
             '${sorted.length} readings',
             if (inRange != null) '${(inRange * 100).round()}% in range',
@@ -128,11 +145,11 @@ class VitalsReportService {
             style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
         _table(
-          ['Date', 'Glucose (mg/dL)', 'Context', 'Class'],
+          ['Date', 'Glucose ($unitLabel)', 'Context', 'Class'],
           sorted
               .map((r) => [
                     _fmt(r.takenAt),
-                    '${r.valueMgdl}',
+                    VitalsAnalyzer.formatGlucose(r.valueMgdl, unit),
                     VitalsAnalyzer.glucoseContextLabel(r.context),
                     VitalsAnalyzer.glucoseLabel(r.glucoseClass),
                   ])
@@ -140,7 +157,10 @@ class VitalsReportService {
         ),
         pw.SizedBox(height: 20),
         _disclaimer(
-            'Targets follow ADA guidance (fasting 80-130, post-meal <180 mg/dL). '
+            unit == GlucoseUnit.mmoll
+                ? 'Targets follow ADA guidance (fasting 4.4-7.2, post-meal <10.0 '
+                    'mmol/L). '
+                : 'Targets follow ADA guidance (fasting 80-130, post-meal <180 mg/dL). '
             'Estimated A1C = (mean glucose + 46.7) / 28.7 and is an estimate, not '
             'a lab result. Not a diagnosis; discuss with your clinician.'),
       ],

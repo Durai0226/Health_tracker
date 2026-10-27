@@ -47,6 +47,8 @@ asking you to type it in twice:
 - **Other vitals:** blood oxygen, respiratory rate, body temperature, skin
   temperature
 - **Body:** weight (only when you tap "Import" — never in the background)
+- **Cycle:** past period days (only when you tap "Import" on the Cycle screen —
+  never in the background, and never written back)
 
 Each of these is requested separately and the app works without them. If you
 decline, the affected tracker falls back to manual entry.

@@ -9,6 +9,7 @@ import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/features/backup/services/health_backup_serializer.dart';
 import 'package:tablet_remainder/features/backup/services/medication_backup_serializer.dart';
+import 'package:tablet_remainder/features/backup/services/reminders_backup_serializer.dart';
 import 'package:tablet_remainder/features/water/services/water_service.dart';
 
 /// "Export a copy" was lossy, and silently.
@@ -264,6 +265,63 @@ void main() {
           ),
         );
 
+    // ---- Heart dashboard: a day of readings, a workout, and a device ------
+    await database.into(database.biometricDailyData).insert(
+          db.BiometricDailyDataCompanion.insert(
+            id: '2026-03-01',
+            date: seededAt,
+            restingHr: const Value(57),
+            hrAvg: const Value(71),
+            hourlyHrJson: Value(jsonEncode([
+              for (var h = 0; h < 24; h++) h < 6 ? 52 : 74,
+            ])),
+            hrvNightlyMs: const Value(48.5),
+            spo2Avg: const Value(96.4),
+            respiratoryRateAvg: const Value(14.2),
+            skinTempC: const Value(33.4),
+            createdAt: seededAt,
+            updatedAt: seededAt,
+          ),
+        );
+    await database.into(database.workoutSessions).insert(
+          db.WorkoutSessionsCompanion.insert(
+            id: 'hw_1772355600000_RUNNING',
+            dateKey: '2026-03-01',
+            startedAt: seededAt,
+            endedAt: seededAt.add(const Duration(minutes: 32)),
+            durationMinutes: 32,
+            activityType: 'RUNNING',
+            energyKcal: const Value(310),
+            createdAt: seededAt,
+            updatedAt: seededAt,
+          ),
+        );
+    await database.into(database.healthSources).insert(
+          db.HealthSourcesCompanion.insert(
+            id: 'src_0123456789abcdef',
+            sourceId: 'com.ouraring.oura',
+            sourceName: 'Oura',
+            platformIndex: 0,
+            firstSeenAt: seededAt,
+            lastSeenAt: seededAt,
+            // The person's own choices about the device.
+            priority: const Value(5),
+            enabled: const Value(false),
+            createdAt: seededAt,
+            updatedAt: seededAt,
+          ),
+        );
+
+    // ---- A reminder category of your own ----------------------------------
+    await database.into(database.reminderCategories).insert(
+          db.ReminderCategoriesCompanion.insert(
+            id: 'gym',
+            name: 'Gym',
+            colorValue: 0xFF9C27B0,
+            iconCodePoint: 0xe28d,
+          ),
+        );
+
     // ---- An app preference (the 'preferences' section) --------------------
     await CleanStorageService.setAppPreference('steps.reminderEnabled', true);
   }
@@ -299,6 +357,15 @@ void main() {
       'stepManualEntries':
           await rows(database.select(database.stepManualEntries).get()),
       'healthProfile': await rows(database.select(database.healthProfiles).get()),
+      'biometricDays':
+          await rows(database.select(database.biometricDailyData).get()),
+      'workouts': await rows(database.select(database.workoutSessions).get()),
+      'healthSources': await rows(database.select(database.healthSources).get()),
+      // The three built-in categories are the app's own and survive a wipe, so
+      // only the person's are part of the round trip.
+      'customCategories': await rows((database.select(database.reminderCategories)
+            ..where((t) => t.id.isNotIn(const ['personal', 'work', 'health'])))
+          .get()),
     };
   }
 
@@ -379,6 +446,10 @@ void main() {
       'doctors',
       'appointments',
       'dependents',
+      'biometricDays',
+      'workouts',
+      'healthSources',
+      'customCategories',
     ]) {
       expect(after[key], equals(before[key]),
           reason: '$key must round-trip losslessly');
@@ -390,7 +461,7 @@ void main() {
     // if the sections are quietly dropped from `exportAllData` again.
     final backup = await CleanStorageService.exportAllData();
 
-    expect(backup['version'], greaterThanOrEqualTo(7));
+    expect(backup['version'], greaterThanOrEqualTo(8));
     expect(backup[HealthBackupSerializer.sleepKey], hasLength(1));
     expect((backup[HealthBackupSerializer.periodKey] as Map)['days'],
         hasLength(1));
@@ -407,6 +478,19 @@ void main() {
     expect(backup[MedicationBackupSerializer.dependentsKey], hasLength(1),
         reason: "a household member's blood type and allergies were typed in "
             'once and exist nowhere else either');
+  });
+
+  test('the export carries the heart dashboard and the reminder categories',
+      () async {
+    final backup = await CleanStorageService.exportAllData();
+
+    final heart = backup[HealthBackupSerializer.biometricsKey] as Map;
+    expect(heart['days'], hasLength(1));
+    expect(heart['workouts'], hasLength(1));
+    expect(heart['sources'], hasLength(1),
+        reason: 'the device, with the choices made about it');
+    final categories = backup[RemindersBackupSerializer.categoriesKey] as List;
+    expect(categories.map((c) => (c as Map)['id']), contains('gym'));
   });
 
   test('a restore file cannot switch on period cloud sync', () async {

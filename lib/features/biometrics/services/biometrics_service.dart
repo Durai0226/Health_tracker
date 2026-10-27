@@ -13,6 +13,7 @@ import '../models/biometric_metric.dart';
 import '../models/health_source.dart';
 import '../models/workout_session.dart';
 import 'health_source_registry.dart';
+import '../../../core/health/workout_entry.dart';
 
 /// Wearable biometrics: heart rate, HRV, blood oxygen, breathing rate,
 /// temperature and workouts, aggregated to one row per day.
@@ -170,6 +171,33 @@ class BiometricsService {
     return out;
   }
 
+  /// Skin temperature over the last [days] days, restricted to ONE
+  /// [SkinTempMetric] — whichever the most recent day carries.
+  ///
+  /// Android reports a change from the person's own baseline and iPhone an
+  /// absolute wrist temperature: different quantities on different scales, so a
+  /// series that mixed them would invent a step change out of a unit difference.
+  /// Null when no day has one.
+  static ({SkinTempMetric metric, List<({DateTime date, double value})> points})?
+      skinTempSeries({int days = 30, DateTime? now}) {
+    final today = dayOnly(now ?? DateTime.now());
+    SkinTempMetric? metric;
+    for (var i = 0; i < days && metric == null; i++) {
+      final d = DateTime(today.year, today.month, today.day - i);
+      final row = _daysNotifier.value[dateKeyOf(d)];
+      if (row?.skinTempC != null && row?.skinTempMetric != null) {
+        metric = row!.skinTempMetric;
+      }
+    }
+    if (metric == null) return null;
+    final points = dailySeries(
+      (d) => d.skinTempMetric == metric ? d.skinTempC : null,
+      days: days,
+      now: now,
+    );
+    return points.isEmpty ? null : (metric: metric, points: points);
+  }
+
   /// HRV trend restricted to a SINGLE [HrvMetric].
   ///
   /// The metric is a parameter rather than an option because mixing RMSSD and
@@ -217,6 +245,74 @@ class BiometricsService {
     }
     final sum = points.fold<double>(0, (a, p) => a + p.ms);
     return (ms: sum / points.length, metric: metric, nights: points.length);
+  }
+
+  // ============ WORKOUTS ENTERED BY HAND ============
+
+  /// Save a workout the person typed in (or a changed one: [replacing] is the
+  /// session being edited, which is removed first if its identity — start and
+  /// kind — changed). Returns the stored session.
+  static Future<WorkoutSession> saveEnteredWorkout({
+    required String activityType,
+    required DateTime startedAt,
+    required int durationMinutes,
+    int? kcal,
+    double? distanceKm,
+    String? note,
+    WorkoutSession? replacing,
+    DateTime? now,
+  }) async {
+    final stamp = now ?? DateTime.now();
+    final session = WorkoutSession(
+      id: WorkoutEntry.idFor(startedAt, activityType),
+      dateKey: dateKeyOf(startedAt),
+      startedAt: startedAt,
+      endedAt: startedAt.add(Duration(minutes: durationMinutes)),
+      durationMinutes: durationMinutes,
+      activityType: activityType,
+      energyKcal: kcal,
+      distanceMeters: distanceKm == null ? null : distanceKm * 1000,
+      source: BiometricSource.manual,
+      note: (note == null || note.trim().isEmpty) ? null : note.trim(),
+      createdAt: replacing?.createdAt ?? stamp,
+      updatedAt: stamp,
+    );
+    if (replacing != null && replacing.id != session.id) {
+      await deleteEnteredWorkout(replacing.id);
+    }
+    await _dao.upsertWorkout(session.toCompanion());
+    final byDay = Map<String, List<WorkoutSession>>.from(_workoutsNotifier.value);
+    byDay[session.dateKey] = [
+      for (final w in byDay[session.dateKey] ?? const <WorkoutSession>[])
+        if (w.id != session.id) w,
+      session,
+    ]..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+    _workoutsNotifier.value = byDay;
+    return session;
+  }
+
+  /// Remove a workout by id (a tombstone, so a sync does not bring it back), from
+  /// the screen and the database.
+  static Future<void> deleteEnteredWorkout(String id) async {
+    await _dao.deleteWorkout(id);
+    final byDay = <String, List<WorkoutSession>>{};
+    for (final e in _workoutsNotifier.value.entries) {
+      final kept = [for (final w in e.value) if (w.id != id) w];
+      if (kept.isNotEmpty) byDay[e.key] = kept;
+    }
+    _workoutsNotifier.value = byDay;
+  }
+
+  /// Put a workout back exactly as it was — the other half of an Undo.
+  static Future<void> restoreEnteredWorkout(WorkoutSession session) async {
+    await _dao.upsertWorkout(session.toCompanion());
+    final byDay = Map<String, List<WorkoutSession>>.from(_workoutsNotifier.value);
+    byDay[session.dateKey] = [
+      for (final w in byDay[session.dateKey] ?? const <WorkoutSession>[])
+        if (w.id != session.id) w,
+      session,
+    ]..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+    _workoutsNotifier.value = byDay;
   }
 
   // ============ IMPORT ============
@@ -305,7 +401,13 @@ class BiometricsService {
           for (final w in workouts) {
             await _dao.upsertWorkout(w.toCompanion());
           }
-          updatedWorkouts[dateKey] = workouts;
+          // The day's sessions the watch wrote, beside any the person entered:
+          // replacing the list outright dropped theirs from the screen.
+          updatedWorkouts[dateKey] = [
+            for (final w in updatedWorkouts[dateKey] ?? const <WorkoutSession>[])
+              if (WorkoutEntry.isEntered(w.id)) w,
+            ...workouts,
+          ]..sort((a, b) => a.startedAt.compareTo(b.startedAt));
         }
 
         written++;

@@ -1,18 +1,28 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_colors_ext.dart';
+import '../../../core/health/mood_tags.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/widgets/app/vitals_theme.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
+import '../../medication/models/medicine_log.dart' show moodRatingLabels;
 import '../models/diary_entry.dart';
 import '../services/diary_storage_service.dart';
+import '../widgets/diary_details_sheet.dart';
 
 /// Full-screen create/edit editor — pushed, not a bottom sheet, since the
 /// body is open-ended multi-line text (the primary input, not an optional
 /// one-liner), which is cramped inside a sheet with the keyboard up.
 class DiaryEntryScreen extends StatefulWidget {
   final DiaryEntry? existing;
-  const DiaryEntryScreen({super.key, this.existing});
+
+  /// A title to start a NEW entry with — the question of a prompt the person
+  /// chose to write about. Ignored when editing.
+  final String? initialTitle;
+
+  const DiaryEntryScreen({super.key, this.existing, this.initialTitle});
 
   @override
   State<DiaryEntryScreen> createState() => _DiaryEntryScreenState();
@@ -23,6 +33,17 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
   late final TextEditingController _body;
   String? _error;
   bool _saving = false;
+
+  /// What the entry is dated, how the writer felt and what it was about. A new
+  /// entry starts at now with neither; they change only through the details
+  /// sheet, so none of them is ever a surprise.
+  late DiaryDetails _details;
+
+  /// How the editor opened, so a change is measured against it.
+  late final DiaryDetails _openedWith;
+
+  /// The title it opened with: the entry's own, or a prompt's question.
+  late final String _openedTitle;
 
   /// Whether the editor holds text that differs from the entry it opened with.
   ///
@@ -35,8 +56,15 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
   void initState() {
     super.initState();
     final e = widget.existing;
-    _title = TextEditingController(text: e?.title ?? '');
+    _openedTitle = e?.title ?? widget.initialTitle ?? '';
+    _title = TextEditingController(text: _openedTitle);
     _body = TextEditingController(text: e?.body ?? '');
+    _openedWith = DiaryDetails(
+      at: e?.entryAt ?? clock.now(),
+      mood: e?.moodIndex,
+      tags: e?.tags ?? const [],
+    );
+    _details = _openedWith;
     // [PopScope] reads `canPop` at BUILD time, so dirtiness has to drive a
     // rebuild. Both controllers are listened to, not just the body: a
     // title-only edit is just as unsaved, and gating on the body alone would
@@ -56,9 +84,21 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
 
   void _refreshDirty() {
     final e = widget.existing;
-    final dirty = _title.text.trim() != (e?.title?.trim() ?? '') ||
-        _body.text.trim() != (e?.body.trim() ?? '');
+    final dirty = _title.text.trim() != _openedTitle.trim() ||
+        _body.text.trim() != (e?.body.trim() ?? '') ||
+        _details != _openedWith;
     if (dirty != _dirty) setState(() => _dirty = dirty);
+  }
+
+  Future<void> _editDetails() async {
+    final picked = await DiaryDetailsSheet.show(
+      context,
+      initial: _details,
+      accent: AppColorsExt.of(context).brand,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _details = picked);
+    _refreshDirty();
   }
 
   /// Back with unsaved text used to throw it away without a word. Clean, the
@@ -90,11 +130,57 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
       dependentId: e?.dependentId,
       title: _title.text.trim().isEmpty ? null : _title.text.trim(),
       body: _body.text.trim(),
-      entryAt: e?.entryAt ?? DateTime.now(),
+      entryAt: _details.at,
       createdAt: e?.createdAt ?? DateTime.now(),
+      moodIndex: _details.mood,
+      tags: _details.tags,
     );
     await DiaryStorageService.save(entry);
     if (mounted) Navigator.pop(context, true);
+  }
+
+  /// One tappable line under the title: when it is dated, and — if given — the
+  /// mood and tags. Opens the details sheet.
+  Widget _detailsRow(AppColorsExt ext, TextTheme tt) {
+    final mood = _details.mood;
+    final tags = _details.tags;
+    final said = [
+      DiaryDetails.whenLabel(_details.at),
+      if (mood != null) moodRatingLabels[mood.clamp(0, moodRatingLabels.length - 1)],
+      if (tags.isNotEmpty) tags.map(MoodTags.label).join(', '),
+    ].join(' · ');
+    return Semantics(
+      button: true,
+      label: 'Entry details: $said',
+      excludeSemantics: true,
+      onTap: _editDetails,
+      child: InkWell(
+        onTap: _editDetails,
+        borderRadius: AppRadius.brSm,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              Icon(Symbols.event_rounded, size: 18, color: ext.textTertiary),
+              const SizedBox(width: AppSpacing.sm),
+              if (mood != null) ...[
+                Icon(VitalsColors.moodIcon(mood),
+                    size: 18, color: VitalsColors.moodBand(ext.isDark, mood)),
+                const SizedBox(width: AppSpacing.xs),
+              ],
+              Expanded(
+                child: Text(said,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+              ),
+              Icon(Symbols.chevron_right_rounded,
+                  size: 20, color: ext.textTertiary),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -156,7 +242,9 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
                       accent: accent,
                       textCapitalization: TextCapitalization.sentences,
                     ),
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.sm),
+                    _detailsRow(ext, tt),
+                    const SizedBox(height: AppSpacing.sm),
                     Text('Entry',
                         style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
                     const SizedBox(height: AppSpacing.sm),

@@ -2,6 +2,7 @@ package com.dlyminder.app
 
 import android.content.Intent
 import android.os.Build
+import android.view.WindowManager
 import androidx.annotation.NonNull
 // FlutterFragmentActivity (not FlutterActivity) is required by the `health`
 // plugin's Health Connect permission flow, which uses registerForActivityResult.
@@ -65,6 +66,19 @@ class MainActivity : FlutterFragmentActivity() {
                     "setShowWhenLocked" -> {
                         val enabled = call.argument<Boolean>("enabled") ?: false
                         applyLockScreenFlags(enabled)
+                        result.success(null)
+                    }
+                    "setSecure" -> {
+                        // FLAG_SECURE keeps the app's content out of the recent-apps
+                        // preview (and out of screenshots and screen recordings) —
+                        // on while App lock is on, so a locked app does not show
+                        // its medicines to whoever flips through the task switcher.
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        if (enabled) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        }
                         result.success(null)
                     }
                     else -> result.notImplemented()

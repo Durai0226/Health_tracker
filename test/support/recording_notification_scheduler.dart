@@ -13,7 +13,12 @@ class RecordedSchedule {
     required this.mode,
     required this.matchDateTimeComponents,
     required this.payload,
+    this.details,
   });
+
+  /// What the notification looks like and carries, so a test can read the iOS
+  /// category (and with it the buttons) a reminder was armed with.
+  final NotificationDetails? details;
 
   final int id;
   final String? title;
@@ -163,6 +168,7 @@ class RecordingNotificationScheduler implements NotificationScheduler {
       mode: androidScheduleMode,
       matchDateTimeComponents: matchDateTimeComponents,
       payload: payload,
+      details: details,
     ));
     sequence.add('arm:$id@${androidScheduleMode.name}');
   }

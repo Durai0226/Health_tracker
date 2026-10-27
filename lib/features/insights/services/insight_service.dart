@@ -7,6 +7,12 @@ import '../../../core/health/refill_predictor.dart';
 import '../../../core/health/hydration_pacer.dart';
 import '../../../core/health/focus_insights.dart';
 import '../../../core/health/correlation_engine.dart';
+import '../../../core/health/mood_tag_insights.dart';
+import '../../../core/health/glucose_patterns.dart';
+import '../../../core/health/vitals_analyzer.dart';
+import '../../../core/services/clean_storage_service.dart';
+import '../../medication/models/mood_entry.dart';
+import '../../medication/models/medicine_log.dart' show moodRatingLabels;
 import 'package:tablet_remainder/core/health/cycle_hydration_insight.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/services/vitals_storage_service.dart';
@@ -15,6 +21,7 @@ import '../../focus/services/focus_service.dart';
 import '../../period/services/period_service.dart';
 import '../../period/models/cycle_prediction.dart';
 import '../../steps/services/step_service.dart';
+import '../../sleep/services/sleep_mover_service.dart';
 import '../../sleep/services/sleep_service.dart';
 import '../../../core/utils/calendar_day.dart';
 import 'package:clock/clock.dart';
@@ -345,6 +352,53 @@ class InsightService {
         lastWeekDays: lw[1],
         higherIsBetter: true,
       ));
+    } catch (_) {}
+
+    // Cross-cutting — what goes with better days: a day's mood against the tags
+    // on its entries, over the last 90 days. Independent of medicines, so it is
+    // not inside the adherence block below.
+    try {
+      final today = DateTime.now();
+      final since = dayOffset(DateTime(today.year, today.month, today.day), -89);
+      final byDay = <String, List<MoodEntry>>{};
+      for (final m in await VitalsStorageService.getAllMood()) {
+        if (m.takenAt.isBefore(since)) continue;
+        (byDay[_dayKey(m.takenAt)] ??= []).add(m);
+      }
+      out.addAll(MoodTagInsights.insights([
+        for (final entry in byDay.entries)
+          DayMood(
+            day: DateTime.parse(entry.key),
+            // Higher is better: the log's 0 is "Great".
+            score: entry.value
+                    .map((e) => (moodRatingLabels.length - 1 - e.moodIndex))
+                    .reduce((a, b) => a + b) /
+                entry.value.length,
+            tags: {for (final e in entry.value) ...e.tags},
+          ),
+      ]));
+    } catch (_) {}
+
+    // What goes with longer and shorter nights: the day before, one factor at a
+    // time (late caffeine, an evening drink, an active day).
+    out.addAll(SleepMovers.insights());
+
+    // Blood sugar by meal and hour: where in the day readings tend to leave
+    // their range. Worked out in the unit the person reads, since the text says
+    // the numbers.
+    try {
+      final mmol = VitalsAnalyzer.glucoseUnitFromPref(
+              CleanStorageService.getAppPreference('glucose_unit', 'mgdl')) ==
+          GlucoseUnit.mmoll;
+      out.addAll(GlucosePatternCheck.check(
+        [
+          for (final g in await VitalsStorageService.getAllGlucose())
+            GlucoseSample(g.valueMgdl, g.context, g.takenAt),
+        ],
+        now: clock.now(),
+        format: (v) =>
+            mmol ? '${VitalsAnalyzer.mgdlToMmol(v).toStringAsFixed(1)} mmol/L' : '$v mg/dL',
+      ).map((p) => p.toInsight()));
     } catch (_) {}
 
     // Cross-cutting — mood/BP vs same-day medication adherence. Both need a

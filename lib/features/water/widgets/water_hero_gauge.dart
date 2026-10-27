@@ -11,6 +11,14 @@ class WaterHeroGauge extends StatelessWidget {
   final double progress; // 0..1
   final int currentMl;
   final int goalMl;
+
+  /// A prescribed daily fluid CEILING, when the person is on one. The gauge then
+  /// counts down to it instead of up to a goal: the number in the middle is what
+  /// is left, and reaching it is a limit, not an achievement.
+  ///
+  /// [currentMl] is then the raw volume swallowed, because that is what a
+  /// clinician's limit is about; the caller passes it, and [progress] with it.
+  final int? limitMl;
   final VoidCallback? onTap;
   final double size;
 
@@ -19,6 +27,7 @@ class WaterHeroGauge extends StatelessWidget {
     required this.progress,
     required this.currentMl,
     required this.goalMl,
+    this.limitMl,
     this.onTap,
     this.size = 232,
   });
@@ -29,7 +38,13 @@ class WaterHeroGauge extends StatelessWidget {
     final s = ext.water;
     final tt = Theme.of(context).textTheme;
     final pct = (progress.clamp(0.0, 1.0) * 100).round();
+    final limit = limitMl != null && limitMl! > 0 ? limitMl : null;
     final reached = goalMl > 0 && currentMl >= goalMl;
+    // On a limit "reached" is not a win but the line not to cross, so it is
+    // checked first everywhere below and `reached` never shows for such a person.
+    final atLimit = limit != null && currentMl >= limit;
+    final overBy = limit != null ? currentMl - limit : 0;
+    final leftMl = limit != null ? (limit - currentMl).clamp(0, limit) : 0;
 
     return GestureDetector(
       onTap: onTap,
@@ -72,7 +87,7 @@ class WaterHeroGauge extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '$currentMl',
+                      limit != null ? '$leftMl' : '$currentMl',
                       style: tt.displayLarge?.copyWith(
                         color: v > 0.62 ? s.on : s.strong,
                         fontWeight: FontWeight.w800,
@@ -81,7 +96,7 @@ class WaterHeroGauge extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'of $goalMl ml',
+                      limit != null ? 'ml left of $limit' : 'of $goalMl ml',
                       style: tt.bodyMedium?.copyWith(
                         color: v > 0.55 ? s.on.withOpacity(0.8) : ext.textSecondary,
                       ),
@@ -94,28 +109,47 @@ class WaterHeroGauge extends StatelessWidget {
                         // with a hardcoded white: on light `success.base`
                         // (#10B981) takes white to 2.20:1, and this pill is
                         // the gauge's readout.
-                        color: reached
-                            ? ext.fillBg(ext.success)
-                            : ext.fillBg(s),
+                        color: atLimit
+                            ? ext.fillBg(overBy > 0 ? ext.error : ext.warning)
+                            : reached
+                                ? ext.fillBg(ext.success)
+                                : ext.fillBg(s),
                         borderRadius: AppRadius.brFull,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            reached ? Symbols.check_rounded : Symbols.local_drink_rounded,
+                            atLimit
+                                ? Symbols.warning_rounded
+                                : reached
+                                    ? Symbols.check_rounded
+                                    : Symbols.local_drink_rounded,
                             size: 13,
-                            color: reached
-                                ? ext.fillFg(ext.success)
-                                : ext.fillFg(s),
+                            color: atLimit
+                                ? ext.fillFg(overBy > 0 ? ext.error : ext.warning)
+                                : reached
+                                    ? ext.fillFg(ext.success)
+                                    : ext.fillFg(s),
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            reached ? 'Goal reached' : '$pct%',
+                            atLimit
+                                ? (overBy > 0
+                                    ? 'Over by $overBy ml'
+                                    : 'Limit reached')
+                                : reached
+                                    ? 'Goal reached'
+                                    : limit != null
+                                        ? '$pct% of limit'
+                                        : '$pct%',
                             style: tt.labelSmall?.copyWith(
-                                color: reached
-                                    ? ext.fillFg(ext.success)
-                                    : ext.fillFg(s)),
+                                color: atLimit
+                                    ? ext.fillFg(
+                                        overBy > 0 ? ext.error : ext.warning)
+                                    : reached
+                                        ? ext.fillFg(ext.success)
+                                        : ext.fillFg(s)),
                           ),
                         ],
                       ),

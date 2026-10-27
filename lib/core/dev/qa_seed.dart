@@ -509,13 +509,29 @@ Future<void> _seedDiary(DateTime now, int days) async {
   try {
     for (var d = 1; d <= days; d += 4) {
       final at = now.subtract(Duration(days: d));
+      // Every other entry carries a mood and tags, so the list is measured with
+      // them on it, not only without.
+      final decorated = (d ~/ 4).isEven;
       await DiaryStorageService.save(DiaryEntry(
         id: 'seed-diary-$d',
         entryAt: at,
         body: 'Felt steady today. Took everything on time.',
         createdAt: at,
+        moodIndex: decorated ? (d ~/ 4) % 5 : null,
+        tags: decorated ? const ['walk', 'friends', 'outdoors'] : const [],
       ));
     }
+    // This date a year ago, so "On this day" is on screen. A long title: that
+    // is the row that has to wrap.
+    final yearAgo = DateTime(now.year - 1, now.month, now.day, 20);
+    await DiaryStorageService.save(DiaryEntry(
+      id: 'seed-diary-year-ago',
+      title: 'A long afternoon walking the river path with everyone',
+      entryAt: yearAgo,
+      body: 'Felt steady today. Took everything on time.',
+      createdAt: yearAgo,
+      moodIndex: 1,
+    ));
   } catch (e) {
     debugPrint('seed diary failed: $e');
   }

@@ -77,9 +77,7 @@ class MedSafetyChecker {
     final out = <MedSafetyWarning>[];
     final byKey = <String, List<MedRef>>{};
     for (final m in meds) {
-      // Prefer the generic (active ingredient); fall back to the display name.
-      final g = _norm(m.genericName ?? '');
-      final key = g.isNotEmpty ? g : _norm(m.name);
+      final key = _ingredientKey(m);
       if (key.isEmpty) continue;
       byKey.putIfAbsent(key, () => []).add(m);
     }
@@ -102,6 +100,31 @@ class MedSafetyChecker {
     return out;
   }
 
+  /// The warning, if any, for a medicine about to be saved: which of [others]
+  /// share its active ingredient (or its name, where no ingredient is known).
+  /// The medicine itself, if it is among [others], is not counted against itself.
+  static MedSafetyWarning? duplicateOf(MedRef candidate, List<MedRef> others) {
+    final key = _ingredientKey(candidate);
+    if (key.isEmpty) return null;
+    final same = <String>[];
+    for (final o in others) {
+      if (o.id != candidate.id &&
+          _ingredientKey(o) == key &&
+          !same.contains(o.name)) {
+        same.add(o.name);
+      }
+    }
+    if (same.isEmpty) return null;
+    return MedSafetyWarning(
+      kind: 'duplicate',
+      severity: 'medium',
+      message:
+          '${candidate.name} appears to share its active ingredient with '
+          '${same.join(' and ')}. Taking both could double your dose — check '
+          'with your pharmacist.',
+    );
+  }
+
   /// Combined convenience: allergy + duplicate warnings for a target med within
   /// the user's full active list.
   static List<MedSafetyWarning> checkAll({
@@ -117,6 +140,13 @@ class MedSafetyChecker {
       ),
       ...checkDuplicates(activeMeds),
     ];
+  }
+
+  /// What two medicines must share to count as the same one: the generic name
+  /// (the active ingredient) when known, else the display name.
+  static String _ingredientKey(MedRef m) {
+    final g = _norm(m.genericName ?? '');
+    return g.isNotEmpty ? g : _norm(m.name);
   }
 
   static String _norm(String s) =>

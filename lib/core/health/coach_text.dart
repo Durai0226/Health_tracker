@@ -5,6 +5,7 @@ import 'focus_readiness.dart';
 import 'health_types.dart';
 import 'hydration_pacer.dart';
 import 'sleep_debt.dart';
+import 'step_reminder_plan.dart';
 
 /// Pure-Dart, deterministic AI engine. Zero cost, zero infra, offline, private —
 /// runs on every device and scales to unlimited users for free. It is the
@@ -97,6 +98,62 @@ class CoachText {
   // Reminders — natural-language parsing
   // ---------------------------------------------------------------------------
   ParsedReminder parseReminder(String input) {
+    final base = _parseReminderBase(input);
+    final lower = input.toLowerCase();
+    final lead = _leadMinutes(lower);
+    final untilDone = _untilDone(lower);
+    if (lead == null && !untilDone) return base;
+
+    var time = base.time;
+    DateTime? event;
+    if (lead != null && time != null) {
+      event = time;
+      var shifted = time.subtract(Duration(minutes: lead));
+      final now = clock.now();
+      // A heads-up that would already have gone by, for an event still ahead, is
+      // sent straight away rather than silently not at all.
+      if (shifted.isBefore(now) && time.isAfter(now) && base.repeat == 'none') {
+        shifted = now.add(const Duration(minutes: 1));
+      }
+      time = shifted;
+    }
+    return base.copyWith(
+      time: time,
+      leadMinutes: event == null ? null : lead,
+      eventTime: event,
+      untilDone: untilDone,
+    );
+  }
+
+  /// "30 min before", "an hour before", "half an hour before", "2 hours ahead":
+  /// how much earlier than the event to fire, or null. Bounded to a day: a lead
+  /// longer than that is a different reminder.
+  int? _leadMinutes(String lower) {
+    const tail = r'(?:before|ahead|early|beforehand|prior)\b';
+    if (RegExp(r'\bhalf\s+(?:an?\s+)?hour\s+' + tail).hasMatch(lower)) return 30;
+    if (RegExp(r'\b(?:an?|one)\s+hour\s+' + tail).hasMatch(lower)) return 60;
+    final m = RegExp(r'\b(\d+)\s*(minutes?|mins?|hours?|hrs?)\s+' + tail)
+        .firstMatch(lower);
+    if (m == null) return null;
+    final n = int.parse(m.group(1)!);
+    final minutes = m.group(2)!.startsWith('h') ? n * 60 : n;
+    return minutes >= 1 && minutes <= 24 * 60 ? minutes : null;
+  }
+
+  /// "until done", "until I do it", "keep reminding me", "nag me", "don't let me
+  /// forget": the person wants it followed up until they act on it.
+  bool _untilDone(String lower) => _untilDonePatterns.any((p) => p.hasMatch(lower));
+
+  static final List<RegExp> _untilDonePatterns = [
+    RegExp(
+        r"\buntil\s+(?:i(?:'m|\s+am)?\s+)?(?:it(?:'s|\s+is)\s+)?(?:done|finished|complete|completed|ticked(?:\s+off)?|checked(?:\s+off)?)\b"),
+    RegExp(r"\buntil\s+i\s+(?:do|did|have\s+done|finish|finished|tick|check)(?:\s+it)?\b"),
+    RegExp(r'\bkeep\s+(?:reminding|nagging|pinging)\s+me\b'),
+    RegExp(r'\bnag\s+me\b'),
+    RegExp(r"\b(?:don'?t|do\s+not)\s+let\s+me\s+forget\b"),
+  ];
+
+  ParsedReminder _parseReminderBase(String input) {
     final text = input.trim();
     final lower = text.toLowerCase();
     // `clock.now()` so a test can pin the wall clock with `withClock`. Every
@@ -554,6 +611,13 @@ class CoachText {
           caseSensitive: false),
       RegExp(r'\b(urgent|important|asap|critical|high priority|low priority|no rush)\b',
           caseSensitive: false),
+      // A heads-up ("30 min before", "an hour before") and "until done" are
+      // instructions to the scheduler, not part of what to be reminded of.
+      RegExp(
+          r'\b(half\s+(an?\s+)?hour|(an?|one)\s+hour|\d+\s*(minutes?|mins?|hours?|hrs?))\s+(before|ahead|early|beforehand|prior)\b',
+          caseSensitive: false),
+      for (final p in _untilDonePatterns)
+        RegExp(p.pattern, caseSensitive: false),
       RegExp(r'\b(morning|afternoon|evening|night|noon|midnight)\b',
           caseSensitive: false),
     ];
@@ -986,6 +1050,10 @@ class CoachText {
     int steps = 0,
     int stepGoal = 0,
     int sleepMinutes = 0,
+
+    /// Today was marked a rest or unwell day: the step goal is paused, so the
+    /// strip has nothing to say about it.
+    bool restDay = false,
   }) {
     // Deliberately NOT prefixed with a greeting or a stats recap.
     //
@@ -1004,7 +1072,22 @@ class CoachText {
       remindersLeft: remindersLeft,
       hour: hour,
       isRestricted: isRestricted,
+      steps: steps,
+      stepGoal: stepGoal,
+      sleepMinutes: sleepMinutes,
+      restDay: restDay,
     );
+  }
+
+  /// Under this, last night counts as a short one.
+  static const int shortNightMinutes = 6 * 60;
+
+  static String _hm(int minutes) {
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h == 0) return '${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
   }
 
   /// The single most useful CROSS-FEATURE suggestion — reasoning across meds,
@@ -1018,6 +1101,10 @@ class CoachText {
     required int remindersLeft,
     required int hour,
     bool isRestricted = false,
+    int steps = 0,
+    int stepGoal = 0,
+    int sleepMinutes = 0,
+    bool restDay = false,
   }) {
     // `waterPct` is progress toward a GOAL for most users and progress toward
     // a prescribed CEILING for a fluid-restricted one — [HydrationProfile]
@@ -1037,6 +1124,13 @@ class CoachText {
       return 'You still have $medsLeft dose${medsLeft == 1 ? '' : 's'} left — '
           'a good moment to take ${medsLeft == 1 ? 'it' : 'them'} before the evening winds down.';
     }
+    // A short night, in the first half of the day: the one thing here that
+    // changes how the rest of the day should be paced, and it is only useful
+    // before the afternoon. Nothing is claimed when no night was recorded.
+    if (sleepMinutes > 0 && sleepMinutes < shortNightMinutes && hour < 14) {
+      return 'A short night — ${_hm(sleepMinutes)}. Go easy on yourself today, '
+          'and an earlier night tonight will help.';
+    }
     // Cross-signal: water behind AND a dose due → one glass covers both.
     if (waterBehind && medsTotal > 0 && medsLeft > 0) {
       return 'A glass of water now closes your hydration gap and pairs perfectly with your next dose.';
@@ -1044,11 +1138,28 @@ class CoachText {
     if (waterBehind) {
       return 'Your water is a little behind — a glass now keeps you on track.';
     }
+    // Early evening, short of the step goal. `steps > 0`: with no steps read at
+    // all there is nothing to measure the goal against, and a phone that does
+    // not count steps is not "8,000 behind".
+    final stepsToGo = stepGoal - steps;
+    if (!restDay &&
+        steps > 0 &&
+        stepsToGo > 0 &&
+        hour >= 17 &&
+        hour < 21) {
+      final mins = StepReminderPlanner.walkMinutes(stepsToGo);
+      return '${StepReminderPlanner.groupThousands(stepsToGo)} steps to go — '
+          'about $mins ${mins == 1 ? 'minute' : 'minutes'} of walking closes '
+          'your step goal.';
+    }
     if (focusMinutes == 0 && hour >= 9 && hour < 20) {
       return 'No focus time yet — a single 25-minute session builds momentum.';
     }
     if (remindersLeft > 0) {
       return 'You\'ve got this.';
+    }
+    if (!restDay && steps > 0 && stepGoal > 0 && steps >= stepGoal) {
+      return 'Everything\'s on track — and your step goal is done.';
     }
     return 'Everything\'s on track — nicely done.';
   }

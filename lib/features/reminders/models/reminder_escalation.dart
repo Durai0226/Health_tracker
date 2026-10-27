@@ -46,12 +46,15 @@ enum ReminderEscalation {
 
   /// The presentation tier this maps to.
   ///
-  /// `gentle` and `standard` deliberately share [ReminderKind.gentle]'s channel
-  /// and quiet treatment: the difference between them is follow-up behaviour,
-  /// not loudness. Only `critical` earns an alarm-grade, full-screen delivery.
+  /// `gentle` is [ReminderKind.quiet]: no sound and no vibration, as its label
+  /// and description promise — it used to share `standard`'s channel, so "Quiet"
+  /// and "Normal" both made a sound. `standard` is an ordinary notification.
+  /// Only `insistent` and `critical` are alarm-grade, and only `critical` takes
+  /// over the screen.
   ReminderKind get kind {
     switch (this) {
       case ReminderEscalation.gentle:
+        return ReminderKind.quiet;
       case ReminderEscalation.standard:
         return ReminderKind.gentle;
       case ReminderEscalation.insistent:

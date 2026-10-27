@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/services/care_circle.dart';
 import '../../../core/services/emergency_contact.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 
@@ -36,6 +37,7 @@ class _EmergencyContactFormState extends State<EmergencyContactForm> {
   late final TextEditingController _name;
   late final TextEditingController _phone;
   bool _saving = false;
+  bool _offer = CareCircle.offerOnMissedDose;
 
   @override
   void initState() {
@@ -108,6 +110,20 @@ class _EmergencyContactFormState extends State<EmergencyContactForm> {
           onPressed: _valid && !_saving ? _save : null,
         ),
         if (EmergencyContact.isSet) ...[
+          const SizedBox(height: AppSpacing.sm),
+          // An offer on a missed dose, never an action: the app opens a message
+          // and the person presses send. Off until they say so.
+          AppListTile(
+            icon: Symbols.sms_rounded,
+            title: 'Offer to text them',
+            subtitle: 'When I miss a dose',
+            accent: ext.medicine,
+            switchValue: _offer,
+            onSwitchChanged: (v) {
+              setState(() => _offer = v);
+              CareCircle.setOfferOnMissedDose(v);
+            },
+          ),
           const SizedBox(height: AppSpacing.xs),
           AppButton(
             label: 'Remove',

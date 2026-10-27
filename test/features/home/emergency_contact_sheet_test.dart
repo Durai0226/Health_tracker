@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
+import 'package:tablet_remainder/core/services/care_circle.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/emergency_contact.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
@@ -96,6 +97,46 @@ void main() {
       await _prepare(tester);
       await pump(tester);
       expect(find.text('Remove'), findsNothing);
+    });
+
+    testWidgets('the offer to text them is not shown until there is a contact',
+        (tester) async {
+      await _prepare(tester);
+      await pump(tester);
+      expect(find.text('Offer to text them'), findsNothing);
+    });
+
+    testWidgets('with one, it is off, and turning it on is kept', (tester) async {
+      await _prepare(tester);
+      await tester.runAsync(() =>
+          EmergencyContact.save(name: 'Priya', phone: '+91 98765 43210'));
+      await pump(tester);
+      expect(find.text('Offer to text them'), findsOneWidget);
+      expect(find.text('When I miss a dose'), findsOneWidget);
+      expect(CareCircle.offerOnMissedDose, isFalse, reason: 'off until asked for');
+
+      await tester.tap(find.text('Offer to text them'));
+      await tester.pump();
+      expect(CareCircle.offerOnMissedDose, isTrue);
+      expect(CareCircle.contactToOffer()?.name, 'Priya');
+
+      await tester.tap(find.text('Offer to text them'));
+      await tester.pump();
+      expect(CareCircle.offerOnMissedDose, isFalse);
+    });
+
+    testWidgets('and it shows how it was left', (tester) async {
+      await _prepare(tester);
+      await tester.runAsync(() async {
+        await EmergencyContact.save(name: 'Priya', phone: '+91 98765 43210');
+        await CareCircle.setOfferOnMissedDose(true);
+      });
+      await pump(tester);
+      expect(
+          tester
+              .widget<AppListTile>(find.widgetWithText(AppListTile, 'Offer to text them'))
+              .switchValue,
+          isTrue);
     });
   });
 

@@ -51,44 +51,18 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
     return '${dayNames[date.weekday - 1]}, ${monthNames[date.month - 1]} ${date.day}, ${date.year}';
   }
 
-  void _showAddEntryDialog() {
-    final ext = AppColorsExt.of(context);
-    AppBottomSheet.show(
-      context,
-      title: 'Add Entry',
-      icon: Symbols.local_drink_rounded,
-      accent: ext.water,
-      builder: (sheetCtx) => _AddEditEntrySheet(
+  void _showAddEntryDialog() => WaterEntrySheet.show(
+        context,
         date: widget.date,
-        onSaved: () async {
-          await _loadData();
-          if (sheetCtx.mounted) {
-            Navigator.pop(sheetCtx);
-          }
-        },
-      ),
-    );
-  }
+        onSaved: _loadData,
+      );
 
-  void _showEditEntryDialog(EnhancedWaterLog log) {
-    final ext = AppColorsExt.of(context);
-    AppBottomSheet.show(
-      context,
-      title: 'Edit Entry',
-      icon: Symbols.edit_rounded,
-      accent: ext.water,
-      builder: (sheetCtx) => _AddEditEntrySheet(
+  void _showEditEntryDialog(EnhancedWaterLog log) => WaterEntrySheet.show(
+        context,
         date: widget.date,
-        existingLog: log,
-        onSaved: () async {
-          await _loadData();
-          if (sheetCtx.mounted) {
-            Navigator.pop(sheetCtx);
-          }
-        },
-      ),
-    );
-  }
+        existing: log,
+        onSaved: _loadData,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -463,22 +437,54 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
 
 /// Bottom sheet content for adding/editing water entries.
 /// Chrome (handle, title, surface) is supplied by [AppBottomSheet].
-class _AddEditEntrySheet extends StatefulWidget {
+///
+/// Public so Today's Log on the dashboard can open the same editor for a row,
+/// instead of sending the person to the history screen to change a drink they
+/// can already see.
+class WaterEntrySheet extends StatefulWidget {
   final DateTime date;
   final EnhancedWaterLog? existingLog;
   final Future<void> Function() onSaved;
 
-  const _AddEditEntrySheet({
+  const WaterEntrySheet({
+    super.key,
     required this.date,
     this.existingLog,
     required this.onSaved,
   });
 
+  /// Add an entry to [date], or edit [existing]. [onSaved] runs once it is
+  /// stored, and the sheet closes after it.
+  static Future<void> show(
+    BuildContext context, {
+    required DateTime date,
+    EnhancedWaterLog? existing,
+    required Future<void> Function() onSaved,
+  }) {
+    final ext = AppColorsExt.of(context);
+    return AppBottomSheet.show<void>(
+      context,
+      title: existing == null ? 'Add Entry' : 'Edit Entry',
+      icon: existing == null ? Symbols.local_drink_rounded : Symbols.edit_rounded,
+      accent: ext.water,
+      builder: (sheetCtx) => WaterEntrySheet(
+        date: date,
+        existingLog: existing,
+        onSaved: () async {
+          await onSaved();
+          if (sheetCtx.mounted) {
+            Navigator.pop(sheetCtx);
+          }
+        },
+      ),
+    );
+  }
+
   @override
-  State<_AddEditEntrySheet> createState() => _AddEditEntrySheetState();
+  State<WaterEntrySheet> createState() => _WaterEntrySheetState();
 }
 
-class _AddEditEntrySheetState extends State<_AddEditEntrySheet> {
+class _WaterEntrySheetState extends State<WaterEntrySheet> {
   late BeverageType _selectedBeverage;
   WaterContainer? _selectedContainer;
   late TextEditingController _amountController;

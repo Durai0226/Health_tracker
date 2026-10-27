@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import '../../utils/reminder_slot_spacing.dart';
 import '../app_database.dart';
 import '../tables/reminders_tables.dart';
 
@@ -16,7 +17,9 @@ part 'reminders_dao.g.dart';
 /// except this one.
 const int genericReminderIdBase = 970000;
 
-/// How many generic reminders can be armed at once.
+/// How many ids the generic-reminder block spans. Each reminder takes a whole
+/// week of them (see `ReminderSlotSpacing`), so it holds this many divided by
+/// eight — 125.
 ///
 /// Deliberately well clear of 979999 so the `+1..+7` weekday sub-ids the
 /// scheduler derives (`base + weekday`) cannot walk out of the block, and the
@@ -159,6 +162,14 @@ class RemindersDao extends DatabaseAccessor<AppDatabase> with _$RemindersDaoMixi
   /// Claim the lowest free notification id in the reserved generic-reminder
   /// block, or `null` when the block is full.
   ///
+  /// "Free" means a whole [ReminderSlotSpacing.span] of ids: a reminder that
+  /// repeats on chosen days is armed under `slot + 1 … slot + 7` as well, so the
+  /// next reminder's slot has to sit a week of ids clear of it. Handing them out
+  /// one apart let a weekday reminder's Tuesday land on its neighbour's slot, and
+  /// whichever was armed second replaced the first. The block holds
+  /// `genericReminderIdCapacity ~/ span` reminders; past that the caller keeps
+  /// the legacy derivation.
+  ///
   /// Lowest-free rather than max+1 so deleting a reminder actually frees its
   /// slot; with max+1 a user who churns reminders would march off the end of the
   /// block and start colliding with the family above it.
@@ -172,12 +183,11 @@ class RemindersDao extends DatabaseAccessor<AppDatabase> with _$RemindersDaoMixi
         await (selectOnly(reminders)..addColumns([reminders.notificationId]))
             .map((r) => r.read(reminders.notificationId))
             .get();
-    final taken = rows.whereType<int>().toSet();
-    for (var i = 0; i < genericReminderIdCapacity; i++) {
-      final candidate = genericReminderIdBase + i;
-      if (!taken.contains(candidate)) return candidate;
-    }
-    return null;
+    return ReminderSlotSpacing.lowestFree(
+      rows.whereType<int>(),
+      base: genericReminderIdBase,
+      capacity: genericReminderIdCapacity,
+    );
   }
 
   Future<void> deleteReminder(String id) async {

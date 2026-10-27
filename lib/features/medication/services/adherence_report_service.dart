@@ -62,6 +62,45 @@ class AdherenceTally {
       totalDue > 0 ? (totalTaken / totalDue * 100).round() : 0;
 }
 
+/// One medicine's doses over a window: how many came due, and what became of
+/// them. The numbers behind a row of the report and behind a visit brief.
+class MedicineAdherence {
+  const MedicineAdherence({
+    required this.medicine,
+    required this.logs,
+    required this.due,
+    required this.taken,
+    required this.missed,
+    required this.skipped,
+  });
+
+  final EnhancedMedicine medicine;
+
+  /// The window's logs, one per slot: see `dedupeByDose`.
+  final List<MedicineLog> logs;
+  final int due;
+  final int taken;
+  final int missed;
+  final int skipped;
+
+  /// Percent of due doses taken; null when none came due.
+  int? get percent => due > 0 ? (taken / due * 100).round() : null;
+
+  /// For sorting: the medicine that went least well first — the lowest percent,
+  /// then the most missed — with those that had nothing due last.
+  static int leastWellFirst(MedicineAdherence a, MedicineAdherence b) {
+    final pa = a.percent, pb = b.percent;
+    if (pa == null || pb == null) {
+      if (pa == null && pb == null) return a.medicine.name.compareTo(b.medicine.name);
+      return pa == null ? 1 : -1;
+    }
+    final byPercent = pa.compareTo(pb);
+    if (byPercent != 0) return byPercent;
+    final byMissed = b.missed.compareTo(a.missed);
+    return byMissed != 0 ? byMissed : a.medicine.name.compareTo(b.medicine.name);
+  }
+}
+
 class AdherenceReportService {
   const AdherenceReportService._();
 
@@ -130,6 +169,36 @@ class AdherenceReportService {
     return count;
   }
 
+  /// Every medicine's numbers over the window, in the order given.
+  ///
+  /// The doses are deduped per slot ([MedicineCleanStorageService.dedupeByDose])
+  /// and counted against what came DUE, not against the rows that exist: see
+  /// [dueCountFor].
+  static List<MedicineAdherence> perMedicine(
+    List<MedicineReportEntry> entries,
+    DateTime? from,
+    DateTime? to,
+    DateTime now,
+  ) {
+    return [
+      for (final e in entries) _adherenceOf(e, from, to, now),
+    ];
+  }
+
+  static MedicineAdherence _adherenceOf(
+      MedicineReportEntry e, DateTime? from, DateTime? to, DateTime now) {
+    // Deduped per slot — see MedicineCleanStorageService.dedupeByDose.
+    final logs = MedicineCleanStorageService.dedupeByDose(_inWindow(e.logs, from, to));
+    return MedicineAdherence(
+      medicine: e.medicine,
+      logs: logs,
+      due: dueCountFor(e.medicine, logs, from, to, now),
+      taken: logs.where((l) => l.countsAsTaken).length,
+      missed: logs.where((l) => l.isMissed).length,
+      skipped: logs.where((l) => l.isSkipped).length,
+    );
+  }
+
   /// Every number the adherence section prints. See [AdherenceTally].
   @visibleForTesting
   static AdherenceTally tallyAdherence(
@@ -141,28 +210,20 @@ class AdherenceReportService {
     var totalDue = 0, totalTaken = 0;
     final rows = <List<String>>[];
     final symptoms = <MedicineSymptomSummary>[];
-    for (final e in entries) {
-      // Deduped per slot — see MedicineCleanStorageService.dedupeByDose.
-      final logs = MedicineCleanStorageService.dedupeByDose(
-          _inWindow(e.logs, from, to));
-      final taken = logs.where((l) => l.countsAsTaken).length;
-      final missed = logs.where((l) => l.isMissed).length;
-      final skipped = logs.where((l) => l.isSkipped).length;
-      final due = dueCountFor(e.medicine, logs, from, to, now);
-      totalDue += due;
-      totalTaken += taken;
-      final pct = due > 0 ? (taken / due * 100).round() : 0;
+    for (final m in perMedicine(entries, from, to, now)) {
+      totalDue += m.due;
+      totalTaken += m.taken;
       rows.add([
-        _medLabel(e.medicine),
-        e.medicine.schedule.frequencyDescription,
-        due > 0 ? '$pct%' : '-',
-        '$taken',
-        '$missed',
-        '$skipped',
+        _medLabel(m.medicine),
+        m.medicine.schedule.frequencyDescription,
+        m.due > 0 ? '${m.percent}%' : '-',
+        '${m.taken}',
+        '${m.missed}',
+        '${m.skipped}',
       ]);
       // Same deduped, windowed logs the adherence row above used — a slot
       // superseded by a later action never counts toward symptoms twice.
-      symptoms.add(summarizeSymptoms(_medLabel(e.medicine), logs));
+      symptoms.add(summarizeSymptoms(_medLabel(m.medicine), m.logs));
     }
     return AdherenceTally(
       rows: rows,

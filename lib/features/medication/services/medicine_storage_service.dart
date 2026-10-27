@@ -20,6 +20,7 @@ import '../../../core/services/dose_action_queue.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/background_alarm_service.dart';
 import 'appointment_reminder_service.dart';
+import 'medication_reminder_service.dart';
 import 'reminder_window_nudges.dart';
 import 'vitals_storage_service.dart';
 import 'refill_loop.dart';
@@ -381,7 +382,11 @@ class MedicineCleanStorageService {
   /// also reverses its stock decrement (previously only the log was deleted).
   static Future<void> restoreStock(String medicineId, double amount) async {
     final med = await getMedicine(medicineId);
-    if (med != null && med.currentStock != null) {
+    // Only for a medicine whose stock is being counted. One that is not stores 0
+    // (the column is not nullable), a take cannot take it below that, and putting
+    // units back on Undo turned a medicine nobody tracks into one with a stock of
+    // two and a low-stock alert to follow.
+    if (med != null && med.currentStock != null && med.isStockTracked) {
       await updateMedicine(med.restoreStock(amount));
       _refreshRunOutReminder(medicineId);
     }
@@ -1193,6 +1198,16 @@ class MedicineCleanStorageService {
     final deps = await _dao.getAllDependents();
     return deps.map(_mapToDomainDependent).toList();
   }
+
+  /// The profile a medicine or a card belongs to: the dependent with
+  /// [dependentId], or the account holder ("Me") when it is null — the same
+  /// "null means self" the medicine rows use.
+  static Future<DependentProfile?> profileFor(String? dependentId) async {
+    final all = await getAllDependents();
+    return all
+        .where((d) => dependentId == null ? d.isSelf : d.id == dependentId)
+        .firstOrNull;
+  }
   
   static DependentProfile _mapToDomainDependent(db.DependentProfile d) {
     return DependentProfile(
@@ -1306,7 +1321,75 @@ class MedicineCleanStorageService {
       await updateAppointment(a.copyWith(clearDependentId: true));
     }
 
+    // Weight and mood were left behind: they kept the id of a profile that no
+    // longer exists, so they showed under nobody — not under the person, not
+    // under self — and were still in every backup. Same promise as the rest:
+    // they stay, attributed to self. (Weight and mood both have a real
+    // clearDependentId for exactly this.)
+    final weights = (await VitalsStorageService.getAllWeight(scopeToActiveProfile: false))
+        .where((r) => r.dependentId == id);
+    for (final r in weights) {
+      await VitalsStorageService.saveWeight(r.copyWith(clearDependentId: true),
+          stampActiveProfile: false, syncToHealthConnect: false);
+    }
+    final moods = (await VitalsStorageService.getAllMood(scopeToActiveProfile: false))
+        .where((r) => r.dependentId == id);
+    for (final r in moods) {
+      await VitalsStorageService.saveMood(r.copyWith(clearDependentId: true),
+          stampActiveProfile: false);
+    }
+
     await _dao.deleteDependent(id);
+  }
+
+  /// Everything the app holds for [id] — their medicines (and so their dose
+  /// logs) with the reminders armed for them, their readings, mood, weight and
+  /// appointments with theirs — gone for good. The profile row itself is left
+  /// for [deleteDependent], which finds nothing left to reassign.
+  ///
+  /// The other way out of removing a person: [deleteDependent] alone keeps
+  /// their records and attributes them to self, which is right when the person
+  /// is a profile that was only ever a convenience and wrong when it is a
+  /// family member whose health records should not live on under the account
+  /// holder's name.
+  static Future<void> deleteRecordsOf(String id) async {
+    // Reminders first: a recompute that still sees the medicine would re-arm it.
+    for (final m in await getMedicinesForDependent(id)) {
+      try {
+        await MedicationReminderService().cancelRemindersById(m.id);
+      } catch (e) {
+        debugPrint('⚠️ Cancelling reminders for ${m.name} failed: $e');
+      }
+      await deleteMedicine(m.id);
+    }
+
+    // Logs attributed to them whose medicine was someone else's.
+    for (final l in (await getAllLogs(scopeToActiveProfile: false))
+        .where((l) => l.dependentId == id)) {
+      await deleteLog(l.id);
+    }
+
+    for (final r in (await VitalsStorageService.getAllBp(scopeToActiveProfile: false))
+        .where((r) => r.dependentId == id)) {
+      await VitalsStorageService.deleteBp(r.id);
+    }
+    for (final r in (await VitalsStorageService.getAllGlucose(scopeToActiveProfile: false))
+        .where((r) => r.dependentId == id)) {
+      await VitalsStorageService.deleteGlucose(r.id);
+    }
+    for (final r in (await VitalsStorageService.getAllWeight(scopeToActiveProfile: false))
+        .where((r) => r.dependentId == id)) {
+      await VitalsStorageService.deleteWeight(r.id);
+    }
+    for (final r in (await VitalsStorageService.getAllMood(scopeToActiveProfile: false))
+        .where((r) => r.dependentId == id)) {
+      await VitalsStorageService.deleteMood(r.id);
+    }
+
+    for (final a in (await getAllAppointments(scopeToActiveProfile: false))
+        .where((a) => a.dependentId == id)) {
+      await deleteAppointment(a.id); // which withdraws its notices too
+    }
   }
 
   // ============ BACKUP HELPERS ============

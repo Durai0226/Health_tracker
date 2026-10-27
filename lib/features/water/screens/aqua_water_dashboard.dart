@@ -20,6 +20,12 @@ import '../widgets/aqua_quick_add_grid.dart';
 import '../widgets/aqua_timeline_list.dart';
 import '../widgets/aqua_weekly_progress.dart';
 import '../widgets/aqua_beverage_sheet.dart';
+import '../widgets/bottle_card.dart';
+import '../widgets/drink_notes_strip.dart';
+import '../services/water_bottle.dart';
+import '../../../core/health/bottle_mode.dart';
+import '../services/drink_notes.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../models/enhanced_water_log.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
@@ -320,6 +326,62 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     ).then((_) => _loadData());
   }
 
+  /// Edit or delete a cup the person made. The creator already knew how to edit
+  /// (it takes an existing cup) and the service already knew how to delete; there
+  /// was simply no way in.
+  Future<void> _manageCup(WaterContainer cup) async {
+    final ext = AppColorsExt.of(context);
+    final choice = await AppBottomSheet.show<String>(
+      context,
+      title: '${cup.emoji} ${cup.name}',
+      icon: Symbols.local_cafe_rounded,
+      accent: ext.water,
+      builder: (sheetCtx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppListTile(
+            icon: Symbols.edit_rounded,
+            title: 'Edit cup',
+            subtitle: '${cup.capacityMl} ml',
+            accent: ext.water,
+            onTap: () => Navigator.of(sheetCtx).pop('edit'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppListTile(
+            icon: Symbols.delete_rounded,
+            title: 'Delete cup',
+            subtitle: 'Drinks already logged with it stay',
+            accent: ext.error,
+            onTap: () => Navigator.of(sheetCtx).pop('delete'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'edit') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => CustomCupCreatorScreen(existingContainer: cup)),
+      );
+      await _loadData();
+      return;
+    }
+    await WaterService.deleteContainer(cup.id);
+    await _loadData();
+    if (!mounted) return;
+    context.toastSuccess(
+      'Deleted ${cup.name}',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          await WaterService.addCustomContainer(cup);
+          await _loadData();
+        },
+      ),
+    );
+  }
+
   /// Selects a beverage from the inline chip strip, without a round trip
   /// through the picker sheet.
   void _selectBeverage(String id) {
@@ -548,13 +610,9 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         const SizedBox(height: AquaTheme.spacingM),
 
                         // Hydration gauge (always water accent, never beverage-tinted)
-                        WaterHeroGauge(
-                          progress: progress,
-                          currentMl: todayData.effectiveHydrationMl,
-                          goalMl: todayData.dailyGoalMl,
-                          onTap: _showBeverageSelector,
-                        ),
+                        _buildGauge(todayData, progress),
                         _buildActivityGoalNote(),
+                        _buildDrinkNotes(todayData),
 
                         const SizedBox(height: AquaTheme.spacingXL),
                         
@@ -572,10 +630,13 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           onBeverageSelect: _selectBeverage,
                           onContainerAdd: _addWaterFromContainer,
                           onCreateCup: _openCupCreator,
+                          onContainerManage: _manageCup,
                           usual: _usual,
                           onUsual: (u) => _addWater(u.amountMl, u.beverageId),
                         ),
-                        
+                        const SizedBox(height: AquaTheme.spacingM),
+                        _buildBottle(todayData),
+
                         const SizedBox(height: AquaTheme.spacingXL),
 
                         // AI hydration insight — self-loading Calm Clarity card.
@@ -621,6 +682,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                         AquaTimelineList(
                           logs: todayData.logs,
                           maxItems: 5,
+                          // A drink on the list can be changed from the list.
+                          onEdit: _editLog,
                           onViewAll: () => _navigateToHistory(),
                         ),
                         
@@ -1097,6 +1160,18 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     );
   }
 
+  /// Open one of today's drinks in the editor, and read the day again when it is
+  /// saved.
+  void _editLog(EnhancedWaterLog log) {
+    final now = clock.now();
+    WaterEntrySheet.show(
+      context,
+      date: DateTime(now.year, now.month, now.day),
+      existing: log,
+      onSaved: _loadData,
+    );
+  }
+
   void _navigateToHistory() {
     Navigator.push(
       context,
@@ -1135,6 +1210,103 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
             .bodySmall
             ?.copyWith(color: ext.textSecondary),
       ),
+    );
+  }
+
+  /// The hero gauge. On a prescribed fluid limit it counts down to the limit
+  /// from the RAW volume swallowed, which is what a clinician's limit is about
+  /// (see [WaterService.fluidHeadroomMl]); otherwise it counts up to the goal.
+  Widget _buildGauge(DailyWaterData todayData, double progress) {
+    final ceiling = WaterService.isFluidRestricted
+        ? WaterService.getProfile().fluidCeilingMl
+        : null;
+    if (ceiling == null || ceiling <= 0) {
+      return WaterHeroGauge(
+        progress: progress,
+        currentMl: todayData.effectiveHydrationMl,
+        goalMl: todayData.dailyGoalMl,
+        onTap: _showBeverageSelector,
+      );
+    }
+    return WaterHeroGauge(
+      progress: (todayData.totalIntakeMl / ceiling).clamp(0.0, 1.0),
+      currentMl: todayData.totalIntakeMl,
+      goalMl: todayData.dailyGoalMl,
+      limitMl: ceiling,
+      onTap: _showBeverageSelector,
+    );
+  }
+
+  // ---- notes about what was drunk -----------------------------------------
+
+  static const _dismissedNotesKey = 'drink_notes_dismissed';
+
+  /// Today's put-away notes, as `kind` names. Only today's are kept: a note put
+  /// away on Monday has nothing to do with Tuesday's coffee.
+  Set<String> _dismissedNotes() {
+    final raw = CleanStorageService.getAppPreference(
+        _dismissedNotesKey, const <String>[]);
+    final today = WaterService.dateKeyFor(clock.now());
+    return {
+      if (raw is List)
+        for (final e in raw)
+          if (e.toString().startsWith('$today:')) e.toString().substring(11),
+    };
+  }
+
+  Future<void> _dismissNote(DrinkNoteKind kind) async {
+    final today = WaterService.dateKeyFor(clock.now());
+    final next = {..._dismissedNotes(), kind.name};
+    await CleanStorageService.setAppPreference(
+        _dismissedNotesKey, [for (final k in next) '$today:$k']);
+    if (mounted) setState(() {});
+  }
+
+  /// Late caffeine against tonight's bedtime, and a glass of water after
+  /// alcohol, for as long as each is true. Never for someone on a fluid limit
+  /// as far as the water goes: that is not a person to be told to drink more.
+  /// "Your bottle · 750 ml": Finished or Half logs it in one tap, and a line
+  /// says how many bottles are left of the goal (not under a fluid limit: that
+  /// is a ceiling to stay under, not a target to count down to).
+  Widget _buildBottle(DailyWaterData todayData) {
+    final accent = AppColorsExt.of(context).water;
+    final size = WaterBottle.sizeMl;
+    return BottleCard(
+      accent: accent,
+      bottleMl: size,
+      remainingMl: WaterService.isFluidRestricted
+          ? null
+          : todayData.dailyGoalMl - todayData.effectiveHydrationMl,
+      onSetSize: () => _setBottle(accent, size),
+      onFinished: size == null ? null : () => _addWater(size, 'water'),
+      onHalf:
+          size == null ? null : () => _addWater(BottleMode.halfMl(size), 'water'),
+    );
+  }
+
+  Future<void> _setBottle(AccentSwatch accent, int? current) async {
+    final chosen =
+        await BottleSizeSheet.show(context, accent: accent, initialMl: current);
+    if (chosen == null) return;
+    await WaterBottle.setSize(chosen == 0 ? null : chosen);
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildDrinkNotes(DailyWaterData todayData) {
+    final now = clock.now();
+    final dismissed = _dismissedNotes();
+    final late = dismissed.contains(DrinkNoteKind.caffeine.name)
+        ? null
+        : DrinkNotes.lateCaffeine(todayData.logs, now,
+            bedtimeMinutes: WaterService.wakingWindow().sleepMinutes);
+    final chaser = !WaterService.isFluidRestricted &&
+        !dismissed.contains(DrinkNoteKind.alcohol.name) &&
+        DrinkNotes.chaserDue(todayData.logs, now);
+    return DrinkNotesStrip(
+      lateCaffeine: late,
+      showChaser: chaser,
+      onAddWater: () => _addWater(DrinkNotes.chaserMl, 'water'),
+      onDismiss: _dismissNote,
     );
   }
 

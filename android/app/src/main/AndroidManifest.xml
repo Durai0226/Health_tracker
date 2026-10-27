@@ -115,6 +115,21 @@
     <uses-permission android:name="android.permission.health.READ_HYDRATION"/>
     <uses-permission android:name="android.permission.health.WRITE_HYDRATION"/>
 
+    <!-- Cycle history: the user-initiated "Import from Health Connect" on the
+         Cycle screen, which brings past periods in so predictions start with
+         history. READ only — the app never writes menstrual data back.
+
+         READ_MENSTRUATION is MenstruationFlowRecord. READ_HEALTH_DATA_HISTORY is
+         a SEPARATE, feature-gated grant: without it Health Connect shows an app
+         only the 30 days before it was first granted access, which would turn
+         "import two years of periods" into one month. HealthDataService probes
+         for it before asking and the import says so when it is not granted.
+
+         Both need a row on the Play Console Health apps declaration — see
+         docs/release-checklist.md. -->
+    <uses-permission android:name="android.permission.health.READ_MENSTRUATION"/>
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY"/>
+
     <application
         android:label="Dlyminder"
         android:name="${applicationName}"

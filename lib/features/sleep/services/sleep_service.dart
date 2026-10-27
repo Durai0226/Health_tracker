@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tablet_remainder/core/health/bedtime_guidance.dart';
+import 'package:tablet_remainder/core/health/bedtime_plan.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' as db;
 import 'package:tablet_remainder/core/database/daos/sleep_dao.dart';
 import 'package:tablet_remainder/core/database/daos/steps_dao.dart';
@@ -15,6 +16,7 @@ import '../models/sleep_schedule.dart';
 import '../models/sleep_stage.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../../../core/health/sleep_debt.dart';
+import '../../../core/health/sleep_score.dart';
 
 /// Reactive sleep tracking service — the single source of truth for sleep
 /// sessions and the schedule.
@@ -369,28 +371,60 @@ class SleepService {
     return bed;
   }
 
+  /// Tonight's bedtime: the wake time less the sleep needed, the catch-up the
+  /// debt calls for and the time the person usually lies awake in bed (from
+  /// their own measured nights; a hand-logged night's is an estimate).
+  static BedtimePlan bedtimePlan() {
+    final s = _schedule;
+    final today = startOfDay(clock.now());
+    final awake = <int>[];
+    for (var i = 0; i < SleepDebt.windowDays; i++) {
+      final n = _sessionsNotifier.value[_dateKey(dayOffset(today, -i))];
+      if (n != null && n.isMeasured && n.asleepMinutes > 0 && n.inBedMinutes >= n.asleepMinutes) {
+        awake.add(n.inBedMinutes - n.asleepMinutes);
+      }
+    }
+    final debt = sleepDebt();
+    return BedtimePlans.compute(
+      targetMinutes: s.targetMinutes,
+      wakeMinuteOfDay: s.wakeHour * 60 + s.wakeMinute,
+      // The debt is quoted only from enough logged nights.
+      debt: debt.nights >= SleepDebt.minNights ? debt : null,
+      awakeInBedMinutes: awake,
+    );
+  }
+
   /// A 0..100 sleep score from duration-vs-target (60), efficiency (25) and
   /// bedtime regularity (15).
-  static int computeScore(SleepSession session) {
-    final target = _schedule.targetMinutes <= 0 ? 480 : _schedule.targetMinutes;
-    final durationRatio = (session.asleepMinutes / target).clamp(0.0, 1.0);
-    final efficiency = session.efficiencyFraction;
-    final regularity = regularityIndex();
+  static int computeScore(SleepSession session) => SleepScore.score(
+        asleepMinutes: session.asleepMinutes,
+        targetMinutes: _schedule.targetMinutes,
+        efficiency: session.efficiencyFraction,
+        regularity: regularityIndex(),
+      );
 
-    final score =
-        (durationRatio * 60) + (efficiency * 25) + (regularity * 15);
-    return score.round().clamp(0, 100);
-  }
+  /// The three parts of [session]'s stored score. See [SleepScore.parts].
+  static SleepScoreParts scoreParts(SleepSession session) => SleepScore.parts(
+        total: session.sleepScore,
+        asleepMinutes: session.asleepMinutes,
+        targetMinutes: _schedule.targetMinutes,
+        efficiency: session.efficiencyFraction,
+      );
 
   // ============ MANUAL LOGGING ============
 
   /// Logs a hand-entered session, estimating asleep/efficiency from the quality
   /// self-report (no measured stages). Recomputes the score and persists.
+  ///
+  /// [editing] is the night being CHANGED rather than a new one: it keeps that
+  /// night's row and creation time, and if the wake date moved the night leaves
+  /// its old date behind. Use [editManualNight], which checks the move first.
   static Future<SleepSession> logManualSession({
     required DateTime bedtime,
     required DateTime wakeTime,
     int quality = 4,
     String? note,
+    SleepSession? editing,
   }) async {
     var inBed = wakeTime.difference(bedtime).inMinutes;
     if (inBed <= 0) {
@@ -417,11 +451,11 @@ class SleepService {
     // sharing the same `dateKey`: the reader ([_winsOver]) picked one and the
     // other became invisible — impossible to see, correct or delete — while
     // still occupying the database and cloud sync forever.
-    final prior = _sessionsNotifier.value[key];
+    final prior = editing != null ? null : _sessionsNotifier.value[key];
     final replacing = prior != null && prior.source == SleepSource.manual;
 
     var session = SleepSession(
-      id: replacing ? prior.id : _uuid.v4(),
+      id: editing?.id ?? (replacing ? prior.id : _uuid.v4()),
       dateKey: key,
       bedtime: bedtime,
       wakeTime: wakeTime,
@@ -433,9 +467,14 @@ class SleepService {
       qualityIndex: q,
       source: SleepSource.manual,
       note: (note != null && note.trim().isEmpty) ? null : note?.trim(),
-      createdAt: replacing ? prior.createdAt : now,
+      createdAt: editing?.createdAt ?? (replacing ? prior.createdAt : now),
       updatedAt: now,
     );
+
+    // A night moved to another date leaves its old date empty: same row, new key.
+    if (editing != null && editing.dateKey != key) {
+      _sessionsNotifier.value.remove(editing.dateKey);
+    }
 
     // Insert first so the score's regularity term sees this night, then score.
     _sessionsNotifier.value[key] = session;
@@ -461,6 +500,88 @@ class SleepService {
       await _dao.upsert(session.toCompanion());
     } catch (e) {
       debugPrint('⚠️ SleepService restoreSession failed: $e');
+    }
+  }
+
+  /// A night as it was before an edit, and as it is after: what Undo needs.
+  static Future<SleepEditResult> editManualNight(
+    SleepSession original, {
+    required DateTime bedtime,
+    required DateTime wakeTime,
+    required int quality,
+    String? note,
+  }) async {
+    if (original.source != SleepSource.manual) {
+      return const SleepEditResult.problem(
+          'That night came from your health app. To change it, change it there.');
+    }
+    final newKey = _dateKey(wakeTime);
+    if (newKey != original.dateKey) {
+      // Not onto a date that already has a night: that would be two nights for
+      // one date, and one of them invisible.
+      final taken = _sessionsNotifier.value[newKey] ??
+          await _nightOnDate(newKey);
+      if (taken != null && taken.id != original.id) {
+        return const SleepEditResult.problem(
+            'There is already a night logged for that date.');
+      }
+    }
+    final after = await logManualSession(
+      bedtime: bedtime,
+      wakeTime: wakeTime,
+      quality: quality,
+      note: note,
+      editing: original,
+    );
+    return SleepEditResult.ok(SleepEdit(before: original, after: after));
+  }
+
+  /// Put a night back as it was before [edit]: on its old date, as it left.
+  static Future<void> undoEdit(SleepEdit edit) async {
+    if (edit.after.dateKey != edit.before.dateKey) {
+      _sessionsNotifier.value.remove(edit.after.dateKey);
+    }
+    await restoreSession(edit.before);
+  }
+
+  static Future<SleepSession?> _nightOnDate(String dateKey) async {
+    try {
+      final row = await _dao.getForDateKey(dateKey);
+      return row == null ? null : SleepSession.fromRow(row);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Nights that ended before [before], newest first, at most [limit]: the
+  /// history past the five weeks held in memory, a page at a time. One night per
+  /// date (the one [_winsOver] would show), deleted nights never.
+  static Future<List<SleepSession>> earlierNights(
+      {required DateTime before, int limit = 30}) async {
+    try {
+      // Fetch more than asked: two rows sharing a date collapse to one.
+      final rows = await _dao.getBefore(before, limit * 2);
+      final byKey = <String, SleepSession>{};
+      for (final r in rows) {
+        final s = SleepSession.fromRow(r);
+        final current = byKey[s.dateKey];
+        if (current == null || _winsOver(s, current)) byKey[s.dateKey] = s;
+      }
+      final list = byKey.values.toList()
+        ..sort((a, b) => b.wakeTime.compareTo(a.wakeTime));
+      return list.take(limit).toList();
+    } catch (e) {
+      debugPrint('⚠️ SleepService earlierNights failed: $e');
+      return const [];
+    }
+  }
+
+  /// Whether any night ended before [before].
+  static Future<bool> hasEarlier({required DateTime before}) async {
+    try {
+      return (await _dao.getBefore(before, 1)).isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -708,6 +829,61 @@ class SleepService {
     return true;
   }
 
+  /// [points], from the one app that saw most of the night.
+  ///
+  /// A watch's own app and a phone tracker, both connected to the health store,
+  /// each write a full night; summing every segment counted it twice — fourteen
+  /// hours "asleep", an efficiency pinned at 100%. One source is chosen by how
+  /// much sleep it recorded (stages, or a bare asleep total), the one with
+  /// stages winning a tie; segments that name no source are one source, as they
+  /// always were.
+  static List<HealthDataPoint> _fromOneSource(List<HealthDataPoint> points) {
+    String idOf(HealthDataPoint p) =>
+        p.sourceId.isNotEmpty ? p.sourceId : (p.sourceName.isNotEmpty ? p.sourceName : '');
+    final bySource = <String, List<HealthDataPoint>>{};
+    for (final p in points) {
+      (bySource[idOf(p)] ??= []).add(p);
+    }
+    if (bySource.length <= 1) return points;
+
+    // Minutes of sleep each recorded, and whether in stages.
+    ({int minutes, bool staged}) coverage(List<HealthDataPoint> group) {
+      var staged = 0, generic = 0, session = 0;
+      for (final p in group) {
+        final m = p.dateTo.difference(p.dateFrom).inMinutes;
+        if (m <= 0) continue;
+        switch (p.type) {
+          case HealthDataType.SLEEP_DEEP:
+          case HealthDataType.SLEEP_LIGHT:
+          case HealthDataType.SLEEP_REM:
+            staged += m;
+          case HealthDataType.SLEEP_ASLEEP:
+            generic += m;
+          case HealthDataType.SLEEP_SESSION:
+            session += m;
+          default:
+            break;
+        }
+      }
+      final minutes = staged > 0 ? staged : (generic > 0 ? generic : session);
+      return (minutes: minutes, staged: staged > 0);
+    }
+
+    List<HealthDataPoint>? best;
+    ({int minutes, bool staged})? bestCoverage;
+    for (final group in bySource.values) {
+      final c = coverage(group);
+      final better = bestCoverage == null ||
+          c.minutes > bestCoverage.minutes ||
+          (c.minutes == bestCoverage.minutes && c.staged && !bestCoverage.staged);
+      if (better) {
+        best = group;
+        bestCoverage = c;
+      }
+    }
+    return best ?? points;
+  }
+
   /// Aggregate one night's raw [HealthDataPoint] segments into a [SleepSession].
   ///
   /// Only the night itself is aggregated. This used to fold EVERY segment in
@@ -718,7 +894,8 @@ class SleepService {
   /// out of the night's figures and recorded in the note rather than thrown
   /// away; everything else is the night, however fragmented.
   static SleepSession? _aggregate(
-      String dateKey, List<HealthDataPoint> allPoints, SleepSource source) {
+      String dateKey, List<HealthDataPoint> everyPoint, SleepSource source) {
+    final allPoints = _fromOneSource(everyPoint);
     final episodes = _splitEpisodes(allPoints);
     final nightEpisodes =
         episodes.where((e) => !_isDaytimeNap(e)).toList(growable: false);
@@ -845,4 +1022,21 @@ class SleepService {
     _sessionsNotifier.value = {};
     _schedule = const SleepSchedule();
   }
+}
+
+/// A hand-logged night changed: as it was, and as it is. What Undo needs.
+class SleepEdit {
+  const SleepEdit({required this.before, required this.after});
+
+  final SleepSession before;
+  final SleepSession after;
+}
+
+/// The outcome of [SleepService.editManualNight]: the edit, or why not.
+class SleepEditResult {
+  const SleepEditResult.ok(SleepEdit this.edit) : problem = null;
+  const SleepEditResult.problem(String this.problem) : edit = null;
+
+  final SleepEdit? edit;
+  final String? problem;
 }

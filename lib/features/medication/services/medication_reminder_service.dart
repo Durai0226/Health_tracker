@@ -206,10 +206,13 @@ class MedicationReminderService {
     final List<ScheduledTime> slots;
     final String frequency;
     if (medicine.schedule.frequencyType == FrequencyType.everyXHours) {
-      slots = medicine.schedule
-          .getScheduledTimesForDate(DateTime.now())
-          .map((d) => ScheduledTime(hour: d.hour, minute: d.minute))
-          .toList();
+      // The schedule's own clock times, not today's DateTimes read back: a slot in
+      // the hour the clocks skip would come back an hour later, and be armed there
+      // every day after.
+      slots = [
+        for (final t in medicine.schedule.everyXHoursClockTimesOn(DateTime.now()))
+          ScheduledTime(hour: t.hour, minute: t.minute)
+      ];
       frequency = 'daily';
     } else {
       slots = medicine.schedule.times;

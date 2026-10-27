@@ -110,7 +110,9 @@ rule Google applies: **the justification must point at a feature a reviewer can
 see in the app.** Generic wording ("to improve the user experience") gets
 rejected.
 
-The app declares 20 health permissions. Copy these:
+The table below has 22 health permissions. (`WRITE_MINDFULNESS` and
+`READ_HEALTH_DATA_IN_BACKGROUND` are declared too and still need rows — see
+the Focus section.) Copy these:
 
 | Permission | Justification |
 |---|---|
@@ -134,6 +136,8 @@ The app declares 20 health permissions. Copy these:
 | `WRITE_WEIGHT` | Optional, off by default: same, for weight. |
 | `READ_HYDRATION` | Lets the Water tracker count drinks the user logged in another app, so the daily total is their real intake rather than only what they entered here. |
 | `WRITE_HYDRATION` | Optional, off by default: writes each drink the user logs in DlyMinder (amount and time) back to Health Connect so Samsung Health, Fitbit and their other apps can see it. |
+| `READ_MENSTRUATION` | User-initiated import of past period days from Health Connect into Cycle history, so the predictions start with real history. Read only, never in the background, and never written back. |
+| `READ_HEALTH_DATA_HISTORY` | Health Connect only shows an app the 30 days before it was first granted access. Needed so the same Cycle import can reach the user's past periods (up to two years) rather than one month. Requested only when the user taps Import. |
 
 > The Heart and Workouts screens these justifications name now exist and are
 > reachable from the Health tab, so this form is ready to submit — **once the

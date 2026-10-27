@@ -327,17 +327,25 @@ class ProactiveNudgeBanner extends StatelessWidget {
                 Text(insight.detail,
                     style: tt.bodySmall?.copyWith(color: ext.textSecondary, height: 1.35)),
                 const SizedBox(height: 4),
-                Row(children: [
-                  WhyThisChip(why: insight.why),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: onDismiss,
-                    style: TextButton.styleFrom(
-                        foregroundColor: ext.textTertiary,
-                        visualDensity: VisualDensity.compact),
-                    child: const Text('Dismiss'),
-                  ),
-                ]),
+                // A Wrap, not a Row with a Spacer: a Spacer absorbs slack but
+                // cannot create any, and the two controls are both fixed-width.
+                // Side by side they sit at opposite ends as before; on a narrow
+                // card, or at a large text size, the second drops to its own line
+                // instead of running off the edge (52px at 320pt).
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    WhyThisChip(why: insight.why),
+                    TextButton(
+                      onPressed: onDismiss,
+                      style: TextButton.styleFrom(
+                          foregroundColor: ext.textTertiary,
+                          visualDensity: VisualDensity.compact),
+                      child: const Text('Dismiss'),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -454,6 +462,16 @@ class InsightCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(insight.detail,
               style: tt.bodyMedium?.copyWith(color: ext.textSecondary, height: 1.4)),
+          // How much to believe it: the sample, and a word for what it adds up
+          // to. Only a cross-day pattern has one.
+          if (insight.evidence != null) ...[
+            const SizedBox(height: 6),
+            Text(insight.evidence!.line,
+                style: tt.bodySmall?.copyWith(
+                    color: ext.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: kTabular)),
+          ],
           const SizedBox(height: AppSpacing.md),
           Container(height: 1, color: ext.outline),
           const SizedBox(height: AppSpacing.sm),

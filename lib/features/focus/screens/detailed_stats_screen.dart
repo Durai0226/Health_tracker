@@ -14,6 +14,7 @@ import '../models/focus_session.dart';
 import '../services/stats_service.dart';
 import '../services/focus_service.dart';
 import '../services/tag_service.dart';
+import 'focus_achievements_screen.dart';
 import 'focus_garden_screen.dart';
 
 /// Consolidated focus statistics hub (FOCUS-4).
@@ -892,6 +893,12 @@ class _DetailedStatsScreenState extends State<DetailedStatsScreen> {
           title: 'Achievements',
           icon: Symbols.workspace_premium_rounded,
           accent: ext.focus,
+          // Only the latest six and the nearest three are shown here.
+          actionLabel: 'See all',
+          onAction: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const FocusAchievementsScreen()),
+          ),
         ),
         AppCard(
           child: Column(

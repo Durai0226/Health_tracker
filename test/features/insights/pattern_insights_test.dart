@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/core/health/insight.dart';
+import 'package:tablet_remainder/core/health/mood_tag_insights.dart';
 import 'package:tablet_remainder/features/insights/services/pattern_insights.dart';
 
 Insight ins(String id, InsightSeverity s, {double rank = 0}) => Insight(
@@ -39,6 +40,26 @@ void main() {
         expect(engines, contains("'$id'"),
             reason: '$id is in the list but nothing produces it');
       }
+    });
+
+    test('every mood-tag insight the engine produces is one', () {
+      final days = [
+        for (var i = 0; i < 6; i++) ...[
+          DayMood(day: DateTime(2026, 3, 1 + i), score: 4, tags: {'walk'}),
+          DayMood(day: DateTime(2026, 3, 11 + i), score: 1, tags: const {}),
+        ],
+      ];
+      final produced = MoodTagInsights.insights(days);
+      expect(produced, isNotEmpty, reason: 'the fixture should make one');
+      final g = PatternInsights.group(produced);
+      expect(g.length, produced.length);
+      expect(g.wins.single.id, 'mood_tag_walk');
+    });
+
+    test('and only ids that START with the prefix', () {
+      expect(PatternInsights.isPattern('mood_tag_walk'), isTrue);
+      expect(PatternInsights.isPattern('x_mood_tag_walk'), isFalse);
+      expect(PatternInsights.isPattern('mood_tags'), isFalse);
     });
 
     test('a today-scoped insight is not a pattern', () {

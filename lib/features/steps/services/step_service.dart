@@ -43,6 +43,11 @@ class StepService {
 
   static HealthProfile _profile = const HealthProfile();
 
+  /// Every day whose goal was reached, from the whole history. The in-memory
+  /// window is only the last ~35 days, so a streak counted from it alone could
+  /// never be longer than that. See [_completedDays].
+  static Set<DateTime> _historicGoalDays = {};
+
   // ---- Live pedometer tracking state -------------------------------------
   static StreamSubscription<StepCount>? _liveSub;
   static int? _liveBaseline; // cumulative-since-boot at first event
@@ -129,6 +134,14 @@ class StepService {
       debugPrint('✓ StepService loaded ${map.length} days from Drift');
     } catch (e) {
       debugPrint('⚠️ StepService load failed (using empty): $e');
+    }
+
+    try {
+      _historicGoalDays = {
+        for (final d in await _dao.getGoalReachedDates()) _dayOnly(d),
+      };
+    } catch (e) {
+      debugPrint('⚠️ StepService goal history load failed: $e');
     }
   }
 
@@ -404,10 +417,15 @@ class StepService {
   /// Days (in loaded history) whose step goal was reached — the input to the
   /// forgiving [StreakEngine].
   static Set<DateTime> _completedDays() {
-    final out = <DateTime>{};
+    // The whole history first, then the days in memory on top: those are fresher
+    // (today's goal can be reached, or un-reached by an edit, since the load).
+    final out = <DateTime>{..._historicGoalDays};
     for (final d in _dailyNotifier.value.values) {
+      final day = DateTime(d.date.year, d.date.month, d.date.day);
       if (d.goalReached) {
-        out.add(DateTime(d.date.year, d.date.month, d.date.day));
+        out.add(day);
+      } else {
+        out.remove(day);
       }
     }
     return out;
@@ -767,9 +785,10 @@ class StepService {
   /// day of [syncFromHealth].
   @visibleForTesting
   static StepDailyData storeHealthDayForTesting(DateTime date, int healthSteps,
-      {required bool isToday}) {
+      {required bool isToday, List<int>? hourly}) {
     final key = _dateKey(date);
-    final day = _dailyNotifier.value[key] ?? _newDay(date);
+    var day = _dailyNotifier.value[key] ?? _newDay(date);
+    if (hourly != null) day = day.copyWith(hourly: hourly);
     final merged = _storeHealthDay(key, day, healthSteps, isToday);
     _notifyListeners();
     return merged;
@@ -835,6 +854,7 @@ class StepService {
     // the ones the wipe is removing.
     unawaited(stopLiveTracking(flush: false));
     _dailyNotifier.value = {};
+    _historicGoalDays = {};
     _profile = const HealthProfile();
     _observedAt = null;
   }
@@ -846,6 +866,7 @@ class StepService {
     _livePersistWindow = livePersistInterval;
     await stopLiveTracking(flush: false);
     _dailyNotifier.value = {};
+    _historicGoalDays = {};
     _profile = const HealthProfile();
   }
 

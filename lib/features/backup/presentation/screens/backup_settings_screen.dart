@@ -88,7 +88,7 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
       final restored = await _backupService.restoreBackup();
       if (!mounted) return;
       if (restored) {
-        _snack('Data restored. Please restart the app.', isError: false);
+        _snack('Data restored.', isError: false);
       } else {
         // false == user canceled the file picker (not an error).
         _snack('Restore canceled.', isError: false, neutral: true);

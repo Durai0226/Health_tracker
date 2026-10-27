@@ -8,6 +8,8 @@ import '../../../../core/utils/relative_time.dart';
 import '../../models/condition_info.dart';
 import '../../services/condition_library_service.dart';
 import '../nunito_medication_detail_screen.dart';
+import '../vitals/blood_pressure_screen.dart';
+import '../vitals/blood_sugar_screen.dart';
 
 /// Detail view for one [ConditionInfo] — overview, common symptoms, self-care
 /// tips, and red-flag symptoms. General education only; see
@@ -44,6 +46,18 @@ class _ConditionDetailScreenState extends State<ConditionDetailScreen> {
     // The second select of the 1-3 contract, and only for the two conditions
     // that have an objective measurement. Twelve of the fourteen pages never
     // ask.
+    final r = await ConditionLibraryService.readingsFor(condition.id);
+    if (mounted) setState(() => _readings = r);
+  }
+
+  /// Where the readings card goes: the screen that holds them. Then the card is
+  /// read again, because the reason to go there is to log one.
+  Future<void> _openReadings() async {
+    final Widget screen = condition.id == 'hypertension'
+        ? const BloodPressureScreen()
+        : const BloodSugarScreen();
+    await Navigator.push(context, MaterialPageRoute<void>(builder: (_) => screen));
+    if (!mounted) return;
     final r = await ConditionLibraryService.readingsFor(condition.id);
     if (mounted) setState(() => _readings = r);
   }
@@ -209,6 +223,9 @@ class _ConditionDetailScreenState extends State<ConditionDetailScreen> {
           accent: accent),
       const SizedBox(height: AppSpacing.sm),
       AppCard(
+        // The card shows the latest reading and a count; the readings themselves,
+        // and the form to add one, are a tap away.
+        onTap: _openReadings,
         child: Row(
           children: [
             Expanded(
@@ -237,6 +254,9 @@ class _ConditionDetailScreenState extends State<ConditionDetailScreen> {
                 style: tt.bodySmall?.copyWith(color: ext.textTertiary),
               ),
             ),
+            const SizedBox(width: AppSpacing.xs),
+            Icon(Symbols.chevron_right_rounded,
+                size: 20, color: ext.textTertiary),
           ],
         ),
       ),

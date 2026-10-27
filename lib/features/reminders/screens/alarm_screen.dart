@@ -14,10 +14,12 @@ import 'package:just_audio/just_audio.dart';
 import '../../../core/design/app_colors_ext.dart';
 import '../../../core/services/background_alarm_service.dart'
     show doseInstantFromAlarmPayload;
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../main.dart' show navigatorKey;
 import '../../medication/models/medicine_enums.dart' show SkipReason;
 import '../../medication/services/medicine_storage_service.dart';
+import '../services/reminder_completion.dart';
 
 /// The full-screen reminder alert — "Aurora Veil" glassmorphism.
 ///
@@ -295,6 +297,38 @@ class _AlarmScreenState extends State<AlarmScreen>
           scheduledTime: scheduled,
           reason: SkipReason.other,
         );
+      } catch (_) {}
+    }
+    if (id != null) {
+      try {
+        await NotificationService().cancelNotification(id);
+      } catch (_) {}
+    }
+  }
+
+  /// The reminder this alarm is for, when it is one the person made. A
+  /// medicine or an alarm with no list entry has none, and so no "done".
+  String? get _reminderId {
+    final id = widget.payload['reminderId'];
+    return id is String && id.isNotEmpty ? id : null;
+  }
+
+  /// Reminders only: mark it done right here (foreground, so Drift is
+  /// available), cancel the notification, and leave — the same completion the
+  /// notification's Done button and the list's tick share.
+  Future<void> _handleDone() async {
+    HapticFeedback.mediumImpact();
+    final reminderId = _reminderId;
+    final id = _payloadId();
+    _exit(); // close instantly; the write below can never block it
+    if (reminderId != null) {
+      try {
+        final reminder = CleanStorageService.getReminders()
+            .where((r) => r.id == reminderId)
+            .firstOrNull;
+        if (reminder != null) {
+          await ReminderCompletion.markDone(reminder, source: 'alarm');
+        }
       } catch (_) {}
     }
     if (id != null) {
@@ -649,6 +683,14 @@ class _AlarmScreenState extends State<AlarmScreen>
             onTap: _handleSkip,
           ),
           const SizedBox(height: 12),
+        ] else if (_reminderId != null) ...[
+          _TakeChip(
+            ext: ext,
+            label: 'Mark done',
+            semanticLabel: 'Mark reminder done',
+            onTap: _handleDone,
+          ),
+          const SizedBox(height: 12),
         ],
         Row(
           children: [
@@ -976,8 +1018,14 @@ class _SnoozeChipState extends State<_SnoozeChip> {
 class _TakeChip extends StatefulWidget {
   final AppColorsExt ext;
   final String label;
+  final String semanticLabel;
   final VoidCallback onTap;
-  const _TakeChip({required this.ext, required this.label, required this.onTap});
+  const _TakeChip({
+    required this.ext,
+    required this.label,
+    required this.onTap,
+    this.semanticLabel = 'Mark medicine taken',
+  });
   @override
   State<_TakeChip> createState() => _TakeChipState();
 }
@@ -989,7 +1037,7 @@ class _TakeChipState extends State<_TakeChip> {
     final accent = widget.ext.mark(widget.ext.medicine);
     return Semantics(
       button: true,
-      label: 'Mark medicine taken',
+      label: widget.semanticLabel,
       child: GestureDetector(
         onTapDown: (_) => setState(() => _down = true),
         onTapCancel: () => setState(() => _down = false),

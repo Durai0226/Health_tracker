@@ -24,6 +24,7 @@ import 'package:tablet_remainder/features/biometrics/screens/health_source_detai
 import 'package:tablet_remainder/features/backup/presentation/screens/backup_settings_screen.dart';
 import 'package:tablet_remainder/features/medication/data/condition_library_data.dart';
 import 'package:tablet_remainder/features/medication/screens/conditions/condition_detail_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/medicine_history_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_detail_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/refill_overview_screen.dart';
 import 'package:tablet_remainder/features/period/screens/period_reminder_settings_screen.dart';
@@ -54,6 +55,8 @@ import 'package:tablet_remainder/features/water/screens/water_history_edit_scree
 import 'package:tablet_remainder/features/diary/screens/diary_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/focus_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/custom_tags_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/breathing_history_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/focus_achievements_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/focus_garden_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/app_allow_list_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/plant_real_trees_screen.dart';
@@ -66,6 +69,7 @@ import 'package:tablet_remainder/features/medication/screens/nunito_medication_d
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/analytics/nunito_adherence_report_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/appointments/nunito_appointment_list_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/appointments/visit_brief_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/clinics/nunito_clinic_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/doctors/nunito_doctor_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/blood_pressure_screen.dart';
@@ -96,12 +100,15 @@ import 'package:tablet_remainder/features/water/screens/hydration_profile_screen
 import 'package:tablet_remainder/features/water/screens/custom_cup_creator_screen.dart';
 import 'package:tablet_remainder/features/water/screens/aqua_water_dashboard.dart';
 import 'package:tablet_remainder/features/home/screens/home_dashboard.dart';
+import 'package:tablet_remainder/features/home/screens/emergency_card_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_dashboard_screen.dart';
 import 'package:tablet_remainder/features/period/screens/period_dashboard.dart';
 import 'package:tablet_remainder/features/onboarding/screens/welcome_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/backup_screen.dart';
 import 'package:tablet_remainder/features/reminders/screens/alarm_screen.dart';
 import 'package:tablet_remainder/features/insights/screens/trends_dashboard_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/vitals/mood_year_screen.dart';
+import 'package:tablet_remainder/features/period/screens/cycle_privacy_screen.dart';
 
 /// Surfaces that render nothing ON PURPOSE, with the reason.
 ///
@@ -183,7 +190,9 @@ const Map<String, int> _rowCutBaseline = {
   // All harness-font — it cuts "May be unstable", fifteen characters, on one
   // line of a 134pt column.
   'early_access': 55,
-  'focus_reminders': 10,
+  // 5, down from 10: the reminders are off until switched on, so the Best hour
+  // and Reminder time rows are not there at rest and no longer count.
+  'focus_reminders': 5,
   // 8, down from 12: the Feature-haptics section now generates six rows from
   // `HapticFeature.values` instead of seven hand-written ones, and the
   // generated titles ("Medicine", "Water", "Focus") are shorter than the
@@ -200,6 +209,11 @@ const Map<String, int> _rowCutBaseline = {
   // 51 rather than a handful because this screen is four reminder rows at four
   // widths and three scales, each contributing a title and a status.
   'period_reminders': 51,
+  // Cycle privacy: the long explanations live in the section footers, so the
+  // four that remain are one title — "Private reminders", seventeen characters
+  // across two lines of a 142pt column — which the harness font cuts and real
+  // Inter fits ("reminders" is nine of its characters on one line).
+  'cycle_privacy': 4,
   // 27 -> 23: AppListTile's subtitle now wraps to two lines instead of
   // ellipsizing at one. Found on a real device at DEFAULT text size, which is
   // the part worth recording — this baseline's own note attributes row cuts to
@@ -348,6 +362,8 @@ final Map<String, ScreenBuilder> _screens = {
   'focus': () => const FocusScreen(),
   'focus_tags': () => const CustomTagsScreen(),
   'focus_garden': () => const FocusGardenScreen(),
+  'focus_achievements': () => const FocusAchievementsScreen(),
+  'breathing_history': () => const BreathingHistoryScreen(),
   'focus_apps': () => const AppAllowListScreen(),
   'plant_trees': () => const PlantRealTreesScreen(),
   'relaxation': () => const RelaxationScreen(),
@@ -365,6 +381,7 @@ final Map<String, ScreenBuilder> _screens = {
   'glucose': () => const BloodSugarScreen(),
   'weight': () => const WeightScreen(),
   'mood': () => const MoodScreen(),
+  'mood_year': () => const MoodYearScreen(),
   'period_calendar': () => const PeriodCalendarScreen(),
   'cycle_history': () => const CycleHistoryScreen(),
   'reminders': () => const RemindersScreen(),
@@ -400,6 +417,8 @@ final Map<String, ScreenBuilder> _screens = {
   'home': () => HomeDashboard(onNavigate: (int i, {int? healthTab}) {}),
   'steps': () => const StepsDashboardScreen(),
   'period': () => const PeriodDashboard(),
+  'cycle_privacy': () => const CyclePrivacyScreen(),
+  'emergency_card': () => const EmergencyCardScreen(),
   'welcome': () => const WelcomeScreen(),
   'backup': () => const BackupScreen(),
   'alarm': () => const AlarmScreen(payload: {'title': 'Metformin 500mg extended release', 'body': 'Time for your evening dose'}),
@@ -434,8 +453,11 @@ final Map<String, ScreenBuilder> _screens = {
         condition:
             conditionLibrary.firstWhere((c) => c.id == 'hypertension'),
       ),
+  'visit_brief': () => VisitBriefScreen(appointment: seededAppointment(_seedNow)),
   'medicine_detail': () =>
       NunitoMedicationDetailScreen(medicine: seededMedicine(_seedNow)),
+  'medicine_history': () =>
+      MedicineHistoryScreen(medicine: seededMedicine(_seedNow)),
   'health_source_detail': () => HealthSourceDetailScreen(
         controller: seededSourceController(_seedNow),
         sourceId: kFixtureSourceId,

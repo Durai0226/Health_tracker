@@ -55,6 +55,7 @@ import 'package:tablet_remainder/features/medication/data/condition_library_data
 import 'package:tablet_remainder/features/medication/screens/analytics/nunito_adherence_report_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/appointments/nunito_add_edit_appointment_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/appointments/nunito_appointment_list_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/appointments/visit_brief_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/clinics/nunito_add_edit_clinic_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/clinics/nunito_clinic_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/conditions/condition_detail_screen.dart';
@@ -62,6 +63,7 @@ import 'package:tablet_remainder/features/medication/screens/dependents/add_edit
 import 'package:tablet_remainder/features/medication/screens/dependents/dependent_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/doctors/nunito_add_edit_doctor_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/doctors/nunito_doctor_list_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/medicine_history_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_detail_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/refill_overview_screen.dart';
@@ -83,6 +85,7 @@ import 'package:tablet_remainder/features/settings/screens/reminders_hub_screen.
 import 'package:tablet_remainder/features/settings/screens/security_settings_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_history_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_schedule_settings_screen.dart';
+import 'package:tablet_remainder/features/home/screens/emergency_card_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_dashboard_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_goal_settings_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_history_screen.dart';
@@ -96,6 +99,8 @@ import 'package:tablet_remainder/features/water/screens/water_statistics_screen.
 import 'package:tablet_remainder/features/focus/screens/focus_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/custom_tags_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/detailed_stats_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/breathing_history_screen.dart';
+import 'package:tablet_remainder/features/focus/screens/focus_achievements_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/focus_garden_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/app_allow_list_screen.dart';
 import 'package:tablet_remainder/features/focus/screens/plant_real_trees_screen.dart';
@@ -118,6 +123,8 @@ import 'package:tablet_remainder/features/sleep/screens/sleep_dashboard_screen.d
 import 'package:tablet_remainder/features/water/screens/aqua_water_dashboard.dart';
 import 'package:tablet_remainder/features/water/screens/caffeine_insights_screen.dart';
 import 'package:tablet_remainder/features/water/screens/water_calendar_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/vitals/mood_year_screen.dart';
+import 'package:tablet_remainder/features/period/screens/cycle_privacy_screen.dart';
 
 /// The instant both responsive harnesses pin, for the same reason: `qa_seed`
 /// anchors its history to "now", so an unpinned run measures a different screen
@@ -202,9 +209,12 @@ final Map<String, int> _comfortBaseline = {
   // 6 switches (the evening blood-pressure reminder is the sixth). Every entry
   // is the 59x39 CupertinoSwitch pattern above; the row is the real target.
   'vitals_reminders': 51,
-  // 3 switches (Best hour is the third). Every entry is the 59x39
+  // 2 switches at rest (Best hour appears only once the daily reminder is
+  // switched on, and it is off until then). Every entry is the 59x39
   // CupertinoSwitch pattern above; the row is the real target.
-  'focus_reminders': 24,
+  //
+  // 15, down from 24.
+  'focus_reminders': 15,
   // 9: one switch, nothing else. Step 4 has real ones of its own.
   //
   // Was 10 — the tenth was the reminder-window caption row at 346x32, and on
@@ -251,6 +261,10 @@ final Map<String, int> _comfortBaseline = {
   'notif_settings': 51,
   'early_access': 27, // three switches
   'period_reminders': 27, // three switches
+  // 2 switches (Private reminders, Leave out of backups): 15 rather than 18
+  // because the second is outside the built extent at one scale. The 59x39
+  // CupertinoSwitch pattern above; the row is the real target.
+  'cycle_privacy': 15,
   // 18, and the second real one: the "All / Unlocked / Locked" filter segments
   // at 130x43 — one point short, at every scale. Each segment is counted twice
   // (the `InkWell` and the `GestureDetector` inside it), so this is three
@@ -285,6 +299,8 @@ final Map<String, Widget Function()> _screens = {
   'focus_tags': () => const CustomTagsScreen(),
   'focus_stats': () => const DetailedStatsScreen(),
   'focus_garden': () => const FocusGardenScreen(),
+  'focus_achievements': () => const FocusAchievementsScreen(),
+  'breathing_history': () => const BreathingHistoryScreen(),
   'focus_apps': () => const AppAllowListScreen(),
   'plant_trees': () => const PlantRealTreesScreen(),
   'relaxation': () => const RelaxationScreen(),
@@ -302,6 +318,7 @@ final Map<String, Widget Function()> _screens = {
   'glucose': () => const BloodSugarScreen(),
   'glucose_report': () => const BloodSugarReportScreen(),
   'mood': () => const MoodScreen(),
+  'mood_year': () => const MoodYearScreen(),
   'weight': () => const WeightScreen(),
   // Five entries for one screen, because `PageView` builds only the page it is
   // showing: registering the flow once measures step 1 and reports silence for
@@ -350,6 +367,8 @@ final Map<String, Widget Function()> _screens = {
   'steps': () => const StepsDashboardScreen(),
   'steps_history': () => const StepsHistoryScreen(),
   'period': () => const PeriodDashboard(),
+  'cycle_privacy': () => const CyclePrivacyScreen(),
+  'emergency_card': () => const EmergencyCardScreen(),
   'water_stats': () => const WaterStatisticsScreen(),
   'water_awards': () => const WaterAchievementsScreen(),
   'hydration_profile': () => const HydrationProfileScreen(),
@@ -386,8 +405,11 @@ final Map<String, Widget Function()> _screens = {
   'condition_detail': () => ConditionDetailScreen(
         condition: conditionLibrary.firstWhere((c) => c.id == 'hypertension'),
       ),
+  'visit_brief': () => VisitBriefScreen(appointment: seededAppointment(_seedNow)),
   'medicine_detail': () =>
       NunitoMedicationDetailScreen(medicine: seededMedicine(_seedNow)),
+  'medicine_history': () =>
+      MedicineHistoryScreen(medicine: seededMedicine(_seedNow)),
   'health_source_detail': () => HealthSourceDetailScreen(
         controller: seededSourceController(_seedNow),
         sourceId: kFixtureSourceId,

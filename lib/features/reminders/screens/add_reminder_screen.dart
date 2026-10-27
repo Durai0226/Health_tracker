@@ -20,6 +20,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../services/reminder_pause_until.dart';
 import '../widgets/reminder_end_pause_controls.dart';
+import '../widgets/reminder_rule_editor.dart';
+import '../models/reminder_rule_edit.dart';
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminder;
@@ -42,6 +44,12 @@ class AddReminderScreen extends StatefulWidget {
   final DateTime? initialEndsAt;
   final int? initialOccurrenceLimit;
 
+  /// From "until done" in Smart Add: follow up until it is acted on.
+  final ReminderEscalation? initialEscalation;
+
+  /// The message line, from a Smart Add heads-up: "At 3:00 PM".
+  final String? initialBody;
+
   const AddReminderScreen({
     super.key,
     this.reminder,
@@ -55,6 +63,8 @@ class AddReminderScreen extends StatefulWidget {
     this.initialRecurrenceRule,
     this.initialEndsAt,
     this.initialOccurrenceLimit,
+    this.initialEscalation,
+    this.initialBody,
   });
 
   @override
@@ -193,6 +203,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _recurrenceRule = widget.initialRecurrenceRule;
       _endsAt = widget.initialEndsAt;
       _occurrenceLimit = widget.initialOccurrenceLimit;
+      if (widget.initialEscalation != null) {
+        _escalation = widget.initialEscalation!;
+      }
+      if (widget.initialBody != null) {
+        _bodyController.text = widget.initialBody!;
+      }
     }
 
     // Seed from the sync cache, then refresh from Drift.
@@ -575,6 +591,27 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         accent: rem,
                       ),
                       const SizedBox(height: AppSpacing.sm),
+                      // A repeat Smart Add wrote ("every 3 days") is shown as what
+                      // it is, with a stepper, instead of the dropdown reading
+                      // "Does not repeat" beside a reminder that repeats.
+                      if (_recurrenceRule != null)
+                        ReminderRuleEditor(
+                          rule: _recurrenceRule!,
+                          accent: rem,
+                          onChanged: (r) => setState(() => _recurrenceRule = r),
+                          onUseStandard: () => setState(() {
+                            // The closest standard repeat is chosen for them, so
+                            // saving at once does not quietly stop it repeating.
+                            _repeatType = ReminderRuleEdit.closestStandard(
+                                _recurrenceRule);
+                            _recurrenceRule = null;
+                            if (_repeatType == RepeatType.custom &&
+                                _customDays.isEmpty) {
+                              _customDays.add(_selectedDate.weekday);
+                            }
+                          }),
+                        )
+                      else
                       _buildDropdownShell(
                         ext: ext,
                         rem: rem,

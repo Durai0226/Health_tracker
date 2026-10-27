@@ -26,6 +26,10 @@ import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/theme/app_theme.dart';
 import 'package:tablet_remainder/core/widgets/app/app_header.dart';
 import 'package:tablet_remainder/features/home/screens/home_dashboard.dart';
+import 'package:tablet_remainder/features/medication/models/enhanced_medicine.dart';
+import 'package:tablet_remainder/features/medication/models/medicine_enums.dart';
+import 'package:tablet_remainder/features/medication/models/medicine_schedule.dart';
+import 'package:tablet_remainder/features/medication/services/medicine_storage_service.dart';
 
 import '../support/counting_executor.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_dashboard.dart';
@@ -91,6 +95,55 @@ void main() {
       lessThanOrEqualTo(3),
       reason: 'medicine_logs was read ${t['medicine_logs']} times. Measured: 3 '
           'shared, 4 duplicated. Full tally: $t',
+    );
+
+    await tester.pump(const Duration(seconds: 8));
+  });
+
+  testWidgets('an as-needed medicine on Today does not add a read of the medicines',
+      (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await MedicineCleanStorageService.addMedicine(EnhancedMedicine(
+      id: 'prn',
+      name: 'Ibuprofen',
+      dosageForm: DosageForm.tablet,
+      dosageAmount: 1,
+      createdAt: DateTime.now().subtract(const Duration(days: 30)),
+      schedule: MedicineSchedule(
+        frequencyType: FrequencyType.asNeeded,
+        times: const [],
+        isPRN: true,
+        maxDailyDoses: 4,
+      ),
+    ));
+
+    final prev = FlutterError.onError;
+    FlutterError.onError = (_) {};
+    try {
+      counter.recording = true;
+      await pumpHome(tester);
+      counter.recording = false;
+    } finally {
+      FlutterError.onError = prev;
+    }
+
+    final t = counter.tally;
+    expect(
+      t['enhanced_medicines'] ?? 0,
+      lessThanOrEqualTo(4),
+      reason: 'The as-needed card read the medicines itself: '
+          '${t['enhanced_medicines']} reads for one Home load. It is handed the '
+          'list Today already read. Full tally: $t',
+    );
+    expect(
+      t['medicine_logs'] ?? 0,
+      lessThanOrEqualTo(4),
+      reason: 'Three shared reads, and one for the as-needed medicine\'s own '
+          'doses. Full tally: $t',
     );
 
     await tester.pump(const Duration(seconds: 8));

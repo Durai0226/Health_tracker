@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 
 import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../reminders/models/reminder_kind.dart' show NudgeAnswers;
 
 /// A vital that can carry a daily "time to measure" reminder.
 class VitalsReminderSpec {
@@ -11,12 +12,16 @@ class VitalsReminderSpec {
   final String title;
   final String body;
   final int defaultHour;
+
+  /// Buttons that answer the check-in from the notification itself.
+  final NudgeAnswers? answers;
   const VitalsReminderSpec({
     required this.id,
     required this.prefKey,
     required this.title,
     required this.body,
     required this.defaultHour,
+    this.answers,
   });
 }
 
@@ -75,6 +80,8 @@ class VitalsReminderService {
     title: 'How are you feeling?',
     body: 'Take a moment to log your mood today.',
     defaultHour: 20,
+    // Good · Okay · Bad on the notification: the answer is the whole task.
+    answers: NudgeAnswers.mood,
   );
 
   /// Every spec, in a fixed order — so a caller can iterate them without
@@ -140,6 +147,7 @@ class VitalsReminderService {
       body: s.body,
       hour: h,
       minute: m,
+      answers: s.answers,
     );
     await CleanStorageService.setAppPreference('${s.prefKey}_on', true);
     await CleanStorageService.setAppPreference('${s.prefKey}_h', h);

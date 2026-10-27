@@ -74,4 +74,33 @@ void main() {
           reason: 'opt-in, not opt-out');
     });
   });
+
+  group('iOS gets Done / Snooze / Later on a reminder, as Android does', () {
+    test('a reminder category is registered', () {
+      expect(init, contains('darwinReminderCategoryId'));
+      expect(code, contains("darwinReminderCategoryId = 'reminder_actions'"));
+    });
+
+    test('it carries done, snooze and later — Android\'s own ids', () {
+      // So the one shared handler routes both platforms without branching.
+      final at = init.indexOf('darwinReminderCategoryId,');
+      expect(at, greaterThan(-1));
+      final category = init.substring(at);
+      for (final action in ['ReminderActions.doneId', "'snooze'", 'ReminderActions.laterId']) {
+        expect(category, contains(action));
+      }
+    });
+
+    test('its previews are hidden: a reminder\'s words are the person\'s own', () {
+      final at = init.indexOf('darwinReminderCategoryId,');
+      expect(init.substring(at), contains('hiddenPreviewShowTitle'));
+    });
+
+    test('only a reminder with an identity claims it', () {
+      // Otherwise water, vitals and focus nudges would sprout a "Done" nothing
+      // could act on.
+      expect(code,
+          contains('categoryIdentifier: reminderId != null ? darwinReminderCategoryId : null'));
+    });
+  });
 }

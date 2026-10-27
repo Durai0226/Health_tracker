@@ -9,6 +9,7 @@ import '../models/biometric_metric.dart';
 import '../services/biometrics_service.dart';
 import '../widgets/biometrics_permission_card.dart';
 import '../widgets/usual_range_chart_card.dart';
+import '../widgets/hourly_heart_rate_card.dart';
 
 /// Resting heart rate, heart-rate variability, blood oxygen and breathing rate
 /// — one screen rather than four thin trackers, because most users will have
@@ -150,6 +151,12 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
           ],
           if (hasAnything) ...[
             _todayCard(context, today),
+            // The hours themselves, when the wearable gave them: renders nothing
+            // for a day with no hourly data.
+            if (today != null && today.hourlyHr.length == 24) ...[
+              const SizedBox(height: AppSpacing.lg),
+              HourlyHeartRateCard(hourly: today.hourlyHr),
+            ],
             const SizedBox(height: AppSpacing.lg),
             _restingCard(context, restingTrend),
             const SizedBox(height: AppSpacing.lg),
@@ -337,6 +344,8 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
     final spo2 = BiometricsService.dailySeries((d) => d.spo2Avg, now: now);
     final resp =
         BiometricsService.dailySeries((d) => d.respiratoryRateAvg, now: now);
+    final body = BiometricsService.dailySeries((d) => d.bodyTempAvgC, now: now);
+    final skin = BiometricsService.skinTempSeries(now: now);
     return [
       if (spo2.isNotEmpty) ...[
         const SizedBox(height: AppSpacing.lg),
@@ -355,6 +364,43 @@ class _HeartDashboardScreenState extends State<HeartDashboardScreen>
             today: now,
             minHalfWidth: 1,
             points: [for (final p in resp) (date: p.date, value: p.value)]),
+      ],
+      if (body.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.lg),
+        UsualRangeChartCard(
+            title: 'Body temperature',
+            unit: '°C',
+            today: now,
+            // A tenth of a degree is wobble, not a change.
+            minHalfWidth: 0.2,
+            decimals: 1,
+            points: [for (final p in body) (date: p.date, value: p.value)]),
+      ],
+      if (skin != null) ...[
+        const SizedBox(height: AppSpacing.lg),
+        // One of two different quantities, named as what it is: a change from
+        // your own baseline, or the wrist temperature itself. Never mixed.
+        UsualRangeChartCard(
+            title: skin.metric == SkinTempMetric.deltaFromBaseline
+                ? 'Skin temperature change'
+                : 'Skin temperature',
+            unit: skin.metric == SkinTempMetric.deltaFromBaseline
+                ? '°C from your baseline'
+                : '°C',
+            today: now,
+            minHalfWidth: 0.2,
+            decimals: 1,
+            points: [for (final p in skin.points) (date: p.date, value: p.value)],
+            lines: [
+              Text(
+                skin.metric == SkinTempMetric.deltaFromBaseline
+                    ? 'How far overnight skin temperature sat from your own '
+                        'baseline, as your wearable reports it.'
+                    : 'Overnight wrist temperature, as your wearable reports it.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColorsExt.of(context).textTertiary),
+              ),
+            ]),
       ],
     ];
   }

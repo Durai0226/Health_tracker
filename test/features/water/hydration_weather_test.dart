@@ -113,10 +113,151 @@ void main() {
     expect(await HydrationWeatherService.setPlace('Chennai'), isNull);
   });
 
+  forecastTests();
+
   test('the CC BY 4.0 attribution is present', () {
     // Open-Meteo's licence requires it, and it is rendered next to the toggle.
     expect(HydrationWeatherService.attribution.toLowerCase(),
         contains('open-meteo'));
     expect(HydrationWeatherService.attribution, contains('CC BY 4.0'));
+  });
+}
+
+/// The hot-day goal reads today's FORECAST HIGH, not only the temperature at the
+/// moment of the request: a goal set at 7 am was cool for a day that reached 36
+/// degrees by three.
+///
+/// The network is answered by `fetchForTesting`, so what is pinned here is what
+/// is asked for, how the answer is read, and what the goal is judged against.
+void forecastTests() {
+  group('the forecast high', () {
+    final now = DateTime(2026, 8, 21, 7, 30);
+
+    Map<String, Object> prefs({
+      double? cachedTemp,
+      double? cachedForecast,
+      String? forecastDay,
+      Duration age = const Duration(minutes: 30),
+    }) =>
+        {
+          'hydration_weather_enabled': true,
+          'hydration_weather_place': 'Chennai',
+          'hydration_weather_lat': 13.0827,
+          'hydration_weather_lon': 80.2707,
+          if (cachedTemp != null) 'hydration_weather_temp_c': cachedTemp,
+          if (cachedTemp != null)
+            'hydration_weather_at': now.subtract(age).millisecondsSinceEpoch,
+          if (cachedForecast != null)
+            'hydration_weather_forecast_max_c': cachedForecast,
+          if (forecastDay != null) 'hydration_weather_forecast_day': forecastDay,
+        };
+
+    Map<String, dynamic> answer({double? current = 24.0, Object? max = 36.5}) => {
+          if (current != null) 'current': {'apparent_temperature': current},
+          if (max != null) 'daily': {'apparent_temperature_max': [max]},
+        };
+
+    tearDown(() => HydrationWeatherService.fetchForTesting = null);
+
+    test('asks for today\'s high as well as the current temperature', () async {
+      SharedPreferences.setMockInitialValues(prefs());
+      Uri? asked;
+      HydrationWeatherService.fetchForTesting = (uri) async {
+        asked = uri;
+        return answer();
+      };
+      await withClock(Clock.fixed(now), () => HydrationWeatherService.current());
+
+      expect(asked!.queryParameters['current'], 'apparent_temperature');
+      expect(asked!.queryParameters['daily'], 'apparent_temperature_max');
+      expect(asked!.queryParameters['forecast_days'], '1');
+    });
+
+    test('reads both, and judges the goal by the hotter', () async {
+      SharedPreferences.setMockInitialValues(prefs());
+      HydrationWeatherService.fetchForTesting = (_) async => answer();
+      final w = (await withClock(
+          Clock.fixed(now), () => HydrationWeatherService.current()))!;
+      expect(w.apparentC, 24.0);
+      expect(w.forecastMaxC, 36.5);
+      expect(w.goalC, 36.5);
+    });
+
+    test('a forecast cooler than now is not used: it is already hotter than '
+        'that', () async {
+      SharedPreferences.setMockInitialValues(prefs());
+      HydrationWeatherService.fetchForTesting =
+          (_) async => answer(current: 33.0, max: 30.0);
+      final w = (await withClock(
+          Clock.fixed(now), () => HydrationWeatherService.current()))!;
+      expect(w.goalC, 33.0);
+    });
+
+    test('no forecast in the answer: the current temperature, as before',
+        () async {
+      SharedPreferences.setMockInitialValues(prefs());
+      HydrationWeatherService.fetchForTesting = (_) async => answer(max: null);
+      final w = (await withClock(
+          Clock.fixed(now), () => HydrationWeatherService.current()))!;
+      expect(w.forecastMaxC, isNull);
+      expect(w.goalC, 24.0);
+    });
+
+    test('an unbelievable forecast is ignored', () async {
+      SharedPreferences.setMockInitialValues(prefs());
+      HydrationWeatherService.fetchForTesting = (_) async => answer(max: 400);
+      final w = (await withClock(
+          Clock.fixed(now), () => HydrationWeatherService.current()))!;
+      expect(w.forecastMaxC, isNull);
+    });
+
+    test('a fresh cache carries the forecast with it, from today', () async {
+      SharedPreferences.setMockInitialValues(prefs(
+          cachedTemp: 25.0, cachedForecast: 35.0, forecastDay: '2026-08-21'));
+      HydrationWeatherService.fetchForTesting =
+          (_) async => fail('inside the TTL: no request');
+      final w = (await withClock(
+          Clock.fixed(now), () => HydrationWeatherService.current()))!;
+      expect(w.forecastMaxC, 35.0);
+      expect(w.goalC, 35.0);
+    });
+
+    test('and never yesterday\'s high', () async {
+      SharedPreferences.setMockInitialValues(prefs(
+          cachedTemp: 25.0, cachedForecast: 41.0, forecastDay: '2026-08-20'));
+      final w = (await withClock(
+          Clock.fixed(now), () => HydrationWeatherService.current()))!;
+      expect(w.forecastMaxC, isNull);
+      expect(w.goalC, 25.0);
+    });
+
+    test('the synchronous read gets it too, only when it is today\'s', () async {
+      SharedPreferences.setMockInitialValues(prefs(
+          cachedTemp: 25.0, cachedForecast: 35.0, forecastDay: '2026-08-21'));
+      expect(
+          await withClock(
+              Clock.fixed(now), () => HydrationWeatherService.cachedApparentC()),
+          35.0);
+
+      SharedPreferences.setMockInitialValues(prefs(
+          cachedTemp: 25.0, cachedForecast: 35.0, forecastDay: '2026-08-20'));
+      expect(
+          await withClock(
+              Clock.fixed(now), () => HydrationWeatherService.cachedApparentC()),
+          25.0);
+    });
+
+    test('a request that returns no forecast clears a stale one', () async {
+      SharedPreferences.setMockInitialValues(prefs(
+          cachedTemp: 25.0,
+          cachedForecast: 35.0,
+          forecastDay: '2026-08-21',
+          age: const Duration(hours: 5)));
+      HydrationWeatherService.fetchForTesting = (_) async => answer(max: null);
+      await withClock(Clock.fixed(now), () => HydrationWeatherService.current());
+      expect(await withClock(
+              Clock.fixed(now), () => HydrationWeatherService.cachedApparentC()),
+          24.0);
+    });
   });
 }

@@ -30,6 +30,9 @@ class _NotificationSettingsScreenState
   bool _fullScreenNotification = true;
   bool _snoozeEnabled = true;
   int _snoozeMinutes = 5;
+  int _maxSnoozes = 3;
+  bool _autoMarkMissed = true;
+  int _missedMinutes = 60;
   int _alarmDurationSeconds = 30;
   String _notificationSound = 'default';
 
@@ -42,6 +45,8 @@ class _NotificationSettingsScreenState
   Timer? _savedTimer;
 
   static const List<int> _snoozeOptions = [1, 5, 10, 15, 30];
+  static const List<int> _maxSnoozeOptions = [1, 2, 3, 5];
+  static const List<int> _missedOptions = [30, 60, 120, 240];
   static const List<int> _alarmOptions = [15, 30, 45, 60];
 
   @override
@@ -81,6 +86,9 @@ class _NotificationSettingsScreenState
           _fullScreenNotification = settings.fullScreenNotification;
           _snoozeEnabled = settings.snoozeEnabled;
           _snoozeMinutes = settings.snoozeIntervalMinutes;
+          _maxSnoozes = settings.maxSnoozeCount;
+          _autoMarkMissed = settings.autoMarkMissed;
+          _missedMinutes = settings.missedThresholdMinutes;
           _alarmDurationSeconds = settings.alarmRingDurationSeconds;
           _notificationSound = settings.notificationSound;
           _isLoading = false;
@@ -109,6 +117,9 @@ class _NotificationSettingsScreenState
         fullScreenNotification: _fullScreenNotification,
         snoozeEnabled: _snoozeEnabled,
         snoozeIntervalMinutes: _snoozeMinutes,
+        maxSnoozeCount: _maxSnoozes,
+        autoMarkMissed: _autoMarkMissed,
+        missedThresholdMinutes: _missedMinutes,
         alarmRingDurationSeconds: _alarmDurationSeconds,
         notificationSound: _notificationSound,
       );
@@ -293,7 +304,7 @@ class _NotificationSettingsScreenState
                         SettingsSection(
                           title: 'Snooze',
                           footer:
-                              'How long a reminder waits before alerting you again.',
+                              'How long a reminder waits before alerting you again, and how many times you can put it off. After the last snooze there is no button to put it off again.',
                           children: [
                             SettingsTile(
                               icon: Symbols.snooze_rounded,
@@ -313,6 +324,49 @@ class _NotificationSettingsScreenState
                                 value: _snoozeMinutes,
                                 onSelected: (v) {
                                   setState(() => _snoozeMinutes = v);
+                                  _persistDebounced();
+                                },
+                              ),
+                            if (_snoozeEnabled)
+                              _durationRow(
+                                ext,
+                                tt,
+                                label: 'Snoozes allowed',
+                                options: _maxSnoozeOptions,
+                                value: _maxSnoozes,
+                                onSelected: (v) {
+                                  setState(() => _maxSnoozes = v);
+                                  _persistDebounced();
+                                },
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+
+                        // Missed
+                        SettingsSection(
+                          title: 'Missed reminders',
+                          footer:
+                              'A reminder you have not answered is counted as missed after this long. It stays on your list; only your reminder history changes.',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.event_busy_rounded,
+                              title: 'Mark as missed',
+                              switchValue: _autoMarkMissed,
+                              onSwitchChanged: (v) {
+                                setState(() => _autoMarkMissed = v);
+                                _persistDebounced();
+                              },
+                            ),
+                            if (_autoMarkMissed)
+                              _durationRow(
+                                ext,
+                                tt,
+                                label: 'After (minutes)',
+                                options: _missedOptions,
+                                value: _missedMinutes,
+                                onSelected: (v) {
+                                  setState(() => _missedMinutes = v);
                                   _persistDebounced();
                                 },
                               ),
@@ -370,7 +424,12 @@ class _NotificationSettingsScreenState
     required int value,
     required ValueChanged<int> onSelected,
   }) {
-    final index = options.indexOf(value).clamp(0, options.length - 1);
+    // A stored value the picker does not offer (a restored backup, an older
+    // build) is shown as itself, not as the first option it was never set to.
+    if (!options.contains(value)) {
+      options = [...options, value]..sort();
+    }
+    final index = options.indexOf(value);
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(

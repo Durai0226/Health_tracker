@@ -5,6 +5,7 @@ import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/app/segmented_toggle.dart';
 import '../services/late_dose_recovery.dart';
+import 'tell_contact_button.dart';
 
 /// Sheet for one dose the app wrote down as missed: it was perhaps taken on
 /// time and never tapped, perhaps taken late, perhaps forgotten.
@@ -110,6 +111,8 @@ class _LateDoseFormState extends State<LateDoseForm> {
           accent: ext.medicine,
           onPressed: () => widget.onChoice(const LateChoice(LateOutcome.skipped)),
         ),
+        // Only when the person has asked for it, and only to open a message.
+        const TellContactButton(),
       ],
     );
   }

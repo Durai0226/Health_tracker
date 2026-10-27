@@ -11,6 +11,7 @@ import '../../services/vitals_storage_service.dart';
 import '../../services/vitals_report_service.dart';
 import 'vitals_trend_chart.dart';
 import '../../services/medicine_storage_service.dart';
+import '../../../../core/services/clean_storage_service.dart';
 
 /// Blood-sugar report: period overview (avg, in-range %, est. A1C), trend,
 /// class breakdown, and a doctor-ready PDF export.
@@ -27,6 +28,12 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
   List<GlucoseReading> _all = [];
   bool _loading = true;
 
+  /// The person's own unit, set on the Blood sugar screen. The report used to
+  /// print mg/dL for everyone, so an mmol/L user read "126" beside a history
+  /// that said "7.0".
+  GlucoseUnit _unit = GlucoseUnit.mgdl;
+  bool get _isMmol => _unit == GlucoseUnit.mmoll;
+
   int get _days => _windows[_windowIndex];
   DateTime get _from => DateTime.now().subtract(Duration(days: _days));
 
@@ -41,6 +48,8 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
     if (!mounted) return;
     setState(() {
       _all = data;
+      _unit = VitalsAnalyzer.glucoseUnitFromPref(
+          CleanStorageService.getAppPreference('glucose_unit', 'mgdl'));
       _loading = false;
     });
   }
@@ -60,6 +69,7 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
         from: _from,
         to: DateTime.now(),
         patientName: await MedicineCleanStorageService.activePatientName(),
+        unit: _unit,
       );
       await Printing.sharePdf(bytes: bytes, filename: 'blood-sugar-report.pdf');
     } catch (_) {
@@ -134,8 +144,8 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
         data.map((r) => (mgdl: r.valueMgdl, ctx: r.context)).toList());
     return StatTileRow(tiles: [
       StatTile(
-        value: avg != null ? '${avg.round()}' : '—',
-        label: 'Avg mg/dL',
+        value: avg != null ? VitalsAnalyzer.formatGlucose(avg.round(), _unit) : '—',
+        label: 'Avg ${VitalsAnalyzer.glucoseUnitLabel(_unit)}',
         icon: Symbols.water_drop_rounded,
         accent: accent,
       ),
@@ -156,9 +166,18 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
 
   Widget _trend(AppColorsExt ext, AccentSwatch accent, List<GlucoseReading> data) {
     final trend = data.reversed.toList();
-    final series = trend.map((r) => r.valueMgdl.toDouble()).toList();
-    final minY = series.isEmpty ? 40.0 : (series.reduce((a, b) => a < b ? a : b) - 20).clamp(20, 400).toDouble();
-    final maxY = series.isEmpty ? 250.0 : (series.reduce((a, b) => a > b ? a : b) + 20).clamp(120, 500).toDouble();
+    final rawSeries = trend.map((r) => r.valueMgdl.toDouble()).toList();
+    final rawMinY = rawSeries.isEmpty ? 40.0 : (rawSeries.reduce((a, b) => a < b ? a : b) - 20).clamp(20, 400).toDouble();
+    final rawMaxY = rawSeries.isEmpty ? 250.0 : (rawSeries.reduce((a, b) => a > b ? a : b) + 20).clamp(120, 500).toDouble();
+    // Headroom and clamps stay in mg/dL, where they are calibrated; everything
+    // the chart draws — line, axis and band — is converted together, as on the
+    // Blood sugar screen. Converting the line but not its axis would be worse
+    // than converting neither.
+    double chartY(double mgdl) =>
+        _isMmol ? VitalsAnalyzer.mgdlToMmol(mgdl.round()) : mgdl;
+    final series = rawSeries.map(chartY).toList();
+    final minY = chartY(rawMinY);
+    final maxY = chartY(rawMaxY);
     return VitalsTrendChart(
       series: [
         VitalsSeries(
@@ -169,8 +188,8 @@ class _BloodSugarReportScreenState extends State<BloodSugarReportScreen> {
       ],
       minY: minY,
       maxY: maxY,
-      bandLow: 70,
-      bandHigh: 180,
+      bandLow: chartY(70),
+      bandHigh: chartY(180),
       bandColor: VitalsColors.glucoseBand(ext.isDark, GlucoseClass.inRange),
     );
   }

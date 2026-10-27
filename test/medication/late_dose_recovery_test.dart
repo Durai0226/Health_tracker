@@ -150,6 +150,38 @@ void main() {
       });
     });
 
+    test('a two-tablet dose uses two tablets, however it is recovered', () async {
+      await withClock(Clock.fixed(today), () async {
+        await MedicineCleanStorageService.saveMedicine(EnhancedMedicine(
+          id: 'm1',
+          name: 'Metformin',
+          dosageForm: DosageForm.tablet,
+          dosageAmount: 2,
+          currentStock: 30,
+          schedule: MedicineSchedule(
+            frequencyType: FrequencyType.onceDaily,
+            times: [ScheduledTime(hour: 8, minute: 0)],
+            startDate: DateTime(2026, 3, 9),
+          ),
+          createdAt: DateTime(2026, 3, 9),
+        ));
+        for (final (choice, expected) in [
+          (const LateChoice(LateOutcome.tookOnTime), 28),
+          (LateChoice(LateOutcome.tookAt, at: DateTime(2026, 3, 10, 9)), 28),
+          (const LateChoice(LateOutcome.takeNow), 28),
+        ]) {
+          final d = await missedYesterday();
+          final log = await LateDoseRecovery.apply(d, choice);
+          expect(log.dosageTaken, 2,
+              reason: 'the default of one unit under-counted every recovered dose '
+                  'of a medicine taken two at a time');
+          expect(await stock(), expected, reason: '${choice.outcome}');
+          await LateDoseRecovery.undo(log);
+          expect(await stock(), 30);
+        }
+      });
+    });
+
     test('Skip: no stock is used', () async {
       await withClock(Clock.fixed(today), () async {
         await seed();

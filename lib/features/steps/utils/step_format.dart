@@ -8,6 +8,8 @@
 /// in `lib`, so the hand-rolled loop stays; it just has one home now.
 library;
 
+import '../../../core/health/week_over_week.dart';
+
 /// `4321` → `"4,321"`, `-900` → `"-900"`, `0` → `"0"`.
 ///
 /// Comma-grouped, three digits at a time. The separator is fixed rather than
@@ -34,3 +36,9 @@ String formatCompactSteps(int n) {
   final k = n / 1000.0;
   return '${k.toStringAsFixed(k >= 10 ? 0 : 1)}k';
 }
+
+/// "2,300 steps ahead of this time last week" / "1,000 steps behind this time
+/// last week".
+String weekOverWeekLine(WeekOverWeek r) =>
+    '${formatThousands(r.difference.abs())} steps '
+    '${r.isAhead ? 'ahead of' : 'behind'} this time last week';

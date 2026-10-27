@@ -261,7 +261,7 @@ void main() {
       'Breathing',
       'Relaxation',
       'Statistics',
-      'Plant Trees',
+      'Garden Shop',
       'Tags',
       'Distractions',
     ];

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' as drift;
 import '../../../core/database/app_database.dart' as db;
@@ -91,7 +92,20 @@ class DiaryStorageService {
       body: d.body,
       entryAt: d.entryAt,
       createdAt: d.createdAt,
+      moodIndex: d.moodIndex,
+      tags: _decodeTags(d.tagsJson),
     );
+  }
+
+  /// A malformed value reads as no tags rather than failing the whole list.
+  static List<String> _decodeTags(String? json) {
+    if (json == null || json.isEmpty) return const [];
+    try {
+      final v = jsonDecode(json);
+      return v is List ? v.whereType<String>().toList() : const [];
+    } catch (_) {
+      return const [];
+    }
   }
 
   static db.DiaryEntriesCompanion _toCompanion(DiaryEntry e) {
@@ -102,6 +116,8 @@ class DiaryStorageService {
       body: drift.Value(e.body),
       entryAt: drift.Value(e.entryAt),
       createdAt: drift.Value(e.createdAt),
+      moodIndex: drift.Value(e.moodIndex),
+      tagsJson: drift.Value(e.tags.isEmpty ? null : jsonEncode(e.tags)),
     );
   }
 }

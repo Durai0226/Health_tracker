@@ -1,5 +1,6 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../../../core/utils/date_formats.dart';
@@ -19,6 +20,7 @@ import '../../../core/services/clean_storage_service.dart';
 import '../../../core/health/streak_milestones.dart';
 import 'nunito_medication_list_screen.dart';
 import 'refill_overview_screen.dart';
+import 'nunito_medication_detail_screen.dart';
 import 'nunito_add_medication_flow.dart';
 import 'nunito_take_medication_sheet.dart';
 import '../services/late_dose_recovery.dart';
@@ -1365,12 +1367,26 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: MergeSemantics(
                   child: Semantics(
-                  button: actionable || isMissed,
+                  // Every row does something now: a dose that is due is taken, a
+                  // missed one is recovered, and anything else opens the
+                  // medicine. Long-press (or the screen reader's action menu)
+                  // opens the medicine from a row whose tap is already spoken
+                  // for.
+                  button: true,
+                  customSemanticsActions: {
+                    const CustomSemanticsAction(label: 'Open medicine details'):
+                        () => _openMedicineDetail(dose.medicine),
+                  },
+                  child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onLongPress: () => _openMedicineDetail(dose.medicine),
                   child: AppCard(
                   color: cardColor,
                   onTap: actionable
                       ? () => _onTakeMedication(dose)
-                      : (isMissed ? () => _onRecoverMissed(dose) : null),
+                      : (isMissed
+                          ? () => _onRecoverMissed(dose)
+                          : () => _openMedicineDetail(dose.medicine)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
@@ -1431,12 +1447,23 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
                 ),
                 ),
                 ),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// The medicine behind a dose row: its schedule, history and settings.
+  void _openMedicineDetail(EnhancedMedicine medicine) {
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+            builder: (_) => NunitoMedicationDetailScreen(medicine: medicine)))
+        .then((_) {
+      if (mounted) _loadData(showLoader: false);
+    });
   }
 
   /// Trailing control for a timeline dose: a completed check, a Pre-logged

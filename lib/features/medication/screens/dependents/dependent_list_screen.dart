@@ -5,6 +5,7 @@ import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/dependent_profile.dart';
 import '../../services/medicine_storage_service.dart';
 import 'add_edit_dependent_screen.dart';
+import '../../widgets/remove_person_sheet.dart';
 
 /// Manage household members ("Family & caregivers" in Settings), or — when
 /// [isSelectionMode] is true — pick which one is currently active (the Today
@@ -65,18 +66,14 @@ class _DependentListScreenState extends State<DependentListScreen> {
   }
 
   Future<void> _deleteDependent(DependentProfile dependent) async {
-    final confirm = await AppBottomSheet.confirm(
-      context,
-      title: 'Delete ${dependent.name}?',
-      message:
-          'This removes their profile. Their medicines and history stay on '
-          'device but will no longer be attributed to them.',
-      confirmLabel: 'Delete',
-      danger: true,
-      icon: Symbols.delete_rounded,
-    );
-    if (confirm != true) return;
+    // Two honest answers, not one: what is recorded for them stays (under you)
+    // or goes with them. Dismissing the sheet removes nothing.
+    final choice = await RemovePersonSheet.show(context, name: dependent.name);
+    if (choice == null) return;
 
+    if (choice == RemovePersonChoice.deleteRecords) {
+      await MedicineCleanStorageService.deleteRecordsOf(dependent.id);
+    }
     await MedicineCleanStorageService.deleteDependent(dependent.id);
     // A deleted profile can't stay "active" — fall back to self so nothing
     // points at a dangling id.
@@ -85,7 +82,9 @@ class _DependentListScreenState extends State<DependentListScreen> {
     }
     _loadDependents();
     if (mounted) {
-      context.toastSuccess('${dependent.name} removed');
+      context.toastSuccess(choice == RemovePersonChoice.deleteRecords
+          ? '${dependent.name} and their records removed'
+          : '${dependent.name} removed');
     }
   }
 

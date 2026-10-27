@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import '../../../core/widgets/app/app_widgets.dart';
 import '../theme/aqua_theme.dart';
 import '../models/water_container.dart';
@@ -30,6 +31,10 @@ class AquaQuickAddGrid extends StatefulWidget {
   /// Called to open the custom cup creator.
   final VoidCallback? onCreateCup;
 
+  /// Called to edit or delete a cup the person made: a long press on its chip, or
+  /// the screen reader's action menu. Built-in cups are not offered.
+  final void Function(WaterContainer container)? onContainerManage;
+
   /// What the person usually drinks around now, when they have a habit — a
   /// one-tap tile above everything else. Null shows nothing.
   final UsualDrink? usual;
@@ -45,6 +50,7 @@ class AquaQuickAddGrid extends StatefulWidget {
     required this.onBeverageSelect,
     this.onContainerAdd,
     this.onCreateCup,
+    this.onContainerManage,
     this.usual,
     this.onUsual,
   });
@@ -221,16 +227,29 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     bool isDark,
   ) {
     final ext = AppColorsExt.of(context);
+    final manage = widget.onContainerManage != null && !container.isDefault
+        ? () => widget.onContainerManage!(container)
+        : null;
     return Semantics(
       button: true,
       label: 'Add ${container.capacityMl} millilitres from ${container.emoji} cup',
       excludeSemantics: true,
+      customSemanticsActions: {
+        if (manage != null)
+          const CustomSemanticsAction(label: 'Edit or delete cup'): manage,
+      },
       child: GestureDetector(
       onTap: widget.onContainerAdd == null
           ? null
           : () {
               HapticFeedback.mediumImpact();
               widget.onContainerAdd!(container);
+            },
+      onLongPress: manage == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              manage();
             },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

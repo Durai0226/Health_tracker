@@ -13,6 +13,7 @@ library;
 import 'package:tablet_remainder/features/biometrics/models/biometric_metric.dart';
 import 'package:tablet_remainder/features/biometrics/models/health_source.dart';
 import 'package:tablet_remainder/features/biometrics/services/connected_devices_controller.dart';
+import 'package:tablet_remainder/features/medication/models/doctor_pharmacy.dart';
 import 'package:tablet_remainder/features/medication/models/enhanced_medicine.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_enums.dart';
 import 'package:tablet_remainder/features/medication/models/medicine_schedule.dart';
@@ -91,3 +92,16 @@ ConnectedDevicesController seededSourceController(DateTime seedNow) {
       ],
     );
 }
+
+/// A visit five days off, with every optional field filled and the longest
+/// plausible doctor name and place: the Visit brief reads the seeded medicines
+/// and logs behind it, and its heading and lines are what can overflow.
+Appointment seededAppointment(DateTime seedNow) => Appointment(
+      id: 'seed-appt-1',
+      doctorName: 'Dr Anand Venkataraghavan, Consultant Endocrinologist',
+      dateTime: seedNow.add(const Duration(days: 5)),
+      location: "St Mary's Hospital, East Wing, Clinic 3",
+      purpose: 'Six-month review of blood pressure and the new tablets',
+      notes: 'Ask about the dizziness in the mornings',
+      reminderEnabled: false,
+    );

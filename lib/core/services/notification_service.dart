@@ -33,6 +33,7 @@ export 'background_alarm_service.dart'
 import '../../main.dart';
 import 'snooze_log.dart';
 import '../../features/medication/services/refill_loop.dart';
+import '../../features/medication/services/visit_brief_link.dart';
 import '../health/step_reminder_plan.dart';
 
 class NotificationService {
@@ -112,6 +113,11 @@ class NotificationService {
   
   bool _isInitialized = false;
   bool _permissionsGranted = false;
+
+  /// How many times the app has gone to the OS for a permission since launch, so
+  /// a test can say that start-up asks for none.
+  @visibleForTesting
+  static int permissionRequestsForTesting = 0;
   // The in-app-toast cluster was deleted here: `_isAppInForeground`,
   // `setAppForegroundState`, `showInAppToast` and `shouldShowInAppToast`.
   //
@@ -210,6 +216,46 @@ class NotificationService {
               DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
             },
           ),
+          // Answer buttons on the check-in nudges. The ids match the Android
+          // ones ([NudgeAnswers]), so the one shared handler routes both.
+          DarwinNotificationCategory(
+            darwinMoodCategoryId,
+            actions: <DarwinNotificationAction>[
+              DarwinNotificationAction.plain(NudgeAnswers.moodGoodId, 'Good'),
+              DarwinNotificationAction.plain(NudgeAnswers.moodOkayId, 'Okay'),
+              DarwinNotificationAction.plain(NudgeAnswers.moodBadId, 'Bad'),
+            ],
+          ),
+          DarwinNotificationCategory(
+            darwinPeriodCategoryId,
+            actions: <DarwinNotificationAction>[
+              DarwinNotificationAction.plain(
+                  NudgeAnswers.periodStartedId, 'Started today'),
+              DarwinNotificationAction.plain(
+                  NudgeAnswers.periodNotYetId, 'Not yet'),
+            ],
+            options: <DarwinNotificationCategoryOption>{
+              // The body is about a cycle: no preview on a lock screen.
+              DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
+            },
+          ),
+          // Done / Snooze / Later on a reminder the person made — the iPhone
+          // half of what Android already offers. Until now an iOS reminder had no
+          // buttons at all. The ids are Android's, so the one shared handler
+          // routes both platforms.
+          DarwinNotificationCategory(
+            darwinReminderCategoryId,
+            actions: <DarwinNotificationAction>[
+              DarwinNotificationAction.plain(ReminderActions.doneId, 'Done'),
+              DarwinNotificationAction.plain('snooze', 'Snooze'),
+              DarwinNotificationAction.plain(ReminderActions.laterId, 'Later'),
+            ],
+            options: <DarwinNotificationCategoryOption>{
+              // A reminder's words are the person's own: no preview on a lock
+              // screen, the same default as Android's private visibility.
+              DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
+            },
+          ),
         ],
       );
 
@@ -240,35 +286,33 @@ class NotificationService {
   
   /// Initialize heavy operations in background after app startup
   void _initializeBackground() {
-    Future(() async {
-      try {
-        // Initialize Android Alarm Manager
-        if (Platform.isAndroid) {
-          try {
-            await AndroidAlarmManager.initialize();
-            debugPrint('✓ AndroidAlarmManager initialized');
-          } catch (e) {
-            debugPrint('⚠️ AndroidAlarmManager init failed: $e');
-          }
-        }
-        
-        // Create notification channels
-        await _createNotificationChannels();
+    Future(_backgroundSetup);
+  }
 
-        // Request permissions — but NOT at cold start on first launch. The
-        // welcome "Turn on reminders" pane primes and requests it there (correct
-        // permission-priming UX; an OS prompt before the user sees the app kills
-        // grant rates). Returning users already decided, so this stays a
-        // harmless re-check for them.
-        if (!CleanStorageService.isFirstLaunch) {
-          await _requestPermissions();
-        }
+  @visibleForTesting
+  Future<void> backgroundSetupForTesting() => _backgroundSetup();
 
-        debugPrint('✓ Background notification setup complete');
-      } catch (e) {
-        debugPrint('⚠️ Background notification setup failed: $e');
+  Future<void> _backgroundSetup() async {
+    try {
+      // Initialize Android Alarm Manager
+      if (Platform.isAndroid) {
+        try {
+          await AndroidAlarmManager.initialize();
+          debugPrint('✓ AndroidAlarmManager initialized');
+        } catch (e) {
+          debugPrint('⚠️ AndroidAlarmManager init failed: $e');
+        }
       }
-    });
+
+      // Create notification channels
+      await _createNotificationChannels();
+
+      await startupPermissionPass();
+
+      debugPrint('✓ Background notification setup complete');
+    } catch (e) {
+      debugPrint('⚠️ Background notification setup failed: $e');
+    }
   }
   
   /// Resolves the device's real IANA timezone (e.g. "America/New_York").
@@ -399,6 +443,18 @@ class NotificationService {
             enableVibration: false,
             showBadge: false,
           ),
+          // Reminders the person set to Quiet: no sound and no vibration. A
+          // channel's sound is fixed when it is created, so "silent" cannot be a
+          // per-notification option on Android — it needs a channel that has none.
+          const AndroidNotificationChannel(
+            quietChannelId,
+            'Quiet Reminders',
+            description: 'Reminders you asked to arrive without a sound',
+            importance: Importance.low,
+            playSound: false,
+            enableVibration: false,
+            showBadge: true,
+          ),
           const AndroidNotificationChannel(
             'checkin_channel',
             'Check-ins & Nudges',
@@ -478,7 +534,39 @@ class NotificationService {
     }
   }
 
+  /// What start-up does about permissions: look, never ask.
+  ///
+  /// It used to go on, from the second launch, to request the notification
+  /// permission, then the exact-alarm one (a system settings page on Android 12+)
+  /// and then the full-screen one, at every cold start until each was granted —
+  /// "returning users already decided", except that someone who tapped "Skip for
+  /// now", or declined once, had not. They were asked again every time they
+  /// opened the app. The asking belongs where a person asks for it: the welcome
+  /// pane, the permission banner and the setup checklist all call
+  /// [requestPermissionsIfNeeded].
+  ///
+  /// Looking is still worth doing: [areNotificationsEnabled] answers from what
+  /// was last seen on iOS, and a grant made in the system settings should show.
+  Future<void> startupPermissionPass() async {
+    try {
+      if (Platform.isAndroid) {
+        final android = _notifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+        _permissionsGranted =
+            await android?.areNotificationsEnabled() ?? _permissionsGranted;
+      } else if (Platform.isIOS) {
+        final ios = _notifications.resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>();
+        final options = await ios?.checkPermissions();
+        _permissionsGranted = options?.isEnabled ?? _permissionsGranted;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Permission look failed: $e');
+    }
+  }
+
   Future<bool> _requestPermissions() async {
+    permissionRequestsForTesting++;
     try {
       if (Platform.isAndroid) {
         final androidImplementation =
@@ -617,6 +705,11 @@ class NotificationService {
     } catch (_) {}
   }
 
+  /// The foreground response handler, reachable from a test.
+  @visibleForTesting
+  void onNotificationResponseForTesting(NotificationResponse response) =>
+      _onNotificationTap(response);
+
   void _onNotificationTap(NotificationResponse response) {
     debugPrint('🔔 Notification response: ${response.actionId}');
     // Any action from the notification should also silence + close a ringing
@@ -661,6 +754,18 @@ class NotificationService {
         amountMl: WaterActionQueue.defaultQuickAddMl,
         at: clock.now(),
       );
+    } else if (ReminderActions.ids.contains(response.actionId)) {
+      // "Done" / "Later" on a reminder the person made. Android normally routes
+      // these to the background isolate, so this is the iOS/foreground path; the
+      // same function handles both, so what a tap does cannot differ by where
+      // it landed.
+      handleReminderAction(response.id ?? 0, response.payload, response.actionId,
+          at: clock.now());
+    } else if (NudgeAnswers.actionIds.contains(response.actionId)) {
+      // "Good" / "Okay" / "Bad" on the mood check-in, "Started today" / "Not
+      // yet" on the period reminder: the same queue the background handler
+      // writes to, so the answer is applied by one code path on resume.
+      handleNudgeAnswerAction(response.actionId, at: clock.now());
     } else {
       // Normal body-tap → open the full-screen alarm when this is an alarm
       // payload. This makes the redesigned AlarmScreen reachable while the app
@@ -673,6 +778,9 @@ class NotificationService {
         // The run-out reminder (or its follow-up): the app shell shows the
         // refill sheet, after the app lock if one is engaged.
         RefillLoop.pendingOpen.value = RefillLoop.medicineIdFromPayload(p);
+      } else if (VisitBriefLink.appointmentIdFromPayload(p) != null) {
+        // "Your visit brief is ready": the app shell opens it, after the lock.
+        VisitBriefLink.pendingOpen.value = VisitBriefLink.appointmentIdFromPayload(p);
       }
     }
   }
@@ -1291,6 +1399,11 @@ class NotificationService {
     int? snoozeDuration,
     String? sound,
     String? payload,
+
+    /// The reminder this arms, when it is one in the Reminders list: it rides in
+    /// the payload, and its notification carries Done and Later.
+    String? reminderId,
+
     /// How insistent this reminder is allowed to be.
     ///
     /// Every generic reminder used to be armed alarm-grade: `ReminderKind.alarm`
@@ -1332,7 +1445,10 @@ class NotificationService {
       // cross-platform branch route to the full-screen AlarmScreen, which loops
       // the user's chosen sound.
       final basePayload = payload ??
-          _buildAlarmPayload(id, title, body, snoozeDuration, sound: sound);
+          _buildAlarmPayload(id, title, body, snoozeDuration,
+              sound: sound,
+              reminderId: reminderId,
+              quiet: escalation.kind == ReminderKind.quiet);
 
       if (Platform.isAndroid) {
         final alarmService = BackgroundAlarmService();
@@ -1439,6 +1555,7 @@ class NotificationService {
       final look = alarmPresentationFor(
         escalation.kind,
         snoozeMinutes: snoozeDuration ?? 5,
+        reminderActions: reminderId != null,
       );
       // Default PRIVATE, matching alarmCallback: for a health app the safe
       // default is not putting "Take sertraline" on a locked screen. The
@@ -1454,10 +1571,11 @@ class NotificationService {
         channelDescription: look.channelDescription,
         importance: look.importance,
         priority: look.priority,
-        playSound: true,
+        playSound: look.playSound,
         sound: null, // the channel supplies the sound
-        enableVibration: true,
-        vibrationPattern: Int64List.fromList(look.vibrationPattern),
+        enableVibration: look.vibrates,
+        vibrationPattern:
+            look.vibrates ? Int64List.fromList(look.vibrationPattern) : null,
         fullScreenIntent: look.fullScreenIntent,
         category: look.category,
         visibility: lockScreenVisibility,
@@ -1471,8 +1589,9 @@ class NotificationService {
       final iOSDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
-        presentSound: priority != ReminderPriority.low,
+        presentSound: priority != ReminderPriority.low && look.playSound,
         interruptionLevel: _getIOSInterruptionLevel(priority),
+        categoryIdentifier: reminderId != null ? darwinReminderCategoryId : null,
       );
 
       final details = NotificationDetails(android: androidDetails, iOS: iOSDetails);
@@ -1537,7 +1656,7 @@ class NotificationService {
                time: scheduledTime,
                dayOfWeek: day,
                details: details,
-               payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration),
+               payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration, reminderId: reminderId, quiet: escalation.kind == ReminderKind.quiet),
              );
           }
           break;
@@ -1546,7 +1665,7 @@ class NotificationService {
            // Sat=6, Sun=7
            for (final day in const [6, 7]) {
              final nid = _generateId(id, day);
-             await _scheduleWeekly(id: nid, title: title, body: body, time: scheduledTime, dayOfWeek: day, details: details, payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration));
+             await _scheduleWeekly(id: nid, title: title, body: body, time: scheduledTime, dayOfWeek: day, details: details, payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration, reminderId: reminderId, quiet: escalation.kind == ReminderKind.quiet));
            }
           break;
 
@@ -1561,7 +1680,7 @@ class NotificationService {
                time: scheduledTime,
                dayOfWeek: day,
                details: details,
-               payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration),
+               payload: payload ?? _buildAlarmPayload(nid, title, body, snoozeDuration, reminderId: reminderId, quiet: escalation.kind == ReminderKind.quiet),
              );
             }
           }
@@ -1608,13 +1727,23 @@ class NotificationService {
           String? medicineId,
           int? hour,
           int? minute,
-          int? baseId}) =>
+          int? baseId,
+          String? reminderId,
+
+          /// A Quiet reminder, so that putting it off to Later brings it back
+          /// quiet too: a re-fire is built from the payload alone.
+          bool quiet = false}) =>
       'alarm:${jsonEncode({
             'id': notifId,
             'title': title,
             'body': body,
             if (snooze != null) 'snoozeDuration': snooze,
             if (sound != null) 'sound': sound,
+            // Which reminder this is, so a Done or Later tapped on its
+            // notification knows what it is about. Absent for everything that
+            // is not a reminder in the Reminders list.
+            if (reminderId != null) 'reminderId': reminderId,
+            if (quiet) 'quiet': true,
             // Dose identity for 1-tap Take/Skip from the notification. hour/minute
             // let the action handler reconstruct today's dose time at fire time.
             if (medicineId != null) 'medicineId': medicineId,
@@ -1945,24 +2074,38 @@ class NotificationService {
     /// Android carries its actions on the notification; iOS needs the category
     /// declared up front in [init] and referenced here.
     bool doseActions = false,
+
+    /// Answer buttons for a check-in nudge: the iOS category for them.
+    NudgeAnswers? answers,
   }) {
     // Get user settings for notification preferences
     final settings = CleanStorageService.getUserSettings();
     final alarmGrade = kind.isAlarmGrade;
+    final quiet = kind == ReminderKind.quiet;
 
     return NotificationDetails(
       android: AndroidNotificationDetails(
-        alarmGrade ? 'alarm_channel' : 'checkin_channel',
-        alarmGrade ? 'Alarm Reminders' : 'Check-ins & Nudges',
+        alarmGrade
+            ? 'alarm_channel'
+            : (quiet ? quietChannelId : 'checkin_channel'),
+        alarmGrade
+            ? 'Alarm Reminders'
+            : (quiet ? 'Quiet Reminders' : 'Check-ins & Nudges'),
         channelDescription: alarmGrade
             ? 'High priority alarm reminders'
-            : 'Gentle check-in and heads-up nudges',
-        importance: alarmGrade ? Importance.max : Importance.high,
-        priority: alarmGrade ? Priority.max : Priority.defaultPriority,
-        playSound: true,
+            : (quiet
+                ? 'Reminders you asked to arrive without a sound'
+                : 'Gentle check-in and heads-up nudges'),
+        importance: alarmGrade
+            ? Importance.max
+            : (quiet ? Importance.low : Importance.high),
+        priority: alarmGrade
+            ? Priority.max
+            : (quiet ? Priority.low : Priority.defaultPriority),
+        playSound: !quiet,
         sound: null, // Use system default sound from the channel
-        enableVibration: settings.vibrationEnabled,
-        vibrationPattern: !settings.vibrationEnabled
+        enableVibration: !quiet && settings.vibrationEnabled,
+        vibrationPattern: quiet || !settings.vibrationEnabled
             ? null
             : alarmGrade
                 ? Int64List.fromList([0, 1000, 500, 1000, 500, 1000])
@@ -2011,9 +2154,9 @@ class NotificationService {
       iOS: DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
-        presentSound: settings.soundEnabled,
+        presentSound: settings.soundEnabled && !quiet,
         interruptionLevel: InterruptionLevel.timeSensitive,
-        categoryIdentifier: doseActions ? darwinDoseCategoryId : null,
+        categoryIdentifier: doseActions ? darwinDoseCategoryId : _darwinCategoryFor(answers),
       ),
     );
   }
@@ -2457,6 +2600,25 @@ class NotificationService {
   /// why declaring it there is mandatory — a `categoryIdentifier` with no
   /// registered category produces no buttons and no error.
   static const String darwinDoseCategoryId = 'dose_reminder';
+
+  /// The iOS category carrying Done / Snooze / Later on a reminder the person made.
+  static const String darwinReminderCategoryId = 'reminder_actions';
+
+  /// The iOS categories carrying the check-in answer buttons ([NudgeAnswers]).
+  static const String darwinMoodCategoryId = 'mood_checkin';
+  static const String darwinPeriodCategoryId = 'period_checkin';
+
+  /// The iOS category for [answers], or null for none.
+  static String? _darwinCategoryFor(NudgeAnswers? answers) {
+    switch (answers) {
+      case NudgeAnswers.mood:
+        return darwinMoodCategoryId;
+      case NudgeAnswers.period:
+        return darwinPeriodCategoryId;
+      case null:
+        return null;
+    }
+  }
 
   Future<bool> scheduleWaterReminder({
     required int id,
@@ -2943,6 +3105,9 @@ class NotificationService {
     required int hour,
     required int minute,
     ReminderKind kind = ReminderKind.gentle,
+
+    /// Buttons that answer the check-in from the notification itself.
+    NudgeAnswers? answers,
   }) async {
     try {
       if (!_isInitialized) {
@@ -2962,6 +3127,7 @@ class NotificationService {
           channelId: 'checkin_channel',
           channelName: 'Check-ins & Nudges',
           kind: kind,
+          answers: answers,
         );
       }
 
@@ -2984,7 +3150,7 @@ class NotificationService {
         title,
         body,
         scheduledDate,
-        _notificationDetails(priority: _iosPriorityFor(kind)),
+        _notificationDetails(priority: _iosPriorityFor(kind), answers: answers),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
@@ -3013,6 +3179,9 @@ class NotificationService {
     /// What a tap on the notification should open. Null keeps the old
     /// behaviour: it just brings the app forward.
     String? payload,
+
+    /// Buttons that answer the notification from the notification itself.
+    NudgeAnswers? answers,
   }) async {
     try {
       if (!_isInitialized) {
@@ -3032,6 +3201,7 @@ class NotificationService {
           channelName: 'Check-ins & Nudges',
           kind: kind,
           payload: payload,
+          answers: answers,
         );
       }
 
@@ -3042,7 +3212,7 @@ class NotificationService {
         title,
         body,
         tzScheduledDate,
-        _notificationDetails(priority: _iosPriorityFor(kind)),
+        _notificationDetails(priority: _iosPriorityFor(kind), answers: answers),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
