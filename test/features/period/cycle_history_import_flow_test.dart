@@ -522,7 +522,24 @@ void main() {
       expect(find.text('Import your periods?'), findsNothing);
     });
 
-    pinned('a second tap while the first is waiting does not ask twice',
+    pinned('two taps in the same frame ask once', (tester) async {
+      final gate = Completer<bool>();
+      final source = FakeCycleSource(gate: gate, samples: twoPeriods());
+      await show(tester, source);
+
+      // No frame between them: the button has not rebuilt as a spinner yet, so
+      // only the flow's own guard stops the second tap starting another.
+      await tester.tap(find.text('Import from Health Connect'));
+      await tester.tap(find.text('Import from Health Connect'), warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(source.asked, 1);
+
+      gate.complete(false);
+      await settle(tester);
+    });
+
+    pinned('a tap while it is waiting on the platform does nothing more',
         (tester) async {
       final gate = Completer<bool>();
       final source = FakeCycleSource(gate: gate, samples: twoPeriods());
@@ -530,7 +547,6 @@ void main() {
 
       await tester.tap(find.text('Import from Health Connect'));
       await tester.pump(const Duration(milliseconds: 50));
-      // The button is a spinner now; tapping where it was must not start another.
       await tester.tap(find.byType(CycleImportButton), warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 50));
 

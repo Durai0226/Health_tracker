@@ -11,13 +11,22 @@ class AquaBeverageSheet extends StatefulWidget {
   final String selectedBeverageId;
   final Function(String beverageId) onSelect;
 
+  /// Whether the grid ends with a "New drink" tile, which reports [createNew].
+  final bool canCreate;
+
   const AquaBeverageSheet({
     super.key,
     required this.selectedBeverageId,
     required this.onSelect,
+    this.canCreate = false,
   });
 
-  static Future<String?> show(BuildContext context, String currentBeverageId) {
+  /// What [show] returns when the person asks to make a new drink rather than
+  /// pick one. Not a drink id: callers that do not offer it never see it.
+  static const String createNew = '__create_new_drink__';
+
+  static Future<String?> show(BuildContext context, String currentBeverageId,
+      {bool canCreate = false}) {
     final ext = AppColorsExt.of(context);
     return AppBottomSheet.show<String>(
       context,
@@ -27,6 +36,7 @@ class AquaBeverageSheet extends StatefulWidget {
       builder: (ctx) => AquaBeverageSheet(
         selectedBeverageId: currentBeverageId,
         onSelect: (id) => Navigator.pop(ctx, id),
+        canCreate: canCreate,
       ),
     );
   }
@@ -48,8 +58,9 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    // Preserve the WaterService-driven catalog (22 items, hydration %, customs).
-    final beverages = WaterService.getAllBeverages();
+    // The whole catalogue and the person's own drinks, the ones they log most
+    // first (see [WaterService.getBeveragesByUse]).
+    final beverages = WaterService.getBeveragesByUse();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -70,8 +81,13 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
             crossAxisSpacing: AppSpacing.md,
             mainAxisSpacing: AppSpacing.md,
           ),
-          itemCount: beverages.length,
+          itemCount: beverages.length + (widget.canCreate ? 1 : 0),
           itemBuilder: (context, index) {
+            if (index == beverages.length) {
+              return _NewDrinkCard(
+                  key: const ValueKey('new-drink'),
+                  onTap: () => widget.onSelect(AquaBeverageSheet.createNew));
+            }
             final beverage = beverages[index];
             final isSelected = beverage.id == _selectedId;
 
@@ -87,6 +103,52 @@ class _AquaBeverageSheetState extends State<AquaBeverageSheet> {
           },
         ),
       ],
+    );
+  }
+}
+
+/// The last tile of the grid: make a drink of your own.
+class _NewDrinkCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _NewDrinkCard({super.key, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return Semantics(
+      button: true,
+      label: 'Create new drink',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.brMd,
+            border: Border.all(color: ext.mark(ext.water), width: 1.5),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Symbols.add_rounded,
+                  size: 28, color: ext.mark(ext.water), applyTextScaling: false),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'New drink',
+                style: tt.labelMedium?.copyWith(
+                    color: ext.textPrimary, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

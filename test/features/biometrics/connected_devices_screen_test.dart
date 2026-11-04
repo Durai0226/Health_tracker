@@ -377,6 +377,49 @@ void main() {
     });
   });
 
+  group('what the last background check found', () {
+    String keyFor(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+
+    Future<String> shown(WidgetTester tester) async {
+      await pump(tester,
+          sources: [_watch()],
+          backgroundAvailable: true,
+          backgroundEnabled: true,
+          height: 1600);
+      await tester.pumpAndSettle();
+      return texts(tester).join(' ');
+    }
+
+    testWidgets('says the steps it counted today', (tester) async {
+      await HealthSyncQueue.writeSnapshot({
+        'atMs': DateTime.now().millisecondsSinceEpoch,
+        'todayKey': keyFor(DateTime.now()),
+        'steps': 5432,
+      });
+
+      final all = await shown(tester);
+
+      expect(all, contains('5,432 steps today'));
+      expect(all, contains('Last checked'));
+    });
+
+    testWidgets('says nothing of steps from an earlier day', (tester) async {
+      await HealthSyncQueue.writeSnapshot({
+        'atMs': DateTime.now().millisecondsSinceEpoch,
+        'todayKey': keyFor(DateTime.now().subtract(const Duration(days: 1))),
+        'steps': 9000,
+      });
+
+      final all = await shown(tester);
+
+      expect(all, contains('Last checked'));
+      expect(all, isNot(contains('steps today')),
+          reason: 'yesterday\'s total is not today\'s');
+      expect(all, isNot(contains('9,000')));
+    });
+  });
+
   // -------------------------------------------------------- responsive gap
 
   testWidgets('no overflow in the states the shared harness cannot reach',

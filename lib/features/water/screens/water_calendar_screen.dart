@@ -10,6 +10,7 @@ import '../services/water_service.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/aqua_shimmer.dart';
 import 'water_history_edit_screen.dart';
+import '../../../core/utils/units.dart';
 
 /// Calendar History Screen - View past water intake by date
 class WaterCalendarScreen extends StatefulWidget {
@@ -519,7 +520,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerRight,
                         child: Text(
-                          '${data.effectiveHydrationMl}ml',
+                          Units.volumeText(data.effectiveHydrationMl, tight: true),
                           maxLines: 1,
                           softWrap: false,
                           style: tt.headlineMedium,
@@ -529,7 +530,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerRight,
                         child: Text(
-                          'of ${goal}ml',
+                          'of ${Units.volumeText(goal, tight: true)}',
                           maxLines: 1,
                           softWrap: false,
                           style: tt.bodySmall
@@ -725,7 +726,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
                   child: Text(
-                    '+${log.amountMl}ml',
+                    '+${Units.volumeText(log.amountMl, tight: true)}',
                     maxLines: 1,
                     softWrap: false,
                     style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -735,7 +736,7 @@ class _WaterCalendarScreenState extends State<WaterCalendarScreen> {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'Hydration: ${log.effectiveHydrationMl}ml',
+                    'Hydration: ${Units.volumeText(log.effectiveHydrationMl, tight: true)}',
                     maxLines: 1,
                     softWrap: false,
                     style: tt.labelSmall?.copyWith(

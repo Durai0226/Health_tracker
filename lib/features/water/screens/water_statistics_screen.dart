@@ -1,4 +1,3 @@
-import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:clock/clock.dart';
@@ -13,6 +12,8 @@ import '../services/water_service.dart';
 import '../theme/aqua_theme.dart';
 import '../widgets/aqua_shimmer.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../../core/utils/share_file.dart';
+import '../../../core/utils/units.dart';
 
 /// Advanced Statistics Screen with charts and insights
 class WaterStatisticsScreen extends StatefulWidget {
@@ -267,10 +268,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/$filename');
       await file.writeAsString(csv);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/csv')],
-        subject: subject,
-      );
+      await shareFile(file, mimeType: 'text/csv', subject: subject);
     } catch (e) {
       if (mounted) context.toastError('Could not export: $e');
     }
@@ -307,7 +305,7 @@ class _WaterStatisticsScreenState extends State<WaterStatisticsScreen> {
           child: _buildOverviewCard(
             icon: Symbols.analytics_rounded,
             iconColor: ext.mark(ext.success),
-            value: '${_monthlyStats.averageDailyMl}ml',
+            value: Units.volumeText(_monthlyStats.averageDailyMl, tight: true),
             label: 'Daily Average',
           ),
         ),

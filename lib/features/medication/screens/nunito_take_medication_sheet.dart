@@ -6,12 +6,14 @@ import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
+import '../models/medicine_snooze.dart';
 import '../models/medicine_log.dart'
     show MedicineLog, moodRatingLabels, effectivenessRatingLabels,
         injectionSites, suggestNextInjectionSite;
 import '../services/medicine_storage_service.dart';
 import '../services/medication_reminder_service.dart';
 import '../services/drug_interaction_service.dart';
+import '../../../core/services/clean_storage_service.dart';
 import '../../../core/services/haptic_service.dart';
 
 class NunitoTakeMedicationSheet extends StatefulWidget {
@@ -445,10 +447,12 @@ class _NunitoTakeMedicationSheetState extends State<NunitoTakeMedicationSheet> {
   Future<void> _snoozeMedication() async {
     _hapticService.light();
 
-    // Use the medicine's configured snooze duration; fall back to 10 min.
-    final minutes = widget.medicine.snoozeMinutes > 0
-        ? widget.medicine.snoozeMinutes
-        : 10;
+    // This medicine's own length if it chose one, else the Notifications
+    // setting — the length the notification's own Snooze button is labelled with.
+    // (It read a model field that was never stored and so said 10 for everyone.)
+    final minutes = MedicineSnooze.effective(
+        widget.medicine.snoozeOverrideMinutes,
+        CleanStorageService.getUserSettings().snoozeIntervalMinutes);
 
     setState(() => _isLoading = true);
 

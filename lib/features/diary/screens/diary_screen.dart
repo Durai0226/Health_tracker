@@ -7,6 +7,7 @@ import '../../../core/design/app_colors_ext.dart';
 import '../../../core/health/mood_tags.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/app/vitals_theme.dart';
+import '../../../core/widgets/photo_thumb.dart';
 import '../models/diary_entry.dart';
 import '../services/diary_prompt_signals.dart';
 import '../services/diary_prompts.dart';
@@ -232,6 +233,16 @@ class _DiaryScreenState extends State<DiaryScreen> {
                     Icon(VitalsColors.moodIcon(e.moodIndex!),
                         size: 20,
                         color: VitalsColors.moodBand(ext.isDark, e.moodIndex!)),
+                  ],
+                  if (e.photoPath != null) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    PhotoThumb(
+                      path: e.photoPath,
+                      size: 40,
+                      label: 'Photo for ${e.displayTitle}',
+                      onTap: () => showPhotoViewer(context, e.photoPath!,
+                          label: 'Photo for ${e.displayTitle}'),
+                    ),
                   ],
                 ],
               ),

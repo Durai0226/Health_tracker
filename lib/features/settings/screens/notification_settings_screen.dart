@@ -1,11 +1,19 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:permission_handler/permission_handler.dart' show openAppSettings;
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/background_alarm_service.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../../../core/services/daily_check_in.dart';
+import '../../../core/services/reminder_reschedule_service.dart';
+import '../../../core/models/user_settings.dart';
+import '../../../core/health/quiet_window.dart';
+import '../../reminders/services/quiet_hours.dart';
+import '../../sleep/services/sleep_service.dart';
 
 /// Notifications settings — an Apple-tier, instant-apply grouped-settings list.
 /// Calm Clarity: one interactive color (brand teal), a neutral chrome bed, and
@@ -14,6 +22,38 @@ import '../../../core/services/clean_storage_service.dart';
 /// fades in the header.
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
+
+  /// Arms every reminder again. Stands apart so a test can watch for it instead of
+  /// running the whole app's scheduling.
+  @visibleForTesting
+  static Future<void> Function() rearmReminders =
+      ReminderRescheduleService.rearmReminders;
+
+  /// Opens this app's page in the phone's settings, where each kind of reminder
+  /// has its own sound. Stands apart because it leaves the app.
+  @visibleForTesting
+  static Future<bool> Function() openPhoneSettings = openAppSettings;
+
+  /// Whether the phone lets a person pick a notification's sound per category.
+  /// Android does; an iPhone offers only on/off, which Sound above already is.
+  static bool get _canPickSoundInPhoneSettings =>
+      defaultTargetPlatform == TargetPlatform.android;
+
+  /// Whether [after] differs from [before] in how an alert presents itself.
+  ///
+  /// Vibration, Keep on screen, Full-screen alerts, Show on lock screen and Sound are
+  /// fixed into a scheduled notification when it is armed — the channel and the flags
+  /// travel with it — so one already waiting keeps the old look until something arms
+  /// it again. The lock screen is the one that matters most: a reminder armed while
+  /// its text was allowed there ("Take sertraline") went on showing it after the
+  /// person had turned that off.
+  @visibleForTesting
+  static bool alertLookChanged(UserSettings before, UserSettings after) =>
+      before.vibrationEnabled != after.vibrationEnabled ||
+      before.persistentNotification != after.persistentNotification ||
+      before.fullScreenNotification != after.fullScreenNotification ||
+      before.showOnLockScreen != after.showOnLockScreen ||
+      before.soundEnabled != after.soundEnabled;
 
   @override
   State<NotificationSettingsScreen> createState() =>
@@ -35,6 +75,20 @@ class _NotificationSettingsScreenState
   int _missedMinutes = 60;
   int _alarmDurationSeconds = 30;
   String _notificationSound = 'default';
+
+  // The daily check-in: applied the moment it is changed, not behind the
+  // debounce the rest of this screen uses — it arms or withdraws a notification.
+  bool _checkInEnabled = false;
+  TimeOfDay _checkInTime = DailyCheckIn.defaultTime;
+  bool _checkInBusy = false;
+
+  // Quiet hours: applied the moment they change, like the check-in, because
+  // reminders already armed inside the window have to move.
+  bool _quietOn = false;
+  QuietWindow _quietWindow = const QuietWindow(
+      startMinute: QuietHours.defaultStartMinute,
+      endMinute: QuietHours.defaultEndMinute);
+  bool _quietBusy = false;
 
   // UI state
   bool _isLoading = true;
@@ -75,9 +129,14 @@ class _NotificationSettingsScreenState
       // banner when medicine/reminder alerts would silently never fire.
       final notificationsEnabled =
           await NotificationService().areNotificationsEnabled();
+      final checkIn = await DailyCheckIn.isEnabled();
 
       if (mounted) {
         setState(() {
+          _checkInEnabled = checkIn;
+          _checkInTime = DailyCheckIn.time;
+          _quietOn = QuietHours.enabled;
+          _quietWindow = QuietHours.window;
           _notificationsEnabled = notificationsEnabled;
           _soundEnabled = settings.soundEnabled;
           _vibrationEnabled = settings.vibrationEnabled;
@@ -109,7 +168,8 @@ class _NotificationSettingsScreenState
       // copyWith on the persisted settings — building a fresh UserSettings here
       // reset every unlisted field (notably the user's theme preference) to its
       // default, silently wiping their dark/light choice on every save.
-      final settings = CleanStorageService.getUserSettings().copyWith(
+      final before = CleanStorageService.getUserSettings();
+      final settings = before.copyWith(
         soundEnabled: _soundEnabled,
         vibrationEnabled: _vibrationEnabled,
         showOnLockScreen: _showOnLockScreen,
@@ -129,6 +189,14 @@ class _NotificationSettingsScreenState
       // two of them here by hand and miss `max_snooze_count` entirely, so the
       // snooze cap the alarm isolate enforced was never the one the user chose.
       await CleanStorageService.saveUserSettings(settings);
+
+      // Reminders already armed carry the look they were armed with, so a changed
+      // switch only reaches them once they are armed again. At the next start, as
+      // it was — which reads as the switch doing nothing, until then. A new
+      // alarm reads the preferences when it rings and needs none of this.
+      if (NotificationSettingsScreen.alertLookChanged(before, settings)) {
+        unawaited(_rearmReminders());
+      }
 
       if (mounted) {
         // Quiet, non-blocking "Saved" affordance in the header — fades away.
@@ -150,6 +218,117 @@ class _NotificationSettingsScreenState
       _savedTimer?.cancel();
       setState(() => _showSaved = false);
       context.toastError("Couldn't save that change. Try again.");
+    }
+  }
+
+  Future<void> _setCheckIn(bool on) async {
+    if (_checkInBusy) return;
+    setState(() => _checkInBusy = true);
+    try {
+      // Turning it on arms a notification, and one scheduled without the
+      // permission is never shown while this screen says it is on. A person who
+      // skipped the first-run step, or declined it, meets the question here.
+      if (on && !await NotificationService().ensurePermission()) {
+        if (mounted) {
+          context.toastInfo('Notifications are off for DlyMinder, so the daily '
+              "check-in would never appear. Allow them in your phone's settings.");
+        }
+        return;
+      }
+      await DailyCheckIn.apply(enabled: on, time: _checkInTime);
+      if (!mounted) return;
+      setState(() => _checkInEnabled = on);
+    } catch (e) {
+      debugPrint('Daily check-in could not be changed: $e');
+      if (mounted) context.toastError("Couldn't change the daily check-in. Try again.");
+    } finally {
+      if (mounted) setState(() => _checkInBusy = false);
+    }
+  }
+
+  Future<void> _pickCheckInTime() async {
+    final picked = await AppTimePicker.show(
+      context,
+      initial: _checkInTime,
+      accent: AppColorsExt.of(context).reminders,
+      minuteInterval: 5,
+      title: 'Check-in time',
+    );
+    if (picked == null || !mounted) return;
+    try {
+      await DailyCheckIn.apply(enabled: true, time: picked);
+      if (!mounted) return;
+      setState(() {
+        _checkInTime = picked;
+        _checkInEnabled = true;
+      });
+    } catch (e) {
+      debugPrint('Daily check-in time could not be changed: $e');
+      if (mounted) context.toastError("Couldn't change the time. Try again.");
+    }
+  }
+
+  TimeOfDay _timeOf(int minute) =>
+      TimeOfDay(hour: minute ~/ 60, minute: minute % 60);
+
+  /// Save quiet hours and move what is already armed. The choice is kept even if
+  /// re-arming fails: the next start of the app arms every reminder again.
+  Future<void> _applyQuietHours(bool on, QuietWindow window) async {
+    setState(() => _quietBusy = true);
+    try {
+      await QuietHours.save(enabled: on, window: window);
+      if (!mounted) return;
+      setState(() {
+        _quietOn = on;
+        _quietWindow = window;
+      });
+      await _rearmReminders();
+    } catch (e) {
+      debugPrint('Quiet hours could not be changed: $e');
+      if (mounted) context.toastError("Couldn't change quiet hours. Try again.");
+    } finally {
+      if (mounted) setState(() => _quietBusy = false);
+    }
+  }
+
+  Future<void> _pickQuietTime({required bool start}) async {
+    final picked = await AppTimePicker.show(
+      context,
+      initial: _timeOf(start ? _quietWindow.startMinute : _quietWindow.endMinute),
+      accent: AppColorsExt.of(context).reminders,
+      minuteInterval: 5,
+      title: start ? 'Quiet hours start' : 'Quiet hours end',
+    );
+    if (picked == null || !mounted) return;
+    final minute = picked.hour * 60 + picked.minute;
+    final next = start
+        ? QuietWindow(startMinute: minute, endMinute: _quietWindow.endMinute)
+        : QuietWindow(startMinute: _quietWindow.startMinute, endMinute: minute);
+    if (next.isEmpty) {
+      context.toastError('Quiet hours need a start and an end that differ.');
+      return;
+    }
+    await _applyQuietHours(_quietOn, next);
+  }
+
+  /// Offered, never applied unasked: the sleep schedule's bedtime and wake time.
+  Future<void> _quietFromSleepSchedule() async {
+    final schedule = SleepService.getSchedule();
+    final next = QuietWindow(
+        startMinute: schedule.bedtimeHour * 60 + schedule.bedtimeMinute,
+        endMinute: schedule.wakeHour * 60 + schedule.wakeMinute);
+    if (next.isEmpty) {
+      context.toastError('Your sleep schedule has the same bedtime and wake time.');
+      return;
+    }
+    await _applyQuietHours(_quietOn, next);
+  }
+
+  Future<void> _rearmReminders() async {
+    try {
+      await NotificationSettingsScreen.rearmReminders();
+    } catch (e) {
+      debugPrint('Re-arming reminders after a change of alert look failed: $e');
     }
   }
 
@@ -231,11 +410,83 @@ class _NotificationSettingsScreenState
                           const SizedBox(height: AppSpacing.xl),
                         ],
 
+                        // The one nudge a day the first-run setup offered. It had
+                        // no home after that: no way to move it, no way to stop
+                        // it but the phone's own settings.
+                        SettingsSection(
+                          title: 'Daily check-in',
+                          footer: 'One gentle nudge a day for your medicine, '
+                              'water and to-dos.',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.event_available_rounded,
+                              title: 'Daily check-in',
+                              switchValue: _checkInEnabled,
+                              onSwitchChanged: _checkInBusy ? null : _setCheckIn,
+                            ),
+                            if (_checkInEnabled)
+                              SettingsTile(
+                                icon: Symbols.schedule_rounded,
+                                title: 'Time',
+                                value: _checkInTime.format(context),
+                                onTap: _pickCheckInTime,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+
+                        // Quiet hours: the reminders you made, held until morning.
+                        SettingsSection(
+                          title: 'Quiet hours',
+                          footer: 'Reminders you made, set to Normal, wait until '
+                              'quiet hours end. Quiet ones make no sound anyway; '
+                              'Insistent and Critical reminders and medicines '
+                              'always arrive on time.',
+                          children: [
+                            SettingsTile(
+                              icon: Symbols.bedtime_rounded,
+                              title: 'Quiet hours',
+                              switchValue: _quietOn,
+                              onSwitchChanged: _quietBusy
+                                  ? null
+                                  : (on) => _applyQuietHours(on, _quietWindow),
+                            ),
+                            if (_quietOn) ...[
+                              SettingsTile(
+                                icon: Symbols.schedule_rounded,
+                                title: 'From',
+                                value: _timeOf(_quietWindow.startMinute)
+                                    .format(context),
+                                onTap: () => _pickQuietTime(start: true),
+                              ),
+                              SettingsTile(
+                                icon: Symbols.alarm_rounded,
+                                title: 'Until',
+                                value: _timeOf(_quietWindow.endMinute)
+                                    .format(context),
+                                onTap: () => _pickQuietTime(start: false),
+                              ),
+                              SettingsTile(
+                                icon: Symbols.bed_rounded,
+                                title: 'Use my sleep schedule',
+                                onTap: _quietFromSleepSchedule,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+
                         // Alerts
                         SettingsSection(
                           title: 'Alerts',
                           footer:
-                              'Play a sound and vibrate your device when a reminder fires.',
+                              'Play a sound and vibrate your device when a reminder fires. '
+                              'Medicine and alarm-style reminders ring on your phone\'s '
+                              'alarm sound whatever Sound says; Vibration applies to them too. '
+                              'Turning Vibration off moves them to a separate "(no vibration)" '
+                              'entry in your phone\'s notification settings, which starts with '
+                              'the app\'s own settings rather than any you changed on the original.'
+                              '${NotificationSettingsScreen._canPickSoundInPhoneSettings ? ' To pick which sound each kind of reminder uses, open your phone\'s settings for DlyMinder, then Notifications.' : ''}',
                           children: [
                             SettingsTile(
                               icon: Symbols.volume_up_rounded,
@@ -246,6 +497,14 @@ class _NotificationSettingsScreenState
                                 _persistDebounced();
                               },
                             ),
+                            if (NotificationSettingsScreen
+                                ._canPickSoundInPhoneSettings)
+                              SettingsTile(
+                                icon: Symbols.music_note_rounded,
+                                title: 'Choose sounds',
+                                onTap: () =>
+                                    NotificationSettingsScreen.openPhoneSettings(),
+                              ),
                             SettingsTile(
                               icon: Symbols.vibration_rounded,
                               title: 'Vibration',
@@ -263,7 +522,8 @@ class _NotificationSettingsScreenState
                         SettingsSection(
                           title: 'Display',
                           footer:
-                              'Full-screen alerts take over the screen for time-critical reminders.',
+                              'Full-screen alerts take over the screen for time-critical reminders. '
+                              'Keep on screen stops them being swiped away until you answer.',
                           children: [
                             SettingsTile(
                               icon: Symbols.lock_rounded,

@@ -14,6 +14,7 @@ import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_reminder_button.dart';
 import '../../services/vitals_reminder_service.dart';
+import 'mood_report_screen.dart';
 import 'mood_year_screen.dart';
 import '../../../../core/health/mood_tag_insights.dart';
 import '../../../../core/health/mood_tags.dart';
@@ -102,6 +103,14 @@ class _MoodScreenState extends State<MoodScreen> {
             title: 'Mood',
             leading: AppHeader.backButton(context),
             actions: [
+              AppIconButton(
+                icon: Symbols.summarize_rounded,
+                filled: false,
+                accent: accent,
+                tooltip: 'Mood report',
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const MoodReportScreen())),
+              ),
               AppIconButton(
                 icon: Symbols.grid_view_rounded,
                 filled: false,

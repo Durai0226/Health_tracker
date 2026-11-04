@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/utils/units.dart';
 
 /// Calm Clarity hydration hero — a bold progress ring around a gentle wave-fill
 /// disc, with the amount centered. Always in the water accent (never tinted by
@@ -87,7 +88,7 @@ class WaterHeroGauge extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      limit != null ? '$leftMl' : '$currentMl',
+                      Units.volumeNumber(limit != null ? leftMl : currentMl),
                       style: tt.displayLarge?.copyWith(
                         color: v > 0.62 ? s.on : s.strong,
                         fontWeight: FontWeight.w800,
@@ -96,7 +97,9 @@ class WaterHeroGauge extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      limit != null ? 'ml left of $limit' : 'of $goalMl ml',
+                      limit != null
+                          ? '${Units.volumeSymbol()} left of ${Units.volumeNumber(limit)}'
+                          : 'of ${Units.volumeText(goalMl)}',
                       style: tt.bodyMedium?.copyWith(
                         color: v > 0.55 ? s.on.withOpacity(0.8) : ext.textSecondary,
                       ),
@@ -136,7 +139,7 @@ class WaterHeroGauge extends StatelessWidget {
                           Text(
                             atLimit
                                 ? (overBy > 0
-                                    ? 'Over by $overBy ml'
+                                    ? 'Over by ${Units.volumeText(overBy)}'
                                     : 'Limit reached')
                                 : reached
                                     ? 'Goal reached'

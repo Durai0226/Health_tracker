@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import '../../reminders/models/reminder_sounds.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
+import '../models/medicine_snooze.dart';
 import '../models/medicine_schedule.dart';
 import 'critical_follow_up.dart';
 
@@ -31,23 +33,76 @@ class SlotMedicine {
   final String name;
   final String scheduleJson;
 
+  /// The bundled sound this medicine asked to ring with; null is the standard
+  /// one. Carried here because the alarm isolate has no database to look it up.
+  final String? sound;
+
+  /// Minutes this medicine asked its Snooze to wait; null follows the
+  /// Notifications setting. Carried for the same reason as [sound].
+  final int? snooze;
+
   const SlotMedicine({
     required this.medicineId,
     required this.name,
     required this.scheduleJson,
+    this.sound,
+    this.snooze,
   });
 
   Map<String, dynamic> toJson() => {
         'medicineId': medicineId,
         'name': name,
         'scheduleJson': scheduleJson,
+        if (sound != null) 'sound': sound,
+        if (snooze != null) 'snooze': snooze,
       };
 
   factory SlotMedicine.fromJson(Map<String, dynamic> json) => SlotMedicine(
         medicineId: json['medicineId']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         scheduleJson: json['scheduleJson']?.toString() ?? '',
+        sound: json['sound'] as String?,
+        snooze: MedicineSnooze.clean(json['snooze']),
       );
+}
+
+/// The one sound a slot's alarm should loop, or null for the standard sound.
+///
+/// A slot is one alarm however many medicines share its minute, so it can ring
+/// only one sound. When every medicine due says the same bundled sound, that is
+/// it; when they disagree, or any asked for none, the standard sound plays —
+/// picking a winner would let one medicine's choice silence another's.
+///
+/// Takes the persisted alarm entries (maps, as the alarm isolate holds them)
+/// rather than [SlotMedicine]s, so it runs there unchanged.
+String? commonSlotSound(Iterable<Map<String, dynamic>> medicines) {
+  String? common;
+  var any = false;
+  for (final m in medicines) {
+    final sound = m['sound'];
+    if (sound is! String || !ReminderSounds.isKnown(sound)) return null;
+    if (any && sound != common) return null;
+    common = sound;
+    any = true;
+  }
+  return common;
+}
+
+/// How long a slot's Snooze should wait, or null to follow the Notifications
+/// setting.
+///
+/// One alarm serves every medicine due, so it snoozes once. Unlike a sound, the
+/// disagreement has a safe answer: the SHORTEST length any of them asked for, so
+/// no medicine waits longer than it said it could. A medicine that asked for
+/// nothing does not count — it has no preference to honour.
+int? shortestSlotSnooze(Iterable<Map<String, dynamic>> medicines) {
+  int? shortest;
+  for (final m in medicines) {
+    final asked = MedicineSnooze.clean(m['snooze']);
+    if (asked == null) continue;
+    if (shortest == null || asked < shortest) shortest = asked;
+  }
+  return shortest;
 }
 
 /// All medicines sharing one exact (hour, minute) reminder time on a given day.
@@ -67,9 +122,27 @@ class ReminderSlot {
   bool get isGroup => medicines.length > 1;
 }
 
+/// What the pill looks like, in words — "white, round" — or null when neither its
+/// colour nor its shape was recorded. [MedicineShape.other] says nothing, so it is
+/// left out.
+///
+/// Words rather than a picture: a notification cannot be drawn in the background
+/// isolate that rings an alarm, a screen reader reads words, and what the line is
+/// for is the moment of doubt — is this the right pill? — which "white, round"
+/// answers as well as a swatch does.
+String? pillLook(EnhancedMedicine medicine) {
+  final parts = [
+    if (medicine.color != null) medicine.color!.displayName.toLowerCase(),
+    if (medicine.shape != null && medicine.shape != MedicineShape.other)
+      medicine.shape!.displayName.toLowerCase(),
+  ];
+  return parts.isEmpty ? null : parts.join(', ');
+}
+
 /// The line shown for one medicine inside a reminder (InboxStyle line, or the
 /// single-medicine notification body). Mirrors the old per-medicine reminder
-/// title: name + strength + dosage + time label + meal-timing tag.
+/// title: name + strength + dosage + time label + meal-timing tag + what the
+/// pill looks like.
 String buildMedicineReminderLine(EnhancedMedicine medicine, ScheduledTime time) {
   final buffer = StringBuffer(medicine.name);
 
@@ -87,6 +160,9 @@ String buildMedicineReminderLine(EnhancedMedicine medicine, ScheduledTime time) 
   if (meal != MealTiming.anytime) {
     buffer.write(' · ${meal.displayName.toLowerCase()}');
   }
+
+  final look = pillLook(medicine);
+  if (look != null) buffer.write(' · $look');
 
   return buffer.toString();
 }
@@ -157,6 +233,10 @@ List<ReminderSlot> groupRemindersBySlot(
         medicineId: medicine.id,
         name: buildMedicineReminderLine(medicine, time),
         scheduleJson: scheduleJson,
+        sound: ReminderSounds.isKnown(medicine.reminderSound)
+            ? medicine.reminderSound
+            : null,
+        snooze: MedicineSnooze.clean(medicine.snoozeOverrideMinutes),
       ));
     }
   }

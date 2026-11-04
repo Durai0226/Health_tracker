@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math' as math;
 import '../../../core/design/app_design.dart';
 import '../theme/aqua_theme.dart';
+import '../../../core/utils/units.dart';
 
 /// Weekly progress widget with mini circular indicators
 class AquaWeeklyProgress extends StatelessWidget {
@@ -178,7 +179,7 @@ class AquaWeeklyProgress extends StatelessWidget {
           _buildDivider(isDark),
           _buildStatItem(
             context,
-            '${avgIntake}ml',
+            Units.volumeText(avgIntake, tight: true),
             'Daily Avg',
             beverage,
           ),

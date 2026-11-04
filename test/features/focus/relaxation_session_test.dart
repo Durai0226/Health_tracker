@@ -240,7 +240,9 @@ void main() {
     // line existed.
     expect(notifications.shown, hasLength(1),
         reason: 'someone still has to be told');
-    expect(notifications.shown.single.id, NotificationService.focusSessionEndId);
+    expect(notifications.shown.single.id, NotificationService.focusRelaxationEndId,
+        reason: 'its own id: finishing a relaxation track must not replace a '
+            'focus "Session complete" that is still on screen');
     expect(notifications.shown.single.title, contains('Relaxation Complete'));
     expect(notifications.shown.single.body, contains('15 minutes'));
   });

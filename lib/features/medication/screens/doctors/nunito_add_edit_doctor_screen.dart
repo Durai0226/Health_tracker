@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
+import '../../models/clinic.dart';
 import '../../models/doctor_pharmacy.dart';
+import '../clinics/nunito_clinic_list_screen.dart';
 import '../../services/medicine_storage_service.dart';
+import '../../../../core/services/active_profile_service.dart';
 import '../../../../core/services/haptic_service.dart';
+import '../../widgets/share_with_family_card.dart';
 
 class NunitoAddEditDoctorScreen extends StatefulWidget {
   final Doctor? editDoctor;
@@ -19,6 +23,15 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isPrimary = false;
+
+  /// A doctor added now belongs to the person in view alone, unless shared.
+  bool _sharedWithFamily = false;
+
+  /// The clinic record chosen for "Hospital / Clinic", when one was chosen rather than
+  /// a name typed, and its name as it was chosen. Typing over the name unlinks it.
+  String? _clinicId;
+  String? _linkedClinicName;
+  bool _hasClinics = false;
 
   final _nameController = TextEditingController();
   final _specialtyController = TextEditingController();
@@ -38,6 +51,62 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
     if (_isEditing) {
       _loadExistingDoctor();
     }
+    _hospitalController.addListener(_onHospitalTyped);
+    _checkForClinics();
+  }
+
+  /// Whether there is a clinic to choose from, and — on an edit — what the linked one is
+  /// called now (it may have been renamed, or deleted, since).
+  Future<void> _checkForClinics() async {
+    try {
+      final clinics = await MedicineCleanStorageService.getAllClinics();
+      if (!mounted) return;
+      final linked = _clinicId == null
+          ? null
+          : clinics.where((c) => c.id == _clinicId).firstOrNull;
+      setState(() {
+        _hasClinics = clinics.isNotEmpty;
+        if (linked != null) {
+          // Shown under the clinic's name now, as the list shows it.
+          _linkedClinicName = linked.name;
+          _hospitalController.text = linked.name;
+        } else if (clinics.isNotEmpty) {
+          // There are clinics and this is not one of them: it was deleted. (An empty
+          // list proves nothing — it is also what a clinic list that could not be
+          // read looks like — so a link is only dropped when there is something to
+          // compare it with.)
+          _clinicId = null;
+          _linkedClinicName = null;
+        }
+      });
+    } catch (e) {
+      debugPrint('Looking for clinics failed: $e');
+    }
+  }
+
+  /// A name typed over the chosen clinic's is a different place: the link goes.
+  void _onHospitalTyped() {
+    if (_clinicId != null && _hospitalController.text != _linkedClinicName) {
+      setState(() {
+        _clinicId = null;
+        _linkedClinicName = null;
+      });
+    }
+  }
+
+  Future<void> _chooseClinic() async {
+    _hapticService.selection();
+    final picked = await Navigator.push<Clinic>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const NunitoClinicListScreen(isSelectionMode: true)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _clinicId = picked.id;
+      _linkedClinicName = picked.name;
+      _hospitalController.text = picked.name;
+    });
   }
 
   void _loadExistingDoctor() {
@@ -48,12 +117,15 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
     _emailController.text = doc.email ?? '';
     _addressController.text = doc.address ?? '';
     _hospitalController.text = doc.clinicName ?? '';
+    _clinicId = doc.clinicId;
     _notesController.text = doc.notes ?? '';
     _isPrimary = doc.isPrimary;
+    _sharedWithFamily = doc.sharedWithFamily;
   }
 
   @override
   void dispose() {
+    _hospitalController.removeListener(_onHospitalTyped);
     _nameController.dispose();
     _specialtyController.dispose();
     _phoneController.dispose();
@@ -78,8 +150,15 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
         email: _emailController.text.isNotEmpty ? _emailController.text.trim() : null,
         address: _addressController.text.isNotEmpty ? _addressController.text.trim() : null,
         clinicName: _hospitalController.text.isNotEmpty ? _hospitalController.text.trim() : null,
+        clinicId: _clinicId,
         notes: _notesController.text.isNotEmpty ? _notesController.text.trim() : null,
         isPrimary: _isPrimary,
+        // Whose doctor this is is fixed when it is added: an edit made while another
+        // profile is in view must not hand it over.
+        dependentId: _isEditing
+            ? widget.editDoctor!.dependentId
+            : ActiveProfileService().activeDependentId,
+        sharedWithFamily: _sharedWithFamily,
       );
 
       await MedicineCleanStorageService.saveDoctor(doctor);
@@ -175,6 +254,24 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                             accent: accent,
                             textCapitalization: TextCapitalization.words,
                           ),
+                          if (_hasClinics) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: AppButton(
+                                label: _clinicId == null
+                                    ? 'Choose from my clinics'
+                                    : 'Change clinic',
+                                size: AppButtonSize.sm,
+                                variant: AppButtonVariant.tonal,
+                                accent: accent,
+                                leadingIcon: _clinicId == null
+                                    ? Symbols.local_hospital_rounded
+                                    : Symbols.link_rounded,
+                                onPressed: _chooseClinic,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -299,6 +396,12 @@ class _NunitoAddEditDoctorScreenState extends State<NunitoAddEditDoctorScreen> {
                           ),
                         ],
                       ),
+                    ),
+                    ShareWithFamilyCard(
+                      kind: 'doctor',
+                      value: _sharedWithFamily,
+                      accent: accent,
+                      onChanged: (v) => setState(() => _sharedWithFamily = v),
                     ),
                     const SizedBox(height: AppSpacing.xl),
 

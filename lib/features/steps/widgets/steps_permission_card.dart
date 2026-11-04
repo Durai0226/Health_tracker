@@ -11,11 +11,20 @@ class StepsPermissionCard extends StatelessWidget {
   final Future<void> Function() onEnable;
   final VoidCallback onLogManually;
 
+  /// Asks for this phone's own step sensor, which needs no health app at all.
+  /// Null leaves the offer out.
+  final Future<void> Function()? onUseSensor;
+
+  /// Whether the sensor is already allowed: the offer is for when it is not.
+  final bool sensorGranted;
+
   const StepsPermissionCard({
     super.key,
     required this.availability,
     required this.onEnable,
     required this.onLogManually,
+    this.onUseSensor,
+    this.sensorGranted = true,
   });
 
   @override
@@ -28,11 +37,19 @@ class StepsPermissionCard extends StatelessWidget {
     final denied = availability == HealthAvailability.denied;
     final needsUpdate = availability == HealthAvailability.needsProviderUpdate;
 
+    // Said as it is: with the sensor on offer below, "no step sensor" would be said
+    // directly above the button that counts with it.
+    final sensorOffered = onUseSensor != null && !sensorGranted;
+
     final (title, body) = unavailable
         ? (
             'Health data unavailable',
-            'This device has no step sensor or health provider. You can still '
-                'track everything by logging steps manually.'
+            sensorOffered
+                ? 'This device has no health provider to read steps from, but this '
+                    'phone can count them itself with its step sensor — or you can '
+                    'log steps manually.'
+                : 'This device has no step sensor or health provider. You can still '
+                    'track everything by logging steps manually.'
           )
         : needsUpdate
             ? (
@@ -107,6 +124,21 @@ class StepsPermissionCard extends StatelessWidget {
               ),
             ],
           ),
+          // The way that needs no health app: this phone counts steps itself, once
+          // it is allowed to. Shown only while it is not allowed — and in the
+          // "unavailable" state too, where it is the only thing on offer besides
+          // typing them in.
+          if (sensorOffered) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: 'Count with this phone\'s sensor',
+              variant: AppButtonVariant.tonal,
+              accent: s,
+              leadingIcon: Symbols.directions_walk_rounded,
+              fullWidth: true,
+              onPressed: onUseSensor,
+            ),
+          ],
         ],
       ),
     );

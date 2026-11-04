@@ -2608,6 +2608,38 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _costPerUnitMeta = const VerificationMeta(
+    'costPerUnit',
+  );
+  @override
+  late final GeneratedColumn<double> costPerUnit = GeneratedColumn<double>(
+    'cost_per_unit',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reminderSoundMeta = const VerificationMeta(
+    'reminderSound',
+  );
+  @override
+  late final GeneratedColumn<String> reminderSound = GeneratedColumn<String>(
+    'reminder_sound',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _snoozeOverrideMinutesMeta =
+      const VerificationMeta('snoozeOverrideMinutes');
+  @override
+  late final GeneratedColumn<int> snoozeOverrideMinutes = GeneratedColumn<int>(
+    'snooze_override_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _deletedAtMeta = const VerificationMeta(
     'deletedAt',
   );
@@ -2662,6 +2694,9 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
     customFieldsJson,
     reminderEnabled,
     criticalAlert,
+    costPerUnit,
+    reminderSound,
+    snoozeOverrideMinutes,
     deletedAt,
   ];
   @override
@@ -2996,6 +3031,33 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
         ),
       );
     }
+    if (data.containsKey('cost_per_unit')) {
+      context.handle(
+        _costPerUnitMeta,
+        costPerUnit.isAcceptableOrUnknown(
+          data['cost_per_unit']!,
+          _costPerUnitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reminder_sound')) {
+      context.handle(
+        _reminderSoundMeta,
+        reminderSound.isAcceptableOrUnknown(
+          data['reminder_sound']!,
+          _reminderSoundMeta,
+        ),
+      );
+    }
+    if (data.containsKey('snooze_override_minutes')) {
+      context.handle(
+        _snoozeOverrideMinutesMeta,
+        snoozeOverrideMinutes.isAcceptableOrUnknown(
+          data['snooze_override_minutes']!,
+          _snoozeOverrideMinutesMeta,
+        ),
+      );
+    }
     if (data.containsKey('deleted_at')) {
       context.handle(
         _deletedAtMeta,
@@ -3175,6 +3237,18 @@ class $EnhancedMedicinesTable extends EnhancedMedicines
         DriftSqlType.bool,
         data['${effectivePrefix}critical_alert'],
       )!,
+      costPerUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}cost_per_unit'],
+      ),
+      reminderSound: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reminder_sound'],
+      ),
+      snoozeOverrideMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}snooze_override_minutes'],
+      ),
       deletedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}deleted_at'],
@@ -3248,6 +3322,23 @@ class EnhancedMedicine extends DataClass
   /// so no existing medicine changes how it rings.
   final bool criticalAlert;
 
+  /// What one unit (a tablet, a millilitre) costs, in the person's own currency.
+  ///
+  /// `EnhancedMedicine.costPerUnit` existed and nothing stored it — the same gap
+  /// `reminderEnabled` and `criticalAlert` had. Null means not entered.
+  final double? costPerUnit;
+
+  /// The bundled alarm sound this medicine's reminder rings with (a key from
+  /// `ReminderSounds`). Null means the standard sound, so no existing medicine
+  /// changes how it rings.
+  final String? reminderSound;
+
+  /// Minutes this medicine's Snooze waits, when it differs from the
+  /// Notifications setting. Null follows that setting, so no existing medicine
+  /// changes how it snoozes. (`EnhancedMedicine.snoozeMinutes` is an older,
+  /// never-stored field that read 10 for everyone; this replaces it in use.)
+  final int? snoozeOverrideMinutes;
+
   /// Soft-delete tombstone, so a deletion can propagate through LWW cloud sync
   /// instead of looking like "this device has not downloaded it yet".
   final DateTime? deletedAt;
@@ -3293,6 +3384,9 @@ class EnhancedMedicine extends DataClass
     this.customFieldsJson,
     required this.reminderEnabled,
     required this.criticalAlert,
+    this.costPerUnit,
+    this.reminderSound,
+    this.snoozeOverrideMinutes,
     this.deletedAt,
   });
   @override
@@ -3385,6 +3479,15 @@ class EnhancedMedicine extends DataClass
     }
     map['reminder_enabled'] = Variable<bool>(reminderEnabled);
     map['critical_alert'] = Variable<bool>(criticalAlert);
+    if (!nullToAbsent || costPerUnit != null) {
+      map['cost_per_unit'] = Variable<double>(costPerUnit);
+    }
+    if (!nullToAbsent || reminderSound != null) {
+      map['reminder_sound'] = Variable<String>(reminderSound);
+    }
+    if (!nullToAbsent || snoozeOverrideMinutes != null) {
+      map['snooze_override_minutes'] = Variable<int>(snoozeOverrideMinutes);
+    }
     if (!nullToAbsent || deletedAt != null) {
       map['deleted_at'] = Variable<DateTime>(deletedAt);
     }
@@ -3478,6 +3581,15 @@ class EnhancedMedicine extends DataClass
           : Value(customFieldsJson),
       reminderEnabled: Value(reminderEnabled),
       criticalAlert: Value(criticalAlert),
+      costPerUnit: costPerUnit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(costPerUnit),
+      reminderSound: reminderSound == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reminderSound),
+      snoozeOverrideMinutes: snoozeOverrideMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(snoozeOverrideMinutes),
       deletedAt: deletedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(deletedAt),
@@ -3541,6 +3653,11 @@ class EnhancedMedicine extends DataClass
       customFieldsJson: serializer.fromJson<String?>(json['customFieldsJson']),
       reminderEnabled: serializer.fromJson<bool>(json['reminderEnabled']),
       criticalAlert: serializer.fromJson<bool>(json['criticalAlert']),
+      costPerUnit: serializer.fromJson<double?>(json['costPerUnit']),
+      reminderSound: serializer.fromJson<String?>(json['reminderSound']),
+      snoozeOverrideMinutes: serializer.fromJson<int?>(
+        json['snoozeOverrideMinutes'],
+      ),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
     );
   }
@@ -3591,6 +3708,9 @@ class EnhancedMedicine extends DataClass
       'customFieldsJson': serializer.toJson<String?>(customFieldsJson),
       'reminderEnabled': serializer.toJson<bool>(reminderEnabled),
       'criticalAlert': serializer.toJson<bool>(criticalAlert),
+      'costPerUnit': serializer.toJson<double?>(costPerUnit),
+      'reminderSound': serializer.toJson<String?>(reminderSound),
+      'snoozeOverrideMinutes': serializer.toJson<int?>(snoozeOverrideMinutes),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
     };
   }
@@ -3637,6 +3757,9 @@ class EnhancedMedicine extends DataClass
     Value<String?> customFieldsJson = const Value.absent(),
     bool? reminderEnabled,
     bool? criticalAlert,
+    Value<double?> costPerUnit = const Value.absent(),
+    Value<String?> reminderSound = const Value.absent(),
+    Value<int?> snoozeOverrideMinutes = const Value.absent(),
     Value<DateTime?> deletedAt = const Value.absent(),
   }) => EnhancedMedicine(
     id: id ?? this.id,
@@ -3695,6 +3818,13 @@ class EnhancedMedicine extends DataClass
         : this.customFieldsJson,
     reminderEnabled: reminderEnabled ?? this.reminderEnabled,
     criticalAlert: criticalAlert ?? this.criticalAlert,
+    costPerUnit: costPerUnit.present ? costPerUnit.value : this.costPerUnit,
+    reminderSound: reminderSound.present
+        ? reminderSound.value
+        : this.reminderSound,
+    snoozeOverrideMinutes: snoozeOverrideMinutes.present
+        ? snoozeOverrideMinutes.value
+        : this.snoozeOverrideMinutes,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
   );
   EnhancedMedicine copyWithCompanion(EnhancedMedicinesCompanion data) {
@@ -3796,6 +3926,15 @@ class EnhancedMedicine extends DataClass
       criticalAlert: data.criticalAlert.present
           ? data.criticalAlert.value
           : this.criticalAlert,
+      costPerUnit: data.costPerUnit.present
+          ? data.costPerUnit.value
+          : this.costPerUnit,
+      reminderSound: data.reminderSound.present
+          ? data.reminderSound.value
+          : this.reminderSound,
+      snoozeOverrideMinutes: data.snoozeOverrideMinutes.present
+          ? data.snoozeOverrideMinutes.value
+          : this.snoozeOverrideMinutes,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
     );
   }
@@ -3844,6 +3983,9 @@ class EnhancedMedicine extends DataClass
           ..write('customFieldsJson: $customFieldsJson, ')
           ..write('reminderEnabled: $reminderEnabled, ')
           ..write('criticalAlert: $criticalAlert, ')
+          ..write('costPerUnit: $costPerUnit, ')
+          ..write('reminderSound: $reminderSound, ')
+          ..write('snoozeOverrideMinutes: $snoozeOverrideMinutes, ')
           ..write('deletedAt: $deletedAt')
           ..write(')'))
         .toString();
@@ -3892,6 +4034,9 @@ class EnhancedMedicine extends DataClass
     customFieldsJson,
     reminderEnabled,
     criticalAlert,
+    costPerUnit,
+    reminderSound,
+    snoozeOverrideMinutes,
     deletedAt,
   ]);
   @override
@@ -3939,6 +4084,9 @@ class EnhancedMedicine extends DataClass
           other.customFieldsJson == this.customFieldsJson &&
           other.reminderEnabled == this.reminderEnabled &&
           other.criticalAlert == this.criticalAlert &&
+          other.costPerUnit == this.costPerUnit &&
+          other.reminderSound == this.reminderSound &&
+          other.snoozeOverrideMinutes == this.snoozeOverrideMinutes &&
           other.deletedAt == this.deletedAt);
 }
 
@@ -3984,6 +4132,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
   final Value<String?> customFieldsJson;
   final Value<bool> reminderEnabled;
   final Value<bool> criticalAlert;
+  final Value<double?> costPerUnit;
+  final Value<String?> reminderSound;
+  final Value<int?> snoozeOverrideMinutes;
   final Value<DateTime?> deletedAt;
   final Value<int> rowid;
   const EnhancedMedicinesCompanion({
@@ -4028,6 +4179,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     this.customFieldsJson = const Value.absent(),
     this.reminderEnabled = const Value.absent(),
     this.criticalAlert = const Value.absent(),
+    this.costPerUnit = const Value.absent(),
+    this.reminderSound = const Value.absent(),
+    this.snoozeOverrideMinutes = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -4073,6 +4227,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     this.customFieldsJson = const Value.absent(),
     this.reminderEnabled = const Value.absent(),
     this.criticalAlert = const Value.absent(),
+    this.costPerUnit = const Value.absent(),
+    this.reminderSound = const Value.absent(),
+    this.snoozeOverrideMinutes = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -4124,6 +4281,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Expression<String>? customFieldsJson,
     Expression<bool>? reminderEnabled,
     Expression<bool>? criticalAlert,
+    Expression<double>? costPerUnit,
+    Expression<String>? reminderSound,
+    Expression<int>? snoozeOverrideMinutes,
     Expression<DateTime>? deletedAt,
     Expression<int>? rowid,
   }) {
@@ -4173,6 +4333,10 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
       if (customFieldsJson != null) 'custom_fields_json': customFieldsJson,
       if (reminderEnabled != null) 'reminder_enabled': reminderEnabled,
       if (criticalAlert != null) 'critical_alert': criticalAlert,
+      if (costPerUnit != null) 'cost_per_unit': costPerUnit,
+      if (reminderSound != null) 'reminder_sound': reminderSound,
+      if (snoozeOverrideMinutes != null)
+        'snooze_override_minutes': snoozeOverrideMinutes,
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -4220,6 +4384,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     Value<String?>? customFieldsJson,
     Value<bool>? reminderEnabled,
     Value<bool>? criticalAlert,
+    Value<double?>? costPerUnit,
+    Value<String?>? reminderSound,
+    Value<int?>? snoozeOverrideMinutes,
     Value<DateTime?>? deletedAt,
     Value<int>? rowid,
   }) {
@@ -4267,6 +4434,10 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
       customFieldsJson: customFieldsJson ?? this.customFieldsJson,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       criticalAlert: criticalAlert ?? this.criticalAlert,
+      costPerUnit: costPerUnit ?? this.costPerUnit,
+      reminderSound: reminderSound ?? this.reminderSound,
+      snoozeOverrideMinutes:
+          snoozeOverrideMinutes ?? this.snoozeOverrideMinutes,
       deletedAt: deletedAt ?? this.deletedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -4406,6 +4577,17 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
     if (criticalAlert.present) {
       map['critical_alert'] = Variable<bool>(criticalAlert.value);
     }
+    if (costPerUnit.present) {
+      map['cost_per_unit'] = Variable<double>(costPerUnit.value);
+    }
+    if (reminderSound.present) {
+      map['reminder_sound'] = Variable<String>(reminderSound.value);
+    }
+    if (snoozeOverrideMinutes.present) {
+      map['snooze_override_minutes'] = Variable<int>(
+        snoozeOverrideMinutes.value,
+      );
+    }
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
@@ -4459,6 +4641,9 @@ class EnhancedMedicinesCompanion extends UpdateCompanion<EnhancedMedicine> {
           ..write('customFieldsJson: $customFieldsJson, ')
           ..write('reminderEnabled: $reminderEnabled, ')
           ..write('criticalAlert: $criticalAlert, ')
+          ..write('costPerUnit: $costPerUnit, ')
+          ..write('reminderSound: $reminderSound, ')
+          ..write('snoozeOverrideMinutes: $snoozeOverrideMinutes, ')
           ..write('deletedAt: $deletedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -6123,6 +6308,17 @@ class $DoctorsTable extends Doctors with TableInfo<$DoctorsTable, Doctor> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _clinicIdMeta = const VerificationMeta(
+    'clinicId',
+  );
+  @override
+  late final GeneratedColumn<String> clinicId = GeneratedColumn<String>(
+    'clinic_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _notesMeta = const VerificationMeta('notes');
   @override
   late final GeneratedColumn<String> notes = GeneratedColumn<String>(
@@ -6147,6 +6343,32 @@ class $DoctorsTable extends Doctors with TableInfo<$DoctorsTable, Doctor> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _dependentIdMeta = const VerificationMeta(
+    'dependentId',
+  );
+  @override
+  late final GeneratedColumn<String> dependentId = GeneratedColumn<String>(
+    'dependent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sharedWithFamilyMeta = const VerificationMeta(
+    'sharedWithFamily',
+  );
+  @override
+  late final GeneratedColumn<bool> sharedWithFamily = GeneratedColumn<bool>(
+    'shared_with_family',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("shared_with_family" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -6167,8 +6389,11 @@ class $DoctorsTable extends Doctors with TableInfo<$DoctorsTable, Doctor> {
     email,
     address,
     hospital,
+    clinicId,
     notes,
     isPrimary,
+    dependentId,
+    sharedWithFamily,
     createdAt,
   ];
   @override
@@ -6226,6 +6451,12 @@ class $DoctorsTable extends Doctors with TableInfo<$DoctorsTable, Doctor> {
         hospital.isAcceptableOrUnknown(data['hospital']!, _hospitalMeta),
       );
     }
+    if (data.containsKey('clinic_id')) {
+      context.handle(
+        _clinicIdMeta,
+        clinicId.isAcceptableOrUnknown(data['clinic_id']!, _clinicIdMeta),
+      );
+    }
     if (data.containsKey('notes')) {
       context.handle(
         _notesMeta,
@@ -6236,6 +6467,24 @@ class $DoctorsTable extends Doctors with TableInfo<$DoctorsTable, Doctor> {
       context.handle(
         _isPrimaryMeta,
         isPrimary.isAcceptableOrUnknown(data['is_primary']!, _isPrimaryMeta),
+      );
+    }
+    if (data.containsKey('dependent_id')) {
+      context.handle(
+        _dependentIdMeta,
+        dependentId.isAcceptableOrUnknown(
+          data['dependent_id']!,
+          _dependentIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('shared_with_family')) {
+      context.handle(
+        _sharedWithFamilyMeta,
+        sharedWithFamily.isAcceptableOrUnknown(
+          data['shared_with_family']!,
+          _sharedWithFamilyMeta,
+        ),
       );
     }
     if (data.containsKey('created_at')) {
@@ -6283,6 +6532,10 @@ class $DoctorsTable extends Doctors with TableInfo<$DoctorsTable, Doctor> {
         DriftSqlType.string,
         data['${effectivePrefix}hospital'],
       ),
+      clinicId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}clinic_id'],
+      ),
       notes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
@@ -6290,6 +6543,14 @@ class $DoctorsTable extends Doctors with TableInfo<$DoctorsTable, Doctor> {
       isPrimary: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_primary'],
+      )!,
+      dependentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dependent_id'],
+      ),
+      sharedWithFamily: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}shared_with_family'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -6312,8 +6573,22 @@ class Doctor extends DataClass implements Insertable<Doctor> {
   final String? email;
   final String? address;
   final String? hospital;
+
+  /// The clinic or hospital record (see `Clinic`) this doctor works at, when the
+  /// person chose one rather than typing a name. [hospital] stays what is shown if
+  /// that record is later deleted, and for a doctor entered before there was a link.
+  final String? clinicId;
   final String? notes;
   final bool isPrimary;
+
+  /// Whose doctor this is: a household member's id, or null for the account holder
+  /// (the same "null means self" as every other record).
+  final String? dependentId;
+
+  /// True when every profile sees this doctor, whoever owns it. Defaults to true so
+  /// every doctor saved before doctors belonged to a person stays visible to all,
+  /// exactly as it was.
+  final bool sharedWithFamily;
   final DateTime createdAt;
   const Doctor({
     required this.id,
@@ -6323,8 +6598,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
     this.email,
     this.address,
     this.hospital,
+    this.clinicId,
     this.notes,
     required this.isPrimary,
+    this.dependentId,
+    required this.sharedWithFamily,
     required this.createdAt,
   });
   @override
@@ -6347,10 +6625,17 @@ class Doctor extends DataClass implements Insertable<Doctor> {
     if (!nullToAbsent || hospital != null) {
       map['hospital'] = Variable<String>(hospital);
     }
+    if (!nullToAbsent || clinicId != null) {
+      map['clinic_id'] = Variable<String>(clinicId);
+    }
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
     map['is_primary'] = Variable<bool>(isPrimary);
+    if (!nullToAbsent || dependentId != null) {
+      map['dependent_id'] = Variable<String>(dependentId);
+    }
+    map['shared_with_family'] = Variable<bool>(sharedWithFamily);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -6374,10 +6659,17 @@ class Doctor extends DataClass implements Insertable<Doctor> {
       hospital: hospital == null && nullToAbsent
           ? const Value.absent()
           : Value(hospital),
+      clinicId: clinicId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clinicId),
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
       isPrimary: Value(isPrimary),
+      dependentId: dependentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dependentId),
+      sharedWithFamily: Value(sharedWithFamily),
       createdAt: Value(createdAt),
     );
   }
@@ -6395,8 +6687,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
       email: serializer.fromJson<String?>(json['email']),
       address: serializer.fromJson<String?>(json['address']),
       hospital: serializer.fromJson<String?>(json['hospital']),
+      clinicId: serializer.fromJson<String?>(json['clinicId']),
       notes: serializer.fromJson<String?>(json['notes']),
       isPrimary: serializer.fromJson<bool>(json['isPrimary']),
+      dependentId: serializer.fromJson<String?>(json['dependentId']),
+      sharedWithFamily: serializer.fromJson<bool>(json['sharedWithFamily']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -6411,8 +6706,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
       'email': serializer.toJson<String?>(email),
       'address': serializer.toJson<String?>(address),
       'hospital': serializer.toJson<String?>(hospital),
+      'clinicId': serializer.toJson<String?>(clinicId),
       'notes': serializer.toJson<String?>(notes),
       'isPrimary': serializer.toJson<bool>(isPrimary),
+      'dependentId': serializer.toJson<String?>(dependentId),
+      'sharedWithFamily': serializer.toJson<bool>(sharedWithFamily),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -6425,8 +6723,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
     Value<String?> email = const Value.absent(),
     Value<String?> address = const Value.absent(),
     Value<String?> hospital = const Value.absent(),
+    Value<String?> clinicId = const Value.absent(),
     Value<String?> notes = const Value.absent(),
     bool? isPrimary,
+    Value<String?> dependentId = const Value.absent(),
+    bool? sharedWithFamily,
     DateTime? createdAt,
   }) => Doctor(
     id: id ?? this.id,
@@ -6436,8 +6737,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
     email: email.present ? email.value : this.email,
     address: address.present ? address.value : this.address,
     hospital: hospital.present ? hospital.value : this.hospital,
+    clinicId: clinicId.present ? clinicId.value : this.clinicId,
     notes: notes.present ? notes.value : this.notes,
     isPrimary: isPrimary ?? this.isPrimary,
+    dependentId: dependentId.present ? dependentId.value : this.dependentId,
+    sharedWithFamily: sharedWithFamily ?? this.sharedWithFamily,
     createdAt: createdAt ?? this.createdAt,
   );
   Doctor copyWithCompanion(DoctorsCompanion data) {
@@ -6449,8 +6753,15 @@ class Doctor extends DataClass implements Insertable<Doctor> {
       email: data.email.present ? data.email.value : this.email,
       address: data.address.present ? data.address.value : this.address,
       hospital: data.hospital.present ? data.hospital.value : this.hospital,
+      clinicId: data.clinicId.present ? data.clinicId.value : this.clinicId,
       notes: data.notes.present ? data.notes.value : this.notes,
       isPrimary: data.isPrimary.present ? data.isPrimary.value : this.isPrimary,
+      dependentId: data.dependentId.present
+          ? data.dependentId.value
+          : this.dependentId,
+      sharedWithFamily: data.sharedWithFamily.present
+          ? data.sharedWithFamily.value
+          : this.sharedWithFamily,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -6465,8 +6776,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
           ..write('email: $email, ')
           ..write('address: $address, ')
           ..write('hospital: $hospital, ')
+          ..write('clinicId: $clinicId, ')
           ..write('notes: $notes, ')
           ..write('isPrimary: $isPrimary, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('sharedWithFamily: $sharedWithFamily, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -6481,8 +6795,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
     email,
     address,
     hospital,
+    clinicId,
     notes,
     isPrimary,
+    dependentId,
+    sharedWithFamily,
     createdAt,
   );
   @override
@@ -6496,8 +6813,11 @@ class Doctor extends DataClass implements Insertable<Doctor> {
           other.email == this.email &&
           other.address == this.address &&
           other.hospital == this.hospital &&
+          other.clinicId == this.clinicId &&
           other.notes == this.notes &&
           other.isPrimary == this.isPrimary &&
+          other.dependentId == this.dependentId &&
+          other.sharedWithFamily == this.sharedWithFamily &&
           other.createdAt == this.createdAt);
 }
 
@@ -6509,8 +6829,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
   final Value<String?> email;
   final Value<String?> address;
   final Value<String?> hospital;
+  final Value<String?> clinicId;
   final Value<String?> notes;
   final Value<bool> isPrimary;
+  final Value<String?> dependentId;
+  final Value<bool> sharedWithFamily;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const DoctorsCompanion({
@@ -6521,8 +6844,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
     this.email = const Value.absent(),
     this.address = const Value.absent(),
     this.hospital = const Value.absent(),
+    this.clinicId = const Value.absent(),
     this.notes = const Value.absent(),
     this.isPrimary = const Value.absent(),
+    this.dependentId = const Value.absent(),
+    this.sharedWithFamily = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -6534,8 +6860,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
     this.email = const Value.absent(),
     this.address = const Value.absent(),
     this.hospital = const Value.absent(),
+    this.clinicId = const Value.absent(),
     this.notes = const Value.absent(),
     this.isPrimary = const Value.absent(),
+    this.dependentId = const Value.absent(),
+    this.sharedWithFamily = const Value.absent(),
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -6549,8 +6878,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
     Expression<String>? email,
     Expression<String>? address,
     Expression<String>? hospital,
+    Expression<String>? clinicId,
     Expression<String>? notes,
     Expression<bool>? isPrimary,
+    Expression<String>? dependentId,
+    Expression<bool>? sharedWithFamily,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -6562,8 +6894,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
       if (email != null) 'email': email,
       if (address != null) 'address': address,
       if (hospital != null) 'hospital': hospital,
+      if (clinicId != null) 'clinic_id': clinicId,
       if (notes != null) 'notes': notes,
       if (isPrimary != null) 'is_primary': isPrimary,
+      if (dependentId != null) 'dependent_id': dependentId,
+      if (sharedWithFamily != null) 'shared_with_family': sharedWithFamily,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -6577,8 +6912,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
     Value<String?>? email,
     Value<String?>? address,
     Value<String?>? hospital,
+    Value<String?>? clinicId,
     Value<String?>? notes,
     Value<bool>? isPrimary,
+    Value<String?>? dependentId,
+    Value<bool>? sharedWithFamily,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -6590,8 +6928,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
       email: email ?? this.email,
       address: address ?? this.address,
       hospital: hospital ?? this.hospital,
+      clinicId: clinicId ?? this.clinicId,
       notes: notes ?? this.notes,
       isPrimary: isPrimary ?? this.isPrimary,
+      dependentId: dependentId ?? this.dependentId,
+      sharedWithFamily: sharedWithFamily ?? this.sharedWithFamily,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -6621,11 +6962,20 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
     if (hospital.present) {
       map['hospital'] = Variable<String>(hospital.value);
     }
+    if (clinicId.present) {
+      map['clinic_id'] = Variable<String>(clinicId.value);
+    }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
     if (isPrimary.present) {
       map['is_primary'] = Variable<bool>(isPrimary.value);
+    }
+    if (dependentId.present) {
+      map['dependent_id'] = Variable<String>(dependentId.value);
+    }
+    if (sharedWithFamily.present) {
+      map['shared_with_family'] = Variable<bool>(sharedWithFamily.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -6646,8 +6996,11 @@ class DoctorsCompanion extends UpdateCompanion<Doctor> {
           ..write('email: $email, ')
           ..write('address: $address, ')
           ..write('hospital: $hospital, ')
+          ..write('clinicId: $clinicId, ')
           ..write('notes: $notes, ')
           ..write('isPrimary: $isPrimary, ')
+          ..write('dependentId: $dependentId, ')
+          ..write('sharedWithFamily: $sharedWithFamily, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -14106,6 +14459,17 @@ class $RemindersTable extends Reminders
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _autoCompleteStepsMeta = const VerificationMeta(
+    'autoCompleteSteps',
+  );
+  @override
+  late final GeneratedColumn<int> autoCompleteSteps = GeneratedColumn<int>(
+    'auto_complete_steps',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isPausedMeta = const VerificationMeta(
     'isPaused',
   );
@@ -14156,6 +14520,7 @@ class $RemindersTable extends Reminders
     recurrenceRule,
     endsAt,
     occurrenceLimit,
+    autoCompleteSteps,
     isPaused,
     escalation,
   ];
@@ -14327,6 +14692,15 @@ class $RemindersTable extends Reminders
         ),
       );
     }
+    if (data.containsKey('auto_complete_steps')) {
+      context.handle(
+        _autoCompleteStepsMeta,
+        autoCompleteSteps.isAcceptableOrUnknown(
+          data['auto_complete_steps']!,
+          _autoCompleteStepsMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_paused')) {
       context.handle(
         _isPausedMeta,
@@ -14432,6 +14806,10 @@ class $RemindersTable extends Reminders
         DriftSqlType.int,
         data['${effectivePrefix}occurrence_limit'],
       ),
+      autoCompleteSteps: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}auto_complete_steps'],
+      ),
       isPaused: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_paused'],
@@ -14501,6 +14879,10 @@ class Reminder extends DataClass implements Insertable<Reminder> {
   /// Stop after this many occurrences. Null means unlimited.
   final int? occurrenceLimit;
 
+  /// Tick this reminder off by itself once today's steps reach this many, as if
+  /// Done had been tapped. Null means never: only a person ticks it.
+  final int? autoCompleteSteps;
+
   /// Temporarily stop firing without deleting. Deleting used to be the only way
   /// to stop a reminder, which also destroyed its history.
   final bool isPaused;
@@ -14532,6 +14914,7 @@ class Reminder extends DataClass implements Insertable<Reminder> {
     this.recurrenceRule,
     this.endsAt,
     this.occurrenceLimit,
+    this.autoCompleteSteps,
     required this.isPaused,
     required this.escalation,
   });
@@ -14579,6 +14962,9 @@ class Reminder extends DataClass implements Insertable<Reminder> {
     if (!nullToAbsent || occurrenceLimit != null) {
       map['occurrence_limit'] = Variable<int>(occurrenceLimit);
     }
+    if (!nullToAbsent || autoCompleteSteps != null) {
+      map['auto_complete_steps'] = Variable<int>(autoCompleteSteps);
+    }
     map['is_paused'] = Variable<bool>(isPaused);
     map['escalation'] = Variable<String>(escalation);
     return map;
@@ -14625,6 +15011,9 @@ class Reminder extends DataClass implements Insertable<Reminder> {
       occurrenceLimit: occurrenceLimit == null && nullToAbsent
           ? const Value.absent()
           : Value(occurrenceLimit),
+      autoCompleteSteps: autoCompleteSteps == null && nullToAbsent
+          ? const Value.absent()
+          : Value(autoCompleteSteps),
       isPaused: Value(isPaused),
       escalation: Value(escalation),
     );
@@ -14657,6 +15046,7 @@ class Reminder extends DataClass implements Insertable<Reminder> {
       recurrenceRule: serializer.fromJson<String?>(json['recurrenceRule']),
       endsAt: serializer.fromJson<DateTime?>(json['endsAt']),
       occurrenceLimit: serializer.fromJson<int?>(json['occurrenceLimit']),
+      autoCompleteSteps: serializer.fromJson<int?>(json['autoCompleteSteps']),
       isPaused: serializer.fromJson<bool>(json['isPaused']),
       escalation: serializer.fromJson<String>(json['escalation']),
     );
@@ -14686,6 +15076,7 @@ class Reminder extends DataClass implements Insertable<Reminder> {
       'recurrenceRule': serializer.toJson<String?>(recurrenceRule),
       'endsAt': serializer.toJson<DateTime?>(endsAt),
       'occurrenceLimit': serializer.toJson<int?>(occurrenceLimit),
+      'autoCompleteSteps': serializer.toJson<int?>(autoCompleteSteps),
       'isPaused': serializer.toJson<bool>(isPaused),
       'escalation': serializer.toJson<String>(escalation),
     };
@@ -14713,6 +15104,7 @@ class Reminder extends DataClass implements Insertable<Reminder> {
     Value<String?> recurrenceRule = const Value.absent(),
     Value<DateTime?> endsAt = const Value.absent(),
     Value<int?> occurrenceLimit = const Value.absent(),
+    Value<int?> autoCompleteSteps = const Value.absent(),
     bool? isPaused,
     String? escalation,
   }) => Reminder(
@@ -14747,6 +15139,9 @@ class Reminder extends DataClass implements Insertable<Reminder> {
     occurrenceLimit: occurrenceLimit.present
         ? occurrenceLimit.value
         : this.occurrenceLimit,
+    autoCompleteSteps: autoCompleteSteps.present
+        ? autoCompleteSteps.value
+        : this.autoCompleteSteps,
     isPaused: isPaused ?? this.isPaused,
     escalation: escalation ?? this.escalation,
   );
@@ -14791,6 +15186,9 @@ class Reminder extends DataClass implements Insertable<Reminder> {
       occurrenceLimit: data.occurrenceLimit.present
           ? data.occurrenceLimit.value
           : this.occurrenceLimit,
+      autoCompleteSteps: data.autoCompleteSteps.present
+          ? data.autoCompleteSteps.value
+          : this.autoCompleteSteps,
       isPaused: data.isPaused.present ? data.isPaused.value : this.isPaused,
       escalation: data.escalation.present
           ? data.escalation.value
@@ -14822,6 +15220,7 @@ class Reminder extends DataClass implements Insertable<Reminder> {
           ..write('recurrenceRule: $recurrenceRule, ')
           ..write('endsAt: $endsAt, ')
           ..write('occurrenceLimit: $occurrenceLimit, ')
+          ..write('autoCompleteSteps: $autoCompleteSteps, ')
           ..write('isPaused: $isPaused, ')
           ..write('escalation: $escalation')
           ..write(')'))
@@ -14851,6 +15250,7 @@ class Reminder extends DataClass implements Insertable<Reminder> {
     recurrenceRule,
     endsAt,
     occurrenceLimit,
+    autoCompleteSteps,
     isPaused,
     escalation,
   ]);
@@ -14879,6 +15279,7 @@ class Reminder extends DataClass implements Insertable<Reminder> {
           other.recurrenceRule == this.recurrenceRule &&
           other.endsAt == this.endsAt &&
           other.occurrenceLimit == this.occurrenceLimit &&
+          other.autoCompleteSteps == this.autoCompleteSteps &&
           other.isPaused == this.isPaused &&
           other.escalation == this.escalation);
 }
@@ -14905,6 +15306,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
   final Value<String?> recurrenceRule;
   final Value<DateTime?> endsAt;
   final Value<int?> occurrenceLimit;
+  final Value<int?> autoCompleteSteps;
   final Value<bool> isPaused;
   final Value<String> escalation;
   final Value<int> rowid;
@@ -14930,6 +15332,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
     this.recurrenceRule = const Value.absent(),
     this.endsAt = const Value.absent(),
     this.occurrenceLimit = const Value.absent(),
+    this.autoCompleteSteps = const Value.absent(),
     this.isPaused = const Value.absent(),
     this.escalation = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -14956,6 +15359,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
     this.recurrenceRule = const Value.absent(),
     this.endsAt = const Value.absent(),
     this.occurrenceLimit = const Value.absent(),
+    this.autoCompleteSteps = const Value.absent(),
     this.isPaused = const Value.absent(),
     this.escalation = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -14987,6 +15391,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
     Expression<String>? recurrenceRule,
     Expression<DateTime>? endsAt,
     Expression<int>? occurrenceLimit,
+    Expression<int>? autoCompleteSteps,
     Expression<bool>? isPaused,
     Expression<String>? escalation,
     Expression<int>? rowid,
@@ -15013,6 +15418,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
       if (recurrenceRule != null) 'recurrence_rule': recurrenceRule,
       if (endsAt != null) 'ends_at': endsAt,
       if (occurrenceLimit != null) 'occurrence_limit': occurrenceLimit,
+      if (autoCompleteSteps != null) 'auto_complete_steps': autoCompleteSteps,
       if (isPaused != null) 'is_paused': isPaused,
       if (escalation != null) 'escalation': escalation,
       if (rowid != null) 'rowid': rowid,
@@ -15041,6 +15447,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
     Value<String?>? recurrenceRule,
     Value<DateTime?>? endsAt,
     Value<int?>? occurrenceLimit,
+    Value<int?>? autoCompleteSteps,
     Value<bool>? isPaused,
     Value<String>? escalation,
     Value<int>? rowid,
@@ -15067,6 +15474,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
       recurrenceRule: recurrenceRule ?? this.recurrenceRule,
       endsAt: endsAt ?? this.endsAt,
       occurrenceLimit: occurrenceLimit ?? this.occurrenceLimit,
+      autoCompleteSteps: autoCompleteSteps ?? this.autoCompleteSteps,
       isPaused: isPaused ?? this.isPaused,
       escalation: escalation ?? this.escalation,
       rowid: rowid ?? this.rowid,
@@ -15139,6 +15547,9 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
     if (occurrenceLimit.present) {
       map['occurrence_limit'] = Variable<int>(occurrenceLimit.value);
     }
+    if (autoCompleteSteps.present) {
+      map['auto_complete_steps'] = Variable<int>(autoCompleteSteps.value);
+    }
     if (isPaused.present) {
       map['is_paused'] = Variable<bool>(isPaused.value);
     }
@@ -15175,6 +15586,7 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
           ..write('recurrenceRule: $recurrenceRule, ')
           ..write('endsAt: $endsAt, ')
           ..write('occurrenceLimit: $occurrenceLimit, ')
+          ..write('autoCompleteSteps: $autoCompleteSteps, ')
           ..write('isPaused: $isPaused, ')
           ..write('escalation: $escalation, ')
           ..write('rowid: $rowid')
@@ -25709,6 +26121,17 @@ class $DiaryEntriesTable extends DiaryEntries
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _photoPathMeta = const VerificationMeta(
+    'photoPath',
+  );
+  @override
+  late final GeneratedColumn<String> photoPath = GeneratedColumn<String>(
+    'photo_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -25719,6 +26142,7 @@ class $DiaryEntriesTable extends DiaryEntries
     createdAt,
     moodIndex,
     tagsJson,
+    photoPath,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -25788,6 +26212,12 @@ class $DiaryEntriesTable extends DiaryEntries
         tagsJson.isAcceptableOrUnknown(data['tags_json']!, _tagsJsonMeta),
       );
     }
+    if (data.containsKey('photo_path')) {
+      context.handle(
+        _photoPathMeta,
+        photoPath.isAcceptableOrUnknown(data['photo_path']!, _photoPathMeta),
+      );
+    }
     return context;
   }
 
@@ -25829,6 +26259,10 @@ class $DiaryEntriesTable extends DiaryEntries
         DriftSqlType.string,
         data['${effectivePrefix}tags_json'],
       ),
+      photoPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}photo_path'],
+      ),
     );
   }
 
@@ -25847,6 +26281,10 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
   final DateTime createdAt;
   final int? moodIndex;
   final String? tagsJson;
+
+  /// One photo for the entry: the path of a copy kept inside the app's own storage.
+  /// Not carried by a backup file (which is JSON) — see `DiaryPhotos`.
+  final String? photoPath;
   const DiaryEntry({
     required this.id,
     this.dependentId,
@@ -25856,6 +26294,7 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     required this.createdAt,
     this.moodIndex,
     this.tagsJson,
+    this.photoPath,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -25875,6 +26314,9 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     }
     if (!nullToAbsent || tagsJson != null) {
       map['tags_json'] = Variable<String>(tagsJson);
+    }
+    if (!nullToAbsent || photoPath != null) {
+      map['photo_path'] = Variable<String>(photoPath);
     }
     return map;
   }
@@ -25897,6 +26339,9 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       tagsJson: tagsJson == null && nullToAbsent
           ? const Value.absent()
           : Value(tagsJson),
+      photoPath: photoPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(photoPath),
     );
   }
 
@@ -25914,6 +26359,7 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       moodIndex: serializer.fromJson<int?>(json['moodIndex']),
       tagsJson: serializer.fromJson<String?>(json['tagsJson']),
+      photoPath: serializer.fromJson<String?>(json['photoPath']),
     );
   }
   @override
@@ -25928,6 +26374,7 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'moodIndex': serializer.toJson<int?>(moodIndex),
       'tagsJson': serializer.toJson<String?>(tagsJson),
+      'photoPath': serializer.toJson<String?>(photoPath),
     };
   }
 
@@ -25940,6 +26387,7 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     DateTime? createdAt,
     Value<int?> moodIndex = const Value.absent(),
     Value<String?> tagsJson = const Value.absent(),
+    Value<String?> photoPath = const Value.absent(),
   }) => DiaryEntry(
     id: id ?? this.id,
     dependentId: dependentId.present ? dependentId.value : this.dependentId,
@@ -25949,6 +26397,7 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     createdAt: createdAt ?? this.createdAt,
     moodIndex: moodIndex.present ? moodIndex.value : this.moodIndex,
     tagsJson: tagsJson.present ? tagsJson.value : this.tagsJson,
+    photoPath: photoPath.present ? photoPath.value : this.photoPath,
   );
   DiaryEntry copyWithCompanion(DiaryEntriesCompanion data) {
     return DiaryEntry(
@@ -25962,6 +26411,7 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       moodIndex: data.moodIndex.present ? data.moodIndex.value : this.moodIndex,
       tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
+      photoPath: data.photoPath.present ? data.photoPath.value : this.photoPath,
     );
   }
 
@@ -25975,7 +26425,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
           ..write('entryAt: $entryAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('moodIndex: $moodIndex, ')
-          ..write('tagsJson: $tagsJson')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('photoPath: $photoPath')
           ..write(')'))
         .toString();
   }
@@ -25990,6 +26441,7 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
     createdAt,
     moodIndex,
     tagsJson,
+    photoPath,
   );
   @override
   bool operator ==(Object other) =>
@@ -26002,7 +26454,8 @@ class DiaryEntry extends DataClass implements Insertable<DiaryEntry> {
           other.entryAt == this.entryAt &&
           other.createdAt == this.createdAt &&
           other.moodIndex == this.moodIndex &&
-          other.tagsJson == this.tagsJson);
+          other.tagsJson == this.tagsJson &&
+          other.photoPath == this.photoPath);
 }
 
 class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
@@ -26014,6 +26467,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
   final Value<DateTime> createdAt;
   final Value<int?> moodIndex;
   final Value<String?> tagsJson;
+  final Value<String?> photoPath;
   final Value<int> rowid;
   const DiaryEntriesCompanion({
     this.id = const Value.absent(),
@@ -26024,6 +26478,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     this.createdAt = const Value.absent(),
     this.moodIndex = const Value.absent(),
     this.tagsJson = const Value.absent(),
+    this.photoPath = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   DiaryEntriesCompanion.insert({
@@ -26035,6 +26490,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     required DateTime createdAt,
     this.moodIndex = const Value.absent(),
     this.tagsJson = const Value.absent(),
+    this.photoPath = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        body = Value(body),
@@ -26049,6 +26505,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     Expression<DateTime>? createdAt,
     Expression<int>? moodIndex,
     Expression<String>? tagsJson,
+    Expression<String>? photoPath,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -26060,6 +26517,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
       if (createdAt != null) 'created_at': createdAt,
       if (moodIndex != null) 'mood_index': moodIndex,
       if (tagsJson != null) 'tags_json': tagsJson,
+      if (photoPath != null) 'photo_path': photoPath,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -26073,6 +26531,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     Value<DateTime>? createdAt,
     Value<int?>? moodIndex,
     Value<String?>? tagsJson,
+    Value<String?>? photoPath,
     Value<int>? rowid,
   }) {
     return DiaryEntriesCompanion(
@@ -26084,6 +26543,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
       createdAt: createdAt ?? this.createdAt,
       moodIndex: moodIndex ?? this.moodIndex,
       tagsJson: tagsJson ?? this.tagsJson,
+      photoPath: photoPath ?? this.photoPath,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -26115,6 +26575,9 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
     if (tagsJson.present) {
       map['tags_json'] = Variable<String>(tagsJson.value);
     }
+    if (photoPath.present) {
+      map['photo_path'] = Variable<String>(photoPath.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -26132,6 +26595,7 @@ class DiaryEntriesCompanion extends UpdateCompanion<DiaryEntry> {
           ..write('createdAt: $createdAt, ')
           ..write('moodIndex: $moodIndex, ')
           ..write('tagsJson: $tagsJson, ')
+          ..write('photoPath: $photoPath, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -32508,6 +32972,9 @@ typedef $$EnhancedMedicinesTableCreateCompanionBuilder =
       Value<String?> customFieldsJson,
       Value<bool> reminderEnabled,
       Value<bool> criticalAlert,
+      Value<double?> costPerUnit,
+      Value<String?> reminderSound,
+      Value<int?> snoozeOverrideMinutes,
       Value<DateTime?> deletedAt,
       Value<int> rowid,
     });
@@ -32554,6 +33021,9 @@ typedef $$EnhancedMedicinesTableUpdateCompanionBuilder =
       Value<String?> customFieldsJson,
       Value<bool> reminderEnabled,
       Value<bool> criticalAlert,
+      Value<double?> costPerUnit,
+      Value<String?> reminderSound,
+      Value<int?> snoozeOverrideMinutes,
       Value<DateTime?> deletedAt,
       Value<int> rowid,
     });
@@ -32769,6 +33239,21 @@ class $$EnhancedMedicinesTableFilterComposer
 
   ColumnFilters<bool> get criticalAlert => $composableBuilder(
     column: $table.criticalAlert,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get costPerUnit => $composableBuilder(
+    column: $table.costPerUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reminderSound => $composableBuilder(
+    column: $table.reminderSound,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get snoozeOverrideMinutes => $composableBuilder(
+    column: $table.snoozeOverrideMinutes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -32992,6 +33477,21 @@ class $$EnhancedMedicinesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get costPerUnit => $composableBuilder(
+    column: $table.costPerUnit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reminderSound => $composableBuilder(
+    column: $table.reminderSound,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get snoozeOverrideMinutes => $composableBuilder(
+    column: $table.snoozeOverrideMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
@@ -33186,6 +33686,21 @@ class $$EnhancedMedicinesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get costPerUnit => $composableBuilder(
+    column: $table.costPerUnit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reminderSound => $composableBuilder(
+    column: $table.reminderSound,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get snoozeOverrideMinutes => $composableBuilder(
+    column: $table.snoozeOverrideMinutes,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 }
@@ -33271,6 +33786,9 @@ class $$EnhancedMedicinesTableTableManager
                 Value<String?> customFieldsJson = const Value.absent(),
                 Value<bool> reminderEnabled = const Value.absent(),
                 Value<bool> criticalAlert = const Value.absent(),
+                Value<double?> costPerUnit = const Value.absent(),
+                Value<String?> reminderSound = const Value.absent(),
+                Value<int?> snoozeOverrideMinutes = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EnhancedMedicinesCompanion(
@@ -33315,6 +33833,9 @@ class $$EnhancedMedicinesTableTableManager
                 customFieldsJson: customFieldsJson,
                 reminderEnabled: reminderEnabled,
                 criticalAlert: criticalAlert,
+                costPerUnit: costPerUnit,
+                reminderSound: reminderSound,
+                snoozeOverrideMinutes: snoozeOverrideMinutes,
                 deletedAt: deletedAt,
                 rowid: rowid,
               ),
@@ -33361,6 +33882,9 @@ class $$EnhancedMedicinesTableTableManager
                 Value<String?> customFieldsJson = const Value.absent(),
                 Value<bool> reminderEnabled = const Value.absent(),
                 Value<bool> criticalAlert = const Value.absent(),
+                Value<double?> costPerUnit = const Value.absent(),
+                Value<String?> reminderSound = const Value.absent(),
+                Value<int?> snoozeOverrideMinutes = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EnhancedMedicinesCompanion.insert(
@@ -33405,6 +33929,9 @@ class $$EnhancedMedicinesTableTableManager
                 customFieldsJson: customFieldsJson,
                 reminderEnabled: reminderEnabled,
                 criticalAlert: criticalAlert,
+                costPerUnit: costPerUnit,
+                reminderSound: reminderSound,
+                snoozeOverrideMinutes: snoozeOverrideMinutes,
                 deletedAt: deletedAt,
                 rowid: rowid,
               ),
@@ -34195,8 +34722,11 @@ typedef $$DoctorsTableCreateCompanionBuilder =
       Value<String?> email,
       Value<String?> address,
       Value<String?> hospital,
+      Value<String?> clinicId,
       Value<String?> notes,
       Value<bool> isPrimary,
+      Value<String?> dependentId,
+      Value<bool> sharedWithFamily,
       required DateTime createdAt,
       Value<int> rowid,
     });
@@ -34209,8 +34739,11 @@ typedef $$DoctorsTableUpdateCompanionBuilder =
       Value<String?> email,
       Value<String?> address,
       Value<String?> hospital,
+      Value<String?> clinicId,
       Value<String?> notes,
       Value<bool> isPrimary,
+      Value<String?> dependentId,
+      Value<bool> sharedWithFamily,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -34259,6 +34792,11 @@ class $$DoctorsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get clinicId => $composableBuilder(
+    column: $table.clinicId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
     builder: (column) => ColumnFilters(column),
@@ -34266,6 +34804,16 @@ class $$DoctorsTableFilterComposer
 
   ColumnFilters<bool> get isPrimary => $composableBuilder(
     column: $table.isPrimary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get sharedWithFamily => $composableBuilder(
+    column: $table.sharedWithFamily,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -34319,6 +34867,11 @@ class $$DoctorsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get clinicId => $composableBuilder(
+    column: $table.clinicId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get notes => $composableBuilder(
     column: $table.notes,
     builder: (column) => ColumnOrderings(column),
@@ -34326,6 +34879,16 @@ class $$DoctorsTableOrderingComposer
 
   ColumnOrderings<bool> get isPrimary => $composableBuilder(
     column: $table.isPrimary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get sharedWithFamily => $composableBuilder(
+    column: $table.sharedWithFamily,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -34365,11 +34928,24 @@ class $$DoctorsTableAnnotationComposer
   GeneratedColumn<String> get hospital =>
       $composableBuilder(column: $table.hospital, builder: (column) => column);
 
+  GeneratedColumn<String> get clinicId =>
+      $composableBuilder(column: $table.clinicId, builder: (column) => column);
+
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
 
   GeneratedColumn<bool> get isPrimary =>
       $composableBuilder(column: $table.isPrimary, builder: (column) => column);
+
+  GeneratedColumn<String> get dependentId => $composableBuilder(
+    column: $table.dependentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get sharedWithFamily => $composableBuilder(
+    column: $table.sharedWithFamily,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -34410,8 +34986,11 @@ class $$DoctorsTableTableManager
                 Value<String?> email = const Value.absent(),
                 Value<String?> address = const Value.absent(),
                 Value<String?> hospital = const Value.absent(),
+                Value<String?> clinicId = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),
+                Value<String?> dependentId = const Value.absent(),
+                Value<bool> sharedWithFamily = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DoctorsCompanion(
@@ -34422,8 +35001,11 @@ class $$DoctorsTableTableManager
                 email: email,
                 address: address,
                 hospital: hospital,
+                clinicId: clinicId,
                 notes: notes,
                 isPrimary: isPrimary,
+                dependentId: dependentId,
+                sharedWithFamily: sharedWithFamily,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -34436,8 +35018,11 @@ class $$DoctorsTableTableManager
                 Value<String?> email = const Value.absent(),
                 Value<String?> address = const Value.absent(),
                 Value<String?> hospital = const Value.absent(),
+                Value<String?> clinicId = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),
+                Value<String?> dependentId = const Value.absent(),
+                Value<bool> sharedWithFamily = const Value.absent(),
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
               }) => DoctorsCompanion.insert(
@@ -34448,8 +35033,11 @@ class $$DoctorsTableTableManager
                 email: email,
                 address: address,
                 hospital: hospital,
+                clinicId: clinicId,
                 notes: notes,
                 isPrimary: isPrimary,
+                dependentId: dependentId,
+                sharedWithFamily: sharedWithFamily,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -37969,6 +38557,7 @@ typedef $$RemindersTableCreateCompanionBuilder =
       Value<String?> recurrenceRule,
       Value<DateTime?> endsAt,
       Value<int?> occurrenceLimit,
+      Value<int?> autoCompleteSteps,
       Value<bool> isPaused,
       Value<String> escalation,
       Value<int> rowid,
@@ -37996,6 +38585,7 @@ typedef $$RemindersTableUpdateCompanionBuilder =
       Value<String?> recurrenceRule,
       Value<DateTime?> endsAt,
       Value<int?> occurrenceLimit,
+      Value<int?> autoCompleteSteps,
       Value<bool> isPaused,
       Value<String> escalation,
       Value<int> rowid,
@@ -38112,6 +38702,11 @@ class $$RemindersTableFilterComposer
 
   ColumnFilters<int> get occurrenceLimit => $composableBuilder(
     column: $table.occurrenceLimit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get autoCompleteSteps => $composableBuilder(
+    column: $table.autoCompleteSteps,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -38240,6 +38835,11 @@ class $$RemindersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get autoCompleteSteps => $composableBuilder(
+    column: $table.autoCompleteSteps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isPaused => $composableBuilder(
     column: $table.isPaused,
     builder: (column) => ColumnOrderings(column),
@@ -38341,6 +38941,11 @@ class $$RemindersTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get autoCompleteSteps => $composableBuilder(
+    column: $table.autoCompleteSteps,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get isPaused =>
       $composableBuilder(column: $table.isPaused, builder: (column) => column);
 
@@ -38399,6 +39004,7 @@ class $$RemindersTableTableManager
                 Value<String?> recurrenceRule = const Value.absent(),
                 Value<DateTime?> endsAt = const Value.absent(),
                 Value<int?> occurrenceLimit = const Value.absent(),
+                Value<int?> autoCompleteSteps = const Value.absent(),
                 Value<bool> isPaused = const Value.absent(),
                 Value<String> escalation = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -38424,6 +39030,7 @@ class $$RemindersTableTableManager
                 recurrenceRule: recurrenceRule,
                 endsAt: endsAt,
                 occurrenceLimit: occurrenceLimit,
+                autoCompleteSteps: autoCompleteSteps,
                 isPaused: isPaused,
                 escalation: escalation,
                 rowid: rowid,
@@ -38451,6 +39058,7 @@ class $$RemindersTableTableManager
                 Value<String?> recurrenceRule = const Value.absent(),
                 Value<DateTime?> endsAt = const Value.absent(),
                 Value<int?> occurrenceLimit = const Value.absent(),
+                Value<int?> autoCompleteSteps = const Value.absent(),
                 Value<bool> isPaused = const Value.absent(),
                 Value<String> escalation = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -38476,6 +39084,7 @@ class $$RemindersTableTableManager
                 recurrenceRule: recurrenceRule,
                 endsAt: endsAt,
                 occurrenceLimit: occurrenceLimit,
+                autoCompleteSteps: autoCompleteSteps,
                 isPaused: isPaused,
                 escalation: escalation,
                 rowid: rowid,
@@ -43461,6 +44070,7 @@ typedef $$DiaryEntriesTableCreateCompanionBuilder =
       required DateTime createdAt,
       Value<int?> moodIndex,
       Value<String?> tagsJson,
+      Value<String?> photoPath,
       Value<int> rowid,
     });
 typedef $$DiaryEntriesTableUpdateCompanionBuilder =
@@ -43473,6 +44083,7 @@ typedef $$DiaryEntriesTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<int?> moodIndex,
       Value<String?> tagsJson,
+      Value<String?> photoPath,
       Value<int> rowid,
     });
 
@@ -43522,6 +44133,11 @@ class $$DiaryEntriesTableFilterComposer
 
   ColumnFilters<String> get tagsJson => $composableBuilder(
     column: $table.tagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get photoPath => $composableBuilder(
+    column: $table.photoPath,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -43574,6 +44190,11 @@ class $$DiaryEntriesTableOrderingComposer
     column: $table.tagsJson,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get photoPath => $composableBuilder(
+    column: $table.photoPath,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$DiaryEntriesTableAnnotationComposer
@@ -43610,6 +44231,9 @@ class $$DiaryEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get tagsJson =>
       $composableBuilder(column: $table.tagsJson, builder: (column) => column);
+
+  GeneratedColumn<String> get photoPath =>
+      $composableBuilder(column: $table.photoPath, builder: (column) => column);
 }
 
 class $$DiaryEntriesTableTableManager
@@ -43651,6 +44275,7 @@ class $$DiaryEntriesTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int?> moodIndex = const Value.absent(),
                 Value<String?> tagsJson = const Value.absent(),
+                Value<String?> photoPath = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DiaryEntriesCompanion(
                 id: id,
@@ -43661,6 +44286,7 @@ class $$DiaryEntriesTableTableManager
                 createdAt: createdAt,
                 moodIndex: moodIndex,
                 tagsJson: tagsJson,
+                photoPath: photoPath,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -43673,6 +44299,7 @@ class $$DiaryEntriesTableTableManager
                 required DateTime createdAt,
                 Value<int?> moodIndex = const Value.absent(),
                 Value<String?> tagsJson = const Value.absent(),
+                Value<String?> photoPath = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DiaryEntriesCompanion.insert(
                 id: id,
@@ -43683,6 +44310,7 @@ class $$DiaryEntriesTableTableManager
                 createdAt: createdAt,
                 moodIndex: moodIndex,
                 tagsJson: tagsJson,
+                photoPath: photoPath,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

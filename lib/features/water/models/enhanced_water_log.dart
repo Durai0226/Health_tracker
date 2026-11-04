@@ -1,4 +1,6 @@
 /// Enhanced water log with beverage type and container info
+import '../../../core/utils/units.dart';
+
 class EnhancedWaterLog {
   final String id;
   final DateTime time;
@@ -400,7 +402,7 @@ class HydrationInsight {
         id: 'below_avg_${now.day}',
         type: InsightType.suggestion,
         title: 'Below Average Intake',
-        description: 'Your average daily intake is ${avgDailyMl}ml, which is below your goal. Try setting more reminders.',
+        description: 'Your average daily intake is ${Units.volumeText(avgDailyMl, tight: true)}, which is below your goal. Try setting more reminders.',
         emoji: '📊',
       ));
     }

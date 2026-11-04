@@ -18,6 +18,7 @@ import 'water_action_queue.dart';
 import 'dose_action_queue.dart';
 import '../../features/medication/models/enhanced_medicine.dart';
 import '../../features/medication/models/medicine_schedule.dart' show ScheduledTime;
+import '../../features/medication/services/ios_dose_plan.dart' show DoseRepeat, PlannedDose;
 import '../../features/medication/services/reminder_slot_grouping.dart';
 import '../../features/reminders/models/reminder_model.dart';
 import '../models/user_settings.dart';
@@ -34,7 +35,9 @@ import '../../main.dart';
 import 'snooze_log.dart';
 import '../../features/medication/services/refill_loop.dart';
 import '../../features/medication/services/visit_brief_link.dart';
+import '../../features/sleep/services/wind_down_link.dart';
 import '../health/step_reminder_plan.dart';
+import '../utils/units.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -174,7 +177,9 @@ class NotificationService {
             actions: <DarwinNotificationAction>[
               DarwinNotificationAction.plain(
                 waterLogActionId,
-                'Log 250 ml',
+                // The amount a tap logs, in the unit the person counts in. A category
+                // is registered once, so a change of unit shows from the next launch.
+                'Log ${Units.volumeText(WaterActionQueue.defaultQuickAddMl)}',
               ),
               DarwinNotificationAction.plain(
                 'dismiss',
@@ -679,6 +684,24 @@ class NotificationService {
     }
   }
   
+  /// Test seam for [ensurePermission]: stands in for asking the platform.
+  @visibleForTesting
+  Future<bool> Function()? permissionForTesting;
+
+  /// Ask for the notification permission if it has not been given, and say
+  /// whether notifications can be shown now.
+  ///
+  /// [requestPermissionsIfNeeded] always answers true — it asks and moves on —
+  /// which is right for onboarding, where nothing depends on the reply. A switch
+  /// that arms something needs the answer: a notification scheduled without the
+  /// permission is never shown, while the screen says it is on.
+  Future<bool> ensurePermission() async {
+    final override = permissionForTesting;
+    if (override != null) return override();
+    await requestPermissionsIfNeeded();
+    return areNotificationsEnabled();
+  }
+
   Future<bool> requestPermissionsIfNeeded() async {
     try {
       if (!_isInitialized) {
@@ -781,12 +804,24 @@ class NotificationService {
       } else if (VisitBriefLink.appointmentIdFromPayload(p) != null) {
         // "Your visit brief is ready": the app shell opens it, after the lock.
         VisitBriefLink.pendingOpen.value = VisitBriefLink.appointmentIdFromPayload(p);
+      } else if (WindDownLink.isPayload(p)) {
+        // The wind-down reminder: the app shell opens the routine, after the lock.
+        WindDownLink.pendingOpen.value = true;
       }
     }
   }
   
 
 
+  /// Arm one dose reminder.
+  ///
+  /// On Android this is a daily alarm that decides when it fires whether the
+  /// medicine is due ([scheduleJson]), and [planned] is not used.
+  ///
+  /// On an iPhone nothing runs when a notification fires, so what to arm has to be
+  /// decided now: [planned] says whether it repeats every day, every week, or is
+  /// one reminder for one dose (see `IosDosePlan`). Without it the reminder repeats
+  /// daily at [hour]:[minute], which is right only for a medicine due every day.
   Future<bool> scheduleMedicineReminder({
     required int id,
     required String medicineName,
@@ -795,6 +830,17 @@ class NotificationService {
     required String frequency,
     String? scheduleJson,
     String? medicineId,
+    PlannedDose? planned,
+
+    /// The bundled sound this medicine asked for. It rides in the payload, so the
+    /// full-screen alarm a tap opens loops it; the notification itself plays the
+    /// system sound, as every notification does.
+    String? sound,
+
+    /// Minutes this medicine's Snooze should wait, when it chose its own; null
+    /// follows the Notifications setting. On an iPhone it rides in the payload,
+    /// since a tap is all that runs; on Android the slot alarm carries it.
+    int? snooze,
   }) async {
     try {
       debugPrint('🔔 Attempting to schedule medicine reminder at $hour:$minute');
@@ -826,8 +872,8 @@ class NotificationService {
           channelId: 'medicine_channel',
           // Route the full-screen alarm to the AlarmScreen with the real name.
           payload: _buildAlarmPayload(
-              id, 'Time for your $medicineName', 'Medicine reminder', null,
-              medicineId: medicineId, hour: hour, minute: minute),
+              id, 'Time for your $medicineName', 'Medicine reminder', snooze,
+              sound: sound, medicineId: medicineId, hour: hour, minute: minute),
           // Serialized schedule → the alarm callback gates firing to active days
           // (fixes non-daily regimens alarming every day).
           scheduleJson: scheduleJson,
@@ -851,6 +897,25 @@ class NotificationService {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
+      // What the plan says: the exact moment, and whether it comes round again.
+      // `tz.TZDateTime.from` keeps the wall-clock fields the plan chose, so a
+      // 08:00 dose stays at 08:00 across a clock change.
+      final DateTimeComponents? repeats;
+      if (planned != null) {
+        scheduledDate = tz.TZDateTime(tz.local, planned.at.year, planned.at.month,
+            planned.at.day, planned.at.hour, planned.at.minute);
+        switch (planned.repeat) {
+          case DoseRepeat.daily:
+            repeats = DateTimeComponents.time;
+          case DoseRepeat.weekly:
+            repeats = DateTimeComponents.dayOfWeekAndTime;
+          case DoseRepeat.once:
+            repeats = null;
+        }
+      } else {
+        repeats = _getMatchComponents(frequency);
+      }
+
       await _zonedSchedule(
         id,
         'Medicine Reminder 💊',
@@ -861,12 +926,12 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: _getMatchComponents(frequency),
+        matchDateTimeComponents: repeats,
         // Route to the full-screen AlarmScreen with the real medicine name
         // (was `medicine:$name`, which never opened the alarm).
         payload: _buildAlarmPayload(
-            id, 'Time for your $medicineName', 'Medicine reminder', null,
-            medicineId: medicineId, hour: hour, minute: minute),
+            id, 'Time for your $medicineName', 'Medicine reminder', snooze,
+            sound: sound, medicineId: medicineId, hour: hour, minute: minute),
       );
 
       debugPrint('✓ Scheduled medicine reminder at ${scheduledDate.hour}:${scheduledDate.minute}');
@@ -1014,15 +1079,17 @@ class NotificationService {
           tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
       if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
 
-      const details = NotificationDetails(
+      final vibrate = _vibrates;
+      final channel = channelForVibration('sleep_channel', 'Sleep & Bedtime', vibrate: vibrate);
+      final details = NotificationDetails(
         android: AndroidNotificationDetails(
-          'sleep_channel',
-          'Sleep & Bedtime',
+          channel.id,
+          channel.name,
           channelDescription: 'Bedtime and wind-down reminders',
           importance: Importance.high,
           priority: Priority.high,
           playSound: true,
-          enableVibration: true,
+          enableVibration: vibrate,
           category: AndroidNotificationCategory.reminder,
           visibility: NotificationVisibility.public,
           // Intentionally NOT full-screen and NOT on the alarm channel.
@@ -1032,13 +1099,16 @@ class NotificationService {
       await _zonedSchedule(
         bedtimeReminderId,
         'Wind-down time 🌙',
-        'A calm moment now helps you sleep better tonight.',
+        'A calm moment now helps you sleep better tonight. Tap for a minute '
+            'of breathing and a low sound.',
         when,
         details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
+        // Opens the wind-down screen, which asks; nothing starts by itself.
+        payload: WindDownLink.payload,
       );
       debugPrint('✓ Bedtime reminder at $hour:$minute (inexact, sleep_channel)');
       return true;
@@ -1185,6 +1255,7 @@ class NotificationService {
     int? goal,
     DateTime? stepsAsOf,
     bool restToday = false,
+    bool Function(DateTime day)? restOn,
   }) async {
     try {
       await _scheduler.cancel(stepReminderId);
@@ -1212,18 +1283,21 @@ class NotificationService {
         goal: goal,
         stepsAsOf: stepsAsOf,
         restDay: restToday,
+        restOn: restOn,
       );
       final when = tz.TZDateTime.from(plan.repeatingFrom, tz.local);
 
-      const details = NotificationDetails(
+      final vibrate = _vibrates;
+      final channel = channelForVibration('steps_channel', 'Step Reminders', vibrate: vibrate);
+      final details = NotificationDetails(
         android: AndroidNotificationDetails(
-          'steps_channel',
-          'Step Reminders',
+          channel.id,
+          channel.name,
           channelDescription: 'Nudges to reach your daily step goal',
           importance: Importance.high,
           priority: Priority.high,
           playSound: true,
-          enableVibration: true,
+          enableVibration: vibrate,
           category: AndroidNotificationCategory.reminder,
           visibility: NotificationVisibility.public,
         ),
@@ -1552,16 +1626,20 @@ class NotificationService {
       // custom reminder regardless of tier, which is how a "Quiet" reminder
       // ended up ringing on the alarm stream (which ignores Do Not Disturb)
       // and taking over the lock screen.
+      final prefs = await SharedPreferences.getInstance();
       final look = alarmPresentationFor(
         escalation.kind,
         snoozeMinutes: snoozeDuration ?? 5,
         reminderActions: reminderId != null,
+        // Vibration, Keep on screen and Full-screen alerts, as mirrored for the
+        // alarm isolate: this path armed the same alerts and ignored the same
+        // three switches.
+        switches: AlarmSwitches.fromPrefs(prefs),
       );
       // Default PRIVATE, matching alarmCallback: for a health app the safe
       // default is not putting "Take sertraline" on a locked screen. The
       // 'Show on lock screen' toggle was already mirrored to SharedPreferences
       // for the alarm isolate; this path simply never read it.
-      final prefs = await SharedPreferences.getInstance();
       final lockScreenVisibility = (prefs.getBool(kShowOnLockScreenPref) ?? false)
           ? NotificationVisibility.public
           : NotificationVisibility.private;
@@ -1765,14 +1843,17 @@ class NotificationService {
       id = _safeId(id); // match the clamp used when scheduling
       await cancelNotification(id);
       
-      // Cancel sub-notifications for complex types
-      if (repeatType == RepeatType.weekdays) {
-         for (int i=1; i<=5; i++) await cancelNotification(_generateId(id, i));
-      } else if (repeatType == RepeatType.weekends) {
-         await cancelNotification(_generateId(id, 6));
-         await cancelNotification(_generateId(id, 7));
-      } else if (repeatType == RepeatType.custom && customDays != null) {
-         for (final day in customDays) await cancelNotification(_generateId(id, day));
+      // Cancel sub-notifications for complex types — all seven days, whatever
+      // days the repeat names. A reminder held by quiet hours is armed on the
+      // days it LANDS on (a Friday 23:00 weekdays reminder waits until Saturday
+      // 07:00), which are not the days its repeat type lists, so cancelling only
+      // the listed days would leave one of those behind with nothing to cancel it.
+      if (repeatType == RepeatType.weekdays ||
+          repeatType == RepeatType.weekends ||
+          repeatType == RepeatType.custom) {
+         for (int day = 1; day <= 7; day++) {
+           await cancelNotification(_generateId(id, day));
+         }
       }
   }
 
@@ -1874,7 +1955,8 @@ class NotificationService {
       String? body,
       String? medicineId,
       int? hour,
-      int? minute}) async {
+      int? minute,
+      bool clearFired = true}) async {
     try {
       final reminders = CleanStorageService.getReminders();
       // Match the fired notification (or its snoozed `+100000` variant) to a
@@ -1957,7 +2039,7 @@ class NotificationService {
       // drifting upward. The rescheduled notification carries a RICH alarm
       // payload so re-firing still opens the AlarmScreen with the real content.
       final snoozeId = _safeId(baseId + 100000);
-      await _scheduler.cancel(notificationId);
+      if (clearFired) await _scheduler.cancel(notificationId);
       await _zonedSchedule(
         snoozeId,
         '⏰ Snoozed: $cleanTitle',
@@ -1991,20 +2073,8 @@ class NotificationService {
         title,
         body,
         NotificationDetails(
-          android: AndroidNotificationDetails(
-            'alarm_channel',
-            'Alarm Reminders',
-            channelDescription: 'Reminder (snooze limit reached)',
-            importance: Importance.high,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
-            autoCancel: true,
-            actions: const <AndroidNotificationAction>[
-              AndroidNotificationAction('dismiss', '❌ Dismiss',
-                  showsUserInterface: false, cancelNotification: true),
-            ],
-          ),
+          android: snoozeLimitDetails(
+              vibrate: CleanStorageService.getUserSettings().vibrationEnabled),
         ),
       );
     } catch (e) {
@@ -2083,14 +2153,15 @@ class NotificationService {
     final alarmGrade = kind.isAlarmGrade;
     final quiet = kind == ReminderKind.quiet;
 
+    // Vibration is a property of the CHANNEL on Android 8+, so "off" means the
+    // channel without it (see [stillChannelId]); the quiet one has none already.
+    // Chosen where every path that posts an alert chooses it.
+    final channel = alertChannelFor(kind, vibrate: settings.vibrationEnabled);
+
     return NotificationDetails(
       android: AndroidNotificationDetails(
-        alarmGrade
-            ? 'alarm_channel'
-            : (quiet ? quietChannelId : 'checkin_channel'),
-        alarmGrade
-            ? 'Alarm Reminders'
-            : (quiet ? 'Quiet Reminders' : 'Check-ins & Nudges'),
+        channel.id,
+        channel.name,
         channelDescription: alarmGrade
             ? 'High priority alarm reminders'
             : (quiet
@@ -2104,12 +2175,9 @@ class NotificationService {
             : (quiet ? Priority.low : Priority.defaultPriority),
         playSound: !quiet,
         sound: null, // Use system default sound from the channel
-        enableVibration: !quiet && settings.vibrationEnabled,
-        vibrationPattern: quiet || !settings.vibrationEnabled
-            ? null
-            : alarmGrade
-                ? Int64List.fromList([0, 1000, 500, 1000, 500, 1000])
-                : Int64List.fromList([0, 250, 250, 250]),
+        enableVibration: channel.vibrates,
+        vibrationPattern:
+            channel.vibrates ? Int64List.fromList(channel.vibrationPattern) : null,
         enableLights: true,
         ledColor: const Color(0xFF4CAF50),
         ledOnMs: 1000,
@@ -2161,6 +2229,12 @@ class NotificationService {
     );
   }
   
+  /// Whether the person wants reminders to vibrate.
+  ///
+  /// Vibration belongs to the CHANNEL on Android 8+, so a poster asks for the
+  /// channel that matches this ([channelForVibration]) and not just for a flag.
+  bool get _vibrates => CleanStorageService.getUserSettings().vibrationEnabled;
+
   /// Get current notification settings for display
   UserSettings getNotificationSettings() {
     return CleanStorageService.getUserSettings();
@@ -2303,19 +2377,27 @@ class NotificationService {
         await init();
       }
 
-      const androidDetails = AndroidNotificationDetails(
-        'medicine_channel',
-        'Medicine Reminders',
+      final vibrate = _vibrates;
+      final channel =
+          channelForVibration('medicine_channel', 'Medicine Reminders', vibrate: vibrate);
+      final androidDetails = AndroidNotificationDetails(
+        channel.id,
+        channel.name,
         channelDescription: 'Reminders for taking medicines on time',
-        importance: Importance.high,
-        priority: Priority.high,
+        // A twin is created by whatever posts to it first, with these, and Android
+        // never lets them change — so they are the original channel's own (see init):
+        // maximum importance, on the alarm stream, as the dose alarm that shares it
+        // posts. On `medicine_channel` itself they are ignored, as they always were.
+        importance: Importance.max,
+        priority: Priority.max,
         playSound: true,
-        enableVibration: true,
+        enableVibration: vibrate,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
         category: AndroidNotificationCategory.reminder,
       );
-      const details = NotificationDetails(
+      final details = NotificationDetails(
         android: androidDetails,
-        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+        iOS: const DarwinNotificationDetails(presentAlert: true, presentSound: true),
       );
 
       final id = 920000 + (dedupeKey.hashCode.abs() % 1000);
@@ -2342,6 +2424,36 @@ class NotificationService {
   // idempotent.
   static const int focusSessionEndId = 918_410;
 
+  // What is NOT a phase of the session gets ids of its own. Every immediate Focus
+  // notification used to go out under [focusSessionEndId], so they replaced each
+  // other: a long session that grew a plant, unlocked three more and earned two
+  // achievements left ONE banner — whichever was posted last — and "Session
+  // complete" was gone before anyone saw it. Session end, round done and break
+  // over still share the one id on purpose: they are phases of a single session,
+  // and the armed completion relies on replacing by it.
+  //
+  // Relaxation is a separate activity from a focus session, so it is not a phase
+  // of one either.
+  static const int focusRelaxationEndId = 918_411;
+
+  /// One id per plant, from here: room for [focusUnlockIdCount] kinds.
+  static const int focusUnlockBaseId = 918_420;
+  static const int focusUnlockIdCount = 20;
+
+  /// One id per achievement, from here: room for [focusAchievementIdCount].
+  static const int focusAchievementBaseId = 918_440;
+  static const int focusAchievementIdCount = 60;
+
+  /// The id for "New Plant Unlocked" of the plant at [plantIndex]. Clamped, so a
+  /// plant added past the room set aside shares the last id rather than leaving
+  /// the reserved block; a test fails first.
+  static int focusUnlockId(int plantIndex) =>
+      focusUnlockBaseId + plantIndex.clamp(0, focusUnlockIdCount - 1);
+
+  /// The id for "Achievement Unlocked" of the achievement at [typeIndex].
+  static int focusAchievementId(int typeIndex) =>
+      focusAchievementBaseId + typeIndex.clamp(0, focusAchievementIdCount - 1);
+
   /// A calm, immediate Focus notification — session complete, break over, an
   /// unlock.
   ///
@@ -2352,14 +2464,18 @@ class NotificationService {
   /// Focus notification went through `showImmediateNotification`, so a plant
   /// unlock rang on the alarm stream and could take over the lock screen.
   /// [showCaregiverAlert] exists for the same reason and says so.
+  ///
+  /// [id] defaults to [focusSessionEndId], which is right for a phase of the
+  /// session (round done, break over, session complete) and wrong for anything
+  /// else: see [focusUnlockId], [focusAchievementId] and [focusRelaxationEndId].
   Future<bool> showFocusNotification({
     required String title,
     required String body,
+    int id = focusSessionEndId,
   }) async {
     try {
       if (!_isInitialized) await init();
-      await _scheduler.show(
-          focusSessionEndId, title, body, _focusDetails());
+      await _scheduler.show(id, title, body, _focusDetails());
       debugPrint('✓ Focus notification shown: $title');
       return true;
     } catch (e) {
@@ -2375,21 +2491,25 @@ class NotificationService {
   /// buttons matters beyond tidiness: the app-wide background tap handler is a
   /// single slot shared with the alarm isolate, so a Focus notification that
   /// carried actions would need routing there too.
-  NotificationDetails _focusDetails() => const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'focus_channel',
-          'Focus Sessions',
-          channelDescription: 'When a focus session or break ends',
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: true,
-          enableVibration: true,
-          category: AndroidNotificationCategory.reminder,
-          visibility: NotificationVisibility.public,
-          autoCancel: true,
-        ),
-        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
-      );
+  NotificationDetails _focusDetails() {
+    final vibrate = _vibrates;
+    final channel = channelForVibration('focus_channel', 'Focus Sessions', vibrate: vibrate);
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        channel.id,
+        channel.name,
+        channelDescription: 'When a focus session or break ends',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: vibrate,
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        autoCancel: true,
+      ),
+      iOS: const DarwinNotificationDetails(presentAlert: true, presentSound: true),
+    );
+  }
 
   /// Schedule (or cancel) a Focus reminder on `focus_channel`.
   ///
@@ -2542,17 +2662,31 @@ class NotificationService {
   /// without opening the app.
   NotificationDetails _waterNotificationDetails() {
     final settings = CleanStorageService.getUserSettings();
+    // Vibration belongs to the CHANNEL on Android 8+, which `water_channel` was
+    // created with on: the flag below was ignored, and every water reminder buzzed
+    // with Vibration off. Off means the twin without it — see [alertChannelFor].
+    final channel = channelForVibration('water_channel', 'Water Reminders',
+        vibrate: settings.vibrationEnabled);
     return NotificationDetails(
       android: AndroidNotificationDetails(
-        'water_channel',
-        'Water Reminders',
+        channel.id,
+        channel.name,
         channelDescription: 'Reminders to drink water',
-        importance: Importance.high,
-        priority: Priority.high,
-        playSound: settings.soundEnabled,
+        // A twin is created by whatever posts to it first, with these, and Android
+        // never lets them change — so they are the original channel's own (see init):
+        // maximum importance, on the alarm stream. On `water_channel` itself they are
+        // ignored, as they always were.
+        importance: Importance.max,
+        priority: Priority.max,
+        // Fixed, like everything else a twin is created with: Android never lets the
+        // channel's sound change, so passing the Sound setting here made
+        // `water_channel_still` permanently silent if the first reminder after
+        // Vibration went off came with Sound off too. An iPhone has its own
+        // `presentSound` below.
+        playSound: true,
         enableVibration: settings.vibrationEnabled,
         category: AndroidNotificationCategory.reminder,
-        audioAttributesUsage: AudioAttributesUsage.notification,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
         visibility: settings.showOnLockScreen
             ? NotificationVisibility.public
             : NotificationVisibility.private,
@@ -2561,7 +2695,7 @@ class NotificationService {
         actions: <AndroidNotificationAction>[
           AndroidNotificationAction(
             waterLogActionId,
-            '💧 Log ${WaterActionQueue.defaultQuickAddMl} ml',
+            '💧 Log ${Units.volumeText(WaterActionQueue.defaultQuickAddMl)}',
             // No UI: the point is to log without opening the app. The drink is
             // queued in the background isolate and applied on next resume.
             showsUserInterface: false,

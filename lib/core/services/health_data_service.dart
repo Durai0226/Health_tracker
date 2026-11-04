@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../health/health_record_ids.dart';
 import '../../features/medication/models/blood_pressure_reading.dart';
 import '../../features/medication/models/glucose_reading.dart';
 import '../../features/medication/models/weight_reading.dart';
@@ -69,12 +71,64 @@ enum BackgroundReadAuth {
   unsupported,
 }
 
+/// A read of the health store that could not be made — as opposed to one that
+/// found nothing.
+class HealthReadException implements Exception {
+  const HealthReadException(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'HealthReadException: $reason';
+}
+
 class HealthDataService {
   HealthDataService._();
   static final HealthDataService instance = HealthDataService._();
 
   final Health _health = Health();
   bool _configured = false;
+
+  /// Test seams: [_configured] is set by the platform, and one type's read is a
+  /// platform call. Together they let the part that is worth testing — what a
+  /// failed read does to the answer — run headless.
+  @visibleForTesting
+  set configuredForTesting(bool value) => _configured = value;
+
+  @visibleForTesting
+  Future<List<HealthDataPoint>> Function(
+          HealthDataType type, DateTime from, DateTime to)?
+      pointReaderForTesting;
+
+  /// What the platform answers when asked whether [types] are granted for
+  /// [access]: true, false, or null where it will not say (iOS, for READ). Lets
+  /// the part worth testing — which question is asked, and what is done with a
+  /// null — run headless.
+  @visibleForTesting
+  Future<bool?> Function(List<HealthDataType> types, List<HealthDataAccess> access)?
+      permissionQueryForTesting;
+
+  /// What the platform answers to a consent request for [types] with [access]. A
+  /// test seam: the sheet cannot be shown headless.
+  @visibleForTesting
+  Future<bool?> Function(List<HealthDataType> types, List<HealthDataAccess> access)?
+      authorizationRequestForTesting;
+
+  Future<bool?> _requestAuthorization(
+      List<HealthDataType> types, List<HealthDataAccess> access) {
+    final request = authorizationRequestForTesting;
+    return request != null
+        ? request(types, access)
+        : _health.requestAuthorization(types, permissions: access);
+  }
+
+  Future<bool?> _hasPermissions(
+      List<HealthDataType> types, List<HealthDataAccess> access) {
+    final query = permissionQueryForTesting;
+    return query != null
+        ? query(types, access)
+        : _health.hasPermissions(types, permissions: access);
+  }
 
   // ---- platform-correct data types ----------------------------------------
   //
@@ -491,19 +545,20 @@ class HealthDataService {
 
   // ---- vitals write (BP / glucose / weight) ---------------------------------
   //
-  // Opt-in and, for BP/glucose, one-directional: this app never reads BP or
-  // glucose back from Health Connect/HealthKit, it only offers to publish
-  // what the user already logged locally. `writeBloodPressure`/
-  // `BLOOD_GLUCOSE`/`WEIGHT` are identical types on both platforms (unlike
-  // sleep/distance above), so no per-platform split is needed here. Mood has
-  // no native record type on either platform, so it is never written.
+  // Opt-in. Writing publishes what the user already logged locally;
+  // `writeBloodPressure`/`BLOOD_GLUCOSE`/`WEIGHT` are identical types on both
+  // platforms (unlike sleep/distance above), so no per-platform split is needed
+  // here. Mood has no native record type on either platform, so it is never
+  // written.
   //
-  // Weight is the one exception to "one-directional": [readWeightSamples]
-  // below is a separate, explicit, user-triggered pull (see
-  // VitalsStorageService.importFromHealthConnect) that lets a reading logged
-  // by a smart scale or another app — never touching this app's write path —
-  // flow into the local Weight tracker. It reuses this same READ_WRITE grant
-  // rather than requesting a standalone read scope.
+  // Reading goes the other way and is its own opt-in: [readWeightSamples] is a
+  // user-triggered pull (VitalsStorageService.importFromHealthConnect), and
+  // [readBloodPressureSamples]/[readGlucoseSamples] feed "Readings from other
+  // apps" (VitalsHealthImport), which brings in what a cuff or a meter app saved.
+  // All three reuse this same READ_WRITE grant rather than requesting a
+  // standalone read scope, and all three must skip records this app wrote
+  // itself (HealthSampleOrigin) or every synced entry would come back as a
+  // duplicate.
   //
   // Duplicate-write avoidance is handled at the Dart level by the caller (see
   // VitalsStorageService's per-id synced flag), NOT by the platform.
@@ -518,7 +573,9 @@ class HealthDataService {
   //   2. Records this app already wrote carry no clientRecordId, and ownership
   //      cannot be claimed retroactively — so a migration would have to treat
   //      every pre-existing write as unowned regardless.
-  // Revisiting this is a named follow-up, not a limitation.
+  // Since then Android writes also carry a clientRecordId (see HealthRecordIds), so
+  // an edit replaces its record and a delete removes it there; the Dart flag stays
+  // the dedup mechanism, and iOS is unchanged.
   static const List<HealthDataType> vitalsWriteTypes = [
     HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
     HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
@@ -539,12 +596,143 @@ class HealthDataService {
   Future<bool> hasVitalsWritePermission() async {
     try {
       await _ensureConfigured();
-      final has = await _health.hasPermissions(vitalsWriteTypes,
-          permissions:
-              vitalsWriteTypes.map((_) => HealthDataAccess.WRITE).toList());
+      final has = await _hasPermissions(vitalsWriteTypes,
+          vitalsWriteTypes.map((_) => HealthDataAccess.WRITE).toList());
       return has == true;
     } catch (e) {
       debugPrint('HealthDataService.hasVitalsWritePermission failed: $e');
+      return false;
+    }
+  }
+
+  // ---- reading other apps' vitals and drinks (READ only) -----------------------
+  //
+  // "Readings from other apps" and "Count drinks from other apps" read, and ask
+  // for READ and nothing else. They used to ask for the sharing switches' READ_WRITE
+  // grant — on blood pressure, glucose AND weight — so a person who wanted cuff
+  // readings brought in was shown a sheet asking to write to the store, which the
+  // privacy policy says the app does only when sharing is switched on, and Health
+  // Connect's own rules ask apps to request only what they use. The cost of asking
+  // for exactly what is read is a second sheet if the person later turns sharing
+  // on too.
+
+  /// What the blood-pressure and glucose import reads, on Health Connect. Weight is
+  /// not here: it is pulled on the weight screen, by the person, on their own request.
+  ///
+  /// Named per platform, like the sleep and distance lists, though the two are the
+  /// same today: the types exist on both, and `health_data_types_test.dart` checks
+  /// each list against the plugin's own key set for ITS platform, so one that stops
+  /// being there fails. Apart, a change for one platform cannot reach the other.
+  static const List<HealthDataType> vitalsReadTypesAndroid = [
+    HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+    HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+    HealthDataType.BLOOD_GLUCOSE,
+  ];
+
+  /// The same, on HealthKit.
+  static const List<HealthDataType> vitalsReadTypesIOS = [
+    HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+    HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+    HealthDataType.BLOOD_GLUCOSE,
+  ];
+
+  static List<HealthDataType> get vitalsReadTypes =>
+      Platform.isAndroid ? vitalsReadTypesAndroid : vitalsReadTypesIOS;
+
+  /// What the drinks import reads, on each platform.
+  static const List<HealthDataType> hydrationReadTypesAndroid = [HealthDataType.WATER];
+  static const List<HealthDataType> hydrationReadTypesIOS = [HealthDataType.WATER];
+
+  static List<HealthDataType> get hydrationReadTypes =>
+      Platform.isAndroid ? hydrationReadTypesAndroid : hydrationReadTypesIOS;
+
+  // Remembered on iPhone, which never says whether read was allowed: all that is
+  // known is that the person got through the sheet. Named with the imports' prefixes
+  // so "Delete all data" removes them with the rest of what the imports remember.
+  static const String _vitalsReadAskedKey = 'vitals_health_import_read_asked';
+  static const String _hydrationReadAskedKey = 'water_health_import_read_asked';
+
+  /// Whether blood pressure or glucose may be READ — at least one of them: true or
+  /// false when the platform says, null when it could not be asked (the store is
+  /// missing, updating, or would not answer).
+  ///
+  /// Null is not "no". A caller that turns a person's choice off on a "no" must not
+  /// do it on a failed look.
+  ///
+  /// Android discloses READ and is asked directly. iPhone never does —
+  /// `hasPermissions` answers null there by design — so the answer is whether the
+  /// person got through the request sheet, which is remembered.
+  Future<bool?> vitalsReadAccess() => _readAccess(vitalsReadTypes, _vitalsReadAskedKey);
+
+  /// [vitalsReadAccess], as a yes or no for a gate: a look that failed is not a yes.
+  Future<bool> hasVitalsReadPermission() async => await vitalsReadAccess() == true;
+
+  /// Whether drinks may be READ. See [vitalsReadAccess].
+  Future<bool?> hydrationReadAccess() =>
+      _readAccess(hydrationReadTypes, _hydrationReadAskedKey);
+
+  Future<bool> hasHydrationReadPermission() async => await hydrationReadAccess() == true;
+
+  Future<bool?> _readAccess(List<HealthDataType> types, String askedKey) async {
+    try {
+      await _ensureConfigured();
+      final read = await _anyReadable(types);
+      if (read != null) return read;
+      // On iPhone the remembered answer is all there is — and if it cannot be read,
+      // that is "could not tell", not "no": a caller that turns a person's choice off
+      // on a "no" would do it on a failed look.
+      return await _readFlagOrNull(askedKey);
+    } catch (e) {
+      debugPrint('HealthDataService: read permission check failed: $e');
+      return null;
+    }
+  }
+
+  /// Whether at least one of [types] may be READ; null where the platform will not
+  /// say.
+  ///
+  /// Health Connect grants each type on its own, and answers a question about
+  /// several with "all of them". Someone who allowed blood pressure and refused
+  /// glucose was told the store "did not share your readings" and the import never
+  /// ran — for the one they had allowed. The plugin returns nothing, not an error,
+  /// for a type that is not granted, so an import over the lot reads what it may.
+  ///
+  /// One question when they are all held, which is the usual case; the others only
+  /// when they are not.
+  Future<bool?> _anyReadable(List<HealthDataType> types) async {
+    final all = await _hasPermissions(types, _readAccessFor(types));
+    if (all != false || types.length < 2) return all;
+    for (final type in types) {
+      if (await _hasPermissions([type], _readAccessFor([type])) == true) return true;
+    }
+    return false;
+  }
+
+  /// Ask to READ blood pressure and glucose, and nothing else. True when at least
+  /// one is held afterwards — confirmed with Health Connect on Android, where each
+  /// is allowed or refused on its own; on iPhone, which will not say, whether the
+  /// sheet was completed.
+  Future<bool> requestVitalsReadPermission() =>
+      _requestReadOnly(vitalsReadTypes, _vitalsReadAskedKey);
+
+  /// Ask to READ drinks, and nothing else. See [requestVitalsReadPermission].
+  Future<bool> requestHydrationReadPermission() =>
+      _requestReadOnly(hydrationReadTypes, _hydrationReadAskedKey);
+
+  Future<bool> _requestReadOnly(List<HealthDataType> types, String askedKey) async {
+    try {
+      await _ensureConfigured();
+      final granted = await _requestAuthorization(types, _readAccessFor(types));
+      // Ask again rather than trust the answer to the request: on iPhone it says
+      // the sheet closed without error, not that read was allowed. Where the
+      // platform will say, it is the truth; where it will not, the sheet is all
+      // there is to go on.
+      final known = await _anyReadable(types);
+      final ok = known ?? granted == true;
+      await _writeFlag(askedKey, ok);
+      return ok;
+    } catch (e) {
+      debugPrint('HealthDataService: read permission request failed: $e');
       return false;
     }
   }
@@ -563,17 +751,50 @@ class HealthDataService {
     }
   }
 
+  /// [id] when this platform can replace and delete a record by name (see
+  /// [HealthRecordIds]), else null — so iOS is sent exactly what it always was.
+  String? _clientIdFor(String? id) =>
+      HealthRecordIds.supported(defaultTargetPlatform) ? id : null;
+
+  /// A version that beats every earlier write of the same name; null with no name.
+  double? _versionFor(String? clientId) =>
+      clientId == null ? null : HealthRecordIds.version(clock.now());
+
+  /// Delete the record this app wrote under [clientRecordId], of [type] (blood
+  /// pressure is [HealthDataType.BLOOD_PRESSURE_SYSTOLIC] for both numbers: it is
+  /// one record).
+  ///
+  /// False where the platform cannot do it, and on any failure. Health Connect only
+  /// ever deletes the calling app's own records, so this cannot remove what another
+  /// app wrote.
+  Future<bool> deleteByClientId(
+      HealthDataType type, String clientRecordId) async {
+    if (!HealthRecordIds.supported(defaultTargetPlatform)) return false;
+    try {
+      await _ensureConfigured();
+      return await _health.deleteByClientRecordId(
+          dataTypeKey: type, clientRecordId: clientRecordId);
+    } catch (e) {
+      debugPrint('HealthDataService.deleteByClientId failed: $e');
+      return false;
+    }
+  }
+
   /// Writes systolic+diastolic as ONE combined record — Health Connect models
   /// blood pressure that way, and the plugin refuses to write either number
   /// alone. Only the numbers and the time are written: the plugin exposes no
   /// parameter for [BloodPressureReading.arm]/[position].
-  Future<bool> writeBloodPressure(BloodPressureReading reading) async {
+  Future<bool> writeBloodPressure(BloodPressureReading reading,
+      {String? clientRecordId}) async {
     try {
       await _ensureConfigured();
+      final cid = _clientIdFor(clientRecordId);
       return await _health.writeBloodPressure(
         systolic: reading.systolic,
         diastolic: reading.diastolic,
         startTime: reading.takenAt,
+        clientRecordId: cid,
+        clientRecordVersion: _versionFor(cid),
         recordingMethod: RecordingMethod.manual,
       );
     } catch (e) {
@@ -585,14 +806,17 @@ class HealthDataService {
   /// Writes the glucose value + time. The plugin exposes no parameter for
   /// [GlucoseReading.context] (fasting/pre/post-meal) — there is no dedicated
   /// glucose writer, only the generic [Health.writeHealthData] call.
-  Future<bool> writeGlucose(GlucoseReading reading) async {
+  Future<bool> writeGlucose(GlucoseReading reading, {String? clientRecordId}) async {
     try {
       await _ensureConfigured();
+      final cid = _clientIdFor(clientRecordId);
       return await _health.writeHealthData(
         value: reading.valueMgdl.toDouble(),
         type: HealthDataType.BLOOD_GLUCOSE,
         unit: HealthDataUnit.MILLIGRAM_PER_DECILITER,
         startTime: reading.takenAt,
+        clientRecordId: cid,
+        clientRecordVersion: _versionFor(cid),
         recordingMethod: RecordingMethod.manual,
       );
     } catch (e) {
@@ -603,14 +827,17 @@ class HealthDataService {
 
   /// Writes body weight in kilograms — [WeightReading.valueKg] is already the
   /// canonical unit, so no conversion is needed here.
-  Future<bool> writeWeight(WeightReading reading) async {
+  Future<bool> writeWeight(WeightReading reading, {String? clientRecordId}) async {
     try {
       await _ensureConfigured();
+      final cid = _clientIdFor(clientRecordId);
       return await _health.writeHealthData(
         value: reading.valueKg,
         type: HealthDataType.WEIGHT,
         unit: HealthDataUnit.KILOGRAM,
         startTime: reading.takenAt,
+        clientRecordId: cid,
+        clientRecordVersion: _versionFor(cid),
         recordingMethod: RecordingMethod.manual,
       );
     } catch (e) {
@@ -643,14 +870,15 @@ class HealthDataService {
   Future<bool> hasHydrationWritePermission() async {
     try {
       await _ensureConfigured();
-      final has = await _health.hasPermissions(hydrationWriteTypes,
-          permissions: const [HealthDataAccess.WRITE]);
+      final has = await _hasPermissions(
+          hydrationWriteTypes, const [HealthDataAccess.WRITE]);
       return has == true;
     } catch (e) {
       debugPrint('HealthDataService.hasHydrationWritePermission failed: $e');
       return false;
     }
   }
+
 
   /// Ask for the hydration write scope. As with vitals, `package:health` has no
   /// write-only request — WRITE always brings READ along.
@@ -678,17 +906,23 @@ class HealthDataService {
   /// interval ending at [at]. Volume is capped at Health Connect's documented
   /// 100 L maximum; anything at or below zero is not written at all (an
   /// alcohol-adjusted negative must never reach this).
-  Future<bool> writeWater({required int volumeMl, required DateTime at}) async {
+  Future<bool> writeWater(
+      {required int volumeMl,
+      required DateTime at,
+      String? clientRecordId}) async {
     if (volumeMl <= 0) return false;
     try {
       await _ensureConfigured();
       final litres = (volumeMl / 1000).clamp(0.0, 100.0);
+      final cid = _clientIdFor(clientRecordId);
       return await _health.writeHealthData(
         value: litres,
         type: HealthDataType.WATER,
         unit: HealthDataUnit.LITER,
         startTime: at.subtract(const Duration(minutes: 1)),
         endTime: at,
+        clientRecordId: cid,
+        clientRecordVersion: _versionFor(cid),
         recordingMethod: RecordingMethod.manual,
       );
     } catch (e) {
@@ -697,20 +931,92 @@ class HealthDataService {
     }
   }
 
-  /// Total hydration recorded by ANY app over [from]..[to], in millilitres.
+  // ============ MINDFUL MINUTES (HealthKit) ============
+
+  /// The one type behind "Save mindful minutes" on an iPhone.
   ///
-  /// Lets the app show "you also logged 500 ml in another app" rather than
-  /// pretending its own database is the whole picture.
-  Future<int> readWaterMl(DateTime from, DateTime to) async {
+  /// `package:health` writes `HealthDataType.MINDFULNESS` on iOS only (it is in
+  /// `dataTypeKeysIOS` and not `dataTypeKeysAndroid`), as HealthKit's
+  /// `mindfulSession` category. Health Connect has its own channel, see
+  /// `MindfulnessChannel`.
+  static const List<HealthDataType> mindfulnessWriteTypes = [
+    HealthDataType.MINDFULNESS,
+  ];
+
+  /// Whether the mindful-minutes write scope is granted.
+  ///
+  /// [HealthDataAccess.WRITE], not `READ_WRITE` — see [hasVitalsWritePermission].
+  Future<bool> hasMindfulnessWritePermission() async {
     try {
-      // _sumNumeric returns null for "no samples", which is 0 ml here.
-      final litres = await _sumNumeric([HealthDataType.WATER], from, to);
-      return litres == null ? 0 : (litres * 1000).round();
+      await _ensureConfigured();
+      final has = await _hasPermissions(
+          mindfulnessWriteTypes, const [HealthDataAccess.WRITE]);
+      return has == true;
     } catch (e) {
-      debugPrint('HealthDataService.readWaterMl failed: $e');
-      return 0;
+      debugPrint('HealthDataService.hasMindfulnessWritePermission failed: $e');
+      return false;
     }
   }
+
+  /// Ask for the mindful-minutes write scope. As with vitals and hydration,
+  /// `package:health` has no write-only request — WRITE always brings READ along.
+  Future<bool> requestMindfulnessWritePermission() async {
+    try {
+      await _ensureConfigured();
+      final granted = await _requestAuthorization(
+          mindfulnessWriteTypes, _readWriteAccessFor(mindfulnessWriteTypes));
+      return granted == true;
+    } catch (e) {
+      debugPrint('HealthDataService.requestMindfulnessWritePermission failed: $e');
+      return false;
+    }
+  }
+
+  /// A test seam for the one platform write below.
+  @visibleForTesting
+  Future<bool> Function(DateTime start, DateTime end, double minutes)?
+      mindfulnessWriterForTesting;
+
+  /// Write one mindfulness session, [start] to [end], to Apple Health.
+  ///
+  /// A session of no length is not written: HealthKit stores a mindful session as
+  /// an interval, and a zero-length one is not a minute of anything.
+  Future<bool> writeMindfulMinutes(
+      {required DateTime start, required DateTime end}) async {
+    if (!end.isAfter(start)) return false;
+    final minutes = end.difference(start).inSeconds / 60.0;
+    try {
+      final writer = mindfulnessWriterForTesting;
+      if (writer != null) return await writer(start, end, minutes);
+      await _ensureConfigured();
+      return await _health.writeHealthData(
+        value: minutes,
+        type: HealthDataType.MINDFULNESS,
+        unit: HealthDataUnit.MINUTE,
+        startTime: start,
+        endTime: end,
+        recordingMethod: RecordingMethod.manual,
+      );
+    } catch (e) {
+      debugPrint('HealthDataService.writeMindfulMinutes failed: $e');
+      return false;
+    }
+  }
+
+  /// Hydration samples in [from]..[to], each a [NumericHealthValue] in litres.
+  ///
+  /// Every app's, this one's included — the caller must skip what this app wrote
+  /// itself (HealthSampleOrigin), or every drink it shared comes back as a second
+  /// one. This replaces `readWaterMl`, which summed all of it and called the
+  /// total "other apps'": nothing read it, and the first thing that did would
+  /// have double-counted.
+  ///
+  /// Throws [HealthReadException] when the store could not be read, which is not
+  /// the same as there being nothing in it: an import that took "could not look"
+  /// for "nothing there" would move its window forward over the readings it never
+  /// saw.
+  Future<List<HealthDataPoint>> readWaterSamples(DateTime from, DateTime to) =>
+      _readOrThrow(hydrationReadTypes, from, to);
 
   Future<void> _ensureConfigured() async {
     if (_configured) return;
@@ -934,6 +1240,17 @@ class HealthDataService {
     }
   }
 
+  /// [_readFlag], but null — "could not tell" — when the preferences cannot be read,
+  /// rather than false.
+  Future<bool?> _readFlagOrNull(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(key) ?? false;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _writeFlag(String key, bool value) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -947,6 +1264,46 @@ class HealthDataService {
   Future<void> resetConnected() async {
     await _setConnected(false);
     await _setAsked(false);
+  }
+
+  /// Forget every connection this app remembers — steps and sleep, the wearable
+  /// scope and the cycle read — and the answer memoised from them.
+  ///
+  /// What "Disconnect" in Connected devices starts with. It touches only what this
+  /// app remembers; taking the permissions back from the platform is
+  /// [revokeAllPermissions]. Anything already stored here stays.
+  Future<void> forgetConnection() async {
+    await resetConnected();
+    await _setBiometricsFlag(false);
+    await _writeFlag(_cyclePrefKey, false);
+    await _writeFlag(_vitalsReadAskedKey, false);
+    await _writeFlag(_hydrationReadAskedKey, false);
+    invalidateAvailabilityCache();
+  }
+
+  /// Hand every permission back to the platform. True when it did.
+  ///
+  /// Health Connect lets an app revoke its own. HealthKit has no such call — only
+  /// the person can, in the Health app — so on an iPhone this does nothing and
+  /// says false, and the screen tells them where to go instead.
+  ///
+  /// True when the request was MADE — not that it was granted: the plugin's
+  /// `revokePermissions` catches and logs whatever the platform throws, so a refusal
+  /// reads the same as success here, and Health Connect applies the request when the
+  /// app is closed rather than at that moment. Whether the permissions are really gone
+  /// is for a look at the platform afterwards, which is what the Connected devices
+  /// screen does before it says "Disconnected".
+  Future<bool> revokeAllPermissions() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      await _ensureConfigured();
+      await _health.revokePermissions();
+      invalidateAvailabilityCache();
+      return true;
+    } catch (e) {
+      debugPrint('HealthDataService.revokeAllPermissions failed: $e');
+      return false;
+    }
   }
 
   Future<int?> readTodaySteps() async {
@@ -1005,6 +1362,18 @@ class HealthDataService {
     return out;
   }
 
+  /// Raw step records in [from]..[to], for honouring a source choice. The
+  /// totals above are the platform's own de-duplicated aggregate; these are
+  /// every source's separate records, so they are only ever totalled for ONE
+  /// source (see `StepSourceChoice`). A read that fails comes back empty
+  /// ([_readPoints] catches per type), which the caller treats as "no choice
+  /// applies" and answers from the aggregate.
+  Future<List<HealthDataPoint>> readStepSamples(
+      DateTime from, DateTime to) async {
+    await _ensureConfigured();
+    return _readPoints([HealthDataType.STEPS], from, to);
+  }
+
   Future<double?> readActiveEnergy(DateTime from, DateTime to) =>
       _sumNumeric([HealthDataType.ACTIVE_ENERGY_BURNED], from, to);
 
@@ -1059,19 +1428,74 @@ class HealthDataService {
     }
   }
 
+  /// Systolic and diastolic samples in [from]..[to]: two points per reading, to be
+  /// paired by time and source (see VitalsHealthImport.bloodPressure).
+  ///
+  /// Throws [HealthReadException] when either could not be read — half a reading
+  /// is no reading — as [readWaterSamples] does.
+  Future<List<HealthDataPoint>> readBloodPressureSamples(
+          DateTime from, DateTime to) =>
+      _readOrThrow(
+          vitalsReadTypes
+              .where((t) =>
+                  t == HealthDataType.BLOOD_PRESSURE_SYSTOLIC ||
+                  t == HealthDataType.BLOOD_PRESSURE_DIASTOLIC)
+              .toList(),
+          from,
+          to);
+
+  /// Blood-glucose samples in [from]..[to], each a [NumericHealthValue] in mg/dL.
+  ///
+  /// Throws [HealthReadException] when it could not be read, as
+  /// [readWaterSamples] does.
+  Future<List<HealthDataPoint>> readGlucoseSamples(DateTime from, DateTime to) =>
+      _readOrThrow(
+          vitalsReadTypes.where((t) => t == HealthDataType.BLOOD_GLUCOSE).toList(), from, to);
+
+  /// [_readPoints] for a caller that must tell "nothing there" from "could not
+  /// look".
+  ///
+  /// Only as far as the plugin lets it. On iPhone a failed read throws and this
+  /// counts it. On Android the plugin's reader catches every exception and answers
+  /// with an empty list — the same answer it gives for a type that is not granted — so
+  /// there a failed look is an empty one, and this raises only when the store could
+  /// not even be set up. What stands between a failed read and a window that moved on
+  /// without it is the overlap each import reads again at its next run (a week for
+  /// readings, two days for drinks).
+  Future<List<HealthDataPoint>> _readOrThrow(
+      List<HealthDataType> types, DateTime from, DateTime to) async {
+    await _ensureConfigured();
+    if (!_configured) {
+      throw const HealthReadException('the health store could not be set up');
+    }
+    return _readPoints(types, from, to, strict: true);
+  }
+
   /// Read [types] one at a time so an unsupported / unavailable type degrades to
   /// a missing metric instead of throwing away every point already collected
   /// (`getHealthDataFromTypes` throws from inside its own loop).
+  ///
+  /// With [strict], any type that cannot be read throws [HealthReadException]
+  /// after the rest have been tried, instead of being left out.
   Future<List<HealthDataPoint>> _readPoints(
-      List<HealthDataType> types, DateTime from, DateTime to) async {
+      List<HealthDataType> types, DateTime from, DateTime to,
+      {bool strict = false}) async {
     final out = <HealthDataPoint>[];
+    var failed = 0;
     for (final type in types) {
       try {
-        out.addAll(await _health.getHealthDataFromTypes(
-            startTime: from, endTime: to, types: [type]));
+        final reader = pointReaderForTesting;
+        out.addAll(reader != null
+            ? await reader(type, from, to)
+            : await _health.getHealthDataFromTypes(
+                startTime: from, endTime: to, types: [type]));
       } catch (e) {
+        failed++;
         debugPrint('HealthDataService: read ${type.name} failed: $e');
       }
+    }
+    if (strict && failed > 0) {
+      throw HealthReadException('$failed of ${types.length} reads failed');
     }
     return out;
   }

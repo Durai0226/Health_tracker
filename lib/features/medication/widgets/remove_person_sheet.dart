@@ -95,16 +95,17 @@ class RemovePersonBody extends StatelessWidget {
           icon: Symbols.inventory_2_rounded,
           color: ext.mark(ext.medicine),
           title: 'Remove them, keep the records',
-          subtitle: 'Their medicines, doses, readings, weight, mood and appointments '
-              'stay on this device, under you.',
+          subtitle: 'Their medicines, doses, readings, weight, mood, appointments, '
+              'doctors and clinics stay on this device, under you.',
           choice: RemovePersonChoice.keepRecords,
         ),
         option(
           icon: Symbols.delete_forever_rounded,
           color: ext.mark(ext.error),
           title: 'Remove them and delete everything',
-          subtitle: 'Their medicines, doses, readings, weight, mood and appointments '
-              'are deleted, with their reminders. This cannot be undone.',
+          subtitle: 'Their medicines, doses, readings, weight, mood, appointments, '
+              'doctors and clinics are deleted, with their reminders. Doctors and '
+              'clinics shared with the family stay with you. This cannot be undone.',
           choice: RemovePersonChoice.deleteRecords,
         ),
         const SizedBox(height: AppSpacing.xs),

@@ -28,7 +28,7 @@ rules_version = '2';
 //   users/{uid}/medicines/{id}           — CloudSyncService
 //   users/{uid}/water_intake/{dateKey}   — CloudSyncService
 //   users/{uid}/focus_sessions/{id}      — CloudSyncService
-//   users/{uid}/backups/{isoTimestamp}   — BackupService
+//   users/{uid}/backups/{isoTimestamp}   — BackupService (+ `{isoTimestamp}~pN` parts of a large one)
 //   users/{uid}/step_days/{dateKey}      — HealthCloudSyncService
 //   users/{uid}/sleep_sessions/{id}      — HealthCloudSyncService
 //   users/{uid}/biometric_days/{dateKey} — HealthCloudSyncService
@@ -166,7 +166,11 @@ service cloud.firestore {
       }
 
       // Cloud backups: one document per backup (keyed by its ISO-8601 creation
-      // instant). `data` is a string either way, which is why the payload is
+      // instant). A backup too big for one document is split: its own document
+      // holds the first part and `parts`, and each further part is a document
+      // here too, keyed `<isoTimestamp>~p2`, `~p3` … with `partOf` and `part`
+      // (BackupService.partId). They pass the same `create` check below, so
+      // splitting needed no rules change. `data` is a string either way, which is why the payload is
       // base64'd after gzip rather than sent as a Blob — the `is string` check
       // below is deployed separately from the app, so changing the field's
       // type would have silently rejected every backup until a rules deploy

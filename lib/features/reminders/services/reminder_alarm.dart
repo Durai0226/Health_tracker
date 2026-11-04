@@ -8,6 +8,7 @@ import '../models/reminder_model.dart';
 import 'package:clock/clock.dart';
 import '../utils/reminder_helper.dart';
 import '../../../core/services/vacation_mode.dart';
+import 'quiet_hours.dart';
 
 /// What to arm. A value type rather than a long parameter list, so adding a
 /// field later does not break every implementation and every call site.
@@ -125,17 +126,27 @@ class ReminderArmRequest {
       }
     }
 
+    // Quiet hours: a Normal reminder due inside the window waits for its end.
+    // Medicines never come through here, and the louder tiers are exempt.
+    final held = QuietHours.hold(
+      window: QuietHours.active,
+      escalation: reminder.escalation,
+      time: fireTime,
+      repeat: needsPerOccurrence ? RepeatType.none : reminder.repeatType,
+      days: reminder.customDays,
+      now: clock.now(),
+    );
+
     return ReminderArmRequest(
       reminderId: reminder.id,
       escalation: reminder.escalation,
       id: reminder.notificationSlot,
       title: reminder.title,
       body: reminder.body,
-      scheduledTime: fireTime,
+      scheduledTime: held.time,
       // A rule or a bound cannot be expressed as a native repeat.
-      repeatType:
-          needsPerOccurrence ? RepeatType.none : reminder.repeatType,
-      customDays: reminder.customDays,
+      repeatType: held.repeat,
+      customDays: held.days,
       snoozeDuration: reminder.snoozeDuration,
       sound: reminder.sound,
       priority: reminder.priority,

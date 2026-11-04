@@ -8,20 +8,26 @@ import 'package:flutter/widgets.dart';
 import 'package:drift/drift.dart' show Value;
 import '../../../core/database/app_database.dart';
 import '../../../core/database/daos/focus_dao.dart';
+import '../../../core/health/focus_breaks.dart';
+import '../../../core/health/focus_habit.dart';
 import '../../../core/health/streak_engine.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../../../core/services/health_store_name.dart';
 import '../../../core/services/mindfulness_channel.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/audio_service.dart';
 import '../models/focus_plant.dart';
 import '../models/ambient_sound.dart';
+import '../models/relaxation_music.dart' show RelaxationCategory;
 import '../models/focus_session.dart';
 import '../models/focus_achievement.dart';
 import '../models/breathing_exercise.dart' show BreathingPattern;
 import 'breathing_history.dart';
 import 'coins_service.dart';
+import 'focus_drift.dart';
 import 'focus_reminder_scheduler.dart';
 import 'focus_session_alarm.dart';
+import '../../../core/services/rest_day_store.dart';
 import 'tag_service.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../../../core/services/vacation_mode.dart';
@@ -51,6 +57,19 @@ class CompletionNotifier extends ValueNotifier<FocusSession?> {
 
   /// Whether any screen is currently able to present a completion.
   bool get hasConsumer => hasListeners;
+}
+
+/// What applying a suggestion did, and how to take it back.
+///
+/// [suggestion] is the one that was ACTUALLY applied — read again at the moment of
+/// the tap, which is not the moment the card was drawn. The hour can have moved on,
+/// or a round finished, so what the screen says it did must come from here and not
+/// from what it was showing.
+class AppliedSuggestion<T> {
+  const AppliedSuggestion(this.suggestion, this.undo);
+
+  final T suggestion;
+  final Future<void> Function() undo;
 }
 
 class FocusService extends ChangeNotifier with WidgetsBindingObserver {
@@ -106,6 +125,16 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   /// Cleared by [startSession] rather than by the listener, so consuming it stays
   /// a read and the service keeps ownership of its own state.
   final CompletionNotifier justCompleted = CompletionNotifier();
+
+  /// Counts every change to the history of rounds: one finished or abandoned, sessions
+  /// restored from a backup or re-read from the database.
+  ///
+  /// For a screen that only wants to know the history changed — Trends, which stays
+  /// alive in the shell. NOT [justCompleted]: that one answers "is a screen here to
+  /// celebrate this?" by whether anyone is LISTENING, so a listener that is not a
+  /// celebration — a Trends tab left mounted — makes the answer yes, the completion is
+  /// handed to a screen that is not there, and nobody is told the round ended.
+  final ValueNotifier<int> sessionsRevision = ValueNotifier<int>(0);
 
   /// Whether a grace day is currently holding the streak together.
   ///
@@ -306,6 +335,22 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   /// after a wipe brought the whole deleted history back. Timers and the
   /// lifecycle observer are left alone: a session that is running is not this
   /// method's to end.
+  /// What the offers remember: the usual minute of leaving, a break after a long
+  /// run, the usual round. One place, so what a wipe clears and what a test reset
+  /// clears cannot come apart when another offer is added.
+  void _resetOffers() {
+    _driftNoticing = true;
+    _driftEvents = [];
+    _driftDismissedAt = null;
+    _driftLeave = null;
+    _driftPatternMemo = null;
+    _breakOffers = true;
+    _breakDeclined = null;
+    _habitOffers = true;
+    _habitDismissedDay = 0;
+    _habitMemo = null;
+  }
+
   void resetAfterWipe() {
     _sessions = [];
     _garden = [];
@@ -329,6 +374,9 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     _soundVolume = 0.5;
     _breathingPreroll = false;
     _mindfulnessSync = false;
+    // The departures too: the next one noticed would otherwise be saved together
+    // with every one that was just deleted.
+    _resetOffers();
     notifyListeners();
   }
 
@@ -370,11 +418,19 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
+        // BEFORE the sync below: it may complete the phase, and whether the round
+        // was still running at this moment is the fact being asked.
+        _noteReturned();
         _isForeground = true;
+        // The ticker takes the end of the phase over again.
+        _cancelBackgroundSoundStop();
         _syncTimer();
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
+        // `hidden` arrives first and `paused` after it, both with the app already
+        // away: only the step from on screen to away is a departure.
+        if (_isForeground) _noteLeft();
         _isForeground = false;
         // Stop the 1 Hz ticker while we are not on screen.
         //
@@ -392,6 +448,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
           //
           // BEFORE the snapshot, so the snapshot records the armed instant.
           if (!_isPaused) _armCompletion();
+          _armBackgroundSoundStop();
           _saveActiveSession();
         }
       case AppLifecycleState.inactive:
@@ -492,8 +549,63 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  // ---- the sound at the end of a phase, while backgrounded -----------------
+  //
+  // The 1 Hz ticker is stopped when the app is backgrounded, so nothing ran at the
+  // end of the phase: the session could only complete on the way back in, and the
+  // ambient sound played on in the meantime — rain on the lock screen long after a
+  // 25-minute session was over, until the person happened to open the app.
+  //
+  // One timer, set for the end instant and no more than that: not a ticker (that
+  // is what was stopped, and why), and not a second source of truth for completion
+  // — it only stops the sound. The session itself still completes on resume, as
+  // before, and the notification armed above still tells them. If the OS has
+  // already suspended the process the timer never fires; nothing is lost then
+  // either, because a suspended process is not playing audio.
+  Timer? _backgroundSoundStop;
+  DateTime? _backgroundSoundStopAt;
+
+  void _armBackgroundSoundStop() {
+    _cancelBackgroundSoundStop();
+    final end = _endTime;
+    if (end == null || !_isRunning || _isPaused || !_audioService.isPlaying) {
+      return;
+    }
+    _backgroundSoundStopAt = end;
+    // A phase that is already over fires on the next turn of the event loop.
+    final wait = end.difference(clock.now());
+    _backgroundSoundStop = Timer(wait.isNegative ? Duration.zero : wait, _stopSoundAtEnd);
+  }
+
+  void _cancelBackgroundSoundStop() {
+    _backgroundSoundStop?.cancel();
+    _backgroundSoundStop = null;
+    _backgroundSoundStopAt = null;
+  }
+
+  void _stopSoundAtEnd() {
+    _backgroundSoundStop = null;
+    _backgroundSoundStopAt = null;
+    // Back on screen, or no longer running, or paused: the ticker and the normal
+    // paths own the sound again.
+    if (_isForeground || !_isRunning || _isPaused) return;
+    _audioService.stop();
+  }
+
+  /// The instant the sound will be stopped at if the app stays in the background,
+  /// or null when nothing is waiting.
+  @visibleForTesting
+  DateTime? get backgroundSoundStopAtForTesting => _backgroundSoundStopAt;
+
+  /// What the timer does when it fires.
+  @visibleForTesting
+  void fireBackgroundSoundStopForTesting() => _stopSoundAtEnd();
+
   /// Withdraw the armed notification, recording whether it already fired.
   Future<void> _disarmCompletion() async {
+    // Every way out of "running" — complete, abandon, pause — passes through here,
+    // and each has its own say about the sound from this point on.
+    _cancelBackgroundSoundStop();
     final armed = _armedFor;
     _completionDelivered = armed != null && !clock.now().isBefore(armed);
     _armedFor = null;
@@ -714,6 +826,12 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
 
       _breathingPreroll = prefs[_kBreathingPreroll] == true;
       _mindfulnessSync = prefs[_kMindfulnessSync] == true;
+      _loadDrift(prefs);
+      _breakOffers = prefs[_kBreakOffers] != false;
+      _habitOffers = prefs[_kHabitOffers] != false;
+      final dismissedDay = prefs[_kHabitDismissedDay];
+      _habitDismissedDay = dismissedDay is num ? dismissedDay.toInt() : 0;
+      _habitMemo = null;
 
       // Load stats
       final statsJson = prefs['focusStats'];
@@ -859,6 +977,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       // incrementally (and synced in its own pass), not derived from the
       // session list. Recomputing it from history would silently disagree with
       // the wallet and the streak.
+      sessionsRevision.value++;
       notifyListeners();
     } catch (e) {
       debugPrint('Error reloading focus sessions: $e');
@@ -1104,7 +1223,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
         _mindfulnessSync = false;
         await _savePreference(_kMindfulnessSync, false);
         _mindfulnessDenialReason =
-            'Health Connect has not granted permission to save mindful minutes.';
+            '${healthStoreName()} has not granted permission to save mindful minutes.';
         notifyListeners();
         return false;
       }
@@ -1165,6 +1284,451 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Breathing mindfulness write-back failed: $e');
     }
+  }
+
+  /// Record a completed relaxation session as a mindfulness session, when the
+  /// category is mindfulness practice (see [mindfulnessKindForRelaxation]).
+  Future<void> writeRelaxationMindfulness({
+    required RelaxationCategory category,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    if (!_mindfulnessSync) return;
+    final kind = mindfulnessKindForRelaxation(category);
+    if (kind == null) return;
+    try {
+      await MindfulnessChannel.instance.writeSession(
+        start: start,
+        end: end,
+        kind: kind,
+        title: 'Relaxation',
+        clientId: 'relaxation_${start.millisecondsSinceEpoch}',
+      );
+    } catch (e) {
+      debugPrint('Relaxation mindfulness write-back failed: $e');
+    }
+  }
+
+  // ---- leaving the app mid-round -------------------------------------------
+  //
+  // See focus_drift.dart for what this counts, what it cannot know, and why most
+  // of its rules are there to keep the screen timing out out of the count.
+
+  static const _kDriftNoticing = 'focusDriftNoticing';
+  static const _kDriftLog = 'focusDriftLog';
+  static const _kDriftDismissedAt = 'focusDriftDismissedAt';
+
+  bool _driftNoticing = true;
+  List<DriftEvent> _driftEvents = [];
+  DateTime? _driftDismissedAt;
+  DriftLeave? _driftLeave;
+
+  /// Whether leaving the app mid-round is being noticed.
+  ///
+  /// On unless switched off, because it observes nothing the app does not already
+  /// see (it is told when it goes to the background), asks for no permission and
+  /// sends nothing anywhere. Turning it OFF also forgets what was noticed.
+  bool get driftNoticing => _driftNoticing;
+
+  /// How many times leaving has been noticed and kept. Nothing in the app shows it:
+  /// the tests ask, to see that forgetting really forgets.
+  @visibleForTesting
+  int get driftEventCount => _driftEvents.length;
+
+  /// The departures kept, oldest first.
+  @visibleForTesting
+  List<DriftEvent> get driftEventsForTesting => List.unmodifiable(_driftEvents);
+
+  Future<void> setDriftNoticing(bool value) async {
+    if (_driftNoticing == value) return;
+    _driftNoticing = value;
+    _driftLeave = null;
+    if (!value) {
+      // Off means forgotten, not merely paused: someone who switches this off
+      // does not want the record kept.
+      _driftEvents = [];
+      _driftDismissedAt = null;
+      _driftPatternMemo = null;
+      await CleanStorageService.setAppPreferences({
+        _kDriftNoticing: false,
+        _kDriftLog: <dynamic>[],
+        _kDriftDismissedAt: 0,
+      });
+    } else {
+      await _savePreference(_kDriftNoticing, true);
+    }
+    notifyListeners();
+  }
+
+  /// The app has just gone to the background.
+  void _noteLeft() {
+    _driftLeave = null;
+    // Only a focus round that is running: a pause, a break (a stand-alone one
+    // counts as a break too) and a count-up session (no end to come back before)
+    // are all things this cannot read.
+    if (!_driftNoticing ||
+        !_isRunning ||
+        _isPaused ||
+        _isOnBreak ||
+        _mode == FocusMode.flow) {
+      return;
+    }
+    final start = _startTime;
+    if (start == null) return;
+    final now = clock.now();
+    _driftLeave = DriftRules.leaving(
+      now: now,
+      phaseKey: start.millisecondsSinceEpoch,
+      elapsedSeconds: elapsedSeconds,
+      plannedMinutes: _phaseMinutes,
+    );
+  }
+
+  /// The app is back on screen.
+  void _noteReturned() {
+    final left = _driftLeave;
+    _driftLeave = null;
+    if (left == null) return;
+    final start = _startTime;
+    final end = _endTime;
+    if (start == null || end == null) return;
+    final now = clock.now();
+    final event = left.returnedAt(
+      now,
+      phaseKey: start.millisecondsSinceEpoch,
+      remainingSeconds: end.difference(now).inSeconds,
+    );
+    if (event == null) return;
+    _driftEvents = DriftAnalysis.capped([..._driftEvents, event]);
+    _driftPatternMemo = null;
+    // The only trace there is of this on a device: nothing in the app lists what
+    // was noticed, and the release checklist asks for this line.
+    debugPrint('✓ Focus drift noticed: minute ${event.minute} of ${event.plannedMinutes}');
+    // Not awaited: this runs inside a lifecycle callback.
+    unawaited(_savePreference(
+        _kDriftLog, [for (final e in _driftEvents) e.toJson()]));
+  }
+
+  // The pattern is looked for on every build of the Focus screen, and over two
+  // hundred events that is not free, so it is kept. Whatever changes the events or
+  // the dismissal drops it (`_driftPatternMemo = null`), and a new day does too —
+  // the window slides — which is why the day is the key. It is NOT keyed by how
+  // many events there are: at the cap one goes out as one comes in, and the count
+  // stays the same.
+  ({DateTime day, DriftPattern? pattern})? _driftPatternMemo;
+
+  DriftPattern? _currentDriftPattern() {
+    final now = clock.now();
+    final day = DateTime(now.year, now.month, now.day);
+    final memo = _driftPatternMemo;
+    if (memo != null && memo.day == day) return memo.pattern;
+    final since = _driftDismissedAt;
+    final pattern = DriftAnalysis.find(
+      since == null
+          ? _driftEvents
+          : _driftEvents.where((e) => e.at.isAfter(since)),
+      now: now,
+    );
+    _driftPatternMemo = (day: day, pattern: pattern);
+    return pattern;
+  }
+
+  /// The minute they keep leaving at, if there is one worth telling them and
+  /// nothing already covers it — or null.
+  ///
+  /// Null while a round runs (the card is for the resting screen), when it was
+  /// dismissed and nothing new has built up since, and when the round they have
+  /// chosen already ends before that minute: the suggestion would be what they are
+  /// already doing. (When noticing is off there are no events to find a pattern in:
+  /// switching it off, and loading it off, both forget them.)
+  DriftPattern? get driftSuggestion {
+    if (_isRunning) return null;
+    final pattern = _currentDriftPattern();
+    if (pattern == null) return null;
+    final plan = _plannedMinutes;
+    if (plan != null && plan <= pattern.suggestedWorkMinutes) return null;
+    return pattern;
+  }
+
+  /// Not now: forget what has been noticed so far. The card comes back only if a
+  /// new pattern builds up from here.
+  Future<void> dismissDriftSuggestion() async {
+    _driftDismissedAt = clock.now();
+    _driftPatternMemo = null;
+    await _savePreference(
+        _kDriftDismissedAt, _driftDismissedAt!.millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
+  /// Set up the round the card offers: Pomodoro, the suggested work length and a
+  /// short break. Returns what undoes it, or null when there was nothing to apply.
+  ///
+  /// The caller says it happened and offers the undo — this changes two settings
+  /// the person chose before.
+  Future<AppliedSuggestion<DriftPattern>?> applyDriftSuggestion() async {
+    if (_isRunning) return null;
+    final pattern = driftSuggestion;
+    if (pattern == null) {
+      // The card that was tapped is out of date, and nothing else will rebuild an idle
+      // screen: say so, or it stays on show and every tap repeats the same answer.
+      notifyListeners();
+      return null;
+    }
+    final before = (
+      mode: _mode,
+      work: _workMinutes,
+      shortBreak: _shortBreakMinutes,
+      dismissedAt: _driftDismissedAt,
+    );
+    setMode(FocusMode.pomodoro);
+    setPomodoroConfig(
+      workMinutes: pattern.suggestedWorkMinutes,
+      shortBreakMinutes: pattern.suggestedBreakMinutes,
+    );
+    await dismissDriftSuggestion();
+    return AppliedSuggestion(pattern, () async {
+      if (_isRunning) return;
+      setMode(before.mode);
+      setPomodoroConfig(
+        workMinutes: before.work,
+        shortBreakMinutes: before.shortBreak,
+      );
+      _driftDismissedAt = before.dismissedAt;
+      _driftPatternMemo = null;
+      await _savePreference(
+          _kDriftDismissedAt, before.dismissedAt?.millisecondsSinceEpoch ?? 0);
+      notifyListeners();
+    });
+  }
+
+  /// Read what was kept from the preference rows. Tolerant: the rows come back
+  /// from backups too.
+  void _loadDrift(Map<String, dynamic> prefs) {
+    _driftNoticing = prefs[_kDriftNoticing] != false;
+    final raw = prefs[_kDriftLog];
+    _driftEvents = raw is List
+        ? DriftAnalysis.capped([
+            for (final e in raw) ?DriftEvent.tryParse(e)
+          ])
+        : [];
+    final dismissed = prefs[_kDriftDismissedAt];
+    _driftDismissedAt = dismissed is num && dismissed > 0
+        ? DateTime.fromMillisecondsSinceEpoch(dismissed.toInt())
+        : null;
+    _driftPatternMemo = null;
+    // Off means nothing is kept, however the rows got here — a restored backup
+    // carries the switch and the log separately. Done on the way in so everything
+    // after this can rely on it: no events while off, and so no card.
+    if (!_driftNoticing && (_driftEvents.isNotEmpty || _driftDismissedAt != null)) {
+      _driftEvents = [];
+      _driftDismissedAt = null;
+      unawaited(CleanStorageService.setAppPreferences(
+          {_kDriftLog: <dynamic>[], _kDriftDismissedAt: 0}));
+    }
+  }
+
+  // ---- earned breaks --------------------------------------------------------
+  //
+  // See focus_breaks.dart: asks "Break first?" before another round once ninety
+  // minutes have gone by with no break of ten minutes or more. A question with two
+  // answers, never a refusal.
+
+  static const _kBreakOffers = 'focusBreakOffers';
+
+  bool _breakOffers = true;
+  FocusStretch? _breakDeclined;
+
+  /// Whether to ask. On unless switched off.
+  bool get breakOffers => _breakOffers;
+
+  Future<void> setBreakOffers(bool value) async {
+    if (_breakOffers == value) return;
+    _breakOffers = value;
+    _breakDeclined = null;
+    await _savePreference(_kBreakOffers, value);
+    notifyListeners();
+  }
+
+  /// The run of rounds that has gone on up to now with no break of ten minutes or
+  /// more in it.
+  FocusStretch get currentStretch => FocusBreaks.stretch([
+        for (final s in _sessions)
+          FocusSpan(
+            start: s.startedAt,
+            end: s.completedAt ??
+                s.startedAt.add(Duration(minutes: s.actualMinutes)),
+            minutes: s.actualMinutes,
+          ),
+      ], now: clock.now());
+
+  /// What to ask before another round starts — how long they have focused and the
+  /// break to offer (the Flowtime one, see [suggestedBreakMinutes]) — or null when
+  /// nothing is due.
+  ({int focusedMinutes, int breakMinutes})? get breakOffer {
+    if (!_breakOffers || _isRunning) return null;
+    final stretch = currentStretch;
+    if (!FocusBreaks.shouldOffer(stretch, declined: _breakDeclined)) return null;
+    return (
+      focusedMinutes: stretch.minutes,
+      breakMinutes: suggestedBreakMinutes(stretch.minutes),
+    );
+  }
+
+  /// "Start anyway": this run is not asked about again until it has grown by an
+  /// hour.
+  void declineBreakOffer() {
+    _breakDeclined = currentStretch;
+  }
+
+  // ---- the usual setup at this time of day ---------------------------------
+  //
+  // See focus_habit.dart: what the person usually does at this hour, offered once
+  // with a button. Never applied on its own.
+
+  static const _kHabitOffers = 'focusHabitOffers';
+  static const _kHabitDismissedDay = 'focusHabitDismissedDay';
+
+  bool _habitOffers = true;
+
+  /// The day the offer was last put away, as `yyyymmdd`; 0 for never.
+  int _habitDismissedDay = 0;
+
+  /// Whether to offer. On unless switched off.
+  bool get habitOffers => _habitOffers;
+
+  Future<void> setHabitOffers(bool value) async {
+    if (_habitOffers == value) return;
+    _habitOffers = value;
+    _habitMemo = null;
+    await _savePreference(_kHabitOffers, value);
+    notifyListeners();
+  }
+
+  static int _dayKey(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
+
+  // Looked for on every build of the Focus screen, over every round there has
+  // ever been, so it is kept until what it depends on changes: the day, the minute,
+  // or the rounds. A round arriving at the front of the list changes the first
+  // id; one arriving from a backup changes the count.
+  //
+  // The MINUTE, not the hour: "around now" is an hour either side of this minute, so
+  // a habit worked out at 10:01 is not the habit at 10:59 — the window has slid by
+  // almost an hour, and the card would have gone on offering (or hiding) the one
+  // from the start of the hour.
+  ({int day, int minuteOfDay, int count, String? newest, FocusHabit? habit})? _habitMemo;
+
+  FocusHabit? _currentHabit(DateTime now) {
+    final memo = _habitMemo;
+    final newest = _sessions.isEmpty ? null : _sessions.first.id;
+    final minuteOfDay = now.hour * 60 + now.minute;
+    if (memo != null &&
+        memo.day == _dayKey(now) &&
+        memo.minuteOfDay == minuteOfDay &&
+        memo.count == _sessions.length &&
+        memo.newest == newest) {
+      return memo.habit;
+    }
+    final habit = FocusHabits.at([
+      for (final s in _sessions)
+        HabitSession(
+          startedAt: s.startedAt,
+          minutes: s.actualMinutes,
+          activity: s.activityType.index,
+          sound: s.soundUsed == null || s.soundUsed == AmbientSoundType.none
+              ? null
+              : s.soundUsed!.index,
+          completed: s.wasCompleted,
+        ),
+    ], now: now);
+    _habitMemo = (
+      day: _dayKey(now),
+      minuteOfDay: minuteOfDay,
+      count: _sessions.length,
+      newest: newest,
+      habit: habit,
+    );
+    return habit;
+  }
+
+  /// The length the next round would have, or null when there is none to compare
+  /// (a count-up session has no length).
+  int? get _plannedMinutes => switch (_mode) {
+        FocusMode.single => _selectedMinutes,
+        FocusMode.pomodoro => _workMinutes,
+        FocusMode.flow => null,
+      };
+
+  /// What they usually do at this time of day, if that is not what is already set
+  /// up — or null.
+  ///
+  /// Null while a round runs, when it is switched off, when it was put away today,
+  /// and when the setup already is that: nothing to offer.
+  FocusHabit? get habitSuggestion {
+    if (!_habitOffers || _isRunning) return null;
+    final now = clock.now();
+    if (_habitDismissedDay == _dayKey(now)) return null;
+    final habit = _currentHabit(now);
+    if (habit == null) return null;
+    final length = _plannedMinutes;
+    final sameLength = length == null || length == habit.minutes;
+    final sameSound = habit.sound == null || habit.sound == _selectedSound.index;
+    if (habit.activity == _selectedActivity.index && sameLength && sameSound) {
+      return null;
+    }
+    return habit;
+  }
+
+  /// Not now: put it away until tomorrow.
+  Future<void> dismissHabitSuggestion() async {
+    _habitDismissedDay = _dayKey(clock.now());
+    await _savePreference(_kHabitDismissedDay, _habitDismissedDay);
+    notifyListeners();
+  }
+
+  /// Set the activity, the length (of a single round, or of a Pomodoro's work
+  /// round; a count-up session has none) and the sound the offer names. Returns
+  /// what undoes it, or null when there was nothing to apply.
+  ///
+  /// The caller says it happened and offers the undo — this changes settings the
+  /// person chose before.
+  Future<AppliedSuggestion<FocusHabit>?> applyHabitSuggestion() async {
+    if (_isRunning) return null;
+    final habit = habitSuggestion;
+    if (habit == null) {
+      // As for the drift card: the one that was tapped is out of date, and the screen
+      // will not rebuild by itself to take it away.
+      notifyListeners();
+      return null;
+    }
+    final before = (
+      activity: _selectedActivity,
+      single: _selectedMinutes,
+      work: _workMinutes,
+      sound: _selectedSound,
+      dismissedDay: _habitDismissedDay,
+    );
+    setActivity(FocusActivityType.values[habit.activity]);
+    switch (_mode) {
+      case FocusMode.single:
+        setDuration(habit.minutes);
+      case FocusMode.pomodoro:
+        setPomodoroConfig(workMinutes: habit.minutes);
+      case FocusMode.flow:
+        break;
+    }
+    final sound = habit.sound;
+    if (sound != null) setSound(AmbientSoundType.values[sound], counts: false);
+    await dismissHabitSuggestion();
+    return AppliedSuggestion(habit, () async {
+      if (_isRunning) return;
+      setActivity(before.activity);
+      setDuration(before.single);
+      setPomodoroConfig(workMinutes: before.work);
+      setSound(before.sound, counts: false);
+      _habitDismissedDay = before.dismissedDay;
+      await _savePreference(_kHabitDismissedDay, _habitDismissedDay);
+      notifyListeners();
+    });
   }
 
   // ---- optional breathing pre-roll ----------------------------------------
@@ -1311,11 +1875,17 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  void setSound(AmbientSoundType sound) {
+  /// [counts] false is for a change the person did not make by choosing: an
+  /// offer they accepted, or an Undo. Choosing a sound counts it as one they have
+  /// tried — toward Sound Explorer — and an offer that did that would be earning
+  /// them an achievement for a sound they never played.
+  void setSound(AmbientSoundType sound, {bool counts = true}) {
     _selectedSound = sound;
     if (sound != AmbientSoundType.none) {
-      _usedSounds.add(sound);
-      _checkSoundExplorerAchievement();
+      if (counts) {
+        _usedSounds.add(sound);
+        _checkSoundExplorerAchievement();
+      }
       // If session is running, change the sound immediately
       if (_isRunning) {
         _audioService.playSound(sound, volume: _soundVolume);
@@ -1800,6 +2370,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       );
       _sessions.insert(0, session);
       await _persistSession(session);
+      sessionsRevision.value++;
       // Deliberately NO mindfulness write here. An abandoned session is not a
       // completed practice, and a health record should not carry one.
 
@@ -1887,6 +2458,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       );
       _sessions.insert(0, session);
       await _persistSession(session);
+      sessionsRevision.value++;
       // Unawaited on purpose — see [_writeMindfulness]. Completed only: an
       // abandoned session is not a practice.
       _writeMindfulness(session);
@@ -2085,6 +2657,8 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
         await NotificationService().showFocusNotification(
           title: 'New Plant Unlocked! ${plant.emoji}',
           body: 'You\'ve unlocked the ${plant.name}! Keep focusing to grow your garden.',
+          // One id per plant, so several unlocked by one long session each show.
+          id: NotificationService.focusUnlockId(plant.index),
         );
       }
     }
@@ -2178,8 +2752,14 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     await NotificationService().showFocusNotification(
       title: 'Achievement Unlocked! ${type.emoji}',
       body: '${type.name}: ${type.description} · +${type.coinReward} coins',
+      // One id per achievement: two earned together are two notifications.
+      id: NotificationService.focusAchievementId(type.index),
     );
   }
+
+  /// The sounds counted as tried, for tests.
+  @visibleForTesting
+  Set<AmbientSoundType> get usedSoundsForTesting => Set.unmodifiable(_usedSounds);
 
   void _checkSoundExplorerAchievement() {
     _updateAchievement(AchievementType.soundExplorer, _usedSounds.length);
@@ -2208,8 +2788,9 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
       completedDays: _completedSessionDays(),
       today: clock.now(),
       graceDaysPerWeek: 1,
-      // Days spent on vacation are neither completions nor misses.
-      frozenDays: VacationMode.frozenDays(),
+      // Days spent on vacation, and days marked rest or unwell, are neither
+      // completions nor misses.
+      frozenDays: {...VacationMode.frozenDays(), ...RestDayStore.frozenDays()},
     );
     final newStreak = result.current;
     _streakUsedGrace = result.usedGrace;
@@ -2311,6 +2892,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     // told the restore succeeded.
     await _focusDao.upsertAll(_sessions.map(_toCompanion).toList());
     await _saveData();
+    sessionsRevision.value++;
     notifyListeners();
   }
 
@@ -2337,6 +2919,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
   void resetForTesting() {
     _timer?.cancel();
     _timer = null;
+    _cancelBackgroundSoundStop();
     if (_didInit) {
       WidgetsBinding.instance.removeObserver(this);
       _didInit = false;
@@ -2373,6 +2956,7 @@ class FocusService extends ChangeNotifier with WidgetsBindingObserver {
     justCompleted.value = null;
     _pendingIntention = null;
     _pendingDistractions.clear();
+    _resetOffers();
     _armedFor = null;
     _completionDelivered = false;
     _isForeground = true;

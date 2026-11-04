@@ -32,6 +32,7 @@ import 'package:tablet_remainder/features/reminders/screens/add_reminder_screen.
 import 'package:tablet_remainder/features/reminders/screens/category_management_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/pin_entry_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_schedule_settings_screen.dart';
+import 'package:tablet_remainder/features/sleep/screens/wind_down_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_goal_settings_screen.dart';
 import 'package:tablet_remainder/features/water/screens/water_reminder_settings_screen.dart';
 import '../support/overflow_errors.dart';
@@ -72,6 +73,8 @@ import 'package:tablet_remainder/features/medication/screens/appointments/nunito
 import 'package:tablet_remainder/features/medication/screens/appointments/visit_brief_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/clinics/nunito_clinic_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/doctors/nunito_doctor_list_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/pharmacies/nunito_add_edit_pharmacy_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/pharmacies/nunito_pharmacy_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/blood_pressure_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/blood_sugar_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/weight_screen.dart';
@@ -87,7 +90,6 @@ import 'package:tablet_remainder/features/biometrics/screens/heart_dashboard_scr
 import 'package:tablet_remainder/features/biometrics/screens/workouts_screen.dart';
 import 'package:tablet_remainder/features/biometrics/screens/connected_devices_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/conditions/condition_library_screen.dart';
-import 'package:tablet_remainder/features/settings/screens/early_access_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/reminders_hub_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_dashboard_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_history_screen.dart';
@@ -98,6 +100,7 @@ import 'package:tablet_remainder/features/water/screens/water_calendar_screen.da
 import 'package:tablet_remainder/features/water/screens/water_achievements_screen.dart';
 import 'package:tablet_remainder/features/water/screens/hydration_profile_screen.dart';
 import 'package:tablet_remainder/features/water/screens/custom_cup_creator_screen.dart';
+import 'package:tablet_remainder/features/water/screens/custom_drink_screen.dart';
 import 'package:tablet_remainder/features/water/screens/aqua_water_dashboard.dart';
 import 'package:tablet_remainder/features/home/screens/home_dashboard.dart';
 import 'package:tablet_remainder/features/home/screens/emergency_card_screen.dart';
@@ -107,6 +110,7 @@ import 'package:tablet_remainder/features/onboarding/screens/welcome_screen.dart
 import 'package:tablet_remainder/features/settings/screens/backup_screen.dart';
 import 'package:tablet_remainder/features/reminders/screens/alarm_screen.dart';
 import 'package:tablet_remainder/features/insights/screens/trends_dashboard_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/vitals/mood_report_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/mood_year_screen.dart';
 import 'package:tablet_remainder/features/period/screens/cycle_privacy_screen.dart';
 
@@ -183,13 +187,17 @@ const Map<String, int> _rowCutBaseline = {
   // Newly registered, so these 13 were always there and simply unmeasured.
   // All harness-font: it cuts "Blood pressure" — 14 characters — across two
   // lines of a 134pt column, which real Inter fits on one.
-  'vitals_reminders': 11,
-  // Newly VISIBLE to this gate rather than newly broken: `early_access` had no
-  // SettingsTiles at all until its three hand-rolled feature-flag cards were
-  // migrated onto the shared row, so the scope finder matched nothing there.
-  // All harness-font — it cuts "May be unstable", fifteen characters, on one
-  // line of a 134pt column.
-  'early_access': 55,
+  //
+  // 11 -> 8 when "Readings from other apps" went in above the Sync section, and
+  // 8 -> 22 when the screen was measured in a tall view ([_tallScreens]).
+  //
+  // Neither was a copy change. The new section pushed lower rows below the built
+  // extent of the lazy list, so the gate stopped measuring them and the number
+  // fell — coverage lost, not a defect fixed. In a tall view every row is built,
+  // and 22 is what is there: all harness-font, short labels at the 134pt column
+  // ("Blood pressure", "Evening BP", "Bring them in", "Share with Health
+  // Connect") that real Inter sets on one or two lines.
+  'vitals_reminders': 22,
   // 5, down from 10: the reminders are off until switched on, so the Best hour
   // and Reminder time rows are not there at rest and no longer count.
   'focus_reminders': 5,
@@ -199,7 +207,29 @@ const Map<String, int> _rowCutBaseline = {
   // pairs they replaced ("Medicine reminder", "Water added", "Focus start").
   // The row count and the label lengths both came down.
   'haptics': 8,
-  'notif_settings': 8,
+  // 8 -> 6 when the Alerts and Display footers grew to say what the switches
+  // really do, and 6 -> 27 when the screen was measured in a tall view
+  // ([_tallScreens]).
+  //
+  // The fall was not a copy fix: in the harness font the longer footers wrap to
+  // more lines, which pushed the lower rows below the built extent of the lazy
+  // list, so the gate stopped measuring them — the same artifact as
+  // `vitals_reminders` above. In a tall view every row is built, and 27 is what
+  // is there: all harness-font cuts of short labels at the 134pt column ("Daily
+  // check-in", "Keep on screen", "Full-screen alerts", "Mark as missed", "Send a
+  // test notification") that real Inter sets on one or two lines.
+  //
+  // 27 -> 30 when the screen gained a "Choose sounds" row (Android) and the tall view
+  // went to 4400 ([_tallViewHeight]). Not a regression in the copy: "Choose sounds" is
+  // one more harness-font cut of a short label at the 172pt navigation column (320pt
+  // at 2.0x only), and the taller view reaches two cuts of "Mark as missed" that the
+  // old height never built (it was counted once, and is cut three times).
+  //
+  // 30 -> 31 when a "Quiet hours" section went in above Alerts and the tall view went
+  // to 5200 ([_tallViewHeight]): "Quiet hours" is one more harness-font cut of a short
+  // label at the 134pt column (320pt at 2.0x only), named in [_rowCutLabels] — real
+  // Inter sets it on one or two lines, as it does "Choose sounds".
+  'notif_settings': 31,
   // Newly registered (TQ-05), so these were always there and simply unmeasured
   // — the same shape as `vitals_reminders` above. Both are harness-font: the
   // widest offender on `period_reminders` is "~2 days before your start", a
@@ -220,6 +250,44 @@ const Map<String, int> _rowCutBaseline = {
   // the test fallback font being ~2x Inter's advance, and that explanation does
   // not cover a cut that reproduces on hardware at 1.0x.
   'health_source_detail': 23,
+};
+
+/// WHICH rows are accepted as cut, for the two screens whose baselines were raised
+/// when they were measured in a tall view ([_tallScreens]).
+///
+/// A count alone cannot tell one cut row from another: a regression that cut a NEW
+/// row while a fixed one stopped being cut would leave the total where it was. These
+/// are the labels, read off the full report — each a short label at the 134pt column
+/// (172pt for the test button), cut in the harness font, which is about twice the
+/// advance of the Inter the app ships — and a row that is cut and not named here
+/// fails the gate even when the total holds.
+///
+/// The cut counts per label, so a future change can see what it moved:
+/// notif_settings — Full-screen alerts 9, Daily check-in 5, Keep on screen 4, Send a
+/// test notification 4, Lock screen 3, Mark as missed 3, Vibration 1, Choose sounds 1,
+/// and, since the Quiet hours section, Quiet hours (a one-word-wide column at 320pt at
+/// the largest text: "Quiet" alone is wider than 134pt in the harness font);
+/// vitals_reminders — Share with Health Connect 11, Blood pressure 5, Bring them in 4,
+/// Blood sugar 1, Evening BP 1.
+const Map<String, Set<String>> _rowCutLabels = {
+  'notif_settings': {
+    'Choose sounds',
+    'Daily check-in',
+    'Full-screen alerts',
+    'Keep on screen',
+    'Lock screen',
+    'Mark as missed',
+    'Quiet hours',
+    'Send a test notification',
+    'Vibration',
+  },
+  'vitals_reminders': {
+    'Blood pressure',
+    'Blood sugar',
+    'Bring them in',
+    'Evening BP',
+    'Share with Health Connect',
+  },
 };
 
 /// The instant every seeded screen is rendered at.
@@ -320,6 +388,31 @@ const _devices = <String, Size>{
   'lg-428x926': Size(428, 926), // iPhone Pro Max
 };
 
+/// Screens measured in a tall view: plain lists of switch rows.
+///
+/// A lazy list builds only what is on screen and a little beyond it. When a section
+/// was added above the last rows of these two, they fell below that and stopped
+/// being measured, and their baselines were lowered to match — coverage lost, not
+/// a defect fixed. A tall view builds every row without changing anything about how
+/// one row is laid out: the width and the text scale, which are what cut a row's
+/// text, are the same.
+///
+/// 3800, up from 3200, to match the touch-target audit: a sentence added to the
+/// Alerts footer pushed the last notification-settings rows past what 3200 builds at
+/// the largest text scale. Here the cut count and labels were the same at both
+/// heights; the two harnesses now measure the same rows.
+///
+/// 4400, up from 3800, for the same reason a third time: the Alerts footer gained the
+/// sentence about choosing sounds in the phone's settings, and the screen a "Choose
+/// sounds" row, which took the last switch rows past 3800 at the largest text scale
+/// (69 of the 72 were reached).
+///
+/// 5200, up from 4400, a fourth time: a "Quiet hours" section went in above the Alerts
+/// rows, and the baseline fell from 30 to 29 — rows past what 4400 builds, not a
+/// defect fixed.
+const _tallViewHeight = 5200.0;
+const _tallScreens = <String>{'vitals_reminders', 'notif_settings'};
+
 /// 1.0 = default. 1.3 = the ceiling `lib/main.dart` clamps Dynamic Type to,
 /// so this is the largest text the app will ever actually render.
 const _textScales = <double>[1.0, 1.3, 2.0];
@@ -336,6 +429,7 @@ final Map<String, ScreenBuilder> _screens = {
   // not real: this map already passes arguments (see 'home' and 'alarm').
   'add_appointment': () => const NunitoAddEditAppointmentScreen(),
   'add_doctor': () => const NunitoAddEditDoctorScreen(),
+  'add_pharmacy': () => const NunitoAddEditPharmacyScreen(),
   'add_clinic': () => const NunitoAddEditClinicScreen(),
   'add_dependent': () => const AddEditDependentScreen(),
   'dependent_list': () => const DependentListScreen(),
@@ -377,10 +471,12 @@ final Map<String, ScreenBuilder> _screens = {
   'appointments': () => const NunitoAppointmentListScreen(),
   'clinics': () => const NunitoClinicListScreen(),
   'doctors': () => const NunitoDoctorListScreen(),
+  'pharmacies': () => const NunitoPharmacyListScreen(),
   'bp': () => const BloodPressureScreen(),
   'glucose': () => const BloodSugarScreen(),
   'weight': () => const WeightScreen(),
   'mood': () => const MoodScreen(),
+  'mood_report': () => const MoodReportScreen(),
   'mood_year': () => const MoodYearScreen(),
   'period_calendar': () => const PeriodCalendarScreen(),
   'cycle_history': () => const CycleHistoryScreen(),
@@ -400,10 +496,10 @@ final Map<String, ScreenBuilder> _screens = {
   // longest name and the only entry that renders both personalised
   // sections. The list screen goes here.
   'condition_library': () => const ConditionLibraryScreen(),
-  'early_access': () => const EarlyAccessScreen(),
   'reminders_hub': () => const RemindersHubScreen(),
   'sleep': () => const SleepDashboardScreen(),
   'sleep_history': () => const SleepHistoryScreen(),
+  'wind_down': () => const WindDownScreen(),
   'steps_history': () => const StepsHistoryScreen(),
   'caffeine': () => const CaffeineInsightsScreen(),
   'water_stats': () => const WaterStatisticsScreen(),
@@ -411,6 +507,7 @@ final Map<String, ScreenBuilder> _screens = {
   'water_awards': () => const WaterAchievementsScreen(),
   'hydration_profile': () => const HydrationProfileScreen(),
   'custom_cup': () => const CustomCupCreatorScreen(),
+  'custom_drink': () => const CustomDrinkScreen(),
   // Previously uncovered: main dashboards, onboarding, and the alarm screen
   // (whose label is user-typed, so its width is unbounded).
   'water_dashboard': () => const AquaWaterDashboard(),
@@ -569,7 +666,9 @@ void main() {
       await withClock(Clock.fixed(_seedNow), () async {
       for (final dev in _devices.entries) {
         for (final scale in _textScales) {
-          final size = dev.value;
+          final size = _tallScreens.contains(name)
+              ? Size(dev.value.width, _tallViewHeight)
+              : dev.value;
           tester.view.devicePixelRatio = 1.0;
           tester.view.physicalSize = size;
 
@@ -985,6 +1084,23 @@ void main() {
     expect(cutImprovements, isEmpty,
         reason: 'Better than the baseline, so the baseline is now lying.\n'
             '${cutImprovements.join('\n')}');
+    // Which rows, not just how many — see [_rowCutLabels].
+    final unexpectedCuts = <String>[];
+    for (final entry in _rowCutLabels.entries) {
+      final cuts = rowCuts[entry.key] ?? const <String>[];
+      final labels = {
+        for (final c in cuts)
+          if (RegExp(r'"(.*?)" truncated').firstMatch(c) case final m?) m.group(1)!,
+      };
+      final extra = labels.difference(entry.value);
+      if (extra.isNotEmpty) {
+        unexpectedCuts.add('${entry.key}: ${extra.join(', ')}');
+      }
+    }
+    expect(unexpectedCuts, isEmpty,
+        reason: 'Rows are cut that the baseline does not name. A row that was cut '
+            'before and is not now can hide a new one behind an unchanged total — '
+            'see [_rowCutLabels].\n${unexpectedCuts.join('\n')}');
     expect(rowWraps, isEmpty,
         reason: 'Settings row text wrapped past two lines. A row title may run '
             'to a second line; its status line may not, and neither may run to '

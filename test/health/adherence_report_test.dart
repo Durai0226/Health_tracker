@@ -194,6 +194,24 @@ void main() {
       expect(row, '2026-03-01,08:00,Metformin 500mg,Taken,"Nausea, Headache",4,5');
     });
 
+    test('a carriage return in a note is quoted, not left to end the row', () {
+      // The export had its own cell escaper, which quoted for a comma, a quote or a
+      // newline and not a carriage return — pasted text has them — so one note could
+      // split a row in two. It shares the one every export uses now.
+      final withNote = [
+        MedicineLog.taken(
+            id: 'l1',
+            medicineId: 'm1',
+            scheduledTime: DateTime(2026, 3, 1, 8),
+            sideEffects: 'felt dizzy\rall morning'),
+      ];
+      final csv = AdherenceReportService.buildCsv(
+        entries: [MedicineReportEntry(medicine: med(), logs: withNote)],
+      );
+
+      expect(csv, contains('"felt dizzy\rall morning"'));
+    });
+
     test('a stale missed row superseded by a real taken row for the same slot '
         'produces exactly ONE csv line, not two', () {
       // This is the exact bug the report-service research surfaced: buildCsv

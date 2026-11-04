@@ -20,8 +20,10 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../services/reminder_pause_until.dart';
 import '../widgets/reminder_end_pause_controls.dart';
+import '../widgets/reminder_step_tick_control.dart';
 import '../widgets/reminder_rule_editor.dart';
 import '../models/reminder_rule_edit.dart';
+import '../models/reminder_sounds.dart';
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminder;
@@ -91,6 +93,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   String? _recurrenceRule;
   DateTime? _endsAt;
   int? _occurrenceLimit;
+  int? _autoCompleteSteps;
 
   /// Paused keeps the reminder but arms nothing; [_pauseUntil] is the day it
   /// comes back on by itself (kept in `ReminderPauseUntil`, not on the row).
@@ -119,17 +122,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
   // Built-in sounds — each maps to a bundled audio asset that plays instantly
   // on selection (offline, no network).
-  static const Map<String, Map<String, String>> _soundOptions = {
-    'default': {'label': 'Default', 'category': 'Classic', 'icon': 'notifications', 'asset': 'assets/sounds/chime.wav'},
-    'gentle_chime': {'label': 'Gentle Chime', 'category': 'Gentle', 'icon': 'music_note', 'asset': 'assets/sounds/gentle_chime.wav'},
-    'soft_bells': {'label': 'Soft Bells', 'category': 'Gentle', 'icon': 'notifications_active', 'asset': 'assets/sounds/soft_bells.wav'},
-    'marimba': {'label': 'Marimba', 'category': 'Melodic', 'icon': 'music_note', 'asset': 'assets/sounds/marimba.wav'},
-    'sunrise': {'label': 'Sunrise', 'category': 'Melodic', 'icon': 'wb_sunny', 'asset': 'assets/sounds/sunrise.wav'},
-    'pulse': {'label': 'Pulse', 'category': 'Classic', 'icon': 'graphic_eq', 'asset': 'assets/sounds/pulse.wav'},
-    'calm': {'label': 'Calm', 'category': 'Gentle', 'icon': 'self_improvement', 'asset': 'assets/sounds/calm.wav'},
-    'digital_alarm': {'label': 'Digital Alarm', 'category': 'Alert', 'icon': 'alarm', 'asset': 'assets/sounds/digital_alarm.wav'},
-    'urgent_alert': {'label': 'Urgent Alert', 'category': 'Alert', 'icon': 'warning', 'asset': 'assets/sounds/urgent_alert.wav'},
-  };
+  static const Map<String, Map<String, String>> _soundOptions =
+      ReminderSounds.options;
 
   /// A custom sound is stored as an absolute file path (from the device audio
   /// picker); built-in presets are stored as their key ('default', etc.).
@@ -157,6 +151,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _recurrenceRule = widget.reminder!.recurrenceRule;
       _endsAt = widget.reminder!.endsAt;
       _occurrenceLimit = widget.reminder!.occurrenceLimit;
+      _autoCompleteSteps = widget.reminder!.autoCompleteSteps;
       _paused = widget.reminder!.isPaused;
       _pauseUntil = ReminderPauseUntil.get(widget.reminder!.id);
       _escalation = widget.reminder!.escalation;
@@ -412,6 +407,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         endsAt: _endsAt,
         occurrenceLimit: _occurrenceLimit,
         isPaused: _paused,
+        autoCompleteSteps: _autoCompleteSteps,
         escalation: _escalation,
       );
 
@@ -626,12 +622,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                           // Every repeat type, unconditionally.
                           //
                           // `custom` (pick your own days) used to be gated
-                          // behind FeatureFlagService.keyAdvancedRepeat, which
-                          // is off by default and toggleable only from the
-                          // early-access screen — so on a stock install the one
-                          // repeat option people actually reach for was invisible,
-                          // while the on-device parser could produce it from
-                          // "every Mon and Thu" and the DB happily stored it.
+                          // behind an experimental flag that was off by default,
+                          // so on a stock install the one repeat option people
+                          // actually reach for was invisible, while the on-device
+                          // parser could produce it from "every Mon and Thu" and
+                          // the DB happily stored it.
                           items: RepeatType.values.map((type) {
                             String label;
                             switch (type) {
@@ -708,6 +703,19 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                           }),
                         ),
                       ],
+                      // ---- Tick off by itself ----
+                      const SizedBox(height: AppSpacing.lg),
+                      SectionHeader(
+                        title: 'Tick off by itself',
+                        icon: Symbols.directions_walk_rounded,
+                        accent: rem,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      ReminderStepTickControl(
+                        steps: _autoCompleteSteps,
+                        accent: rem,
+                        onChanged: (v) => setState(() => _autoCompleteSteps = v),
+                      ),
                       // ---- Pause ---- (an existing reminder only)
                       if (widget.reminder != null) ...[
                         const SizedBox(height: AppSpacing.lg),

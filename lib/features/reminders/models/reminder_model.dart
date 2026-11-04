@@ -1,4 +1,5 @@
 import 'reminder_escalation.dart';
+import 'reminder_step_targets.dart';
 
 // Re-exported so a consumer needs one import for the whole reminder vocabulary,
 // the way RepeatType / ReminderPriority / ReminderOutcome already work.
@@ -91,6 +92,10 @@ class Reminder {
   /// Temporarily stopped without being deleted.
   final bool isPaused;
 
+  /// Tick this reminder off by itself once today's steps reach this many. Null
+  /// means never: only a person ticks it. See `ReminderAutoComplete`.
+  final int? autoCompleteSteps;
+
   /// How hard this reminder pushes when it is ignored. See [ReminderEscalation].
   final ReminderEscalation escalation;
 
@@ -117,6 +122,7 @@ class Reminder {
     this.endsAt,
     this.occurrenceLimit,
     this.isPaused = false,
+    this.autoCompleteSteps,
     this.escalation = ReminderEscalation.standard,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
@@ -141,6 +147,8 @@ class Reminder {
     DateTime? endsAt,
     int? occurrenceLimit,
     bool? isPaused,
+    int? autoCompleteSteps,
+    bool clearAutoCompleteSteps = false,
     ReminderEscalation? escalation,
   }) {
     return Reminder(
@@ -166,6 +174,9 @@ class Reminder {
       endsAt: endsAt ?? this.endsAt,
       occurrenceLimit: occurrenceLimit ?? this.occurrenceLimit,
       isPaused: isPaused ?? this.isPaused,
+      autoCompleteSteps: clearAutoCompleteSteps
+          ? null
+          : (autoCompleteSteps ?? this.autoCompleteSteps),
       escalation: escalation ?? this.escalation,
     );
   }
@@ -206,6 +217,7 @@ class Reminder {
       'endsAt': endsAt?.toIso8601String(),
       'occurrenceLimit': occurrenceLimit,
       'isPaused': isPaused,
+      'autoCompleteSteps': autoCompleteSteps,
       'escalation': escalation.name,
     };
   }
@@ -248,6 +260,7 @@ class Reminder {
           : null,
       occurrenceLimit: (json['occurrenceLimit'] as num?)?.toInt(),
       isPaused: json['isPaused'] == true,
+      autoCompleteSteps: ReminderStepTargets.clean(json['autoCompleteSteps']),
       escalation: ReminderEscalation.fromName(json['escalation'] as String?),
     );
   }

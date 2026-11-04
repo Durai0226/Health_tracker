@@ -10,6 +10,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
 import 'package:tablet_remainder/core/services/audio_service.dart';
@@ -147,8 +148,8 @@ void main() {
         await open(tester);
 
         expect(find.text('Earned Sep 29 · Silver · 25 coins'), findsOneWidget);
-        expect(find.byIcon(Icons.check_circle_rounded), findsNothing,
-            reason: 'a Material Symbol, not the framework icon');
+        expect(find.byIcon(Symbols.check_circle_rounded), findsOneWidget,
+            reason: 'the earned one is marked, and only the earned one');
       });
     });
 

@@ -1,3 +1,5 @@
+import 'care_team_scope.dart';
+
 /// Doctor/Prescriber information
 class Doctor {
   final String id;
@@ -7,8 +9,20 @@ class Doctor {
   final String? email;
   final String? address;
   final String? clinicName;
+
+  /// The clinic or hospital record this doctor works at, when one was chosen rather
+  /// than a name typed. [clinicName] is what is shown when it is not set, or when the
+  /// record has since been deleted.
+  final String? clinicId;
   final String? notes;
   final bool isPrimary;
+
+  /// The household member this doctor belongs to; null is the account holder.
+  final String? dependentId;
+
+  /// Whether every profile sees this doctor (a family doctor) or only the owner.
+  /// True for a record that never said, so nobody loses a doctor they had.
+  final bool sharedWithFamily;
 
   Doctor({
     required this.id,
@@ -18,8 +32,11 @@ class Doctor {
     this.email,
     this.address,
     this.clinicName,
+    this.clinicId,
     this.notes,
     this.isPrimary = false,
+    this.dependentId,
+    this.sharedWithFamily = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -30,8 +47,11 @@ class Doctor {
     'email': email,
     'address': address,
     'clinicName': clinicName,
+    'clinicId': clinicId,
     'notes': notes,
     'isPrimary': isPrimary,
+    'dependentId': dependentId,
+    'sharedWithFamily': sharedWithFamily,
   };
 
   factory Doctor.fromJson(Map<String, dynamic> json) => Doctor(
@@ -42,8 +62,11 @@ class Doctor {
     email: json['email'],
     address: json['address'],
     clinicName: json['clinicName'],
+    clinicId: json['clinicId'],
     notes: json['notes'],
     isPrimary: json['isPrimary'] ?? false,
+    dependentId: json['dependentId'] as String?,
+    sharedWithFamily: CareTeamScope.cleanShared(json['sharedWithFamily']),
   );
 
   Doctor copyWith({
@@ -54,8 +77,12 @@ class Doctor {
     String? email,
     String? address,
     String? clinicName,
+    String? clinicId,
     String? notes,
     bool? isPrimary,
+    String? dependentId,
+    bool clearDependentId = false,
+    bool? sharedWithFamily,
   }) {
     return Doctor(
       id: id ?? this.id,
@@ -65,8 +92,11 @@ class Doctor {
       email: email ?? this.email,
       address: address ?? this.address,
       clinicName: clinicName ?? this.clinicName,
+      clinicId: clinicId ?? this.clinicId,
       notes: notes ?? this.notes,
       isPrimary: isPrimary ?? this.isPrimary,
+      dependentId: clearDependentId ? null : (dependentId ?? this.dependentId),
+      sharedWithFamily: sharedWithFamily ?? this.sharedWithFamily,
     );
   }
 }

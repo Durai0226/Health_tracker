@@ -27,6 +27,7 @@ import '../services/late_dose_recovery.dart';
 import '../widgets/late_dose_sheets.dart';
 import 'appointments/nunito_appointment_list_screen.dart';
 import 'doctors/nunito_doctor_list_screen.dart';
+import 'pharmacies/nunito_pharmacy_list_screen.dart';
 import 'clinics/nunito_clinic_list_screen.dart';
 import 'analytics/nunito_adherence_report_screen.dart';
 
@@ -566,6 +567,14 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const NunitoDoctorListScreen()),
+    );
+  }
+
+  void _navigateToPharmacies() {
+    _hapticService.light();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NunitoPharmacyListScreen()),
     );
   }
 
@@ -1777,6 +1786,8 @@ class _NunitoMedicationDashboardState extends State<NunitoMedicationDashboard>
       _QuickTile('Doctors', Symbols.person_rounded, ext.info, _navigateToDoctors),
       _QuickTile('Clinics', Symbols.local_hospital_rounded, ext.medicine,
           _navigateToClinics),
+      _QuickTile('Pharmacies', Symbols.local_pharmacy_rounded, ext.success,
+          _navigateToPharmacies),
       _QuickTile('Appointments', Symbols.event_rounded, ext.warning,
           _navigateToAppointments),
     ];

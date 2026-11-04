@@ -86,6 +86,13 @@ dependencies:
   # Salted PIN hashing for the app-lock feature (was already a transitive
   # dependency; declared explicitly since we now import it directly).
   crypto: ^3.0.7
+  # AES-256-GCM and PBKDF2 for the optional passphrase on an exported backup
+  # (lib/core/services/backup_encryption.dart). Pure Dart; nothing else uses it.
+  pointycastle: ^3.9.1
+  # NFC-normalises that passphrase, so the same words typed on two keyboards
+  # (composed or decomposed accents) derive the same key and open the same file.
+  # Pure Dart; nothing else uses it.
+  unorm_dart: ^0.3.3
   flutter_staggered_grid_view: ^0.7.0
   # 13.x only to satisfy health 13.3.2's device_info_plus ^13.2.0 → win32 ^6
   # (share_plus 12.x pins win32 ^5.5.3). No API change: 13.0.0 is a dependency

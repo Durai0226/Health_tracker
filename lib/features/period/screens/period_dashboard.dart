@@ -18,6 +18,7 @@ import '../widgets/cycle_lengths_sheet.dart';
 import '../widgets/cycle_import_button.dart';
 import '../widgets/cycle_pattern_card.dart';
 import '../widgets/pms_pattern_card.dart';
+import '../widgets/birth_control_card.dart';
 import '../widgets/temperature_shift_card.dart';
 import '../services/temperature_shift.dart';
 import '../services/pms_pattern.dart';
@@ -242,6 +243,7 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
     final cycleLen = p.cycleLengthEstimate ?? settings.typicalCycleLength;
     final periodLen = stats.medianPeriodLength ?? settings.typicalPeriodLength;
     final ttc = mode == TrackingMode.ttc;
+    final birthControl = settings.birthControlEnabled;
 
     int? dayIndex(DateTime? d) {
       if (d == null || p.lastPeriodStart == null) return null;
@@ -269,6 +271,7 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
             fertileEndDay: dayIndex(p.fertileEnd),
             confidence: confVal,
             currentPhase: phase,
+            showOvulation: !birthControl,
             centerTop: late ? 'Late' : 'Day ${p.dayOfCycle ?? 1}',
             centerBottom: late
                 ? '${(p.daysUntilNextPeriod ?? 0).abs()}d overdue'
@@ -289,7 +292,8 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
           },
         ),
         const SizedBox(height: AppSpacing.lg),
-        PredictionCard(prediction: p, emphasizeFertile: ttc),
+        PredictionCard(
+            prediction: p, emphasizeFertile: ttc, birthControl: birthControl),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
@@ -303,7 +307,14 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
             child: const Text('Adjust cycle lengths'),
           ),
         ),
-        if (ttc) ...[
+        BirthControlCard(
+          value: birthControl,
+          onChanged: (v) =>
+              PeriodService.saveSettings(settings.copyWith(birthControlEnabled: v)),
+        ),
+        // The BBT hint is about confirming ovulation, which hormonal birth
+        // control can stop; the temperature-shift card below is the same claim.
+        if (ttc && !birthControl) ...[
           const SizedBox(height: AppSpacing.lg),
           _ttcBbtHint(context, p),
         ],
@@ -321,7 +332,8 @@ class _PeriodDashboardState extends State<PeriodDashboard> {
           CyclePatternCard(
               pattern: pattern, onShare: () => _shareSummary(pattern)),
         ],
-        if (_shifts() case final shifts when shifts.isNotEmpty) ...[
+        if (!birthControl)
+          if (_shifts() case final shifts when shifts.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
           TemperatureShiftCard(
               latest: shifts.last,

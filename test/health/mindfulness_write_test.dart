@@ -73,13 +73,28 @@ void main() {
   });
 
   group('the channel', () {
-    test('reports unavailable off Android without calling anything', () async {
+    test('on iPhone is available, and calls nothing on this channel', () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       mock();
-      expect(await MindfulnessChannel.instance.isAvailable(), isFalse);
+      expect(await MindfulnessChannel.instance.isAvailable(), isTrue);
       expect(calls, isEmpty,
           reason: 'iOS goes through package:health, which supports MINDFULNESS '
               'there — this channel must stay out of its way');
+    });
+
+    test('is unavailable anywhere else, without calling anything', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      mock();
+      expect(await MindfulnessChannel.instance.isAvailable(), isFalse);
+      expect(await MindfulnessChannel.instance.hasPermission(), isFalse);
+      expect(await MindfulnessChannel.instance.requestPermission(), isFalse);
+      expect(
+          await MindfulnessChannel.instance.writeSession(
+              start: DateTime(2026, 3, 15, 10),
+              end: DateTime(2026, 3, 15, 10, 20),
+              kind: MindfulnessKind.meditation),
+          isFalse);
+      expect(calls, isEmpty);
     });
 
     test('writes with the right arguments', () async {

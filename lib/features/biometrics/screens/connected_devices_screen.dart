@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/services/health_data_service.dart';
+import '../../../core/services/health_store_name.dart';
 import '../../../core/services/health_sync_queue.dart';
 import '../../../core/utils/relative_time.dart';
 import '../../../core/widgets/app/app_widgets.dart';
@@ -10,6 +11,7 @@ import '../models/biometric_metric.dart';
 import '../models/health_source.dart';
 import '../services/connected_devices_controller.dart';
 import 'health_source_detail_screen.dart';
+import '../../steps/utils/step_format.dart' show formatThousands;
 
 /// Which apps and wearables are actually feeding DlyMinder.
 ///
@@ -55,6 +57,7 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
     with WidgetsBindingObserver {
   late final ConnectedDevicesController _controller;
   late final bool _ownsController;
+  bool _disconnecting = false;
 
   @override
   void initState() {
@@ -236,6 +239,7 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
           ),
         ),
         ..._backgroundSection(context, state),
+        ..._disconnectSection(context, state),
       ],
     );
   }
@@ -266,6 +270,7 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
           style: tt.bodySmall?.copyWith(color: ext.textTertiary),
         ),
         ..._backgroundSection(context, state),
+        ..._disconnectSection(context, state),
       ],
     );
   }
@@ -388,6 +393,87 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
     );
   }
 
+  // -------------------------------------------------------------- DISCONNECT
+
+  /// "Disconnect Health Connect": only while there is something connected.
+  ///
+  /// There was no way out from inside the app. The only route was the phone's own
+  /// settings, which this screen did not even name — and a person who connects
+  /// something should be able to un-connect it from where they connected it.
+  List<Widget> _disconnectSection(
+      BuildContext context, ConnectedDevicesState state) {
+    if (state.availability != HealthAvailability.available) return const [];
+    final ext = AppColorsExt.of(context);
+    final store = healthStoreName();
+    return [
+      const SizedBox(height: AppSpacing.xl),
+      SettingsSection(
+        title: 'Disconnect',
+        footer: 'Stops DlyMinder reading from and writing to $store. Steps, '
+            'sleep and everything else already in DlyMinder stays until you '
+            'delete it.',
+        children: [
+          SettingsTile(
+            icon: Symbols.link_off_rounded,
+            accent: ext.brand,
+            title: 'Disconnect $store',
+            onTap: _disconnecting ? null : _confirmDisconnect,
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Future<void> _confirmDisconnect() async {
+    final store = healthStoreName();
+    final go = await AppBottomSheet.confirm(
+      context,
+      title: 'Disconnect $store?',
+      message: 'DlyMinder stops reading from and writing to $store, and turns '
+          'off background sync, bringing in readings and drinks, and sharing '
+          'with it. What is already in DlyMinder stays. You can connect again '
+          'any time.',
+      confirmLabel: 'Disconnect',
+      danger: true,
+      icon: Symbols.link_off_rounded,
+    );
+    if (go != true || !mounted) return;
+    setState(() => _disconnecting = true);
+    try {
+      final result = await _controller.disconnect();
+      if (!mounted) return;
+      if (result.revoked) {
+        // Health Connect may hand the permissions back when DlyMinder is closed
+        // rather than at that moment, so the look at the platform that just
+        // finished can still find them held. "Disconnected" over a screen that
+        // still reads connected would be saying two things; say what is true.
+        final stillHeld =
+            _controller.value.availability == HealthAvailability.available;
+        if (stillHeld) {
+          // Said both ways: the platform applies the request when DlyMinder is
+          // closed — but the plugin swallows a refusal, so there is no telling "later"
+          // from "never" here, and what the person can do themselves is always true.
+          context.toastInfo('DlyMinder has stopped using $store. $store takes '
+              'its access away completely when DlyMinder is closed — or you can '
+              'take it away yourself in Health Connect → App permissions → DlyMinder.');
+        } else {
+          context.toastSuccess('Disconnected from $store.');
+        }
+      } else {
+        // The platform would not take its own permissions back — an iPhone never
+        // does — so say where the person can.
+        context.toastInfo('DlyMinder has stopped using $store. To take its '
+            'access away as well, open '
+            '${store == 'Apple Health' ? 'Health → Sharing → Apps → DlyMinder' : 'Health Connect → App permissions → DlyMinder'}.');
+      }
+    } catch (e) {
+      debugPrint('ConnectedDevicesScreen: disconnect failed: $e');
+      if (mounted) context.toastError('Could not disconnect. Please try again.');
+    } finally {
+      if (mounted) setState(() => _disconnecting = false);
+    }
+  }
+
   // ------------------------------------------------------------- BACKGROUND
 
   List<Widget> _backgroundSection(
@@ -437,7 +523,8 @@ class _ConnectedDevicesScreenState extends State<ConnectedDevicesScreen>
                 // Honest: WorkManager's initial delay is fifteen minutes, so
                 // "never run" right after enabling is expected, not a fault.
                 ? 'Waiting for the first check.'
-                : 'Last checked ${RelativeTime.since(state.lastRunAt!)}.',
+                : 'Last checked ${RelativeTime.since(state.lastRunAt!)}'
+                    '${state.lastSteps == null ? '' : ' — ${formatThousands(state.lastSteps!)} steps today'}.',
             style: tt.bodySmall?.copyWith(color: ext.textTertiary),
           ),
         ),

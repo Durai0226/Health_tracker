@@ -358,6 +358,59 @@ void main() {
       });
     });
 
+    Future<void> frames(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('a rest of a few days is offered beside one day, and says what it does',
+        (tester) async {
+      await withClock(Clock.fixed(now), () async {
+        await twoBadNights();
+        await open(tester);
+
+        expect(find.text('Take a rest day'), findsOneWidget);
+        expect(find.text('Rest for 3 days'), findsOneWidget);
+        expect(find.textContaining('Medicines, water and your own reminders'),
+            findsOneWidget,
+            reason: 'what is NOT paused matters as much as what is');
+        expect(RestDayStore.kindToday(now: now), isNull);
+      });
+    });
+
+    testWidgets('taking three marks today and the next two, and Undo puts back what was there',
+        (tester) async {
+      await withClock(Clock.fixed(now), () async {
+        await twoBadNights();
+        // Something already marked on tomorrow: Undo must give it back.
+        await RestDayStore.markDays(RestKind.unwell, 1,
+            now: DateTime(now.year, now.month, now.day + 1));
+        await open(tester);
+
+        await tester.tap(find.text('Rest for 3 days'));
+        await frames(tester);
+        for (var i = 0; i < 3; i++) {
+          expect(
+              RestDayStore.kindOn(DateTime(now.year, now.month, now.day + i)),
+              RestKind.rest,
+              reason: 'day +$i');
+        }
+        expect(RestDayStore.kindOn(DateTime(now.year, now.month, now.day + 3)), isNull);
+        expect(find.text('Today and the next 2 days are marked as rest days.'),
+            findsOneWidget);
+
+        await tester.tap(find.text('Undo'));
+        await frames(tester);
+        expect(RestDayStore.kindToday(now: now), isNull);
+        expect(RestDayStore.kindOn(DateTime(now.year, now.month, now.day + 1)),
+            RestKind.unwell,
+            reason: 'the mark that was replaced comes back');
+        expect(RestDayStore.kindOn(DateTime(now.year, now.month, now.day + 2)), isNull);
+        expect(find.text('Rest for 3 days'), findsOneWidget);
+      });
+    });
+
     testWidgets('no wearable data, no card', (tester) async {
       await withClock(Clock.fixed(now), () async {
         await SleepService.logManualSession(

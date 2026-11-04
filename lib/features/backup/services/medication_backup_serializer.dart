@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/foundation.dart';
 
 import '../../../core/database/app_database.dart' as db;
+import '../../medication/models/care_team_scope.dart';
 import '../../medication/models/clinic.dart';
 import '../../medication/services/medicine_storage_service.dart';
 
@@ -19,8 +20,8 @@ import '../../medication/services/medicine_storage_service.dart';
 /// **`exportAllMedicineData` is not the seam for this.** It serialises the
 /// same six things through the DOMAIN models, its `medicines`/`logs` sections
 /// duplicate what `exportMedicinesJson` already puts in the backup, it carries
-/// `pharmacies` (a table with a DAO and service methods but no screen that
-/// writes it), and it has no import counterpart. It has had no callers since
+/// `pharmacies` (which now ride this serializer instead, in a section of their
+/// own), and it has no import counterpart. It has had no callers since
 /// it was written. Reusing it would have meant two different serialisations of
 /// medicines inside one backup file.
 ///
@@ -43,6 +44,10 @@ class MedicationBackupSerializer {
   static const String appointmentsKey = 'appointments';
   static const String dependentsKey = 'dependents';
 
+  /// The pharmacies a medicine can be linked to, and that the refill errand calls.
+  /// Typed in on the Pharmacies screen, so — like a doctor — they exist nowhere else.
+  static const String pharmaciesKey = 'pharmacies';
+
   /// Clinics and hospitals. Unlike the rest of this file they are not Drift
   /// rows — they live in SharedPreferences — so they were in no backup and
   /// survived "Delete all data". They ride the same section rules as the other
@@ -59,11 +64,11 @@ class MedicationBackupSerializer {
   /// appointments out of the file. Reading the tables directly is what makes
   /// the export independent of who happens to be selected.
   ///
-  /// `pharmacies` and `treatment_courses` are deliberately absent. Both have
-  /// tables and DAO methods, but nothing in the app writes either — there is
-  /// no pharmacy screen and no caller of `addTreatment` — so they hold no
-  /// user data to lose. If a screen for one ever lands, it joins this file,
-  /// [importJson] and [clearRestorableRows] in the same change.
+  /// `treatment_courses` is deliberately absent: it has a table and DAO methods
+  /// but nothing in the app writes it — there is no caller of `addTreatment` — so
+  /// it holds no user data to lose. If a screen for it ever lands, it joins this
+  /// file, [importJson] and [clearRestorableRows] in the same change, as
+  /// `pharmacies` did when the Pharmacies screen landed.
   static Future<Map<String, dynamic>> exportJson() async {
     final d = _db;
 
@@ -76,13 +81,18 @@ class MedicationBackupSerializer {
     final dependents = await (d.select(d.dependentProfiles)
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .get();
+    final pharmacies = await (d.select(d.pharmacies)
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
 
-    final clinics = await MedicineCleanStorageService.getAllClinics();
+    final clinics =
+        await MedicineCleanStorageService.getAllClinics(scopeToActiveProfile: false);
 
     return <String, dynamic>{
       doctorsKey: doctors.map((r) => r.toJson()).toList(),
       appointmentsKey: appointments.map((r) => r.toJson()).toList(),
       dependentsKey: dependents.map((r) => r.toJson()).toList(),
+      pharmaciesKey: pharmacies.map((r) => r.toJson()).toList(),
       clinicsKey: clinics.map((c) => c.toJson()).toList(),
     };
   }
@@ -99,11 +109,27 @@ class MedicationBackupSerializer {
     // dangling for the length of the restore.
     for (final raw in (data[doctorsKey] as List? ?? const [])) {
       try {
+        // A file from before doctors belonged to a person has no "shared" flag, and
+        // the generated reader throws on a missing non-null column — which would
+        // drop every one of those doctors. Absent means shared, as it always was.
+        final row = Map<String, dynamic>.from(raw as Map);
+        row['sharedWithFamily'] = CareTeamScope.cleanShared(row['sharedWithFamily']);
         await d.into(d.doctors).insertOnConflictUpdate(
-            db.Doctor.fromJson(Map<String, dynamic>.from(raw as Map))
-                .toCompanion(false));
+            db.Doctor.fromJson(row).toCompanion(false));
       } catch (e) {
         debugPrint('Import doctor failed: $e');
+      }
+    }
+
+    // Pharmacies before anything that points at one: a medicine's refill errand finds
+    // its pharmacy by id.
+    for (final raw in (data[pharmaciesKey] as List? ?? const [])) {
+      try {
+        await d.into(d.pharmacies).insertOnConflictUpdate(
+            db.Pharmacy.fromJson(Map<String, dynamic>.from(raw as Map))
+                .toCompanion(false));
+      } catch (e) {
+        debugPrint('Import pharmacy failed: $e');
       }
     }
 
@@ -163,6 +189,7 @@ class MedicationBackupSerializer {
     // Appointments first: they reference the doctors below.
     if (carries(appointmentsKey)) await d.delete(d.appointments).go();
     if (carries(doctorsKey)) await d.delete(d.doctors).go();
+    if (carries(pharmaciesKey)) await d.delete(d.pharmacies).go();
     if (carries(clinicsKey)) await MedicineCleanStorageService.clearClinics();
   }
 }

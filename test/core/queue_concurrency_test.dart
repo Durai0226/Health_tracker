@@ -135,6 +135,28 @@ void main() {
       expect(pending.map((p) => p.medicineId), [for (var i = 0; i < 10; i++) 'm$i']);
     });
 
+    test('a drain does not clear it: what has not been acked is still there', () async {
+      await DoseActionQueue.enqueue(
+          medicineId: 'm1', scheduledTime: at, action: DoseActionQueue.actionTake);
+
+      expect(await DoseActionQueue.drain(), hasLength(1));
+
+      expect(await DoseActionQueue.drain(), hasLength(1),
+          reason: 'nothing has been applied yet, so nothing may be forgotten');
+    });
+
+    test('an ack forgets exactly what it is given', () async {
+      for (final id in ['a', 'b', 'c']) {
+        await DoseActionQueue.enqueue(
+            medicineId: id, scheduledTime: at, action: DoseActionQueue.actionTake);
+      }
+      final pending = await DoseActionQueue.drain();
+
+      await DoseActionQueue.ack([pending[0], pending[2]]);
+
+      expect((await DoseActionQueue.drain()).map((p) => p.medicineId), ['b']);
+    });
+
     test('and a drain beside a tap loses neither', () async {
       await DoseActionQueue.enqueue(
           medicineId: 'first', scheduledTime: at, action: DoseActionQueue.actionTake);
@@ -148,11 +170,55 @@ void main() {
             .then((_) => <PendingDoseAction>[]),
       ]);
 
-      final drainedFirst = results.first.map((p) => p.medicineId).toList();
+      final drainedFirst = results.first;
+      await DoseActionQueue.ack(drainedFirst);
       final drainedAfter =
           (await DoseActionQueue.drain()).map((p) => p.medicineId).toList();
-      expect([...drainedFirst, ...drainedAfter], ['first', 'second'],
-          reason: 'each tap is handed over exactly once, whichever drain gets it');
+      expect([...drainedFirst.map((p) => p.medicineId), ...drainedAfter],
+          ['first', 'second'],
+          reason: 'each tap is handed over once: acking the first drain leaves '
+              'exactly what it did not see');
+    });
+
+    test('a tap that lands while an earlier one is being acked survives', () async {
+      await DoseActionQueue.enqueue(
+          medicineId: 'first', scheduledTime: at, action: DoseActionQueue.actionTake);
+      final pending = await DoseActionQueue.drain();
+
+      await Future.wait([
+        DoseActionQueue.ack(pending),
+        DoseActionQueue.enqueue(
+            medicineId: 'second', scheduledTime: at, action: DoseActionQueue.actionTake),
+      ]);
+
+      expect((await DoseActionQueue.drain()).map((p) => p.medicineId), ['second']);
+    });
+
+    test('two identical taps need two acks', () async {
+      for (var i = 0; i < 2; i++) {
+        await DoseActionQueue.enqueue(
+            medicineId: 'm1', scheduledTime: at, action: DoseActionQueue.actionTake);
+      }
+      final pending = await DoseActionQueue.drain();
+      expect(pending, hasLength(2));
+
+      await DoseActionQueue.ack([pending.first]);
+
+      expect(await DoseActionQueue.drain(), hasLength(1));
+    });
+
+    test('a record that is not a dose is pruned, the rest kept', () async {
+      SharedPreferences.setMockInitialValues({
+        'pending_dose_actions': [
+          'not json',
+          '{"medicineId":"m1","scheduledTime":"nonsense","action":"take"}',
+          '{"medicineId":"m2","scheduledTime":"${at.toIso8601String()}","action":"take"}',
+        ],
+      });
+
+      expect((await DoseActionQueue.drain()).map((p) => p.medicineId), ['m2']);
+      expect((await DoseActionQueue.drain()).map((p) => p.medicineId), ['m2'],
+          reason: 'and the bad ones are gone for good, not re-read every time');
     });
   });
 
@@ -208,20 +274,40 @@ void main() {
       expect((await queue.drain()).map((p) => p.data['n']), [1]);
     });
 
-    test('the dose queue\'s drain does not wipe a tap that arrives while it clears',
+    test('the dose queue\'s drain pruning a bad record does not wipe a tap that arrives',
         () async {
-      final first = '{"medicineId":"first","scheduledTime":"${at.toIso8601String()}","action":"take"}';
+      final good =
+          '{"medicineId":"first","scheduledTime":"${at.toIso8601String()}","action":"take"}';
       late List<PendingDoseAction> drained;
       await overlap(
-        {'flutter.pending_dose_actions': [first]},
+        {'flutter.pending_dose_actions': ['not json', good]},
         () async => drained = await DoseActionQueue.drain(),
         () => DoseActionQueue.enqueue(
             medicineId: 'second', scheduledTime: at, action: DoseActionQueue.actionTake),
       );
 
       final later = await DoseActionQueue.drain();
-      expect([...drained, ...later].map((p) => p.medicineId), ['first', 'second'],
-          reason: 'each is handed over once; the second must not vanish');
+      expect({...drained.map((p) => p.medicineId), ...later.map((p) => p.medicineId)},
+          {'first', 'second'});
+      expect(later.map((p) => p.medicineId), contains('second'),
+          reason: 'the tap that arrived during the prune is still queued');
+    });
+
+    test('the dose queue\'s ack does not wipe a tap that arrives while it stores',
+        () async {
+      final raw =
+          '{"medicineId":"first","scheduledTime":"${at.toIso8601String()}","action":"take"}';
+      await overlap(
+        {'flutter.pending_dose_actions': [raw]},
+        () => DoseActionQueue.ack([
+          PendingDoseAction(
+              medicineId: 'first', scheduledTime: at, action: 'take', raw: raw)
+        ]),
+        () => DoseActionQueue.enqueue(
+            medicineId: 'second', scheduledTime: at, action: DoseActionQueue.actionTake),
+      );
+
+      expect((await DoseActionQueue.drain()).map((p) => p.medicineId), ['second']);
     });
 
     test('the water queue\'s drain pruning a bad record does not overwrite a new drink',

@@ -1,4 +1,5 @@
 import 'medicine_enums.dart';
+import 'medicine_snooze.dart';
 import 'medicine_schedule.dart';
 import 'drug_interaction.dart';
 import 'package:clock/clock.dart';
@@ -45,6 +46,11 @@ class EnhancedMedicine {
   final String? reminderSound;
   final bool criticalAlert; // For critical medications
   final int snoozeMinutes;
+
+  /// How long this medicine's Snooze waits; null follows the Notifications
+  /// setting. Distinct from [snoozeMinutes], which was never stored and read 10
+  /// for everyone, so it cannot say "no choice".
+  final int? snoozeOverrideMinutes;
   // Drug Information
   final DrugInfo? drugInfo;
   final List<String>? warnings;
@@ -97,6 +103,7 @@ class EnhancedMedicine {
     this.reminderSound,
     this.criticalAlert = false,
     this.snoozeMinutes = 10,
+    this.snoozeOverrideMinutes,
     this.drugInfo,
     this.warnings,
     this.sideEffects,
@@ -245,6 +252,7 @@ class EnhancedMedicine {
     'reminderSound': reminderSound,
     'criticalAlert': criticalAlert,
     'snoozeMinutes': snoozeMinutes,
+    'snoozeOverrideMinutes': snoozeOverrideMinutes,
     'drugInfo': drugInfo?.toJson(),
     'warnings': warnings,
     'sideEffects': sideEffects,
@@ -295,6 +303,7 @@ class EnhancedMedicine {
     reminderSound: json['reminderSound'],
     criticalAlert: json['criticalAlert'] ?? false,
     snoozeMinutes: json['snoozeMinutes'] ?? 10,
+    snoozeOverrideMinutes: MedicineSnooze.clean(json['snoozeOverrideMinutes']),
     drugInfo: json['drugInfo'] != null ? DrugInfo.fromJson(json['drugInfo']) : null,
     warnings: (json['warnings'] as List?)?.cast<String>(),
     sideEffects: (json['sideEffects'] as List?)?.cast<String>(),
@@ -348,6 +357,7 @@ class EnhancedMedicine {
     String? reminderSound,
     bool? criticalAlert,
     int? snoozeMinutes,
+    int? snoozeOverrideMinutes,
     DrugInfo? drugInfo,
     List<String>? warnings,
     List<String>? sideEffects,
@@ -402,6 +412,7 @@ class EnhancedMedicine {
       reminderSound: reminderSound ?? this.reminderSound,
       criticalAlert: criticalAlert ?? this.criticalAlert,
       snoozeMinutes: snoozeMinutes ?? this.snoozeMinutes,
+      snoozeOverrideMinutes: snoozeOverrideMinutes ?? this.snoozeOverrideMinutes,
       drugInfo: drugInfo ?? this.drugInfo,
       warnings: warnings ?? this.warnings,
       sideEffects: sideEffects ?? this.sideEffects,

@@ -4,7 +4,9 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../models/clinic.dart';
 import '../../services/medicine_storage_service.dart';
+import '../../../../core/services/active_profile_service.dart';
 import '../../../../core/services/haptic_service.dart';
+import '../../widgets/share_with_family_card.dart';
 
 class NunitoAddEditClinicScreen extends StatefulWidget {
   final Clinic? editClinic;
@@ -19,6 +21,9 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   String _selectedType = ClinicType.clinic;
+
+  /// A clinic added now belongs to the person in view alone, unless shared.
+  bool _sharedWithFamily = false;
 
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
@@ -53,6 +58,7 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
     _websiteController.text = c.website ?? '';
     _notesController.text = c.notes ?? '';
     _selectedType = c.type ?? ClinicType.clinic;
+    _sharedWithFamily = c.sharedWithFamily;
     if (c.operatingHours != null) {
       _operatingHours = c.operatingHours!;
     }
@@ -87,6 +93,12 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
         operatingHours: _operatingHours,
         createdAt: _isEditing ? widget.editClinic!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
+        // Fixed when it is added: an edit made while another profile is in view
+        // must not hand the clinic over.
+        dependentId: _isEditing
+            ? widget.editClinic!.dependentId
+            : ActiveProfileService().activeDependentId,
+        sharedWithFamily: _sharedWithFamily,
       );
 
       await MedicineCleanStorageService.saveClinic(clinic);
@@ -261,6 +273,12 @@ class _NunitoAddEditClinicScreenState extends State<NunitoAddEditClinicScreen> {
                         accent: med,
                         maxLines: 3,
                         textCapitalization: TextCapitalization.sentences,
+                      ),
+                      ShareWithFamilyCard(
+                        kind: 'clinic',
+                        value: _sharedWithFamily,
+                        accent: med,
+                        onChanged: (v) => setState(() => _sharedWithFamily = v),
                       ),
                       const SizedBox(height: AppSpacing.xl),
 

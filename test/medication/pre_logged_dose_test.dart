@@ -131,6 +131,70 @@ void main() {
             }));
   });
 
+  group('markMedicinePreLogged and the stock', () {
+    Future<void> seedWithStock() => MedicineCleanStorageService.addMedicine(
+        EnhancedMedicine(
+          id: 'm3',
+          name: 'Counted',
+          strength: '1',
+          dosageForm: DosageForm.tablet,
+          dosageAmount: 1,
+          currentStock: 10,
+          createdAt: now.subtract(const Duration(days: 5)),
+          schedule: MedicineSchedule(
+            frequencyType: FrequencyType.onceDaily,
+            times: [ScheduledTime(hour: 8, minute: 0)],
+            startDate: now.subtract(const Duration(days: 5)),
+          ),
+        ),
+        stampActiveProfile: false);
+
+    test('pre-logging the same slot twice takes the units off once',
+        () => pinned(() async {
+              await seedWithStock();
+              final slot = DateTime(now.year, now.month, now.day + 1, 8);
+              for (var i = 0; i < 2; i++) {
+                await MedicineCleanStorageService.markMedicinePreLogged(
+                    medicineId: 'm3', scheduledTime: slot);
+              }
+
+              expect((await MedicineCleanStorageService.getMedicine('m3'))?.currentStock, 9,
+                  reason: 'one slot, one dose, one tablet — as markMedicineTaken does it');
+            }));
+
+    test('and taking the slot after pre-logging it does not count it again',
+        () => pinned(() async {
+              await seedWithStock();
+              final slot = DateTime(now.year, now.month, now.day + 1, 8);
+              await MedicineCleanStorageService.markMedicinePreLogged(
+                  medicineId: 'm3', scheduledTime: slot);
+              await MedicineCleanStorageService.markMedicineTaken(
+                  medicineId: 'm3', scheduledTime: slot);
+
+              expect((await MedicineCleanStorageService.getMedicine('m3'))?.currentStock, 9);
+            }));
+
+    test('the dose and the stock change together: a stock that cannot be written leaves no log',
+        () => pinned(() async {
+              await seedWithStock();
+              final slot = DateTime(now.year, now.month, now.day + 1, 8);
+              await db.customStatement(
+                  'CREATE TRIGGER no_stock_change BEFORE UPDATE ON enhanced_medicines '
+                  "BEGIN SELECT RAISE(ABORT, 'locked'); END");
+
+              await expectLater(
+                  MedicineCleanStorageService.markMedicinePreLogged(
+                      medicineId: 'm3', scheduledTime: slot),
+                  throwsA(anything));
+
+              expect(
+                  await MedicineCleanStorageService.getLog(
+                      MedicineCleanStorageService.doseLogId('m3', slot)),
+                  isNull,
+                  reason: 'logged but not counted is the half-done state this prevents');
+            }));
+  });
+
   group('dedupeByDose rank ordering', () {
     test('positive: taken beats preLogged beats skipped beats missed', () {
       final scheduled = DateTime(2026, 1, 1, 8);

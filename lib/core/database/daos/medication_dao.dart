@@ -197,6 +197,29 @@ class MedicationDao extends DatabaseAccessor<AppDatabase> with _$MedicationDaoMi
     await (update(pharmacies)..where((t) => t.id.equals(pharmacy.id.value))).write(pharmacy);
   }
 
+  /// Take a pharmacy off every medicine that names it, stamping them updated so the
+  /// change travels with cloud sync like any other edit. Returns how many.
+  Future<int> unlinkPharmacy(String pharmacyId, DateTime at) =>
+      (update(enhancedMedicines)..where((t) => t.pharmacyId.equals(pharmacyId)))
+          .write(EnhancedMedicinesCompanion(
+        pharmacyId: const Value(null),
+        updatedAt: Value(at),
+      ));
+
+  /// Take a clinic off every doctor that names it. The name they were typed or chosen
+  /// with ([Doctor.hospital]) stays, so they still read the same.
+  Future<int> unlinkClinic(String clinicId) =>
+      (update(doctors)..where((t) => t.clinicId.equals(clinicId)))
+          .write(const DoctorsCompanion(clinicId: Value(null)));
+
+  /// The same for a doctor.
+  Future<int> unlinkDoctor(String doctorId, DateTime at) =>
+      (update(enhancedMedicines)..where((t) => t.doctorId.equals(doctorId)))
+          .write(EnhancedMedicinesCompanion(
+        doctorId: const Value(null),
+        updatedAt: Value(at),
+      ));
+
   Future<void> deletePharmacy(String id) async {
     await (delete(pharmacies)..where((t) => t.id.equals(id))).go();
   }

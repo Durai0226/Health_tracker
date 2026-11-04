@@ -161,14 +161,20 @@ void main() {
     // predate it and were scheduled through `scheduleGenericReminder`, which on
     // Android hands them to AlarmManager — so they were already load-bearing
     // before anything asserted they were unique.
-    const focusIds = <int>{
+    final focusIds = <int>{
       NotificationService.focusDailyReminderId,
       NotificationService.focusStreakReminderId,
       NotificationService.focusSessionEndId,
+      NotificationService.focusRelaxationEndId,
+      // One per plant and one per achievement: see `focus_notifications_stack_test`.
+      for (var i = 0; i < NotificationService.focusUnlockIdCount; i++)
+        NotificationService.focusUnlockBaseId + i,
+      for (var i = 0; i < NotificationService.focusAchievementIdCount; i++)
+        NotificationService.focusAchievementBaseId + i,
     };
 
     test('has distinct ids inside its reserved range', () {
-      expect(focusIds.length, 3, reason: 'two Focus ids collided');
+      expect(focusIds.length, 4 + 20 + 60, reason: 'two Focus ids collided');
       for (final id in focusIds) {
         expect(id >= 918_400 && id < 918_500, isTrue,
             reason: '$id escaped the reserved 918_4xx block');

@@ -4,6 +4,8 @@
 /// Pure Dart. The bottle is the person's own size, set once.
 library;
 
+import '../utils/units.dart';
+
 class BottleMode {
   const BottleMode._();
 
@@ -14,9 +16,13 @@ class BottleMode {
   /// What a new bottle starts at in the size sheet.
   static const int defaultBottleMl = 500;
 
-  /// A size the sheet could have produced: in range and on a step.
+  /// A size the sheet could have produced: in range and on a step — a multiple of
+  /// 50 ml, or a whole number of ounces for someone who counts in them (16 oz is
+  /// 473 ml, which is on no 50 ml step).
   static bool isValid(int ml) =>
-      ml >= minBottleMl && ml <= maxBottleMl && ml % stepMl == 0;
+      ml >= minBottleMl &&
+      ml <= maxBottleMl &&
+      (ml % stepMl == 0 || Units.isWholeOunces(ml));
 
   /// Half of [bottleMl], rounded to 10 ml so "Half" of 750 is 380, not 375 —
   /// nobody can pour to the millilitre, and a tidy number reads better.

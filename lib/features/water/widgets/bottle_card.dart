@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/health/bottle_mode.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/utils/units.dart';
 
 /// Drinking from one bottle: "Finished" or "Half" logs it in one tap, and a line
 /// says how many bottles are left of the day. Before a size is set it is a short
@@ -83,7 +84,7 @@ class BottleCard extends StatelessWidget {
               Icon(Symbols.water_bottle_rounded, size: 20, color: ext.mark(accent)),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text('Your bottle · $size ml',
+                child: Text('Your bottle · ${Units.volumeText(size)}',
                     style: tt.titleSmall?.copyWith(
                         color: ext.textPrimary, fontWeight: FontWeight.w700)),
               ),
@@ -184,15 +185,19 @@ class _BottleSizeSheetState extends State<BottleSizeSheet> {
             style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
         const SizedBox(height: AppSpacing.md),
         AppStepper(
-          value: '$_ml ml',
+          value: Units.volumeText(_ml),
           accent: widget.accent,
           decrementTooltip: 'Smaller bottle',
           incrementTooltip: 'Larger bottle',
           onDecrement: _ml > BottleMode.minBottleMl
-              ? () => setState(() => _ml -= BottleMode.stepMl)
+              ? () => setState(() => _ml = Units.stepped(_ml, -1,
+                      mlStep: BottleMode.stepMl, ozStep: 1)
+                  .clamp(BottleMode.minBottleMl, BottleMode.maxBottleMl))
               : null,
           onIncrement: _ml < BottleMode.maxBottleMl
-              ? () => setState(() => _ml += BottleMode.stepMl)
+              ? () => setState(() => _ml = Units.stepped(_ml, 1,
+                      mlStep: BottleMode.stepMl, ozStep: 1)
+                  .clamp(BottleMode.minBottleMl, BottleMode.maxBottleMl))
               : null,
         ),
         const SizedBox(height: AppSpacing.lg),

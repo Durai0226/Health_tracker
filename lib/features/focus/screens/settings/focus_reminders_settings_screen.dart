@@ -244,15 +244,15 @@ class _FocusRemindersSettingsScreenState
                         if (_mindfulnessAvailable)
                           SettingsSection(
                             title: healthStoreName(),
-                            footer: 'Only breathing and meditation are written. '
-                                'A work session is not a mindfulness session, so '
-                                'it is never saved as one.',
+                            footer: 'Only breathing, meditation and stress-relief '
+                                'relaxation are written. A work session is not a '
+                                'mindfulness session, so it is never saved as one.',
                             children: [
                               SettingsTile(
                                 icon: Symbols.self_improvement_rounded,
                                 title: 'Save mindful minutes',
-                                subtitle: 'Write completed breathing and '
-                                    'meditation to ${healthStoreName()}',
+                                subtitle: 'Write completed breathing, meditation '
+                                    'and relaxation to ${healthStoreName()}',
                                 accent: accent,
                                 switchValue: FocusService().mindfulnessSync,
                                 onSwitchChanged:

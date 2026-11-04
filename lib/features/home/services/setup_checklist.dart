@@ -9,6 +9,7 @@ import '../../../core/services/notification_service.dart';
 import 'package:home_widget/home_widget.dart';
 import '../../../core/services/backup_record.dart';
 import '../../../core/services/emergency_contact.dart';
+import '../../../core/utils/units.dart';
 
 /// One thing that has to be on for reminders and health data to be reliable.
 @immutable
@@ -208,7 +209,8 @@ class SetupChecklistService {
       steps.add(SetupStep(
         id: SetupStepId.widget,
         title: 'Add the home-screen widget',
-        detail: 'Water and steps at a glance, with a one-tap +250 ml.',
+        detail:
+            'Water and steps at a glance, with a one-tap +${Units.volumeText(250)}.',
         fixLabel: 'Add',
         done: placed,
       ));

@@ -803,7 +803,6 @@ const _colorBudget = <String, int>{
   'lib/features/medication/widgets/nunito_pill_visual.dart': 3,
   'lib/features/onboarding/screens/welcome_screen.dart': 1,
   'lib/features/reminders/screens/alarm_screen.dart': 31,
-  'lib/features/settings/screens/early_access_screen.dart': 1,
 };
 
 // 52 off-scale radii — mostly 4, 6, 10, 14, 30 on chart bars and pills.

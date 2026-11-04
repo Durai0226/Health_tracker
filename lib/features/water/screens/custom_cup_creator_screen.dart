@@ -7,6 +7,7 @@ import '../models/beverage_type.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
 import '../theme/aqua_theme.dart';
+import '../../../core/utils/units.dart';
 
 /// Screen for creating and customizing cups/containers
 class CustomCupCreatorScreen extends StatefulWidget {
@@ -49,35 +50,13 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     '💧', '🧊', '🥥', '🧋', '🫧',
   ];
 
-  /// The colours a cup can be tinted with.
-  ///
-  /// This was fourteen `Colors.*` constants — the only place in the feature
-  /// where the Material palette was still being offered to the user. It is the
-  /// app's OWN accents now, so a cup the user makes is the same blue, teal or
-  /// amber as everything else on screen. The value is persisted as hex, so
-  /// existing cups keep exactly the colour they were saved with.
-  static const List<Color> _colorOptions = [
-    AppPalette.info,
-    AppPalette.water,
-    AppPalette.brand,
-    AppPalette.steps,
-    AppPalette.success,
-    AppPalette.reminders,
-    AppPalette.warningStrong,
-    AppPalette.period,
-    AppPalette.focus,
-    AppPalette.medicine,
-    AppPalette.sleep,
-    AppPalette.error,
-  ];
-
   @override
   void initState() {
     super.initState();
     if (widget.existingContainer != null) {
       final c = widget.existingContainer!;
       _nameController.text = c.name;
-      _capacityController.text = c.capacityMl.toString();
+      _capacityController.text = Units.volumeInput(c.capacityMl);
       _selectedEmoji = c.emoji;
       if (c.colorHex != null) {
         try {
@@ -88,7 +67,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
         }
       }
     } else {
-      _capacityController.text = '250';
+      _capacityController.text = Units.volumeInput(Units.glassMl());
     }
   }
 
@@ -103,7 +82,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     if (_isMultiIngredient && _ingredients.isNotEmpty) {
       return _ingredients.fold(0, (sum, i) => sum + i.amountMl);
     }
-    return int.tryParse(_capacityController.text) ?? 0;
+    return Units.mlFromInput(_capacityController.text) ?? 0;
   }
 
   int get _effectiveHydration {
@@ -117,7 +96,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
       }
       return totalEffective;
     }
-    return int.tryParse(_capacityController.text) ?? 0;
+    return Units.mlFromInput(_capacityController.text) ?? 0;
   }
 
   void _snack(String message, {bool error = false}) {
@@ -150,7 +129,10 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
     }
 
     if (_totalCapacity > 10000) {
-      if (mounted) _snack('Capacity cannot exceed 10000ml', error: true);
+      if (mounted) {
+        _snack('Capacity cannot exceed ${Units.volumeText(10000, tight: true)}',
+            error: true);
+      }
       return;
     }
 
@@ -325,7 +307,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '${_totalCapacity}ml',
+              Units.volumeText(_totalCapacity, tight: true),
               style: tt.titleMedium?.copyWith(
                 color: _selectedColor,
                 fontWeight: FontWeight.w700,
@@ -334,7 +316,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
             if (_isMultiIngredient && _effectiveHydration != _totalCapacity) ...[
               const SizedBox(height: AppSpacing.xs),
               Text(
-                'Effective: ${_effectiveHydration}ml',
+                'Effective: ${Units.volumeText(_effectiveHydration, tight: true)}',
                 style: tt.bodySmall?.copyWith(color: ext.textSecondary),
               ),
             ],
@@ -431,7 +413,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           Wrap(
             spacing: AppSpacing.md,
             runSpacing: AppSpacing.md,
-            children: _colorOptions.map((color) {
+            children: AquaTheme.pickerColors.map((color) {
               final isSelected = color == _selectedColor;
               return GestureDetector(
                 onTap: () {
@@ -489,7 +471,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${_totalCapacity}ml',
+                    Units.volumeText(_totalCapacity, tight: true),
                     style: tt.headlineMedium?.copyWith(
                       color: water.onContainer,
                       fontWeight: FontWeight.w700,
@@ -519,17 +501,19 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           const SizedBox(height: AppSpacing.sm),
           AppTextField(
             controller: _capacityController,
-            label: 'Capacity (ml)',
+            label: 'Capacity (${Units.volumeSymbol()})',
             hint: 'Enter capacity',
             prefixIcon: Symbols.water_drop_rounded,
             accent: water,
-            keyboardType: TextInputType.number,
+            keyboardType: Units.volume == VolumeUnit.ml
+                ? TextInputType.number
+                : const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() {}),
             validator: (v) {
               if (v == null || v.isEmpty) return 'Required';
-              final n = int.tryParse(v);
-              if (n == null || n <= 0) return 'Enter valid amount';
-              if (n > 10000) return 'Max 10000ml';
+              final n = Units.mlFromInput(v);
+              if (n == null) return 'Enter valid amount';
+              if (n > 10000) return 'Max ${Units.volumeText(10000, tight: true)}';
               return null;
             },
           ),
@@ -537,15 +521,16 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
           Wrap(
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
-            children: [100, 150, 250, 350, 500, 750, 1000].map((ml) {
-              final selected = int.tryParse(_capacityController.text) == ml;
+            children: Units.presetsMl(const [100, 150, 250, 350, 500, 750, 1000],
+                const [4, 6, 8, 12, 16, 24, 32]).map((ml) {
+              final selected = Units.mlFromInput(_capacityController.text) == ml;
               return AppChip(
-                label: '${ml}ml',
+                label: Units.volumeText(ml, tight: true),
                 selected: selected,
                 accent: water,
                 onTap: () {
                   HapticFeedback.selectionClick();
-                  _capacityController.text = ml.toString();
+                  _capacityController.text = Units.volumeInput(ml);
                   setState(() {});
                 },
               );
@@ -669,7 +654,7 @@ class _CustomCupCreatorScreenState extends State<CustomCupCreatorScreen> {
                             style: tt.titleSmall?.copyWith(color: ext.textPrimary),
                           ),
                           Text(
-                            '${ingredient.amountMl}ml (${beverage?.hydrationPercent ?? 100}% hydration)',
+                            '${Units.volumeText(ingredient.amountMl, tight: true)} (${beverage?.hydrationPercent ?? 100}% hydration)',
                             style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                           ),
                         ],
@@ -714,7 +699,8 @@ class _IngredientSelector extends StatefulWidget {
 
 class _IngredientSelectorState extends State<_IngredientSelector> {
   BeverageType? _selectedBeverage;
-  final _amountController = TextEditingController(text: '100');
+  final _amountController = TextEditingController(
+      text: Units.volumeInput(Units.presetsMl(const [100], const [4]).first));
 
   @override
   void dispose() {
@@ -801,21 +787,24 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
         const SizedBox(height: AppSpacing.lg),
         AppTextField(
           controller: _amountController,
-          label: 'Amount (ml)',
+          label: 'Amount (${Units.volumeSymbol()})',
           accent: water,
-          keyboardType: TextInputType.number,
+          keyboardType: Units.volume == VolumeUnit.ml
+              ? TextInputType.number
+              : const TextInputType.numberWithOptions(decimal: true),
         ),
         const SizedBox(height: AppSpacing.md),
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
-          children: [50, 100, 150, 200, 250].map((ml) {
+          children: Units.presetsMl(
+              const [50, 100, 150, 200, 250], const [2, 4, 6, 8, 10]).map((ml) {
             return AppChip(
-              label: '${ml}ml',
+              label: Units.volumeText(ml, tight: true),
               accent: water,
               onTap: () {
                 HapticFeedback.selectionClick();
-                _amountController.text = ml.toString();
+                _amountController.text = Units.volumeInput(ml);
                 setState(() {});
               },
             );
@@ -831,13 +820,14 @@ class _IngredientSelectorState extends State<_IngredientSelector> {
           onPressed: _selectedBeverage == null
               ? null
               : () {
-                  final amount = int.tryParse(_amountController.text) ?? 0;
+                  final amount = Units.mlFromInput(_amountController.text) ?? 0;
                   if (amount <= 0) {
                     _snack('Please enter a valid amount');
                     return;
                   }
                   if (amount > 5000) {
-                    _snack('Amount cannot exceed 5000ml');
+                    _snack(
+                        'Amount cannot exceed ${Units.volumeText(5000, tight: true)}');
                     return;
                   }
                   widget.onSelected(_selectedBeverage!.id, amount);

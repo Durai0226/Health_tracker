@@ -30,6 +30,7 @@ export '../../features/reminders/models/reminder_kind.dart';
 import 'dose_action_queue.dart';
 import 'notification_scheduler.dart';
 import 'nudge_answer_queues.dart';
+import 'queue_signal.dart';
 import 'reminder_action_queue.dart';
 import 'water_action_queue.dart';
 import 'snooze_log.dart';
@@ -650,7 +651,10 @@ Future<void> _scheduleSnoozeNotification(int originalId,
     {DateTime? ringAt}) async {
   final isLater = ringAt != null;
   try {
-    final prefs = await SharedPreferences.getInstance();
+    // Fresh, not the copy this isolate loaded the first time it looked: the
+    // Notification settings are written by the app's own isolate, and this one
+    // can outlive an earlier alarm. See [QueueSignal.freshPrefs].
+    final prefs = await QueueSignal.freshPrefs();
 
     // Get original alarm data
     final alarmDataJson = prefs.getString('alarm_$originalId');
@@ -710,6 +714,7 @@ Future<void> _scheduleSnoozeNotification(int originalId,
         channelId: alarmData['channelId'] as String? ?? 'medicine_channel',
         channelName: alarmData['channelName'] as String? ?? 'Medicine Reminders',
         payload: alarmData['payload'] as String?,
+        vibrate: AlarmSwitches.fromPrefs(prefs).vibrate,
       );
       return;
     }
@@ -809,6 +814,7 @@ Future<void> _showFinalCappedNotification(
   required String channelId,
   required String channelName,
   String? payload,
+  required bool vibrate,
 }) async {
   try {
     final notifications = FlutterLocalNotificationsPlugin();
@@ -821,19 +827,11 @@ Future<void> _showFinalCappedNotification(
     await notifications.initialize(
       const InitializationSettings(android: androidInit, iOS: iosInit),
     );
-    final androidDetails = AndroidNotificationDetails(
-      channelId,
-      channelName,
-      channelDescription: 'Reminder (snooze limit reached)',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      autoCancel: true,
-      actions: const <AndroidNotificationAction>[
-        AndroidNotificationAction('dismiss', '✕ Dismiss',
-            showsUserInterface: false, cancelNotification: true),
-      ],
+    final androidDetails = snoozeLimitDetails(
+      vibrate: vibrate,
+      channelId: channelId,
+      channelName: channelName,
+      dismissLabel: '✕ Dismiss',
     );
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
@@ -861,6 +859,183 @@ Future<void> _handleBackgroundSnooze(int originalId, SharedPreferences prefs) as
 /// The channel a quiet reminder is posted to: low importance, no sound, no
 /// vibration. Created in `NotificationService.init`.
 const String quietChannelId = 'quiet_channel';
+
+/// The channel an alert posts to when Vibration is off.
+///
+/// On Android 8 and later a channel's vibration is fixed when the channel is
+/// created: `enableVibration` and `vibrationPattern` on an individual
+/// notification are ignored once its channel exists, and every alarm-grade and
+/// nudge channel here was created with vibration on. So turning Vibration off
+/// cannot be a per-notification option — it needs a channel that does not vibrate,
+/// exactly as a Quiet reminder needs one that makes no sound. This is that
+/// channel: the same one without the buzz, created by the plugin the first time
+/// something is posted to it. The quiet channel already has none and is left
+/// alone.
+String stillChannelId(String channelId) =>
+    channelId == quietChannelId || channelId.endsWith(_stillSuffix)
+        ? channelId
+        : '$channelId$_stillSuffix';
+
+/// What the person sees for [stillChannelId] in the phone's notification
+/// settings.
+String stillChannelName(String channelName) =>
+    channelName.endsWith(_stillNameSuffix) ? channelName : '$channelName$_stillNameSuffix';
+
+const String _stillSuffix = '_still';
+const String _stillNameSuffix = ' (no vibration)';
+
+/// The channel to post to for an alert whose own channel is [id] / [name], given
+/// whether the person wants it to buzz: that channel, or its twin without the buzz
+/// ([stillChannelId]). The quiet channel is its own twin and keeps its name.
+///
+/// The one place the "Vibration off" rule is applied to a channel. It was written
+/// out in four places — the alarm, the foreground post, the re-fire after Snooze
+/// and the end-of-snoozes notification — and a rule that has to be remembered in
+/// four places is changed in three. `alert_channel_one_place_test.dart` fails when
+/// a fifth appears.
+({String id, String name}) channelForVibration(String id, String name,
+        {required bool vibrate}) =>
+    vibrate
+        ? (id: id, name: name)
+        : (
+            id: stillChannelId(id),
+            name: id == quietChannelId ? name : stillChannelName(name)
+          );
+
+/// Where an alert of one kind is posted, and how it buzzes.
+class AlertChannel {
+  const AlertChannel({required this.id, required this.name, required this.vibrationPattern});
+
+  final String id;
+  final String name;
+
+  /// Empty means no vibration at all.
+  final List<int> vibrationPattern;
+
+  bool get vibrates => vibrationPattern.isNotEmpty;
+}
+
+/// The channel an alert of [kind] is posted to, and its buzz, with Vibration
+/// switched on or off.
+///
+/// Every path that posts an alert asks this — [alarmPresentationFor], the
+/// foreground [NotificationService] posts and the re-fire after a snooze — so what
+/// they choose cannot come apart. They had their own copies of this selection, and
+/// a channel is the one thing a copy cannot get wrong quietly: Android fixes a
+/// channel's importance, sound and vibration at the moment it is first posted to,
+/// and a twin created by a path that disagreed with the others stays disagreeing.
+///
+/// [requestedChannelId] and [requestedChannelName] are honoured for alarm-grade
+/// kinds only, as in [alarmPresentationFor].
+AlertChannel alertChannelFor(
+  ReminderKind kind, {
+  required bool vibrate,
+  String? requestedChannelId,
+  String? requestedChannelName,
+}) {
+  final alarmGrade = kind.isAlarmGrade;
+  final quiet = kind == ReminderKind.quiet;
+  final channel = channelForVibration(
+    alarmGrade
+        ? (requestedChannelId ?? 'alarm_channel')
+        : (quiet ? quietChannelId : 'checkin_channel'),
+    alarmGrade
+        ? (requestedChannelName ?? 'Alarm Reminders')
+        : (quiet ? 'Quiet Reminders' : 'Check-ins & Nudges'),
+    vibrate: vibrate,
+  );
+  return AlertChannel(
+    id: channel.id,
+    name: channel.name,
+    vibrationPattern: !vibrate
+        ? const <int>[]
+        : alarmGrade
+            ? const [0, 1000, 500, 1000, 500, 1000]
+            : (quiet ? const <int>[] : const [0, 250, 250, 250]),
+  );
+}
+
+/// How the notification shown when the snooze cap is reached looks and buzzes.
+///
+/// Three paths show one — the foreground handler, the background action handler
+/// and the payload re-fire — and each had vibration hardcoded on and the alarm
+/// channel (which was created with it) hardcoded in. So with Vibration switched
+/// off, the last notification of a missed dose was the one that still buzzed.
+/// Vibration belongs to the channel on Android 8 and later, so off means the twin
+/// channel without it ([stillChannelId]); the quiet channel has none already and
+/// is left as it is.
+///
+/// Presented as the alarm it is the end of — maximum importance, on the alarm
+/// stream — and not as an ordinary heads-up. Only an alarm-grade reminder can be
+/// snoozed, so only an alarm-grade channel is ever posted to here; and a twin
+/// channel is created by whatever posts to it FIRST, with that notification's
+/// importance and audio attributes, which Android never lets be changed. If this
+/// notification were the first to reach `alarm_channel_still` it would make it a
+/// high-importance channel on the notification stream, and every later alarm posted
+/// there would stop bypassing Do Not Disturb.
+AndroidNotificationDetails snoozeLimitDetails({
+  required bool vibrate,
+  String channelId = 'alarm_channel',
+  String channelName = 'Alarm Reminders',
+  String dismissLabel = '❌ Dismiss',
+}) {
+  final channel = channelForVibration(channelId, channelName, vibrate: vibrate);
+  return AndroidNotificationDetails(
+    channel.id,
+    channel.name,
+    channelDescription: 'Reminder (snooze limit reached)',
+    importance: Importance.max,
+    priority: Priority.max,
+    playSound: true,
+    enableVibration: vibrate,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
+    autoCancel: true,
+    actions: <AndroidNotificationAction>[
+      AndroidNotificationAction(
+        'dismiss',
+        dismissLabel,
+        showsUserInterface: false,
+        cancelNotification: true,
+      ),
+    ],
+  );
+}
+
+/// What the Notification settings say about how an alarm presents itself.
+///
+/// Three of the switches on that screen — Vibration, Keep on screen and
+/// Full-screen alerts — were read by the notifications the app posts itself and
+/// by nothing on the alarm path, which is where every Android medicine reminder
+/// goes: [alarmPresentationFor] hardcoded all three. Turning them off did nothing
+/// to the notification that matters most.
+///
+/// The alarm fires in a background isolate with no Drift connection, so these are
+/// read from the preferences `CleanStorageService.mirrorSettingsForAlarmIsolate`
+/// copies them into. Everything defaults to what the alarm always did, so a person
+/// who never opened Settings sees no change.
+class AlarmSwitches {
+  const AlarmSwitches({
+    this.vibrate = true,
+    this.fullScreen = true,
+    this.persistent = true,
+  });
+
+  /// "Vibration": the alert buzzes.
+  final bool vibrate;
+
+  /// "Full-screen alerts": an alarm-grade alert may take over the screen.
+  final bool fullScreen;
+
+  /// "Keep on screen": an alarm-grade alert stays until it is answered, rather
+  /// than being swiped away.
+  final bool persistent;
+
+  static AlarmSwitches fromPrefs(SharedPreferences prefs) => AlarmSwitches(
+        vibrate: prefs.getBool(kAlarmVibrationPref) ?? true,
+        fullScreen: prefs.getBool(kAlarmFullScreenPref) ?? true,
+        persistent: prefs.getBool(kAlarmPersistentPref) ?? true,
+      );
+}
 
 /// Everything about *how* an alarm presents itself, derived from what it is.
 ///
@@ -945,16 +1120,21 @@ AlarmPresentation alarmPresentationFor(
   /// Later, a quiet one Done and Later (it never offered Snooze). A dose has its
   /// own buttons and ignores it.
   bool reminderActions = false,
+
+  /// What the Notification settings allow. See [AlarmSwitches].
+  AlarmSwitches switches = const AlarmSwitches(),
 }) {
   final alarmGrade = kind.isAlarmGrade;
   final quiet = kind == ReminderKind.quiet;
+  final channel = alertChannelFor(
+    kind,
+    vibrate: switches.vibrate,
+    requestedChannelId: requestedChannelId,
+    requestedChannelName: requestedChannelName,
+  );
   return AlarmPresentation(
-    channelId: alarmGrade
-        ? (requestedChannelId ?? 'alarm_channel')
-        : (quiet ? quietChannelId : 'checkin_channel'),
-    channelName: alarmGrade
-        ? (requestedChannelName ?? 'Alarm Reminders')
-        : (quiet ? 'Quiet Reminders' : 'Check-ins & Nudges'),
+    channelId: channel.id,
+    channelName: channel.name,
     channelDescription: alarmGrade
         ? 'High priority alarm reminders'
         : (quiet
@@ -972,7 +1152,7 @@ AlarmPresentation alarmPresentationFor(
     // A nudge must never take over the screen. Play can revoke
     // USE_FULL_SCREEN_INTENT for exactly that over-reach, and the manifest keeps
     // the permission solely for dose-grade alerts.
-    fullScreenIntent: alarmGrade,
+    fullScreenIntent: alarmGrade && switches.fullScreen,
     category: alarmGrade
         ? AndroidNotificationCategory.alarm
         : AndroidNotificationCategory.reminder,
@@ -981,13 +1161,12 @@ AlarmPresentation alarmPresentationFor(
     audioUsage: alarmGrade
         ? AudioAttributesUsage.alarm
         : AudioAttributesUsage.notification,
-    // A nudge is dismissible by swipe; an alarm is not.
-    autoCancel: !alarmGrade,
-    ongoing: alarmGrade,
+    // A nudge is dismissible by swipe; an alarm is not — unless "Keep on screen"
+    // has been turned off.
+    autoCancel: !alarmGrade || !switches.persistent,
+    ongoing: alarmGrade && switches.persistent,
     timeoutAfterMs: alarmGrade ? 300000 : null, // 5 minute safety timeout
-    vibrationPattern: alarmGrade
-        ? const [0, 1000, 500, 1000, 500, 1000]
-        : (quiet ? const <int>[] : const [0, 250, 250, 250]),
+    vibrationPattern: channel.vibrationPattern,
     actions: kind == ReminderKind.gentle && answers != null
         ? nudgeAnswerActions(answers)
         : _actionsFor(kind,
@@ -1175,8 +1354,12 @@ Future<void> alarmCallback(int alarmId) async {
   debugPrint('🔔 ALARM CALLBACK FIRED! ID: $alarmId');
   
   try {
-    // Initialize shared preferences
-    final prefs = await SharedPreferences.getInstance();
+    // Initialize shared preferences — freshly, not the copy this isolate loaded
+    // the first time it looked: the settings (Vibration, Keep on screen,
+    // Full-screen alerts) are written by the app's own isolate, and this one can
+    // outlive an earlier alarm, so a switch changed since would still read as it
+    // was. See [QueueSignal.freshPrefs].
+    final prefs = await QueueSignal.freshPrefs();
     
     // Get alarm data
     final alarmDataJson = prefs.getString('alarm_$alarmId');
@@ -1358,6 +1541,20 @@ Future<void> alarmCallback(int alarmId) async {
       }
     }
 
+    // A medicine can ask for its own snooze length. The alarm snoozes once for
+    // everything due in the slot, so it takes the shortest asked for. A slot is
+    // re-resolved on every fire (a medicine may not be due today), so a length
+    // asked for yesterday must not linger: with no request it is removed and the
+    // phone-wide length applies. Nothing else sets one on a medicine slot.
+    if (rawMedicines.isNotEmpty) {
+      final asked = shortestSlotSnooze(activeToday);
+      if (asked != null) {
+        alarmData['snoozeDuration'] = asked;
+      } else {
+        alarmData.remove('snoozeDuration');
+      }
+    }
+
     // ── Build today's title/body/payload from the active medicines ─────────
     // A single medicine keeps the exact wording/payload shape used before
     // grouping existed. Two-or-more collapse into one InboxStyle notification
@@ -1375,12 +1572,15 @@ Future<void> alarmCallback(int alarmId) async {
         final med = activeToday.single;
         title = 'Medicine Reminder 💊';
         body = 'Time to take ${med['name']}';
+        // The sound this medicine chose, if any: the full-screen alarm loops it.
+        final sound = commonSlotSound(activeToday);
         payload = 'alarm:${jsonEncode({
               'id': alarmId,
               'title': 'Time for your ${med['name']}',
               'body': 'Medicine reminder',
               if (alarmData['snoozeDuration'] != null)
                 'snoozeDuration': alarmData['snoozeDuration'],
+              if (sound != null) 'sound': sound,
               'medicineId': med['medicineId'],
               'hour': hour,
               'minute': minute,
@@ -1394,6 +1594,8 @@ Future<void> alarmCallback(int alarmId) async {
           contentTitle: title,
           summaryText: body,
         );
+        // One alarm, one sound: only when every medicine due agrees on it.
+        final sound = commonSlotSound(activeToday);
         payload = 'alarm:${jsonEncode({
               'id': alarmId,
               'title': title,
@@ -1402,6 +1604,7 @@ Future<void> alarmCallback(int alarmId) async {
                   .join(', '),
               if (alarmData['snoozeDuration'] != null)
                 'snoozeDuration': alarmData['snoozeDuration'],
+              if (sound != null) 'sound': sound,
               'medicines': activeToday
                   .map((m) => {
                         'medicineId': m['medicineId'],
@@ -1502,6 +1705,7 @@ Future<void> alarmCallback(int alarmId) async {
       // Done and Later.
       reminderActions: kind != ReminderKind.dose &&
           reminderIdFromAlarmPayload(payload) != null,
+      switches: AlarmSwitches.fromPrefs(prefs),
     );
 
     final androidDetails = AndroidNotificationDetails(
@@ -1802,14 +2006,26 @@ Future<void> _handleWindowNudge(
     final title = alarmData['title'] != null ? '⏰ $baseTitle' : baseTitle;
     const body = 'Take it before your window closes.';
 
+    // The same Vibration switch the dose alarm itself honoured: this nudge posted to
+    // `medicine_channel` — which buzzes — whatever it said, so with Vibration off the
+    // first alarm was silent and "Still time for X" was not. Off means the twin.
+    final vibrate = AlarmSwitches.fromPrefs(prefs).vibrate;
+    final channel =
+        channelForVibration('medicine_channel', 'Medicine Reminders', vibrate: vibrate);
+
     final androidDetails = AndroidNotificationDetails(
-      'medicine_channel',
-      'Medicine Reminders',
+      channel.id,
+      channel.name,
       channelDescription: 'Reminders for taking medicines on time',
-      importance: Importance.high,
-      priority: Priority.high,
+      // A twin is created by whatever posts to it first, with these, and Android
+      // never lets them change — so they are the original channel's own: maximum
+      // importance, on the alarm stream, as the dose alarm that shares it posts. On
+      // `medicine_channel` itself they are ignored, as they always were.
+      importance: Importance.max,
+      priority: Priority.max,
       playSound: true,
-      enableVibration: true,
+      enableVibration: vibrate,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
       category: AndroidNotificationCategory.reminder,
       actions: <AndroidNotificationAction>[
         const AndroidNotificationAction(
@@ -1935,6 +2151,12 @@ Future<void> _attemptRescheduleOnError(int alarmId) async {
 /// cannot call `CleanStorageService.getUserSettings()`. The main isolate
 /// mirrors the flag here whenever settings are saved.
 const String kShowOnLockScreenPref = 'notif_show_on_lock_screen';
+
+/// The other three the alarm isolate honours, mirrored the same way. See
+/// [AlarmSwitches].
+const String kAlarmVibrationPref = 'notif_vibration_enabled';
+const String kAlarmFullScreenPref = 'notif_full_screen_enabled';
+const String kAlarmPersistentPref = 'notif_persistent_enabled';
 
 class BackgroundAlarmService {
   static final BackgroundAlarmService _instance = BackgroundAlarmService._internal();
@@ -2303,7 +2525,8 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload,
     {DateTime? ringAt}) async {
   final isLater = ringAt != null;
   try {
-    final prefs = await SharedPreferences.getInstance();
+    // Fresh: see [alarmCallback].
+    final prefs = await QueueSignal.freshPrefs();
 
     // Parse the rich `alarm:{json}` payload for a clean title/body — otherwise
     // the raw JSON would be shown as the notification body. Parsed FIRST
@@ -2381,7 +2604,9 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload,
       // reminder entirely. See background_alarm_service.dart's identical fix.
       debugPrint(
           '⏹️ Snooze cap ($maxSnoozeCount) reached for notification $notificationId — showing a final reminder with no snooze option');
-      await _showFinalCappedPayloadNotification(notificationId, snoozeTitle, snoozeBody, payload);
+      await _showFinalCappedPayloadNotification(
+          notificationId, snoozeTitle, snoozeBody, payload,
+          vibrate: AlarmSwitches.fromPrefs(prefs).vibrate);
       return;
     }
     if (!isLater) {
@@ -2414,6 +2639,11 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload,
             reminderActions: reminderIdFromAlarmPayload(nextPayload) != null,
           )
         : null;
+    // The same three switches the alarm honoured the first time it rang.
+    final switches = AlarmSwitches.fromPrefs(prefs);
+    // The channel and the buzz as every other alert chooses them: the alarm channel,
+    // or its twin without the buzz when Vibration is off.
+    final alarmChannel = alertChannelFor(ReminderKind.alarm, vibrate: switches.vibrate);
     await zonedScheduleGuarded(
       PluginNotificationScheduler(notifications),
       snoozeId,
@@ -2438,16 +2668,20 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload,
                 actions: quietLook.actions,
               )
             : AndroidNotificationDetails(
-          'alarm_channel', // Use alarm channel for proper alarm sound
-          'Alarm Reminders',
+          // The alarm channel for proper alarm sound — or its twin without the
+          // buzz when Vibration is off (see [stillChannelId]).
+          alarmChannel.id,
+          alarmChannel.name,
           channelDescription: 'High priority alarm reminders',
           importance: Importance.max,
           priority: Priority.max,
           playSound: true,
           sound: null, // Use system default alarm sound
-          enableVibration: true,
-          vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
-          fullScreenIntent: true,
+          enableVibration: alarmChannel.vibrates,
+          vibrationPattern: alarmChannel.vibrates
+              ? Int64List.fromList(alarmChannel.vibrationPattern)
+              : null,
+          fullScreenIntent: switches.fullScreen,
           category: AndroidNotificationCategory.alarm,
           // Honour 'Show on lock screen', default PRIVATE — the same policy
           // `alarmCallback` applies a few hundred lines up. This path is a
@@ -2458,8 +2692,8 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload,
               ? NotificationVisibility.public
               : NotificationVisibility.private,
           audioAttributesUsage: AudioAttributesUsage.alarm,
-          autoCancel: false,
-          ongoing: true,
+          autoCancel: !switches.persistent,
+          ongoing: switches.persistent,
           // The same buttons the reminder was first shown with: a re-fire that
           // dropped Done would be the one place the person cannot say they did it.
           actions: reminderIdFromAlarmPayload(nextPayload) != null
@@ -2506,7 +2740,8 @@ Future<void> _snoozeFromPayload(int notificationId, String? payload,
 /// notification by the time this handler runs.
 @pragma('vm:entry-point')
 Future<void> _showFinalCappedPayloadNotification(
-    int id, String title, String body, String? payload) async {
+    int id, String title, String body, String? payload,
+    {required bool vibrate}) async {
   try {
     final notifications = FlutterLocalNotificationsPlugin();
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -2516,22 +2751,7 @@ Future<void> _showFinalCappedPayloadNotification(
       id,
       title,
       body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'alarm_channel',
-          'Alarm Reminders',
-          channelDescription: 'Reminder (snooze limit reached)',
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: true,
-          enableVibration: true,
-          autoCancel: true,
-          actions: const <AndroidNotificationAction>[
-            AndroidNotificationAction('dismiss', '❌ Dismiss',
-                showsUserInterface: false, cancelNotification: true),
-          ],
-        ),
-      ),
+      NotificationDetails(android: snoozeLimitDetails(vibrate: vibrate)),
       payload: payload,
     );
   } catch (e) {

@@ -10,6 +10,7 @@ import '../services/insight_actions.dart';
 import '../services/trends_data_service.dart';
 import '../services/weekly_recap_service.dart';
 import '../widgets/trend_chart_card.dart';
+import '../../../core/utils/units.dart';
 
 /// Your last seven days, as a scrollable report.
 ///
@@ -116,7 +117,7 @@ class WeeklyRecapScreen extends StatefulWidget {
           series: b.water,
           days: days,
           featureName: 'water',
-          formatValue: (v) => '${v.round()} ml',
+          formatValue: (v) => Units.volumeText(v.round()),
           centerValue: (_) => '${b.water.goalPercent!.round()}%',
           centerCaption: 'of goal',
           ringHeadline: (_) =>

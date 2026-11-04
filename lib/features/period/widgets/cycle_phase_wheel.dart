@@ -6,6 +6,47 @@ import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import '../models/cycle_phase.dart';
 import '../theme/period_theme.dart';
 
+/// One arc of the phase ring, as days from the first day of the cycle.
+class WheelArc {
+  const WheelArc(this.phase, this.start, this.end);
+
+  final CyclePhase phase;
+  final double start;
+  final double end;
+}
+
+/// The arcs the ring is drawn from, sized by real day-spans.
+///
+/// [showOvulation] false leaves out the ovulation arc: the follicular one runs
+/// through the first of those days (the one `CyclePredictor.phaseOn` counts as
+/// follicular then) and the luteal one starts there, so the ring and the phase
+/// named under it never disagree.
+@visibleForTesting
+List<WheelArc> wheelArcs({
+  required int cycleLength,
+  required int periodLength,
+  required int lutealLength,
+  bool showOvulation = true,
+}) {
+  final len = cycleLength < 1 ? 28 : cycleLength;
+  final ovIndex = (len - lutealLength).clamp(1, len - 1);
+  final ovStart = (ovIndex - 1).clamp(0, len).toDouble();
+  final ovEnd = (ovIndex + 2).clamp(0, len).toDouble();
+  final pLen = periodLength.clamp(1, len).toDouble();
+
+  final follicularEnd =
+      showOvulation ? ovStart : (ovIndex + 1).clamp(0, len).toDouble();
+  final lutealStart = showOvulation ? ovEnd : follicularEnd;
+
+  return [
+    WheelArc(CyclePhase.menstrual, 0, pLen),
+    if (pLen < follicularEnd) WheelArc(CyclePhase.follicular, pLen, follicularEnd),
+    if (showOvulation) WheelArc(CyclePhase.ovulation, ovStart, ovEnd),
+    if (lutealStart < len.toDouble())
+      WheelArc(CyclePhase.luteal, lutealStart, len.toDouble()),
+  ];
+}
+
 /// The signature hero: an interactive-feeling ring whose four phase arcs are
 /// sized by their real day-spans, with a fertile-window band whose opacity
 /// encodes prediction confidence and an animated current-day marker. Center text
@@ -31,6 +72,10 @@ class CyclePhaseWheel extends StatelessWidget {
   final String centerBottom;
   final double size;
 
+  /// False draws no ovulation arc: its days join the phase before, as
+  /// `CyclePredictor.phaseOn` counts them when hormonal birth control is on.
+  final bool showOvulation;
+
   const CyclePhaseWheel({
     super.key,
     required this.cycleLength,
@@ -44,7 +89,17 @@ class CyclePhaseWheel extends StatelessWidget {
     required this.centerTop,
     required this.centerBottom,
     this.size = 240,
+    this.showOvulation = true,
   });
+
+  /// The arcs this ring draws.
+  @visibleForTesting
+  List<WheelArc> get arcs => wheelArcs(
+        cycleLength: cycleLength,
+        periodLength: periodLength,
+        lutealLength: lutealLength,
+        showOvulation: showOvulation,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -53,21 +108,9 @@ class CyclePhaseWheel extends StatelessWidget {
     final len = cycleLength < 1 ? 28 : cycleLength;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
 
-    final ovIndex = (len - lutealLength).clamp(1, len - 1);
-    final ovStart = (ovIndex - 1).clamp(0, len).toDouble();
-    final ovEnd = (ovIndex + 2).clamp(0, len).toDouble();
-    final pLen = periodLength.clamp(1, len).toDouble();
-
-    final segments = <_PhaseSeg>[
-      _PhaseSeg(0, pLen, ext.mark(PeriodTheme.phaseSwatch(ext, CyclePhase.menstrual))),
-      if (pLen < ovStart)
-        _PhaseSeg(pLen, ovStart,
-            ext.mark(PeriodTheme.phaseSwatch(ext, CyclePhase.follicular))),
-      _PhaseSeg(ovStart, ovEnd,
-          ext.mark(PeriodTheme.phaseSwatch(ext, CyclePhase.ovulation))),
-      if (ovEnd < len.toDouble())
-        _PhaseSeg(ovEnd, len.toDouble(),
-            ext.mark(PeriodTheme.phaseSwatch(ext, CyclePhase.luteal))),
+    final segments = [
+      for (final a in arcs)
+        _PhaseSeg(a.start, a.end, ext.mark(PeriodTheme.phaseSwatch(ext, a.phase))),
     ];
 
     _Band? band;

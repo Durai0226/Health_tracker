@@ -15,9 +15,14 @@ class OvernightBodyCard extends StatelessWidget {
     this.dip,
     this.offerRest = false,
     this.restMarked = false,
+    this.restDaysMarked = 1,
     this.onRest,
+    this.onRestFewDays,
     this.onUndoRest,
   });
+
+  /// The number of days [onRestFewDays] marks.
+  static const int fewDays = 3;
 
   final AccentSwatch accent;
   final OvernightBodyCheck? check;
@@ -28,7 +33,13 @@ class OvernightBodyCard extends StatelessWidget {
 
   /// Today is already marked, from this card.
   final bool restMarked;
+
+  /// How many days, from today, were marked from this card.
+  final int restDaysMarked;
   final VoidCallback? onRest;
+
+  /// Mark [fewDays] days from today. Not offered when null.
+  final VoidCallback? onRestFewDays;
   final VoidCallback? onUndoRest;
 
   @override
@@ -79,7 +90,11 @@ class OvernightBodyCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text('Today is marked as a rest day.',
+                  child: Text(
+                      restDaysMarked > 1
+                          ? 'Today and the next ${restDaysMarked - 1} '
+                              '${restDaysMarked == 2 ? 'day are' : 'days are'} marked as rest days.'
+                          : 'Today is marked as a rest day.',
                       style: tt.bodyMedium?.copyWith(color: ext.textPrimary)),
                 ),
                 TextButton(
@@ -95,17 +110,29 @@ class OvernightBodyCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             Text(
                 'That is two nights in a row. If you are feeling it too, a rest '
-                'day pauses today\'s step goal and keeps your streak.',
+                'day pauses the step goal and your streaks, and quiets the step '
+                'and streak nudges. Medicines, water and your own reminders are '
+                'never touched.',
                 style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
             const SizedBox(height: AppSpacing.sm),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppButton(
-                label: 'Take a rest day',
-                leadingIcon: Symbols.hotel_rounded,
-                accent: accent,
-                onPressed: onRest,
-              ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppButton(
+                  label: 'Take a rest day',
+                  leadingIcon: Symbols.hotel_rounded,
+                  accent: accent,
+                  onPressed: onRest,
+                ),
+                if (onRestFewDays != null)
+                  AppButton(
+                    label: 'Rest for $fewDays days',
+                    variant: AppButtonVariant.tonal,
+                    accent: accent,
+                    onPressed: onRestFewDays,
+                  ),
+              ],
             ),
           ],
         ],

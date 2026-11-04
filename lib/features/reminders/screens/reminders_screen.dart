@@ -14,6 +14,7 @@ import 'add_reminder_screen.dart';
 import '../services/reminder_adherence.dart';
 import '../services/reminder_service.dart';
 import '../services/reminder_alarm.dart';
+import '../services/reminder_history_export.dart';
 import '../services/reminder_completion.dart';
 import '../services/reminder_pause_until.dart';
 import '../widgets/overdue_triage_sheet.dart';
@@ -162,6 +163,52 @@ class _RemindersScreenState extends State<RemindersScreen> {
     );
   }
 
+  /// Ask how far back, then share the history as a spreadsheet file.
+  Future<void> _exportHistory() async {
+    final ext = AppColorsExt.of(context);
+    final range = await AppBottomSheet.show<HistoryRange>(
+      context,
+      title: 'Export reminder history',
+      icon: Symbols.ios_share_rounded,
+      accent: ext.reminders,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'A spreadsheet file with a line for every time a reminder came due: '
+            'when, whether it was answered, and how.',
+            style: Theme.of(ctx)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppColorsExt.of(ctx).textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SettingsSection(
+            children: [
+              for (final r in HistoryRange.values)
+                SettingsTile(
+                  icon: Symbols.calendar_month_rounded,
+                  title: r.label,
+                  accent: ext.reminders,
+                  onTap: () => Navigator.pop(ctx, r),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (range == null || !mounted) return;
+    try {
+      final lines = await ReminderHistoryExport.share(range);
+      if (!mounted) return;
+      if (lines == 0) context.toastInfo('No reminder history in that time.');
+    } catch (e) {
+      debugPrint('Reminder history export failed: $e');
+      if (mounted) context.toastError("Couldn't create the file. Try again.");
+    }
+  }
+
   ReminderAdherenceSummary? _adherence;
 
   Future<void> _loadAdherence() async {
@@ -234,6 +281,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   ],
                 ],
               ),
+            ),
+            IconButton(
+              icon: Icon(Symbols.ios_share_rounded, color: ext.textSecondary),
+              tooltip: 'Export reminder history',
+              onPressed: _exportHistory,
             ),
           ],
         ),

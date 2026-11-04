@@ -25,9 +25,11 @@ import 'features/sleep/services/sleep_service.dart';
 import 'features/biometrics/services/biometrics_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/reminder_reschedule_service.dart';
+import 'core/services/photo_store.dart';
+import 'core/services/photo_sweep.dart';
+import 'features/reminders/services/reminder_auto_complete.dart';
 import 'core/services/background_alarm_service.dart';
 import 'core/services/background_health_sync_service.dart';
-import 'core/services/feature_flag_service.dart';
 import 'core/services/feature_manager.dart';
 import 'core/services/simple_ad_service.dart';
 import 'core/theme/app_theme.dart';
@@ -42,6 +44,7 @@ import 'features/settings/screens/app_lock_gate.dart';
 import 'core/constants/app_strings.dart';
 import 'features/medication/services/refill_loop.dart';
 import 'features/medication/services/visit_brief_link.dart';
+import 'features/sleep/services/wind_down_link.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -128,15 +131,26 @@ void _initDeferredServices() {
         // not ride the exact-alarm path. See its class doc.
         _initService('BackgroundHealthSync',
             () => BackgroundHealthSyncService.instance.init()),
-        _initService('FeatureFlagService', () => FeatureFlagService().init()),
         _initService('VitaVibeService', () => VitaVibeService().init()),
         // Registers the home-screen widget's tap handler. Without this the
         // widget's "+250" button fires its broadcast, the isolate starts, and
         // finds no callback to run — a dead button with no error anywhere.
         _initService('HomeWidget', () => HomeWidgetService.init()),
+        // Where the kept photos live, so a thumbnail can find one whose saved path has
+        // gone stale (an iPhone restored to a new phone has a new app folder).
+        _initService('PhotoStore', () => PhotoStore.warmUp()),
         // Other services can be initialized on-demand
       ]);
       
+      // Photos nothing refers to any more (a medicine deleted, a form closed between
+      // picking and saving). Best effort, and after the services above: it is only
+      // housekeeping, and must never stand in front of the reminders.
+      unawaited(PhotoSweep.run());
+
+      // Reminders set to tick themselves off when the steps show up. Started here,
+      // after the step data is loaded, and quiet until a step changes.
+      ReminderAutoCompleteWatcher.start();
+
       // Reschedule reminders after services are ready (non-blocking)
       try {
         await ReminderRescheduleService.rescheduleAllReminders();
@@ -350,6 +364,7 @@ void main() async {
       final payload = notificationAppLaunchDetails?.notificationResponse?.payload;
       RefillLoop.pendingOpen.value = RefillLoop.medicineIdFromPayload(payload);
       VisitBriefLink.pendingOpen.value = VisitBriefLink.appointmentIdFromPayload(payload);
+      WindDownLink.pendingOpen.value = WindDownLink.isPayload(payload);
       if (payload != null && payload.startsWith('alarm:')) {
         initialRoute = '/alarm';
         // The payload is `alarm:{json}` carrying the real title/body/id so the

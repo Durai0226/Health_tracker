@@ -28,6 +28,19 @@ class RestDayStore {
         _key, RestDays.encodeAll(RestDays.mark(all(), t, kind, today: t)));
   }
 
+  /// Mark today and the [count] - 1 days after it, for a rest of a few days. The
+  /// days after today change nothing until they arrive: [frozenDays] stops at today.
+  static Future<void> markDays(RestKind kind, int count, {DateTime? now}) {
+    final t = now ?? clock.now();
+    return CleanStorageService.setAppPreference(
+        _key, RestDays.encodeAll(RestDays.markRun(all(), t, kind, count, today: t)));
+  }
+
+  /// Put the marks back as they were, for Undo: unlike clearing the days that were
+  /// marked, it also gives back a mark that the new ones replaced.
+  static Future<void> restore(List<RestDay> before) =>
+      CleanStorageService.setAppPreference(_key, RestDays.encodeAll(before));
+
   static Future<void> clear(DateTime day) => CleanStorageService.setAppPreference(
       _key, RestDays.encodeAll(RestDays.unmark(all(), day)));
 }

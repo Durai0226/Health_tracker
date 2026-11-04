@@ -336,4 +336,69 @@ void main() {
       expect(await HealthSyncQueue.selfDisable(), isNull);
     });
   });
+
+  group('the last check\'s steps across loads', () {
+    ConnectedDevicesController controller() => ConnectedDevicesController(
+          readSources: () async => [_source('watch')],
+          probeAvailability: () async => HealthAvailability.available,
+          probeBackgroundAvailable: () async => true,
+          readBackgroundEnabled: () async => true,
+        );
+
+    String today() {
+      final d = DateTime.now();
+      return '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+    }
+
+    test('are read on load, and gone when a later load finds none', () async {
+      await HealthSyncQueue.writeSnapshot({'todayKey': today(), 'steps': 777});
+      final c = controller();
+
+      await c.load();
+      expect(c.value.lastSteps, 777);
+
+      await HealthSyncQueue.clearForTesting();
+      await c.load();
+      expect(c.value.lastSteps, isNull,
+          reason: 'a number from a check that is no longer there must not stay up');
+      c.dispose();
+    });
+  });
+
+  group('stepsFromSnapshot', () {
+    final now = DateTime(2026, 3, 10, 15);
+    Map<String, dynamic> snap({Object? steps = 4200, String key = '2026-03-10'}) =>
+        {'todayKey': key, 'steps': steps};
+
+    test('today\'s steps are returned', () {
+      expect(ConnectedDevicesController.stepsFromSnapshot(snap(), now), 4200);
+    });
+
+    test('zero steps is a real answer', () {
+      expect(ConnectedDevicesController.stepsFromSnapshot(snap(steps: 0), now), 0);
+    });
+
+    test('an earlier day\'s is not today\'s', () {
+      expect(
+          ConnectedDevicesController.stepsFromSnapshot(snap(key: '2026-03-09'), now),
+          isNull);
+    });
+
+    test('no snapshot, a negative or a non-integer count: nothing', () {
+      expect(ConnectedDevicesController.stepsFromSnapshot(null, now), isNull);
+      expect(ConnectedDevicesController.stepsFromSnapshot(snap(steps: -1), now), isNull);
+      expect(ConnectedDevicesController.stepsFromSnapshot(snap(steps: '4200'), now), isNull);
+      expect(ConnectedDevicesController.stepsFromSnapshot(snap(steps: 4200.5), now), isNull);
+      expect(ConnectedDevicesController.stepsFromSnapshot({'steps': 4200}, now), isNull,
+          reason: 'with no day on it there is no saying it is today\'s');
+    });
+
+    test('the key is zero-padded, as the worker writes it', () {
+      expect(
+          ConnectedDevicesController.stepsFromSnapshot(
+              snap(key: '2026-03-05'), DateTime(2026, 3, 5, 9)),
+          4200);
+    });
+  });
 }

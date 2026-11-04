@@ -8,10 +8,12 @@ import '../../../core/database/app_database.dart' as db;
 import '../../../core/database/daos/medication_dao.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
+import '../models/medicine_snooze.dart';
 import '../models/medicine_schedule.dart';
 import '../models/doctor_pharmacy.dart';
 import '../models/dependent_profile.dart';
 import '../models/medicine_enums.dart';
+import '../models/care_team_scope.dart';
 import '../models/clinic.dart';
 import '../../../core/health/streak_engine.dart';
 import '../../../core/utils/calendar_day.dart';
@@ -74,6 +76,9 @@ class MedicineCleanStorageService {
       color: MedicineColor.values[data.colorIndex],
       shape: MedicineShape.values[data.shapeIndex],
       imagePath: data.imagePath,
+      costPerUnit: data.costPerUnit,
+      reminderSound: data.reminderSound,
+      snoozeOverrideMinutes: MedicineSnooze.clean(data.snoozeOverrideMinutes),
       instructions: data.instructions,
       purpose: data.purpose,
       currentStock: data.currentStock,
@@ -122,6 +127,10 @@ class MedicineCleanStorageService {
       colorIndex: drift.Value(medicine.color?.index ?? 0),
       shapeIndex: drift.Value(medicine.shape?.index ?? 0),
       imagePath: drift.Value(medicine.imagePath),
+      costPerUnit: drift.Value(medicine.costPerUnit),
+      reminderSound: drift.Value(medicine.reminderSound),
+      snoozeOverrideMinutes:
+          drift.Value(MedicineSnooze.clean(medicine.snoozeOverrideMinutes)),
       instructions: drift.Value(medicine.instructions),
       purpose: drift.Value(medicine.purpose),
       currentStock: drift.Value(medicine.currentStock ?? 0),
@@ -338,25 +347,51 @@ class MedicineCleanStorageService {
   }
 
   static Future<void> reduceStock(String medicineId, double amount) async {
+    final change = await _changeStock(medicineId, reduce: amount);
+    if (change == null) return;
+    _bumpRevision();
+    await _afterStockChange(medicineId, change);
+  }
+
+  /// What a change of stock did, for what follows it: the medicine as it now is,
+  /// and whether it was already low before the units came off.
+  static Future<({EnhancedMedicine after, bool wasLow})?> _changeStock(
+    String medicineId, {
+    double restore = 0,
+    double reduce = 0,
+  }) async {
     final med = await getMedicine(medicineId);
-    if (med != null) {
-      final wasLow = med.isLowStock;
-      final updated = med.reduceStock(amount);
-      await updateMedicine(updated);
-      // Fire a refill alert the moment stock crosses the low threshold
-      // (once, not on every subsequent dose). No-ops gracefully off-device.
-      if (updated.refillReminderEnabled && updated.isLowStock && !wasLow) {
-        await NotificationService().showImmediateNotification(
-          title: 'Refill ${med.name}',
-          body: 'Only ${updated.currentStock} left — time to restock.',
-          // Was `channelId: 'refill'` — not a channel that exists, and
-          // _notificationDetails ignored it anyway, so "you're running low" rang
-          // as a full-screen alarm. Nothing here is time-critical.
-          kind: ReminderKind.gentle,
-        );
-      }
-      _refreshRunOutReminder(medicineId);
+    if (med == null) return null;
+    var after = med;
+    // Only for a medicine whose stock is being counted: see [restoreStock].
+    if (restore > 0 && after.currentStock != null && after.isStockTracked) {
+      after = after.restoreStock(restore);
     }
+    final wasLow = after.isLowStock;
+    after = after.reduceStock(reduce);
+    // The DAO, not [updateMedicine]: this runs inside a transaction (see
+    // [markMedicineTaken]), and the notice to the screens is for after it commits.
+    await _dao.updateMedicine(_mapToMedicineCompanion(after));
+    return (after: after, wasLow: wasLow);
+  }
+
+  /// What follows a change of stock once it is written: a refill alert the moment
+  /// stock crosses the low threshold (once, not on every subsequent dose), and the
+  /// run-out reminder re-armed. No-ops gracefully off-device.
+  static Future<void> _afterStockChange(
+      String medicineId, ({EnhancedMedicine after, bool wasLow}) change) async {
+    final updated = change.after;
+    if (updated.refillReminderEnabled && updated.isLowStock && !change.wasLow) {
+      await NotificationService().showImmediateNotification(
+        title: 'Refill ${updated.name}',
+        body: 'Only ${updated.currentStock} left — time to restock.',
+        // Was `channelId: 'refill'` — not a channel that exists, and
+        // _notificationDetails ignored it anyway, so "you're running low" rang
+        // as a full-screen alarm. Nothing here is time-critical.
+        kind: ReminderKind.gentle,
+      );
+    }
+    _refreshRunOutReminder(medicineId);
   }
 
   /// The run-out reminder was only recomputed at app start, so a dose taken at
@@ -516,32 +551,7 @@ class MedicineCleanStorageService {
       vitals: vitals,
       actionTime: takenAt,
     );
-    // Was this exact slot ALREADY recorded as taken?
-    //
-    // `addLog` is an upsert on `doseLogId(medicineId, scheduledTime)`, so a
-    // second take of the same slot replaces one log row — but the stock
-    // decrement below is unconditional, so it ran twice. That happens on
-    // ordinary paths: taking a dose in-app and then the queue draining the
-    // notification action for the same slot, or Take on the full-screen alarm
-    // followed by Take in the app. Two tablets left the tracked count for one
-    // tablet actually swallowed, which drifts the refill date early and can
-    // trigger a refill alert that is not real.
-    //
-    // Read BEFORE the upsert overwrites it.
-    final prior = await getLog(doseLogId(medicineId, scheduledTime));
-    final alreadyCounted = prior?.countsAsTaken ?? false;
-    final priorAmount = prior?.dosageTaken ?? 0;
-
-    await addLog(log);
-    await _markDoseResolved(medicineId, scheduledTime);
-
-    // Update stock if tracked. When the slot was already counted, give back
-    // what the previous record removed first, so the net effect of re-taking a
-    // slot is the difference — not a second full decrement.
-    if (alreadyCounted && priorAmount > 0) {
-      await restoreStock(medicineId, priorAmount);
-    }
-    await reduceStock(medicineId, dosageTaken);
+    await _recordCountedDose(log, dosageTaken);
 
     return log;
   }
@@ -574,16 +584,62 @@ class MedicineCleanStorageService {
       dependentId: medicine?.dependentId,
       vitals: vitals,
     );
-    await addLog(log);
-    // Suppresses follow-up window nudges for this slot. The PRIMARY alarm at
-    // the original scheduled time is NOT suppressed by this flag (no gate
-    // exists for it today — a pre-existing gap shared with "took it early",
-    // not something this feature introduces or can fix here).
-    await _markDoseResolved(medicineId, scheduledTime);
-
-    await reduceStock(medicineId, dosageTaken);
+    // Suppresses follow-up window nudges for this slot (see [_recordCountedDose]). The
+    // PRIMARY alarm at the original scheduled time is NOT suppressed by that flag (no
+    // gate exists for it today — a pre-existing gap shared with "took it early", not
+    // something this feature introduces or can fix here).
+    await _recordCountedDose(log, dosageTaken);
 
     return log;
+  }
+
+  /// Record [log], a dose that counts as taken, and take its units off the stock —
+  /// for a dose taken on its slot and for one logged ahead of it alike, so the two
+  /// cannot disagree about how many units a dose costs.
+  static Future<void> _recordCountedDose(MedicineLog log, double dosageTaken) async {
+    // Was this exact slot ALREADY recorded as taken?
+    //
+    // `addLog` is an upsert on `doseLogId(medicineId, scheduledTime)`, so a
+    // second take of the same slot replaces one log row — but the stock
+    // decrement below is unconditional, so it ran twice. That happens on
+    // ordinary paths: taking a dose in-app and then the queue draining the
+    // notification action for the same slot, or Take on the full-screen alarm
+    // followed by Take in the app. Two tablets left the tracked count for one
+    // tablet actually swallowed, which drifts the refill date early and can
+    // trigger a refill alert that is not real.
+    //
+    // Read BEFORE the upsert overwrites it.
+    //
+    // The log and the stock are ONE change: a retry reasons from "the slot is
+    // already logged, so the stock has already moved", and that is only true if
+    // the two cannot be written apart. They were two writes. A failure between
+    // them — a locked database, the app swiped away — left the dose logged and the
+    // stock untouched, and the retry from the queue then gave back and took the
+    // dose in one step: net nothing, so the dose was never counted off the stock
+    // and the refill alert came a dose late. In a transaction, either the dose is
+    // logged AND counted, or neither is.
+    final medicineId = log.medicineId;
+    final change = await db.AppDatabase.instance.transaction(() async {
+      final prior = await getLog(log.id);
+      final alreadyCounted = prior?.countsAsTaken ?? false;
+      final priorAmount = prior?.dosageTaken ?? 0;
+
+      await _dao.addLog(_mapToLogCompanion(log));
+
+      // Update stock if tracked. When the slot was already counted, give back
+      // what the previous record removed first, so the net effect of re-taking a
+      // slot is the difference — not a second full decrement.
+      return _changeStock(
+        medicineId,
+        restore: alreadyCounted && priorAmount > 0 ? priorAmount : 0,
+        reduce: dosageTaken,
+      );
+    });
+    // After the commit, outside the transaction: what listens to this reloads from
+    // the database, and what it reads must be what was kept.
+    _bumpRevision();
+    await _markDoseResolved(medicineId, log.scheduledTime);
+    if (change != null) await _afterStockChange(medicineId, change);
   }
 
   /// Marks (medicineId, scheduledTime) as resolved for Phase 4's reminder
@@ -827,6 +883,10 @@ class MedicineCleanStorageService {
     required DateTime scheduledTime,
     required SkipReason reason,
     String? skipNote,
+
+    /// When the dose was actually skipped, for a tap that is only now being
+    /// applied. Defaults to now.
+    DateTime? skippedAt,
   }) async {
     // See markMedicineTaken — a log inherits its medicine's owner.
     final medicine = await getMedicine(medicineId);
@@ -837,6 +897,7 @@ class MedicineCleanStorageService {
       reason: reason,
       skipNote: skipNote,
       dependentId: medicine?.dependentId,
+      actionTime: skippedAt,
     );
 
     // Skipping a slot that was previously recorded as TAKEN must give the stock
@@ -844,82 +905,232 @@ class MedicineCleanStorageService {
     // without this the units the take removed stayed removed, and the patient's
     // count was permanently short by one dose. Reachable from the ordinary
     // "took it, then corrected myself" path.
-    final prior = await getLog(doseLogId(medicineId, scheduledTime));
-    if ((prior?.countsAsTaken ?? false) && (prior!.dosageTaken) > 0) {
-      await restoreStock(medicineId, prior.dosageTaken);
-    }
-
-    await addLog(log);
+    //
+    // The log and the stock are ONE change, as for a take (see [markMedicineTaken]): a
+    // retry reasons from the slot's log, so a failure between giving the units back
+    // and writing the skip left the slot still "taken" — and the retry gave them back
+    // again, the stock two doses too high.
+    final change = await db.AppDatabase.instance.transaction(() async {
+      final prior = await getLog(log.id);
+      await _dao.addLog(_mapToLogCompanion(log));
+      if ((prior?.countsAsTaken ?? false) && prior!.dosageTaken > 0) {
+        return _changeStock(medicineId, restore: prior.dosageTaken);
+      }
+      return null;
+    });
+    _bumpRevision();
     await _markDoseResolved(medicineId, scheduledTime);
+    if (change != null) await _afterStockChange(medicineId, change);
     return log;
   }
+
+  /// The drain under way, if there is one.
+  ///
+  /// The queue is read without being cleared (see [DoseActionQueue.drain]), so an
+  /// entry stays visible until it is acked. The app drains on cold start AND on
+  /// resume, and a resume can land while the first drain is still awaiting its
+  /// writes: without this each would apply the same taps, and the caller would
+  /// offer an Undo for twice as many doses as were taken.
+  static Future<List<String>>? _drainingDoseActions;
+
+  /// Something asked to drain while one was under way.
+  ///
+  /// The drain under way has already read the queue, so it does not know about a
+  /// tap that was queued since. "Take all" on a grouped notification queues one
+  /// entry per medicine, and each queued entry nudges the app to drain; the first
+  /// nudge starts a drain and the rest used to be dropped, leaving the other doses
+  /// in the queue until the next resume. Now they leave a note, and the drain goes
+  /// round again before it reports.
+  static bool _drainDoseActionsAgain = false;
+
+  /// Stands in for one pass over the queue, so the one-at-a-time rule can be driven
+  /// without a database that fails on cue.
+  @visibleForTesting
+  static Future<List<String>> Function()? doseDrainPassForTesting;
 
   /// Apply any Take/Skip actions the user tapped on a notification while the app
   /// was closed (queued by the background isolate — Drift is unavailable there).
   /// Returns the ids of the logs created, so the caller can offer a single Undo.
-  static Future<List<String>> drainPendingDoseActions() async {
+  ///
+  /// Each action is acked as soon as it has been applied, one at a time. Being
+  /// killed half way through then leaves the untouched ones queued and the written
+  /// ones forgotten; and one that throws stays queued for the next resume instead
+  /// of being thrown away with the rest of the list.
+  ///
+  /// One drain at a time. A call that arrives while one is under way leaves a note
+  /// for it to go round again, and returns — once everything is applied — nothing:
+  /// the drain under way reports all of it, in one "Logged N doses · Undo".
+  static Future<List<String>> drainPendingDoseActions() {
+    final running = _drainingDoseActions;
+    if (running != null) {
+      _drainDoseActionsAgain = true;
+      return running.then((_) => const <String>[]);
+    }
+    return _drainingDoseActions = _drainUntilQuiet();
+  }
+
+  static Future<List<String>> _drainUntilQuiet() async {
+    final created = <String>[];
+    try {
+      do {
+        _drainDoseActionsAgain = false;
+        created.addAll(await (doseDrainPassForTesting ?? _drainPendingDoseActions)());
+      } while (_drainDoseActionsAgain);
+    } finally {
+      // In the same synchronous step as the last look at the note above. Cleared
+      // anywhere later — by a `whenComplete` on the returned future, say — a call that
+      // arrived in the gap between "nothing more to do" and "no longer running" would
+      // leave its note for a pass that never comes.
+      _drainingDoseActions = null;
+    }
+    return created;
+  }
+
+  /// Whether the person has taken or skipped this slot themselves since
+  /// [tappedAt]. A slot merely marked missed, or not logged, is not a decision —
+  /// the tap is the person's, and is applied over it. Unknown tap time: not
+  /// settled, so an action queued by an older build is applied as it was.
+  @visibleForTesting
+  static bool settledSince(MedicineLog? log, DateTime? tappedAt) {
+    if (log == null || tappedAt == null) return false;
+    if (!log.countsAsTaken && !log.isSkipped) return false;
+    final at = log.actionTime;
+    return at != null && at.isAfter(tappedAt);
+  }
+
+  /// Whether this very tap is already what [log] says: the log is the take (or the
+  /// skip) the tap asked for, written at the moment of the tap.
+  ///
+  /// True for a tap that an earlier pass applied and the app was killed before it
+  /// could forget. Applying it again nets out — the log and the stock are one change
+  /// — but REPORTING it offered "Logged 1 dose · Undo" a second time for a dose the
+  /// person had been told about, and the Undo on that one would take the dose back.
+  /// Compared to the second: the log's time is stored as whole seconds.
+  @visibleForTesting
+  static bool appliedBy(MedicineLog? log, PendingDoseAction action) {
+    final tappedAt = action.tappedAt;
+    if (log == null || tappedAt == null) return false;
+    final at = log.actionTime;
+    if (at == null) return false;
+    if (at.millisecondsSinceEpoch ~/ 1000 != tappedAt.millisecondsSinceEpoch ~/ 1000) {
+      return false;
+    }
+    return action.isTake ? log.countsAsTaken : log.isSkipped;
+  }
+
+  static Future<List<String>> _drainPendingDoseActions() async {
     final actions = await DoseActionQueue.drain();
     final created = <String>[];
-    for (final a in actions) {
-      final med = await getMedicine(a.medicineId);
-      if (med == null) continue;
-      try {
-        final log = a.isTake
-            ? await markMedicineTaken(
-                medicineId: a.medicineId,
-                scheduledTime: a.scheduledTime,
-                // The queue carries no dose amount (it's written from the alarm
-                // isolate, which can't read Drift), so resolve it here exactly
-                // the way the in-app take path does — including titration.
-                // Defaulting to 1 under-decremented stock for every medicine
-                // whose dose isn't a single unit (e.g. "2 tablets"), which
-                // drifts refill predictions and runs the patient out early.
-                dosageTaken: med.schedule
-                    .effectiveDosageAmount(a.scheduledTime, med.dosageAmount),
-              )
-            : await markMedicineSkipped(
-                medicineId: a.medicineId,
-                scheduledTime: a.scheduledTime,
-                reason: SkipReason.other);
-        created.add(log.id);
-      } catch (e) {
-        debugPrint('⚠️ Applying queued dose action failed: $e');
+    // Forgotten together, ONCE, when the pass is over. Forgetting is a read and a
+    // rewrite of the one stored list, which the alarm isolate also appends to — a
+    // tap that lands between the two is lost — so it is one window per pass rather
+    // than one per action. What was applied and not yet forgotten is applied again
+    // if the app is killed first, which changes nothing: a slot's log and its stock
+    // are one change, and doing it twice nets out.
+    final done = <PendingDoseAction>[];
+    try {
+      for (final a in actions) {
+        try {
+          final med = await getMedicine(a.medicineId);
+          if (med == null) {
+            // The medicine was deleted since the tap: there is nothing to apply it
+            // to, and nothing that will ever change that.
+            done.add(a);
+            continue;
+          }
+          // The person may have settled this very slot in the app since the tap —
+          // the tap could only be retried because it failed to apply. Their later
+          // decision stands: replaying the tap would overwrite it, and move the
+          // stock the wrong way with it.
+          final prior = await getLog(doseLogId(a.medicineId, a.scheduledTime));
+          if (settledSince(prior, a.tappedAt)) {
+            done.add(a);
+            continue;
+          }
+          // Already in, from a pass that was cut short: forgotten without being applied
+          // or reported again.
+          if (appliedBy(prior, a)) {
+            done.add(a);
+            continue;
+          }
+          final log = a.isTake
+              ? await markMedicineTaken(
+                  medicineId: a.medicineId,
+                  scheduledTime: a.scheduledTime,
+                  // When they tapped, not when the app got round to applying it —
+                  // which is also what lets a LATER tap on the same slot be told
+                  // from an earlier one.
+                  takenAt: a.tappedAt,
+                  // The queue carries no dose amount (it's written from the alarm
+                  // isolate, which can't read Drift), so resolve it here exactly
+                  // the way the in-app take path does — including titration.
+                  // Defaulting to 1 under-decremented stock for every medicine
+                  // whose dose isn't a single unit (e.g. "2 tablets"), which
+                  // drifts refill predictions and runs the patient out early.
+                  dosageTaken: med.schedule
+                      .effectiveDosageAmount(a.scheduledTime, med.dosageAmount),
+                )
+              : await markMedicineSkipped(
+                  medicineId: a.medicineId,
+                  scheduledTime: a.scheduledTime,
+                  reason: SkipReason.other,
+                  skippedAt: a.tappedAt);
+          created.add(log.id);
+          done.add(a);
+        } catch (e) {
+          debugPrint('⚠️ Applying queued dose action failed: $e');
+          // Left queued, to be tried again on the next resume — unless it has been
+          // failing for longer than anything transient lasts.
+          if (clock.now().difference(a.scheduledTime) > DoseActionQueue.giveUpAfter) {
+            debugPrint('⚠️ Giving up on a queued dose action for ${a.medicineId}');
+            done.add(a);
+          }
+        }
       }
+    } finally {
+      await DoseActionQueue.ack(done);
     }
     return created;
   }
 
   // ============ DOCTOR METHODS ============
 
-  static Future<List<Doctor>> getAllDoctors() async {
+  /// Every doctor the profile in view can see: its own and the ones shared with the
+  /// family. [scopeToActiveProfile] is false for what must see them all — a backup,
+  /// a full export, the sweep that reassigns a removed person's records.
+  static Future<List<Doctor>> getAllDoctors({
+    bool scopeToActiveProfile = true,
+  }) async {
     final docs = await _dao.getAllDoctors();
-    return docs.map((d) => Doctor(
-      id: d.id,
-      name: d.name,
-      specialty: d.specialty,
-      phone: d.phone,
-      email: d.email,
-      address: d.address,
-      clinicName: d.hospital,
-      notes: d.notes,
-      isPrimary: d.isPrimary,
-    )).toList();
+    final all = docs.map(_doctorFromRow).toList();
+    if (!scopeToActiveProfile) return all;
+    final active = ActiveProfileService().activeDependentId;
+    return all
+        .where((d) => CareTeamScope.visible(
+            owner: d.dependentId, shared: d.sharedWithFamily, active: active))
+        .toList();
   }
 
+  static Doctor _doctorFromRow(db.Doctor d) => Doctor(
+        id: d.id,
+        name: d.name,
+        specialty: d.specialty,
+        phone: d.phone,
+        email: d.email,
+        address: d.address,
+        clinicName: d.hospital,
+        clinicId: d.clinicId,
+        notes: d.notes,
+        isPrimary: d.isPrimary,
+        dependentId: d.dependentId,
+        sharedWithFamily: d.sharedWithFamily,
+      );
+
+  /// One doctor by id, whoever owns it: an appointment or a medicine that names a
+  /// doctor must still find them while another profile is in view.
   static Future<Doctor?> getDoctor(String id) async {
     final d = await _dao.getDoctor(id);
-    if (d == null) return null;
-    return Doctor(
-      id: d.id,
-      name: d.name,
-      specialty: d.specialty,
-      phone: d.phone,
-      email: d.email,
-      address: d.address,
-      clinicName: d.hospital,
-      notes: d.notes,
-      isPrimary: d.isPrimary,
-    );
+    return d == null ? null : _doctorFromRow(d);
   }
 
   static Future<void> saveDoctor(Doctor doctor) async {
@@ -940,8 +1151,11 @@ class MedicineCleanStorageService {
       email: drift.Value(doctor.email),
       address: drift.Value(doctor.address),
       hospital: drift.Value(doctor.clinicName),
+      clinicId: drift.Value(doctor.clinicId),
       notes: drift.Value(doctor.notes),
       isPrimary: drift.Value(doctor.isPrimary),
+      dependentId: drift.Value(doctor.dependentId),
+      sharedWithFamily: drift.Value(doctor.sharedWithFamily),
       createdAt: drift.Value(DateTime.now()),
     ));
   }
@@ -955,13 +1169,24 @@ class MedicineCleanStorageService {
       email: drift.Value(doctor.email),
       address: drift.Value(doctor.address),
       hospital: drift.Value(doctor.clinicName),
+      clinicId: drift.Value(doctor.clinicId),
       notes: drift.Value(doctor.notes),
       isPrimary: drift.Value(doctor.isPrimary),
+      dependentId: drift.Value(doctor.dependentId),
+      sharedWithFamily: drift.Value(doctor.sharedWithFamily),
     ));
   }
 
+  /// Delete a doctor, and take them off the medicines that named them: a medicine
+  /// left pointing at a doctor who is gone would show an empty "Prescriber".
   static Future<void> deleteDoctor(String id) async {
-    await _dao.deleteDoctor(id);
+    // One transaction: a delete that went through and an unlink that did not would
+    // leave exactly the pointer to nothing that this exists to prevent.
+    final unlinked = await db.AppDatabase.instance.transaction(() async {
+      await _dao.deleteDoctor(id);
+      return _dao.unlinkDoctor(id, clock.now());
+    });
+    if (unlinked > 0) _bumpRevision();
   }
 
   // ============ PHARMACY METHODS ============
@@ -1022,20 +1247,50 @@ class MedicineCleanStorageService {
     ));
   }
 
+  /// Delete a pharmacy, and take it off the medicines that named it. The refill
+  /// errand finds its pharmacy by id and copes with one that is gone, but the
+  /// medicine form would show a pharmacy that does not exist.
   static Future<void> deletePharmacy(String id) async {
-    await _dao.deletePharmacy(id);
+    final unlinked = await db.AppDatabase.instance.transaction(() async {
+      await _dao.deletePharmacy(id);
+      return _dao.unlinkPharmacy(id, clock.now());
+    });
+    if (unlinked > 0) _bumpRevision();
+  }
+
+  static Future<void> savePharmacy(Pharmacy pharmacy) async {
+    if (await getPharmacy(pharmacy.id) != null) {
+      await updatePharmacy(pharmacy);
+    } else {
+      await addPharmacy(pharmacy);
+    }
   }
 
   // ============ CLINIC METHODS (SharedPreferences) ============
   
   static const String _clinicsKey = 'medication_clinics';
 
-  static Future<List<Clinic>> getAllClinics() async {
+  /// Every clinic the profile in view can see. [scopeToActiveProfile] is false for
+  /// what must see them all, above all [saveClinic] and [deleteClinic], which write
+  /// the whole list back and would otherwise drop everyone else's clinics.
+  static Future<List<Clinic>> getAllClinics({
+    bool scopeToActiveProfile = true,
+  }) async {
+    final all = await _readClinics();
+    if (!scopeToActiveProfile) return all;
+    final active = ActiveProfileService().activeDependentId;
+    return all
+        .where((c) => CareTeamScope.visible(
+            owner: c.dependentId, shared: c.sharedWithFamily, active: active))
+        .toList();
+  }
+
+  static Future<List<Clinic>> _readClinics() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = prefs.getString(_clinicsKey);
       if (jsonStr == null || jsonStr.isEmpty) return [];
-      
+
       final List<dynamic> jsonList = jsonDecode(jsonStr);
       return jsonList.map((j) => Clinic.fromJson(j as Map<String, dynamic>)).toList();
     } catch (e) {
@@ -1045,7 +1300,7 @@ class MedicineCleanStorageService {
   }
 
   static Future<Clinic?> getClinic(String id) async {
-    final clinics = await getAllClinics();
+    final clinics = await _readClinics();
     try {
       return clinics.firstWhere((c) => c.id == id);
     } catch (_) {
@@ -1055,7 +1310,7 @@ class MedicineCleanStorageService {
 
   static Future<void> saveClinic(Clinic clinic) async {
     try {
-      final clinics = await getAllClinics();
+      final clinics = await _readClinics();
       final index = clinics.indexWhere((c) => c.id == clinic.id);
       
       if (index >= 0) {
@@ -1098,9 +1353,14 @@ class MedicineCleanStorageService {
 
   static Future<void> deleteClinic(String id) async {
     try {
-      final clinics = await getAllClinics();
+      // Doctors who worked there keep the name they were shown under, and lose only the
+      // link: a link to a record that is gone would otherwise be saved back for ever.
+      // First, so that a database that fails leaves the clinic where it was, still
+      // linked, for a retry; the other way round leaves a link to nothing.
+      await _dao.unlinkClinic(id);
+
+      final clinics = await _readClinics();
       clinics.removeWhere((c) => c.id == id);
-      
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_clinicsKey, jsonEncode(clinics.map((c) => c.toJson()).toList()));
     } catch (e) {
@@ -1339,7 +1599,25 @@ class MedicineCleanStorageService {
           stampActiveProfile: false);
     }
 
+    await _reassignCareTeamToSelf(id, onlyShared: false);
+
     await _dao.deleteDependent(id);
+  }
+
+  /// Hands [id]'s doctors and clinics to the account holder. [onlyShared] limits it to
+  /// the ones shared with the family: when a person's own records are being deleted,
+  /// a family doctor they happened to add is still the household's and goes to self,
+  /// where the rest are deleted.
+  static Future<void> _reassignCareTeamToSelf(String id,
+      {required bool onlyShared}) async {
+    for (final d in await getAllDoctors(scopeToActiveProfile: false)) {
+      if (d.dependentId != id || (onlyShared && !d.sharedWithFamily)) continue;
+      await updateDoctor(d.copyWith(clearDependentId: true));
+    }
+    for (final c in await _readClinics()) {
+      if (c.dependentId != id || (onlyShared && !c.sharedWithFamily)) continue;
+      await saveClinic(c.copyWith(clearDependentId: true));
+    }
   }
 
   /// Everything the app holds for [id] — their medicines (and so their dose
@@ -1389,6 +1667,17 @@ class MedicineCleanStorageService {
     for (final a in (await getAllAppointments(scopeToActiveProfile: false))
         .where((a) => a.dependentId == id)) {
       await deleteAppointment(a.id); // which withdraws its notices too
+    }
+
+    // Their doctors and clinics, except the ones shared with the family, which are
+    // the household's and go to the account holder. After the medicines and
+    // appointments, so a doctor's removal has nothing left of theirs to unlink.
+    await _reassignCareTeamToSelf(id, onlyShared: true);
+    for (final d in await getAllDoctors(scopeToActiveProfile: false)) {
+      if (d.dependentId == id) await deleteDoctor(d.id);
+    }
+    for (final c in await _readClinics()) {
+      if (c.dependentId == id) await deleteClinic(c.id);
     }
   }
 
@@ -1495,7 +1784,7 @@ class MedicineCleanStorageService {
     final medicines =
         await getAllMedicines(includeArchived: true, scopeToActiveProfile: false);
     final logs = await getAllLogs(scopeToActiveProfile: false);
-    final doctors = await getAllDoctors();
+    final doctors = await getAllDoctors(scopeToActiveProfile: false);
     final pharmacies = await getAllPharmacies();
     final appointments = await getAllAppointments(scopeToActiveProfile: false);
     final dependents = await getAllDependents();

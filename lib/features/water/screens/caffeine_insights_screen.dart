@@ -10,6 +10,7 @@ import '../models/enhanced_water_log.dart';
 import '../services/water_service.dart';
 import '../../../core/utils/calendar_day.dart';
 import 'package:clock/clock.dart';
+import '../../../core/utils/units.dart';
 
 /// How today's caffeine intake is classified against the FDA's 400 mg/day
 /// guidance for healthy adults. General reference only — never presented as
@@ -231,7 +232,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
           accent: accent,
         ),
         StatTile(
-          value: _hydrationOffsetMl == 0 ? '—' : '$_hydrationOffsetMl ml',
+          value: _hydrationOffsetMl == 0 ? '—' : Units.volumeText(_hydrationOffsetMl),
           label: 'Hydration offset',
           icon: Symbols.water_drop_rounded,
           accent: accent,
@@ -415,7 +416,7 @@ class _CaffeineInsightsScreenState extends State<CaffeineInsightsScreen> {
                                   fontWeight: FontWeight.w600)),
                           Text(
                             '${TimeOfDay.fromDateTime(log.time).format(context)}'
-                            ' · ${log.amountMl} ml',
+                            ' · ${Units.volumeText(log.amountMl)}',
                             style: tt.bodySmall
                                 ?.copyWith(color: ext.textSecondary),
                           ),

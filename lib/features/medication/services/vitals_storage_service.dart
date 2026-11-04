@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' as drift;
-import 'package:health/health.dart' show HealthDataPoint, NumericHealthValue;
+import 'package:health/health.dart'
+    show HealthDataPoint, HealthDataType, NumericHealthValue;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/app_database.dart' as db;
 import '../../../core/database/daos/vitals_dao.dart';
+import '../../../core/health/health_record_ids.dart';
+import '../../../core/health/health_sample_origin.dart';
 import '../../../core/health/vitals_analyzer.dart';
 import '../../../core/services/active_profile_service.dart';
 import '../../../core/services/health_data_service.dart';
@@ -23,7 +26,53 @@ class VitalsStorageService {
 
   /// Bumped on any vitals mutation so kept-alive screens can refresh live.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
-  static void _bump() => revision.value++;
+
+  static int _batchDepth = 0;
+  static bool _bumpOwed = false;
+
+  static void _bump() {
+    if (_batchDepth > 0) {
+      _bumpOwed = true;
+    } else {
+      revision.value++;
+    }
+  }
+
+  /// Runs [body], which saves many readings, as ONE transaction, and tells
+  /// listeners ONCE when it is done instead of once per reading.
+  ///
+  /// Every save bumps [revision], and a screen that follows it reloads on each
+  /// bump: an import of a few hundred readings was a few hundred reloads of the
+  /// whole list while it was still being written. Inside this, the bumps are
+  /// collected into one, sent when the outermost batch ends, after the commit.
+  /// Nothing is sent if nothing was saved.
+  ///
+  /// If [body] throws, all of it is rolled back and the error goes on to the caller:
+  /// an import that did not get as far as remembering what it had seen finds
+  /// nothing half done, and tries the lot again. Listeners are still told, since
+  /// another batch running at the same moment may have saved something, and a
+  /// reload that finds nothing changed costs far less than one that was skipped.
+  ///
+  /// One transaction also means one write to disk rather than one per reading,
+  /// which for an app that writes a reading every few minutes is the difference
+  /// between a moment and minutes.
+  ///
+  /// Save with `syncToHealthConnect: false` in here: the share-out is started
+  /// without being awaited and would run on after the transaction has closed. Every
+  /// bulk save (an import, a restore) is a reading that came from somewhere else,
+  /// and is not shared back out anyway.
+  static Future<T> batch<T>(Future<T> Function() body) async {
+    _batchDepth++;
+    try {
+      return await db.AppDatabase.instance.transaction(body);
+    } finally {
+      _batchDepth--;
+      if (_batchDepth == 0 && _bumpOwed) {
+        _bumpOwed = false;
+        revision.value++;
+      }
+    }
+  }
 
   static Future<void> init() async {
     // DB is initialized centrally (AppDatabase.instance); nothing to preload.
@@ -48,9 +97,11 @@ class VitalsStorageService {
   //
   // Duplicate-write avoidance is a Dart-level flag per reading id, set only
   // after a write actually succeeds — a failed write leaves the flag unset so
-  // the next save/retry tries again. The plugin's own clientRecordId/delete
-  // APIs (v13+) are deliberately not used here; see
-  // HealthDataService.vitalsWriteTypes' doc for why.
+  // the next save/retry tries again. On Android the write ALSO carries a name
+  // (clientRecordId, see HealthRecordIds), which is what lets an edit replace the
+  // record and a delete remove it; the Dart flag stays the dedup mechanism because
+  // the name is a Health Connect concept the iOS side ignores. See
+  // HealthDataService.vitalsWriteTypes' doc.
 
   static const String _syncEnabledKey = 'health_connect_vitals_sync_enabled';
 
@@ -77,16 +128,70 @@ class VitalsStorageService {
     await prefs.setBool(_syncedFlagKey(readingId), true);
   }
 
+  // A reading whose platform record was written under a name (HealthRecordIds) can
+  // be replaced by an edit and deleted with the reading. Only those: a reading sent
+  // before the names existed has a record nothing can find again, and rewriting it
+  // would make a second one. Android only; see [HealthRecordIds].
+  static String _namedFlagKey(String readingId) =>
+      'health_connect_named_$readingId';
+
+  static Future<bool> _isNamed(String readingId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_namedFlagKey(readingId)) ?? false;
+  }
+
+  /// Both flags, once a write under a name has landed.
+  static Future<void> _markWritten(String readingId) async {
+    await _markSynced(readingId);
+    if (HealthRecordIds.supported(defaultTargetPlatform)) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_namedFlagKey(readingId), true);
+    }
+  }
+
+  /// Whether [readingId] is to be written now: not yet sent, or sent under a name
+  /// and so replaceable by this edit.
+  static Future<bool> _shouldWrite(String readingId) async {
+    if (!await _alreadySynced(readingId)) return true;
+    return _isNamed(readingId);
+  }
+
+  /// A deleted reading comes out of the health store too, when it went in under a
+  /// name. Both flags are cleared once it has, so that Undo — which saves the same id
+  /// again — writes it afresh instead of finding it "already sent".
+  ///
+  /// Best-effort and never throws, like the write: a store that cannot be reached
+  /// leaves the record where it is, and the flags with it, which is what the
+  /// reading looked like before this existed.
+  static Future<void> _withdraw(
+      String readingId, HealthDataType type, String clientRecordId) async {
+    try {
+      if (!await _isNamed(readingId)) return;
+      final ok = await HealthDataService.instance
+          .deleteByClientId(type, clientRecordId);
+      if (!ok) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_syncedFlagKey(readingId));
+      await prefs.remove(_namedFlagKey(readingId));
+    } catch (e) {
+      debugPrint('⚠️ Health Connect withdraw failed: $e');
+    }
+  }
+
   /// Best-effort, never throws, never blocks the local save that triggered
   /// it — deliberately NOT awaited by [saveBp]/[saveGlucose] (fire-and-forget)
   /// since the underlying plugin call has no timeout; a slow/hanging Health
   /// Connect/HealthKit provider must never stall a save the user is waiting on.
   static Future<void> _syncBpIfEnabled(BloodPressureReading r) async {
     try {
+      // A reading that came FROM the store is not sent back to it — not even when
+      // the person edits it, which is a save like any other.
+      if (HealthSampleOrigin.cameFromTheStore(r.id)) return;
       if (!await isHealthConnectSyncEnabled()) return;
-      if (await _alreadySynced(r.id)) return;
-      final ok = await HealthDataService.instance.writeBloodPressure(r);
-      if (ok) await _markSynced(r.id);
+      if (!await _shouldWrite(r.id)) return;
+      final ok = await HealthDataService.instance.writeBloodPressure(r,
+          clientRecordId: HealthRecordIds.bloodPressure(r.id));
+      if (ok) await _markWritten(r.id);
     } catch (e) {
       debugPrint('⚠️ Health Connect BP sync failed: $e');
     }
@@ -95,10 +200,12 @@ class VitalsStorageService {
   /// See [_syncBpIfEnabled]'s doc.
   static Future<void> _syncGlucoseIfEnabled(GlucoseReading r) async {
     try {
+      if (HealthSampleOrigin.cameFromTheStore(r.id)) return;
       if (!await isHealthConnectSyncEnabled()) return;
-      if (await _alreadySynced(r.id)) return;
-      final ok = await HealthDataService.instance.writeGlucose(r);
-      if (ok) await _markSynced(r.id);
+      if (!await _shouldWrite(r.id)) return;
+      final ok = await HealthDataService.instance
+          .writeGlucose(r, clientRecordId: HealthRecordIds.glucose(r.id));
+      if (ok) await _markWritten(r.id);
     } catch (e) {
       debugPrint('⚠️ Health Connect glucose sync failed: $e');
     }
@@ -108,10 +215,12 @@ class VitalsStorageService {
   /// and glucose (one "Share with Health Connect" switch), not a separate one.
   static Future<void> _syncWeightIfEnabled(WeightReading r) async {
     try {
+      if (HealthSampleOrigin.cameFromTheStore(r.id)) return;
       if (!await isHealthConnectSyncEnabled()) return;
-      if (await _alreadySynced(r.id)) return;
-      final ok = await HealthDataService.instance.writeWeight(r);
-      if (ok) await _markSynced(r.id);
+      if (!await _shouldWrite(r.id)) return;
+      final ok = await HealthDataService.instance
+          .writeWeight(r, clientRecordId: HealthRecordIds.weight(r.id));
+      if (ok) await _markWritten(r.id);
     } catch (e) {
       debugPrint('⚠️ Health Connect weight sync failed: $e');
     }
@@ -146,11 +255,11 @@ class VitalsStorageService {
   /// must be false there too, or restoring years of history would bulk-write
   /// every reading to Health Connect on first launch on a new device.
   ///
-  /// Sync is once-per-id: a later edit to an already-synced reading does NOT
-  /// push the correction, because this app does not track the platform record
-  /// it wrote (see HealthDataService.vitalsWriteTypes' doc for why the plugin's
-  /// v13 clientRecordId/delete APIs are not used) — re-syncing on every edit
-  /// would instead pile up duplicates.
+  /// On Android an edit is sent too: the reading's platform record was written under
+  /// a name ([HealthRecordIds]) and the same name written again replaces it, so the
+  /// store gets the corrected reading rather than a second one. A reading sent before
+  /// the names existed, and any reading on an iPhone, is once-per-id as it always was:
+  /// its record cannot be found again, and re-sending would pile up duplicates.
   static Future<void> saveBp(
     BloodPressureReading r, {
     bool stampActiveProfile = true,
@@ -164,22 +273,27 @@ class VitalsStorageService {
     if (syncToHealthConnect) unawaited(_syncBpIfEnabled(toSave));
   }
 
-  /// Deliberately does NOT clear the id's synced flag (a prior version of
-  /// this method did, to avoid orphaned flags accumulating). That reopened a
-  /// worse bug: the delete-confirmation SnackBar's Undo action re-saves the
-  /// SAME id, which — with the flag cleared — passed the "already synced"
-  /// check and pushed a brand-new, duplicate write to Health Connect/HealthKit
-  /// for data that was already there (a local delete never removes the platform
-  /// record: this app does not retain the uuid/clientRecordId that the plugin's
-  /// v13 delete APIs would need, so the original write survives regardless).
-  /// The flag answers "has Health Connect already seen this id's data",
-  /// which stays true regardless of whether the LOCAL row currently exists —
-  /// a stale flag for a genuinely-deleted (never restored) reading is a
-  /// harmless, small, unbounded-but-slow-growing leftover, same class of
-  /// trade-off already accepted for `expiry_notified_*` flags.
+  /// Does NOT clear the id's synced flag by itself (a prior version did, to avoid
+  /// orphaned flags accumulating). That reopened a worse bug: the delete-confirmation
+  /// SnackBar's Undo action re-saves the SAME id, which — with the flag cleared —
+  /// passed the "already synced" check and pushed a brand-new, duplicate write to the
+  /// store for data that was already there.
+  ///
+  /// What changed is that on Android the platform record can now be removed: one
+  /// written under a name ([HealthRecordIds]) is deleted from the store along with
+  /// the reading, and only THEN are the flags cleared, so Undo writes it afresh.
+  /// A record written before the names existed (or on an iPhone) cannot be found
+  /// again; it stays, with its flag, which is what keeps Undo from duplicating it. The
+  /// flag answers "has the store already seen this id's data", which stays true
+  /// regardless of whether the LOCAL row currently exists — a stale flag for a
+  /// genuinely-deleted (never restored) reading is a harmless, small, slow-growing
+  /// leftover, same class of trade-off already accepted for `expiry_notified_*`
+  /// flags.
   static Future<void> deleteBp(String id) async {
     await _dao.deleteBp(id);
     _bump();
+    unawaited(_withdraw(id, HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+        HealthRecordIds.bloodPressure(id)));
   }
 
   // ============ BLOOD GLUCOSE ============
@@ -224,6 +338,8 @@ class VitalsStorageService {
   static Future<void> deleteGlucose(String id) async {
     await _dao.deleteGlucose(id);
     _bump();
+    unawaited(
+        _withdraw(id, HealthDataType.BLOOD_GLUCOSE, HealthRecordIds.glucose(id)));
   }
 
   // ============ WEIGHT ============
@@ -273,6 +389,7 @@ class VitalsStorageService {
   static Future<void> deleteWeight(String id) async {
     await _dao.deleteWeight(id);
     _bump();
+    unawaited(_withdraw(id, HealthDataType.WEIGHT, HealthRecordIds.weight(id)));
   }
 
   // ---- Health Connect / HealthKit import (weight, read-direction) --------
@@ -289,7 +406,7 @@ class VitalsStorageService {
   // into a no-op update rather than a duplicate row.
 
   static String _importedWeightId(DateTime sampleStart) =>
-      'hc_import_${sampleStart.millisecondsSinceEpoch}';
+      '${HealthSampleOrigin.weightIdPrefix}${sampleStart.millisecondsSinceEpoch}';
 
   /// Pull weight samples logged directly into Health Connect/HealthKit (e.g.
   /// by a smart scale or another app) into the local Weight tracker. Never
@@ -330,21 +447,26 @@ class VitalsStorageService {
         .toSet();
     final now = DateTime.now();
     var imported = 0;
-    for (final p in points) {
-      final value = p.value;
-      if (value is! NumericHealthValue) continue; // defensive: unexpected shape
-      final id = _importedWeightId(p.dateFrom);
-      if (existingIds.contains(id)) continue; // already imported previously
-      final reading = WeightReading(
-        id: id,
-        valueKg: value.numericValue.toDouble(),
-        takenAt: p.dateFrom,
-        createdAt: now,
-      );
-      await saveWeight(reading, syncToHealthConnect: false);
-      existingIds.add(id);
-      imported++;
-    }
+    // Never this app's own records: with sharing on, every weight logged here
+    // is also in the health store under this app's name, and reading it back
+    // would add each one a second time as an import.
+    await batch(() async {
+      for (final p in HealthSampleOrigin.fromOthers(points)) {
+        final value = p.value;
+        if (value is! NumericHealthValue) continue; // defensive: unexpected shape
+        final id = _importedWeightId(p.dateFrom);
+        if (existingIds.contains(id)) continue; // already imported previously
+        final reading = WeightReading(
+          id: id,
+          valueKg: value.numericValue.toDouble(),
+          takenAt: p.dateFrom,
+          createdAt: now,
+        );
+        await saveWeight(reading, syncToHealthConnect: false);
+        existingIds.add(id);
+        imported++;
+      }
+    });
     return imported;
   }
 
@@ -412,32 +534,32 @@ class VitalsStorageService {
   /// Restore vitals from a backup snapshot (non-destructive upsert). Does not
   /// stamp the active profile — each reading's `dependentId` from the backup
   /// (including a legitimate null for a self-owned reading) is authoritative.
-  static Future<void> importJson(Map<String, dynamic> data) async {
-    for (final r in (data['bloodPressure'] as List? ?? const [])) {
-      try {
-        await saveBp(BloodPressureReading.fromJson(Map<String, dynamic>.from(r)),
-            stampActiveProfile: false, syncToHealthConnect: false);
-      } catch (_) {/* skip malformed */}
-    }
-    for (final r in (data['glucose'] as List? ?? const [])) {
-      try {
-        await saveGlucose(GlucoseReading.fromJson(Map<String, dynamic>.from(r)),
-            stampActiveProfile: false, syncToHealthConnect: false);
-      } catch (_) {/* skip malformed */}
-    }
-    for (final r in (data['weight'] as List? ?? const [])) {
-      try {
-        await saveWeight(WeightReading.fromJson(Map<String, dynamic>.from(r)),
-            stampActiveProfile: false, syncToHealthConnect: false);
-      } catch (_) {/* skip malformed */}
-    }
-    for (final r in (data['mood'] as List? ?? const [])) {
-      try {
-        await saveMood(MoodEntry.fromJson(Map<String, dynamic>.from(r)),
-            stampActiveProfile: false);
-      } catch (_) {/* skip malformed */}
-    }
-  }
+  static Future<void> importJson(Map<String, dynamic> data) => batch(() async {
+        for (final r in (data['bloodPressure'] as List? ?? const [])) {
+          try {
+            await saveBp(BloodPressureReading.fromJson(Map<String, dynamic>.from(r)),
+                stampActiveProfile: false, syncToHealthConnect: false);
+          } catch (_) {/* skip malformed */}
+        }
+        for (final r in (data['glucose'] as List? ?? const [])) {
+          try {
+            await saveGlucose(GlucoseReading.fromJson(Map<String, dynamic>.from(r)),
+                stampActiveProfile: false, syncToHealthConnect: false);
+          } catch (_) {/* skip malformed */}
+        }
+        for (final r in (data['weight'] as List? ?? const [])) {
+          try {
+            await saveWeight(WeightReading.fromJson(Map<String, dynamic>.from(r)),
+                stampActiveProfile: false, syncToHealthConnect: false);
+          } catch (_) {/* skip malformed */}
+        }
+        for (final r in (data['mood'] as List? ?? const [])) {
+          try {
+            await saveMood(MoodEntry.fromJson(Map<String, dynamic>.from(r)),
+                stampActiveProfile: false);
+          } catch (_) {/* skip malformed */}
+        }
+      });
 
   // ============ MAPPERS ============
 

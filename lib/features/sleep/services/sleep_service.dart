@@ -11,6 +11,9 @@ import 'package:tablet_remainder/core/database/app_database.dart' as db;
 import 'package:tablet_remainder/core/database/daos/sleep_dao.dart';
 import 'package:tablet_remainder/core/database/daos/steps_dao.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
+import '../../biometrics/models/health_source.dart';
+import '../../biometrics/services/health_source_choices.dart';
+import '../../biometrics/services/health_source_registry.dart';
 import '../models/sleep_session.dart';
 import '../models/sleep_schedule.dart';
 import '../models/sleep_stage.dart';
@@ -645,7 +648,11 @@ class SleepService {
       debugPrint('⚠️ SleepService tombstone lookup failed: $e');
     }
 
-    return _importBuckets(buckets, source, deletedIds);
+    // The user's Connected-devices choices: a source switched off is left out
+    // of the night, and a pinned one is used whenever it recorded it.
+    final known = await HealthSourceChoices.load();
+
+    return _importBuckets(buckets, source, deletedIds, known: known);
   }
 
   /// The bucket-and-store half of [syncFromHealth], split out from the platform
@@ -658,8 +665,9 @@ class SleepService {
   static Future<int> _importBuckets(
     Map<String, List<HealthDataPoint>> buckets,
     SleepSource source,
-    Set<String> deletedIds,
-  ) async {
+    Set<String> deletedIds, {
+    Map<String, HealthSource> known = const {},
+  }) async {
     var changed = false;
     var count = 0;
 
@@ -670,7 +678,7 @@ class SleepService {
       // …nor resurrect an imported night they deleted.
       if (deletedIds.contains('hk_${entry.key}')) continue;
 
-      var session = _aggregate(entry.key, entry.value, source);
+      var session = _aggregate(entry.key, entry.value, source, known: known);
       if (session == null) continue;
 
       // A re-import of a night we already hold is an UPDATE of that row, not a
@@ -716,8 +724,9 @@ class SleepService {
     Map<String, List<HealthDataPoint>> buckets,
     SleepSource source, {
     Set<String> deletedIds = const {},
+    Map<String, HealthSource> known = const {},
   }) =>
-      _importBuckets(buckets, source, deletedIds);
+      _importBuckets(buckets, source, deletedIds, known: known);
 
   /// Whether a freshly aggregated night is, field for field, the night already
   /// stored — ignoring the timestamps, which are exactly what must not drive
@@ -837,7 +846,21 @@ class SleepService {
   /// much sleep it recorded (stages, or a bare asleep total), the one with
   /// stages winning a tie; segments that name no source are one source, as they
   /// always were.
-  static List<HealthDataPoint> _fromOneSource(List<HealthDataPoint> points) {
+  ///
+  /// Two things the user can say on Connected devices come first. A source they
+  /// switched off is not a candidate, and the one they pinned wins whenever it
+  /// recorded the night at all, however short — a preference, so a night it
+  /// missed still comes from whoever did record it.
+  static List<HealthDataPoint> _fromOneSource(
+      List<HealthDataPoint> everyPoint, Map<String, HealthSource> known) {
+    final points = HealthSourceRegistry.usable(everyPoint, known);
+    if (points.isEmpty) return points;
+    final pinned = HealthSourceRegistry.pinnedKeyIn(points, known);
+    if (pinned != null) {
+      return points
+          .where((p) => HealthSourceRegistry.keyFor(p) == pinned)
+          .toList(growable: false);
+    }
     String idOf(HealthDataPoint p) =>
         p.sourceId.isNotEmpty ? p.sourceId : (p.sourceName.isNotEmpty ? p.sourceName : '');
     final bySource = <String, List<HealthDataPoint>>{};
@@ -894,8 +917,9 @@ class SleepService {
   /// out of the night's figures and recorded in the note rather than thrown
   /// away; everything else is the night, however fragmented.
   static SleepSession? _aggregate(
-      String dateKey, List<HealthDataPoint> everyPoint, SleepSource source) {
-    final allPoints = _fromOneSource(everyPoint);
+      String dateKey, List<HealthDataPoint> everyPoint, SleepSource source,
+      {Map<String, HealthSource> known = const {}}) {
+    final allPoints = _fromOneSource(everyPoint, known);
     final episodes = _splitEpisodes(allPoints);
     final nightEpisodes =
         episodes.where((e) => !_isDaytimeNap(e)).toList(growable: false);
@@ -1003,8 +1027,9 @@ class SleepService {
   /// way to drive the import path.
   @visibleForTesting
   static SleepSession? aggregateForTesting(
-          String dateKey, List<HealthDataPoint> points, SleepSource source) =>
-      _aggregate(dateKey, points, source);
+          String dateKey, List<HealthDataPoint> points, SleepSource source,
+          {Map<String, HealthSource> known = const {}}) =>
+      _aggregate(dateKey, points, source, known: known);
 
   // ============ LIFECYCLE ============
 

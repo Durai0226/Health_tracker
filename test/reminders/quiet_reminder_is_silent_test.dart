@@ -262,7 +262,10 @@ void main() {
     });
 
     const id = 5000;
-    final tap = DateTime(2026, 10, 27, 13, 0);
+    // The real now: the plugin refuses a time that has passed by the REAL clock, and
+    // a Later is set for 18:00 or tomorrow morning from the tap, so a fixed tap
+    // passes on the day it is written and fails after.
+    final tap = DateTime.now();
 
     String payload({bool quiet = false}) => 'alarm:${jsonEncode({
           'id': id,

@@ -114,7 +114,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 27;
 
 
   /// Tables dropped in v2 — the exam-prep, finance, fitness, notes, and
@@ -527,6 +527,83 @@ class AppDatabase extends _$AppDatabase {
             }
           }
           debugPrint('✓ Added diary_entries.mood_index/tags_json (v22)');
+        }
+        if (from < 23) {
+          // Three columns that held something with nowhere to put it: what a
+          // medicine costs per unit, which clinic record a doctor works at, and a
+          // diary entry's photo. Guarded with PRAGMA like v16-v22, and for a missing
+          // table: an older fixture may not have had it, and `createTable` uses the
+          // current definition, columns included.
+          Future<Set<String>> columnsOf(String table) => customSelect(
+                  "PRAGMA table_info('$table')")
+              .get()
+              .then((rows) => rows.map((r) => r.read<String>('name')).toSet());
+
+          final medCols = await columnsOf('enhanced_medicines');
+          if (medCols.isNotEmpty && !medCols.contains('cost_per_unit')) {
+            await m.addColumn(enhancedMedicines, enhancedMedicines.costPerUnit);
+          }
+          final doctorCols = await columnsOf('doctors');
+          if (doctorCols.isNotEmpty && !doctorCols.contains('clinic_id')) {
+            await m.addColumn(doctors, doctors.clinicId);
+          }
+          final diaryCols = await columnsOf('diary_entries');
+          if (diaryCols.isEmpty) {
+            await m.createTable(diaryEntries);
+          } else if (!diaryCols.contains('photo_path')) {
+            await m.addColumn(diaryEntries, diaryEntries.photoPath);
+          }
+          debugPrint('✓ Added enhanced_medicines.cost_per_unit, doctors.clinic_id '
+              'and diary_entries.photo_path (v23)');
+        }
+        if (from < 24) {
+          // Which bundled sound a medicine's reminder rings with. Guarded like
+          // v23: an older fixture may lack the table, and `createTable` would
+          // already carry the column.
+          final rows = await customSelect(
+                  "PRAGMA table_info('enhanced_medicines')")
+              .get();
+          final cols = rows.map((r) => r.read<String>('name')).toSet();
+          if (cols.isNotEmpty && !cols.contains('reminder_sound')) {
+            await m.addColumn(enhancedMedicines, enhancedMedicines.reminderSound);
+          }
+          debugPrint('✓ Added enhanced_medicines.reminder_sound (v24)');
+        }
+        if (from < 25) {
+          // A per-medicine snooze length. Guarded like v24.
+          final rows = await customSelect(
+                  "PRAGMA table_info('enhanced_medicines')")
+              .get();
+          final cols = rows.map((r) => r.read<String>('name')).toSet();
+          if (cols.isNotEmpty && !cols.contains('snooze_override_minutes')) {
+            await m.addColumn(
+                enhancedMedicines, enhancedMedicines.snoozeOverrideMinutes);
+          }
+          debugPrint('✓ Added enhanced_medicines.snooze_override_minutes (v25)');
+        }
+        if (from < 26) {
+          // Reminders that tick themselves off when the steps show up. Guarded
+          // like v24 and v25: an older fixture may lack the table.
+          final rows = await customSelect("PRAGMA table_info('reminders')").get();
+          final cols = rows.map((r) => r.read<String>('name')).toSet();
+          if (cols.isNotEmpty && !cols.contains('auto_complete_steps')) {
+            await m.addColumn(reminders, reminders.autoCompleteSteps);
+          }
+          debugPrint('✓ Added reminders.auto_complete_steps (v26)');
+        }
+        if (from < 27) {
+          // Doctors that belong to a person. Guarded like v24 to v26. The new
+          // shared flag defaults to true, so every doctor already saved stays
+          // visible to every profile.
+          final rows = await customSelect("PRAGMA table_info('doctors')").get();
+          final cols = rows.map((r) => r.read<String>('name')).toSet();
+          if (cols.isNotEmpty && !cols.contains('dependent_id')) {
+            await m.addColumn(doctors, doctors.dependentId);
+          }
+          if (cols.isNotEmpty && !cols.contains('shared_with_family')) {
+            await m.addColumn(doctors, doctors.sharedWithFamily);
+          }
+          debugPrint('✓ Added doctors.dependent_id and shared_with_family (v27)');
         }
       },
     );

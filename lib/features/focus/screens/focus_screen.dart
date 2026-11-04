@@ -5,6 +5,8 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/health/focus_readiness.dart';
 import '../../../core/health/insight.dart';
 import '../../../core/health/insight_engine.dart';
+import '../../../core/health/focus_breaks.dart';
+import '../../../core/health/focus_habit.dart';
 import '../../../core/health/focus_insights.dart';
 import '../../../core/services/audio_service.dart';
 import '../../biometrics/services/biometrics_service.dart';
@@ -13,6 +15,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/services/vitavibe_service.dart';
 import '../models/focus_session.dart';
 import '../models/focus_plant.dart';
+import '../services/focus_drift.dart';
 import '../services/focus_service.dart';
 import '../services/tag_service.dart';
 import '../widgets/plant_animation_widget.dart';
@@ -35,6 +38,7 @@ import '../services/coins_service.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/health/streak_milestones.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../../core/widgets/toast/toast.dart';
 import 'package:clock/clock.dart';
 
@@ -288,6 +292,8 @@ class _FocusScreenState extends State<FocusScreen> {
                         final refs = _sessionRefs();
                         final bestHour = FocusInsights.bestFocusHour(refs);
                         final suggested = FocusInsights.suggestedMinutes(refs);
+                        final drift = _focusService.driftSuggestion;
+                        final habit = _focusService.habitSuggestion;
                         final sections = <Widget>[
                           const SizedBox(height: AppSpacing.xs),
                           // Only the clock and the ring change per second.
@@ -333,8 +339,21 @@ class _FocusScreenState extends State<FocusScreen> {
                             const SizedBox(height: AppSpacing.lg),
                             _buildSessionSetupRow(ext),
                             const SizedBox(height: AppSpacing.xl),
+                            // Right under the setup it offers to change: what they
+                            // usually do at this hour, when it is not what is set.
+                            if (habit != null) ...[
+                              _buildHabitSuggestion(ext, habit),
+                              const SizedBox(height: AppSpacing.xl),
+                            ],
                             _buildFocusInsight(ext, refs, bestHour, suggested),
                             const SizedBox(height: AppSpacing.xl),
+                            // Below the insight for the same reason: a reflection
+                            // on history, with one thing to do about it. Absent
+                            // until the same minute has come up on several days.
+                            if (drift != null) ...[
+                              _buildDriftSuggestion(ext, drift),
+                              const SizedBox(height: AppSpacing.xl),
+                            ],
                           ] else ...[
                             _buildActiveSessionCard(ext),
                             const SizedBox(height: AppSpacing.xl),
@@ -984,6 +1003,73 @@ class _FocusScreenState extends State<FocusScreen> {
     );
   }
 
+  /// One switch in a section of its own, with a footer saying what it does: the
+  /// shape every "offer" setting on this screen takes.
+  Widget _buildOfferToggle(
+    AppColorsExt ext, {
+    required IconData icon,
+    required String title,
+    required String footer,
+    required bool value,
+    required void Function(bool) onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: SettingsSection(
+        footer: footer,
+        children: [
+          SettingsTile(
+            icon: icon,
+            title: title,
+            accent: ext.focus,
+            switchValue: value,
+            onSwitchChanged: (v) {
+              _hapticService.toggle();
+              onChanged(v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// "Notice when I step away" — on unless switched off.
+  ///
+  /// The footer says what is counted (the screen turning off included, because
+  /// the phone cannot tell it from another app) and what switching off does.
+  Widget _buildDriftToggle(AppColorsExt ext) => _buildOfferToggle(
+        ext,
+        icon: Symbols.exit_to_app_rounded,
+        title: 'Notice when I step away',
+        footer: 'Suggests a shorter round if you keep leaving the app at the same '
+            'minute. Screen locks count too. Switching it off clears what was noticed.',
+        value: _focusService.driftNoticing,
+        onChanged: _focusService.setDriftNoticing,
+      );
+
+  /// "Offer a break after long stretches" — on unless switched off.
+  Widget _buildBreakOffersToggle(AppColorsExt ext) => _buildOfferToggle(
+        ext,
+        icon: Symbols.coffee_rounded,
+        title: 'Offer a break after long stretches',
+        footer: 'Asks before another round once you have focused for 90 minutes '
+            'without a break of 10 minutes or more. You can always start anyway.',
+        value: _focusService.breakOffers,
+        onChanged: _focusService.setBreakOffers,
+      );
+
+  /// "Suggest my usual setup" — on unless switched off.
+  Widget _buildHabitOffersToggle(AppColorsExt ext) => _buildOfferToggle(
+        ext,
+        icon: Symbols.history_rounded,
+        title: 'Suggest my usual setup',
+        footer: 'Offers what you usually do at this time of day — the activity, '
+            'the length and the sound — when it is not what is set now. Nothing '
+            'changes until you tap Use this.',
+        value: _focusService.habitOffers,
+        onChanged: _focusService.setHabitOffers,
+      );
+
   /// Finish a flow session and offer the proportional break.
   ///
   /// The break is the Flowtime rule — focused time ÷ 5, clamped 5–30 — and it is
@@ -1026,6 +1112,13 @@ class _FocusScreenState extends State<FocusScreen> {
   /// session — the user asked for a session, and a skipped ritual must not
   /// swallow the action.
   void _startSession() {
+    // After a long stretch with no break, ask first — once; "Start anyway" starts
+    // the round this same call would have, and is not asked about again soon.
+    final offer = _focusService.breakOffer;
+    if (offer != null) {
+      _offerBreakFirst(offer);
+      return;
+    }
     if (_focusService.breathingPreroll && !_showBreathing) {
       setState(() {
         // `balancing` is 4-4-4-4 box breathing: symmetrical, so there is no
@@ -1067,6 +1160,30 @@ class _FocusScreenState extends State<FocusScreen> {
         minutes: _focusService.mode == FocusMode.pomodoro
             ? _focusService.workMinutes
             : _focusService.selectedMinutes);
+  }
+
+  /// "Break first?" — the two answers, and a third for closing the sheet.
+  ///
+  /// Closing it starts nothing: the person tapped Start, then did not choose
+  /// either way, and the quiet reading of that is that they are not ready to.
+  Future<void> _offerBreakFirst(
+      ({int focusedMinutes, int breakMinutes}) offer) async {
+    _hapticService.selection();
+    final takeBreak = await ConfirmationBottomSheet.show(
+      context: context,
+      title: 'Break first?',
+      message: FocusBreaks.offerMessage(offer.focusedMinutes),
+      confirmText: 'Take ${offer.breakMinutes} min',
+      cancelText: 'Start anyway',
+      icon: Symbols.coffee_rounded,
+    );
+    if (!mounted || takeBreak == null) return;
+    if (takeBreak) {
+      await _focusService.startRestBreak(offer.breakMinutes);
+      return;
+    }
+    _focusService.declineBreakOffer();
+    _startSession();
   }
 
   Widget _buildSessionSetupRow(AppColorsExt ext) {
@@ -1140,6 +1257,12 @@ class _FocusScreenState extends State<FocusScreen> {
             _buildIntentionField(ext),
             const SizedBox(height: AppSpacing.lg),
             _buildPrerollToggle(ext),
+            const SizedBox(height: AppSpacing.lg),
+            _buildDriftToggle(ext),
+            const SizedBox(height: AppSpacing.lg),
+            _buildBreakOffersToggle(ext),
+            const SizedBox(height: AppSpacing.lg),
+            _buildHabitOffersToggle(ext),
             const SizedBox(height: AppSpacing.xl),
             _buildModeToggle(ext),
             const SizedBox(height: AppSpacing.xl),
@@ -1354,6 +1477,114 @@ class _FocusScreenState extends State<FocusScreen> {
         onAction: _insightAction(insight, suggested, bestHour),
       ),
     );
+  }
+
+  /// "You often step away around minute 22 — try 20 + 5."
+  ///
+  /// Offered, never applied: the button changes two settings, says so afterwards
+  /// and carries the way back. Dismissing sets what was noticed aside, so it does
+  /// not return on the next visit.
+  Widget _buildDriftSuggestion(AppColorsExt ext, DriftPattern pattern) {
+    final insight = InsightEngine.focusDrift(
+      usualMinute: pattern.minute,
+      workMinutes: pattern.suggestedWorkMinutes,
+      breakMinutes: pattern.suggestedBreakMinutes,
+      times: pattern.times,
+      days: pattern.days,
+      total: pattern.total,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: ProactiveNudgeBanner(
+        insight: insight,
+        onAction: _applyDriftSuggestion,
+        onDismiss: () {
+          _hapticService.selection();
+          _focusService.dismissDriftSuggestion();
+        },
+      ),
+    );
+  }
+
+  /// "Your usual round around now: Study for 45 minutes, with Rain."
+  ///
+  /// Offered, never applied: the button changes the activity, the length and the
+  /// sound, says so afterwards and carries the way back. Putting it away holds
+  /// until tomorrow.
+  Widget _buildHabitSuggestion(AppColorsExt ext, FocusHabit habit) {
+    final (:activity, :sound) = _habitNames(habit);
+    final insight = InsightEngine.focusHabit(
+      activityName: activity,
+      minutes: habit.minutes,
+      soundName: sound,
+      times: habit.times,
+      days: habit.days,
+      total: habit.total,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: ProactiveNudgeBanner(
+        insight: insight,
+        onAction: _applyHabitSuggestion,
+        onDismiss: () {
+          _hapticService.selection();
+          _focusService.dismissHabitSuggestion();
+        },
+      ),
+    );
+  }
+
+  /// Take up a suggestion, say what was set, and carry the way back. [apply]
+  /// answers with the suggestion it ACTUALLY applied and what undoes it, or null when
+  /// there was nothing to apply.
+  ///
+  /// What is said comes from what was applied, not from what the card was showing:
+  /// the card is drawn at one moment and tapped at another, and in between the hour
+  /// can move on or a round can finish. Saying "Study, 45 minutes" over a different
+  /// activity, length and sound was wrong; so was a tap that did nothing and said
+  /// nothing.
+  Future<void> _applySuggestion<T>(
+    Future<AppliedSuggestion<T>?> Function() apply,
+    String Function(T suggestion) say,
+  ) async {
+    _hapticService.selection();
+    final applied = await apply();
+    if (!mounted) return;
+    if (applied == null) {
+      context.toastInfo('That suggestion is out of date now.');
+      return;
+    }
+    FocusToast.roundSet(
+      context,
+      message: say(applied.suggestion),
+      undo: ToastAction(label: 'Undo', onPressed: applied.undo),
+    );
+  }
+
+  Future<void> _applyHabitSuggestion() => _applySuggestion(
+        _focusService.applyHabitSuggestion,
+        (habit) => '${_habitSummary(habit)}.',
+      );
+
+  Future<void> _applyDriftSuggestion() => _applySuggestion(
+        _focusService.applyDriftSuggestion,
+        (pattern) => 'Pomodoro: ${pattern.suggestedWorkMinutes} minutes, then a '
+            '${pattern.suggestedBreakMinutes}-minute break.',
+      );
+
+  /// The activity and the sound a habit names, as the words the card and the toast
+  /// both use — in one place, so what the card promises and what the toast says was
+  /// done cannot be worded apart.
+  ({String activity, String? sound}) _habitNames(FocusHabit habit) => (
+        activity: FocusActivityType.values[habit.activity].name,
+        sound: habit.sound == null ? null : AmbientSoundType.values[habit.sound!].name,
+      );
+
+  /// "study for 45 minutes, with rain".
+  String _habitSummary(FocusHabit habit) {
+    final (:activity, :sound) = _habitNames(habit);
+    return '$activity for ${habit.minutes} minutes'
+        '${sound == null ? '' : ', with $sound'}';
   }
 
   /// What the insight's button does, or null if it should not be offered.

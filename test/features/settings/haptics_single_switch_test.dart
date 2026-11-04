@@ -85,11 +85,18 @@ void main() {
       expect(settings.contains('_buildVitaVibeSettingsTile'), isFalse);
     });
 
-    test("the deleted screen's only unique entry survives", () {
-      // "Early access" had no equivalent on the Haptic screen, so it moved
-      // rather than disappearing with its host.
-      expect(settings.contains('Early access'), isTrue);
-      expect(settings.contains('EarlyAccessScreen'), isTrue);
+    test('"Early access" is gone too: its switches changed nothing', () {
+      // It moved here when the Haptic screen went. Its three flags were later
+      // ungated everywhere they once mattered, so the screen was a list of
+      // switches that saved a value nothing read — "Premium themes" among them,
+      // for themes that do not exist.
+      expect(settings.contains('Early access'), isFalse);
+      expect(settings.contains('EarlyAccessScreen'), isFalse);
+      expect(File('lib/features/settings/screens/early_access_screen.dart')
+          .existsSync(), isFalse);
+      expect(File('lib/core/services/feature_flag_service.dart').existsSync(),
+          isFalse,
+          reason: 'with the screen gone nothing can set a flag, and nothing reads one');
     });
 
     test('nothing still routes to the deleted screen', () {

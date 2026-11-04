@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart' show AppDatabase;
 import 'package:tablet_remainder/core/health/focus_insights.dart';
+import 'package:tablet_remainder/core/health/rest_days.dart';
+import 'package:tablet_remainder/core/services/clean_storage_service.dart';
+import 'package:tablet_remainder/core/services/rest_day_store.dart';
 import 'package:tablet_remainder/core/services/active_profile_service.dart';
 import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/features/focus/models/focus_plant.dart';
@@ -38,6 +41,9 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     AppDatabase.setInstanceForTesting(db);
     ActiveProfileService().resetForTesting();
+    // Fresh preferences too: a rest day marked by one test must not quiet the next.
+    CleanStorageService.resetForTesting();
+    await CleanStorageService.init();
     await FocusService().reloadSessionsFromDb();
     scheduler = RecordingNotificationScheduler();
     NotificationService().schedulerForTesting = scheduler;
@@ -163,6 +169,84 @@ void main() {
       expect(scheduler.armedIds,
           contains(NotificationService.focusStreakReminderId),
           reason: 'otherwise the test above proves nothing');
+    });
+
+    test('a rest or unwell day: no streak nudge, but the same streak is nudged without it',
+        () async {
+      final run = [
+        session('a', DateTime(2026, 3, 10, 10)),
+        session('b', DateTime(2026, 3, 9, 10)),
+        session('c', DateTime(2026, 3, 8, 10)),
+      ];
+      SharedPreferences.setMockInitialValues({'focus_streak_reminder': true});
+      addTearDown(FocusService().resetForTesting);
+      await withClock(Clock.fixed(now), () async {
+        await seed(run);
+        await FocusService().init();
+        await FocusReminderScheduler.apply();
+      });
+      expect(scheduler.armedIds,
+          contains(NotificationService.focusStreakReminderId),
+          reason: 'the premise: this streak is at risk and is nudged');
+
+      // Let anything the service started on its own settle first, so it cannot
+      // land on the fresh scheduler below.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      scheduler = RecordingNotificationScheduler();
+      NotificationService().schedulerForTesting = scheduler;
+      await withClock(Clock.fixed(now), () async {
+        await RestDayStore.markDays(RestKind.rest, 1);
+        await FocusReminderScheduler.apply();
+      });
+      expect(scheduler.armedIds,
+          isNot(contains(NotificationService.focusStreakReminderId)),
+          reason: 'a streak that is paused today is not something to be nudged about');
+    });
+
+    test('a rest day is not a missed day: the streak runs through it', () async {
+      // Completed on the 10th and the 7th; the 8th and 9th were rest days. Two
+      // missed days in a week would break it (one is forgiven), so it is the
+      // marks that keep it whole.
+      final sessions = [
+        session('a', DateTime(2026, 3, 10, 10)),
+        session('b', DateTime(2026, 3, 7, 10)),
+      ];
+      addTearDown(FocusService().resetForTesting);
+
+      await withClock(Clock.fixed(now), () async {
+        await seed(sessions);
+        await FocusService().init();
+      });
+      final without = FocusService().stats.currentStreak;
+
+      await withClock(Clock.fixed(now), () async {
+        await RestDayStore.markDays(RestKind.rest, 2, now: DateTime(2026, 3, 8));
+        FocusService().resetForTesting();
+        await seed(sessions);
+        await FocusService().init();
+      });
+      expect(FocusService().stats.currentStreak, greaterThan(without),
+          reason: 'with the two rest days the 7th and the 10th join up');
+      expect(FocusService().stats.currentStreak, 2);
+    });
+
+    test('a nudge planned for a rest day is not armed', () async {
+      await seed(pattern());
+      await withClock(Clock.fixed(now), () async {
+        await FocusReminderScheduler.apply();
+      });
+      expect(scheduler.armedIds, contains(NotificationService.focusDailyReminderId),
+          reason: 'the premise: 13:50 today is planned');
+
+      scheduler = RecordingNotificationScheduler();
+      NotificationService().schedulerForTesting = scheduler;
+      await withClock(Clock.fixed(now), () async {
+        await RestDayStore.markDays(RestKind.rest, 1);
+        await FocusReminderScheduler.apply();
+      });
+      expect(scheduler.armedIds,
+          isNot(contains(NotificationService.focusDailyReminderId)),
+          reason: 'it is a one-off for a day that is a rest day');
     });
 
     test('arms ONE non-repeating nudge at the planned time', () async {

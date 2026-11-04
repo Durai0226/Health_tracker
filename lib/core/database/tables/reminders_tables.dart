@@ -53,6 +53,10 @@ class Reminders extends Table {
   /// Stop after this many occurrences. Null means unlimited.
   IntColumn get occurrenceLimit => integer().nullable()();
 
+  /// Tick this reminder off by itself once today's steps reach this many, as if
+  /// Done had been tapped. Null means never: only a person ticks it.
+  IntColumn get autoCompleteSteps => integer().nullable()();
+
   /// Temporarily stop firing without deleting. Deleting used to be the only way
   /// to stop a reminder, which also destroyed its history.
   BoolColumn get isPaused => boolean().withDefault(const Constant(false))();

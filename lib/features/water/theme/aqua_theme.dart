@@ -396,10 +396,38 @@ class AquaTheme {
         return Symbols.local_bar_rounded;
       case 'water':
       case 'sparkling_water':
-      default:
         return Symbols.water_drop_rounded;
+      default:
+        // A catalogue drink with no glyph of its own is water's drop, as ever. An
+        // id the catalogue does not know is a drink the person made (or one they
+        // made and deleted, whose logs remain): not water's drop, which would make
+        // every one of them look like water. Decided by what the catalogue lacks,
+        // not by how the id is spelt, so a drink made before ids carried a prefix
+        // is treated the same.
+        return BeverageType.defaultBeverages.any((b) => b.id == beverageId)
+            ? Symbols.water_drop_rounded
+            : Symbols.blender_rounded;
     }
   }
+
+  /// The colours a drink or a cup can be tinted with, offered by both creators: the
+  /// app's own accents, so what the person makes is the same blue, teal or amber as
+  /// everything else on screen. Persisted as hex, so a change here does not recolour
+  /// what is already saved.
+  static const List<Color> pickerColors = [
+    AppPalette.info,
+    AppPalette.water,
+    AppPalette.brand,
+    AppPalette.steps,
+    AppPalette.success,
+    AppPalette.reminders,
+    AppPalette.warningStrong,
+    AppPalette.period,
+    AppPalette.focus,
+    AppPalette.medicine,
+    AppPalette.sleep,
+    AppPalette.error,
+  ];
 }
 
 /// Beverage theme data class

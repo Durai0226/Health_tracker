@@ -161,7 +161,13 @@ final _screens = <List<dynamic>>[
 /// were being spent on a worse answer.
 const Map<String, int> _elementBudget = {
   'Water/calendar': 2081,
-  'Water/dashboard': 2018,
+  // 2018 -> 2341: measured 2036, on a weekday morning. Clock-dependent, and this is
+  // the observed HIGH (see Insights/weekly_recap below): the seed puts a drink of
+  // water every two hours from 08:00 on every day, so whenever the wall clock is
+  // within 90 minutes of one of them "Your usual" is offered and its tile is on the
+  // screen. In the small hours there is no habit around the hour and the tile is
+  // absent: the same code measured under the old figure at 01:00 and over it at 10:00.
+  'Water/dashboard': 2341,
   'Focus/timer': 1540,
   'Medication/dashboard': 1385,
   'Period/calendar': 1347,
@@ -235,7 +241,12 @@ const Map<String, int> _elementBudget = {
   // subtitle nearly doubles how many of them fit the viewport.
   // Measured 697 on first registration + 15%. Was in no harness at all before,
   // so this is a first measurement rather than a re-baseline.
-  'Vitals/reminders': 801,
+  //
+  // 801 -> 1010: measured 878, was 777. +101 for a whole section — "Readings
+  // from other apps": a title, a footer, and one switch row, of which the
+  // CupertinoSwitch alone is a large share. Real content, not a regression: it
+  // is the same cost as the Sync section beneath it.
+  'Vitals/reminders': 1010,
   'Medication/condition_library': 1243,
   'Vitals/blood_sugar': 940,
   'Focus/stats': 1328,
@@ -257,7 +268,11 @@ const Map<String, int> _elementBudget = {
   'Insights/weekly_recap': 940,
   'Vitals/blood_pressure': 854,
   'Insights/trends': 1137,
-  'Period/dashboard': 819,
+  // 819 -> 1000: measured 869, was 816. +53 for one card, "Hormonal birth
+  // control": an AppCard, an icon in a tinted square, a title, a line of copy and a
+  // switch, of which the CupertinoSwitch is a large share. Content, not chrome: it is
+  // the only control the screen has for a setting that changes what the screen shows.
+  'Period/dashboard': 1000,
   'Medication/list': 780,
   'Water/caffeine': 731,
   // 714 -> 1068: measured 929. The seeded diary now has a mood and tags on

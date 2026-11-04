@@ -5,8 +5,8 @@ import '../../../core/health/bp_tags.dart';
 import '../../../core/health/vitals_analyzer.dart';
 import '../models/blood_pressure_reading.dart';
 import '../models/glucose_reading.dart';
-import '../../../core/constants/app_strings.dart';
 import 'bp_sessions.dart';
+import 'report_pdf_parts.dart';
 
 /// Doctor-ready PDF exports for the vitals trackers. Pure Dart (the `pdf`
 /// package needs no Flutter bindings) so it is unit-testable headlessly; the UI
@@ -175,60 +175,16 @@ class VitalsReportService {
     final range = (from != null && to != null)
         ? '${_fmtDate(from)} to ${_fmtDate(to)}'
         : 'All recorded readings';
-    return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-      pw.Text(title, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-      pw.SizedBox(height: 4),
-      pw.Text(AppStrings.productName, style: const pw.TextStyle(fontSize: 11, color: PdfColors.teal700)),
-      pw.SizedBox(height: 10),
-      pw.Row(children: [
-        if (patient != null && patient.trim().isNotEmpty)
-          pw.Expanded(child: pw.Text('Patient: $patient', style: const pw.TextStyle(fontSize: 10))),
-        pw.Expanded(child: pw.Text('Period: $range', style: const pw.TextStyle(fontSize: 10))),
-        pw.Text('Generated: ${_fmtDate(now)}', style: const pw.TextStyle(fontSize: 10)),
-      ]),
-      pw.SizedBox(height: 10),
-      pw.Divider(color: PdfColors.grey400, thickness: .5),
-    ]);
+    return ReportPdfParts.header(
+        title: title, patient: patient, period: range, generated: _fmtDate(now));
   }
 
   static pw.Widget _summaryBox(
-      {required String big, required String unit, required String caption}) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(14),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.teal50,
-        borderRadius: pw.BorderRadius.circular(8),
-      ),
-      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
-        pw.Text(big,
-            style: pw.TextStyle(
-                fontSize: 30, fontWeight: pw.FontWeight.bold, color: PdfColors.teal800)),
-        pw.SizedBox(width: 8),
-        pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 10),
-          child: pw.Text(unit, style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-        ),
-        pw.Spacer(),
-        pw.Expanded(
-          child: pw.Text(caption,
-              textAlign: pw.TextAlign.right,
-              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-        ),
-      ]),
-    );
-  }
+          {required String big, required String unit, required String caption}) =>
+      ReportPdfParts.summaryBox(big: big, unit: unit, caption: caption);
 
-  static pw.Widget _table(List<String> headers, List<List<String>> rows) {
-    return pw.TableHelper.fromTextArray(
-      headers: headers,
-      data: rows,
-      border: pw.TableBorder.all(color: PdfColors.grey300, width: .5),
-      headerStyle: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.teal600),
-      cellStyle: const pw.TextStyle(fontSize: 9.5),
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-    );
-  }
+  static pw.Widget _table(List<String> headers, List<List<String>> rows) =>
+      ReportPdfParts.table(headers, rows);
 
   static pw.Widget _disclaimer(String text) => pw.Text(text,
       style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey600));

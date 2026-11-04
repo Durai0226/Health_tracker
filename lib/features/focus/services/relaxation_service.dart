@@ -9,6 +9,8 @@ import '../../../core/services/notification_service.dart';
 import '../../../core/services/audio_service.dart';
 import '../../../core/utils/enum_json.dart';
 import '../models/relaxation_music.dart';
+import 'focus_service.dart';
+import 'relaxation_snapshot.dart';
 
 /// A [ValueNotifier] that will admit whether anybody is listening.
 ///
@@ -177,7 +179,88 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     await _audioService.init();
     await _loadData();
+    await _recoverActive();
     debugPrint('✓ RelaxationService initialized');
+  }
+
+  // ---- a session the app was closed under --------------------------------------
+
+  static const String _kActive = 'relaxationActive';
+
+  /// Set by a recovery: the track was playing in a process that is gone, so a
+  /// resume has to start it again rather than ask the engine to resume what it
+  /// never loaded.
+  bool _audioLost = false;
+
+  /// Keep the running or paused session where a restart can find it.
+  ///
+  /// Written whenever it starts, pauses or resumes and cleared when it ends, not
+  /// every second: the end is a wall-clock time, so nothing else needs saving.
+  /// Best-effort and unawaited; a preference that fails to write costs the
+  /// recovery, not the session.
+  void _persistActive() {
+    final music = _selectedMusic;
+    final start = _startTime;
+    final end = _endTime;
+    if (!_isRunning || music == null || start == null || end == null) return;
+    final snapshot = RelaxationSnapshot(
+      startedAt: start,
+      endTime: end,
+      minutes: _selectedMinutes,
+      music: music,
+      category: _selectedCategory,
+      pausedRemainingSeconds: _isPaused ? _remainingSeconds : null,
+    );
+    unawaited(CleanStorageService.setAppPreference(_kActive, snapshot.toJson()));
+  }
+
+  void _clearActive() => unawaited(CleanStorageService.removeAppPreference(_kActive));
+
+  /// Pick up a session that was running or paused when the app last stopped.
+  ///
+  /// One that is still within its time carries on (a paused one comes back paused
+  /// with the time it had left); one whose end passed while the app was not running
+  /// is dropped, not credited — see [RelaxationRecovery.expired]. Anything stored
+  /// that cannot be read is dropped too. Never throws.
+  Future<void> _recoverActive() async {
+    try {
+      final raw = CleanStorageService.getAppPreferences()[_kActive];
+      if (raw == null) return;
+      if (_isRunning) return;
+      final snapshot = RelaxationSnapshot.fromJson(raw);
+      final now = clock.now();
+      if (snapshot == null || snapshot.recoveryAt(now) == RelaxationRecovery.expired) {
+        await CleanStorageService.removeAppPreference(_kActive);
+        return;
+      }
+
+      _selectedMinutes = snapshot.minutes;
+      _selectedMusic = snapshot.music;
+      _selectedCategory = snapshot.category;
+      _startTime = snapshot.startedAt;
+      _remainingSeconds = snapshot.remainingSecondsAt(now);
+      _isRunning = true;
+      _audioLost = true;
+      if (snapshot.paused) {
+        _isPaused = true;
+        // As if paused just now: a resume pushes the end forward by the pause, so
+        // the time it had left is what it has left.
+        _pauseStartTime = now;
+        _endTime = now.add(Duration(seconds: _remainingSeconds));
+        notifyListeners();
+      } else {
+        _isPaused = false;
+        _endTime = snapshot.endTime;
+        _startTimer();
+        notifyListeners();
+        _audioLost = false;
+        unawaited(_playRelaxationMusic());
+      }
+      debugPrint('✓ Relaxation session recovered '
+          '(${snapshot.paused ? 'paused' : 'running'}, $_remainingSeconds s left)');
+    } catch (e) {
+      debugPrint('Relaxation recovery skipped: $e');
+    }
   }
 
   /// Read persisted relaxation state — one section at a time, so a bad value
@@ -346,6 +429,7 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
     // Start timer and update UI IMMEDIATELY for smooth experience
     _startTimer();
     notifyListeners();
+    _persistActive();
     
     debugPrint('✓ Relaxation session started: $_selectedMinutes minutes with ${_selectedMusic?.name}');
     
@@ -447,11 +531,21 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
       // left instead of 10, and a pause outlasting the session completed it
       // instantly and credited a full 15 minutes nobody listened to.
       _pauseStartTime = clock.now();
+      // What is left, from the end time rather than the last tick: a tick that never
+      // fired (the app was backgrounded) would otherwise leave a stale number to be
+      // shown, saved and resumed from.
+      final end = _endTime;
+      if (end != null) {
+        final ms = end.difference(_pauseStartTime!).inMilliseconds;
+        _remainingSeconds =
+            ms <= 0 ? 0 : (ms / 1000).ceil().clamp(0, _selectedMinutes * 60);
+      }
       _timer?.cancel();
       _timer = null;
       _audioService.pause();
       HapticService().focusPause();
       notifyListeners();
+      _persistActive();
     }
   }
 
@@ -465,12 +559,19 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
         _endTime = _endTime!.add(clock.now().difference(pausedAt));
       }
       _pauseStartTime = null;
-      _audioService.resume();
+      if (_audioLost) {
+        // Recovered after a restart: there is nothing loaded to resume.
+        _audioLost = false;
+        unawaited(_playRelaxationMusic());
+      } else {
+        _audioService.resume();
+      }
       // The ticker was cancelled by the pause, so resuming has to restart it or
       // the countdown never moves again.
       _startTimer();
       HapticService().focusStart();
       notifyListeners();
+      _persistActive();
     }
   }
 
@@ -593,9 +694,21 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
         await NotificationService().showFocusNotification(
           title: 'Relaxation Complete! ${_selectedCategory.emoji}',
           body: 'You completed $_selectedMinutes minutes of ${_selectedCategory.name}. Feel refreshed!',
+          // Not a phase of a focus session, so not its id: finishing a
+          // relaxation track must not wipe a "Session complete" still on screen.
+          id: NotificationService.focusRelaxationEndId,
         );
       }
     
+      // To Health Connect / Apple Health, when the person has asked for mindful
+      // minutes and this kind of relaxation is practice. Not awaited: a slow health
+      // store must not hold up the end of a session.
+      unawaited(FocusService().writeRelaxationMindfulness(
+        category: session.category,
+        start: session.startedAt,
+        end: session.completedAt ?? clock.now(),
+      ));
+
       _resetSession();
       await _saveData();
     
@@ -613,6 +726,8 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
     _startTime = null;
     _endTime = null;
     _pauseStartTime = null;
+    _audioLost = false;
+    _clearActive();
     notifyListeners();
   }
 
@@ -672,6 +787,7 @@ class RelaxationService extends ChangeNotifier with WidgetsBindingObserver {
     _startTime = null;
     _endTime = null;
     _pauseStartTime = null;
+    _audioLost = false;
     _stats = const RelaxationStats();
     _sessions = [];
     _isForeground = true;

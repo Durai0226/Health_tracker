@@ -587,6 +587,12 @@ class AppTextField extends StatelessWidget {
   final int? minLines;
   final bool obscureText;
   final TextCapitalization textCapitalization;
+
+  /// Whether the keyboard may correct, and learn from, what is typed. Off for what
+  /// is not a word — a passphrase, a code — which, once it is shown, is ordinary text
+  /// to a keyboard that would "fix" it.
+  final bool autocorrect;
+  final bool enableSuggestions;
   final FocusNode? focusNode;
   final TextInputAction? textInputAction;
   final bool enabled;
@@ -611,6 +617,8 @@ class AppTextField extends StatelessWidget {
     this.minLines,
     this.obscureText = false,
     this.textCapitalization = TextCapitalization.none,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
     this.focusNode,
     this.textInputAction,
     this.enabled = true,
@@ -662,6 +670,8 @@ class AppTextField extends StatelessWidget {
           minLines: minLines,
           obscureText: obscureText,
           textCapitalization: textCapitalization,
+          autocorrect: autocorrect,
+          enableSuggestions: enableSuggestions,
           textInputAction: textInputAction,
           enabled: enabled,
           autofocus: autofocus,

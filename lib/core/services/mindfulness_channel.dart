@@ -2,17 +2,20 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../features/focus/models/focus_session.dart';
+import '../../features/focus/models/relaxation_music.dart' show RelaxationCategory;
+import 'health_data_service.dart';
 
 /// What kind of mindfulness practice a session was. Ordinals are the wire
 /// format for the Kotlin side — append only, never insert.
 enum MindfulnessKind { breathing, meditation, music }
 
-/// Health Connect mindfulness write-back.
+/// Mindfulness write-back: Health Connect on Android, Apple Health on iPhone.
 ///
 /// `package:health` 13.3.2 supports `HealthDataType.MINDFULNESS` on iOS only —
 /// it appears in `dataTypeKeysIOS`, is absent from `dataTypeKeysAndroid`, and
 /// there is no mindfulness code in the plugin's Android sources. HealthKit
-/// therefore goes through the plugin; Health Connect needs this channel.
+/// therefore goes through the plugin (via [HealthDataService]); Health Connect
+/// needs the method channel. Callers see one interface either way.
 ///
 /// Every method degrades to "no" rather than throwing. This is opt-in, secondary
 /// to the thing the user actually did, and a health provider that hangs or a
@@ -34,6 +37,7 @@ class MindfulnessChannel {
   /// host is not Android. `defaultTargetPlatform` is overridable, so the tests
   /// can actually exercise the Android path.
   bool get _isAndroid => defaultTargetPlatform == TargetPlatform.android;
+  bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
 
   /// Whether this device can store mindfulness sessions at all.
   ///
@@ -44,6 +48,9 @@ class MindfulnessChannel {
   /// permissions the app genuinely needs. The settings row is hidden when this is
   /// false rather than shown and broken.
   Future<bool> isAvailable() async {
+    // Every iPhone can store a mindful session; nothing like Android's optional
+    // system update stands in the way, so the row is always offered there.
+    if (_isIOS) return true;
     if (!_isAndroid) return false;
     try {
       return await channelForTesting.invokeMethod<bool>('isAvailable') ?? false;
@@ -54,6 +61,7 @@ class MindfulnessChannel {
   }
 
   Future<bool> hasPermission() async {
+    if (_isIOS) return HealthDataService.instance.hasMindfulnessWritePermission();
     if (!_isAndroid) return false;
     try {
       return await channelForTesting.invokeMethod<bool>('hasPermission') ?? false;
@@ -77,6 +85,7 @@ class MindfulnessChannel {
   /// and secondary, and a build whose Kotlin half predates this method must still
   /// leave the switch usable everywhere else.
   Future<bool> requestPermission() async {
+    if (_isIOS) return HealthDataService.instance.requestMindfulnessWritePermission();
     if (!_isAndroid) return false;
     try {
       return await channelForTesting.invokeMethod<bool>('requestPermission') ??
@@ -95,6 +104,11 @@ class MindfulnessChannel {
     String? title,
     String? clientId,
   }) async {
+    // HealthKit's mindful session carries no kind or title; those are Health
+    // Connect's, and are simply not sent.
+    if (_isIOS) {
+      return HealthDataService.instance.writeMindfulMinutes(start: start, end: end);
+    }
     if (!_isAndroid) return false;
     if (!end.isAfter(start)) return false;
     try {
@@ -139,6 +153,24 @@ MindfulnessKind? mindfulnessKindFor(FocusActivityType activity) {
     case FocusActivityType.creative:
     case FocusActivityType.exercise:
     case FocusActivityType.other:
+      return null;
+  }
+}
+
+/// Which relaxation categories are mindfulness practice.
+///
+/// Stress Relief is: sitting with calming sound to let anxiety go. Deep Focus is
+/// background for work, study and coding, which is concentration, not practice (see
+/// [mindfulnessKindFor]). Full Reset is sleep audio, which is often played while
+/// falling asleep, so minutes of it would be minutes nobody was mindful for. Both
+/// return null, and an exhaustive switch with no `default:` makes a new category a
+/// compile error here rather than a silent decision to write it.
+MindfulnessKind? mindfulnessKindForRelaxation(RelaxationCategory category) {
+  switch (category) {
+    case RelaxationCategory.stressRelief:
+      return MindfulnessKind.meditation;
+    case RelaxationCategory.deepFocus:
+    case RelaxationCategory.nervousSystemReset:
       return null;
   }
 }

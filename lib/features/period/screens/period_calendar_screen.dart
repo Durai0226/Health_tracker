@@ -157,7 +157,10 @@ class _PeriodCalendarScreenState extends State<PeriodCalendarScreen> {
           // spoken label.
           item(period.container, 'Spotting / light'),
           item(ext.fillBg(period), 'Medium / heavy'),
-          item(PeriodTheme.fertileSwatch(ext).container, 'Fertile window'),
+          // No fertile window is estimated on hormonal birth control, so its key
+          // would name a fill the calendar never paints.
+          if (!PeriodService.getSettings().birthControlEnabled)
+            item(PeriodTheme.fertileSwatch(ext).container, 'Fertile window'),
           item(ext.mark(period), 'Predicted', outline: true),
           item(ext.mark(ext.focus), 'Symptoms logged'),
         ],

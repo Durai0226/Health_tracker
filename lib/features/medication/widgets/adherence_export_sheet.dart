@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/services/haptic_service.dart';
+import '../../../core/utils/share_file.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../services/adherence_report_service.dart';
 import '../services/medicine_storage_service.dart';
@@ -172,10 +172,7 @@ class AdherenceExportSheet {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/medication-log.csv');
       await file.writeAsString(csv);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/csv')],
-        subject: 'Medicine log (last 30 days)',
-      );
+      await shareFile(file, mimeType: 'text/csv', subject: 'Medicine log (last 30 days)');
     } catch (e) {
       _logFailure(e);
       if (context.mounted) context.toastError(_failureMessage);

@@ -103,8 +103,8 @@ class HealthPrivacyScreen extends StatelessWidget {
                         icon: Symbols.water_drop_rounded,
                         iconColor: ext.mark(ext.water),
                         title: 'Water logged in other apps',
-                        subtitle: 'So your daily total counts drinks you '
-                            'recorded elsewhere',
+                        subtitle: 'Only when you switch on '
+                            '"Count drinks from other apps" in the Hydration profile',
                       ),
                       // The biometrics tier. This screen listed four read
                       // types while `HealthDataService.biometricTypesFor`
@@ -139,6 +139,17 @@ class HealthPrivacyScreen extends StatelessWidget {
                         title: 'Workouts recorded by your watch or band',
                         subtitle: 'Their type, duration, distance, calories '
                             'and average heart rate — fills the Workouts list',
+                      ),
+                      // Behind its own switch in Vitals settings. These two were
+                      // requested (read and write come together) and declared
+                      // for months before anything read them, which is the
+                      // wrong way round for a disclosure: now something does.
+                      AppListTile(
+                        icon: Symbols.bloodtype_rounded,
+                        iconColor: ext.mark(ext.medicine),
+                        title: 'Blood pressure and blood sugar from other apps',
+                        subtitle: 'Only when you switch on "Readings from other '
+                            'apps" in Vitals settings',
                       ),
                       // Behind its own button on the Cycle screen, so it is
                       // its own line here: reproductive health data is the
@@ -223,7 +234,10 @@ class HealthPrivacyScreen extends StatelessWidget {
                         icon: Symbols.tune_rounded,
                         iconColor: ext.mark(ext.brand),
                         title: 'Change or revoke access any time',
-                        subtitle: 'Health Connect → App permissions → '
+                        // "Disconnect" in Connected devices does it from inside the
+                        // app on Android; the phone's own settings do it anywhere.
+                        subtitle: 'Connected devices → Disconnect, or Health '
+                            'Connect → App permissions → '
                             '${AppStrings.productName} (or Apple Health → Sharing on iPhone)',
                       ),
                       AppListTile(

@@ -139,6 +139,24 @@ class FocusToast {
     );
   }
 
+  /// A round set up from a suggestion, with the way back.
+  ///
+  /// Two settings the person chose earlier were just changed, so the toast stays
+  /// long enough to undo them.
+  static String roundSet(BuildContext context,
+      {required String message, required ToastAction undo}) {
+    return ToastService.show(
+      context,
+      type: ToastType.success,
+      feature: ToastFeature.focus,
+      title: 'Round set',
+      message: message,
+      customIcon: Symbols.timer_rounded,
+      action: undo,
+      duration: const Duration(seconds: 8),
+    );
+  }
+
   /// Show error toast
   static String error(BuildContext context, {required String message}) {
     return ToastService.show(

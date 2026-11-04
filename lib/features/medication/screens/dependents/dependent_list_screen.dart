@@ -6,6 +6,8 @@ import '../../models/dependent_profile.dart';
 import '../../services/medicine_storage_service.dart';
 import 'add_edit_dependent_screen.dart';
 import '../../widgets/remove_person_sheet.dart';
+import '../../../../core/services/photo_store.dart';
+import '../../../../core/widgets/photo_thumb.dart';
 
 /// Manage household members ("Family & caregivers" in Settings), or — when
 /// [isSelectionMode] is true — pick which one is currently active (the Today
@@ -164,9 +166,16 @@ class _DependentListScreenState extends State<DependentListScreen> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(color: med.container, shape: BoxShape.circle),
-              child: Center(
-                child: Icon(relationshipSymbol(dependent.relationship),
-                    size: 22, color: med.onContainer),
+              child: ClipOval(
+                child: PhotoStore.resolve(dependent.avatarPath) != null
+                    ? PhotoThumb(
+                        path: dependent.avatarPath,
+                        size: 48,
+                        label: '${dependent.name}\'s photo')
+                    : Center(
+                        child: Icon(relationshipSymbol(dependent.relationship),
+                            size: 22, color: med.onContainer),
+                      ),
               ),
             ),
             const SizedBox(width: AppSpacing.md),

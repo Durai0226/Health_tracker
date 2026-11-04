@@ -2,6 +2,7 @@ import 'package:clock/clock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/rest_day_store.dart';
 import 'focus_service.dart';
 import '../../../core/utils/calendar_day.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -58,7 +59,9 @@ class FocusReminderScheduler {
     if (planned != null) {
       await notifications.scheduleFocusReminder(
         id: NotificationService.focusDailyReminderId,
-        enabled: dailyEnabled,
+        // A one-off for a planned moment, so it can be left out of a rest day; the
+        // repeating fallback below cannot, and rings as it always did.
+        enabled: dailyEnabled && RestDayStore.kindOn(planned) == null,
         title: 'Time to focus',
         body: 'This is usually your best hour. A short session is enough.',
         when: planned,
@@ -84,7 +87,12 @@ class FocusReminderScheduler {
 
     await notifications.scheduleFocusReminder(
       id: NotificationService.focusStreakReminderId,
-      enabled: streakEnabled && atRisk && streak > 0,
+      // Not on a rest or unwell day: the streak is paused then, and a nudge about
+      // it is the pressure the rest was taken to be free of.
+      enabled: streakEnabled &&
+          atRisk &&
+          streak > 0 &&
+          RestDayStore.kindToday() == null,
       title: 'Your $streak-day streak',
       // Shame-free even here, and TRUE: the engine forgives one miss per rolling
       // week, so this is information rather than a threat.

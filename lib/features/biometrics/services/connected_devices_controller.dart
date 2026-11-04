@@ -25,6 +25,7 @@
 /// framework, and that is how anything here becomes testable.
 library;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/database/app_database.dart' as db;
@@ -33,6 +34,7 @@ import '../../../core/services/health_data_service.dart';
 import '../../../core/services/health_sync_queue.dart';
 import '../models/health_source.dart';
 import 'biometrics_service.dart';
+import 'health_disconnect.dart';
 
 /// How far the load has got.
 ///
@@ -69,6 +71,10 @@ class ConnectedDevicesState {
   final DateTime? lastRunAt;
   final String? lastError;
 
+  /// The step count the last background check found for TODAY; null when it found
+  /// none, or the check was on an earlier day (yesterday's total is not today's).
+  final int? lastSteps;
+
   /// Rows whose write is in flight. Only these disable their own switch — the
   /// screen never greys out en masse.
   final Set<String> pendingIds;
@@ -87,6 +93,7 @@ class ConnectedDevicesState {
     this.selfDisabled,
     this.lastRunAt,
     this.lastError,
+    this.lastSteps,
     this.pendingIds = const {},
     this.error,
   });
@@ -108,6 +115,8 @@ class ConnectedDevicesState {
     DateTime? lastRunAt,
     String? lastError,
     bool clearLastError = false,
+    int? lastSteps,
+    bool clearLastSteps = false,
     Set<String>? pendingIds,
     Object? error,
     bool clearError = false,
@@ -123,6 +132,7 @@ class ConnectedDevicesState {
             clearSelfDisabled ? null : (selfDisabled ?? this.selfDisabled),
         lastRunAt: lastRunAt ?? this.lastRunAt,
         lastError: clearLastError ? null : (lastError ?? this.lastError),
+        lastSteps: clearLastSteps ? null : (lastSteps ?? this.lastSteps),
         pendingIds: pendingIds ?? this.pendingIds,
         error: clearError ? null : (error ?? this.error),
       );
@@ -137,6 +147,7 @@ typedef WriteSourceEnabled = Future<void> Function(String id, bool enabled);
 typedef WriteSourcePriority = Future<void> Function(String id, int priority);
 typedef RunSync = Future<int> Function();
 typedef ReloadAggregation = Future<void> Function();
+typedef DisconnectHealth = Future<HealthDisconnectResult> Function();
 
 class ConnectedDevicesController extends ValueNotifier<ConnectedDevicesState> {
   final ReadSources _readSources;
@@ -148,6 +159,7 @@ class ConnectedDevicesController extends ValueNotifier<ConnectedDevicesState> {
   final RunSync _sync;
   final ReloadAggregation _reload;
   final Future<void> Function(bool) _setBackground;
+  final DisconnectHealth _disconnect;
 
   /// How long to wait on the platform before giving up on it. The rows are
   /// already on screen by then, so this bounds an inconvenience rather than a
@@ -164,8 +176,10 @@ class ConnectedDevicesController extends ValueNotifier<ConnectedDevicesState> {
     RunSync? runSync,
     ReloadAggregation? reloadAggregation,
     Future<void> Function(bool)? setBackground,
+    DisconnectHealth? disconnect,
     this.probeTimeout = const Duration(seconds: 6),
-  })  : _readSources = readSources ?? _defaultReadSources,
+  })  : _disconnect = disconnect ?? HealthDisconnect.run,
+        _readSources = readSources ?? _defaultReadSources,
         _probeAvailability =
             probeAvailability ?? HealthDataService.instance.availability,
         _probeBackgroundAvailable = probeBackgroundAvailable ??
@@ -250,12 +264,14 @@ class ConnectedDevicesController extends ValueNotifier<ConnectedDevicesState> {
     ({SyncDisableReason reason, DateTime at})? selfDisabled;
     DateTime? lastRunAt;
     String? lastError;
+    int? lastSteps;
     try {
       bgAvailable = await _probeBackgroundAvailable().timeout(probeTimeout);
       bgEnabled = await _readBackgroundEnabled();
       selfDisabled = await HealthSyncQueue.selfDisable();
       lastRunAt = await HealthSyncQueue.lastRunAt();
       lastError = await HealthSyncQueue.lastError();
+      lastSteps = stepsFromSnapshot(await HealthSyncQueue.readSnapshot(), clock.now());
     } catch (_) {
       // Background sync is a secondary concern on this screen; failing to read
       // its status must not disturb the device list.
@@ -272,7 +288,22 @@ class ConnectedDevicesController extends ValueNotifier<ConnectedDevicesState> {
       lastRunAt: lastRunAt,
       lastError: lastError,
       clearLastError: lastError == null,
+      lastSteps: lastSteps,
+      clearLastSteps: lastSteps == null,
     ));
+  }
+
+  /// The steps a background check recorded, but only when it was today's: the
+  /// snapshot keeps the last one until the app next merges it, and a total from
+  /// yesterday read as "steps today" would be wrong by a whole day.
+  @visibleForTesting
+  static int? stepsFromSnapshot(Map<String, dynamic>? snapshot, DateTime now) {
+    if (snapshot == null) return null;
+    final key = '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    final steps = snapshot['steps'];
+    if (snapshot['todayKey'] != key || steps is! int || steps < 0) return null;
+    return steps;
   }
 
   /// Turn one source on or off.
@@ -363,6 +394,17 @@ class ConnectedDevicesController extends ValueNotifier<ConnectedDevicesState> {
       selfDisabled: selfDisabled,
       clearSelfDisabled: selfDisabled == null,
     ));
+  }
+
+  /// Leave the health store: stop everything that uses it, forget the
+  /// connection, hand the permissions back where the platform allows, and read the
+  /// screen's state again. Throws nothing the screen has to catch twice — a failure
+  /// is reported to the caller, which says so.
+  Future<HealthDisconnectResult> disconnect() async {
+    final result = await _disconnect();
+    // Re-read rather than assume: what the platform now says is the truth.
+    await load();
+    return result;
   }
 
   /// Dismiss the self-disable notice without turning sync back on.

@@ -28,6 +28,7 @@ import '../../reminders/screens/add_reminder_screen.dart';
 import '../../diary/screens/diary_entry_screen.dart';
 import '../../medication/services/medicine_storage_service.dart';
 import '../../medication/models/enhanced_medicine.dart';
+import '../../../core/utils/units.dart';
 
 /// One unified "Log something" entry point — the center ➕ action and the Today
 /// quick-log chips both route through here, so there's a single mental model for
@@ -221,7 +222,7 @@ class LogSomethingSheet {
     final addedLogId = updated.logs.isNotEmpty ? updated.logs.last.id : null;
     if (!context.mounted) return;
     context.toastSuccess(
-      'Added 250 ml of water',
+      'Added ${Units.volumeText(250)} of water',
       action: addedLogId == null
           ? null
           : AppToastAction(

@@ -35,6 +35,7 @@ import '../widgets/morning_report_card.dart';
 import '../widgets/setup_checklist_card.dart';
 import '../../../widgets/smart_ad_widgets.dart';
 import '../../../core/utils/calendar_day.dart';
+import '../../../core/utils/units.dart';
 
 /// The unified landing screen — one calm "today" snapshot across every feature.
 /// The only greeting in the app.
@@ -64,6 +65,25 @@ class HomeDashboard extends StatefulWidget {
 
 class _HomeDashboardState extends State<HomeDashboard> {
   final FocusService _focus = FocusService();
+
+  @override
+  void initState() {
+    super.initState();
+    Units.changes.addListener(_onUnitsChanged);
+  }
+
+  @override
+  void dispose() {
+    Units.changes.removeListener(_onUnitsChanged);
+    super.dispose();
+  }
+
+  /// A unit was changed in Settings while this tab sat underneath: the amounts in
+  /// its text, including the daily sentence it keeps, are re-read in the new unit.
+  void _onUnitsChanged() {
+    if (!mounted) return;
+    setState(() => _briefingFuture = null);
+  }
 
   // Medicine data is async; memoize it against the service revision so it only
   // re-queries when medicine data actually changed (a dose logged, a medicine
@@ -1493,8 +1513,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
       icon: Symbols.water_drop_rounded,
       title: 'Hydration',
       subtitle: (data.effectiveHydrationMl >= goal)
-          ? 'Goal reached · ${data.effectiveHydrationMl} ml'
-          : '${data.effectiveHydrationMl} / $goal ml · $remaining ml to go',
+          ? 'Goal reached · ${Units.volumeText(data.effectiveHydrationMl)}'
+          : '${Units.volumeNumber(data.effectiveHydrationMl)} / ${Units.volumeText(goal)} · ${Units.volumeText(remaining)} to go',
       onTap: () => widget.onNavigate(1, healthTab: 1),
       badge: streak > 0 ? _streakChip(ext.water, streak) : null,
       // Bounded, and the caption shrinks to fit it. This sits in a Row beside a

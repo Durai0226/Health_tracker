@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    show PendingNotificationRequest;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/health/adaptive_timing.dart';
 import '../../../core/services/background_alarm_service.dart';
@@ -12,12 +14,15 @@ import '../../../core/services/background_alarm_service.dart'
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_enums.dart';
 import '../models/medicine_schedule.dart';
+import '../models/medicine_snooze.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../models/medicine_log.dart';
 import 'medicine_storage_service.dart';
 import 'reminder_slot_grouping.dart';
 import 'reminder_window_nudges.dart';
 import 'critical_follow_up.dart';
+import 'ios_dose_plan.dart';
+import '../../reminders/models/reminder_sounds.dart';
 
 /// Service for managing medication reminder notifications
 /// Handles scheduling, updating, and canceling push notifications for medicines
@@ -185,54 +190,105 @@ class MedicationReminderService {
     return _scheduleRemindersLegacy(medicine);
   }
 
-  /// iOS legacy path: one `zonedSchedule` per (medicine, slot) — unchanged
-  /// from before Phase 1 grouping existed.
-  Future<List<int>> _scheduleRemindersLegacy(EnhancedMedicine medicine) async {
+  /// iOS legacy path: one `zonedSchedule` per planned dose (see [IosDosePlan]) —
+  /// the per-medicine ids and one-notification-per-medicine shape are unchanged
+  /// from before Phase 1 grouping existed; what each one repeats on is not.
+  Future<List<int>> _scheduleRemindersLegacy(EnhancedMedicine medicine) async =>
+      (await _armLegacy(medicine)).ids;
+
+  /// [_scheduleRemindersLegacy], and how many of the doses it tried to arm the
+  /// platform refused — which nothing throws for, and a caller that records "armed"
+  /// needs to know.
+  Future<({List<int> ids, int failed})> _armLegacy(
+      EnhancedMedicine medicine) async {
     final scheduledIds = <int>[];
+    var failed = 0;
+
+    final firstId = await _notificationIdFor(medicine.id, 0);
+
+    /// Withdraw this medicine's reminders from position [from] on: the ones an earlier
+    /// arming left. Only ids that are pending — a pass over many medicines is
+    /// otherwise 24 platform calls each for nothing — so [pendingNow], which the
+    /// caller has read, is what it goes by.
+    Future<void> withdrawFrom(
+        int from, List<PendingNotificationRequest> pendingNow) async {
+      final ids = [
+        for (final p in pendingNow)
+          if (p.id >= firstId + from && p.id < firstId + _maxSlotsPerMedicine) p.id
+      ];
+      for (final id in ids) {
+        try {
+          await _notificationService.cancelNotification(id);
+        } catch (e) {
+          debugPrint('⚠️ Error withdrawing reminder $id for ${medicine.name}: $e');
+        }
+      }
+    }
+
+    // A medicine that is not to be reminded of has nothing armed: whatever an earlier
+    // arming left (a course's doses, say) is withdrawn here, because the callers that
+    // switch reminders off or archive a medicine are not the only way to get here.
+    // Best effort: when the phone cannot say what is pending there is nothing to go
+    // by, and nothing was going to be armed anyway.
+    Future<void> withdrawAll() async {
+      try {
+        await withdrawFrom(0, await _notificationService.getPendingNotifications());
+      } catch (e) {
+        debugPrint('⚠️ Could not list pending reminders to withdraw ${medicine.name}\'s: $e');
+      }
+    }
 
     if (!medicine.reminderEnabled || medicine.schedule.isPRN) {
       debugPrint('⏭️ Skipping reminders: enabled=${medicine.reminderEnabled}, isPRN=${medicine.schedule.isPRN}');
-      return scheduledIds;
+      await withdrawAll();
+      return (ids: scheduledIds, failed: 0);
     }
     if (medicine.schedule.times.isEmpty) {
       debugPrint('⏭️ No reminder times set for ${medicine.name}');
-      return scheduledIds;
+      await withdrawAll();
+      return (ids: scheduledIds, failed: 0);
     }
     if (medicine.isArchived || !medicine.isActive) {
       debugPrint('⏭️ Medicine ${medicine.name} is archived/inactive');
-      return scheduledIds;
+      await withdrawAll();
+      return (ids: scheduledIds, failed: 0);
     }
 
-    final List<ScheduledTime> slots;
-    final String frequency;
-    if (medicine.schedule.frequencyType == FrequencyType.everyXHours) {
-      // The schedule's own clock times, not today's DateTimes read back: a slot in
-      // the hour the clocks skip would come back an hour later, and be armed there
-      // every day after.
-      slots = [
-        for (final t in medicine.schedule.everyXHoursClockTimesOn(DateTime.now()))
-          ScheduledTime(hour: t.hour, minute: t.minute)
-      ];
-      frequency = 'daily';
-    } else {
-      slots = medicine.schedule.times;
-      frequency = _getFrequencyString(medicine.schedule);
-    }
+    // What to arm is decided here, not when the notification fires: an iPhone runs
+    // nothing at that moment, so it cannot ask whether the medicine is due today.
+    // Every medicine used to be armed as "this time, every day", which reminded a
+    // weekly medicine daily, an every-other-day one daily, a course that had ended
+    // for ever, and a three-weeks-on cycle through its week off. See [IosDosePlan].
+    final now = clock.now();
+    final plan = IosDosePlan.plan(medicine.schedule,
+        now: now, maxCount: _maxSlotsPerMedicine);
 
-    debugPrint('📅 Scheduling ${slots.length} reminders for ${medicine.name}');
+    debugPrint('📅 Scheduling ${plan.length} reminders for ${medicine.name}');
 
     // iOS keeps only the soonest-firing 64 pending requests and silently
-    // discards the rest. This path arms one per (medicine, slot) — up to 24 each
+    // discards the rest. This path arms one per planned dose — up to 24 each
     // — so three medicines on frequent schedules already overflow, and what gets
     // dropped is whatever is furthest out. A dose is never *pruned* by the
     // budget (see ReminderBudget.allocate), but it must know when the platform
     // is about to prune it for us, because that failure is otherwise invisible:
     // no error, no log, just a dose that never arrives.
-    final pending = await _notificationService.getPendingNotificationCount();
+    //
+    // What is pending, NOT counting this medicine's own: arming again replaces them,
+    // and counting them leaves room for none of the doses they are about to be
+    // replaced by. (Counting them, with the withdrawing below, would cancel doses
+    // that are still wanted whenever the phone is nearly full.)
+    //
+    // Not guarded: a phone that cannot say what is pending is not ready to be armed
+    // either, and this has always failed here, for the caller to log, rather than
+    // carry on into the rest of the platform.
+    final pendingNow = await _notificationService.getPendingNotifications();
+    final ownPending = pendingNow
+        .where((p) => p.id >= firstId && p.id < firstId + _maxSlotsPerMedicine)
+        .length;
+    final pending = pendingNow.length - ownPending;
     final headroom =
         ReminderBudget.headroomFor(ReminderKind.dose, pending: pending);
-    final wanted =
-        slots.length < _maxSlotsPerMedicine ? slots.length : _maxSlotsPerMedicine;
+    final wanted = plan.length;
     final limit = wanted < headroom ? wanted : headroom;
     ReminderBudget.reportTruncation(
       family: 'iOS dose reminders for ${medicine.name}',
@@ -243,32 +299,50 @@ class MedicationReminderService {
     final scheduleJson = jsonEncode(medicine.schedule.toJson());
 
     for (int i = 0; i < limit; i++) {
-      final time = slots[i];
-      final notificationId = await _notificationIdFor(medicine.id, i);
+      final dose = plan[i];
+      final time = ScheduledTime(hour: dose.hour, minute: dose.minute);
+      final notificationId = firstId + i;
 
       try {
         final success = await _notificationService.scheduleMedicineReminder(
           id: notificationId,
           medicineName: buildMedicineReminderLine(medicine, time),
-          hour: time.hour,
-          minute: time.minute,
-          frequency: frequency,
+          hour: dose.hour,
+          minute: dose.minute,
+          frequency: _getFrequencyString(medicine.schedule),
           scheduleJson: scheduleJson,
           medicineId: medicine.id,
+          planned: dose,
+          sound: ReminderSounds.isKnown(medicine.reminderSound)
+              ? medicine.reminderSound
+              : null,
+          snooze: MedicineSnooze.clean(medicine.snoozeOverrideMinutes),
         );
 
         if (success) {
           scheduledIds.add(notificationId);
           debugPrint('✓ Scheduled reminder #$i for ${medicine.name} at ${time.formattedTime}');
         } else {
+          failed++;
           debugPrint('⚠️ Failed to schedule reminder #$i for ${medicine.name}');
         }
       } catch (e) {
+        failed++;
         debugPrint('❌ Error scheduling reminder: $e');
       }
     }
 
-    return scheduledIds;
+    // Withdraw what an earlier arming left past the end of this plan.
+    //
+    // The ids are positions in the plan and the plan is recomputed from now every
+    // time, so a dose can move to a lower id between two armings — and when the plan
+    // gets shorter (a course nearing its end, a dose now past) the old, higher ids
+    // still hold doses the new plan holds at lower ones. The phone would ring twice
+    // for each. Arming first and withdrawing the rest after means no moment where
+    // nothing is armed.
+    await withdrawFrom(limit, pendingNow);
+
+    return (ids: scheduledIds, failed: failed);
   }
 
   /// Resolves the full medicine list a recompute should act on: unscoped
@@ -576,21 +650,29 @@ class MedicationReminderService {
   }
 
   /// Schedule reminders for multiple medicines (e.g., on app startup).
-  Future<void> scheduleAllReminders(List<EnhancedMedicine> medicines) async {
+  ///
+  /// Returns how many doses the platform refused (always 0 on Android, whose
+  /// recompute reports in its own way): nothing here throws for one, and a caller
+  /// that records "armed" needs to tell a pass that armed everything from one that
+  /// armed none.
+  Future<int> scheduleAllReminders(List<EnhancedMedicine> medicines) async {
     debugPrint('📅 Scheduling reminders for ${medicines.length} medicines');
 
     if (_useAndroidPath) {
       final slots = await _recomputeAll(medicines);
       debugPrint('✓ Scheduled ${slots.length} medicine slot(s)');
-      return;
+      return 0;
     }
 
     int totalScheduled = 0;
+    int totalFailed = 0;
     for (final medicine in medicines) {
-      final ids = await _scheduleRemindersLegacy(medicine);
-      totalScheduled += ids.length;
+      final armed = await _armLegacy(medicine);
+      totalScheduled += armed.ids.length;
+      totalFailed += armed.failed;
     }
     debugPrint('✓ Scheduled $totalScheduled total reminders');
+    return totalFailed;
   }
 
   /// Get frequency string for notification matching (iOS legacy scheme only).
@@ -679,6 +761,7 @@ class MedicationReminderService {
     String? medicineId,
     int? hour,
     int? minute,
+    bool clearFired = true,
   }) async {
     try {
       await _notificationService.snoozeReminder(
@@ -689,6 +772,7 @@ class MedicationReminderService {
         medicineId: medicineId,
         hour: hour,
         minute: minute,
+        clearFired: clearFired,
       );
       debugPrint('✓ Snoozed reminder $notificationId for $minutes minutes');
       return true;
@@ -744,6 +828,15 @@ class MedicationReminderService {
       medicineId: medicine.id,
       hour: scheduledTime.hour,
       minute: scheduledTime.minute,
+      // The id is only a stable name for this dose's snooze count and its snooze
+      // reminder. It is not where the reminder that fired is armed: the ids a
+      // plan arms are positions in it (see [IosDosePlan]) and move between armings,
+      // so cancelling it would withdraw some other dose's reminder — or, for a daily
+      // one, the repeating reminder for every day after. A notification the person
+      // tapped is taken down by the phone; one they snoozed from inside the app
+      // without opening it stays in the tray until they clear it, which is the
+      // lesser harm.
+      clearFired: false,
     );
   }
 

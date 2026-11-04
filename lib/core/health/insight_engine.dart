@@ -2,6 +2,7 @@ import 'insight.dart';
 import 'focus_insights.dart';
 import 'vitals_pattern_detector.dart';
 import 'sleep_debt.dart';
+import '../utils/units.dart';
 
 /// Cross-feature "one big thing" engine. Pure Dart: each builder turns a
 /// feature's already-computed stats (from AdherenceAnalyzer, StreakEngine,
@@ -118,8 +119,8 @@ class InsightEngine {
         feature: InsightFeature.water,
         severity: InsightSeverity.attention,
         title: 'Behind on water',
-        detail: 'You\'re about ${deficitMl}ml behind pace for this point in the day — a drink now catches you up.',
-        metric: '${deficitMl}ml behind',
+        detail: 'You\'re about ${Units.volumeText(deficitMl, tight: true)} behind pace for this point in the day — a drink now catches you up.',
+        metric: '${Units.volumeText(deficitMl, tight: true)} behind',
         progress: goalMl > 0 ? intakeMl / goalMl : null,
         why: 'Expected intake for the elapsed waking hours vs your actual intake.',
         rank: 52,
@@ -131,7 +132,7 @@ class InsightEngine {
         feature: InsightFeature.water,
         severity: InsightSeverity.good,
         title: 'Hydration goal reached',
-        detail: 'You hit your ${goalMl}ml goal today — great consistency.',
+        detail: 'You hit your ${Units.volumeText(goalMl, tight: true)} goal today — great consistency.',
         metric: '${(intakeMl / goalMl * 100).round()}%',
         progress: intakeMl / goalMl,
         why: 'Today\'s intake vs your daily goal.',
@@ -203,6 +204,69 @@ class InsightEngine {
       );
     }
     return null;
+  }
+
+  /// "You often step away around minute 22 — try 20 + 5."
+  ///
+  /// Built from a minute somebody keeps leaving the app at, not from anything the
+  /// OS reported about distraction: it counts leaving, and says so in [why],
+  /// because the screen turning off arrives the same way as another app. The
+  /// suggestion is a round that ends just before that minute, followed by a short
+  /// break — offered with a button, never applied.
+  static Insight focusDrift({
+    required int usualMinute,
+    required int workMinutes,
+    required int breakMinutes,
+    required int times,
+    required int days,
+    required int total,
+  }) {
+    return Insight(
+      id: 'focus_drift',
+      feature: InsightFeature.focus,
+      severity: InsightSeverity.info,
+      title: 'You often step away around minute $usualMinute',
+      detail: 'Most times you left the app in the middle of a round were near the '
+          '$usualMinute-minute mark. A $workMinutes-minute round and then a '
+          '$breakMinutes-minute break comes just before that.',
+      why: 'You left the app $total times during a focus round and came back '
+          'before it ended. $times of them were around minute $usualMinute, on '
+          '$days different days. The screen turning off counts as leaving — the '
+          'phone cannot tell the two apart. Leaving in the first ten minutes, or '
+          'for more than ten minutes at a time, is not counted.',
+      actionLabel: 'Try $workMinutes + $breakMinutes',
+      rank: 30,
+    );
+  }
+
+  /// "Your usual round around now: Study for 45 minutes, with Rain."
+  ///
+  /// Offered with a button that sets the Focus setup up that way — never applied
+  /// on its own. [soundName] is null when no one sound usually plays.
+  static Insight focusHabit({
+    required String activityName,
+    required int minutes,
+    String? soundName,
+    required int times,
+    required int days,
+    required int total,
+  }) {
+    final withSound = soundName == null ? '' : ', with $soundName';
+    return Insight(
+      id: 'focus_habit',
+      feature: InsightFeature.focus,
+      severity: InsightSeverity.info,
+      title: 'Your usual round around now',
+      detail: '$activityName for $minutes minutes$withSound — what you usually '
+          'start at this time of day.',
+      why: 'Of the $total focus rounds you finished that started within an hour '
+          'of now over the last 60 days, $times were $activityName, on $days '
+          'different days. The middle length of those was $minutes minutes'
+          '${soundName == null ? '' : ', and $soundName was playing in at least half of them'}. '
+          'Nothing is changed until you tap Use this.',
+      actionLabel: 'Use this',
+      rank: 28,
+    );
   }
 
   static Insight? bloodPressure(List<BpPoint> points) =>

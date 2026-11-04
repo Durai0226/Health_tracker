@@ -7,6 +7,7 @@ import '../models/health_profile.dart';
 import '../services/step_service.dart';
 import '../utils/step_format.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../../core/utils/units.dart';
 
 /// Goal + body-profile settings: choose an adaptive or a fixed custom goal, see
 /// exactly why the adaptive goal is what it is, and provide weight/height so
@@ -25,6 +26,12 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
   late bool _reminderEnabled;
   late int _reminderMinute;
   final _weightController = TextEditingController();
+
+  /// The weight the box was filled from, and the text it was given for it. A save
+  /// that left the box as it was keeps THIS: the box shows pounds to a tenth, and
+  /// reading that back would walk 70 kg to 69.99 on a save that changed nothing.
+  double? _weightKgBehindBox;
+  String _weightBoxText = '';
   final _heightController = TextEditingController();
   String? _weightError;
   String? _heightError;
@@ -39,8 +46,13 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
     _reminderEnabled = StepService.getReminderEnabled();
     _reminderMinute = StepService.getReminderMinuteOfDay();
     if (p.weightKg != null) {
-      _weightController.text =
-          p.weightKg! % 1 == 0 ? p.weightKg!.toInt().toString() : p.weightKg!.toString();
+      final kg = p.weightKg!;
+      // Kilograms exactly as stored; pounds to a tenth.
+      _weightController.text = Units.weight == WeightUnit.lb
+          ? Units.weightNumber(kg)
+          : (kg % 1 == 0 ? kg.toInt().toString() : kg.toString());
+      _weightKgBehindBox = kg;
+      _weightBoxText = _weightController.text;
     }
     if (p.heightCm != null) _heightController.text = p.heightCm!.toString();
   }
@@ -71,6 +83,24 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
     setState(() => _customGoal = (_customGoal + delta).clamp(1000, 30000));
   }
 
+  /// What was typed, as kilograms, whichever unit it was typed in — for the
+  /// validator, which speaks kilograms. Text that is not a number comes back as it
+  /// was, for the validator to refuse.
+  String _kgText(String typed) {
+    if (typed.isEmpty) return '';
+    final kg = Units.kgFromInput(typed);
+    return kg == null ? typed : kg.toString();
+  }
+
+  /// Why [typed] is not a usable weight, in the unit it was typed in.
+  String? _validateWeight(String typed) {
+    final error = HealthProfile.validateWeightText(_kgText(typed));
+    if (error == null || Units.weight == WeightUnit.kg) return error;
+    return 'Enter a weight between '
+        '${Units.weightNumber(HealthProfile.minWeightKg)} and '
+        '${Units.weightNumber(HealthProfile.maxWeightKg)} ${Units.weightSymbol()}.';
+  }
+
   Future<void> _save() async {
     if (_saving) return;
     final wText = _weightController.text.trim();
@@ -81,7 +111,7 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
     // becomes every distance the app reports and weight becomes every calorie
     // figure, so a stray `-5` would be shown back to the user as a confident
     // health number rather than as the typo it is.
-    final wError = HealthProfile.validateWeightText(wText);
+    final wError = _validateWeight(wText);
     final hError = HealthProfile.validateHeightText(hText);
     if (wError != null || hError != null) {
       setState(() {
@@ -96,7 +126,9 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
     final updated = base.copyWith(
       useCustomStepGoal: _useCustom,
       customStepGoal: _customGoal,
-      weightKg: double.tryParse(wText),
+      weightKg: wText == _weightBoxText && _weightKgBehindBox != null
+          ? _weightKgBehindBox
+          : Units.kgFromInput(wText),
       clearWeight: wText.isEmpty,
       heightCm: int.tryParse(hText),
       clearHeight: hText.isEmpty,
@@ -268,8 +300,8 @@ class _StepsGoalSettingsScreenState extends State<StepsGoalSettingsScreen> {
                     children: [
                       AppTextField(
                         controller: _weightController,
-                        label: 'Weight (kg)',
-                        hint: 'e.g. 70',
+                        label: 'Weight (${Units.weightSymbol()})',
+                        hint: Units.weight == WeightUnit.lb ? 'e.g. 154' : 'e.g. 70',
                         accent: s,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),

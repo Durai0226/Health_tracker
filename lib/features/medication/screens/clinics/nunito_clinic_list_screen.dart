@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -76,15 +77,17 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
     }
   }
 
-  Future<void> _openMap(Clinic clinic) async {
-    if (!clinic.hasLocation) return;
-
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=${clinic.latitude},${clinic.longitude}'
-    );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  Future<void> _openDirections(Clinic clinic) async {
+    final uri = clinic.directionsUri(apple: defaultTargetPlatform == TargetPlatform.iOS);
+    if (uri == null) return;
+    var opened = false;
+    try {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Could not open directions for ${clinic.name}: $e');
     }
+    // Said, not swallowed: a button that does nothing looks broken.
+    if (!opened && mounted) context.toastError('Could not open a maps app.');
   }
 
   Future<void> _deleteClinic(Clinic clinic) async {
@@ -278,7 +281,7 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
               ),
             ],
             if ((clinic.phone != null && clinic.phone!.isNotEmpty) ||
-                clinic.hasLocation) ...[
+                clinic.canGetDirections) ...[
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
@@ -293,17 +296,17 @@ class _NunitoClinicListScreenState extends State<NunitoClinicListScreen> {
                         onPressed: () => _callClinic(clinic),
                       ),
                     ),
-                  if (clinic.phone != null && clinic.hasLocation)
+                  if (clinic.phone != null && clinic.canGetDirections)
                     const SizedBox(width: AppSpacing.sm),
-                  if (clinic.hasLocation)
+                  if (clinic.canGetDirections)
                     Expanded(
                       child: AppButton(
-                        label: 'Map',
-                        leadingIcon: Symbols.map_rounded,
+                        label: 'Directions',
+                        leadingIcon: Symbols.directions_rounded,
                         variant: AppButtonVariant.secondary,
                         size: AppButtonSize.sm,
                         accent: ext.info,
-                        onPressed: () => _openMap(clinic),
+                        onPressed: () => _openDirections(clinic),
                       ),
                     ),
                 ],

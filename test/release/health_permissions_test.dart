@@ -92,12 +92,81 @@ void main() {
       final policy = File('docs/privacy-policy.md').readAsStringSync();
       expect(policy.toLowerCase(), contains('past period days'));
     });
+  });
 
-    test('the iPhone purpose string names the cycle read', () {
+  group('readings from other apps', () {
+    test('the privacy screen, the policy and the Play declaration say so', () {
+      final privacy =
+          File('lib/features/settings/screens/health_privacy_screen.dart')
+              .readAsStringSync();
+      expect(privacy.toLowerCase(),
+          contains('blood pressure and blood sugar from other apps'));
+
+      final policy = File('docs/privacy-policy.md').readAsStringSync().toLowerCase();
+      expect(policy, contains('readings from other apps'));
+
+      final checklist = File('docs/release-checklist.md').readAsStringSync();
+      expect(checklist, contains('Readings from other apps'),
+          reason: 'the READ_BLOOD_PRESSURE / READ_BLOOD_GLUCOSE rows must say '
+              'what the read is for');
+    });
+
+    test('and for drinks: the switch is named on all three', () {
+      final privacy =
+          File('lib/features/settings/screens/health_privacy_screen.dart')
+              .readAsStringSync();
+      expect(privacy, contains('Count drinks from other apps'));
+
+      final policy = File('docs/privacy-policy.md').readAsStringSync();
+      expect(policy, contains('Count drinks from other apps'));
+
+      final checklist = File('docs/release-checklist.md').readAsStringSync();
+      expect(checklist, contains('Count drinks from other apps'),
+          reason: 'the READ_HYDRATION row must say what the read is for');
+    });
+  });
+
+  group('the iPhone purpose strings', () {
+    String plistString(String key) {
       final plist = File('ios/Runner/Info.plist').readAsStringSync();
-      final start = plist.indexOf('NSHealthShareUsageDescription');
-      final end = plist.indexOf('</string>', start);
-      expect(plist.substring(start, end).toLowerCase(), contains('past periods'));
+      final start = plist.indexOf('<key>$key</key>');
+      expect(start, isNonNegative, reason: '$key is missing from Info.plist');
+      final open = plist.indexOf('<string>', start) + '<string>'.length;
+      return plist.substring(open, plist.indexOf('</string>', open)).toLowerCase();
+    }
+
+    // It said "your steps and sleep" while the app also read heart rate,
+    // workouts, weight and water, and — now — past periods. Apple reads this
+    // text against what the app requests, and an iPhone person sees it on the
+    // permission sheet: it has to name everything the sheet can ask for.
+    test('the read string names everything the app can read', () {
+      final text = plistString('NSHealthShareUsageDescription');
+      for (final word in [
+        'steps',
+        'sleep',
+        'heart rate',
+        'vitals',
+        'workouts',
+        'blood pressure',
+        'blood sugar',
+        'weight',
+        'water',
+        'past periods',
+      ]) {
+        expect(text, contains(word), reason: 'the read string never mentions $word');
+      }
+    });
+
+    test('and says the cycle read happens only when asked for', () {
+      expect(plistString('NSHealthShareUsageDescription'),
+          contains('only if you tap import'));
+    });
+
+    test('the write string names the drinks it writes back', () {
+      final text = plistString('NSHealthUpdateUsageDescription');
+      for (final word in ['blood pressure', 'blood glucose', 'weight', 'drinks']) {
+        expect(text, contains(word), reason: 'the write string never mentions $word');
+      }
     });
   });
 

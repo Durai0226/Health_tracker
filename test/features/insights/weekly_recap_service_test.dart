@@ -138,6 +138,11 @@ void main() {
 /// one that is missing. Moving an id from here into
 /// `WeeklyRecapService.weekScopedInsightIds` is a product decision about what
 /// the recap shows, not a bug fix.
+///
+/// `focus_drift` is multi-day (a minute they keep leaving at, over weeks) and is
+/// an offer with a button that changes the Focus setup, on the resting Focus
+/// screen — not a claim about the week. `focus_habit` is the same kind of thing:
+/// an offer to set the Focus setup up the way they usually do at this hour.
 const _notRecapContent = <String>{
   'water_trend',
   'steps_trend',
@@ -146,6 +151,8 @@ const _notRecapContent = <String>{
   'correlation_focus_sleep',
   'correlation_bp_adherence',
   'correlation_mood_adherence',
+  'focus_drift',
+  'focus_habit',
 };
 
 const _knownTodayScoped = <String>{

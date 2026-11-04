@@ -170,6 +170,15 @@ class CyclePredictor {
     int lutealPhaseLength = 14,
     bool pregnancyMode = false,
     DateTime? pregnancyStartDate,
+    bool hormonalBirthControl = false,
+
+    /// Where a temperature rise in the CURRENT cycle put ovulation (the day before
+    /// the first warmer day; see `TemperatureShift.ovulationDay`), or null.
+    ///
+    /// When it is given and sensible, the next period is counted on from it —
+    /// ovulation plus [lutealPhaseLength] — instead of from the cycle's start plus
+    /// the typical length. See [maxTemperatureAdjustDays] for what "sensible" is.
+    DateTime? confirmedOvulation,
   }) {
     final today = _dayOnly(on ?? DateTime.now());
 
@@ -196,22 +205,49 @@ class CyclePredictor {
         _learnedCycleLength(stats, typicalCycleLength, completedCount);
     final periodLen = stats.medianPeriodLength ?? typicalPeriodLength;
 
-    final predictedStart = _addDays(lastStart, learnedCycle);
+    var predictedStart = _addDays(lastStart, learnedCycle);
+    var basis = PredictionBasis.calendar;
+    // A temperature rise found in this cycle says when ovulation HAPPENED, and the
+    // luteal phase after it is far steadier than the time before it, so counting
+    // on from it can beat counting from the last period. Not with hormonal birth
+    // control (there may be no ovulation to find), and not when it disagrees with
+    // the calendar by more than a week: a rise that far off is more likely a noisy
+    // chart or an unusual cycle than news, and the calendar estimate stands.
+    if (!hormonalBirthControl && confirmedOvulation != null) {
+      final ovulated = _dayOnly(confirmedOvulation);
+      final fromTemperature = _addDays(ovulated, lutealPhaseLength);
+      if (ovulated.isAfter(lastStart) &&
+          !ovulated.isAfter(today) &&
+          _daysBetween(predictedStart, fromTemperature).abs() <=
+              maxTemperatureAdjustDays) {
+        predictedStart = fromTemperature;
+        basis = PredictionBasis.temperature;
+      }
+    }
     final half = _windowHalfWidth(stats.cycleLengthStd);
     final windowStart = _addDays(predictedStart, -half);
     final windowEnd = _addDays(predictedStart, half);
-    final ovulation = _addDays(predictedStart, -lutealPhaseLength);
-    final fertileStart = _addDays(ovulation, -5);
-    final fertileEnd = _addDays(ovulation, 1);
+    // Hormonal birth control can stop ovulation, so an ovulation day and a fertile
+    // window counted back from the next period would be a guess about something
+    // that may not be happening. They are left out, not softened.
+    final ovulation = hormonalBirthControl
+        ? null
+        : _addDays(predictedStart, -lutealPhaseLength);
+    final fertileStart = ovulation == null ? null : _addDays(ovulation, -5);
+    final fertileEnd = ovulation == null ? null : _addDays(ovulation, 1);
 
     final dayOfCycle = _daysBetween(lastStart, today) + 1;
     final daysUntil = _daysBetween(today, predictedStart);
     final phase = phaseOn(
       today,
       lastStart: lastStart,
-      cycleLength: learnedCycle,
+      // The phases follow the cycle as it is now being estimated to run.
+      cycleLength: basis == PredictionBasis.temperature
+          ? _daysBetween(lastStart, predictedStart)
+          : learnedCycle,
       periodLength: periodLen,
       lutealLength: lutealPhaseLength,
+      ovulationPhase: !hormonalBirthControl,
     );
 
     final confidence =
@@ -243,8 +279,13 @@ class CyclePredictor {
       daysUntilNextPeriod: daysUntil,
       completedCycles: completedCount,
       lastPeriodStart: lastStart,
+      basis: basis,
     );
   }
+
+  /// How far a temperature-based next period may differ from the calendar one and
+  /// still be used. Beyond it the rise is set aside, not trusted over the history.
+  static const int maxTemperatureAdjustDays = 7;
 
   /// The phase of [date] relative to a known cycle anchor.
   static CyclePhase phaseOn(
@@ -253,6 +294,7 @@ class CyclePredictor {
     required int cycleLength,
     required int periodLength,
     required int lutealLength,
+    bool ovulationPhase = true,
   }) {
     final len = cycleLength <= 0 ? 28 : cycleLength;
     final offset = _daysBetween(lastStart, date);
@@ -261,8 +303,14 @@ class CyclePredictor {
 
     final ovulationIndex = (len - lutealLength).clamp(0, len - 1);
     if (cd < periodLength) return CyclePhase.menstrual;
-    if ((cd - ovulationIndex).abs() <= 1) return CyclePhase.ovulation;
-    if (cd < ovulationIndex) return CyclePhase.follicular;
+    // [ovulationPhase] false: the days around ovulation are not a phase of their
+    // own, so they join the one before.
+    if (ovulationPhase && (cd - ovulationIndex).abs() <= 1) {
+      return CyclePhase.ovulation;
+    }
+    if (cd < ovulationIndex || (!ovulationPhase && cd == ovulationIndex)) {
+      return CyclePhase.follicular;
+    }
     return CyclePhase.luteal;
   }
 
@@ -275,6 +323,7 @@ class CyclePredictor {
     int typicalCycleLength = 28,
     int typicalPeriodLength = 5,
     int lutealPhaseLength = 14,
+    bool ovulationPhase = true,
   }) {
     final cycles = deriveCycles(days);
     if (cycles.isEmpty) return null;
@@ -303,6 +352,7 @@ class CyclePredictor {
       cycleLength: len,
       periodLength: anchor.periodLengthDays,
       lutealLength: lutealPhaseLength,
+      ovulationPhase: ovulationPhase,
     );
   }
 

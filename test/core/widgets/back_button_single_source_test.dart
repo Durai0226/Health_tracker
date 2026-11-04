@@ -30,7 +30,6 @@ const _exempt = <String, String>{
   // their own leading slot. Unifying them is its own phase, and it has to
   // re-home AppBarTheme.systemOverlayStyle first — without which three water
   // screens paint white status-bar glyphs on a light scaffold.
-  'early_access_screen.dart': 'Material AppBar',
   'water_achievements_screen.dart': 'SliverAppBar',
   'water_statistics_screen.dart': 'Material AppBar',
   'hydration_profile_screen.dart': 'Material AppBar',

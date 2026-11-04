@@ -26,10 +26,13 @@ import '../services/water_bottle.dart';
 import '../../../core/health/bottle_mode.dart';
 import '../services/drink_notes.dart';
 import '../../../core/services/clean_storage_service.dart';
+import '../models/beverage_type.dart';
+import '../models/custom_drink.dart';
 import '../models/enhanced_water_log.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
 import 'custom_cup_creator_screen.dart';
+import 'custom_drink_screen.dart';
 import 'water_statistics_screen.dart';
 import 'water_calendar_screen.dart';
 import 'water_reminder_settings_screen.dart';
@@ -40,6 +43,7 @@ import 'caffeine_insights_screen.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../../../core/health/usual_drink.dart';
+import '../../../core/utils/units.dart';
 
 /// Modern Aqua Water Dashboard
 /// Features: Animated droplet, dynamic beverage gradients, glassmorphism
@@ -87,6 +91,12 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     _initAnimations();
     _loadData(showLoading: true);
     _scrollController.addListener(_onScroll);
+    Units.changes.addListener(_onUnitsChanged);
+  }
+
+  /// A unit was changed in the profile pushed above this screen.
+  void _onUnitsChanged() {
+    if (mounted) setState(() {});
   }
 
   void _initAnimations() {
@@ -141,6 +151,9 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     return UsualDrinkCalc.at(now, [
       for (final day in WaterService.getDataForRange(from, now))
         for (final l in day.logs)
+          // A drink that no longer exists cannot be offered as the usual one: the
+          // tile logs by id, and the id would resolve to nothing.
+          if (WaterService.getBeverage(l.beverageId) != null)
           PastDrink(
             time: l.time,
             beverageId: l.beverageId,
@@ -247,7 +260,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           // themselves. The kit's content is a String, so the glyph rides in
           // the message — exactly how the achievement toast below carries
           // `first.emoji`.
-          '${beverage.emoji} +${amountMl}ml ${beverage.name}',
+          '${beverage.emoji} +${Units.volumeText(amountMl, tight: true)} ${beverage.name}',
           variant: AppToastVariant.success,
           duration: const Duration(seconds: 3),
           action: addedLogId == null
@@ -300,8 +313,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
         if (WaterService.isDrinkingTooFast()) {
           final hourMl = WaterService.intakeInLastHourMl();
           context.toastWarning(
-            'That is ${hourMl}ml in the last hour. Your kidneys clear about '
-            '1 litre an hour — it is worth easing off for a while.',
+            'That is ${Units.volumeText(hourMl, tight: true)} in the last hour. Your kidneys clear about '
+            '${Units.volume == VolumeUnit.ml ? '1 litre' : '34 fl oz'} an hour — it is worth easing off for a while.',
           );
         }
       }
@@ -342,7 +355,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
           AppListTile(
             icon: Symbols.edit_rounded,
             title: 'Edit cup',
-            subtitle: '${cup.capacityMl} ml',
+            subtitle: Units.volumeText(cup.capacityMl),
             accent: ext.water,
             onTap: () => Navigator.of(sheetCtx).pop('edit'),
           ),
@@ -382,6 +395,94 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     );
   }
 
+  /// Make a drink of the person's own, then select it: they made it to log it.
+  Future<void> _openDrinkCreator() async {
+    final id = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const CustomDrinkScreen()),
+    );
+    await _loadData();
+    if (id != null && mounted) setState(() => _selectedBeverageId = id);
+  }
+
+  /// Edit or delete a drink the person made — the same two choices, and the same
+  /// way in, as a cup.
+  Future<void> _manageDrink(BeverageType drink) async {
+    final ext = AppColorsExt.of(context);
+    final choice = await AppBottomSheet.show<String>(
+      context,
+      title: drink.name,
+      icon: Symbols.local_drink_rounded,
+      accent: ext.water,
+      builder: (sheetCtx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppListTile(
+            icon: Symbols.edit_rounded,
+            title: 'Edit drink',
+            accent: ext.water,
+            onTap: () => Navigator.of(sheetCtx).pop('edit'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppListTile(
+            icon: Symbols.delete_rounded,
+            title: 'Delete drink',
+            subtitle: 'Drinks already logged with it stay',
+            accent: ext.error,
+            onTap: () => Navigator.of(sheetCtx).pop('delete'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'edit') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => CustomDrinkScreen(existing: drink)),
+      );
+      await _loadData();
+      return;
+    }
+    try {
+      await WaterService.deleteBeverage(drink.id);
+    } catch (e) {
+      debugPrint('Deleting a drink failed: $e');
+      if (mounted) context.toastError('Could not delete the drink. Try again.');
+      return;
+    }
+    // Deleting the drink that is selected must not leave the strip on an id that
+    // no longer exists; water is always there.
+    if (_selectedBeverageId == drink.id) _selectedBeverageId = 'water';
+    await _loadData();
+    if (!mounted) return;
+    context.toastSuccess(
+      'Deleted ${drink.name}',
+      action: AppToastAction(
+        label: 'Undo',
+        onPressed: () async {
+          // Not over a drink made since: it may have been given this very id (the
+          // old one had none of its own logs to keep it taken) or this name.
+          if (WaterService.isCustomBeverage(drink.id) ||
+              CustomDrink.nameError(drink.name, WaterService.getAllBeverages()) != null) {
+            if (mounted) {
+              context.toastInfo(
+                  'You have made a drink with that name since. Add this one again from New Drink.');
+            }
+            return;
+          }
+          try {
+            await WaterService.addCustomBeverage(drink);
+          } catch (e) {
+            debugPrint('Undoing a drink delete failed: $e');
+            if (mounted) context.toastError('Could not bring the drink back.');
+            return;
+          }
+          await _loadData();
+        },
+      ),
+    );
+  }
+
   /// Selects a beverage from the inline chip strip, without a round trip
   /// through the picker sheet.
   void _selectBeverage(String id) {
@@ -390,10 +491,14 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
   }
 
   void _showBeverageSelector() async {
-    final result = await AquaBeverageSheet.show(context, _selectedBeverageId);
-    if (result != null && mounted) {
-      setState(() => _selectedBeverageId = result);
+    final result = await AquaBeverageSheet.show(context, _selectedBeverageId,
+        canCreate: true);
+    if (result == null || !mounted) return;
+    if (result == AquaBeverageSheet.createNew) {
+      await _openDrinkCreator();
+      return;
     }
+    setState(() => _selectedBeverageId = result);
   }
 
   void _showCustomAmountDialog() {
@@ -449,25 +554,29 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
               // AppStepper: the shared -/+ control. This was the third copy of
               // it in the water feature alone.
               AppStepper(
-                value: '${newGoal}ml',
-                subLabel: '${(newGoal / 250).round()} glasses',
+                value: Units.volumeText(newGoal, tight: true),
+                subLabel: '${(newGoal / Units.glassMl()).round()} glasses',
                 valueStyle: Theme.of(context).textTheme.displayLarge,
                 accent: AppColorsExt.of(context).water,
-                decrementTooltip: 'Decrease goal by 250 ml',
-                incrementTooltip: 'Increase goal by 250 ml',
+                decrementTooltip:
+                    'Decrease goal by ${Units.volumeText(Units.stepMl(250, 8))}',
+                incrementTooltip:
+                    'Increase goal by ${Units.volumeText(Units.stepMl(250, 8))}',
                 onDecrement: newGoal <= 500
                     ? null
                     : () {
                         HapticFeedback.selectionClick();
-                        setModalState(
-                            () => newGoal = (newGoal - 250).clamp(500, 5000));
+                        setModalState(() => newGoal = Units.stepped(newGoal, -1,
+                                mlStep: 250, ozStep: 8)
+                            .clamp(500, 5000));
                       },
                 onIncrement: newGoal >= 5000
                     ? null
                     : () {
                         HapticFeedback.selectionClick();
-                        setModalState(
-                            () => newGoal = (newGoal + 250).clamp(500, 5000));
+                        setModalState(() => newGoal = Units.stepped(newGoal, 1,
+                                mlStep: 250, ozStep: 8)
+                            .clamp(500, 5000));
                       },
               ),
               const SizedBox(height: AquaTheme.spacingXL),
@@ -533,6 +642,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
 
   @override
   void dispose() {
+    Units.changes.removeListener(_onUnitsChanged);
     _fadeController.dispose();
     _headerController.dispose();
     _scrollController.dispose();
@@ -630,6 +740,8 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
                           onBeverageSelect: _selectBeverage,
                           onContainerAdd: _addWaterFromContainer,
                           onCreateCup: _openCupCreator,
+                          onCreateDrink: _openDrinkCreator,
+                          onBeverageManage: _manageDrink,
                           onContainerManage: _manageCup,
                           usual: _usual,
                           onUsual: (u) => _addWater(u.amountMl, u.beverageId),
@@ -1203,7 +1315,7 @@ class _AquaWaterDashboardState extends State<AquaWaterDashboard>
     return Padding(
       padding: const EdgeInsets.only(top: AquaTheme.spacingS),
       child: Text(
-        'Goal +${note.deltaMl} ml today for ${note.activeKcal} active kcal',
+        'Goal +${Units.volumeText(note.deltaMl)} today for ${note.activeKcal} active kcal',
         textAlign: TextAlign.center,
         style: Theme.of(context)
             .textTheme

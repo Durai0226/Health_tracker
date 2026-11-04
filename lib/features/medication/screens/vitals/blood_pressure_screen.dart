@@ -8,6 +8,7 @@ import '../../../../core/design/app_design.dart';
 import '../../../../core/design/app_colors_ext.dart';
 import '../../../../core/health/vitals_analyzer.dart';
 import '../../../../core/utils/calendar_day.dart';
+import '../../../../core/utils/coalesced_load.dart';
 import '../../../../core/health/insight_engine.dart';
 import '../../../../core/health/vitals_pattern_detector.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
@@ -19,6 +20,9 @@ import '../../services/bp_sessions.dart';
 import '../../services/home_bp_week_service.dart';
 import '../../widgets/home_bp_week_card.dart';
 import '../../services/vitals_storage_service.dart';
+import '../../services/vitals_health_import.dart';
+import '../../widgets/vitals_import_flow.dart';
+import '../../../../core/services/health_store_name.dart';
 import 'bp_second_reading_sheet.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_emergency_call.dart';
@@ -88,13 +92,29 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
   List<BloodPressureReading> _readings = [];
   bool _loading = true;
 
+  /// One load at a time: every save bumps the store's revision, and a burst of
+  /// them — an import — must be one reload behind the one under way, not one each.
+  late final CoalescedLoad _load = CoalescedLoad(_loadOnce, canContinue: () => mounted);
+
   @override
   void initState() {
     super.initState();
     _load();
+    // Readings can arrive while this is open — a cuff app saved one and the
+    // import brought it in — so it follows the store rather than only what this
+    // screen itself saved.
+    VitalsStorageService.revision.addListener(_onRevision);
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    VitalsStorageService.revision.removeListener(_onRevision);
+    super.dispose();
+  }
+
+  void _onRevision() => _load();
+
+  Future<void> _loadOnce() async {
     final data = await VitalsStorageService.getAllBp();
     if (!mounted) return;
     setState(() {
@@ -120,7 +140,9 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
           _BpLogForm(accent: accent, existing: edit, secondOf: secondOf),
     );
     if (saved == null) return;
-    await _load();
+    // The save bumped the revision, which started the reload; what follows needs
+    // the list it brings, not a second one.
+    await _load.settled;
     if (edit == null) _offerSecondReading(saved);
   }
 
@@ -178,7 +200,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
     // Soft delete: remove now, but offer Undo — deleting a health record must
     // never be a one-swipe, unrecoverable action.
     await VitalsStorageService.deleteBp(r.id);
-    _load();
+    // The delete bumped the revision, which reloads the list.
     // The messenger used to be captured before the await so the toast
     // survived the gap; the toast kit takes a context, so guard instead.
     if (!mounted) return;
@@ -186,10 +208,7 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
       'Reading deleted',
       action: AppToastAction(
         label: 'Undo',
-        onPressed: () async {
-          await VitalsStorageService.saveBp(r);
-          _load();
-        },
+        onPressed: () => VitalsStorageService.saveBp(r),
       ),
     );
   }
@@ -497,7 +516,8 @@ class _BloodPressureScreenState extends State<BloodPressureScreen> {
                       '${VitalsAnalyzer.bpLabel(cat)} · ${DateFormats.dayMonthTime.format(r.takenAt)}'
                       '${r.pulse != null ? ' · ${r.pulse} bpm' : ''}'
                       '${r.tags.isNotEmpty ? ' · ${BpTags.describe(r.tags)}' : ''}'
-                      '${inAverageOf != null ? ' · in a $inAverageOf-reading average' : ''}',
+                      '${inAverageOf != null ? ' · in a $inAverageOf-reading average' : ''}'
+                      '${VitalsHealthImport.isImported(r.id) ? ' · from ${healthStoreName()}' : ''}',
                       style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                     ),
                   ],
@@ -589,6 +609,9 @@ class _EmptyState extends StatelessWidget {
           size: AppButtonSize.lg,
           onPressed: onLog,
         ),
+        // A cuff app may already have saved readings to the health store.
+        const SizedBox(height: AppSpacing.sm),
+        const VitalsImportButton(),
       ],
     );
   }

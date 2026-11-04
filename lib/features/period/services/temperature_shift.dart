@@ -10,7 +10,10 @@
 /// after it began, so it confirms ovulation rather than forecasting it, and it
 /// is an estimate that illness, alcohol, a short night or a changed alarm can
 /// all move. It is never a basis for contraception, and says so wherever it is
-/// shown. Nothing here changes the calendar-method prediction.
+/// shown. It does move the NEXT-PERIOD estimate, narrowly: when the current cycle
+/// shows a rise, `CyclePredictor.predict` counts on from that ovulation day instead
+/// of from the cycle's start — but only within a week of the calendar's answer,
+/// and never with hormonal birth control.
 library;
 
 import '../services/cycle_predictor.dart' show DerivedCycle;

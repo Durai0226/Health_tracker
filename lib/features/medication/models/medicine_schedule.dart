@@ -300,21 +300,32 @@ class MedicineSchedule {
   }
 
   List<DateTime> getScheduledTimesForDate(DateTime date) {
-    if (!isActiveOnDate(date)) return [];
+    return [
+      for (final t in clockTimesForDate(date))
+        DateTime(date.year, date.month, date.day, t.hour, t.minute),
+    ]..sort((a, b) => a.compareTo(b));
+  }
+
+  /// The clock times ([hour]:[minute]) a dose falls at on [date] — what
+  /// [getScheduledTimesForDate] turns into moments.
+  ///
+  /// The two differ on the day the clocks skip a time: a `DateTime` built for 02:30
+  /// there is moved to 03:30 by Dart, and reading the hour back off it gives the wrong
+  /// slot. A caller that needs to NAME the dose (the payload a reminder carries, the
+  /// slot a "Take" logs against) takes it from here.
+  List<({int hour, int minute})> clockTimesForDate(DateTime date) {
+    if (!isActiveOnDate(date)) return const [];
 
     // PRN / as-needed meds have no fixed slots — they are taken ad-hoc and must
     // never generate missed doses or timeline entries.
-    if (isPRN || frequencyType == FrequencyType.asNeeded) return [];
+    if (isPRN || frequencyType == FrequencyType.asNeeded) return const [];
 
     // "Every X hours" fans a single anchor time out across the whole day at the
     // given interval, so the timeline / adherence sees every dose slot.
     if (frequencyType == FrequencyType.everyXHours &&
         intervalHours != null &&
         intervalHours! > 0) {
-      return [
-        for (final t in everyXHoursClockTimes)
-          DateTime(date.year, date.month, date.day, t.hour, t.minute),
-      ];
+      return everyXHoursClockTimes;
     }
 
     // Day-based filtering (specificDays / everyXDays / cyclical) is handled by
@@ -323,8 +334,7 @@ class MedicineSchedule {
     final isWeekend = date.weekday == DateTime.saturday ||
         date.weekday == DateTime.sunday;
     final effectiveTimes = (isWeekend && hasWeekendOverride) ? weekendTimes! : times;
-    return effectiveTimes.map((t) => t.toDateTime(date)).toList()
-      ..sort((a, b) => a.compareTo(b));
+    return [for (final t in effectiveTimes) (hour: t.hour, minute: t.minute)];
   }
 
   String get frequencyDescription {

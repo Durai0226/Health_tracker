@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/confirmation_bottom_sheet.dart';
+import '../../models/clinic.dart';
 import '../../models/doctor_pharmacy.dart';
 import '../../services/medicine_storage_service.dart';
 import '../../../../core/services/haptic_service.dart';
@@ -19,6 +20,9 @@ class NunitoDoctorListScreen extends StatefulWidget {
 
 class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
   List<Doctor> _doctors = [];
+
+  /// The clinics by id, so a doctor linked to one is shown under its current name.
+  Map<String, Clinic> _clinics = {};
   bool _isLoading = true;
 
   final HapticService _hapticService = HapticService();
@@ -33,9 +37,11 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
     setState(() => _isLoading = true);
     try {
       final doctors = await MedicineCleanStorageService.getAllDoctors();
+      final clinics = await MedicineCleanStorageService.getAllClinics();
       if (mounted) {
         setState(() {
           _doctors = doctors;
+          _clinics = {for (final c in clinics) c.id: c};
           _isLoading = false;
         });
       }
@@ -285,10 +291,10 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
                       style: tt.bodySmall?.copyWith(color: ext.mark(accent)),
                     ),
                   ],
-                  if (doctor.clinicName != null && doctor.clinicName!.isNotEmpty) ...[
+                  if (_placeOf(doctor) != null) ...[
                     const SizedBox(height: 2),
                     Text(
-                      doctor.clinicName!,
+                      _placeOf(doctor)!,
                       style: tt.bodySmall?.copyWith(color: ext.textTertiary),
                     ),
                   ],
@@ -313,6 +319,14 @@ class _NunitoDoctorListScreenState extends State<NunitoDoctorListScreen> {
         ),
       ),
     );
+  }
+
+  /// Where the doctor works: the linked clinic's name as it is now, else the name that
+  /// was typed (which is also what a deleted clinic leaves behind).
+  String? _placeOf(Doctor doctor) {
+    final linked = doctor.clinicId == null ? null : _clinics[doctor.clinicId!];
+    final name = linked?.name ?? doctor.clinicName;
+    return name == null || name.isEmpty ? null : name;
   }
 
   String _getInitials(String name) {

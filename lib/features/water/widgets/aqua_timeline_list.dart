@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import '../../../core/design/app_design.dart';
 import '../theme/aqua_theme.dart';
 import '../models/enhanced_water_log.dart';
+import '../services/water_health_import.dart';
+import '../../../core/services/health_store_name.dart';
+import '../../../core/utils/units.dart';
 
 /// Timeline list for today's water logs
 class AquaTimelineList extends StatelessWidget {
@@ -277,7 +280,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                           children: [
                             Expanded(
                               child: Text(
-                                '+${widget.log.amountMl} ml',
+                                '+${Units.volumeText(widget.log.amountMl)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.headlineSmall!.copyWith(
@@ -328,7 +331,8 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '$timeStr • ${widget.log.beverageName}',
+                          '$timeStr • ${widget.log.beverageName}'
+                          '${WaterHealthImport.isImported(widget.log.id) ? ' • from ${healthStoreName()}' : ''}',
                           style: Theme.of(context).textTheme.bodySmall!.copyWith(
                             color: ext.textSecondary,
                           ),
@@ -336,7 +340,7 @@ class _AquaTimelineItemState extends State<_AquaTimelineItem> {
                         if (widget.log.effectiveHydrationMl != widget.log.amountMl) ...[
                           const SizedBox(height: 4),
                           Text(
-                            'Hydration: ${widget.log.effectiveHydrationMl} ml',
+                            'Hydration: ${Units.volumeText(widget.log.effectiveHydrationMl)}',
                             style: Theme.of(context).textTheme.labelSmall!.copyWith(
                               color: ext.mark(ext.water),
                             ),
@@ -408,7 +412,7 @@ class AquaCompactLogEntry extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${log.amountMl} ml ${log.beverageName}',
+                    '${Units.volumeText(log.amountMl)} ${log.beverageName}',
                     style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                       color: ext.textPrimary,
                       fontWeight: FontWeight.w500,

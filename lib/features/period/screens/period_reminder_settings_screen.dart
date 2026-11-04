@@ -141,7 +141,8 @@ class _PeriodReminderSettingsScreenState
                       onSwitchChanged: (v) =>
                           _update(_cfg.copyWith(logReminderEnabled: v)),
                     ),
-                    if (_isTtc)
+                    // No fertile window exists to remind about on hormonal birth control.
+                    if (_isTtc && !PeriodService.getSettings().birthControlEnabled)
                       SettingsTile(
                         icon: Symbols.spa_rounded,
                         accent: acc,

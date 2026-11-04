@@ -42,12 +42,15 @@ class RecordedSchedule {
 
 /// One `show` call.
 class RecordedShow {
-  RecordedShow(this.id, this.title, this.body, this.payload);
+  RecordedShow(this.id, this.title, this.body, this.payload, [this.details]);
 
   final int id;
   final String? title;
   final String? body;
   final String? payload;
+
+  /// What it looked like and which channel it went to.
+  final NotificationDetails? details;
 
   @override
   String toString() => 'RecordedShow($id, $title)';
@@ -104,6 +107,10 @@ class RecordingNotificationScheduler implements NotificationScheduler {
 
   /// What [pendingNotificationRequests] answers.
   List<PendingNotificationRequest> pending = <PendingNotificationRequest>[];
+
+  /// What [pendingNotificationRequests] throws, when set: a plugin that cannot
+  /// list what is pending, as before it is ready.
+  Object? pendingError;
 
   final List<RecordedSchedule> scheduled = <RecordedSchedule>[];
   final List<RecordedShow> shown = <RecordedShow>[];
@@ -181,7 +188,7 @@ class RecordingNotificationScheduler implements NotificationScheduler {
     NotificationDetails? details, {
     String? payload,
   }) async {
-    shown.add(RecordedShow(id, title, body, payload));
+    shown.add(RecordedShow(id, title, body, payload, details));
     sequence.add('show:$id');
   }
 
@@ -199,12 +206,66 @@ class RecordingNotificationScheduler implements NotificationScheduler {
   }
 
   @override
-  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async =>
-      pending;
+  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
+    final error = pendingError;
+    if (error != null) throw error;
+    return pending;
+  }
 
   @override
   Future<bool> exactAlarmsAllowed() async {
     exactAlarmChecks++;
     return exactAllowed;
+  }
+}
+
+/// A recorder whose pending list is what the phone would actually hold: every id
+/// armed and not withdrawn since, plus whatever a test puts in [pending]. A one-off
+/// whose moment is before [asOf] has been delivered and is gone; a repeating one
+/// never is.
+///
+/// For code that decides from what is pending — the dose arming counts the phone's
+/// pending requests against its limit and withdraws what an earlier arming left —
+/// where a recorder that answers only a fixed list cannot show the withdrawing work.
+class LivePendingNotificationScheduler extends RecordingNotificationScheduler {
+  LivePendingNotificationScheduler({super.exactAllowed});
+
+  /// "Now", for deciding which one-offs have already come and gone. Null keeps all.
+  DateTime? asOf;
+
+  /// Ids armed and still held, in arming order, last write winning.
+  List<RecordedSchedule> get held {
+    final live = <int, RecordedSchedule>{};
+    var armIndex = 0;
+    for (final step in sequence) {
+      if (step.startsWith('arm:')) {
+        final id = int.parse(step.substring(4).split('@').first);
+        live[id] = scheduled[armIndex++];
+      } else if (step.startsWith('cancel:')) {
+        live.remove(int.parse(step.substring(7)));
+      } else if (step == 'cancelAll') {
+        live.clear();
+      }
+    }
+    final cut = asOf;
+    return [
+      for (final r in live.values)
+        if (cut == null ||
+            r.matchDateTimeComponents != null ||
+            DateTime(r.when.year, r.when.month, r.when.day, r.when.hour,
+                    r.when.minute)
+                .isAfter(cut))
+          r
+    ];
+  }
+
+  @override
+  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
+    final error = pendingError;
+    if (error != null) throw error;
+    return [
+      ...pending,
+      for (final r in held) PendingNotificationRequest(r.id, r.title, r.body, r.payload),
+    ];
   }
 }

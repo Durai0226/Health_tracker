@@ -103,6 +103,43 @@ abstract final class HealthSourceRegistry {
     return best;
   }
 
+  /// [points] minus those from a source the user switched off.
+  ///
+  /// A source nobody has registered yet is usable: the table only knows a
+  /// device after it has won a heart-data day, so "unknown" must not mean
+  /// "off".
+  static List<HealthDataPoint> usable(
+    Iterable<HealthDataPoint> points,
+    Map<String, HealthSource> known,
+  ) =>
+      known.isEmpty
+          ? points.toList()
+          : points
+              .where((p) => known[keyFor(p)]?.enabled ?? true)
+              .toList(growable: false);
+
+  /// The key of the source the user pinned, if any of [points] came from it.
+  ///
+  /// Null when nothing is pinned OR the pinned device wrote none of these
+  /// points — a pin is a preference, so a night or a day it did not record is
+  /// still filled from whoever did, never left empty.
+  static String? pinnedKeyIn(
+    Iterable<HealthDataPoint> points,
+    Map<String, HealthSource> known,
+  ) {
+    String? best;
+    var bestPriority = 0;
+    for (final p in points) {
+      final key = keyFor(p);
+      final priority = known[key]?.priority ?? 0;
+      if (priority > bestPriority) {
+        best = key;
+        bestPriority = priority;
+      }
+    }
+    return best;
+  }
+
   /// Group [points] by contributing source, counting samples.
   static Map<String, SourceCandidate> candidatesFrom(
     Iterable<HealthDataPoint> points, {

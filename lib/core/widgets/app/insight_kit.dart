@@ -286,13 +286,21 @@ class SafetyDisclaimerBar extends StatelessWidget {
 }
 
 /// A dismissible proactive nudge banner (frequency-capped by the caller). Shows
-/// the single most important insight with a "Why this?" and a dismiss.
+/// the single most important insight with a "Why this?" and a dismiss — and, when
+/// the insight has an `actionLabel` and the caller gives [onAction], the one thing
+/// to do about it.
 class ProactiveNudgeBanner extends StatelessWidget {
   final Insight insight;
   final VoidCallback onDismiss;
   final VoidCallback? onTap;
-  const ProactiveNudgeBanner(
-      {super.key, required this.insight, required this.onDismiss, this.onTap});
+  final VoidCallback? onAction;
+  const ProactiveNudgeBanner({
+    super.key,
+    required this.insight,
+    required this.onDismiss,
+    this.onTap,
+    this.onAction,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -328,20 +336,34 @@ class ProactiveNudgeBanner extends StatelessWidget {
                     style: tt.bodySmall?.copyWith(color: ext.textSecondary, height: 1.35)),
                 const SizedBox(height: 4),
                 // A Wrap, not a Row with a Spacer: a Spacer absorbs slack but
-                // cannot create any, and the two controls are both fixed-width.
+                // cannot create any, and the controls are all fixed-width.
                 // Side by side they sit at opposite ends as before; on a narrow
-                // card, or at a large text size, the second drops to its own line
-                // instead of running off the edge (52px at 320pt).
+                // card, or at a large text size, the one that does not fit drops
+                // to its own line instead of running off the edge (52px at 320pt).
+                //
+                // Both buttons are real 44pt targets. `minimumSize` alone is not
+                // enough with `VisualDensity.compact`: compact takes 8 off the
+                // minimum, so they used to render at 36 — and "Use this" is the
+                // button that applies the suggestion.
                 Wrap(
                   alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     WhyThisChip(why: insight.why),
+                    if (insight.actionLabel != null && onAction != null)
+                      TextButton(
+                        onPressed: onAction,
+                        style: TextButton.styleFrom(
+                            foregroundColor: ext.mark(accent),
+                            minimumSize: const Size(0, 44)),
+                        child: Text(insight.actionLabel!,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
                     TextButton(
                       onPressed: onDismiss,
                       style: TextButton.styleFrom(
                           foregroundColor: ext.textTertiary,
-                          visualDensity: VisualDensity.compact),
+                          minimumSize: const Size(0, 44)),
                       child: const Text('Dismiss'),
                     ),
                   ],

@@ -248,7 +248,10 @@ void main() {
         await tester.tap(find.byTooltip('Previous month'));
         await pumpFor(tester);
       }
-      await tester.tap(find.text('${y.day}'));
+      // Inside the calendar: on the 2nd, yesterday is the 1st, and a bare "1" is also
+      // other things on a dialog that has numbers on it.
+      await tester.tap(find.descendant(
+          of: find.byType(CalendarDatePicker), matching: find.text('${y.day}')));
       await pumpFor(tester);
       await tester.tap(find.text('Set date'));
       await pumpFor(tester);

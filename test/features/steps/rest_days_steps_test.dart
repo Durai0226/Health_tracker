@@ -101,6 +101,52 @@ void main() {
     });
   });
 
+  group('the evening reminder, on a rest of a few days', () {
+    test('carries on after the last marked day, not the day after today', () async {
+      tz_data.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('UTC'));
+      final scheduler = RecordingNotificationScheduler();
+      NotificationService().schedulerForTesting = scheduler;
+      await withClock(Clock.fixed(DateTime(2026, 3, 12, 18, 30)), () async {
+        await StepService.setReminder(true, 19 * 60);
+        await RestDayStore.markDays(RestKind.rest, 3);
+        await StepService.replanReminder();
+        final repeating = scheduler.scheduled
+            .singleWhere((s) => s.id == NotificationService.stepReminderId);
+        expect(repeating.when.isAtSameMomentAs(DateTime(2026, 3, 15, 19)), isTrue,
+            reason: 'the 12th, 13th and 14th are rest days: ${repeating.when}');
+      });
+    });
+  });
+
+  group('RestDayStore, a few days at a time', () {
+    test('marks the days ahead, which change nothing until they come', () async {
+      await withClock(Clock.fixed(today), () async {
+        await RestDayStore.markDays(RestKind.rest, 3);
+        expect(RestDayStore.kindToday(), RestKind.rest);
+        expect(RestDayStore.kindOn(DateTime(2026, 3, 13)), RestKind.rest);
+        expect(RestDayStore.kindOn(DateTime(2026, 3, 14)), RestKind.rest);
+        expect(RestDayStore.kindOn(DateTime(2026, 3, 15)), isNull);
+        expect(RestDayStore.frozenDays(), {DateTime(2026, 3, 12)});
+      });
+    });
+
+    test('restoring puts back what was there, including a mark that was replaced',
+        () async {
+      await withClock(Clock.fixed(today), () async {
+        await RestDayStore.markDays(RestKind.unwell, 1, now: DateTime(2026, 3, 13));
+        final before = RestDayStore.all();
+        await RestDayStore.markDays(RestKind.rest, 3);
+        expect(RestDayStore.kindOn(DateTime(2026, 3, 13)), RestKind.rest);
+
+        await RestDayStore.restore(before);
+        expect(RestDayStore.kindOn(DateTime(2026, 3, 13)), RestKind.unwell);
+        expect(RestDayStore.kindToday(), isNull);
+        expect(RestDayStore.kindOn(DateTime(2026, 3, 14)), isNull);
+      });
+    });
+  });
+
   group('the evening reminder', () {
     test('stays quiet on a marked day, even with no step data', () async {
       tz_data.initializeTimeZones();

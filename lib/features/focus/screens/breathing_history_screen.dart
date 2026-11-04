@@ -23,9 +23,7 @@ class BreathingHistoryScreen extends StatelessWidget {
   /// "Today", "Yesterday", "Sep 26".
   static String dayHeading(DateTime day, DateTime now) {
     if (isSameCalendarDay(day, now)) return 'Today';
-    if (isSameCalendarDay(day, now.subtract(const Duration(days: 1)))) {
-      return 'Yesterday';
-    }
+    if (isSameCalendarDay(day, prevDay(now))) return 'Yesterday';
     return DateFormats.dayLabel(day, reference: now);
   }
 

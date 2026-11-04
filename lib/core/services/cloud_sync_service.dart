@@ -171,7 +171,17 @@ class CloudSyncService {
     }
   }
 
-  /// Two-way sync of today's water.
+  /// How many days back a sync reconciles water, today included.
+  ///
+  /// It used to be today alone, so a drink logged after the day's last sync — an
+  /// evening glass, with the app opened only in the morning — was never uploaded:
+  /// by the next sync the day it belonged to was no longer "today". A week also
+  /// covers a phone that was offline or switched off for a few days. Older days
+  /// ride up with [uploadDataToCloud] and come back down with
+  /// [downloadDataFromCloud], which already reads every day.
+  static const int waterSyncDays = 7;
+
+  /// Two-way sync of the last [waterSyncDays] days of water.
   ///
   /// This was cloud-wins-unconditionally: whenever the cloud document existed,
   /// the local day was replaced by it with no comparison. Drink four glasses on
@@ -185,11 +195,20 @@ class CloudSyncService {
   /// deleted — recompute totals from the merged set, then push the merged
   /// result back up so the other device converges too. See
   /// [WaterService.mergeCloudDay] for how deletions travel.
+  ///
+  /// One day failing does not stop the others.
   Future<void> _syncWaterIntake(String userId) async {
+    final today = clock.now();
+    for (var i = 0; i < waterSyncDays; i++) {
+      await _syncWaterDay(
+          userId, DateTime(today.year, today.month, today.day - i));
+    }
+  }
+
+  Future<void> _syncWaterDay(String userId, DateTime date) async {
     try {
-      final today = clock.now();
       // The SAME key the local store uses — zero-padded.
-      final key = WaterService.dateKeyFor(today);
+      final key = WaterService.dateKeyFor(date);
       final cloudRef = _firestore
           .collection('users')
           .doc(userId)
@@ -198,12 +217,13 @@ class CloudSyncService {
 
       final cloudDoc = await cloudRef.get();
       // Not `getTodayData()`: the upload has to carry the day's tombstones, and
-      // those are read lazily — see [WaterService.todayDataForSync].
-      final localWater = await WaterService.todayDataForSync();
+      // those are read lazily — see [WaterService.dayDataForSync].
+      final localWater = await WaterService.dayDataForSync(date);
 
       if (!cloudDoc.exists || cloudDoc.data() == null) {
-        if (localWater.totalIntakeMl > 0 || localWater.logs.isNotEmpty) {
-          debugPrint('Uploading today\'s water intake to cloud');
+        if (localWater != null &&
+            (localWater.totalIntakeMl > 0 || localWater.logs.isNotEmpty)) {
+          debugPrint('Uploading water intake for $key to cloud');
           await cloudRef.set(localWater.toJson());
         }
         return;
@@ -220,7 +240,7 @@ class CloudSyncService {
         debugPrint('Migrating legacy water data: $e');
         cloudWater = DailyWaterData(
           id: key,
-          date: DateTime.tryParse(data['date']?.toString() ?? '') ?? today,
+          date: DateTime.tryParse(data['date']?.toString() ?? '') ?? date,
           dailyGoalMl: (data['dailyGoalMl'] as num?)?.toInt() ?? 2500,
           totalIntakeMl: (data['currentIntakeMl'] as num?)?.toInt() ?? 0,
           effectiveHydrationMl: (data['currentIntakeMl'] as num?)?.toInt() ?? 0,
@@ -243,7 +263,7 @@ class CloudSyncService {
         await cloudRef.set(merged.toJson());
       }
     } catch (e) {
-      debugPrint('Water intake sync error: $e');
+      debugPrint('Water intake sync error (${WaterService.dateKeyFor(date)}): $e');
     }
   }
 
@@ -253,8 +273,6 @@ class CloudSyncService {
 
       final localMedicines =
           await AppDatabase.instance.medicationDao.getAllMedicinesIncludingDeleted();
-      // Tombstones included, same as the two-way sync above.
-      final localWater = await WaterService.todayDataForSync();
 
       // commitInChunks, not one raw batch: Firestore caps a batch at 500 writes
       // and throws the whole thing away past that. This list is every medicine
@@ -275,11 +293,15 @@ class CloudSyncService {
             b.set(userRef.collection('medicines').doc(medicine.id), data));
       }
 
-      if (localWater.totalIntakeMl > 0 || localWater.logs.isNotEmpty) {
-        // Zero-padded, same as the local store — see _syncWaterIntake.
-        final key = WaterService.dateKeyFor(clock.now());
+      // Every stored day, not just today: this is the first copy a new account
+      // gets, and water history is exactly what a person switching on sync
+      // expects to find safe. Tombstones included, same as the two-way sync.
+      for (final key in await WaterService.everyStoredDayKey()) {
+        final day = await WaterService.dayDataForSyncKey(key);
+        if (day == null || (day.totalIntakeMl <= 0 && day.logs.isEmpty)) continue;
+        // Zero-padded, same as the local store — see _syncWaterDay.
         ops.add((b) => b.set(
-            userRef.collection('water_intake').doc(key), localWater.toJson()));
+            userRef.collection('water_intake').doc(key), day.toJson()));
       }
 
       await commitInChunks(_firestore, ops);

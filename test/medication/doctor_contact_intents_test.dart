@@ -41,6 +41,8 @@ void main() {
   const required = <String, String>{
     'tel': 'android.intent.action.DIAL',
     'mailto': 'android.intent.action.SENDTO',
+    // A clinic's Directions, the privacy policy, the store page.
+    'https': 'android.intent.action.VIEW',
   };
 
   required.forEach((scheme, action) {

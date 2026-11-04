@@ -6,13 +6,22 @@ import '../../../../core/services/health_data_service.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../services/vitals_reminder_service.dart';
 import '../../services/vitals_storage_service.dart';
+import '../../services/vitals_health_import.dart';
+import '../../widgets/vitals_import_flow.dart';
 
 /// A clear, labeled home for the blood-pressure & blood-sugar "time to measure"
 /// reminders — the same daily nudges the vitals screens' header button sets,
 /// now discoverable from Settings / the Reminders hub. Instant-apply via
 /// [VitalsReminderService] (one shared source of truth).
 class VitalsReminderSettingsScreen extends StatefulWidget {
-  const VitalsReminderSettingsScreen({super.key});
+  const VitalsReminderSettingsScreen({
+    super.key,
+    this.importSource = const HealthStoreVitalsSource(),
+  });
+
+  /// Where "Readings from other apps" asks and reads. A test hands its own: the
+  /// platform plugin cannot run headless.
+  final VitalsImportSource importSource;
 
   @override
   State<VitalsReminderSettingsScreen> createState() =>
@@ -32,6 +41,13 @@ class _VitalsReminderSettingsScreenState
   /// of the two it is, and that new readings stopped being shared.
   bool _syncRevoked = false;
 
+  /// "Readings from other apps": whether it is on, whether a switch tap is being
+  /// worked on, and whether it was on but the OS grant behind it is gone (the
+  /// same notice the sharing switch gives, for the same reason).
+  bool _importEnabled = false;
+  bool _importBusy = false;
+  bool _importRevoked = false;
+
   @override
   void initState() {
     super.initState();
@@ -50,9 +66,21 @@ class _VitalsReminderSettingsScreenState
         revoked = true;
         await VitalsStorageService.setHealthConnectSyncEnabled(false);
       }
+      var importOn = await VitalsHealthImport.isEnabled();
+      var importRevoked = false;
+      // Only a no is a revoked grant. A look that failed — Health Connect updating,
+      // or not answering — says nothing, and the person's choice is not theirs to
+      // lose to it.
+      if (importOn && await widget.importSource.allowed() == false) {
+        importOn = false;
+        importRevoked = true;
+        await VitalsHealthImport.setEnabled(false);
+      }
       if (mounted) setState(() {
         _syncEnabled = enabled;
         _syncRevoked = revoked;
+        _importEnabled = importOn;
+        _importRevoked = importRevoked;
         _syncLoaded = true;
       });
     } catch (e) {
@@ -93,6 +121,31 @@ class _VitalsReminderSettingsScreenState
     } finally {
       if (mounted) setState(() => _syncToggleBusy = false);
     }
+  }
+
+  Future<void> _toggleImport(bool v) async {
+    if (_importBusy) return;
+    setState(() => _importBusy = true);
+    try {
+      final on = v
+          ? await VitalsImportFlow.turnOn(context, source: widget.importSource)
+          : await _turnImportOff();
+      if (mounted) {
+        setState(() {
+          _importEnabled = on;
+          _importRevoked = false;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _importBusy = false);
+      }
+    }
+  }
+
+  Future<bool> _turnImportOff() async {
+    await VitalsHealthImport.setEnabled(false);
+    return false;
   }
 
   Future<void> _toggle(VitalsReminderSpec s, bool v) async {
@@ -192,8 +245,39 @@ class _VitalsReminderSettingsScreenState
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
+                if (_importRevoked) ...[
+                  _RevokedNotice(
+                      key: const ValueKey('import-revoked'),
+                      message: 'Bringing in readings from $_healthAppName '
+                          'stopped: its permission was turned off outside '
+                          'DlyMinder. Switch it back on below to grant it again.'),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+                if (_syncLoaded) ...[
+                  SettingsSection(
+                    title: 'Readings from other apps',
+                    footer: 'Blood pressure and blood sugar your cuff or meter '
+                        'app saves to $_healthAppName appear here by '
+                        'themselves, and stay gone if you delete them.',
+                    children: [
+                      SettingsTile(
+                        icon: Symbols.download_rounded,
+                        accent: acc,
+                        title: 'Bring them in',
+                        switchValue: _importEnabled,
+                        onSwitchChanged: _importBusy ? null : _toggleImport,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 if (_syncRevoked) ...[
-                  _SyncRevokedNotice(healthAppName: _healthAppName),
+                  _RevokedNotice(
+                      key: const ValueKey('sync-revoked'),
+                      message: 'Sharing with $_healthAppName stopped: its '
+                          'permission was turned off outside DlyMinder, so new '
+                          'readings are no longer being sent. Switch it back on '
+                          'below to grant it again.'),
                   const SizedBox(height: AppSpacing.sm),
                 ],
                 if (_syncLoaded)
@@ -225,13 +309,13 @@ class _VitalsReminderSettingsScreenState
   }
 }
 
-/// Shown once, above the Sync row, when the OS grant behind an enabled sync
-/// has been revoked outside the app. Warning-coloured and persistent rather
-/// than a toast: the user is not necessarily on this screen when the
-/// revalidation runs, and the fact survives a rebuild until they act on it.
-class _SyncRevokedNotice extends StatelessWidget {
-  final String healthAppName;
-  const _SyncRevokedNotice({required this.healthAppName});
+/// Shown above a switch whose OS grant has been revoked outside the app.
+/// Warning-coloured and persistent rather than a toast: the user is not
+/// necessarily on this screen when the revalidation runs, and the fact survives
+/// a rebuild until they act on it.
+class _RevokedNotice extends StatelessWidget {
+  final String message;
+  const _RevokedNotice({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -247,9 +331,7 @@ class _SyncRevokedNotice extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'Sharing with $healthAppName stopped: its permission was turned '
-              'off outside DlyMinder, so new readings are no longer being '
-              'sent. Switch it back on below to grant it again.',
+              message,
               style: tt.bodySmall
                   ?.copyWith(color: ext.warning.onContainer, height: 1.35),
             ),

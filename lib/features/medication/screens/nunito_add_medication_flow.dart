@@ -22,6 +22,16 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../../core/design/on_arbitrary_fill.dart';
 import '../services/critical_follow_up.dart';
+import '../models/doctor_pharmacy.dart';
+import '../../../core/services/photo_store.dart';
+import '../../../core/widgets/photo_thumb.dart';
+import '../../../core/services/clean_storage_service.dart';
+import '../../reminders/models/reminder_sounds.dart';
+import '../../reminders/widgets/reminder_sound_sheet.dart';
+import '../models/medicine_snooze.dart';
+import '../widgets/medicine_snooze_sheet.dart';
+import 'doctors/nunito_doctor_list_screen.dart';
+import 'pharmacies/nunito_pharmacy_list_screen.dart';
 
 /// How the end of a medication course is expressed in the wizard.
 enum _DurationMode { ongoing, endDate, duration }
@@ -179,6 +189,26 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   bool _reminderEnabled = true;
   bool _criticalAlert = false;
 
+  /// A key from `ReminderSounds`; null rings with the standard sound.
+  String? _reminderSound;
+  int? _snoozeOverride;
+
+  // Step 5 (cont.): who prescribed it, where it is bought, what it costs and what it
+  // looks like. The ids are the form's state; the names are only what is shown for them.
+  String? _doctorId;
+  String? _doctorName;
+  String? _pharmacyId;
+  String? _pharmacyName;
+  final _costController = TextEditingController();
+
+  /// The kept copy of the photo, or null.
+  String? _imagePath;
+
+  /// What becomes of the photos picked while this form is open: the one replaced or
+  /// removed is deleted once the change is saved, and any picked and dropped when the form
+  /// closes.
+  PhotoSession _photos = PhotoSession();
+
 
   final HapticService _hapticService = HapticService();
   final MedicationReminderService _reminderService = MedicationReminderService();
@@ -197,7 +227,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
   // finished, captured at the end of [initState].
 
   /// The form as it looked when the wizard opened.
-  late final String _pristineSignature;
+  late String _pristineSignature;
 
   /// The value [build] last handed to [PopScope.canPop]. Cached because
   /// `canPop` is read at build time and typing in an [AppTextField] rebuilds
@@ -220,6 +250,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         _stockController,
         _instructionsController,
         _purposeController,
+        _costController,
         ..._titrationDayControllers,
         ..._titrationDoseControllers,
       ];
@@ -274,6 +305,12 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       _purposeController.text,
       '$_reminderEnabled',
       '$_criticalAlert',
+      '$_reminderSound',
+      '$_snoozeOverride',
+      '$_doctorId',
+      '$_pharmacyId',
+      _costController.text,
+      '$_imagePath',
       // NUL separator: no field can contain one, so two different forms can
       // never collide on the same signature by running fields together.
     ].join('\u0000');
@@ -300,6 +337,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     }
     // After the edit-load, so an untouched edit counts as clean.
     _pristineSignature = _formSignature();
+    _resolveLinkNames();
     for (final c in _formControllers) {
       c.addListener(_onFieldEdited);
     }
@@ -375,6 +413,13 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _purposeController.text = m.purpose ?? '';
     _reminderEnabled = m.reminderEnabled;
     _criticalAlert = m.criticalAlert;
+    _reminderSound = ReminderSounds.isKnown(m.reminderSound) ? m.reminderSound : null;
+    _snoozeOverride = MedicineSnooze.clean(m.snoozeOverrideMinutes);
+    _doctorId = m.doctorId;
+    _pharmacyId = m.pharmacyId;
+    _costController.text = _costText(m.costPerUnit);
+    _imagePath = m.imagePath;
+    _photos = PhotoSession(original: m.imagePath);
     _titrationEnabled = sched.isTitrating;
     if (_titrationEnabled) {
       for (final step in sched.titrationSteps!) {
@@ -399,6 +444,7 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     _stockController.dispose();
     _instructionsController.dispose();
     _purposeController.dispose();
+    _costController.dispose();
     _descController.dispose();
     for (final c in _titrationDayControllers) {
       c.dispose();
@@ -406,6 +452,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     for (final c in _titrationDoseControllers) {
       c.dispose();
     }
+    // A form closed without saving leaves no picture behind it.
+    _photos.close();
     super.dispose();
   }
 
@@ -766,6 +814,14 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
+    // A cost that is not a number is said so on the step it is on, not saved as nothing.
+    if (_costError != null) {
+      _goToStep(4);
+      _showError(_costError!);
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
     final candidate = _buildMedicineFromForm();
     if (!await _confirmAllergySafety(candidate)) {
       if (mounted) setState(() => _isLoading = false);
@@ -797,6 +853,10 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
       if (mounted) setState(() => _isLoading = false);
       return;
     }
+
+    // The photo is on the medicine now: the one it replaced, and any picked and then
+    // dropped, can go.
+    await _photos.commit(_imagePath);
 
     // STEP 2 — post-save side-effects. The medicine is ALREADY persisted, so a
     // failure here must NOT report "failed to save" (the old bug: a reminder /
@@ -907,21 +967,24 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
         isArchived: existing?.isArchived ?? false,
         createdAt: existing?.createdAt ?? DateTime.now(),
         updatedAt: DateTime.now(),
-        // Fields this form has no control for at all — always carry forward.
+        // Fields this form has no control for at all — always carry forward. (The
+        // photo, the prescriber, the pharmacy and the cost have one now.)
         brandName: existing?.brandName,
         imprint: existing?.imprint,
-        imagePath: existing?.imagePath,
+        imagePath: _imagePath,
         condition: existing?.condition,
         lastRefillDate: existing?.lastRefillDate,
-        costPerUnit: existing?.costPerUnit,
+        costPerUnit: _costValue,
         prescriptionNumber: existing?.prescriptionNumber,
-        doctorId: existing?.doctorId,
-        pharmacyId: existing?.pharmacyId,
+        doctorId: _doctorId,
+        pharmacyId: _pharmacyId,
         prescribedDate: existing?.prescribedDate,
         refillsRemaining: existing?.refillsRemaining,
-        reminderSound: existing?.reminderSound,
+        reminderSound: _reminderEnabled && !_isPRN ? _reminderSound : null,
         criticalAlert: _criticalAlert && _reminderEnabled && !_isPRN,
         snoozeMinutes: existing?.snoozeMinutes ?? 10,
+        snoozeOverrideMinutes:
+            _reminderEnabled && !_isPRN ? _snoozeOverride : null,
         drugInfo: existing?.drugInfo,
         warnings: existing?.warnings,
         sideEffects: existing?.sideEffects,
@@ -3286,6 +3349,119 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
     );
   }
 
+  // --- Prescriber, pharmacy, cost, photo ------------------------------------
+
+  /// What the cost field shows for [v]: no trailing ".0", so 2.5 reads "2.5" and 3 "3".
+  static String _costText(double? v) {
+    if (v == null) return '';
+    return v % 1 == 0 ? v.toInt().toString() : v.toString();
+  }
+
+  /// The highest cost a field here accepts: a slipped key, not a price.
+  static const double _maxCost = 1000000;
+
+  /// The cost typed, or null when the field is empty or does not hold a usable amount.
+  double? get _costValue {
+    final text = _costController.text.trim();
+    if (text.isEmpty) return null;
+    final v = _parseDose(text); // the same decimal rules: a lone comma is a point
+    if (v == null || !v.isFinite || v < 0 || v > _maxCost) return null;
+    return v;
+  }
+
+  /// Why the cost cannot be saved, or null when it can (including when it is empty).
+  String? get _costError {
+    final text = _costController.text.trim();
+    if (text.isEmpty || _costValue != null) return null;
+    return 'Cost per unit should be a number, like 2.50';
+  }
+
+  /// Look up the names behind the two ids, for display. Nothing here is part of the
+  /// form's state: an id whose record is gone simply shows as not set.
+  Future<void> _resolveLinkNames() async {
+    try {
+      final doctorId = _doctorId;
+      final pharmacyId = _pharmacyId;
+      final doctor =
+          doctorId == null ? null : await MedicineCleanStorageService.getDoctor(doctorId);
+      final pharmacy = pharmacyId == null
+          ? null
+          : await MedicineCleanStorageService.getPharmacy(pharmacyId);
+      if (!mounted) return;
+      setState(() {
+        _doctorName = doctor?.name;
+        _pharmacyName = pharmacy?.name;
+        // A link to something that no longer exists is not kept: it would show as "not
+        // set" and be saved back as a pointer to nothing.
+        if (doctorId != null && doctor == null) _doctorId = null;
+        if (pharmacyId != null && pharmacy == null) _pharmacyId = null;
+      });
+      // Not a change the person made.
+      _pristineSignature = _formSignature();
+    } catch (e) {
+      debugPrint('Resolving the prescriber and pharmacy failed: $e');
+    }
+  }
+
+  Future<void> _pickDoctor() async {
+    _hapticService.selection();
+    final picked = await Navigator.push<Doctor>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const NunitoDoctorListScreen(isSelectionMode: true)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _doctorId = picked.id;
+      _doctorName = picked.name;
+    });
+  }
+
+  Future<void> _pickPharmacy() async {
+    _hapticService.selection();
+    final picked = await Navigator.push<Pharmacy>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const NunitoPharmacyListScreen(isSelectionMode: true)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _pharmacyId = picked.id;
+      _pharmacyName = picked.name;
+    });
+  }
+
+  /// Camera, gallery or remove: what the person does about the photo.
+  Future<void> _choosePhoto() async {
+    _hapticService.selection();
+    final action = await choosePhotoAction(context,
+        hasPhoto: _imagePath != null,
+        accent: AppColorsExt.of(context).medicine,
+        title: 'Photo of the medicine');
+    if (!mounted || action == null) return;
+    if (action == PhotoAction.remove) {
+      setState(() => _imagePath = null);
+      return;
+    }
+    String? kept;
+    try {
+      kept = await _photos.pick(
+          action == PhotoAction.camera ? ImageSource.camera : ImageSource.gallery);
+    } on PhotoPickFailed {
+      if (mounted) _showError(PhotoPickFailed.message);
+      return;
+    }
+    if (!mounted) {
+      // Left the form while the camera was open: nothing will keep this one.
+      await PhotoStore.delete(kept);
+      return;
+    }
+    if (kept == null) return; // backed out, or no camera: the photo is as it was
+    final previous = _imagePath;
+    setState(() => _imagePath = kept);
+    await _photos.replaced(previous);
+  }
+
   Widget _buildStep5Additional(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final med = ext.medicine;
@@ -3359,6 +3535,8 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          _buildSupplyCard(context),
           const SizedBox(height: AppSpacing.xl),
           AppCard(
             onTap: () {
@@ -3406,9 +3584,222 @@ class _NunitoAddMedicationFlowState extends State<NunitoAddMedicationFlow>
           if (_reminderEnabled && !_isPRN) ...[
             const SizedBox(height: AppSpacing.md),
             _buildCriticalCard(context),
+            const SizedBox(height: AppSpacing.md),
+            _buildSoundCard(context),
+            const SizedBox(height: AppSpacing.md),
+            _buildSnoozeCard(context),
           ],
         ],
       ),
+    );
+  }
+
+  /// Which bundled sound this medicine's alarm loops. Null is the standard one.
+  Widget _buildSoundCard(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    final custom = _reminderSound != null;
+
+    return AppCard(
+      onTap: () async {
+        _hapticService.selection();
+        final choice = await chooseReminderSound(context,
+            current: _reminderSound, accent: med);
+        if (choice == null || !mounted) return;
+        setState(() => _reminderSound = choice.key);
+      },
+      child: Row(
+        children: [
+          Icon(Symbols.music_note_rounded,
+              color: custom ? ext.mark(med) : ext.textTertiary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Reminder sound', style: tt.titleLarge),
+                Text(
+                  custom
+                      ? ReminderSounds.labelFor(_reminderSound)
+                      : 'Default',
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                ),
+                Text(
+                  'Plays when the alarm opens on your screen. If another '
+                  'medicine is due at the same time with a different sound, '
+                  'the default plays.',
+                  style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                ),
+              ],
+            ),
+          ),
+          Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
+        ],
+      ),
+    );
+  }
+
+  /// How long this medicine's Snooze waits. Null follows the Notifications
+  /// setting.
+  Widget _buildSnoozeCard(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+    final custom = _snoozeOverride != null;
+    final phoneWide = CleanStorageService.getUserSettings().snoozeIntervalMinutes;
+
+    return AppCard(
+      onTap: () async {
+        _hapticService.selection();
+        final choice = await chooseMedicineSnooze(context,
+            current: _snoozeOverride, phoneWide: phoneWide, accent: med);
+        if (choice == null || !mounted) return;
+        setState(() => _snoozeOverride = choice.minutes);
+      },
+      child: Row(
+        children: [
+          Icon(Symbols.snooze_rounded,
+              color: custom ? ext.mark(med) : ext.textTertiary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Snooze length', style: tt.titleLarge),
+                Text(
+                  custom
+                      ? MedicineSnooze.labelFor(_snoozeOverride)
+                      : 'Follows Notifications ($phoneWide min)',
+                  style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                ),
+                Text(
+                  'If another medicine is due at the same time, the shortest '
+                  'length asked for is used.',
+                  style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+                ),
+              ],
+            ),
+          ),
+          Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
+        ],
+      ),
+    );
+  }
+
+  /// Who prescribed it, where it is bought, what a unit costs and what it looks like.
+  Widget _buildSupplyCard(BuildContext context) {
+    final ext = AppColorsExt.of(context);
+    final med = ext.medicine;
+    final tt = Theme.of(context).textTheme;
+
+    Widget linkRow({
+      required IconData icon,
+      required String label,
+      required String? value,
+      required VoidCallback onTap,
+      required VoidCallback onClear,
+    }) =>
+        AppCard(
+          onTap: onTap,
+          child: Row(
+            children: [
+              Icon(icon, color: value != null ? ext.mark(med) : ext.textTertiary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: tt.titleLarge),
+                    Text(
+                      value ?? 'Not set',
+                      style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              if (value != null)
+                AppIconButton(
+                  icon: Symbols.close_rounded,
+                  filled: false,
+                  tooltip: 'Clear $label',
+                  onPressed: onClear,
+                )
+              else
+                Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
+            ],
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        linkRow(
+          icon: Symbols.stethoscope_rounded,
+          label: 'Prescriber',
+          value: _doctorId == null ? null : (_doctorName ?? 'Doctor'),
+          onTap: _pickDoctor,
+          onClear: () => setState(() {
+            _doctorId = null;
+            _doctorName = null;
+          }),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        linkRow(
+          icon: Symbols.local_pharmacy_rounded,
+          label: 'Pharmacy',
+          value: _pharmacyId == null ? null : (_pharmacyName ?? 'Pharmacy'),
+          onTap: _pickPharmacy,
+          onClear: () => setState(() {
+            _pharmacyId = null;
+            _pharmacyName = null;
+          }),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _costController,
+          label: 'Cost per unit (optional)',
+          hint: 'e.g., 2.50',
+          prefixIcon: Symbols.payments_rounded,
+          accent: med,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          errorText: _costError,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          onTap: _choosePhoto,
+          child: Row(
+            children: [
+              PhotoThumb(
+                path: _imagePath,
+                size: 56,
+                label: 'Photo of the medicine',
+                onTap: _imagePath == null
+                    ? null
+                    : () => showPhotoViewer(context, _imagePath!,
+                        label: 'Photo of the medicine'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Photo', style: tt.titleLarge),
+                    Text(
+                      _imagePath == null
+                          ? 'Add one to know it at a glance'
+                          : 'Tap to change or remove',
+                      style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Symbols.chevron_right_rounded, color: ext.textTertiary),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

@@ -29,10 +29,14 @@ void main() {
     bool isArchived = false,
     MealTiming mealTiming = MealTiming.anytime,
     int? windowMinutes,
+    MedicineColor? color,
+    MedicineShape? shape,
   }) =>
       EnhancedMedicine(
         id: id,
         name: name,
+        color: color,
+        shape: shape,
         strength: '500mg',
         dosageForm: DosageForm.tablet,
         dosageAmount: 1,
@@ -201,6 +205,54 @@ void main() {
       final m = med('m1', 'Metformin', label: 'Morning');
       final line = buildMedicineReminderLine(m, m.schedule.times.single);
       expect(line, isNot(contains('·')));
+    });
+
+    group('what the pill looks like', () {
+      String line(EnhancedMedicine m) =>
+          buildMedicineReminderLine(m, m.schedule.times.single);
+
+      test('colour and shape, so the right pill can be told from the wrong one', () {
+        final m = med('m1', 'Metformin',
+            label: 'Morning', color: MedicineColor.white, shape: MedicineShape.round);
+
+        expect(line(m), 'Metformin 500mg - 1 pill(s) (Morning) · white, round');
+      });
+
+      test('colour alone, or shape alone', () {
+        expect(line(med('m1', 'A', color: MedicineColor.blue)), endsWith(' · blue'));
+        expect(line(med('m1', 'A', shape: MedicineShape.oval)), endsWith(' · oval'));
+      });
+
+      test('the shape "other" says nothing, so it is left out', () {
+        expect(line(med('m1', 'A', shape: MedicineShape.other)), isNot(contains('·')));
+        expect(line(med('m1', 'A', color: MedicineColor.pink, shape: MedicineShape.other)),
+            endsWith(' · pink'));
+      });
+
+      test('after the meal tag, not before it', () {
+        final m = med('m1', 'A',
+            mealTiming: MealTiming.withMeal,
+            color: MedicineColor.yellow,
+            shape: MedicineShape.capsule);
+
+        expect(line(m), endsWith(' · with meals · yellow, capsule'));
+      });
+
+      test('nothing recorded, nothing said', () {
+        expect(pillLook(med('m1', 'A')), isNull);
+        expect(line(med('m1', 'A')), isNot(contains('·')));
+      });
+
+      test('it reaches the notification: a slot carries the line it will show', () {
+        final slots = groupRemindersBySlot([
+          med('m1', 'Metformin', color: MedicineColor.white, shape: MedicineShape.round),
+          med('m2', 'Aspirin'),
+        ], DateTime(2026, 3, 2));
+
+        final names = {for (final m in slots.single.medicines) m.medicineId: m.name};
+        expect(names['m1'], endsWith(' · white, round'));
+        expect(names['m2'], isNot(contains('·')));
+      });
     });
   });
 

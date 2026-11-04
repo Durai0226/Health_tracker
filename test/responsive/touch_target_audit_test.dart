@@ -63,6 +63,8 @@ import 'package:tablet_remainder/features/medication/screens/dependents/add_edit
 import 'package:tablet_remainder/features/medication/screens/dependents/dependent_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/doctors/nunito_add_edit_doctor_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/doctors/nunito_doctor_list_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/pharmacies/nunito_add_edit_pharmacy_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/pharmacies/nunito_pharmacy_list_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/medicine_history_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_detail_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/nunito_medication_list_screen.dart';
@@ -76,7 +78,6 @@ import 'package:tablet_remainder/features/reminders/screens/alarm_screen.dart';
 import 'package:tablet_remainder/features/reminders/screens/category_management_screen.dart';
 import 'package:tablet_remainder/features/reminders/screens/reminders_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/backup_screen.dart';
-import 'package:tablet_remainder/features/settings/screens/early_access_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/haptic_settings_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/health_privacy_screen.dart';
 import 'package:tablet_remainder/features/settings/screens/notification_settings_screen.dart';
@@ -85,11 +86,13 @@ import 'package:tablet_remainder/features/settings/screens/reminders_hub_screen.
 import 'package:tablet_remainder/features/settings/screens/security_settings_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_history_screen.dart';
 import 'package:tablet_remainder/features/sleep/screens/sleep_schedule_settings_screen.dart';
+import 'package:tablet_remainder/features/sleep/screens/wind_down_screen.dart';
 import 'package:tablet_remainder/features/home/screens/emergency_card_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_dashboard_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_goal_settings_screen.dart';
 import 'package:tablet_remainder/features/steps/screens/steps_history_screen.dart';
 import 'package:tablet_remainder/features/water/screens/custom_cup_creator_screen.dart';
+import 'package:tablet_remainder/features/water/screens/custom_drink_screen.dart';
 import 'package:tablet_remainder/features/water/screens/hydration_profile_screen.dart';
 import 'package:tablet_remainder/features/water/screens/water_achievements_screen.dart';
 import 'package:tablet_remainder/features/water/screens/water_history_edit_screen.dart';
@@ -123,6 +126,7 @@ import 'package:tablet_remainder/features/sleep/screens/sleep_dashboard_screen.d
 import 'package:tablet_remainder/features/water/screens/aqua_water_dashboard.dart';
 import 'package:tablet_remainder/features/water/screens/caffeine_insights_screen.dart';
 import 'package:tablet_remainder/features/water/screens/water_calendar_screen.dart';
+import 'package:tablet_remainder/features/medication/screens/vitals/mood_report_screen.dart';
 import 'package:tablet_remainder/features/medication/screens/vitals/mood_year_screen.dart';
 import 'package:tablet_remainder/features/period/screens/cycle_privacy_screen.dart';
 
@@ -206,9 +210,16 @@ class _ThrowsInBuild extends StatelessWidget {
 /// two it assumes the whole file ran — under a name filter the screens that
 /// were never pumped all read as "fixed entirely".
 final Map<String, int> _comfortBaseline = {
-  // 6 switches (the evening blood-pressure reminder is the sixth). Every entry
-  // is the 59x39 CupertinoSwitch pattern above; the row is the real target.
-  'vitals_reminders': 51,
+  // 7 switches: the evening blood-pressure reminder was the sixth, and "Bring
+  // them in" (Readings from other apps) is the seventh. Every entry is the
+  // 59x39 CupertinoSwitch pattern above; the row is the real target.
+  //
+  // 63 is all seven at all three scales. It read 54 for a while, and 51 before
+  // that: new sections pushed the last rows below what a lazy list builds, and
+  // the baseline was lowered to match what the audit could still reach. That was
+  // coverage lost, not a defect fixed — so the screen is measured in a tall view
+  // now ([_viewHeight]) and the number is what is actually on it.
+  'vitals_reminders': 63,
   // 2 switches at rest (Best hour appears only once the daily reminder is
   // switched on, and it is off until then). Every entry is the 59x39
   // CupertinoSwitch pattern above; the row is the real target.
@@ -226,6 +237,10 @@ final Map<String, int> _comfortBaseline = {
   'add_medicine_3': 9,
   'connected_devices': 9, // 1 switch
   'add_medicine_2': 9, // 1 switch
+  // 9: "Hormonal birth control" on the Cycle screen, one switch, nothing else. The
+  // 59x39 CupertinoSwitch pattern above; the whole card is the real target (it is an
+  // AppCard whose tap toggles the switch, a full-width row well over 44).
+  'period': 9,
   // add_medicine_4 is gone from this map: its nine were the shape chips
   // ('Round', 'Oval', 'Capsule'...) at 42pt, measured at 41.9dp on a 420dpi
   // device. `_buildSelectablePill` now carries a 44 floor, so the screen has
@@ -248,18 +263,28 @@ final Map<String, int> _comfortBaseline = {
   // tappable — is the real target. Only two of the fourteen are anything else,
   // and both are named.
   //
-  // 63: seven switches, nothing else.
+  // 72: eight switches, nothing else — "Count drinks from other apps" is the
+  // eighth, under "Share drinks with other health apps". Nine each, as above.
   //
-  // Was 67 — the extra four were the SEX CHIPS, at 84x32 and 111x32 at 1.0x
-  // and 100x37 and 134x37 at 1.3x, clearing 44 only at 2.0x: a chip with no
-  // minimum height rather than a clipped one. Confirmed on a 420dpi device at
-  // 63x32 and 78x32, then given a `minHeight: 44`.
-  'hydration_profile': 63,
+  // Was 67 with seven — the extra four were the SEX CHIPS, at 84x32 and 111x32
+  // at 1.0x and 100x37 and 134x37 at 1.3x, clearing 44 only at 2.0x: a chip
+  // with no minimum height rather than a clipped one. Confirmed on a 420dpi
+  // device at 63x32 and 78x32, then given a `minHeight: 44`.
+  'hydration_profile': 72,
   'add_clinic': 63, // seven switches, nothing else
-  // Six switches at 1.0x and 1.3x, five at 2.0x — the sixth is outside the
-  // built extent by then, which is why this is 51 and not 54.
-  'notif_settings': 51,
-  'early_access': 27, // three switches
+  // Eight switches — Daily check-in, Sound, Vibration, Lock screen, Keep on
+  // screen, Full-screen alerts, Snooze and Mark as missed — at all three scales:
+  // 72. It was 51, then 45, as sections were added above the last rows and pushed
+  // them below what a lazy list builds. The audit stopped reaching them and the
+  // baseline was lowered to match: coverage lost, not a defect fixed. The screen
+  // is measured in a tall view now ([_viewHeight]), so every row is built, and
+  // the number is what is actually on it. Each is the same 59x39 CupertinoSwitch
+  // inside a row that is the real target, like the others.
+  // 72 -> 81 when a "Quiet hours" section went in: a ninth switch, the same 59x39
+  // CupertinoSwitch inside a row that is the real target (9 switches x 3 scales x 3
+  // counted targets). Not a new kind of control: a new instance of the one already
+  // accepted, which the taller view ([_viewHeight]) reaches at every scale.
+  'notif_settings': 81,
   'period_reminders': 27, // three switches
   // 2 switches (Private reminders, Leave out of backups): 15 rather than 18
   // because the second is outside the built extent at one scale. The 59x39
@@ -275,9 +300,36 @@ final Map<String, int> _comfortBaseline = {
   'haptics': 9, // 1 switch
   'security': 9, // 1 switch
   'custom_cup': 9, // 1 switch
+  'add_pharmacy': 6, // 1 switch (Delivers): the 59x39 CupertinoSwitch, inside a row that is the real target
+  'custom_drink': 9, // 1 switch (Contains caffeine)
   'water_reminders': 9, // 1 switch
   'add_appointment': 6, // 1 switch, built at 1.0x and 1.3x only
   'steps_goal': 3, // 1 switch, built at 1.0x only
+};
+
+/// How tall the view is for a screen that needs to be, in logical pixels. The
+/// default is the mainstream phone's 844.
+///
+/// A lazy list builds only what is on screen and a little beyond it, so a row
+/// below that is not in the tree for this audit to measure — and when a section
+/// is added above it, the audit quietly stops reaching the last switch rows and
+/// the baseline gets lowered to match. That is coverage lost, not a defect fixed.
+/// These screens are plain lists of switches, so a tall view builds every row
+/// without changing a thing about how any one of them is laid out: the width, the
+/// text scale and every control's own size are the same.
+const Map<String, double> _viewHeight = {
+  // 3800, up from 3200: the Alerts footer gained a sentence, and at the largest text
+  // scale the last switch rows went past what 3200 builds — 69 of the 72 were
+  // reached, which the baseline below correctly refused to call an improvement.
+  // 4400, up from 3800, when it gained the sentence about choosing sounds in the
+  // phone's settings and a "Choose sounds" row: 69 of the 72 again.
+  // 5200, up from 4400, when it gained a "Quiet hours" section: the last switch rows
+  // went past 4400 at the largest text scale and the count fell short again.
+  'notif_settings': 5200,
+  // The same height as the overflow harness measures it at (`_tallViewHeight`), so
+  // the two harnesses build the same rows and a section added above the last switches
+  // cannot cost one of them coverage the other keeps.
+  'vitals_reminders': 3800,
 };
 
 final Map<String, Widget Function()> _screens = {
@@ -318,6 +370,7 @@ final Map<String, Widget Function()> _screens = {
   'glucose': () => const BloodSugarScreen(),
   'glucose_report': () => const BloodSugarReportScreen(),
   'mood': () => const MoodScreen(),
+  'mood_report': () => const MoodReportScreen(),
   'mood_year': () => const MoodYearScreen(),
   'weight': () => const WeightScreen(),
   // Five entries for one screen, because `PageView` builds only the page it is
@@ -342,6 +395,7 @@ final Map<String, Widget Function()> _screens = {
   'diary_entry': () => const DiaryEntryScreen(),
   'add_appointment': () => const NunitoAddEditAppointmentScreen(),
   'add_doctor': () => const NunitoAddEditDoctorScreen(),
+  'add_pharmacy': () => const NunitoAddEditPharmacyScreen(),
   'add_clinic': () => const NunitoAddEditClinicScreen(),
   'add_dependent': () => const AddEditDependentScreen(),
   'dependent_list': () => const DependentListScreen(),
@@ -354,16 +408,17 @@ final Map<String, Widget Function()> _screens = {
   'appointments': () => const NunitoAppointmentListScreen(),
   'clinics': () => const NunitoClinicListScreen(),
   'doctors': () => const NunitoDoctorListScreen(),
+  'pharmacies': () => const NunitoPharmacyListScreen(),
   'cycle_history': () => const CycleHistoryScreen(),
   'reminders': () => const RemindersScreen(),
   'reminders_hub': () => const RemindersHubScreen(),
   'haptics': () => const HapticSettingsScreen(),
   'security': () => const SecuritySettingsScreen(),
   'health_privacy': () => const HealthPrivacyScreen(),
-  'early_access': () => const EarlyAccessScreen(),
   'heart': () => const HeartDashboardScreen(),
   'workouts': () => const WorkoutsScreen(),
   'sleep_history': () => const SleepHistoryScreen(),
+  'wind_down': () => const WindDownScreen(),
   'steps': () => const StepsDashboardScreen(),
   'steps_history': () => const StepsHistoryScreen(),
   'period': () => const PeriodDashboard(),
@@ -373,6 +428,7 @@ final Map<String, Widget Function()> _screens = {
   'water_awards': () => const WaterAchievementsScreen(),
   'hydration_profile': () => const HydrationProfileScreen(),
   'custom_cup': () => const CustomCupCreatorScreen(),
+  'custom_drink': () => const CustomDrinkScreen(),
   'trends': () => const TrendsDashboardScreen(),
   'welcome': () => const WelcomeScreen(),
   'backup': () => const BackupScreen(),
@@ -538,8 +594,9 @@ void main() {
   for (final entry in _screens.entries) {
     for (final scale in scales) {
     testWidgets('${entry.key}: tap targets meet 44pt @${scale}x', (tester) async {
+      final height = _viewHeight[entry.key] ?? 844.0;
       tester.view.devicePixelRatio = 1.0;
-      tester.view.physicalSize = const Size(390, 844); // a mainstream phone
+      tester.view.physicalSize = Size(390, height); // a mainstream phone's width
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -561,7 +618,7 @@ void main() {
           theme: AppTheme.lightTheme,
           home: MediaQuery(
             data: MediaQueryData(
-              size: const Size(390, 844),
+              size: Size(390, height),
               textScaler: TextScaler.linear(scale),
             ),
             child: entry.value(),

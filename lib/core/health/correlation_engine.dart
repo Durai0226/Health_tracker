@@ -1,4 +1,5 @@
 import 'insight.dart';
+import '../utils/units.dart';
 
 /// One calendar day's adherence outcome + a numeric metric for that same day
 /// (mean mood index, mean systolic, mean glucose, …) — the raw input to
@@ -275,7 +276,7 @@ class CorrelationEngine {
     if (r.delta < _hydrationMeaningfulDeltaMl) return null;
     if (r.inGroupMean <= r.outGroupMean) return null;
 
-    String ml(double v) => '${v.round()}ml';
+    String ml(double v) => Units.volumeText(v.round(), tight: true);
     final total = r.inGroupCount + r.outGroupCount;
 
     return Insight(
@@ -322,7 +323,7 @@ class CorrelationEngine {
     final excessMl = r.adherentMean - r.nonAdherentMean;
     if (excessMl < _hydrationMeaningfulDeltaMl) return null;
 
-    String ml(double v) => '${v.round()}ml';
+    String ml(double v) => Units.volumeText(v.round(), tight: true);
     final total = r.adherentCount + r.nonAdherentCount;
 
     return Insight(

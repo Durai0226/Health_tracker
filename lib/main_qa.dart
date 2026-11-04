@@ -11,7 +11,6 @@ import 'package:path_provider/path_provider.dart';
 
 import 'core/database/app_database.dart';
 import 'core/services/clean_storage_service.dart';
-import 'core/services/feature_flag_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/medication/screens/nunito_medication_dashboard.dart';
 import 'features/medication/screens/nunito_add_medication_flow.dart';
@@ -76,7 +75,6 @@ import 'features/settings/screens/notification_settings_screen.dart';
 import 'features/settings/screens/haptic_settings_screen.dart';
 import 'features/focus/screens/settings/focus_reminders_settings_screen.dart';
 import 'features/settings/screens/security_settings_screen.dart';
-import 'features/settings/screens/early_access_screen.dart';
 import 'features/settings/screens/backup_screen.dart';
 import 'features/backup/presentation/screens/backup_settings_screen.dart';
 import 'features/sleep/screens/sleep_history_screen.dart';
@@ -92,7 +90,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppDatabase.instance; // open Drift
   await CleanStorageService.init();
-  await FeatureFlagService().init();
   await StepService.init();
   await SleepService.init();
   // Water was never initialised here, so every QA run showed Home's hydration
@@ -294,7 +291,6 @@ class _QaApp extends StatelessWidget {
       'haptics' => const HapticSettingsScreen(),
       'focus_reminders' => const FocusRemindersSettingsScreen(),
       'security' => const SecuritySettingsScreen(),
-      'early_access' => const EarlyAccessScreen(),
       'backup_cloud' => const BackupScreen(),
       'backup_local' => const BackupSettingsScreen(),
       'sleep_history' => const SleepHistoryScreen(),

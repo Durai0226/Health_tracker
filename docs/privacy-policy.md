@@ -35,6 +35,15 @@ Everything you log — medicines and doses, water, sleep, steps, blood pressure,
 blood sugar, weight, mood, menstrual cycle, diary entries, reminders — is stored
 in a private database on your device.
 
+**Focus.** Alongside your focus sessions the app keeps up to 200 short records of
+the times you left the app partway through a round: when, how many minutes in, and
+how long the round was. It cannot see which app you went to or why — the screen
+turning off looks the same — and it is used for one thing, suggesting a shorter
+round if you keep leaving at the same minute. It is on by default; Focus → Session
+setup → "Notice when I step away" turns it off and deletes what it noticed. Like
+the rest of your data it leaves your phone only if you turn on cloud sync or share
+a backup.
+
 ## Health data we read from Health Connect / Apple Health
 
 With your permission, the app reads the following so your trackers reflect what
@@ -49,6 +58,12 @@ asking you to type it in twice:
 - **Body:** weight (only when you tap "Import" — never in the background)
 - **Cycle:** past period days (only when you tap "Import" on the Cycle screen —
   never in the background, and never written back)
+- **Readings from other apps:** blood pressure and blood sugar that a cuff or a
+  meter app saved (only when you switch on "Readings from other apps" in Vitals
+  settings; readings this app wrote itself are skipped)
+- **Water:** drinks that other apps saved (only when you switch on
+  "Count drinks from other apps" in the Hydration profile; drinks this app wrote
+  itself are skipped, and what comes in is never written back)
 
 Each of these is requested separately and the app works without them. If you
 decline, the affected tracker falls back to manual entry.
@@ -59,15 +74,19 @@ from. This is stored on your device only and is never uploaded.
 
 ## Health data we write back
 
-If — and only if — you turn this on in Vitals settings, the app writes readings
-**you logged yourself** back to Health Connect / Apple Health, so other health
-apps can see them:
+If — and only if — you turn each one on, the app writes things **you logged
+yourself** back to Health Connect / Apple Health, so other health apps can see
+them. Each is its own switch:
 
-- Blood pressure
-- Blood sugar
-- Weight
+- Blood pressure, blood sugar and weight (Vitals settings)
+- The drinks you log (Hydration profile)
+- Completed breathing, meditation and stress-relief relaxation sessions, as
+  mindful minutes (Focus settings). Work and study sessions are never written.
 
-This is off by default. The app never writes data it read from somewhere else.
+All of these are off by default. The app never writes data it read from
+somewhere else. On Android, if you edit or delete a reading or drink in the app
+after sharing it, the copy in Health Connect is corrected or removed too; this
+only ever touches records this app wrote.
 
 ## Cloud sync (optional, off by default)
 
@@ -88,11 +107,28 @@ Firebase Authentication, including Google Sign-In. We receive your email address
 and, if you use Google Sign-In, your Google account's basic profile. We do not
 receive your Google password.
 
-## Camera
+## Backup files
+
+"Export a copy" makes a file of everything in the app and hands it to the share
+sheet. You can protect it with a passphrase you choose: the file is then
+encrypted on your phone (AES-256), and the passphrase is never stored or sent
+anywhere. **We cannot recover it** — a backup whose passphrase is lost cannot be
+opened by anyone.
+
+## Camera and photos
 
 The app can scan a prescription label to fill in a medicine's details. Text
-recognition runs **entirely on your device**; the photo is not uploaded and is
-not stored.
+recognition runs **entirely on your device**; the photo taken to scan a label is
+not uploaded and is not stored.
+
+You can also attach a photo to a medicine, to a diary entry or to a family
+member's profile, from the camera or from your gallery. The app keeps a **copy inside its own private storage on your
+phone** — not a link to your gallery. These photos are **not uploaded**, and they
+are **not part of cloud sync, cloud backup or "Export a copy"**: a backup file
+holds your entries, medicines and profiles, not their pictures, so a photo does
+not come back on another phone. A photo is deleted when you replace or remove it,
+and by "Delete all data". When you delete the medicine, entry or profile it belongs
+to, its photo is deleted the next time the app starts.
 
 ## Advertising
 
@@ -135,9 +171,10 @@ is on, the cloud copy is kept until you delete your data or your account.
 - **In the app:** Settings → Clear all data removes everything from the device
   and, if cloud sync is on, your account.
 - **Deleting your account** removes your cloud copy.
-- **Revoking health access:** Health Connect → App permissions → DlyMinder on
-  Android, or Health → Sharing → DlyMinder on iPhone. This stops new readings
-  arriving. Anything already saved in DlyMinder stays until you delete it in the
+- **Revoking health access:** in the app, Connected devices → Disconnect (on
+  Android this also gives the permissions back); or Health Connect → App
+  permissions → DlyMinder on Android, or Health → Sharing → DlyMinder on iPhone.
+  This stops new readings arriving. Anything already saved in DlyMinder stays until you delete it in the
   app.
 - Or email [CONTACT EMAIL] and we will action a deletion request.
 

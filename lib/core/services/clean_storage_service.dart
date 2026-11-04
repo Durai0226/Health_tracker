@@ -8,17 +8,22 @@ import '../../features/reminders/models/reminder_kind.dart'
 import 'background_alarm_service.dart'
     show
         defaultMaxSnoozeCount,
+        kAlarmFullScreenPref,
+        kAlarmPersistentPref,
+        kAlarmVibrationPref,
         kShowOnLockScreenPref,
         maxSnoozeCountKey,
         snoozeEnabledKey,
         snoozeIntervalMinutesKey;
 import '../database/app_database.dart';
+import 'photo_store.dart';
 import '../database/daos/core_dao.dart';
 import '../database/daos/medication_dao.dart';
 import '../database/daos/water_dao.dart';
 import '../database/daos/reminders_dao.dart';
 import '../models/user_settings.dart';
 import '../../features/reminders/models/reminder_model.dart' as ReminderModel;
+import '../../features/reminders/models/reminder_step_targets.dart';
 import '../../features/reminders/models/reminder_category_model.dart' as ReminderCategoryModel;
 import '../../features/medication/services/medicine_storage_service.dart';
 import '../../features/medication/services/vitals_storage_service.dart';
@@ -43,7 +48,9 @@ import 'reminder_reschedule_service.dart';
 import '../../features/focus/services/coins_service.dart';
 import '../../features/focus/services/tag_service.dart';
 import '../../features/focus/services/relaxation_service.dart';
+import '../health/health_import_control.dart';
 import 'health_caches.dart';
+import '../utils/units.dart';
 
 /// Clean Drift-based storage service - unified storage using Drift DAOs
 class CleanStorageService {
@@ -81,6 +88,10 @@ class CleanStorageService {
   }
 
   static Future<void> init() async {
+    // Volume and weight units are preferences, but the code that formats an amount
+    // is pure and imports no storage — point it at this cache.
+    Units.preference = getAppPreference;
+    Units.writePreference = setAppPreference;
     if (_isInitialized) {
       debugPrint('CleanStorageService already initialized');
       return;
@@ -273,6 +284,7 @@ class CleanStorageService {
         endsAt: Value(reminder.endsAt),
         occurrenceLimit: Value(reminder.occurrenceLimit),
         isPaused: Value(reminder.isPaused),
+        autoCompleteSteps: Value(ReminderStepTargets.clean(reminder.autoCompleteSteps)),
         escalation: Value(reminder.escalation.name),
         createdAt: reminder.createdAt,
         updatedAt: reminder.updatedAt,
@@ -552,6 +564,7 @@ class CleanStorageService {
           endsAt: row.endsAt,
           occurrenceLimit: row.occurrenceLimit,
           isPaused: row.isPaused,
+          autoCompleteSteps: ReminderStepTargets.clean(row.autoCompleteSteps),
           escalation: ReminderModel.ReminderEscalation.fromName(row.escalation),
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -885,6 +898,7 @@ class CleanStorageService {
         endsAt: Value(reminder.endsAt),
         occurrenceLimit: Value(reminder.occurrenceLimit),
         isPaused: Value(reminder.isPaused),
+        autoCompleteSteps: Value(ReminderStepTargets.clean(reminder.autoCompleteSteps)),
         escalation: Value(reminder.escalation.name),
         // Not carried from the cloud: notification ids are per-device, allocated
         // from this device's reserved block. Taking another device's id would
@@ -1030,6 +1044,9 @@ class CleanStorageService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(kShowOnLockScreenPref, settings.showOnLockScreen);
+      await prefs.setBool(kAlarmVibrationPref, settings.vibrationEnabled);
+      await prefs.setBool(kAlarmFullScreenPref, settings.fullScreenNotification);
+      await prefs.setBool(kAlarmPersistentPref, settings.persistentNotification);
       await prefs.setInt(
           snoozeIntervalMinutesKey, settings.snoozeIntervalMinutes);
       await prefs.setBool(snoozeEnabledKey, settings.snoozeEnabled);
@@ -1063,9 +1080,10 @@ class CleanStorageService {
       // 'doctors', 'appointments' and 'dependents', which had never been in
       // one either and, being hand-typed, exist nowhere else. v8 adds the heart
       // dashboard's 'biometrics' (with workouts and devices), the reminder
-      // categories and the haptic settings. Older backups simply omit sections
-      // and are restored non-destructively by importData.
-      'version': 8,
+      // categories and the haptic settings. v9 adds 'waterSetup', the drinks and
+      // cups the person made and their hydration profile, and 'pharmacies'. Older
+      // backups simply omit sections and are restored non-destructively by importData.
+      'version': 9,
       'timestamp': DateTime.now().toIso8601String(),
       'settings': getUserSettings().toJson(),
       'medicines': await MedicineCleanStorageService.exportMedicinesJson(),
@@ -1074,6 +1092,9 @@ class CleanStorageService {
       },
       'reminders': getReminders().map((r) => r.toJson()).toList(),
       'water': water.map((d) => d.toJson()).toList(),
+      // Always written, even when there are no drinks of their own: a restore
+      // replaces what the file carries, and an empty list is how a backup says so.
+      'waterSetup': WaterService.exportSetupForBackup(),
       'vitals': await VitalsStorageService.exportJson(),
       'diary': await DiaryStorageService.exportJson(),
       ...await HealthBackupSerializer.exportJson(),
@@ -1085,6 +1106,32 @@ class CleanStorageService {
             .where((e) => !kNeverLeaveTheDevice.contains(e.key)),
       ),
     };
+  }
+
+  /// The preference-key prefixes of the imports from the health store, in
+  /// SharedPreferences. See [clearAllPersistentData].
+  ///
+  /// Every key an import keeps — its switch, where its last run ended, the ids it
+  /// has seen, the "asked" flags — must start with one of these, or "Delete all data"
+  /// leaves it behind. `health_import_wipe_coverage_test.dart` reads the source and
+  /// fails for a key that does not.
+  static const List<String> healthImportPrefixes = [
+    'water_health_import_',
+    'vitals_health_import_',
+  ];
+
+  static Future<void> _forgetHealthImports() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final k in prefs
+          .getKeys()
+          .where((k) => healthImportPrefixes.any(k.startsWith))
+          .toList()) {
+        await prefs.remove(k);
+      }
+    } catch (e) {
+      debugPrint('Error forgetting the health imports: $e');
+    }
   }
 
   /// Preference keys that must never enter a backup, in either direction.
@@ -1165,8 +1212,10 @@ class CleanStorageService {
   ///                           "self" row is app scaffolding created once by
   ///                           ActiveProfileService.init(). See
   ///                           [MedicationBackupSerializer.clearRestorableRows]
-  ///   * pharmacies /        — tables with DAO methods and no writer anywhere
-  ///     treatmentCourses      in the app, so they hold no user data at all
+  ///   * pharmacies          — exported, re-imported and cleared with the doctors
+  ///                           (see [MedicationBackupSerializer])
+  ///   * treatmentCourses    — a table with DAO methods and no writer anywhere in
+  ///                           the app, so it holds no user data at all
   ///
   /// The rollback snapshot uses the same export, so a failure path can only
   /// recover what the export covers. Restoring a backup must never destroy
@@ -1207,6 +1256,13 @@ class CleanStorageService {
         await db.delete(db.enhancedWaterLogs).go();
         await db.delete(db.dailyWaterDataTable).go();
       }
+      if (carries('waterSetup')) {
+        // The built-in drinks and cups live in code, not in these tables, so this
+        // removes only what the person made, and their profile.
+        await db.delete(db.beverageTypes).go();
+        await db.delete(db.waterContainers).go();
+        await db.delete(db.hydrationProfiles).go();
+      }
       if (carries('vitals')) {
         // One section, four tables — VitalsStorageService exports and imports
         // blood pressure, glucose, weight and mood together.
@@ -1227,6 +1283,19 @@ class CleanStorageService {
   }
 
   static Future<void> clearAllPersistentData() async {
+    // The imports from the health store first, before anything is deleted: a run
+    // that is mid-read would otherwise save what it found into tables this has
+    // already emptied, and write down where it got to after the keys are gone.
+    // They cannot begin again until this is over.
+    HealthImportControl.wipeBegan();
+    try {
+      await _clearAllPersistentData();
+    } finally {
+      HealthImportControl.wipeEnded();
+    }
+  }
+
+  static Future<void> _clearAllPersistentData() async {
     final db = database;
     try {
       // Reminders
@@ -1246,14 +1315,15 @@ class CleanStorageService {
       // every appointment, and a household member's date of birth, blood type,
       // allergies and insurance details all survived a wipe that told the user
       // "All data deleted." Appointments first — they reference the other two.
-      // `pharmacies` and `treatmentCourses` are not here because nothing in
-      // the app has ever written a row to either. The well-known "self"
+      // `treatmentCourses` is not here because nothing in the app has ever written
+      // a row to it; `pharmacies` is, since the Pharmacies screen can. The well-known "self"
       // profile goes with them and is recreated by ActiveProfileService.init()
       // on the next launch — the same restart-shaped limitation FocusService
       // has below, and the right trade against leaving a dependent's medical
       // details on a device the user was told is now clean.
       await db.delete(db.appointments).go();
       await db.delete(db.doctors).go();
+      await db.delete(db.pharmacies).go();
       await db.delete(db.dependentProfiles).go();
       // Clinics are SharedPreferences, not Drift, and were the one thing here
       // the wipe never reached: names, addresses and phone numbers of every
@@ -1263,6 +1333,13 @@ class CleanStorageService {
       await db.delete(db.enhancedWaterLogs).go();
       await db.delete(db.dailyWaterDataTable).go();
       await db.delete(db.waterAchievements).go();
+      // What the person set up for water: the drinks and cups they made, and their
+      // hydration profile — weight, activity, pregnancy or nursing, health
+      // conditions. These were left behind by "Delete all data" and came back on
+      // the next start, because the service reads them from these tables.
+      await db.delete(db.beverageTypes).go();
+      await db.delete(db.waterContainers).go();
+      await db.delete(db.hydrationProfiles).go();
       // Period / steps / sleep trackers
       await db.delete(db.periodDays).go();
       await db.delete(db.menstrualCycles).go();
@@ -1282,6 +1359,10 @@ class CleanStorageService {
       await db.delete(db.weightReadings).go();
       await db.delete(db.moodEntries).go();
       await db.delete(db.diaryEntries).go();
+      // The pictures kept for medicines and diary entries: private photos that the rows
+      // above only pointed at, and that a wipe which said "all data deleted" would
+      // otherwise leave in the app's storage with nothing to say what they were.
+      await PhotoStore.clearAll();
 
       // Residue from the removed AI feature: its Drift tables went in schema v8,
       // but the chat transcript and engine settings live in `app_preferences`,
@@ -1317,9 +1398,23 @@ class CleanStorageService {
         'rest_days',
         'vacation_periods',
         'weight_goal_kg',
+        // DailyCheckIn.enabledKey. Left on, the next start re-armed a nudge for a
+        // person whose data had just been deleted. (A literal: the class imports
+        // this one.)
+        'dailyCheckInEnabled',
+        StepService.liveMarkKey,
       ]) {
         await removeAppPreference(k);
       }
+
+      // What the imports from the health store remember: the switches, where the
+      // last read ended and every sample id seen. They live in SharedPreferences,
+      // not in the table the loops above clear, so "Delete all data" never reached
+      // them — and the ids matter most: left in place they silently skipped
+      // everything the health store still holds, so a person who wiped and opted
+      // in again got none of it back. The switches are consent, and a wipe is the
+      // moment to ask again.
+      await _forgetHealthImports();
       for (final k in _appPreferencesCache.keys
           .where((k) => k.startsWith('refill_requested_'))
           .toList()) {
@@ -1491,6 +1586,16 @@ class CleanStorageService {
           await WaterService.refreshAfterRestore();
         } catch (e) {
           debugPrint('Water post-restore refresh failed: $e');
+        }
+      }
+      // The drinks and cups the person made, and their hydration profile (v9+).
+      // Missing key → leave the ones on this device alone.
+      if (data['waterSetup'] is Map) {
+        try {
+          await WaterService.restoreSetupFromBackup(
+              Map<String, dynamic>.from(data['waterSetup'] as Map));
+        } catch (e) {
+          debugPrint('Import water setup failed: $e');
         }
       }
       // Vitals (v4+). Missing key → leave existing readings intact.

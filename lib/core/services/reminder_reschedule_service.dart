@@ -1,10 +1,14 @@
+import 'dart:io' show Platform;
+
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import '../database/daos/reminders_dao.dart'
     show genericReminderIdBase, genericReminderIdCapacity;
 import '../health/hydration_pacer.dart';
+import '../utils/coalesced_load.dart';
 import '../utils/reminder_slot_spacing.dart';
 import 'clean_storage_service.dart';
+import 'daily_check_in.dart';
 import 'notification_service.dart';
 import '../../features/medication/services/appointment_reminder_service.dart';
 import '../../features/medication/services/refill_reminder_service.dart';
@@ -64,6 +68,8 @@ class RescheduleOutcome {
 }
 
 class ReminderRescheduleService {
+  static const String _medicinesFamily = 'medicines';
+
   /// The families rebuilt by [rescheduleAllReminders], in order.
   ///
   /// This used to be five near-identical `try { … } catch { failCount++ }`
@@ -74,7 +80,7 @@ class ReminderRescheduleService {
   /// OS pending-notification ceiling is reached it is a hydration reminder that
   /// does not fit, not a dose. See [ReminderBudget].
   static final List<ReminderFamily> _families = <ReminderFamily>[
-    ReminderFamily('medicines', _rescheduleMedicines),
+    ReminderFamily(_medicinesFamily, _rescheduleMedicines),
     ReminderFamily('appointments', _rescheduleAppointments),
     ReminderFamily('generic reminders', rescheduleGenericReminders),
     ReminderFamily('vitals', VitalsReminderService.rescheduleAll),
@@ -83,6 +89,9 @@ class ReminderRescheduleService {
     // After the rest: a wind-down reminder that follows tonight's plan moves
     // with the sleep owed, so it is re-read here at every start.
     ReminderFamily('sleep wind-down', WindDownService.rearm),
+    // The setup's one nudge a day, which is switchable now and so has to be
+    // re-armed from what is recorded, not assumed.
+    ReminderFamily('daily check-in', DailyCheckIn.rearm),
   ];
 
   /// Add a family. For anything defined outside this file's imports; the
@@ -97,15 +106,75 @@ class ReminderRescheduleService {
   static List<String> get familyNames =>
       List.unmodifiable(_families.map((f) => f.name));
 
+  /// The names of the families the last pass went through, so a test can tell a pass
+  /// over everything from one over the medicines alone.
+  @visibleForTesting
+  static List<String> lastPassFamilies = const [];
+
   /// Rebuild every family's reminders.
   ///
   /// Runs on every app start (`main._initDeferredServices`, off the critical
-  /// path) and whenever an exact-alarm grant lands
-  /// (`AppShell._rearmIfExactAlarmsWereGranted`). Each family is isolated: one
-  /// throwing must not stop the rest, which is the difference between losing one
-  /// family's reminders and losing all of them.
-  static Future<void> rescheduleAllReminders() async {
+  /// path), whenever an exact-alarm grant lands
+  /// (`AppShell._rearmIfExactAlarmsWereGranted`), after a restore, and when the
+  /// person changes how alerts look. Each family is isolated: one throwing must not
+  /// stop the rest, which is the difference between losing one family's reminders
+  /// and losing all of them.
+  ///
+  /// One pass at a time: a pass cancels and re-arms every reminder, so two running
+  /// over each other — a start-up pass and a switch flipped during it, or two
+  /// switches a few seconds apart — interleave their cancels and schedules. A call
+  /// that arrives while one is running asks for ONE more pass behind it, and
+  /// completes when that has finished.
+  static Future<void> rescheduleAllReminders() {
+    _reconcileWanted = true;
+    _fullWanted = true;
+    return _passes();
+  }
+
+  /// Arm every reminder again and do nothing else: [rescheduleAllReminders] without
+  /// the missed-dose reconciliation that opens it.
+  ///
+  /// For when how an alert LOOKS has changed. Flipping Vibration is not a reason to
+  /// close out every past-due dose as missed — which moves the adherence numbers at
+  /// that moment, where the person is looking at a switch. It shares the one pass
+  /// with [rescheduleAllReminders] (two passes must never interleave), and a pass
+  /// reconciles if anyone who is waiting for it asked to.
+  static Future<void> rearmReminders() {
+    _fullWanted = true;
+    return _passes();
+  }
+
+  /// Set by [rescheduleAllReminders], read and cleared by the pass that serves it.
+  static bool _reconcileWanted = false;
+
+  /// Set by every request for a pass over every family, read and cleared by the pass
+  /// that serves it. A pass nobody asked that of — [rearmDosesIfStale]'s — re-arms
+  /// the medicines only, so a pass for the doses does not cancel and re-arm every
+  /// water, vitals and refill reminder too.
+  static bool _fullWanted = false;
+
+  /// Stands in for one pass, so the one-at-a-time rule can be driven without the
+  /// platform and the database every real family reaches.
+  @visibleForTesting
+  static Future<void> Function()? passForTesting;
+
+  /// Stand in for the missed-dose reconciliation and for the families, so what a
+  /// pass does — and does not — can be driven without the platform.
+  @visibleForTesting
+  static Future<void> Function()? reconcileForTesting;
+
+  @visibleForTesting
+  static List<ReminderFamily>? familiesForTesting;
+
+  static final CoalescedLoad _passes =
+      CoalescedLoad(() => (passForTesting ?? _rescheduleOnce)());
+
+  static Future<void> _rescheduleOnce() async {
     debugPrint('🔄 Rescheduling all reminders...');
+    final reconcile = _reconcileWanted;
+    _reconcileWanted = false;
+    final full = _fullWanted;
+    _fullWanted = false;
 
     // Close out past-due doses nobody answered, BEFORE anything reports on
     // them — the same denominator problem as `reconcileMissedReminders` below.
@@ -119,13 +188,16 @@ class ReminderRescheduleService {
     // Deliberately outside the family loop and separately guarded: it arms
     // nothing, and a reconcile failure must never stop reminders being
     // re-armed.
-    try {
-      await MedicineCleanStorageService.reconcileMissedDoses();
-    } catch (e) {
-      debugPrint('⚠️ Missed-dose reconciliation failed: $e');
+    if (reconcile) {
+      try {
+        await (reconcileForTesting ?? MedicineCleanStorageService.reconcileMissedDoses)();
+      } catch (e) {
+        debugPrint('⚠️ Missed-dose reconciliation failed: $e');
+      }
     }
 
-    final outcome = await rearmFamilies(_families);
+    final outcome = await rearmFamilies(familiesForTesting ??
+        (full ? _families : _families.where((f) => f.name == _medicinesFamily).toList()));
 
     debugPrint('✓ Rescheduled ${outcome.armed} reminders across '
         '${outcome.succeeded}/${outcome.attempted} families');
@@ -152,6 +224,7 @@ class ReminderRescheduleService {
       List<ReminderFamily> families) async {
     var armed = 0;
     var failed = 0;
+    lastPassFamilies = [for (final f in families) f.name];
 
     for (final family in families) {
       try {
@@ -178,8 +251,69 @@ class ReminderRescheduleService {
     // One-time: clear any medicine alarms left under the old hash-based IDs
     // before we reschedule with the new dense (collision-free) scheme.
     await reminderService.migrateNotificationIdsIfNeeded();
-    await reminderService.scheduleAllReminders(medicines);
+    final refused = await reminderService.scheduleAllReminders(medicines);
+    // Written down whether or not every dose was armed, with whether any was refused:
+    // [rearmDosesIfStale] reads both. A pass that armed none (notifications switched
+    // off, one medicine the phone always refuses) must not count as one that armed
+    // everything — and must not be run again on every return to the app either, which
+    // is what leaving no stamp at all would do. So it counts, and is tried again
+    // sooner.
+    try {
+      await CleanStorageService.setAppPreference(
+          dosesArmedAtKey, clock.now().millisecondsSinceEpoch);
+      await CleanStorageService.setAppPreference(dosesRefusedKey, refused > 0);
+    } catch (e) {
+      debugPrint('⚠️ Could not record when the dose reminders were armed: $e');
+    }
     return medicines.where((m) => m.reminderEnabled).length;
+  }
+
+  /// App preference (milliseconds since the epoch): when the dose reminders were
+  /// last armed.
+  static const String dosesArmedAtKey = 'dose_reminders_armed_at';
+
+  /// App preference (bool): whether the phone refused any of them that time.
+  static const String dosesRefusedKey = 'dose_reminders_refused';
+
+  /// How soon after a pass that the phone refused doses in, another is worth trying.
+  /// Not never, which would leave the doses that run out alone for twelve hours; not
+  /// at every return to the app either, which is a full read of the medicines and a
+  /// round of cancels each time for something that will probably be refused again.
+  static const Duration refusedRetryAfter = Duration(hours: 1);
+
+  /// Stands in for "this is an iPhone", which `Platform.isIOS` cannot be made to
+  /// say on the host the tests run on.
+  @visibleForTesting
+  static bool? isIosForTesting;
+
+  /// Arm the dose reminders again if it has been [maxAge] since they were.
+  ///
+  /// For an iPhone, where a medicine that is not due every day is armed as one
+  /// reminder per upcoming dose (see `IosDosePlan`) and so runs out: arming happens
+  /// at every start of the app, but an app that stays alive in the background for
+  /// weeks is never started. Coming back to the foreground is the other moment the
+  /// app can look, and this is what it asks.
+  ///
+  /// Not Android, whose alarms decide when they fire whether the medicine is due and
+  /// never run out. It re-arms the medicines and nothing else, through the same
+  /// one-pass-at-a-time as everything here so it cannot interleave with a pass that is
+  /// already running — and does nothing while one is, since that pass is arming the
+  /// medicines now and will say so when it is done.
+  static Future<void> rearmDosesIfStale(
+      {Duration maxAge = const Duration(hours: 12)}) async {
+    if (!(isIosForTesting ?? Platform.isIOS)) return;
+    if (_passes.isRunning) return;
+    final armed = CleanStorageService.getAppPreference(dosesArmedAtKey, null);
+    if (armed is int) {
+      final age = clock.now().difference(DateTime.fromMillisecondsSinceEpoch(armed));
+      final refused =
+          CleanStorageService.getAppPreference(dosesRefusedKey, false) == true;
+      final limit = refused && refusedRetryAfter < maxAge ? refusedRetryAfter : maxAge;
+      // A stamp from the future (a clock set back) is treated as stale, not fresh
+      // for ever.
+      if (!age.isNegative && age < limit) return;
+    }
+    await _passes();
   }
 
   /// A device reboot or app update can lose AndroidAlarmManager's pending

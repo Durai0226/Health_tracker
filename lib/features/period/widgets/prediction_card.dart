@@ -68,10 +68,15 @@ class PredictionCard extends StatelessWidget {
   /// TTC mode emphasises the fertile window.
   final bool emphasizeFertile;
 
+  /// Hormonal birth control is on, so there is no fertile window to show — and the
+  /// card says why, rather than leaving the person to wonder where it went.
+  final bool birthControl;
+
   const PredictionCard({
     super.key,
     required this.prediction,
     this.emphasizeFertile = false,
+    this.birthControl = false,
   });
 
   @override
@@ -89,7 +94,7 @@ class PredictionCard extends StatelessWidget {
             Expanded(
               child: Text(
                 'Log a few more cycles and ${AppStrings.productName} will estimate your next '
-                'period and fertile window here.',
+                '${birthControl ? 'period' : 'period and fertile window'} here.',
                 style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
               ),
             ),
@@ -190,6 +195,29 @@ class PredictionCard extends StatelessWidget {
                   : null,
               trailingColor: ext.mark(fertileAccent),
               emphasize: emphasizeFertile,
+            ),
+          ],
+
+          if (fertile == null && birthControl) ...[
+            const SizedBox(height: AppSpacing.md),
+            Divider(height: 1, color: ext.outline),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'No fertile window or ovulation day is estimated while hormonal '
+              'birth control is on.',
+              style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+            ),
+          ],
+
+          if (p.basis == PredictionBasis.temperature) ...[
+            const SizedBox(height: AppSpacing.md),
+            Divider(height: 1, color: ext.outline),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Counted on from the temperature rise in your log this cycle, '
+              'which is when ovulation most likely was. It is an estimate: '
+              'illness, alcohol or a short night can move a reading.',
+              style: tt.bodySmall?.copyWith(color: ext.textSecondary),
             ),
           ],
 

@@ -78,6 +78,25 @@ class RestDays {
     return _pruned(kept, today);
   }
 
+  /// The most days one rest can run: "a few days", not a standing pause. Longer
+  /// than that is what Vacation mode is for.
+  static const int maxRunDays = 7;
+
+  /// [count] days in a row from [start] marked as [kind], replacing any mark on
+  /// those days. Days are stepped by calendar day, not by 24 hours, so a clock
+  /// change inside the run cannot skip or repeat one.
+  static List<RestDay> markRun(
+      List<RestDay> days, DateTime start, RestKind kind, int count,
+      {required DateTime today}) {
+    final n = count.clamp(1, maxRunDays);
+    var out = days;
+    for (var i = 0; i < n; i++) {
+      out = mark(out, DateTime(start.year, start.month, start.day + i), kind,
+          today: today);
+    }
+    return out;
+  }
+
   static List<RestDay> unmark(List<RestDay> days, DateTime day) {
     final d = _day(day);
     return [for (final r in days) if (r.day != d) r];

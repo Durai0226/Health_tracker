@@ -12,7 +12,7 @@ import 'package:tablet_remainder/core/services/health_data_service.dart';
 import 'package:tablet_remainder/core/services/home_widget_service.dart';
 import 'package:tablet_remainder/core/services/notification_service.dart';
 import 'package:tablet_remainder/core/services/rest_day_store.dart';
-import 'package:tablet_remainder/core/health/rest_days.dart' show RestKind;
+import 'package:tablet_remainder/core/health/rest_days.dart' show RestDay, RestKind;
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart';
 import 'package:tablet_remainder/core/widgets/app/personal_best_card.dart';
 import 'package:tablet_remainder/core/milestones/milestones_screen.dart';
@@ -26,6 +26,8 @@ import '../widgets/overnight_body_card.dart';
 import '../services/sleep_service.dart';
 import '../services/day_rhythm_service.dart';
 import '../services/wind_down_service.dart';
+import '../widgets/wind_down_tile.dart';
+import 'wind_down_screen.dart';
 import '../widgets/bedtime_plan_card.dart';
 import '../widgets/day_rhythm_card.dart';
 import '../widgets/sleep_consistency_card.dart';
@@ -61,13 +63,24 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
   /// Today was marked a rest day from the overnight card, and can be taken back.
   bool _restMarkedHere = false;
 
-  Future<void> _takeRestDay() async {
-    await RestDayStore.markToday(RestKind.rest);
-    if (mounted) setState(() => _restMarkedHere = true);
+  /// How many days from today were marked from the card, and what was marked
+  /// before, so Undo puts back exactly that.
+  int _restDays = 1;
+  List<RestDay> _restBefore = const [];
+
+  Future<void> _takeRest(int days) async {
+    _restBefore = RestDayStore.all();
+    await RestDayStore.markDays(RestKind.rest, days);
+    if (mounted) {
+      setState(() {
+        _restMarkedHere = true;
+        _restDays = days;
+      });
+    }
   }
 
   Future<void> _undoRestDay() async {
-    await RestDayStore.clear(clock.now());
+    await RestDayStore.restore(_restBefore);
     if (mounted) setState(() => _restMarkedHere = false);
   }
 
@@ -380,6 +393,8 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
         ))
         ..add(const SizedBox(height: AppSpacing.md))
         ..add(_buildBedtimeTip(context))
+        ..add(const SizedBox(height: AppSpacing.md))
+        ..add(WindDownTile(onStart: () => _openWindDown(context)))
         ..add(_buildDayRhythm(context))
         ..add(const SizedBox(height: AppSpacing.md))
         ..add(_buildStatRow(context, lastNight))
@@ -417,7 +432,9 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
             dip: dip,
             offerRest: OvernightBody.restOffered(),
             restMarked: _restMarkedHere,
-            onRest: _takeRestDay,
+            restDaysMarked: _restDays,
+            onRest: () => _takeRest(1),
+            onRestFewDays: () => _takeRest(OvernightBodyCard.fewDays),
             onUndoRest: _undoRestDay,
           ));
       }
@@ -593,6 +610,9 @@ class _SleepDashboardScreenState extends State<SleepDashboardScreen>
       ),
     );
   }
+
+  Future<void> _openWindDown(BuildContext context) => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => const WindDownScreen()));
 
   /// Have the wind-down reminder follow tonight's plan (or stop), and say so.
   Future<void> _followPlan(bool follow) async {

@@ -1,11 +1,14 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart' show ImageSource;
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_colors_ext.dart';
 import '../../../core/health/mood_tags.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/app/vitals_theme.dart';
+import '../../../core/services/photo_store.dart';
+import '../../../core/widgets/photo_thumb.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../medication/models/medicine_log.dart' show moodRatingLabels;
 import '../models/diary_entry.dart';
@@ -52,6 +55,12 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
   /// there would train the user to dismiss the sheet without reading it.
   bool _dirty = false;
 
+  /// The entry's photo, and what becomes of the ones picked while this is open: the
+  /// one replaced or removed is deleted once the entry is saved, those picked and
+  /// dropped when the editor closes.
+  String? _photoPath;
+  late PhotoSession _photos;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +74,8 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
       tags: e?.tags ?? const [],
     );
     _details = _openedWith;
+    _photoPath = e?.photoPath;
+    _photos = PhotoSession(original: e?.photoPath);
     // [PopScope] reads `canPop` at BUILD time, so dirtiness has to drive a
     // rebuild. Both controllers are listened to, not just the body: a
     // title-only edit is just as unsaved, and gating on the body alone would
@@ -79,6 +90,8 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
     _body.removeListener(_refreshDirty);
     _title.dispose();
     _body.dispose();
+    // Closed without saving: no picture is left behind.
+    _photos.close();
     super.dispose();
   }
 
@@ -86,7 +99,8 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
     final e = widget.existing;
     final dirty = _title.text.trim() != _openedTitle.trim() ||
         _body.text.trim() != (e?.body.trim() ?? '') ||
-        _details != _openedWith;
+        _details != _openedWith ||
+        _photoPath != e?.photoPath;
     if (dirty != _dirty) setState(() => _dirty = dirty);
   }
 
@@ -134,9 +148,76 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
       createdAt: e?.createdAt ?? DateTime.now(),
       moodIndex: _details.mood,
       tags: _details.tags,
+      photoPath: _photoPath,
     );
     await DiaryStorageService.save(entry);
+    await _photos.commit(_photoPath);
     if (mounted) Navigator.pop(context, true);
+  }
+
+  Future<void> _choosePhoto() async {
+    final action = await choosePhotoAction(context,
+        hasPhoto: _photoPath != null,
+        accent: AppColorsExt.of(context).brand,
+        title: 'Photo for this entry');
+    if (!mounted || action == null) return;
+    if (action == PhotoAction.remove) {
+      setState(() => _photoPath = null);
+      _refreshDirty();
+      return;
+    }
+    String? kept;
+    try {
+      kept = await _photos.pick(
+          action == PhotoAction.camera ? ImageSource.camera : ImageSource.gallery);
+    } on PhotoPickFailed {
+      if (mounted) context.toastError(PhotoPickFailed.message);
+      return;
+    }
+    if (!mounted) {
+      await PhotoStore.delete(kept); // left while the camera was open
+      return;
+    }
+    if (kept == null) return;
+    final previous = _photoPath;
+    setState(() => _photoPath = kept);
+    _refreshDirty();
+    await _photos.replaced(previous);
+  }
+
+  /// One line for the photo: its thumbnail, and to add, change or remove it.
+  Widget _photoRow(AppColorsExt ext, TextTheme tt) {
+    return Semantics(
+      button: true,
+      label: _photoPath == null ? 'Add a photo' : 'Change or remove the photo',
+      excludeSemantics: true,
+      onTap: _choosePhoto,
+      child: InkWell(
+        onTap: _choosePhoto,
+        borderRadius: AppRadius.brSm,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              if (_photoPath != null) ...[
+                PhotoThumb(path: _photoPath, size: 40, label: 'Entry photo'),
+                const SizedBox(width: AppSpacing.sm),
+              ] else ...[
+                Icon(Symbols.add_photo_alternate_rounded,
+                    size: 18, color: ext.textTertiary),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              Expanded(
+                child: Text(_photoPath == null ? 'Add a photo' : 'Change or remove the photo',
+                    style: tt.bodyMedium?.copyWith(color: ext.textSecondary)),
+              ),
+              Icon(Symbols.chevron_right_rounded,
+                  size: 20, color: ext.textTertiary),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// One tappable line under the title: when it is dated, and — if given — the
@@ -244,6 +325,7 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _detailsRow(ext, tt),
+                    _photoRow(ext, tt),
                     const SizedBox(height: AppSpacing.sm),
                     Text('Entry',
                         style: tt.labelLarge?.copyWith(color: ext.textSecondary)),

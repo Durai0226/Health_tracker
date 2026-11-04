@@ -79,11 +79,22 @@ class StepReminderPlanner {
     /// Today was marked as a rest or unwell day: the goal is paused, so there is
     /// nothing to nudge about.
     bool restDay = false,
+
+    /// Whether a given day is a rest or unwell day. A rest of a few days is marked
+    /// ahead, and this reminder repeats daily from the day it is armed for, so
+    /// "tomorrow" has to be the first day that is NOT one: left alone, it rang on
+    /// the second day of a rest the app was not opened on.
+    bool Function(DateTime day)? restOn,
   }) {
     final h = (minuteOfDay ~/ 60) % 24;
     final m = minuteOfDay % 60;
     final today = DateTime(now.year, now.month, now.day, h, m);
-    final tomorrow = DateTime(now.year, now.month, now.day + 1, h, m);
+    var tomorrow = DateTime(now.year, now.month, now.day + 1, h, m);
+    // A bounded walk: marks are capped at a week, and a corrupt store must not
+    // loop forever.
+    for (var i = 0; i < 14 && restOn != null && restOn(tomorrow); i++) {
+      tomorrow = DateTime(tomorrow.year, tomorrow.month, tomorrow.day + 1, h, m);
+    }
 
     // Today's slot has gone by: tomorrow, as ever.
     if (!today.isAfter(now)) {

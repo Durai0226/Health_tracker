@@ -96,6 +96,16 @@ class CycleStats {
 }
 
 /// Immutable result of a single prediction run. All dates are day-precision.
+/// What the next-period estimate rests on.
+enum PredictionBasis {
+  /// The length of past cycles, as ever.
+  calendar,
+
+  /// Past cycles, and the temperature rise found in this cycle's own log: ovulation
+  /// is known rather than assumed, and the period is counted on from it.
+  temperature,
+}
+
 class CyclePrediction {
   /// Estimated first day of the next period.
   final DateTime? predictedStart;
@@ -133,6 +143,10 @@ class CyclePrediction {
 
   final DateTime? lastPeriodStart;
 
+  /// What [predictedStart] rests on. Never [PredictionBasis.temperature] without
+  /// a temperature rise found in the current cycle.
+  final PredictionBasis basis;
+
   const CyclePrediction({
     this.predictedStart,
     this.windowStart,
@@ -149,6 +163,7 @@ class CyclePrediction {
     this.gestationalDays,
     this.completedCycles = 0,
     this.lastPeriodStart,
+    this.basis = PredictionBasis.calendar,
   });
 
   /// Cold-start result: no data yet.

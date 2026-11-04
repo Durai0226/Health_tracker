@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' as drift;
 import '../../../core/database/app_database.dart' as db;
 import '../../../core/database/daos/diary_dao.dart';
 import '../../../core/services/active_profile_service.dart';
+import '../../../core/services/photo_store.dart';
 import '../models/diary_entry.dart';
 
 /// Drift-backed storage facade for the diary/journal feature, mirroring
@@ -59,6 +60,10 @@ class DiaryStorageService {
     _bump();
   }
 
+  /// Delete an entry. Its photo is NOT deleted here: the Diary offers Undo, which saves
+  /// the entry back with the photo it had, and a file already gone would leave it
+  /// pointing at nothing. The file is nothing's once the entry stays deleted, and
+  /// `PhotoSweep` removes it the next time the app starts.
   static Future<void> delete(String id) async {
     await _dao.deleteEntry(id);
     _bump();
@@ -74,10 +79,21 @@ class DiaryStorageService {
   }
 
   static Future<void> importJson(List<dynamic> data) async {
+    // A photo is not in a backup file, only its name. An entry restored over one that
+    // is here keeps the photo it has; one restored into an empty table (an overwrite
+    // restore, or the rollback of a failed one, both clear the rows first) gets back
+    // the photo the file names, if that file is still on this phone. On another phone
+    // it is not, and the entry simply has no photo.
+    final photos = {
+      for (final r in await _dao.getAll())
+        if (r.photoPath != null) r.id: r.photoPath!,
+    };
     for (final e in data) {
       try {
-        await save(DiaryEntry.fromJson(Map<String, dynamic>.from(e)),
-            stampActiveProfile: false);
+        final raw = Map<String, dynamic>.from(e);
+        final entry = DiaryEntry.fromJson(raw);
+        final photo = photos[entry.id] ?? await PhotoStore.locate(raw['photoFile'] as String?);
+        await save(entry.copyWith(photoPath: photo), stampActiveProfile: false);
       } catch (_) {/* skip malformed */}
     }
   }
@@ -94,6 +110,7 @@ class DiaryStorageService {
       createdAt: d.createdAt,
       moodIndex: d.moodIndex,
       tags: _decodeTags(d.tagsJson),
+      photoPath: d.photoPath,
     );
   }
 
@@ -118,6 +135,7 @@ class DiaryStorageService {
       createdAt: drift.Value(e.createdAt),
       moodIndex: drift.Value(e.moodIndex),
       tagsJson: drift.Value(e.tags.isEmpty ? null : jsonEncode(e.tags)),
+      photoPath: drift.Value(e.photoPath),
     );
   }
 }

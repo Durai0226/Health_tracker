@@ -17,6 +17,10 @@ class DiaryEntries extends Table {
   IntColumn get moodIndex => integer().nullable()();
   TextColumn get tagsJson => text().nullable()(); // JSON string[]
 
+  /// One photo for the entry: the path of a copy kept inside the app's own storage.
+  /// Not carried by a backup file (which is JSON) — see `DiaryPhotos`.
+  TextColumn get photoPath => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

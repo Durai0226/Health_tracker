@@ -146,4 +146,45 @@ void main() {
       expect(p.repeatingFrom.minute, 30);
     });
   });
+
+  group('a rest of a few days', () {
+    // Marked ahead: the 10th (today), 11th and 12th.
+    bool restOn(DateTime d) => !d.isBefore(DateTime(2026, 3, 10)) &&
+        d.isBefore(DateTime(2026, 3, 13));
+
+    StepReminderPlan withRest({DateTime? now, bool restToday = true}) =>
+        StepReminderPlanner.plan(
+          now: now ?? noon,
+          minuteOfDay: evening,
+          restDay: restToday,
+          restOn: restOn,
+        );
+
+    test('repeats from the first day that is not a rest day', () {
+      final p = withRest();
+      expect(p.todayAt, isNull);
+      expect(p.repeatingFrom, DateTime(2026, 3, 13, 19),
+          reason: 'tomorrow is a rest day too, and so is the day after');
+    });
+
+    test('also when today\'s slot has already gone', () {
+      expect(withRest(now: DateTime(2026, 3, 10, 21)).repeatingFrom,
+          DateTime(2026, 3, 13, 19));
+    });
+
+    test('without it, tomorrow is tomorrow, as before', () {
+      expect(plan(now: DateTime(2026, 3, 10, 21)).repeatingFrom, tomorrow7pm);
+    });
+
+    test('a store that says every day is rest does not loop for ever', () {
+      final p = StepReminderPlanner.plan(
+        now: noon,
+        minuteOfDay: evening,
+        restDay: true,
+        restOn: (_) => true,
+      );
+      expect(p.repeatingFrom.isAfter(noon), isTrue);
+      expect(p.repeatingFrom.difference(noon).inDays, lessThanOrEqualTo(15));
+    });
+  });
 }

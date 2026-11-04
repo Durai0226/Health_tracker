@@ -19,6 +19,7 @@ import '../../services/vitals_storage_service.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_reminder_button.dart';
 import '../../services/vitals_reminder_service.dart';
+import '../../../../core/utils/units.dart';
 
 enum _WeightUnit { kg, lb }
 
@@ -65,8 +66,9 @@ class _WeightScreenState extends State<WeightScreen> {
 
   Future<void> _toggleUnit() async {
     final next = _isLb ? _WeightUnit.kg : _WeightUnit.lb;
-    await CleanStorageService.setAppPreference(
-        _unitKey, next == _WeightUnit.lb ? 'lb' : 'kg');
+    // Through `Units`, which owns this preference, so an open screen elsewhere is
+    // told and the hydration and steps profiles show the same unit.
+    await Units.setWeight(next == _WeightUnit.lb ? WeightUnit.lb : WeightUnit.kg);
     setState(() => _unit = next);
   }
 

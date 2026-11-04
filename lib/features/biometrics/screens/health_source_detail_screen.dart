@@ -126,7 +126,7 @@ class HealthSourceDetailScreen extends StatelessWidget {
               title: 'Use for health data',
               subtitle: s.enabled
                   ? 'Counted when DlyMinder works out each day.'
-                  : 'Ignored. Past days it already won are unchanged.',
+                  : 'Ignored. Heart days it already won are unchanged.',
               switchValue: s.enabled,
               onSwitchChanged:
                   busy ? null : (v) => controller.setEnabled(s, v),
@@ -144,9 +144,10 @@ class HealthSourceDetailScreen extends StatelessWidget {
         // Two things the control genuinely does not do. Both are the kind of
         // omission a user only discovers by being surprised later.
         Text(
-          'A preference applies to every measurement this source writes, not '
-          'to one of them — and like the switch above, to today and future '
-          'days. Days already worked out stay as they are.',
+          'A preference covers heart data, steps and sleep together, not one '
+          'of them — and like the switch above, it applies from now on. Heart '
+          'days already worked out stay as they are; the last week of steps '
+          'and sleep is read again with your choice.',
           style: tt.bodySmall?.copyWith(color: ext.textTertiary),
         ),
         const SizedBox(height: AppSpacing.xl),

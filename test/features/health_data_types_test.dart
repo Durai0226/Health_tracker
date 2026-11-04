@@ -39,6 +39,59 @@ void main() {
               '${unsupported.map((t) => t.name).join(', ')}');
     });
 
+    // The automatic imports' READ lists are named per platform like the sleep lists,
+    // and each is held to ITS platform's key set in the plugin — checked here for both,
+    // since the host runs neither.
+    final perPlatform = <String, (List<HealthDataType>, List<HealthDataType>)>{
+      'vitalsReadTypes': (
+        HealthDataService.vitalsReadTypesAndroid,
+        HealthDataService.vitalsReadTypesIOS
+      ),
+      'hydrationReadTypes': (
+        HealthDataService.hydrationReadTypesAndroid,
+        HealthDataService.hydrationReadTypesIOS
+      ),
+    };
+    for (final e in perPlatform.entries) {
+      final (android, ios) = e.value;
+      test('${e.key}: the Android list is on Health Connect, the iOS list on HealthKit', () {
+        expect(android, isNotEmpty);
+        expect(ios, isNotEmpty);
+        expect(android.where((t) => !dataTypeKeysAndroid.contains(t)), isEmpty,
+            reason: 'Health Connect would reject the whole permission request');
+        expect(ios.where((t) => !dataTypeKeysIOS.contains(t)), isEmpty,
+            reason: 'HealthKit would map these to the wrong sample type');
+      });
+    }
+
+    // The WRITE lists are one list for both platforms, on the ground that the types
+    // are the same on Health Connect and HealthKit. That is a claim about the plugin,
+    // so it is checked against the plugin, in both directions.
+    final sharedLists = <String, List<HealthDataType>>{
+      'vitalsWriteTypes': HealthDataService.vitalsWriteTypes,
+      'hydrationWriteTypes': HealthDataService.hydrationWriteTypes,
+    };
+    for (final e in sharedLists.entries) {
+      test('${e.key} is on BOTH platforms, so one list is right for both', () {
+        expect(e.value, isNotEmpty);
+        expect(e.value.where((t) => !dataTypeKeysAndroid.contains(t)), isEmpty,
+            reason: 'Health Connect would reject the whole permission request');
+        expect(e.value.where((t) => !dataTypeKeysIOS.contains(t)), isEmpty,
+            reason: 'HealthKit would map these to the wrong sample type');
+      });
+    }
+
+    test('what is read is a subset of what is written, plus nothing the sheet did not offer',
+        () {
+      // Reading weight is a separate, tap-to-import affair; the automatic imports
+      // read blood pressure, glucose and water — all of which sharing can also write.
+      expect(HealthDataService.vitalsWriteTypes,
+          containsAll(HealthDataService.vitalsReadTypes));
+      expect(HealthDataService.hydrationWriteTypes,
+          containsAll(HealthDataService.hydrationReadTypes));
+      expect(HealthDataService.vitalsReadTypes, isNot(contains(HealthDataType.WEIGHT)));
+    });
+
     test('sleep read lists are platform-correct in both directions', () {
       expect(HealthDataService.sleepTypesAndroid,
           contains(HealthDataType.SLEEP_SESSION),

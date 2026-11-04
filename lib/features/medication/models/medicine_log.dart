@@ -281,12 +281,13 @@ class MedicineLog {
     required SkipReason reason,
     String? skipNote,
     String? dependentId,
+    DateTime? actionTime,
   }) {
     return MedicineLog(
       id: id,
       medicineId: medicineId,
       scheduledTime: scheduledTime,
-      actionTime: DateTime.now(),
+      actionTime: actionTime ?? DateTime.now(),
       status: MedicineStatus.skipped,
       skipReason: reason,
       skipNote: skipNote,

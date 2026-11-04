@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tablet_remainder/core/database/app_database.dart'
     show AppDatabase, ReminderOccurrencesCompanion;
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
+import 'package:tablet_remainder/core/services/reminder_reschedule_service.dart';
 import 'package:tablet_remainder/core/widgets/app/app_widgets.dart'
     show AppSwitch, SegmentedToggle, SettingsTile;
 import 'package:tablet_remainder/features/settings/screens/notification_settings_screen.dart';
@@ -33,9 +34,15 @@ void main() {
     AppDatabase.setInstanceForTesting(db);
     CleanStorageService.resetForTesting();
     await CleanStorageService.init();
+    // Changing how alerts look re-arms every reminder; not what is under test here.
+    NotificationSettingsScreen.rearmReminders = () async {};
   });
 
-  tearDown(() async => db.close());
+  tearDown(() async {
+    NotificationSettingsScreen.rearmReminders =
+        ReminderRescheduleService.rearmReminders;
+    await db.close();
+  });
 
   Future<void> open(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1000, 3000);

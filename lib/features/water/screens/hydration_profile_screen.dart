@@ -7,14 +7,24 @@ import '../../../core/widgets/app/app_widgets.dart';
 import '../models/hydration_profile.dart';
 import '../services/water_service.dart';
 import '../services/hydration_health_sync.dart';
+import '../services/water_health_import.dart';
+import '../widgets/water_import_flow.dart';
 import '../services/hydration_weather_service.dart';
 import '../../../core/health/hydration_goal.dart';
 import 'package:tablet_remainder/core/widgets/app/app_toast.dart';
 import '../../../core/services/health_data_service.dart';
+import '../../../core/utils/units.dart';
 
 /// Hydration Profile Screen - Calculate personalized water goal
 class HydrationProfileScreen extends StatefulWidget {
-  const HydrationProfileScreen({super.key});
+  const HydrationProfileScreen({
+    super.key,
+    this.importSource = const HealthStoreWaterSource(),
+  });
+
+  /// Where "Count drinks from other apps" asks and reads. A test hands its own:
+  /// the platform plugin cannot run headless.
+  final WaterImportSource importSource;
 
   @override
   State<HydrationProfileScreen> createState() => _HydrationProfileScreenState();
@@ -26,6 +36,13 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   // frame). WaterService overwrites it once loaded.
   HydrationProfile _profile = HydrationProfile(id: 'profile', createdAt: DateTime.now());
   final _weightController = TextEditingController();
+
+  /// The weight the box stands for, and the text it was last given for it. While
+  /// the box still reads what we wrote, switching kilograms and pounds converts
+  /// THIS — not the rounded text — so 82 kg, shown as 180.8 lb and switched back,
+  /// is 82 kg again and not 82.0095.
+  double? _weightKgBehindBox;
+  String _weightBoxText = '';
   final _ageController = TextEditingController();
   final _ceilingController = TextEditingController();
   final _placeController = TextEditingController();
@@ -35,6 +52,8 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   bool _isSaving = false;
   bool _healthSyncEnabled = false;
   bool _healthSyncBusy = false;
+  bool _healthImportEnabled = false;
+  bool _healthImportBusy = false;
 
   @override
   void initState() {
@@ -46,9 +65,11 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     try {
       await WaterService.init();
       _profile = WaterService.getProfile();
-      _weightController.text = _profile.weightKg?.toString() ?? '';
+      _weightController.text = _weightText(_profile.weightKg);
+      _weightKgBehindBox = _profile.weightKg;
+      _weightBoxText = _weightController.text;
       _ageController.text = _profile.age?.toString() ?? '';
-      _ceilingController.text = _profile.fluidCeilingMl?.toString() ?? '';
+      _ceilingController.text = _ceilingText(_profile.fluidCeilingMl);
       _weatherEnabled = await HydrationWeatherService.isEnabled();
       _weatherPlace = await HydrationWeatherService.savedPlaceName();
       _placeController.text = _weatherPlace ?? '';
@@ -59,6 +80,14 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
           await HealthDataService.instance.hasHydrationWritePermission();
       if (_healthSyncEnabled != wanted) {
         await HydrationHealthSync.setEnabled(_healthSyncEnabled);
+      }
+      // Same rule for counting other apps' drinks: on only while the grant is.
+      // Only a no switches it off: a look that failed says nothing.
+      final importWanted = await WaterHealthImport.isEnabled();
+      _healthImportEnabled =
+          importWanted && await widget.importSource.allowed() != false;
+      if (_healthImportEnabled != importWanted) {
+        await WaterHealthImport.setEnabled(_healthImportEnabled);
       }
       if (mounted) setState(() {});
     } catch (e) {
@@ -82,6 +111,44 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     super.dispose();
   }
 
+  /// The weight as it is typed: kilograms exactly as stored (nothing lost to
+  /// rounding on a save that changed nothing), pounds to a tenth.
+  String _weightText(double? kg) {
+    if (kg == null) return '';
+    return Units.weight == WeightUnit.lb ? Units.weightNumber(kg) : kg.toString();
+  }
+
+  String _ceilingText(int? ml) => ml == null ? '' : Units.volumeInput(ml);
+
+  Future<void> _setVolumeUnit(VolumeUnit unit) async {
+    if (unit == Units.volume) return;
+    await Units.setVolume(unit);
+    if (!mounted) return;
+    setState(() {
+      // The limit box shows the same limit, in the unit now chosen.
+      _ceilingController.text = _ceilingText(_profile.fluidCeilingMl);
+    });
+  }
+
+  Future<void> _setWeightUnit(WeightUnit unit) async {
+    if (unit == Units.weight) return;
+    // The same weight, shown in the new unit: exactly, while the box is as we left
+    // it; read from what was typed, in the unit it was typed in, once it is not.
+    final untouched = _weightController.text == _weightBoxText;
+    final kg = untouched && _weightKgBehindBox != null
+        ? _weightKgBehindBox
+        : Units.kgFromInput(_weightController.text);
+    await Units.setWeight(unit);
+    if (!mounted) return;
+    setState(() {
+      if (kg != null) {
+        _weightController.text = _weightText(kg);
+        _weightKgBehindBox = kg;
+        _weightBoxText = _weightController.text;
+      }
+    });
+  }
+
   Future<void> _save() async {
     if (_isSaving) return;
 
@@ -96,7 +163,12 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         final ageText = _ageController.text.trim();
 
         final updated = _profile.copyWith(
-          weightKg: double.tryParse(weightText),
+          // A box left as we filled it keeps the kilograms it was filled from — what
+          // it shows in pounds is rounded, and a save that changed nothing must not
+          // move the stored weight.
+          weightKg: weightText == _weightBoxText && _weightKgBehindBox != null
+              ? _weightKgBehindBox
+              : Units.kgFromInput(weightText),
           age: int.tryParse(ageText),
           // An emptied box means "I do not want this used", not "keep what you
           // had". `copyWith`'s `??` cannot express that, so it needs a flag —
@@ -109,7 +181,8 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
         await WaterService.saveProfile(updated);
 
         if (mounted) {
-          context.toastSuccess('Profile saved! Daily goal: ${updated.effectiveGoalMl}ml');
+          context.toastSuccess(
+              'Profile saved! Daily goal: ${Units.volumeText(updated.effectiveGoalMl, tight: true)}');
           Navigator.pop(context, true);
         }
       } catch (e) {
@@ -136,18 +209,20 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
   bool _validateInput() {
     final weightText = _weightController.text.trim();
     final ageText = _ageController.text.trim();
-    final weight = double.tryParse(weightText);
+    final weight = Units.kgFromInput(weightText);
     final age = int.tryParse(ageText);
+    final weightRange =
+        'Please enter a valid weight between ${Units.weightNumber(20)}-${Units.weightNumber(300)} ${Units.weightSymbol()}';
 
     // Non-empty but unparseable is its own error: it used to fall through
     // `tryParse` as null and save as "no weight given" without a word.
     if (weightText.isNotEmpty && weight == null) {
-      _showValidationError('Please enter a valid weight between 20-300 kg');
+      _showValidationError(weightRange);
       return false;
     }
 
     if (weight != null && (weight < 20 || weight > 300)) {
-      _showValidationError('Please enter a valid weight between 20-300 kg');
+      _showValidationError(weightRange);
       return false;
     }
 
@@ -166,13 +241,14 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     // limit, and a box left empty or mistyped silently kept whatever the last
     // valid keystroke had set.
     if (_profile.isRestricted) {
-      final ceiling = int.tryParse(_ceilingController.text.trim());
+      final ceiling = Units.mlFromInput(_ceilingController.text);
       if (ceiling == null ||
           ceiling < minCeilingMl ||
           ceiling > maxCeilingMl) {
         _showValidationError(
-            'Enter your daily limit in ml, between $minCeilingMl and '
-            '$maxCeilingMl');
+            'Enter your daily limit in ${Units.volumeSymbol()}, between '
+            '${Units.volumeNumber(minCeilingMl)} and '
+            '${Units.volumeNumber(maxCeilingMl)}');
         return false;
       }
     }
@@ -211,6 +287,8 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             _buildGoalCard(),
             const SizedBox(height: 24),
             _buildPersonalInfo(),
+            const SizedBox(height: 24),
+            _buildUnits(),
             const SizedBox(height: 24),
             _buildActivityLevel(),
             const SizedBox(height: 24),
@@ -276,11 +354,11 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '${_profile.effectiveGoalMl}ml',
+              Units.volumeText(_profile.effectiveGoalMl, tight: true),
               style: tt.displayMedium?.copyWith(color: onFill),
             ),
             Text(
-              '${(_profile.effectiveGoalMl / 250).round()} glasses per day',
+              '${(_profile.effectiveGoalMl / Units.glassMl()).round()} glasses per day',
               style: tt.bodyMedium?.copyWith(color: onFill),
             ),
             // Show the working. Every competitor prints a confident number with
@@ -333,6 +411,49 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
     );
   }
 
+  /// Millilitres or fluid ounces, kilograms or pounds. How a number is shown and
+  /// typed — everything stays stored in millilitres and kilograms.
+  Widget _buildUnits() {
+    final ext = AppColorsExt.of(context);
+    final tt = Theme.of(context).textTheme;
+    return _buildSection(
+      title: 'Units',
+      icon: Symbols.straighten_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Drinks and goals',
+              style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedToggle(
+            accent: ext.water,
+            items: const [SegmentItem(label: 'ml'), SegmentItem(label: 'fl oz')],
+            index: Units.volume == VolumeUnit.flOz ? 1 : 0,
+            onChanged: (i) =>
+                _setVolumeUnit(i == 1 ? VolumeUnit.flOz : VolumeUnit.ml),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('Weight',
+              style: tt.labelLarge?.copyWith(color: ext.textSecondary)),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedToggle(
+            accent: ext.water,
+            items: const [SegmentItem(label: 'kg'), SegmentItem(label: 'lb')],
+            index: Units.weight == WeightUnit.lb ? 1 : 0,
+            onChanged: (i) =>
+                _setWeightUnit(i == 1 ? WeightUnit.lb : WeightUnit.kg),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Only how amounts are shown and typed. Everything is kept in '
+            'millilitres and kilograms, so changing this never changes a record.',
+            style: tt.bodySmall?.copyWith(color: ext.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPersonalInfo() {
     final tt = Theme.of(context).textTheme;
     return _buildSection(
@@ -349,11 +470,11 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             children: [
               Expanded(
                 child: _buildTextField(
-                  label: 'Weight (kg)',
+                  label: 'Weight (${Units.weightSymbol()})',
                   controller: _weightController,
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
-                    final weight = double.tryParse(value);
+                    final weight = Units.kgFromInput(value);
                     setState(() {
                       _profile = _profile.copyWith(weightKg: weight);
                     });
@@ -743,9 +864,42 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                 : 'Off. Drinks you log stay in this app only.',
             style: tt.bodySmall?.copyWith(color: ext.textSecondary),
           ),
+          const SizedBox(height: AppSpacing.md),
+          _buildToggleRow(
+            label: 'Count drinks from other apps',
+            icon: Symbols.download_rounded,
+            value: _healthImportEnabled,
+            onChanged: _healthImportBusy ? (_) {} : _setHealthImport,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _healthImportEnabled
+                ? 'Drinks other apps save to ${healthStoreName()} are counted '
+                    'toward today, as plain water. Delete one here and it '
+                    'stays deleted.'
+                : 'Off. Only drinks you log here count.',
+            style: tt.bodySmall?.copyWith(color: ext.textSecondary),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _setHealthImport(bool enabled) async {
+    setState(() => _healthImportBusy = true);
+    try {
+      final on = enabled
+          ? await WaterImportFlow.turnOn(context, source: widget.importSource)
+          : await _turnImportOff();
+      if (mounted) setState(() => _healthImportEnabled = on);
+    } finally {
+      if (mounted) setState(() => _healthImportBusy = false);
+    }
+  }
+
+  Future<bool> _turnImportOff() async {
+    await WaterImportFlow.turnOff();
+    return false;
   }
 
   Future<void> _setHealthSync(bool enabled) async {
@@ -803,8 +957,7 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
                         fluidCeilingMl: _profile.fluidCeilingMl ?? 1500)
                     : _profile.copyWith(clearFluidCeiling: true);
               });
-              _ceilingController.text =
-                  _profile.fluidCeilingMl?.toString() ?? '';
+              _ceilingController.text = _ceilingText(_profile.fluidCeilingMl);
             },
           ),
           const SizedBox(height: 8),
@@ -822,11 +975,11 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             const SizedBox(height: 16),
             _buildTextField(
               controller: _ceilingController,
-              label: 'Daily limit (ml)',
+              label: 'Daily limit (${Units.volumeSymbol()})',
               keyboardType: TextInputType.number,
               onChanged: (v) {
-                final ml = int.tryParse(v);
-                if (ml != null && ml > 0) {
+                final ml = Units.mlFromInput(v);
+                if (ml != null) {
                   setState(() =>
                       _profile = _profile.copyWith(fluidCeilingMl: ml));
                 }
@@ -1163,20 +1316,24 @@ class _HydrationProfileScreenState extends State<HydrationProfileScreen> {
             // AppStepper — the shared control that replaced three copies of
             // this exact -/+ row (two of which had untooltipped icon buttons).
             AppStepper(
-              value: '${_profile.customGoalMl}ml',
+              value: Units.volumeText(_profile.customGoalMl, tight: true),
               accent: ext.water,
-              decrementTooltip: 'Decrease goal by 250 ml',
-              incrementTooltip: 'Increase goal by 250 ml',
+              decrementTooltip:
+                  'Decrease goal by ${Units.volumeText(Units.stepMl(250, 8))}',
+              incrementTooltip:
+                  'Increase goal by ${Units.volumeText(Units.stepMl(250, 8))}',
               onDecrement: _profile.customGoalMl <= 500
                   ? null
                   : () => setState(() => _profile = _profile.copyWith(
-                      customGoalMl:
-                          (_profile.customGoalMl - 250).clamp(500, 5000))),
+                      customGoalMl: Units.stepped(_profile.customGoalMl, -1,
+                              mlStep: 250, ozStep: 8)
+                          .clamp(500, 5000))),
               onIncrement: _profile.customGoalMl >= 5000
                   ? null
                   : () => setState(() => _profile = _profile.copyWith(
-                      customGoalMl:
-                          (_profile.customGoalMl + 250).clamp(500, 5000))),
+                      customGoalMl: Units.stepped(_profile.customGoalMl, 1,
+                              mlStep: 250, ozStep: 8)
+                          .clamp(500, 5000))),
             ),
           ],
         ],

@@ -83,6 +83,14 @@ class AuthService extends ChangeNotifier {
   @visibleForTesting
   Future<List<String>> Function()? cloudCopyDeleterForTesting;
 
+  /// Stands in for [deleteAccount], for a widget test.
+  @visibleForTesting
+  Future<String?> Function()? accountDeleterForTesting;
+
+  /// Stands in for [reauthenticate], for a widget test.
+  @visibleForTesting
+  Future<String?> Function()? reauthenticatorForTesting;
+
   /// Put the service in a signed-in (or guest) state without Firebase, for a
   /// widget test. Null signs out.
   @visibleForTesting
@@ -488,7 +496,15 @@ class AuthService extends ChangeNotifier {
   /// holding a full health export). A Cloud Function using the Admin SDK's
   /// recursive delete is the correct belt-and-braces follow-up, and is called
   /// out in docs/app-rating.md.
+  ///
+  /// A sign-in too old for Firebase to accept the deletion is refused BEFORE
+  /// anything is deleted, and comes back as [reauthRequiredMessage]. That holds
+  /// right after [reauthenticate] too: the age is read from a fresh token (see
+  /// [deleteSignedInAccount]), not taken on trust, so a confirmation Firebase would
+  /// still call stale cannot get as far as the cloud data.
   Future<String?> deleteAccount() async {
+    final override = accountDeleterForTesting;
+    if (override != null) return override();
     final user = _firebaseAuth?.currentUser;
     if (user == null) {
       // Local-only / guest: there is no cloud account to delete. The caller
@@ -498,8 +514,9 @@ class AuthService extends ChangeNotifier {
 
     String? message;
     try {
-      message = await runAccountDeletion(
-        lastSignInTime: user.metadata.lastSignInTime,
+      message = await deleteSignedInAccount(
+        signedInAt: user.metadata.lastSignInTime,
+        tokenAuthTime: () async => (await user.getIdTokenResult(true)).authTime,
         now: DateTime.now(),
         deleteCloudData: () => _deleteCloudData(user.uid),
         deleteAuthUser: () => user.delete(),
@@ -519,6 +536,83 @@ class AuthService extends ChangeNotifier {
     _enableOfflineGuestMode();
     return null;
   }
+
+  /// Confirm, with Google, that the person is who is signed in — so a session too
+  /// old to delete an account can be refreshed here instead of by leaving the app
+  /// and signing in from scratch.
+  ///
+  /// Null on success; `'cancelled'` when they close the Google sheet; otherwise a
+  /// message to show. Only the SAME account counts: picking another one is refused
+  /// before Firebase is asked, because re-authenticating a different identity
+  /// would at best fail and at worst confuse which account is being deleted.
+  Future<String?> reauthenticate() async {
+    final override = reauthenticatorForTesting;
+    if (override != null) return override();
+    final user = _firebaseAuth?.currentUser;
+    if (user == null) return 'You are not signed in.';
+    // Only a Google account can be confirmed here. Google's credential cannot
+    // re-authenticate any other kind — it is refused as "a different account", which
+    // says nothing true to a person who has no Google account to choose. Signing in
+    // with Google is the only way into the app today, so this is not reachable; it
+    // is what keeps the message honest on the day another way in is added.
+    if (!canReauthenticateWithGoogle(user.providerData.map((p) => p.providerId))) {
+      return reauthNotGoogleMessage;
+    }
+    try {
+      // Sign out of Google's own session first, as sign-in does, so the account
+      // picker appears rather than the last account being reused silently.
+      await _googleSignIn.signOut();
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return 'cancelled';
+      final mismatch = reauthAccountMismatch(
+          signedInEmail: user.email, chosenEmail: googleUser.email);
+      if (mismatch != null) return mismatch;
+      final googleAuth = await googleUser.authentication;
+      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+        return 'Failed to get authentication credentials. Please try again.';
+      }
+      await user.reauthenticateWithCredential(
+        firebase_auth.GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        ),
+      );
+      return null;
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      if (e.code == 'user-mismatch') return reauthWrongAccountMessage;
+      return _getErrorMessage(e.code);
+    } catch (e) {
+      debugPrint('Re-authentication failed: $e');
+      return 'Could not confirm it is you. Please try again.';
+    }
+  }
+
+  /// Whether the account was made with Google, which is what [reauthenticate] can
+  /// confirm.
+  @visibleForTesting
+  static bool canReauthenticateWithGoogle(Iterable<String> providerIds) =>
+      providerIds.contains('google.com');
+
+  /// What to say when the account is not a Google one.
+  static const String reauthNotGoogleMessage =
+      'This account was not made with Google, so it cannot be confirmed here. Sign '
+      'out, sign in again, and then delete the account.';
+
+  /// What to say when a different Google account was picked.
+  static const String reauthWrongAccountMessage =
+      'That is a different Google account from the one you are signed in with. '
+      'Choose the same account to confirm it is you.';
+
+  /// Null when [chosenEmail] is the signed-in account (ignoring case), or when
+  /// there is nothing to compare it with; the message otherwise.
+  @visibleForTesting
+  static String? reauthAccountMismatch(
+          {String? signedInEmail, required String chosenEmail}) =>
+      signedInEmail != null &&
+              signedInEmail.isNotEmpty &&
+              signedInEmail.toLowerCase() != chosenEmail.toLowerCase()
+          ? reauthWrongAccountMessage
+          : null;
 
   /// How stale a sign-in may be before [deleteAccount] refuses to start.
   ///
@@ -541,6 +635,46 @@ class AuthService extends ChangeNotifier {
   static bool requiresRecentLogin(DateTime? lastSignInTime, DateTime now) =>
       lastSignInTime == null ||
       now.difference(lastSignInTime) > recentLoginWindow;
+
+  /// [runAccountDeletion], judged by the best evidence there is of when the person
+  /// last proved who they are.
+  ///
+  /// Firebase keeps two clocks. `metadata.lastSignInTime` is when the account last
+  /// signed in, and the SDK does not promise to move it on a re-authentication. The
+  /// ID token's `auth_time` does move, and it is what Firebase itself compares when
+  /// `user.delete()` asks for a recent login. So a fresh token is asked for and the
+  /// later of the two is used: a confirmation the person has just given counts, and
+  /// one Firebase would still call stale is caught here, before the first document
+  /// goes. Taking the confirmation on trust instead let the refusal come from
+  /// `user.delete()` AFTER the cloud data was gone — the half-deleted state the
+  /// up-front check exists to prevent.
+  ///
+  /// A token that cannot be read (offline, say) leaves `signedInAt` as the
+  /// answer, and the cloud deletion that would follow fails on its own.
+  @visibleForTesting
+  static Future<String?> deleteSignedInAccount({
+    required DateTime? signedInAt,
+    required Future<DateTime?> Function() tokenAuthTime,
+    required DateTime now,
+    required Future<List<String>> Function() deleteCloudData,
+    required Future<void> Function() deleteAuthUser,
+  }) async {
+    var lastProvedAt = signedInAt;
+    try {
+      final tokenAt = await tokenAuthTime();
+      if (tokenAt != null && (lastProvedAt == null || tokenAt.isAfter(lastProvedAt))) {
+        lastProvedAt = tokenAt;
+      }
+    } catch (e) {
+      debugPrint('Account delete: could not read the token time: $e');
+    }
+    return runAccountDeletion(
+      lastSignInTime: lastProvedAt,
+      now: now,
+      deleteCloudData: deleteCloudData,
+      deleteAuthUser: deleteAuthUser,
+    );
+  }
 
   /// The order of the deletion, with the Firebase plumbing injected so it can
   /// be tested.

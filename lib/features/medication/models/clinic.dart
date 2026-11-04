@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:clock/clock.dart';
 
+import 'care_team_scope.dart';
+
 /// Operating hours for a single day
 class DayHours {
   final bool isOpen;
@@ -229,6 +231,12 @@ class Clinic {
   final DateTime? updatedAt;
   final int? version;
 
+  /// The household member this clinic belongs to; null is the account holder.
+  final String? dependentId;
+
+  /// Whether every profile sees this clinic. True for a record that never said.
+  final bool sharedWithFamily;
+
   Clinic({
     required this.id,
     required this.name,
@@ -246,9 +254,44 @@ class Clinic {
     DateTime? createdAt,
     this.updatedAt,
     this.version,
+    this.dependentId,
+    this.sharedWithFamily = true,
   }) : createdAt = createdAt ?? DateTime.now();
 
   bool get hasLocation => latitude != null && longitude != null;
+
+  /// Whether "Directions" can be offered: there is somewhere to go, as
+  /// coordinates or as an address a maps app can search for.
+  ///
+  /// Nothing in the app sets [latitude] and [longitude] — the form has no field
+  /// for them — so the button used to wait on a location nobody could give it and
+  /// never appeared. An address is what people actually type.
+  bool get canGetDirections =>
+      hasLocation || (address?.trim().isNotEmpty ?? false);
+
+  /// A link that opens a maps app with directions to this clinic, or null when
+  /// there is nowhere to send it.
+  ///
+  /// Coordinates when there are some, otherwise the address as typed — the maps
+  /// app does the searching. [apple] is for iOS, where the system maps app
+  /// answers its own link; everywhere else it is Google Maps' universal link,
+  /// which an installed maps app takes over and a browser can still open.
+  Uri? directionsUri({bool apple = false}) {
+    final String destination;
+    if (hasLocation) {
+      destination = '$latitude,$longitude';
+    } else {
+      final a = address?.trim();
+      if (a == null || a.isEmpty) return null;
+      destination = a;
+    }
+    return apple
+        ? Uri.https('maps.apple.com', '/', {'daddr': destination})
+        : Uri.https('www.google.com', '/maps/dir/', {
+            'api': '1',
+            'destination': destination,
+          });
+  }
 
   bool get hasOperatingHours => operatingHours != null;
 
@@ -279,6 +322,8 @@ class Clinic {
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt?.toIso8601String(),
         'version': version ?? 1,
+        'dependentId': dependentId,
+        'sharedWithFamily': sharedWithFamily,
       };
 
   factory Clinic.fromJson(Map<String, dynamic> json) {
@@ -325,6 +370,8 @@ class Clinic {
           ? DateTime.parse(json['updatedAt'] as String)
           : null,
       version: json['version'] as int?,
+      dependentId: json['dependentId'] as String?,
+      sharedWithFamily: CareTeamScope.cleanShared(json['sharedWithFamily']),
     );
   }
 
@@ -345,6 +392,9 @@ class Clinic {
     DateTime? createdAt,
     DateTime? updatedAt,
     int? version,
+    String? dependentId,
+    bool clearDependentId = false,
+    bool? sharedWithFamily,
   }) =>
       Clinic(
         id: id ?? this.id,
@@ -363,6 +413,8 @@ class Clinic {
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         version: version ?? this.version,
+        dependentId: clearDependentId ? null : (dependentId ?? this.dependentId),
+        sharedWithFamily: sharedWithFamily ?? this.sharedWithFamily,
       );
 
   @override

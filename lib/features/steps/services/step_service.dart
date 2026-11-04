@@ -9,11 +9,16 @@ import 'package:tablet_remainder/core/health/streak_engine.dart';
 import 'package:tablet_remainder/core/database/daos/steps_dao.dart';
 import 'package:tablet_remainder/core/services/clean_storage_service.dart';
 import 'package:tablet_remainder/core/services/health_data_service.dart';
+import '../../biometrics/models/health_source.dart';
+import '../../biometrics/services/health_source_choices.dart';
 import '../models/health_profile.dart';
 import '../models/step_daily_data.dart';
 import '../models/step_manual_entry.dart';
 import '../models/step_source.dart';
 import '../utils/step_format.dart';
+import 'live_step_mark.dart';
+import 'step_sensor_access.dart';
+import 'step_source_choice.dart';
 import '../../../core/utils/calendar_day.dart';
 import '../../../core/health/step_goal.dart';
 import '../../../core/utils/date_formats.dart';
@@ -57,6 +62,15 @@ class StepService {
   /// The most recent cumulative-since-boot reading. Needed so a Health sync can
   /// re-anchor BOTH ends of the live sum at once — see [_rawForDay].
   static int? _liveLastRaw;
+
+  /// The reading that goes with [_livePendingDay]: what the sensor said when that
+  /// day was queued, so the mark written beside the day is the day's own.
+  static int? _livePendingRaw;
+
+  /// Where the sensor's reading is kept beside the day (see [LiveStepMark]). Public
+  /// so "Delete all data" can remove it: left behind, the next session would add
+  /// what was walked since to a day that has just been emptied.
+  static const liveMarkKey = 'steps.liveMark';
 
   /// How long a burst of pedometer ticks may accumulate before today's row is
   /// written to Drift. See [_queueLivePersist].
@@ -473,6 +487,7 @@ class StepService {
     return NotificationService().scheduleStepReminder(
       enabled: true,
       restToday: resting,
+      restOn: (day) => RestDayStore.kindOn(day) != null,
       minuteOfDay: getReminderMinuteOfDay(),
       stepsToday: known ? today.effectiveSteps : null,
       goal: known ? today.goalSteps : null,
@@ -602,6 +617,48 @@ class StepService {
     }
   }
 
+  /// Subscribe again from scratch: the person has just allowed the sensor, and
+  /// the subscription made while it was refused is a stream that will never emit.
+  static Future<void> restartLiveTracking() async {
+    await stopLiveTracking();
+    await startLiveTracking();
+  }
+
+  /// Count steps for as long as the app is alive, not only while the Steps screen
+  /// is open, and pick up the steps taken since the last count.
+  ///
+  /// Android, and only when the phone's own sensor has already been allowed: that
+  /// is the person's yes. An iPhone raises its Motion & Fitness prompt the first
+  /// time the pedometer is read, and a prompt at launch for a screen they may never
+  /// open is not what they agreed to, so an iPhone still starts on the Steps screen.
+  /// And an iPhone's pedometer counts from the moment it is subscribed, not from
+  /// boot, so a mark from an earlier session would mean nothing there.
+  static Future<void> keepCountingWhileOpen({
+    StepSensorAccess access = const PlatformStepSensorAccess(),
+  }) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (_liveSub != null) return;
+    try {
+      if (!await access.isGranted()) return;
+    } catch (e) {
+      debugPrint('⚠️ StepService: could not read the sensor permission: $e');
+      return;
+    }
+    await startLiveTracking();
+  }
+
+  /// Forget where the counter stood, so the next session starts from its own first
+  /// reading. For the moment the sensor is allowed afresh: steps taken before that
+  /// are not the person's to have counted.
+  static Future<void> forgetLiveMark() async {
+    _livePendingRaw = null;
+    await CleanStorageService.setAppPreference(liveMarkKey, '');
+  }
+
+  /// Whether the live sensor is subscribed to.
+  @visibleForTesting
+  static bool get liveTrackingStartedForTesting => _liveSub != null;
+
   /// Stop the sensor subscription, writing anything the throttle still holds.
   ///
   /// [flush] is false only for a data wipe ([clearInMemory], [resetForTesting]):
@@ -614,6 +671,7 @@ class StepService {
       _livePersistTimer?.cancel();
       _livePersistTimer = null;
       _livePendingDay = null;
+      _livePendingRaw = null;
     }
     await _liveSub?.cancel();
     _liveSub = null;
@@ -623,17 +681,36 @@ class StepService {
     _liveLastRaw = null;
   }
 
+  /// [hourly] with [steps] added to the bucket for [hour]. An empty record starts
+  /// as 24 empty hours; a step count of zero or less, or an hour that is not one,
+  /// changes nothing.
+  @visibleForTesting
+  static List<int> hourlyWith(List<int> hourly, int hour, int steps) {
+    if (steps <= 0 || hour < 0 || hour > 23) return hourly;
+    final out = hourly.length == 24 ? List<int>.of(hourly) : List<int>.filled(24, 0);
+    out[hour] += steps;
+    return out;
+  }
+
   static void _onStepCount(StepCount event) {
     final key = _dateKey(clock.now());
     // (Re)baseline at first event or a midnight rollover.
     _liveLastRaw = event.steps;
     if (_liveBaseline == null || _liveDayKey != key) {
+      // A session's first reading, not a midnight: what the phone counted since the
+      // last one was written down belongs to today, if it is the same day.
+      final missed = _liveBaseline == null
+          ? LiveStepMark.decode(CleanStorageService.getAppPreference(liveMarkKey, ''))
+                  ?.stepsSince(key, event.steps) ??
+              0
+          : 0;
       _liveBaseline = event.steps;
       _liveDayKey = key;
       final existing = _dailyNotifier.value[key];
       // Baseline against the RAW reading, not the stored combined total, or the
       // day's manual adjustments would be counted again on every live tick.
       _liveStartSteps = existing == null ? 0 : (_rawSensorSteps(existing) ?? 0);
+      if (missed > 0) _countMissedSteps(key, existing, missed, event.steps);
       return;
     }
     final delta = event.steps - _liveBaseline!;
@@ -641,17 +718,44 @@ class StepService {
 
     final liveRawSteps = _liveStartSteps + delta;
     var day = _dailyNotifier.value[key] ?? _newDay(clock.now());
-    if (liveRawSteps <= (_rawSensorSteps(day) ?? 0)) return; // never regress
+    final before = _rawSensorSteps(day) ?? 0;
+    if (liveRawSteps <= before) return; // never regress
 
+    day = day.copyWith(
+      source: day.manualEntries.isNotEmpty
+          ? StepSource.mixed
+          : StepSource.pedometer,
+      // The hourly chart used to fill only from a health app, so a phone with
+      // none showed an empty one however far its sensor had counted. The steps
+      // this tick added belong to the hour they were taken in.
+      hourly: hourlyWith(day.hourly, clock.now().hour, liveRawSteps - before),
+    );
+    day = _recompute(day, rawSensorSteps: liveRawSteps);
+    _dailyNotifier.value[key] = day;
+    _notifyListeners();
+    _queueLivePersist(day, event.steps);
+  }
+
+  /// Add [missed] steps, taken while no session was listening, to today.
+  ///
+  /// Not given an hour: they were taken at some time since the last count, and
+  /// putting them in this one would make "active hours" claim an hour that was not.
+  /// The hourly record then no longer accounts for the day's steps, which is the
+  /// case that screen already hides itself for.
+  static void _countMissedSteps(
+      String key, StepDailyData? existing, int missed, int reading) {
+    final liveRawSteps = _liveStartSteps + missed;
+    var day = existing ?? _newDay(clock.now());
     day = day.copyWith(
       source: day.manualEntries.isNotEmpty
           ? StepSource.mixed
           : StepSource.pedometer,
     );
     day = _recompute(day, rawSensorSteps: liveRawSteps);
+    _liveStartSteps = liveRawSteps;
     _dailyNotifier.value[key] = day;
     _notifyListeners();
-    _queueLivePersist(day);
+    _queueLivePersist(day, reading);
   }
 
   /// Queue [day] for persistence, writing at most once per
@@ -670,8 +774,9 @@ class StepService {
   /// persist nothing at all. This arms once and lets the window run out, which
   /// makes the interval a ceiling on how much work is in flight rather than on
   /// how long a walk can defer it.
-  static void _queueLivePersist(StepDailyData day) {
+  static void _queueLivePersist(StepDailyData day, int reading) {
     _livePendingDay = day;
+    _livePendingRaw = reading;
     _livePersistTimer ??= Timer(_livePersistWindow, () {
       _livePersistTimer = null;
       unawaited(flushPendingLiveDay());
@@ -690,7 +795,15 @@ class StepService {
     _livePersistTimer = null;
     final day = _livePendingDay;
     if (day == null) return;
+    final reading = _livePendingRaw;
     _livePendingDay = null;
+    _livePendingRaw = null;
+    // The mark first: if the app is killed between the two writes, the next session
+    // misses a few steps rather than counting the same ones twice.
+    if (reading != null) {
+      await CleanStorageService.setAppPreference(
+          liveMarkKey, LiveStepMark(dayKey: day.id, raw: reading).encode());
+    }
     await _persistDay(day);
   }
 
@@ -730,18 +843,21 @@ class StepService {
       final now = clock.now();
       var changed = false;
 
+      final known = await HealthSourceChoices.load();
+
       for (final date in recentSyncDays(now)) {
         final isToday = date == _dayOnly(now);
         final key = _dateKey(date);
         final start = date;
         final end = isToday ? now : dayOffset(start, 1);
 
-        final steps = await svc.readStepsForDay(date, end: isToday ? now : null);
-        if (steps == null) continue;
+        final read = await _readDay(svc, date, now, known);
+        if (read == null) continue;
+        final steps = read.steps;
 
         final energy = await svc.readActiveEnergy(start, end);
         final distance = await svc.readDistanceMeters(start, end);
-        final hourly = isToday ? await svc.readHourlySteps(date) : const <int>[];
+        final hourly = isToday ? read.hourly : const <int>[];
 
         final existing = _dailyNotifier.value[key];
         final entries = existing?.manualEntries ?? const <StepManualEntry>[];
@@ -770,6 +886,48 @@ class StepService {
     }
     return count;
   }
+
+  /// One day's raw device steps and, for today, the hourly buckets.
+  ///
+  /// The platform's own total is the default: it counts a phone and a watch
+  /// once. It cannot leave a source out, though, so when Connected devices has
+  /// a pinned device or a switched-off source that wrote steps, those records
+  /// are totalled for the one chosen source instead ([StepSourceChoice]).
+  ///
+  /// Null skips the day: nothing readable, or every step source switched off,
+  /// in which case the stored day stays as it was rather than dropping to 0.
+  static Future<({int steps, List<int> hourly})?> _readDay(
+    HealthDataService svc,
+    DateTime date,
+    DateTime now,
+    Map<String, HealthSource> known,
+  ) async {
+    final isToday = date == _dayOnly(now);
+    if (StepSourceChoice.mayApply(known)) {
+      final end = isToday ? now : dayOffset(date, 1);
+      final choice = StepSourceChoice.resolve(
+          await svc.readStepSamples(date, end), known, date);
+      if (choice != null) {
+        final steps = choice.steps;
+        return steps == null ? null : (steps: steps, hourly: choice.hourly);
+      }
+    }
+    final steps = await svc.readStepsForDay(date, end: isToday ? now : null);
+    if (steps == null) return null;
+    return (
+      steps: steps,
+      hourly: isToday ? await svc.readHourlySteps(date) : const <int>[],
+    );
+  }
+
+  /// Test seam for [_readDay]: the loop around it needs a platform channel.
+  @visibleForTesting
+  static Future<({int steps, List<int> hourly})?> readDayForTesting(
+          HealthDataService svc,
+          DateTime date,
+          DateTime now,
+          Map<String, HealthSource> known) =>
+      _readDay(svc, date, now, known);
 
   /// Merge a fresh Health reading into [day] and put it back in the day map.
   static StepDailyData _storeHealthDay(

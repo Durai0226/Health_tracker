@@ -12,6 +12,7 @@ import 'notification_settings_screen.dart';
 import 'haptic_settings_screen.dart';
 import 'backup_screen.dart';
 import '../../backup/presentation/screens/backup_settings_screen.dart';
+import '../../backup/presentation/backup_exporting.dart';
 import '../../sleep/screens/sleep_schedule_settings_screen.dart';
 import '../../steps/screens/steps_goal_settings_screen.dart';
 import '../../water/screens/water_reminder_settings_screen.dart';
@@ -26,24 +27,28 @@ import 'health_privacy_screen.dart';
 import '../../backup/services/backup_service.dart' as local_backup;
 import '../../../main.dart';
 import '../../../widgets/smart_ad_widgets.dart';
-import '../../onboarding/screens/welcome_screen.dart';
-import 'early_access_screen.dart';
 import '../widgets/delete_all_choice_sheet.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/services/cloud_sync_runner.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.backupService});
+
+  /// Replaces the real file-backup service, which writes to a temp directory and
+  /// opens the share sheet. A test hands its own.
+  final local_backup.BackupService? backupService;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with BackupExporting<SettingsScreen> {
   final _authService = AuthService();
   bool _cloudSyncEnabled = CleanStorageService.cloudSyncEnabled;
   final _hapticService = HapticService();
-  final _localBackupService = local_backup.BackupService();
+  late final local_backup.BackupService _localBackupService =
+      widget.backupService ?? const local_backup.BackupService();
   bool _isLoading = false;
   bool _isExporting = false;
   bool _isClearing = false;
@@ -69,37 +74,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirm == true && mounted) {
       await _authService.signOut();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-          (route) => false,
-        );
-      }
+      if (!mounted) return;
+      // Signing out switched cloud sync off underneath this screen, which read the
+      // switch once when it was built. It used to be hidden by the screen being
+      // replaced; now it stays, and would go on showing sync ON — and, signed back in,
+      // nothing would sync until it was turned off and on.
+      setState(() => _cloudSyncEnabled = CleanStorageService.cloudSyncEnabled);
+      // Stay where they are. This used to push the WelcomeScreen — the first-run
+      // onboarding, with "Get started" and "Turn on reminders" — over someone who
+      // had been using the app for months. Signing out ends the cloud account and
+      // switches sync off; the data on this phone stays, and so does the app, and
+      // this screen shows the signed-out state (with Sign in) on its own.
+      context.toastSuccess(
+          'Signed out. Your data stays on this phone, and cloud sync is off.');
     }
   }
 
-  /// One-tap "Export a copy": builds the local ZIP backup and opens the system
-  /// share sheet so the user can save it anywhere.
-  Future<void> _exportCopy() async {
-    if (_isExporting) return;
-    setState(() => _isExporting = true);
-    _hapticService.tap();
-    try {
-      final file = await _localBackupService.createBackup();
-      if (!mounted) return;
-      if (file != null) {
-        await _localBackupService.shareBackup(file);
-        if (!mounted) return;
-        _showResultSnack('Backup ready to share.', isError: false);
-      } else {
-        _showResultSnack('Could not create the backup file.', isError: true);
-      }
-    } catch (e) {
-      if (mounted) _showResultSnack('Export failed: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isExporting = false);
-    }
-  }
+  // "Export a copy": builds the local ZIP backup and opens the system share sheet
+  // so the user can save it anywhere. The flow itself is [BackupExporting]'s; this
+  // screen says how it is busy and how it speaks.
+  @override
+  local_backup.BackupService get exportService => _localBackupService;
+
+  @override
+  bool get exportBusy => _isExporting;
+
+  @override
+  void setExportBusy(bool busy) => setState(() => _isExporting = busy);
+
+  @override
+  void reportExport(String message, {required bool isError}) =>
+      _showResultSnack(message, isError: isError);
+
+  @override
+  String get exportFailureLead => 'Export failed';
+
+  @override
+  void exportStarted() => _hapticService.tap();
 
   /// Destructive "Delete all data": confirmation-guarded wipe of the four core
   /// features. Deletes the kept Drift rows and focus preferences, then routes
@@ -130,9 +141,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Cloud first: if the local wipe ran first and the cloud step then
       // failed, the user would be left believing everything was gone while a
       // full copy of their health record survived on Google's servers.
-      final error = await AuthService().deleteAccount();
+      final error = await _deleteAccountConfirmingIdentity();
       if (error != null) {
-        if (mounted) _showResultSnack(error, isError: true);
+        // The account is intact, and the message says why. A person who declined to
+        // sign in again, or closed the Google sheet, stopped it themselves: that is
+        // said plainly, not in the red of something that went wrong.
+        if (mounted) {
+          _showResultSnack(error, isError: error != AuthService.reauthRequiredMessage);
+        }
         return;
       }
       await CleanStorageService.clearAllData();
@@ -144,6 +160,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _isClearing = false);
     }
+  }
+
+  /// [AuthService.deleteAccount] — and when the sign-in is too old for Firebase to
+  /// accept a deletion, ask the person to confirm it is them right here and carry
+  /// on, instead of telling them to sign out, sign in and find their way back.
+  ///
+  /// Asking now costs nothing: the refusal is decided before anything is deleted,
+  /// so nothing has happened yet. Declining, closing the Google sheet or failing
+  /// to confirm all end with the account intact and a message saying why. After a
+  /// successful confirmation it tries once more and no more — a loop on a session
+  /// Firebase keeps calling stale would be worse than the message.
+  Future<String?> _deleteAccountConfirmingIdentity() async {
+    final first = await AuthService().deleteAccount();
+    if (first != AuthService.reauthRequiredMessage || !mounted) return first;
+
+    final signInAgain = await ConfirmationBottomSheet.show(
+      context: context,
+      title: 'Confirm it is you',
+      message: 'For your security, sign in with Google again before your account '
+          'is deleted. Nothing has been deleted yet.',
+      confirmText: 'Sign in again',
+      icon: Symbols.verified_user_rounded,
+    );
+    if (signInAgain != true) return first;
+
+    final confirmed = await AuthService().reauthenticate();
+    if (confirmed == 'cancelled') return first;
+    if (confirmed != null) return confirmed;
+    return AuthService().deleteAccount();
   }
 
   Future<void> _deleteAllData() async {
@@ -272,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: Symbols.logout_rounded,
                           iconColor: ext.mark(ext.error),
                           title: 'Sign Out',
-                          subtitle: 'Return to welcome screen',
+                          subtitle: 'Your data stays on this phone',
                           onTap: _handleSignOut,
                         ),
                       ],
@@ -362,7 +407,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                       ),
                       _buildHapticSettingsTile(),
-                      _buildEarlyAccessTile(),
                     ],
                   ),
 
@@ -461,7 +505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         iconColor: ext.mark(ext.success),
                         title: 'Export a copy',
                         subtitle: 'Save a backup file and share it',
-                        onTap: _isExporting ? null : _exportCopy,
+                        onTap: _isExporting ? null : () => exportBackup(),
                         trailing: _isExporting
                             ? SizedBox(
                                 width: 20,
@@ -473,6 +517,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               )
                             : null,
+                      ),
+                      AppListTile(
+                        icon: Symbols.lock_rounded,
+                        iconColor: ext.mark(ext.success),
+                        title: 'Export an encrypted copy',
+                        subtitle: 'Protected with a passphrase you choose',
+                        onTap: _isExporting ? null : () => exportBackup(encrypted: true),
                       ),
                       AppListTile(
                         icon: Symbols.save_alt_rounded,
@@ -771,30 +822,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case HapticIntensity.custom:
         return 'Custom';
     }
-  }
-
-  /// "Early access" used to live inside the Haptix screen.
-  ///
-  /// That screen is gone — it duplicated Haptic Feedback's structure (a master
-  /// toggle, the same six feature rows, a pattern explorer) with a second,
-  /// independent master switch, so toggling one did nothing to the other. This
-  /// entry was the only thing on it that had no equivalent, so it moves here
-  /// rather than disappearing with the screen.
-  Widget _buildEarlyAccessTile() {
-    final ext = AppColorsExt.of(context);
-    return AppListTile(
-      icon: Symbols.science_rounded,
-      iconColor: ext.mark(ext.success),
-      title: 'Early access',
-      subtitle: 'Try experimental features',
-      onTap: () {
-        _hapticService.tap();
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const EarlyAccessScreen()),
-        );
-      },
-    );
   }
 
 }

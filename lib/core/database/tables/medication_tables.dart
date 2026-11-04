@@ -66,6 +66,23 @@ class EnhancedMedicines extends Table {
   BoolColumn get criticalAlert =>
       boolean().withDefault(const Constant(false))();
 
+  /// What one unit (a tablet, a millilitre) costs, in the person's own currency.
+  ///
+  /// `EnhancedMedicine.costPerUnit` existed and nothing stored it — the same gap
+  /// `reminderEnabled` and `criticalAlert` had. Null means not entered.
+  RealColumn get costPerUnit => real().nullable()();
+
+  /// The bundled alarm sound this medicine's reminder rings with (a key from
+  /// `ReminderSounds`). Null means the standard sound, so no existing medicine
+  /// changes how it rings.
+  TextColumn get reminderSound => text().nullable()();
+
+  /// Minutes this medicine's Snooze waits, when it differs from the
+  /// Notifications setting. Null follows that setting, so no existing medicine
+  /// changes how it snoozes. (`EnhancedMedicine.snoozeMinutes` is an older,
+  /// never-stored field that read 10 for everyone; this replaces it in use.)
+  IntColumn get snoozeOverrideMinutes => integer().nullable()();
+
   /// Soft-delete tombstone, so a deletion can propagate through LWW cloud sync
   /// instead of looking like "this device has not downloaded it yet".
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -130,8 +147,22 @@ class Doctors extends Table {
   TextColumn get email => text().nullable()();
   TextColumn get address => text().nullable()();
   TextColumn get hospital => text().nullable()();
+
+  /// The clinic or hospital record (see `Clinic`) this doctor works at, when the
+  /// person chose one rather than typing a name. [hospital] stays what is shown if
+  /// that record is later deleted, and for a doctor entered before there was a link.
+  TextColumn get clinicId => text().nullable()();
   TextColumn get notes => text().nullable()();
   BoolColumn get isPrimary => boolean().withDefault(const Constant(false))();
+
+  /// Whose doctor this is: a household member's id, or null for the account holder
+  /// (the same "null means self" as every other record).
+  TextColumn get dependentId => text().nullable()();
+
+  /// True when every profile sees this doctor, whoever owns it. Defaults to true so
+  /// every doctor saved before doctors belonged to a person stays visible to all,
+  /// exactly as it was.
+  BoolColumn get sharedWithFamily => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime()();
 
   @override

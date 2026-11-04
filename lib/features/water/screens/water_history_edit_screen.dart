@@ -7,6 +7,7 @@ import '../models/water_container.dart';
 import '../services/water_service.dart';
 import '../theme/aqua_theme.dart';
 import '../../../core/widgets/app/app_widgets.dart';
+import '../../../core/utils/units.dart';
 
 /// Screen for editing water history - add/edit/delete entries for any date
 class WaterHistoryEditScreen extends StatefulWidget {
@@ -204,7 +205,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${currentMl}ml',
+                      Units.volumeText(currentMl, tight: true),
                       style: tt.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: ext.textPrimary,
@@ -212,7 +213,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'of ${goal}ml goal',
+                      'of ${Units.volumeText(goal, tight: true)} goal',
                       style: tt.bodyMedium?.copyWith(color: ext.textSecondary),
                     ),
                   ],
@@ -233,7 +234,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
           if (rawMl != currentMl) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Raw intake: ${rawMl}ml (Effective: ${currentMl}ml)',
+              'Raw intake: ${Units.volumeText(rawMl, tight: true)} (Effective: ${Units.volumeText(currentMl, tight: true)})',
               style: tt.bodySmall?.copyWith(color: ext.textTertiary),
             ),
           ],
@@ -304,7 +305,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
         return await AppBottomSheet.confirm(
           context,
           title: 'Delete Entry',
-          message: 'Delete ${log.amountMl}ml of ${log.beverageName}?',
+          message: 'Delete ${Units.volumeText(log.amountMl, tight: true)} of ${log.beverageName}?',
           confirmLabel: 'Delete',
           danger: true,
           icon: Symbols.delete_rounded,
@@ -378,7 +379,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          '+${log.amountMl}ml',
+                          '+${Units.volumeText(log.amountMl, tight: true)}',
                           style: tt.bodyMedium?.copyWith(
                             color: ext.mark(ext.water),
                             fontWeight: FontWeight.w700,
@@ -386,7 +387,7 @@ class _WaterHistoryEditScreenState extends State<WaterHistoryEditScreen> {
                         ),
                         if (log.hydrationPercent != 100)
                           _miniBadge(
-                            '${log.hydrationPercent}% → ${log.effectiveHydrationMl}ml',
+                            '${log.hydrationPercent}% → ${Units.volumeText(log.effectiveHydrationMl, tight: true)}',
                             log.effectiveHydrationMl >= 0 ? ext.success : ext.error,
                           ),
                         if (log.caffeineAmount > 0)
@@ -511,7 +512,8 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
         (b) => b.id == log.beverageId,
         orElse: () => _beverages.first,
       );
-      _amountController = TextEditingController(text: log.amountMl.toString());
+      _amountController =
+          TextEditingController(text: Units.volumeInput(log.amountMl));
       _noteController = TextEditingController(text: log.note ?? '');
       _selectedTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
       if (log.containerId != null && _containers.isNotEmpty) {
@@ -528,7 +530,9 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
         (b) => b.id == 'water',
         orElse: () => _beverages.first,
       );
-      _amountController = TextEditingController(text: '250');
+      // 250 ml in either unit — water's own default, so the "still untouched,
+      // so follow the drink" rule below holds in ounces as it does in millilitres.
+      _amountController = TextEditingController(text: Units.volumeInput(250));
       _noteController = TextEditingController();
     }
   }
@@ -541,7 +545,7 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
   }
 
   Future<void> _save() async {
-    final amount = int.tryParse(_amountController.text) ?? 0;
+    final amount = Units.mlFromInput(_amountController.text) ?? 0;
     if (amount <= 0) {
       if (mounted) {
         context.toastError('Please enter a valid amount');
@@ -551,7 +555,8 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
 
     if (amount > 5000) {
       if (mounted) {
-        context.toastError('Amount cannot exceed 5000ml');
+        context.toastError(
+            'Amount cannot exceed ${Units.volumeText(5000, tight: true)}');
       }
       return;
     }
@@ -640,11 +645,11 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
                     // silently became 200ml, with nothing on screen to say the
                     // amount had changed.
                     final untouched = _amountController.text.trim() ==
-                        _selectedBeverage.defaultAmountMl.toString();
+                        Units.volumeInput(_selectedBeverage.defaultAmountMl);
                     _selectedBeverage = beverage;
                     if (untouched) {
                       _amountController.text =
-                          beverage.defaultAmountMl.toString();
+                          Units.volumeInput(beverage.defaultAmountMl);
                     }
                   });
                 },
@@ -702,14 +707,16 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
             Expanded(
               child: AppTextField(
                 controller: _amountController,
-                label: 'Amount (ml)',
+                label: 'Amount (${Units.volumeSymbol()})',
                 hint: 'Enter amount',
-                keyboardType: TextInputType.number,
+                keyboardType: Units.volume == VolumeUnit.ml
+                    ? TextInputType.number
+                    : const TextInputType.numberWithOptions(decimal: true),
                 accent: ext.water,
                 suffix: Padding(
                   padding: const EdgeInsets.only(right: 14),
                   child: Text(
-                    'ml',
+                    Units.volumeSymbol(),
                     style: tt.bodyMedium?.copyWith(color: ext.textTertiary),
                   ),
                 ),
@@ -768,13 +775,14 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
-          children: [100, 150, 250, 350, 500, 750].map((amount) {
+          children: Units.presetsMl(
+              const [100, 150, 250, 350, 500, 750], const [4, 6, 8, 12, 16, 24]).map((amount) {
             return AppChip(
-              label: '${amount}ml',
+              label: Units.volumeText(amount, tight: true),
               accent: ext.water,
               onTap: () {
                 HapticFeedback.selectionClick();
-                setState(() => _amountController.text = amount.toString());
+                setState(() => _amountController.text = Units.volumeInput(amount));
               },
             );
           }).toList(),
@@ -818,7 +826,7 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
                       ),
                     ),
                     Text(
-                      'Effective: ${(_selectedBeverage.getEffectiveHydration(int.tryParse(_amountController.text) ?? 0))}ml',
+                      'Effective: ${Units.volumeText(_selectedBeverage.getEffectiveHydration(Units.mlFromInput(_amountController.text) ?? 0), tight: true)}',
                       style: tt.bodySmall?.copyWith(
                         color: ext.water.onContainer.withOpacity(0.8),
                       ),
@@ -834,7 +842,7 @@ class _WaterEntrySheetState extends State<WaterEntrySheet> {
                     borderRadius: AppRadius.brSm,
                   ),
                   child: Text(
-                    '☕ ${(_selectedBeverage.caffeinePerMl * (int.tryParse(_amountController.text) ?? 0) / 100).round()}mg',
+                    '☕ ${(_selectedBeverage.caffeinePerMl * (Units.mlFromInput(_amountController.text) ?? 0) / 100).round()}mg',
                     style: tt.labelMedium?.copyWith(color: ext.warning.onContainer),
                   ),
                 ),

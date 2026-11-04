@@ -4,9 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import '../../../core/widgets/app/app_widgets.dart';
 import '../theme/aqua_theme.dart';
+import '../models/beverage_type.dart';
 import '../models/water_container.dart';
 import '../services/water_service.dart';
 import '../../../core/health/usual_drink.dart';
+import '../../../core/utils/units.dart';
 
 /// Quick add buttons grid for beverages
 class AquaQuickAddGrid extends StatefulWidget {
@@ -31,6 +33,13 @@ class AquaQuickAddGrid extends StatefulWidget {
   /// Called to open the custom cup creator.
   final VoidCallback? onCreateCup;
 
+  /// Called to make a drink of the person's own. Null hides the "New Drink" chip.
+  final VoidCallback? onCreateDrink;
+
+  /// Called to edit or delete a drink the person made: a long press on its chip,
+  /// or the screen reader's action menu. Catalogue drinks are not offered.
+  final void Function(BeverageType beverage)? onBeverageManage;
+
   /// Called to edit or delete a cup the person made: a long press on its chip, or
   /// the screen reader's action menu. Built-in cups are not offered.
   final void Function(WaterContainer container)? onContainerManage;
@@ -50,6 +59,8 @@ class AquaQuickAddGrid extends StatefulWidget {
     required this.onBeverageSelect,
     this.onContainerAdd,
     this.onCreateCup,
+    this.onCreateDrink,
+    this.onBeverageManage,
     this.onContainerManage,
     this.usual,
     this.onUsual,
@@ -71,7 +82,7 @@ class _UsualDrinkTile extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     return Semantics(
       button: true,
-      label: 'Log your usual: ${usual.amountMl} millilitres of ${usual.name}',
+      label: 'Log your usual: ${Units.volumeSpoken(usual.amountMl)} of ${usual.name}',
       child: AppCard(
         onTap: () => onTap(usual),
         color: ext.water.container,
@@ -89,7 +100,7 @@ class _UsualDrinkTile extends StatelessWidget {
                   Text('Your usual',
                       style: tt.labelMedium
                           ?.copyWith(color: ext.water.onContainer)),
-                  Text('${usual.name} · ${usual.amountMl} ml',
+                  Text('${usual.name} · ${Units.volumeText(usual.amountMl)}',
                       style: tt.titleMedium?.copyWith(
                           color: ext.water.onContainer,
                           fontWeight: FontWeight.w700)),
@@ -107,12 +118,52 @@ class _UsualDrinkTile extends StatelessWidget {
 class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
   int? _pressedIndex;
 
-  final List<_QuickAddOption> _amounts = [
-    _QuickAddOption(150, 'Small'),
-    _QuickAddOption(250, 'Medium'),
-    _QuickAddOption(500, 'Large'),
-    _QuickAddOption(750, 'X-Large'),
-  ];
+  /// The order the drinks and the cups were listed in, and the ids that were there
+  /// when it was worked out. Ranked by use when the screen opens and kept for as long
+  /// as it stays open: ranking on every build moves a chip the moment a drink is
+  /// logged, under a thumb that is about to tap it, and scrolls the strip away from
+  /// the one that is selected. It is worked out again when a drink or cup is added or
+  /// removed, which the person has just done and wants to see.
+  List<String>? _drinkOrder;
+  Set<String> _drinkIds = const {};
+  List<String>? _cupOrder;
+  Set<String> _cupIds = const {};
+
+  /// [WaterService.getBeveragesByUse], as it was when this strip last had a different
+  /// set of drinks. Always the current drinks (an edit shows at once), in the kept order.
+  List<BeverageType> _drinksInOrder() {
+    final all = WaterService.getAllBeverages();
+    final ids = {for (final b in all) b.id};
+    if (_drinkOrder == null || !_sameIds(ids, _drinkIds)) {
+      _drinkOrder = [for (final b in WaterService.getBeveragesByUse()) b.id];
+      _drinkIds = ids;
+    }
+    final byId = {for (final b in all) b.id: b};
+    return [for (final id in _drinkOrder!) byId[id]!];
+  }
+
+  /// The same for the cups.
+  List<WaterContainer> _cupsInOrder() {
+    final all = WaterService.getAllContainers();
+    final ids = {for (final c in all) c.id};
+    if (_cupOrder == null || !_sameIds(ids, _cupIds)) {
+      _cupOrder = [for (final c in WaterService.getContainersByUse()) c.id];
+      _cupIds = ids;
+    }
+    final byId = {for (final c in all) c.id: c};
+    return [for (final id in _cupOrder!) byId[id]!];
+  }
+
+  static bool _sameIds(Set<String> a, Set<String> b) =>
+      a.length == b.length && a.containsAll(b);
+
+  /// Four one-tap sizes: 150 / 250 / 500 / 750 ml, or 6 / 8 / 16 / 24 fl oz for
+  /// someone counting in ounces.
+  List<_QuickAddOption> get _amounts {
+    final ml = Units.presetsMl(const [150, 250, 500, 750], const [6, 8, 16, 24]);
+    const labels = ['Small', 'Medium', 'Large', 'X-Large'];
+    return [for (var i = 0; i < ml.length; i++) _QuickAddOption(ml[i], labels[i])];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,12 +228,9 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
 
   Widget _buildCupsSection(BeverageThemeData beverage, bool isDark) {
     final ext = AppColorsExt.of(context);
-    // Surface custom cups first, then defaults.
-    final containers = [...WaterService.getAllContainers()]
-      ..sort((a, b) {
-        if (a.isDefault == b.isDefault) return 0;
-        return a.isDefault ? 1 : -1;
-      });
+    // The cups drunk from most come first; of those used equally, the person's
+    // own before the built-in ones.
+    final containers = _cupsInOrder();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,7 +280,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
         : null;
     return Semantics(
       button: true,
-      label: 'Add ${container.capacityMl} millilitres from ${container.emoji} cup',
+      label: 'Add ${Units.volumeSpoken(container.capacityMl)} from ${container.emoji} cup',
       excludeSemantics: true,
       customSemanticsActions: {
         if (manage != null)
@@ -269,7 +317,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                 style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(width: 6),
             Text(
-              '${container.capacityMl}ml',
+              Units.volumeText(container.capacityMl, tight: true),
               style: Theme.of(context).textTheme.labelMedium!.copyWith(
                 color: ext.textPrimary,
                 fontWeight: FontWeight.w600,
@@ -322,7 +370,11 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
 
   Widget _buildBeverageSelector(BeverageThemeData beverage, bool isDark) {
     final ext = AppColorsExt.of(context);
-    final beverageList = WaterService.getAllBeverages();
+    // The drinks the person has logged most come first, so the one they reach for
+    // is under their thumb rather than twenty chips along.
+    final beverageList = _drinksInOrder();
+    final canCreate = widget.onCreateDrink != null;
+    final customIds = {for (final b in WaterService.getCustomBeverages()) b.id};
 
     return SizedBox(
       // Same as the cups strip: a bounded height that tracks Dynamic Type, so
@@ -330,21 +382,43 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
       height: MediaQuery.textScalerOf(context).scale(50).clamp(50.0, 104.0),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: beverageList.length,
-        itemBuilder: (context, index) {
-          final bev = AquaTheme.themeFromBeverage(beverageList[index]);
+        itemCount: beverageList.length + (canCreate ? 1 : 0),
+        itemBuilder: (context, position) {
+          // The "+" leads the strip: at the end of twenty-odd drinks it would be
+          // somewhere nobody scrolls to.
+          if (canCreate && position == 0) return _buildNewDrinkChip(beverage);
+          final index = canCreate ? position - 1 : position;
+          final source = beverageList[index];
+          final bev = AquaTheme.themeFromBeverage(source);
           final isSelected = bev.id == widget.selectedBeverageId;
+          // A drink the person made has no glyph of its own, so its chip always
+          // carries its name; without it two of them are the same icon.
+          final isCustom = customIds.contains(source.id);
+          final manage = isCustom && widget.onBeverageManage != null
+              ? () => widget.onBeverageManage!(source)
+              : null;
 
           return Semantics(
             button: true,
             selected: isSelected,
             label: '${bev.name}, select beverage',
             excludeSemantics: true,
+            customSemanticsActions: {
+              if (manage != null)
+                const CustomSemanticsAction(label: 'Edit or delete drink'):
+                    manage,
+            },
             child: GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
               widget.onBeverageSelect(bev.id);
             },
+            onLongPress: manage == null
+                ? null
+                : () {
+                    HapticFeedback.selectionClick();
+                    manage();
+                  },
             child: AnimatedContainer(
               duration: AquaTheme.animationFast,
               // 44pt floor: `vertical: 10` around the 18pt glyph lands at 38.
@@ -383,12 +457,14 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
                         : ext.textSecondary,
                     applyTextScaling: false,
                   ),
-                  if (isSelected) ...[
+                  if (isSelected || isCustom) ...[
                     const SizedBox(width: 6),
                     Text(
                       bev.name,
                       style: Theme.of(context).textTheme.labelMedium!.copyWith(
-                        color: AquaTheme.onBeverage(bev.primary),
+                        color: isSelected
+                            ? AquaTheme.onBeverage(bev.primary)
+                            : ext.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -403,6 +479,36 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     );
   }
 
+  /// The first chip in the drinks strip: make a drink of your own.
+  ///
+  /// Just the plus, so it costs the strip 44 points rather than a name's worth;
+  /// the screen reader says what it does.
+  Widget _buildNewDrinkChip(BeverageThemeData beverage) {
+    final onFill = AquaTheme.onBeverage(beverage.primary);
+    return Semantics(
+      button: true,
+      label: 'Create new drink',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          widget.onCreateDrink!();
+        },
+        child: Container(
+          width: 44,
+          height: 44,
+          margin: const EdgeInsets.only(right: AquaTheme.spacingS),
+          decoration: BoxDecoration(
+            color: beverage.primary,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Symbols.add_rounded,
+              size: 20, color: onFill, applyTextScaling: false),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAmountButton(
     _QuickAddOption option,
     BeverageThemeData beverage,
@@ -413,7 +519,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
     final ext = AppColorsExt.of(context);
     return Semantics(
       button: true,
-      label: 'Add ${option.amount} millilitres, ${option.label}',
+      label: 'Add ${Units.volumeSpoken(option.amount)}, ${option.label}',
       excludeSemantics: true,
       child: GestureDetector(
       onTapDown: (_) => setState(() => _pressedIndex = index),
@@ -457,7 +563,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                '+${option.amount}',
+                '+${Units.volumeNumber(option.amount)}',
                 maxLines: 1,
                 softWrap: false,
                 style: Theme.of(context).textTheme.labelLarge!.copyWith(
@@ -469,7 +575,7 @@ class _AquaQuickAddGridState extends State<AquaQuickAddGrid> {
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                'ml',
+                Units.volumeSymbol(),
                 maxLines: 1,
                 softWrap: false,
                 style: Theme.of(context).textTheme.labelSmall!.copyWith(
@@ -554,15 +660,24 @@ class AquaCustomAmountDialog extends StatefulWidget {
 }
 
 class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
-  int _amount = 250;
+  /// A glass to start from: 250 ml, or 8 fl oz.
+  int _amount = Units.glassMl();
   
-  final List<int> _presets = [100, 200, 250, 300, 350, 400, 500, 750, 1000];
+  /// One-tap amounts, in millilitres: the millilitre list, or round ounce sizes.
+  List<int> get _presets => Units.presetsMl(
+      const [100, 200, 250, 300, 350, 400, 500, 750, 1000],
+      const [4, 6, 8, 10, 12, 16, 20, 24, 32]);
 
   @override
   Widget build(BuildContext context) {
     final ext = AppColorsExt.of(context);
     final tt = Theme.of(context).textTheme;
-    final beverage = AquaTheme.getBeverage(widget.beverageId);
+    // The drinks the person made are not in the theme's own table; theme the
+    // dialog from the catalogue entry so it is their colour, not water's.
+    final source = WaterService.getBeverage(widget.beverageId);
+    final beverage = source != null
+        ? AquaTheme.themeFromBeverage(source)
+        : AquaTheme.getBeverage(widget.beverageId);
     final onFill = AquaTheme.onBeverage(beverage.primary);
 
     return Dialog(
@@ -613,23 +728,27 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                 borderRadius: AppRadius.brLg,
               ),
               child: AppStepper(
-                value: '$_amount',
-                subLabel: 'ml',
+                value: Units.volumeNumber(_amount),
+                subLabel: Units.volumeSymbol(),
                 valueStyle: tt.displayLarge,
                 accent: ext.water,
-                decrementTooltip: 'Decrease by 50 ml',
-                incrementTooltip: 'Increase by 50 ml',
+                decrementTooltip: 'Decrease by ${Units.volumeText(Units.stepMl(50, 1))}',
+                incrementTooltip: 'Increase by ${Units.volumeText(Units.stepMl(50, 1))}',
                 onDecrement: _amount <= 50
                     ? null
                     : () {
                         HapticFeedback.selectionClick();
-                        setState(() => _amount = (_amount - 50).clamp(50, 2000));
+                        setState(() => _amount = Units.stepped(_amount, -1,
+                                mlStep: 50, ozStep: 1)
+                            .clamp(50, 2000));
                       },
                 onIncrement: _amount >= 2000
                     ? null
                     : () {
                         HapticFeedback.selectionClick();
-                        setState(() => _amount = (_amount + 50).clamp(50, 2000));
+                        setState(() => _amount = Units.stepped(_amount, 1,
+                                mlStep: 50, ozStep: 1)
+                            .clamp(50, 2000));
                       },
               ),
             ),
@@ -657,7 +776,7 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                       ),
                     ),
                     child: Text(
-                      '${preset}ml',
+                      Units.volumeText(preset, tight: true),
                       style: tt.labelMedium!.copyWith(
                         color: isSelected ? onFill : ext.textPrimary,
                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
@@ -690,7 +809,7 @@ class _AquaCustomAmountDialogState extends State<AquaCustomAmountDialog> {
                     Icon(Symbols.add_rounded, color: onFill),
                     const SizedBox(width: 8),
                     Text(
-                      'Add $_amount ml',
+                      'Add ${Units.volumeText(_amount)}',
                       style: tt.labelLarge!.copyWith(
                         color: onFill,
                         fontWeight: FontWeight.w600,

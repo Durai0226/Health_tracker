@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/date_formats.dart';
 import '../../../core/widgets/app/app_widgets.dart';
 import '../../../core/widgets/confirmation_bottom_sheet.dart';
+import '../../../core/widgets/photo_thumb.dart';
 import '../widgets/nunito_pill_visual.dart';
 import '../models/enhanced_medicine.dart';
 import '../models/medicine_log.dart';
@@ -30,6 +31,8 @@ import 'nunito_take_medication_sheet.dart';
 import 'medicine_history_screen.dart';
 import '../widgets/dose_edit_flow.dart';
 import '../widgets/dose_log_row.dart';
+import '../../reminders/models/reminder_sounds.dart';
+import '../models/medicine_snooze.dart';
 
 class NunitoMedicationDetailScreen extends StatefulWidget {
   final EnhancedMedicine medicine;
@@ -62,6 +65,11 @@ class NunitoMedicationDetailScreen extends StatefulWidget {
 class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScreen>
     with SingleTickerProviderStateMixin {
   late EnhancedMedicine _medicine;
+
+  /// The names behind [EnhancedMedicine.doctorId] and `pharmacyId`, null when unset or
+  /// when the record has since been deleted.
+  String? _doctorName;
+  String? _pharmacyName;
   List<MedicineLog> _recentLogs = [];
 
   /// Every dose on record, for "Show all" — `_recentLogs` holds only the latest.
@@ -128,6 +136,21 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
       final updated = medicines.where((m) => m.id == _medicine.id).firstOrNull;
       if (updated != null) {
         _medicine = updated;
+      }
+      // Two names for display: not worth the doses and stats below if they fail.
+      try {
+        final doctorId = _medicine.doctorId;
+        final pharmacyId = _medicine.pharmacyId;
+        _doctorName = doctorId == null
+            ? null
+            : (await MedicineCleanStorageService.getDoctor(doctorId))?.name;
+        _pharmacyName = pharmacyId == null
+            ? null
+            : (await MedicineCleanStorageService.getPharmacy(pharmacyId))?.name;
+      } catch (e) {
+        debugPrint('Looking up the prescriber and pharmacy failed: $e');
+        _doctorName = null;
+        _pharmacyName = null;
       }
 
       _computeInteractions(medicines);
@@ -842,6 +865,19 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
               ],
             ),
             const SizedBox(height: AppSpacing.md),
+            if (_medicine.imagePath != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PhotoThumb(
+                  path: _medicine.imagePath,
+                  size: 96,
+                  label: 'Photo of ${_medicine.name}',
+                  onTap: () => showPhotoViewer(context, _medicine.imagePath!,
+                      label: 'Photo of ${_medicine.name}'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             _buildDetailRow('Form', _medicine.dosageForm.displayName),
             if (_medicine.route != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -858,6 +894,31 @@ class _NunitoMedicationDetailScreenState extends State<NunitoMedicationDetailScr
             if (_medicine.purpose != null) ...[
               const SizedBox(height: AppSpacing.sm),
               _buildDetailRow('Purpose', _medicine.purpose!),
+            ],
+            if (_doctorName != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow('Prescriber', 'Dr. $_doctorName'),
+            ],
+            if (_pharmacyName != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow('Pharmacy', _pharmacyName!),
+            ],
+            if (_medicine.costPerUnit != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow(
+                  'Cost per unit', _medicine.costPerUnit!.toStringAsFixed(2)),
+            ],
+            if (_medicine.reminderEnabled &&
+                ReminderSounds.isKnown(_medicine.reminderSound)) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow(
+                  'Reminder sound', ReminderSounds.labelFor(_medicine.reminderSound)),
+            ],
+            if (_medicine.reminderEnabled &&
+                MedicineSnooze.isKnown(_medicine.snoozeOverrideMinutes)) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _buildDetailRow('Snooze length',
+                  MedicineSnooze.labelFor(_medicine.snoozeOverrideMinutes)),
             ],
           ],
         ),

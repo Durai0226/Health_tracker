@@ -11,6 +11,7 @@ import '../models/menstrual_cycle.dart';
 import '../models/period_day.dart';
 import '../models/period_settings.dart';
 import 'cycle_predictor.dart';
+import 'temperature_shift.dart';
 import 'period_reminder_service.dart';
 import 'new_period_check.dart';
 
@@ -220,15 +221,40 @@ class PeriodService {
   static CycleStats getStats() =>
       CyclePredictor.computeStats(CyclePredictor.deriveCycles(_flowDays()));
 
+  /// Where the temperature log puts this cycle's ovulation, if it shows a rise yet.
+  ///
+  /// Only readings up to [on] are used, so asking about a past day cannot see what
+  /// had not been logged then. Null with hormonal birth control (see
+  /// `CyclePredictor.predict`), with no open cycle, or with no rise.
+  static DateTime? _confirmedOvulation(DateTime? on) {
+    if (_settings.birthControlEnabled) return null;
+    final cycles = CyclePredictor.deriveCycles(_flowDays());
+    if (cycles.isEmpty) return null;
+    final today = DateTime.now();
+    final asOf = DateTime((on ?? today).year, (on ?? today).month, (on ?? today).day);
+    final shift = TemperatureShiftCheck.detect(
+      cycleStart: cycles.last.start,
+      cycleEnd: cycles.last.end,
+      readings: [
+        for (final d in days.values)
+          if (d.bbtCelsius != null && !d.date.isAfter(asOf))
+            BbtReading(d.date, d.bbtCelsius!),
+      ],
+    );
+    return shift?.ovulationDay;
+  }
+
   static CyclePrediction getPrediction({DateTime? on}) {
     return CyclePredictor.predict(
       days: _flowDays(),
       on: on,
+      confirmedOvulation: _confirmedOvulation(on),
       typicalCycleLength: _settings.typicalCycleLength,
       typicalPeriodLength: _settings.typicalPeriodLength,
       lutealPhaseLength: _settings.lutealPhaseLength,
       pregnancyMode: _settings.trackingMode == TrackingMode.pregnancy,
       pregnancyStartDate: _settings.pregnancyStartDate,
+      hormonalBirthControl: _settings.birthControlEnabled,
     );
   }
 
@@ -240,6 +266,7 @@ class PeriodService {
       typicalCycleLength: _settings.typicalCycleLength,
       typicalPeriodLength: _settings.typicalPeriodLength,
       lutealPhaseLength: _settings.lutealPhaseLength,
+      ovulationPhase: !_settings.birthControlEnabled,
     );
   }
 

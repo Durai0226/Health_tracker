@@ -6,7 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+
+import '../../../core/utils/share_file.dart';
 
 /// Turns the card on screen into a picture to share or to set as a lock screen.
 class EmergencyCardExport {
@@ -40,6 +41,6 @@ class EmergencyCardExport {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/emergency-card.png');
     await file.writeAsBytes(png, flush: true);
-    await Share.shareXFiles([XFile(file.path, mimeType: 'image/png')], text: text);
+    await shareFile(file, mimeType: 'image/png', text: text);
   }
 }

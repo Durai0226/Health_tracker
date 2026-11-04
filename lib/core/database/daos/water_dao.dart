@@ -136,6 +136,12 @@ class WaterDao extends DatabaseAccessor<AppDatabase> with _$WaterDaoMixin {
     await into(beverageTypes).insert(beverage);
   }
 
+  /// Insert-or-replace: editing a drink, and restoring a backup twice, must not
+  /// trip over a row that is already there.
+  Future<void> saveBeverage(BeverageTypesCompanion beverage) async {
+    await into(beverageTypes).insertOnConflictUpdate(beverage);
+  }
+
   Future<void> updateBeverage(BeverageTypesCompanion beverage) async {
     await (update(beverageTypes)..where((t) => t.id.equals(beverage.id.value))).write(beverage);
   }
@@ -152,6 +158,11 @@ class WaterDao extends DatabaseAccessor<AppDatabase> with _$WaterDaoMixin {
 
   Future<void> addContainer(WaterContainersCompanion container) async {
     await into(waterContainers).insert(container);
+  }
+
+  /// Insert-or-replace, for a restore that may meet a row already there.
+  Future<void> saveContainer(WaterContainersCompanion container) async {
+    await into(waterContainers).insertOnConflictUpdate(container);
   }
 
   Future<void> updateContainer(WaterContainersCompanion container) async {

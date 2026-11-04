@@ -34,9 +34,11 @@ void main() {
         MaterialApp(theme: AppTheme.lightTheme, home: const WelcomeScreen()));
     await tester.pumpAndSettle();
 
-    // Pane 1 -> 2 -> 3, then the no-permission exit ("Skip for now"), which is
+    // Pane 1 -> 2 -> 3 -> 4, then the no-permission exit ("Skip for now"), which is
     // the shortest path through _finish().
     await tester.tap(find.text('Get started'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();

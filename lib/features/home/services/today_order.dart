@@ -9,6 +9,8 @@
 /// Pure Dart and deterministic; the screen supplies the numbers.
 library;
 
+import '../../../core/utils/units.dart';
+
 /// The ids of Today's cards, in the order a person starts with.
 const List<String> todayCardIds = ['medicine', 'water', 'weekly', 'activity'];
 
@@ -117,7 +119,7 @@ class TodayOrder {
     } else if (needs.waterBehindMl >= waterBehindThresholdMl &&
         order.contains('water')) {
       id = 'water';
-      reason = 'about ${_nearest50(needs.waterBehindMl)} ml behind';
+      reason = 'about ${Units.volumeText(_nearest50(needs.waterBehindMl))} behind';
     }
 
     // Already on top: nothing moved, so there is nothing to explain.

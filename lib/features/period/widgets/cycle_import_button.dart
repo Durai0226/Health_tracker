@@ -88,7 +88,7 @@ class _CycleImportButtonState extends State<CycleImportButton> {
     final store = _source.storeName;
 
     var granted = await _source.allowed();
-    granted = await _source.ask();
+    if (!granted) granted = await _source.ask();
     if (!mounted) return;
     if (!granted) {
       context.toastInfo('$store did not share your cycle data, so nothing was '

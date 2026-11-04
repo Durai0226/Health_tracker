@@ -31,17 +31,17 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access lets you scan a prescription label so medicine details can be filled in for you.</string>
+	<string>Camera access lets you scan a prescription label so medicine details can be filled in for you, or take a photo to attach to a medicine, a diary entry or a family member's profile.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID unlocks the app so your medicines and health records stay private on a shared device.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo library access lets you attach an image of a prescription or label to a medicine.</string>
+	<string>Photo library access lets you attach a picture to a medicine, a diary entry or a family member's profile, such as a photo of the pack or a prescription. A copy is kept on this phone only.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>We need notification access to remind you about your medicines, health checks, and fitness activities on time.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>DailyMinder reads your steps, sleep, heart rate, workouts and body readings from Apple Health to show your activity and rest trends, and — only if you tap Import on the Cycle screen — your past periods. This data stays on your device unless you turn on cloud sync in Settings.</string>
+	<string>DailyMinder reads your steps, sleep, heart rate and other vitals, blood pressure and blood sugar, workouts, weight, water and mindful minutes from Apple Health to show your activity and rest trends — and, only if you tap Import on the Cycle screen, your past periods. This data stays on your device unless you turn on cloud sync in Settings.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>DailyMinder can save manually logged steps, sleep, blood pressure, blood glucose, and weight readings back to Apple Health.</string>
+	<string>DailyMinder can save manually logged steps, sleep, blood pressure, blood glucose, weight readings, the drinks you log and, if you turn it on, completed breathing and meditation sessions as mindful minutes back to Apple Health.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>DailyMinder uses the motion sensor to count your steps live while the app is open.</string>
 	<key>NSUserTrackingUsageDescription</key>

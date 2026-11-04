@@ -11,6 +11,7 @@ import '../../../core/health/hydration_goal.dart';
 import '../../sleep/services/sleep_service.dart';
 import '../../../core/health/streak_engine.dart';
 import '../models/beverage_type.dart';
+import '../models/custom_drink.dart';
 import '../models/water_container.dart';
 import '../models/hydration_profile.dart';
 import '../models/water_achievement.dart';
@@ -110,35 +111,8 @@ class WaterService {
       debugPrint('⚠️ WaterService profile load failed: $e');
     }
 
-    // Load persisted custom beverages (merged with defaults, no default dupes).
-    try {
-      final rows = await _dao.getAllBeverages();
-      final defaultIds =
-          BeverageType.defaultBeverages.map((b) => b.id).toSet();
-      _customBeverages
-        ..clear()
-        ..addAll(rows
-            .where((r) => !defaultIds.contains(r.id))
-            .map(_beverageFromRow));
-      debugPrint('✓ WaterService loaded ${_customBeverages.length} custom beverages');
-    } catch (e) {
-      debugPrint('⚠️ WaterService beverages load failed: $e');
-    }
-
-    // Load persisted custom containers (merged with defaults, no default dupes).
-    try {
-      final rows = await _dao.getAllContainers();
-      final defaultIds =
-          WaterContainer.defaultContainers.map((c) => c.id).toSet();
-      _customContainers
-        ..clear()
-        ..addAll(rows
-            .where((r) => !defaultIds.contains(r.id))
-            .map(_containerFromRow));
-      debugPrint('✓ WaterService loaded ${_customContainers.length} custom containers');
-    } catch (e) {
-      debugPrint('⚠️ WaterService containers load failed: $e');
-    }
+    // Load persisted custom beverages and containers (no default dupes).
+    await _loadCustomCatalogFromDb();
 
     // Load persisted achievements, then re-evaluate against the loaded daily
     // data so streaks/points/unlock states are fresh and survive restart.
@@ -410,6 +384,39 @@ class WaterService {
     }
   }
 
+  /// Put the drinks and cups the person made into memory from the tables, which
+  /// are the truth. Used at start, and by a restore, whose memory may be stale (the
+  /// tables were cleared under it) or fuller than it should be (a merge keeps what
+  /// is already here).
+  static Future<void> _loadCustomCatalogFromDb() async {
+    try {
+      final rows = await _dao.getAllBeverages();
+      final defaultIds =
+          BeverageType.defaultBeverages.map((b) => b.id).toSet();
+      _customBeverages
+        ..clear()
+        ..addAll(rows
+            .where((r) => !defaultIds.contains(r.id))
+            .map(_beverageFromRow));
+      debugPrint('✓ WaterService loaded ${_customBeverages.length} custom beverages');
+    } catch (e) {
+      debugPrint('⚠️ WaterService beverages load failed: $e');
+    }
+    try {
+      final rows = await _dao.getAllContainers();
+      final defaultIds =
+          WaterContainer.defaultContainers.map((c) => c.id).toSet();
+      _customContainers
+        ..clear()
+        ..addAll(rows
+            .where((r) => !defaultIds.contains(r.id))
+            .map(_containerFromRow));
+      debugPrint('✓ WaterService loaded ${_customContainers.length} custom containers');
+    } catch (e) {
+      debugPrint('⚠️ WaterService containers load failed: $e');
+    }
+  }
+
   // ---- Beverage <-> Drift mapping / persistence --------------------------
   static BeverageType _beverageFromRow(db.BeverageType r) => BeverageType(
         id: r.id,
@@ -423,9 +430,13 @@ class WaterService {
         isAlcoholic: r.isAlcoholic,
       );
 
-  static Future<void> _persistBeverage(BeverageType b) async {
+  /// Write a drink to its table. A failure is logged and swallowed unless
+  /// [rethrowFailure]: the screens that make and change a drink need to know it
+  /// was not kept, and must not say it was.
+  static Future<void> _persistBeverage(BeverageType b,
+      {bool rethrowFailure = false}) async {
     try {
-      await _dao.addBeverage(db.BeverageTypesCompanion(
+      await _dao.saveBeverage(db.BeverageTypesCompanion(
         id: Value(b.id),
         name: Value(b.name),
         emoji: Value(b.emoji),
@@ -438,6 +449,7 @@ class WaterService {
       ));
     } catch (e) {
       debugPrint('⚠️ persist beverage failed: $e');
+      if (rethrowFailure) rethrow;
     }
   }
 
@@ -479,22 +491,78 @@ class WaterService {
     return allBeverages.where((b) => b.id == id).firstOrNull;
   }
 
-  /// Add custom beverage
+  /// Add custom beverage.
+  ///
+  /// Written first and kept in memory only if it was: a drink that exists only in
+  /// the list is gone at the next start, with logs that name it. Throws if it could
+  /// not be written. Adding an id that is already there replaces it rather than
+  /// listing it twice (Undo on a delete can be tapped more than once).
   static Future<void> addCustomBeverage(BeverageType beverage) async {
-    _customBeverages.add(beverage);
+    // A catalogue id is never a custom drink's: it would be listed twice and offered
+    // Edit and Delete, and the next start would drop it from the custom list again.
+    if (BeverageType.defaultBeverages.any((b) => b.id == beverage.id)) {
+      throw ArgumentError.value(
+          beverage.id, 'beverage', 'is the id of a built-in drink');
+    }
+    await _persistBeverage(beverage, rethrowFailure: true);
+    final index = _customBeverages.indexWhere((b) => b.id == beverage.id);
+    if (index >= 0) {
+      _customBeverages[index] = beverage;
+    } else {
+      _customBeverages.add(beverage);
+    }
     _notifyListeners();
-    await _persistBeverage(beverage);
+  }
+
+  /// The drinks the person made themselves, in the order they made them.
+  static List<BeverageType> getCustomBeverages() =>
+      List.unmodifiable(_customBeverages);
+
+  /// Every drink id that appears in the log, whether or not the drink still
+  /// exists. A new drink must not be given one of these: its logs would be read as
+  /// the new drink's (usage ranking, stats by drink).
+  static Set<String> loggedBeverageIds() => _beverageUsage.keys.toSet();
+
+  /// Whether [id] is one of them, as opposed to a catalogue drink.
+  static bool isCustomBeverage(String id) =>
+      _customBeverages.any((b) => b.id == id);
+
+  /// Change one of the person's own drinks. Throws for an id that is not one of them
+  /// (in particular a catalogue drink, which an edit never turns into a custom one),
+  /// or if it could not be written; the drink is then as it was.
+  ///
+  /// Drinks already logged keep the name, colour and percentage they were logged
+  /// with (the log row carries its own copy), so an edit changes what the NEXT
+  /// drink is, not history. That is deliberate: re-scoring last month because a
+  /// percentage was changed today would move numbers nobody touched.
+  static Future<void> updateCustomBeverage(BeverageType beverage) async {
+    if (!_customBeverages.any((b) => b.id == beverage.id)) {
+      // Deleted while the person had it open to edit. Saying "saved" would be a lie,
+      // and writing it would bring a deleted drink back in storage only.
+      throw StateError('The drink "${beverage.name}" no longer exists');
+    }
+    await _persistBeverage(beverage, rethrowFailure: true);
+    final now = _customBeverages.indexWhere((b) => b.id == beverage.id);
+    if (now < 0) {
+      // Removed while that was being written: the row is back, so the list must be.
+      _customBeverages.add(beverage);
+    } else {
+      _customBeverages[now] = beverage;
+    }
+    _notifyListeners();
   }
 
   /// Delete custom beverage (only non-default)
+  ///
+  /// A catalogue id is refused outright: its row, if any, is not the person's to
+  /// remove, and nothing in the catalogue is held in [_customBeverages] anyway.
   static Future<void> deleteBeverage(String id) async {
+    if (!_customBeverages.any((b) => b.id == id)) return;
+    // The row first, and the drink leaves the list only once it has: a delete the
+    // storage refused would otherwise show as done and come back at the next start.
+    await _dao.deleteBeverage(id);
     _customBeverages.removeWhere((b) => b.id == id);
     _notifyListeners();
-    try {
-      await _dao.deleteBeverage(id);
-    } catch (e) {
-      debugPrint('⚠️ delete beverage failed: $e');
-    }
   }
 
   /// Get favorite beverages (most used)
@@ -587,22 +655,34 @@ class WaterService {
   /// Most-logged beverages first, ties broken by declared order so the list is
   /// stable. Previously `getAllBeverages().take(limit)` — i.e. never actually
   /// the user's favourites, just the first six built-ins.
-  static List<BeverageType> getFavoriteBeverages({int limit = 6}) {
-    final all = getAllBeverages();
-    final ranked = [...all];
-    final order = {for (var i = 0; i < all.length; i++) all[i].id: i};
-    ranked.sort((a, b) {
-      final ca = _beverageUsage[a.id]?.count ?? 0;
-      final cb = _beverageUsage[b.id]?.count ?? 0;
-      if (ca != cb) return cb.compareTo(ca);
-      return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
-    });
-    return ranked.take(limit).toList();
-  }
+  static List<BeverageType> getFavoriteBeverages({int limit = 6}) =>
+      getBeveragesByUse().take(limit).toList();
 
   /// How many times [beverageId] has been logged.
   static int beverageUseCount(String beverageId) =>
       _beverageUsage[beverageId]?.count ?? 0;
+
+  /// Every drink, the ones the person actually has logged first (most-logged
+  /// leading), then the ones they have made themselves and not used yet, then
+  /// the rest of the catalogue in its own order.
+  ///
+  /// What the drink picker lists. It is [getFavoriteBeverages] without the
+  /// limit, plus one rule: a drink made a minute ago is not buried behind
+  /// twenty unused catalogue entries.
+  static List<BeverageType> getBeveragesByUse() {
+    final all = getAllBeverages();
+    final order = {for (var i = 0; i < all.length; i++) all[i].id: i};
+    final custom = {for (final b in _customBeverages) b.id};
+    return [...all]..sort((a, b) {
+        final ca = _beverageUsage[a.id]?.count ?? 0;
+        final cb = _beverageUsage[b.id]?.count ?? 0;
+        if (ca != cb) return cb.compareTo(ca);
+        final ma = custom.contains(a.id);
+        final mb = custom.contains(b.id);
+        if (ma != mb) return ma ? -1 : 1;
+        return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
+      });
+  }
 
   // ============ CONTAINERS ============
 
@@ -670,17 +750,25 @@ class WaterService {
   /// Most-used cups first, ties broken by declared order. Previously
   /// `getAllContainers().take(limit)` — the first four built-ins, regardless of
   /// what the user actually drinks from.
-  static List<WaterContainer> getFrequentContainers({int limit = 4}) {
+  static List<WaterContainer> getFrequentContainers({int limit = 4}) =>
+      getContainersByUse().take(limit).toList();
+
+  /// Every cup, the most-used first; cups with the same use count keep the
+  /// person's own ahead of the built-in ones, then the declared order.
+  ///
+  /// What the cups strip lists. It used to be "your own cups, then the built-in
+  /// ones", which put a cup made once and never used ahead of the one drunk from
+  /// every day.
+  static List<WaterContainer> getContainersByUse() {
     final all = getAllContainers();
     final order = {for (var i = 0; i < all.length; i++) all[i].id: i};
-    final ranked = [...all];
-    ranked.sort((a, b) {
-      final ca = _containerUsage[a.id]?.count ?? 0;
-      final cb = _containerUsage[b.id]?.count ?? 0;
-      if (ca != cb) return cb.compareTo(ca);
-      return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
-    });
-    return ranked.take(limit).toList();
+    return [...all]..sort((a, b) {
+        final ca = _containerUsage[a.id]?.count ?? 0;
+        final cb = _containerUsage[b.id]?.count ?? 0;
+        if (ca != cb) return cb.compareTo(ca);
+        if (a.isDefault != b.isDefault) return a.isDefault ? 1 : -1;
+        return (order[a.id] ?? 0).compareTo(order[b.id] ?? 0);
+      });
   }
 
   /// How many times [containerId] has been logged, and when it was last used.
@@ -777,18 +865,34 @@ class WaterService {
     return _dailyWaterNotifier.value[key]!;
   }
 
-  /// Today's day, stamped with the drinks that were deleted from it — the
-  /// shape the cloud uploader has to send.
+  /// [date]'s data for a sync, stamped with the drinks that were deleted from it
+  /// — the shape the cloud uploader has to send. Null when that day was never
+  /// saved, so there is nothing to upload for it.
   ///
   /// [getTodayData] stays synchronous because UI call sites read it during
   /// build, and the tombstones are not in memory until something asks for them
   /// (see [_ensureTombstonesLoaded]). Sync is the caller that must never miss
   /// them: an upload without the tombstone is what lets the next download —
   /// here or on another device — put the drink back.
-  static Future<DailyWaterData> todayDataForSync() async {
+  /// Reads the day from storage when it is older than the warm cache, and
+  /// lets a failed read propagate: a sync that cannot read a day must skip it,
+  /// not upload a blank over what the cloud holds.
+  static Future<DailyWaterData?> dayDataForSync(DateTime date) =>
+      dayDataForSyncKey(_getDateKey(date));
+
+  /// [dayDataForSync], addressed by the day's key (`2026-08-21`).
+  static Future<DailyWaterData?> dayDataForSyncKey(String key) async {
     await _ensureTombstonesLoaded();
-    final key = _getDateKey(clock.now());
-    return getTodayData().copyWith(deletedLogIds: _tombstonesFor(key));
+    final day = await _ensureDayLoaded(key);
+    return day?.copyWith(deletedLogIds: _tombstonesFor(key));
+  }
+
+  /// The key of every stored day, oldest first — what a first upload to the
+  /// cloud has to carry. Ordinary syncs reconcile only the recent days; this is
+  /// the whole history.
+  static Future<List<String>> everyStoredDayKey() async {
+    final rows = await _dao.getAllDailyData();
+    return rows.map((r) => r.id).toList()..sort();
   }
 
   /// Get water data for a specific date.
@@ -960,6 +1064,9 @@ class WaterService {
     _notifyListeners();
     await _dao.deleteWaterLog(logId);
     await _persistDay(updatedData);
+    // Out of Health Connect too, when it went in there under a name. Not awaited,
+    // like the write: a slow health store must not hold up the delete or its Undo.
+    unawaited(HydrationHealthSync.onLogRemoved(logId));
     await _evaluateAchievements();
     // The home-screen widget shows today's intake, and only a push refreshes
     // it. The ADD path pushed (aqua_water_dashboard.dart, after every "+"), the
@@ -972,6 +1079,12 @@ class WaterService {
   }
 
   /// Add water log for a specific date (for history editing)
+  ///
+  /// [id] names the log instead of a fresh uuid — for a drink brought in from the
+  /// health store, whose id says which sample it is so it can never be added
+  /// twice. [syncToHealth] false keeps the drink from being written out again: a
+  /// drink that CAME from Health Connect or Apple Health must not be sent back
+  /// under this app's name, where every other app would count it twice.
   static Future<DailyWaterData> addWaterLogForDate({
     required DateTime date,
     required int amountMl,
@@ -979,13 +1092,15 @@ class WaterService {
     WaterContainer? container,
     DateTime? time,
     String? note,
+    String? id,
+    bool syncToHealth = true,
   }) async {
     final key = _getDateKey(date);
     final effectiveTime = time ?? date;
     
     // Create the log entry
     final log = EnhancedWaterLog(
-      id: _uuid.v4(),
+      id: id ?? _uuid.v4(),
       time: effectiveTime,
       amountMl: amountMl,
       effectiveHydrationMl: beverage.getEffectiveHydration(amountMl),
@@ -1031,7 +1146,7 @@ class WaterService {
     // The call is still made on every single add, so a drink still reaches the
     // health store; only the waiting on it is gone. It swallows its own
     // failures, so there is nothing here that could want the result.
-    unawaited(HydrationHealthSync.onLogAdded(log));
+    if (syncToHealth) unawaited(HydrationHealthSync.onLogAdded(log));
 
     // Usage is log-derived, and the log that changed it is right here — so
     // fold it in rather than re-running the grouped COUNT over every row ever
@@ -1121,6 +1236,7 @@ class WaterService {
       }
     }
     await _persistDay(updatedData);
+    if (editedLog != null) unawaited(HydrationHealthSync.onLogUpdated(editedLog!));
     await _evaluateAchievements();
 
     // Editing an entry changes the day's totals just as much as adding or
@@ -1873,6 +1989,130 @@ class WaterService {
       debugPrint('⚠️ WaterService backup export failed: $e');
       return const [];
     }
+  }
+
+  /// What the person set up, as opposed to what they drank: the drinks and cups
+  /// they made, and their hydration profile (weight, activity, climate, custom
+  /// goal).
+  ///
+  /// A backup carried every drink that was ever logged and none of this. Restored
+  /// onto a new phone, the history read "Protein shake, 300 ml" while the picker
+  /// had no protein shake to log tomorrow, a cup made for the morning coffee was
+  /// gone, and the goal fell back to the generic one because the weight and the
+  /// custom goal had not come with it. Each log keeps its own copy of the drink's
+  /// name and score, so history was never wrong; the setup was just emptier than
+  /// the person left it.
+  static Map<String, dynamic> exportSetupForBackup() => {
+        'beverages': [for (final b in _customBeverages) b.toJson()],
+        'containers': [for (final c in _customContainers) c.toJson()],
+        'profile': _profile.toJson(),
+      };
+
+  /// Bring the drinks and cups in [data] — the shape [exportSetupForBackup] writes —
+  /// into what is here, and the profile if there is none yet.
+  ///
+  /// The tables are the truth. A restore that cleared them first (`clearExisting`)
+  /// leaves memory stale, and one that did not leaves the person's drinks where they
+  /// were; both are right once memory is read back from the tables, and then the
+  /// file only ADDS what is missing. It never removes a drink or a cup that is here,
+  /// and it never overwrites a profile that has been saved: a merge is documented as
+  /// deleting nothing, and a profile carries a prescribed fluid limit that an older or
+  /// blank backup must not lift.
+  ///
+  /// One entry that cannot be read (a hand-edited file, a field of the wrong type) is
+  /// skipped, not the whole section; a catalogue id is never accepted, since the
+  /// built-in drinks are not the file's to redefine; and a drink is passed through
+  /// [CustomDrink.sanitized], so a figure outside the range the screen allows cannot
+  /// come in by the back door.
+  static Future<void> restoreSetupFromBackup(Map<String, dynamic> data) async {
+    await _loadCustomCatalogFromDb();
+    final builtInDrinks = BeverageType.defaultBeverages.map((b) => b.id).toSet();
+    final builtInCups = WaterContainer.defaultContainers.map((c) => c.id).toSet();
+
+    final drinks = data['beverages'];
+    for (final raw in (drinks is List ? drinks : const [])) {
+      try {
+        final parsed = BeverageType.fromJson(Map<String, dynamic>.from(raw as Map));
+        final b = CustomDrink.sanitized(parsed);
+        if (b == null || builtInDrinks.contains(b.id)) continue;
+        if (_customBeverages.any((x) => x.id == b.id)) continue;
+        await _persistBeverage(b, rethrowFailure: true);
+        _customBeverages.add(b);
+      } catch (e) {
+        debugPrint('⚠️ skipped an unreadable custom drink in the backup: $e');
+      }
+    }
+    final cups = data['containers'];
+    for (final raw in (cups is List ? cups : const [])) {
+      try {
+        final c = _sanitizedCup(
+            WaterContainer.fromJson(Map<String, dynamic>.from(raw as Map)));
+        if (c == null || builtInCups.contains(c.id)) continue;
+        if (_customContainers.any((x) => x.id == c.id)) continue;
+        await _dao.saveContainer(_containerCompanion(c));
+        _customContainers.add(c);
+      } catch (e) {
+        debugPrint('⚠️ skipped an unreadable custom cup in the backup: $e');
+      }
+    }
+    final profile = data['profile'];
+    if (profile is Map) {
+      try {
+        if (await _dao.getProfile() == null) {
+          await saveProfile(HydrationProfile.fromJson(
+              _sanitizedProfileJson(Map<String, dynamic>.from(profile))));
+        }
+      } catch (e) {
+        debugPrint('⚠️ skipped an unreadable hydration profile in the backup: $e');
+      }
+    }
+    _notifyListeners();
+  }
+
+  /// A cup read out of a file, held to what the cup creator allows: a name of up to
+  /// 50 characters, a capacity of 1–10000 ml, a glyph of a few characters and a
+  /// `#RRGGBB` colour. Null when it cannot be a cup.
+  static WaterContainer? _sanitizedCup(WaterContainer c) {
+    final name = c.name.trim();
+    if (c.id.isEmpty || name.isEmpty) return null;
+    if (c.capacityMl <= 0 || c.capacityMl > 10000) return null;
+    final hex = c.colorHex;
+    final colour = hex != null && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(hex) ? hex : null;
+    // Built afresh rather than `copyWith`, which keeps the old value for a null: an
+    // invalid colour has to become none, not stay.
+    return WaterContainer(
+      id: c.id,
+      name: String.fromCharCodes(name.runes.take(50)),
+      emoji: c.emoji.isEmpty ? '🥤' : String.fromCharCodes(c.emoji.runes.take(8)),
+      capacityMl: c.capacityMl,
+      isDefault: false,
+      colorHex: colour,
+    );
+  }
+
+  /// A profile's JSON with every figure outside a believable range taken out, so it
+  /// falls back to the default it would have had: a goal of 0 or 900,000 ml, a weight
+  /// of −5 kg or a fluid limit of 3 ml from a damaged or hand-edited file must not be
+  /// saved as what the app then works every number from.
+  static Map<String, dynamic> _sanitizedProfileJson(Map<String, dynamic> j) {
+    final out = Map<String, dynamic>.from(j);
+    void keepIn(String key, num lo, num hi) {
+      final v = out[key];
+      if (v == null) return;
+      if (v is! num || v < lo || v > hi) out.remove(key);
+    }
+
+    keepIn('weightKg', 20, 400);
+    keepIn('heightCm', 50, 260);
+    keepIn('age', 0, 120);
+    keepIn('customGoalMl', 500, 10000);
+    keepIn('fluidCeilingMl', 250, 10000);
+    keepIn('wakeUpHour', 0, 23);
+    keepIn('bedtimeHour', 0, 23);
+    // The enum indices are indexes into lists: one out of range throws on read.
+    keepIn('activityLevel', 0, ActivityLevel.values.length - 1);
+    keepIn('climate', 0, ClimateType.values.length - 1);
+    return out;
   }
 
   /// Restore one day *and its per-drink logs*, as a single atomic replacement.

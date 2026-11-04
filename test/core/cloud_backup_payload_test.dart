@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tablet_remainder/core/services/backup_service.dart';
 import 'package:tablet_remainder/features/settings/screens/backup_screen.dart';
@@ -85,18 +87,34 @@ void main() {
           reason: 'a few bytes of headroom is not headroom');
     });
 
+    test('all the parts of a backup fit in one batch write', () {
+      const batchLimit = 10 * 1024 * 1024; // 10 MiB, hard.
+      expect(BackupService.maxTotalPayloadBytes, lessThan(batchLimit),
+          reason: 'the parts are committed together or not at all, so they '
+              'must fit in one batch with room for their field names');
+      expect(batchLimit - BackupService.maxTotalPayloadBytes,
+          greaterThanOrEqualTo(1024 * 1024));
+    });
+
     test('a payload at the limit is allowed', () {
       expect(
-          BackupService.oversizeMessage(BackupService.maxBackupPayloadBytes),
+          BackupService.oversizeMessage(BackupService.maxTotalPayloadBytes),
           isNull);
+    });
+
+    test('a payload bigger than one document, but within the parts, is allowed', () {
+      expect(
+          BackupService.oversizeMessage(BackupService.maxBackupPayloadBytes + 1),
+          isNull,
+          reason: 'it used to be refused here; it is split into parts now');
     });
 
     test('a payload over the limit is refused with an actionable message', () {
       final message =
-          BackupService.oversizeMessage(BackupService.maxBackupPayloadBytes + 1);
+          BackupService.oversizeMessage(BackupService.maxTotalPayloadBytes + 1);
 
       expect(message, isNotNull);
-      expect(message, contains('900 KB'),
+      expect(message, contains('7200 KB'),
           reason: 'the user should be able to see how far over they are');
       expect(message, contains('Export a copy'),
           reason: 'a refusal with no way forward is just a dead end — the '
@@ -114,7 +132,7 @@ void main() {
       // user-facing half never arrives.
       const visibleBudget = 80;
       final message =
-          BackupService.oversizeMessage(BackupService.maxBackupPayloadBytes + 1)!;
+          BackupService.oversizeMessage(BackupService.maxTotalPayloadBytes + 1)!;
 
       expect(message.substring(0, visibleBudget), contains('Export a copy'),
           reason: 'the instruction has to be inside the part that is rendered, '
@@ -130,7 +148,7 @@ void main() {
       // out of the instruction's budget.
       final shown = BackupScreen.failureMessage(
           StateError(BackupService.oversizeMessage(
-              BackupService.maxBackupPayloadBytes + 1)!));
+              BackupService.maxTotalPayloadBytes + 1)!));
 
       expect(shown, startsWith('Backup too large'));
       expect(shown, isNot(contains('Bad state')));
@@ -152,14 +170,19 @@ void main() {
   /// a guard the upload path doesn't run is decoration, and the inline version
   /// it replaced was three statements nothing pinned.
   group('the document that gets uploaded', () {
-    Map<String, Object?> build(String json) => BackupService.buildBackupDocument(
+    Map<String, Object?> build(String json,
+            {int chunkBytes = BackupService.maxBackupPayloadBytes,
+            int maxParts = BackupService.maxBackupParts}) =>
+        BackupService.buildBackupDocuments(
           backupId: '2026-03-01T09:00:00.000',
           jsonString: json,
           deviceName: 'android',
           // A stand-in for FieldValue.serverTimestamp(), which needs a live
           // Firebase app.
           createdAt: 'server-timestamp',
-        );
+          chunkBytes: chunkBytes,
+          maxParts: maxParts,
+        ).first;
 
     test('carries the compressed payload and its real byte length', () {
       final json = exportOfSize(50);
@@ -188,17 +211,235 @@ void main() {
       // would flatten it and the payload would come in under the cap.
       final random = Random(7);
       final incompressible = String.fromCharCodes([
-        for (var i = 0; i < BackupService.maxBackupPayloadBytes * 2; i++)
-          33 + random.nextInt(94),
+        for (var i = 0; i < 4000; i++) 33 + random.nextInt(94),
       ]);
 
+      // Two parts of a thousand bytes: the payload is far past both.
       expect(
-        () => build(incompressible),
+        () => build(incompressible, chunkBytes: 1000, maxParts: 2),
         throwsA(isA<StateError>().having((e) => e.message, 'message',
             contains('too large for the cloud'))),
         reason: 'the write must not be attempted — Firestore rejects it and '
             'the user is left believing they have a backup',
       );
+    });
+  });
+
+  /// A backup bigger than one document used to be refused outright ("Capped at
+  /// 900 KB per backup"). It is now split into parts, stored beside the backup's
+  /// own document in the same collection — which `firestore.rules` already lets the
+  /// owner write, so no deploy is needed.
+  group('a backup bigger than one document', () {
+    const id = '2026-03-01T09:00:00.000';
+    final json = exportOfSize(300);
+    final payloadLength = BackupService.encodePayload(json).length;
+    // About three parts' worth.
+    final chunk = (payloadLength / 3).ceil();
+
+    List<Map<String, Object?>> docs({int? chunkBytes}) =>
+        BackupService.buildBackupDocuments(
+          backupId: id,
+          jsonString: json,
+          deviceName: 'android',
+          createdAt: 'server-timestamp',
+          chunkBytes: chunkBytes ?? chunk,
+        );
+
+    group('splitting', () {
+      test('is lossless and every piece is within the size', () {
+        final payload = BackupService.encodePayload(json);
+        final pieces = BackupService.splitPayload(payload, chunkBytes: chunk);
+        expect(pieces.join(), payload);
+        expect(pieces.every((p) => p.length <= chunk), isTrue);
+        expect(pieces.length, 3);
+      });
+
+      test('a payload that fits is one piece, and an empty one too', () {
+        expect(BackupService.splitPayload('abc', chunkBytes: 3), ['abc']);
+        expect(BackupService.splitPayload('', chunkBytes: 3), ['']);
+      });
+
+      test('an exact multiple has no empty piece at the end', () {
+        expect(BackupService.splitPayload('abcdef', chunkBytes: 3),
+            ['abc', 'def']);
+        expect(BackupService.splitPayload('abcdefg', chunkBytes: 3),
+            ['abc', 'def', 'g']);
+      });
+    });
+
+    group('the documents', () {
+      test('the first is the backup, with the whole size and how many parts', () {
+        final all = docs();
+        expect(all.length, 3);
+        final first = all.first;
+        expect(first['id'], id);
+        expect(first['parts'], 3);
+        expect(first['sizeBytes'], payloadLength,
+            reason: 'the backup list shows this as the backup\'s size');
+        expect(first['encoding'], BackupService.gzipBase64Encoding);
+        expect(first['createdAt'], 'server-timestamp');
+        expect((first['data'] as String).length, chunk);
+      });
+
+      test('the others say which backup they belong to, and carry no createdAt', () {
+        final all = docs();
+        for (var i = 1; i < all.length; i++) {
+          final part = all[i];
+          expect(part['id'], BackupService.partId(id, i + 1));
+          expect(part['partOf'], id);
+          expect(part['part'], i + 1);
+          expect(part.containsKey('createdAt'), isFalse,
+              reason: 'the list is ordered by createdAt, so a part without one '
+                  'is never listed as a backup of its own');
+          expect(part.containsKey('deviceName'), isFalse);
+        }
+      });
+
+      test('every one meets what firestore.rules asks on create', () {
+        for (final d in docs()) {
+          expect(d['id'], isA<String>());
+          expect(d['data'], isA<String>());
+          expect(d['sizeBytes'], isA<int>());
+          expect(d.keys.length, lessThanOrEqualTo(100));
+        }
+      });
+
+      test('a backup that fits is exactly what it always was', () {
+        final one = docs(chunkBytes: payloadLength);
+        expect(one.length, 1);
+        expect(one.single.containsKey('parts'), isFalse,
+            reason: 'older builds read this document and must find what they expect');
+        expect(one.single['sizeBytes'], payloadLength);
+      });
+
+      test('the part ids are not another backup\'s id', () {
+        expect(BackupService.partId(id, 2), isNot(id));
+        expect(BackupService.partId(id, 2), isNot(BackupService.partId(id, 3)));
+      });
+    });
+
+    group('in Firestore', () {
+      late FakeFirebaseFirestore firestore;
+      late BackupService service;
+
+      CollectionReference<Map<String, dynamic>> backups() =>
+          firestore.collection('users').doc('u1').collection('backups');
+
+      setUp(() {
+        firestore = FakeFirebaseFirestore();
+        service = BackupService.forTesting(firestore: firestore);
+      });
+
+      test('what is uploaded restores to the same JSON', () async {
+        await service.uploadForTesting(id, json, chunkBytes: chunk);
+        expect((await backups().get()).docs.length, 3);
+        expect(await service.loadBackupJson(id), json);
+      });
+
+      test('a backup that fits restores as before', () async {
+        await service.uploadForTesting(id, json);
+        expect((await backups().get()).docs.length, 1);
+        expect(await service.loadBackupJson(id), json);
+      });
+
+      test('the list shows one backup, at its whole size', () async {
+        await service.uploadForTesting(id, json, chunkBytes: chunk);
+        await service.uploadForTesting('2026-03-02T09:00:00.000', json);
+
+        final listed = await service.getBackups();
+        expect(listed.map((b) => b.id).toSet(),
+            {id, '2026-03-02T09:00:00.000'});
+        expect(listed.length, 2, reason: 'a part is not a backup');
+        expect(listed.firstWhere((b) => b.id == id).sizeBytes, payloadLength);
+      });
+
+      test('deleting takes every part with it', () async {
+        await service.uploadForTesting(id, json, chunkBytes: chunk);
+        await service.uploadForTesting('2026-03-02T09:00:00.000', json);
+
+        await service.deleteBackup(id);
+
+        final left = (await backups().get()).docs.map((d) => d.id).toList();
+        expect(left, ['2026-03-02T09:00:00.000']);
+      });
+
+      test('deleting one that is already gone is harmless', () async {
+        await service.deleteBackup('nope');
+        expect((await backups().get()).docs, isEmpty);
+      });
+
+      test('a missing part is said, and nothing is guessed', () async {
+        await service.uploadForTesting(id, json, chunkBytes: chunk);
+        await backups().doc(BackupService.partId(id, 2)).delete();
+
+        expect(
+          service.loadBackupJson(id),
+          throwsA(isA<Exception>().having((e) => '$e', 'message',
+              allOf(contains('incomplete'), contains('part 2 of 3'),
+                  contains('Nothing on this phone was changed')))),
+        );
+      });
+
+      test('a part that belongs to another backup is not joined in', () async {
+        await service.uploadForTesting(id, json, chunkBytes: chunk);
+        await backups()
+            .doc(BackupService.partId(id, 3))
+            .update({'partOf': '2020-01-01T00:00:00.000'});
+
+        expect(service.loadBackupJson(id),
+            throwsA(isA<Exception>().having((e) => '$e', 'message', contains('incomplete'))));
+      });
+
+      test('a part numbered wrongly is not joined in', () async {
+        await service.uploadForTesting(id, json, chunkBytes: chunk);
+        await backups().doc(BackupService.partId(id, 2)).update({'part': 3});
+
+        expect(service.loadBackupJson(id),
+            throwsA(isA<Exception>().having((e) => '$e', 'message', contains('incomplete'))));
+      });
+
+      test('more parts than this app writes means a newer app made it', () async {
+        await backups().doc(id).set({
+          'id': id,
+          'data': 'x',
+          'sizeBytes': 1,
+          'parts': BackupService.maxBackupParts + 1,
+          'encoding': BackupService.gzipBase64Encoding,
+          'createdAt': Timestamp.now(),
+        });
+        expect(service.loadBackupJson(id),
+            throwsA(isA<Exception>().having((e) => '$e', 'message', contains('newer version'))));
+      });
+
+      test('a backup from before compression, with no parts, still loads', () async {
+        const legacy = '{"version":5,"medicines":[]}';
+        await backups().doc(id).set({
+          'id': id,
+          'data': legacy,
+          'sizeBytes': legacy.length,
+          'createdAt': Timestamp.now(),
+        });
+        expect(await service.loadBackupJson(id), legacy);
+      });
+
+      test('one that is not there, or has no data, says so', () async {
+        expect(service.loadBackupJson('nope'),
+            throwsA(isA<Exception>().having((e) => '$e', 'message', contains('not found'))));
+        await backups().doc(id).set({'id': id, 'sizeBytes': 0});
+        expect(service.loadBackupJson(id),
+            throwsA(isA<Exception>().having((e) => '$e', 'message', contains('empty'))));
+      });
+
+      test('too big even for the parts uploads nothing', () async {
+        final random = Random(3);
+        final noise = String.fromCharCodes(
+            [for (var i = 0; i < 6000; i++) 33 + random.nextInt(94)]);
+        await expectLater(
+          service.uploadForTesting(id, noise, chunkBytes: 1000, maxParts: 2),
+          throwsA(isA<StateError>()),
+        );
+        expect((await backups().get()).docs, isEmpty);
+      });
     });
   });
 }

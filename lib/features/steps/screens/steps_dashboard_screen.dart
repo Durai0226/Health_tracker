@@ -25,8 +25,10 @@ import '../models/step_manual_entry.dart';
 import '../widgets/manual_step_entries_card.dart';
 import '../widgets/rest_day_card.dart';
 import '../widgets/rain_walk_tip_card.dart';
+import '../widgets/active_hours_card.dart';
 import '../widgets/walking_trend_card.dart';
 import '../widgets/steps_permission_card.dart';
+import '../services/step_sensor_access.dart';
 import 'package:tablet_remainder/core/health/rest_days.dart';
 import 'package:tablet_remainder/core/services/rest_day_store.dart';
 import 'steps_goal_settings_screen.dart';
@@ -35,6 +37,7 @@ import '../utils/step_format.dart';
 import '../../../core/health/coach_text.dart';
 import '../../../core/utils/calendar_day.dart';
 import 'package:clock/clock.dart';
+import 'package:tablet_remainder/core/health/active_hours.dart';
 import 'package:tablet_remainder/core/health/week_over_week.dart';
 
 /// Steps home: hero activity ring, key stats, streak, weekly + hourly charts,
@@ -45,7 +48,15 @@ class StepsDashboardScreen extends StatefulWidget {
   /// drops its own scaffold/header chrome.
   final bool embedded;
 
-  const StepsDashboardScreen({super.key, this.embedded = false});
+  /// Replaces the platform permission for the step sensor. A test hands its own:
+  /// the real one opens an OS dialog.
+  final StepSensorAccess sensorAccess;
+
+  const StepsDashboardScreen({
+    super.key,
+    this.embedded = false,
+    this.sensorAccess = const PlatformStepSensorAccess(),
+  });
 
   @override
   State<StepsDashboardScreen> createState() => _StepsDashboardScreenState();
@@ -54,6 +65,10 @@ class StepsDashboardScreen extends StatefulWidget {
 class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   HealthAvailability _availability = HealthAvailability.notDetermined;
+
+  /// Whether this phone's step sensor may be read. True until it is known, so the
+  /// offer to allow it never flashes up on the way in.
+  bool _sensorGranted = true;
   bool _loading = true;
 
   // Goal-close celebration: a one-shot ring pulse when the goal is crossed
@@ -106,6 +121,7 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshAvailability();
+      unawaited(_refreshSensorAccess());
       return;
     }
     unawaited(StepService.flushPendingLiveDay());
@@ -143,6 +159,9 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
     } catch (_) {
       avail = HealthAvailability.notDetermined;
     }
+    // Not awaited: whether the sensor is allowed only decides whether an offer is
+    // shown, and a platform answer that is slow must not hold the whole screen.
+    unawaited(_loadSensorAccess());
     _resolveFreshStart();
     _checkMilestones();
     // Keep the opt-in evening reminder alive across app opens (no prompt unless
@@ -163,7 +182,9 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _celebrateCtrl.dispose();
-    StepService.stopLiveTracking();
+    // Counting goes on after the screen closes (see keepCountingWhileOpen); only
+    // what the throttle still holds is written.
+    unawaited(StepService.flushPendingLiveDay());
     super.dispose();
   }
 
@@ -291,6 +312,48 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
       msg = "Connected. No step data found yet — it'll sync as it appears.";
     }
     context.toastInfo(msg);
+  }
+
+  Future<void> _loadSensorAccess() async {
+    final granted = await widget.sensorAccess.isGranted();
+    if (mounted && granted != _sensorGranted) {
+      setState(() => _sensorGranted = granted);
+    }
+  }
+
+  /// The sensor may have been allowed — or taken away — in Settings while the app was
+  /// away; the person follows the toast there and comes back. Asked once when the
+  /// screen opened, the offer would go on showing, and the count — a subscription that
+  /// was opened before the permission and never emits — would stay at zero until they
+  /// tapped the button again.
+  Future<void> _refreshSensorAccess() async {
+    final granted = await widget.sensorAccess.isGranted();
+    if (!mounted || granted == _sensorGranted) return;
+    setState(() => _sensorGranted = granted);
+    if (granted) {
+      await StepService.forgetLiveMark();
+      await StepService.restartLiveTracking();
+    }
+  }
+
+  /// Ask to read this phone's step sensor, and start counting if it is allowed.
+  ///
+  /// This was asked for in only one place — inside "Enable", the health app's
+  /// consent — so someone whose phone has no health app, and who is therefore
+  /// offered nothing but "Log manually", was never asked at all.
+  Future<void> _useSensor() async {
+    final granted = await widget.sensorAccess.request();
+    if (!mounted) return;
+    setState(() => _sensorGranted = granted);
+    if (!granted) {
+      context.toastInfo('The step sensor was not allowed. You can allow it in '
+          'Settings → Apps → DlyMinder → Permissions.');
+      return;
+    }
+    await StepService.forgetLiveMark();
+    await StepService.restartLiveTracking();
+    if (!mounted) return;
+    context.toastSuccess("Counting steps with this phone's sensor.");
   }
 
   /// Resolve the once-a-week fresh-start recap. Marks the week as seen so it
@@ -589,6 +652,8 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
               availability: _availability,
               onEnable: _enableHealth,
               onLogManually: _openManualSheet,
+              onUseSensor: _useSensor,
+              sensorGranted: _sensorGranted,
             ),
           ],
 
@@ -602,6 +667,16 @@ class _StepsDashboardScreenState extends State<StepsDashboardScreen>
           const SizedBox(height: AppSpacing.lg),
           // The last four weeks against the last ninety days.
           const WalkingTrendCard(),
+
+          // Hours with real walking in them; nothing without an hourly record that
+          // covers the day, and nothing on a day the goal is paused.
+          if (resting == null)
+            ActiveHoursCard(
+              result: ActiveHoursCalc.compute(
+                hourly: today.hourly,
+                sensorTotal: today.sensorSteps,
+              ),
+            ),
 
           // Hourly distribution.
           StepHourlyChart(hourly: today.hourly),

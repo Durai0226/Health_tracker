@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as p;
+
 /// An immutable free-form journal entry: an optional title, a free-text body,
 /// a timestamp, and — both optional — how the writer was feeling and what the
 /// entry was about.
@@ -19,6 +21,19 @@ class DiaryEntry {
   /// title-cased rather than dropped.
   final List<String> tags;
 
+  /// The path of the entry's photo, a copy kept in the app's own storage, or null.
+  ///
+  /// A backup carries only the photo's file NAME ([photoFile]), never the path or the
+  /// picture: a path means nothing on another phone, and the file does not travel.
+  /// Whatever shows it copes with a file that is not there.
+  final String? photoPath;
+
+  /// The name the photo is kept under, without its folder — all a backup says about it.
+  String? get photoFile {
+    final path = photoPath;
+    return path == null || path.isEmpty ? null : p.basename(path);
+  }
+
   DiaryEntry({
     required this.id,
     this.dependentId,
@@ -28,6 +43,7 @@ class DiaryEntry {
     required this.createdAt,
     this.moodIndex,
     this.tags = const [],
+    this.photoPath,
   });
 
   /// A short preview for list rows — the title if set, else the first
@@ -68,6 +84,8 @@ class DiaryEntry {
     int? moodIndex,
     bool clearMood = false,
     List<String>? tags,
+    String? photoPath,
+    bool clearPhoto = false,
   }) {
     return DiaryEntry(
       id: id,
@@ -78,6 +96,7 @@ class DiaryEntry {
       createdAt: createdAt,
       moodIndex: clearMood ? null : (moodIndex ?? this.moodIndex),
       tags: tags ?? this.tags,
+      photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
     );
   }
 
@@ -90,6 +109,7 @@ class DiaryEntry {
         'createdAt': createdAt.toIso8601String(),
         'moodIndex': moodIndex,
         'tags': tags,
+        'photoFile': photoFile,
       };
 
   factory DiaryEntry.fromJson(Map<String, dynamic> json) => DiaryEntry(

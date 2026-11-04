@@ -1,11 +1,17 @@
 import 'package:clock/clock.dart';
 
+import '../utils/units.dart';
 import 'focus_insights.dart';
 import 'focus_readiness.dart';
 import 'health_types.dart';
 import 'hydration_pacer.dart';
 import 'sleep_debt.dart';
 import 'step_reminder_plan.dart';
+
+/// An amount of water as this person reads it: "250ml", or "8.5 fl oz". The older
+/// unspaced millilitre spelling is kept, so these lines are unchanged for anyone
+/// who counts in millilitres.
+String _v(num ml) => Units.volumeText(ml, tight: true);
 
 /// Pure-Dart, deterministic AI engine. Zero cost, zero infra, offline, private —
 /// runs on every device and scales to unlimited users for free. It is the
@@ -794,20 +800,20 @@ class CoachText {
     if (isRestricted && goalMl > 0) {
       final left = goalMl - intakeMl;
       if (left < 0) {
-        return 'You are ${-left}ml over your ${goalMl}ml daily limit. Worth '
+        return 'You are ${_v(-left)} over your ${_v(goalMl)} daily limit. Worth '
             'mentioning to your clinician if it happens often.';
       }
       if (left == 0) {
-        return 'You have reached your ${goalMl}ml daily limit for today.';
+        return 'You have reached your ${_v(goalMl)} daily limit for today.';
       }
       if (pct >= 80) {
-        return 'Close to your limit — ${left}ml left of ${goalMl}ml today.';
+        return 'Close to your limit — ${_v(left)} left of ${_v(goalMl)} today.';
       }
-      return '${intakeMl}ml of your ${goalMl}ml limit so far. ${left}ml left.';
+      return '${_v(intakeMl)} of your ${_v(goalMl)} limit so far. ${_v(left)} left.';
     }
 
     if (intakeMl >= goalMl && goalMl > 0) {
-      return '🎉 Goal reached — ${intakeMl}ml today! Keep sipping to stay ahead.$streak';
+      return '🎉 Goal reached — ${_v(intakeMl)} today! Keep sipping to stay ahead.$streak';
     }
 
     // Pace-aware nudge: compare intake to where you'd be if on track for THIS
@@ -821,25 +827,25 @@ class CoachText {
     );
 
     if (hour < 10) {
-      return 'Good morning! A glass now is a strong start toward your ${goalMl}ml goal.$streak';
+      return 'Good morning! A glass now is a strong start toward your ${_v(goalMl)} goal.$streak';
     }
     // With nothing logged yet there is no pace to be behind — the whole elapsed
     // day would read as a deficit ("you're 1,800ml behind"), which is just the
     // goal restated as a failure. Invite the first log instead.
     if (intakeMl <= 0) {
-      return 'Nothing logged yet today. Add your first drink and I\'ll track your pace toward ${goalMl}ml.$streak';
+      return 'Nothing logged yet today. Add your first drink and I\'ll track your pace toward ${_v(goalMl)}.$streak';
     }
     if (pace.behind) {
       final sip = pace.suggestedSipMl > 0 ? pace.suggestedSipMl : 250;
-      return 'You\'re about ${pace.deficitMl}ml behind pace — a ${sip}ml drink now gets you back on track ($intakeMl of ${goalMl}ml).$streak';
+      return 'You\'re about ${_v(pace.deficitMl)} behind pace — a ${_v(sip)} drink now gets you back on track (${Units.volumeNumber(intakeMl)} of ${_v(goalMl)}).$streak';
     }
     if (hour >= 20) {
-      return 'You\'re at $pct% ($intakeMl of ${goalMl}ml). A last glass before bed tops you off.$streak';
+      return 'You\'re at $pct% (${Units.volumeNumber(intakeMl)} of ${_v(goalMl)}). A last glass before bed tops you off.$streak';
     }
     if (pace.ahead) {
       return 'Ahead of pace — $pct% of your goal already. Nice work, keep it steady.$streak';
     }
-    return 'On pace — $pct% of your goal. Just ${remaining}ml to go.$streak';
+    return 'On pace — $pct% of your goal. Just ${_v(remaining)} to go.$streak';
   }
 
   /// One line of context under the timer. Warm, and never a threat.

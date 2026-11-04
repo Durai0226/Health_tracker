@@ -16,12 +16,16 @@ import '../../../../core/widgets/app/vitals_widgets.dart';
 import '../../models/glucose_reading.dart';
 import '../../services/glucose_recheck.dart';
 import '../../services/vitals_storage_service.dart';
+import '../../services/vitals_health_import.dart';
+import '../../widgets/vitals_import_flow.dart';
+import '../../../../core/services/health_store_name.dart';
 import 'vitals_trend_chart.dart';
 import 'vitals_emergency_call.dart';
 import 'vitals_reminder_button.dart';
 import 'blood_sugar_report_screen.dart';
 import 'package:clock/clock.dart';
 import '../../../../core/utils/calendar_day.dart';
+import '../../../../core/utils/coalesced_load.dart';
 
 /// Blood Sugar tracker — log, classify per-context (ADA), estimated A1C, trend.
 class BloodSugarScreen extends StatefulWidget {
@@ -60,13 +64,27 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
   bool get _isMmol => _unit == GlucoseUnit.mmoll;
   String get _unitLabel => _isMmol ? 'mmol/L' : 'mg/dL';
 
+  /// See the blood-pressure screen: one load at a time, a burst of changes is one
+  /// reload behind the one under way.
+  late final CoalescedLoad _load = CoalescedLoad(_loadOnce, canContinue: () => mounted);
+
   @override
   void initState() {
     super.initState();
     _load();
+    // See the blood-pressure screen: readings can arrive while this is open.
+    VitalsStorageService.revision.addListener(_onRevision);
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    VitalsStorageService.revision.removeListener(_onRevision);
+    super.dispose();
+  }
+
+  void _onRevision() => _load();
+
+  Future<void> _loadOnce() async {
     final data = await VitalsStorageService.getAllGlucose();
     final unit = CleanStorageService.getAppPreference(_unitKey, 'mgdl');
     if (!mounted) return;
@@ -99,7 +117,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
       builder: (_) => _GlucoseLogForm(accent: accent, unit: _unit, existing: edit),
     );
     if (saved == null) return;
-    _load();
+    // The save bumped the revision, which reloads the list.
     if (saved is DateTime && mounted) {
       context.toastInfo(
         'Recheck reminder set for ${DateFormats.time.format(saved)}',
@@ -112,7 +130,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
     // Soft delete: remove now, but offer Undo — deleting a health record must
     // never be a one-swipe, unrecoverable action.
     await VitalsStorageService.deleteGlucose(r.id);
-    _load();
+    // The delete bumped the revision, which reloads the list.
     // The messenger used to be captured before the await so the toast
     // survived the gap; the toast kit takes a context, so guard instead.
     if (!mounted) return;
@@ -120,10 +138,7 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
       'Reading deleted',
       action: AppToastAction(
         label: 'Undo',
-        onPressed: () async {
-          await VitalsStorageService.saveGlucose(r);
-          _load();
-        },
+        onPressed: () => VitalsStorageService.saveGlucose(r),
       ),
     );
   }
@@ -415,7 +430,8 @@ class _BloodSugarScreenState extends State<BloodSugarScreen> {
                             color: ext.textPrimary, fontWeight: FontWeight.w700)),
                     Text(
                       '${VitalsAnalyzer.glucoseLabel(cls)} · ${VitalsAnalyzer.glucoseContextLabel(r.context)} · ${DateFormats.dayMonthTime.format(r.takenAt)}'
-                      '${r.insulinUnits == null ? '' : ' · ${_GlucoseLogFormState._unitsText(r.insulinUnits)} units insulin'}',
+                      '${r.insulinUnits == null ? '' : ' · ${_GlucoseLogFormState._unitsText(r.insulinUnits)} units insulin'}'
+                      '${VitalsHealthImport.isImported(r.id) ? ' · from ${healthStoreName()}' : ''}',
                       style: tt.bodySmall?.copyWith(color: ext.textSecondary),
                     ),
                   ],
@@ -519,6 +535,9 @@ class _EmptyState extends StatelessWidget {
           size: AppButtonSize.lg,
           onPressed: onLog,
         ),
+        // A meter app may already have saved readings to the health store.
+        const SizedBox(height: AppSpacing.sm),
+        const VitalsImportButton(),
       ],
     );
   }

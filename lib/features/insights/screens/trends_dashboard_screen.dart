@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -15,11 +17,18 @@ import '../../period/screens/period_calendar_screen.dart';
 import '../../sleep/screens/sleep_dashboard_screen.dart';
 import '../../steps/screens/steps_dashboard_screen.dart';
 import '../../water/screens/aqua_water_dashboard.dart';
+import '../../focus/services/focus_service.dart';
 import '../../medication/services/medicine_storage_service.dart';
+import '../../medication/services/vitals_storage_service.dart';
+import '../../period/services/period_service.dart';
+import '../../sleep/services/sleep_service.dart';
+import '../../steps/services/step_service.dart';
+import '../../water/services/water_service.dart';
 import '../services/trends_data_service.dart';
 import '../widgets/trend_chart_card.dart';
 import '../widgets/patterns_section.dart';
 import 'weekly_recap_screen.dart';
+import '../../../core/utils/units.dart';
 
 /// The unified "Trends" dashboard — every feature charted in one place with a
 /// 7 / 14 / 30-day range selector. One small-multiple card per feature (each in
@@ -85,9 +94,70 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
     // tapping back to this tab kept showing the PREVIOUS profile's vitals/med
     // trends, since VitalsStorageService.getBpForRange/getGlucoseForRange are
     // scoped by ActiveProfileService but nothing here ever re-queried them.
-    MedicineCleanStorageService.revision.addListener(_onDataChanged);
-    ActiveProfileService().addListener(_onDataChanged);
+    for (final source in _sources) {
+      source.addListener(_onDataChanged);
+    }
+    // A different person is not "more data": see [_onProfileChanged].
+    ActiveProfileService().addListener(_onProfileChanged);
+    // Steps are the one source that moves all the time — every few seconds while
+    // someone walks with the phone in a pocket — so they get their own, slower
+    // lane: see [_stepsReloadDelay].
+    _stepsSource?.addListener(_onStepsChanged);
   }
+
+  /// Everything that can change what the charts say.
+  ///
+  /// Only medicine and the active profile used to be listened to, so a drink, a
+  /// night, a day's steps, a period day, a blood pressure reading or a finished
+  /// focus round logged anywhere else left every other card showing what was true
+  /// when the tab was last loaded — until the person pulled to refresh. Each of
+  /// these publishes a change, and the hidden-tab deferral below already makes
+  /// listening to all of them cheap: a change while another tab is showing costs
+  /// one flag, and one reload when this one is.
+  ///
+  /// A few can be null before their service has started; there is nothing to
+  /// listen to then, and the first load reads them anyway.
+  late final List<Listenable> _sources = [
+    MedicineCleanStorageService.revision,
+    VitalsStorageService.revision,
+    ?WaterService.listenToDailyData(),
+    SleepService.listenToSessions(),
+    PeriodService.listenToDays(),
+    // The history of rounds — NOT `justCompleted`, whose "is anyone listening?" decides
+    // whether a finished round is celebrated on screen or announced by notification.
+    // This tab stays mounted once it has been shown, so listening to that one told the
+    // service a screen was there to celebrate, and a round that finished with the
+    // Focus screen closed was announced to nobody.
+    FocusService().sessionsRevision,
+  ];
+
+  /// The live step count, which publishes as the sensor reports.
+  late final Listenable? _stepsSource = StepService.listenToDailyData();
+
+  /// How long after the first step change a steps-driven reload waits.
+  ///
+  /// A reload is the whole bundle — four service reads, four series, nine
+  /// aggregations — and a person watching Trends while they walk would have run it
+  /// every few seconds for as long as they walked: battery, jank, charts that
+  /// flicker. So steps never reload at once. The first change starts one timer and
+  /// the reload comes when it ends, once, however many steps came in between. Any
+  /// other change reloads the whole bundle in the meantime and picks the steps up
+  /// with it.
+  static const Duration _stepsReloadDelay = Duration(seconds: 15);
+
+  Timer? _stepsTimer;
+
+  /// Reloads caused by a data change are spaced at least this far apart.
+  ///
+  /// Some sources are noisy — a health sync writes a day at a time, and steps
+  /// move while the phone is in a pocket — and every reload is the whole bundle:
+  /// four service reads, four series, nine aggregations. The first change after a
+  /// quiet spell reloads at once, so what is logged shows straight away; the ones
+  /// that arrive inside the gap are folded into a single reload when it ends.
+  static const Duration _reloadGap = Duration(seconds: 3);
+
+  Timer? _cooldown;
+  bool _changedDuringCooldown = false;
 
   /// A data change arrived while this screen was a HIDDEN tab; [_onPainted]
   /// flushes it the moment the tab is actually shown.
@@ -106,20 +176,80 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
       _staleWhileHidden = true;
       return;
     }
+    if (_cooldown != null) {
+      _changedDuringCooldown = true;
+      return;
+    }
     _reload();
+    _cooldown = Timer(_reloadGap, _endCooldown);
+  }
+
+  /// The active profile changed: the charts are now about somebody else.
+  ///
+  /// Not a data change, and so not behind [_reloadGap]. That spacing exists to
+  /// keep a noisy source from re-running the bundle every few seconds, but the
+  /// person who has just switched profile is looking for the other person's
+  /// numbers, and for up to three seconds after any earlier reload they were shown
+  /// the previous person's vitals and medicines — the very thing listening to the
+  /// profile was added to stop.
+  void _onProfileChanged() {
+    if (!mounted) return;
+    if (!_isShowing) {
+      _staleWhileHidden = true;
+      return;
+    }
+    _reload();
+  }
+
+  void _onStepsChanged() {
+    if (!mounted) return;
+    if (!_isShowing) {
+      _staleWhileHidden = true;
+      return;
+    }
+    _stepsTimer ??= Timer(_stepsReloadDelay, () {
+      _stepsTimer = null;
+      if (!mounted) return;
+      // The tab may have been put behind another while it waited.
+      if (!_isShowing) {
+        _staleWhileHidden = true;
+        return;
+      }
+      _reload();
+    });
+  }
+
+  void _endCooldown() {
+    _cooldown = null;
+    if (!_changedDuringCooldown || !mounted) return;
+    _changedDuringCooldown = false;
+    // The tab may have been put behind another while it waited: then it is owed
+    // a reload for when it comes back, like any other change it missed.
+    if (!_isShowing) {
+      _staleWhileHidden = true;
+      return;
+    }
+    _reload();
+    _cooldown = Timer(_reloadGap, _endCooldown);
   }
 
   /// Whether this screen is the SHOWN child of the shell's [IndexedStack].
   ///
-  /// `IndexedStack` wraps every child in a [Visibility] and paints only the
-  /// selected one — hidden children still build and still lay out, so neither
-  /// `build` nor `didChangeDependencies` can tell the difference. That wrapper
-  /// widget is the one signal there is.
+  /// `IndexedStack` paints only the selected child — hidden children still build
+  /// and still lay out, so neither `build` nor `didChangeDependencies` can tell
+  /// the difference. What it does say is [Visibility.of].
   ///
-  /// Pushed as a route, or in a widget test, there is no such ancestor and this
-  /// reports visible — which is the behaviour this screen has always had.
-  bool get _isShowing =>
-      context.findAncestorWidgetOfExactType<Visibility>()?.visible ?? true;
+  /// This used to look for a [Visibility] widget among the ancestors, which is
+  /// how `IndexedStack` reported it until Flutter 3.47: it now publishes it
+  /// through a private scope instead, there is no such widget, and the lookup
+  /// quietly answered "shown" for every tab — so every data change re-ran the
+  /// whole bundle for a screen nobody was looking at, exactly what this exists to
+  /// prevent. `trends_offscreen_reload_test` is what noticed, and what keeps it
+  /// noticed.
+  ///
+  /// Pushed as a route, or in a widget test, there is no scope and this reports
+  /// visible — which is the behaviour this screen has always had.
+  bool get _isShowing => Visibility.of(context);
 
   /// Called every time this screen's subtree is actually painted.
   ///
@@ -139,8 +269,13 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
 
   @override
   void dispose() {
-    MedicineCleanStorageService.revision.removeListener(_onDataChanged);
-    ActiveProfileService().removeListener(_onDataChanged);
+    _cooldown?.cancel();
+    _stepsTimer?.cancel();
+    for (final source in _sources) {
+      source.removeListener(_onDataChanged);
+    }
+    ActiveProfileService().removeListener(_onProfileChanged);
+    _stepsSource?.removeListener(_onStepsChanged);
     super.dispose();
   }
 
@@ -276,7 +411,9 @@ class _TrendsDashboardScreenState extends State<TrendsDashboardScreen> {
         series: b.water,
         days: days,
         featureName: 'water',
-        formatValue: (v) => '${_fmtInt(v)} ml',
+        formatValue: (v) => Units.volume == VolumeUnit.ml
+            ? '${_fmtInt(v)} ml'
+            : Units.volumeText(v),
         centerValue: (_) => '${b.water.goalPercent!.round()}%',
         centerCaption: 'of goal',
         ringHeadline: (_) =>

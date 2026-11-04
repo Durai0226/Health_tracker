@@ -201,10 +201,10 @@ void main() {
     expect(WaterService.getTodayData().deletedLogIds, isEmpty,
         reason: 'premise: nothing has asked for them yet this session');
 
-    // Which is why the uploader goes through `todayDataForSync`. Sending the
+    // Which is why the uploader goes through `dayDataForSync`. Sending the
     // day without its tombstones is what lets the very next download — the
     // copy uploaded before the delete — hand the drink straight back.
-    final payload = await WaterService.todayDataForSync();
+    final payload = (await WaterService.dayDataForSync(DateTime.now()))!;
     expect(payload.deletedLogIds, {doomed.id});
     expect(payload.toJson()['deletedLogIds'], [doomed.id],
         reason: 'and it has to survive into the document Firestore stores');

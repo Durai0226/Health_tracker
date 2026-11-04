@@ -77,6 +77,12 @@ void main() {
   const notificationId = 5000;
   final tap = DateTime(2026, 10, 27, 13, 0);
 
+  /// The real now, for a Later that goes through the notification plugin's
+  /// `zonedSchedule`: the plugin refuses a time that has passed by the REAL clock,
+  /// and a Later is 18:00 or tomorrow morning from the tap — so the fixed [tap]
+  /// above passed on the day it was written and fails from the evening on.
+  final liveTap = DateTime.now();
+
   String payload({String? reminderId = 'r-1', Map<String, Object?> extra = const {}}) =>
       'alarm:${jsonEncode({
         'id': notificationId,
@@ -251,7 +257,7 @@ void main() {
         () async {
       final prefs = await prefsWith({});
       await handleReminderAction(
-          notificationId, payload(), ReminderActions.laterId, at: tap);
+          notificationId, payload(), ReminderActions.laterId, at: liveTap);
 
       final scheduled =
           notificationCalls.where((c) => c.method == 'zonedSchedule').toList();
@@ -268,7 +274,7 @@ void main() {
       // zone is UTC here (no device to ask), so the string is UTC without a mark.
       final raw = args['scheduledDateTime'] as String;
       final instant = DateTime.parse(RegExp(r'(Z|[+-]\d\d:?\d\d)$').hasMatch(raw) ? raw : '${raw}Z');
-      expect(instant.isAtSameMomentAs(DateTime(2026, 10, 27, 18)), isTrue,
+      expect(instant.isAtSameMomentAs(ReminderLater.from(liveTap)), isTrue,
           reason: 'got $raw');
 
       // The re-fire carries the buttons the reminder was first shown with: a
@@ -285,7 +291,7 @@ void main() {
       final prefs = await prefsWith({maxSnoozeCountKey: 1, counterKey: 5});
       await handleReminderAction(
           notificationId + snoozeIdOffset, payload(), ReminderActions.laterId,
-          at: tap);
+          at: liveTap);
 
       expect(prefs.getInt(counterKey), 5);
       expect(prefs.getStringList(SnoozeLog.keyFor(notificationId)), isNull);

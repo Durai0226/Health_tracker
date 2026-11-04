@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:health/health.dart' show HealthDataType;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/health/health_record_ids.dart';
 import '../../../core/services/health_data_service.dart';
 import '../models/enhanced_water_log.dart';
 
@@ -22,9 +24,10 @@ import '../models/enhanced_water_log.dart';
 /// vitals, that record is a single capped list rather than a key per drink —
 /// see [_recentSyncsKey].
 ///
-/// NOT YET two-directional: deleting a drink here does not remove the record
-/// from the platform store, because `HealthDataService` exposes no hydration
-/// delete. Until it does, an undone drink stays in Health Connect / HealthKit.
+/// On Android a drink is written under a name ([HealthRecordIds]), so editing it
+/// replaces the record and deleting it removes the record. A drink written before
+/// that, and every drink on an iPhone (where the plugin ignores the name), cannot be
+/// found again and stays in the store when it is changed or undone here.
 ///
 /// Every method swallows its own failures. A health-store problem must never
 /// stop a drink being recorded locally, and this is called from
@@ -71,6 +74,10 @@ class HydrationHealthSync {
   static const String _legacyFlagPrefix = 'hydration_hc_synced_';
 
   static const int _recentSyncsCap = 200;
+
+  /// The ids among them that were written under a name, and so can be replaced and
+  /// deleted. A second capped list for the same reason as the first.
+  static const String _namedSyncsKey = 'hydration_hc_named_syncs';
 
   /// Once per process, on the first write: delete the per-log keys the old
   /// scheme left behind. Runs here rather than in `WaterService.init()` because
@@ -130,15 +137,64 @@ class HydrationHealthSync {
         return;
       }
 
-      final ok = await HealthDataService.instance
-          .writeWater(volumeMl: log.amountMl, at: log.time);
+      final ok = await HealthDataService.instance.writeWater(
+          volumeMl: log.amountMl,
+          at: log.time,
+          clientRecordId: HealthRecordIds.water(log.id));
       // Only record on success, so a transient failure retries next time.
       if (ok) {
         await prefs.setStringList(
             _recentSyncsKey, appendCapped(recent, log.id));
+        await _markNamed(prefs, log.id);
       }
     } catch (e) {
       debugPrint('HydrationHealthSync.onLogAdded skipped: $e');
+    }
+  }
+
+  static Future<void> _markNamed(SharedPreferences prefs, String id) async {
+    if (!HealthRecordIds.supported(defaultTargetPlatform)) return;
+    final named = prefs.getStringList(_namedSyncsKey) ?? const <String>[];
+    await prefs.setStringList(_namedSyncsKey, appendCapped(named, id));
+  }
+
+  /// An edited drink replaces its record in the store — when it was written under a
+  /// name. One written before the names existed would get a second record, so it is
+  /// left as it was.
+  static Future<void> onLogUpdated(EnhancedWaterLog log) async {
+    try {
+      // No volume check: `writeWater` refuses a drink of no volume itself.
+      if (!await isEnabled()) return;
+      final prefs = await SharedPreferences.getInstance();
+      final named = prefs.getStringList(_namedSyncsKey) ?? const <String>[];
+      if (!named.contains(log.id)) return;
+      await HealthDataService.instance.writeWater(
+          volumeMl: log.amountMl,
+          at: log.time,
+          clientRecordId: HealthRecordIds.water(log.id));
+    } catch (e) {
+      debugPrint('HydrationHealthSync.onLogUpdated skipped: $e');
+    }
+  }
+
+  /// A removed drink comes out of the store, when it went in under a name. Dropped
+  /// from both lists only once it has, so that Undo — which adds the same id again —
+  /// writes it afresh instead of finding it already sent.
+  static Future<void> onLogRemoved(String logId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final named = prefs.getStringList(_namedSyncsKey) ?? const <String>[];
+      if (!named.contains(logId)) return;
+      final ok = await HealthDataService.instance
+          .deleteByClientId(HealthDataType.WATER, HealthRecordIds.water(logId));
+      if (!ok) return;
+      await prefs.setStringList(
+          _namedSyncsKey, named.where((e) => e != logId).toList());
+      final recent = prefs.getStringList(_recentSyncsKey) ?? const <String>[];
+      await prefs.setStringList(
+          _recentSyncsKey, recent.where((e) => e != logId).toList());
+    } catch (e) {
+      debugPrint('HydrationHealthSync.onLogRemoved skipped: $e');
     }
   }
 
@@ -153,17 +209,6 @@ class HydrationHealthSync {
     } catch (e) {
       debugPrint('HydrationHealthSync.requestPermission failed: $e');
       return false;
-    }
-  }
-
-  /// Hydration recorded by OTHER apps over [from]..[to], in millilitres.
-  static Future<int> readExternalMl(DateTime from, DateTime to) async {
-    try {
-      if (!await isEnabled()) return 0;
-      return await HealthDataService.instance.readWaterMl(from, to);
-    } catch (e) {
-      debugPrint('HydrationHealthSync.readExternalMl failed: $e');
-      return 0;
     }
   }
 }

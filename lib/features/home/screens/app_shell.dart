@@ -20,6 +20,8 @@ import '../../medication/screens/vitals/blood_pressure_screen.dart';
 import '../../medication/services/today_schedule_service.dart';
 import '../../water/services/water_service.dart';
 import '../../../core/services/health_sync_queue.dart';
+import '../../medication/services/vitals_health_import.dart';
+import '../../water/services/water_health_import.dart';
 import '../../steps/services/step_service.dart';
 import '../../sleep/services/sleep_service.dart';
 import '../../biometrics/services/biometrics_service.dart';
@@ -32,12 +34,15 @@ import 'health_browse_screen.dart';
 import '../widgets/log_something_sheet.dart';
 import '../../medication/services/refill_loop.dart';
 import '../../medication/services/visit_brief_link.dart';
+import '../../sleep/screens/wind_down_screen.dart';
+import '../../sleep/services/wind_down_link.dart';
 import '../../medication/screens/appointments/visit_brief_screen.dart';
 import '../../medication/models/doctor_pharmacy.dart' show Appointment;
 import '../../medication/widgets/refill_request_sheet.dart';
 import '../../water/screens/aqua_water_dashboard.dart';
 import '../../../core/services/cloud_sync_runner.dart';
 import '../../../core/services/queue_signal.dart';
+import '../../../core/utils/units.dart';
 
 /// The single persistent shell — one bottom nav with a center action:
 /// **Today · Meds · ➕ Log · Health · Insights** over an [IndexedStack].
@@ -100,6 +105,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // tapped while the app is alive sets it later.
     RefillLoop.pendingOpen.addListener(_onRefillTap);
     VisitBriefLink.pendingOpen.addListener(_onVisitBriefTap);
+    WindDownLink.pendingOpen.addListener(_onWindDownTap);
     // A notification button tapped while the app is OPEN runs in a background
     // isolate and only queues its answer; nothing resumes, so without this a Done
     // tapped on a banner over the Reminders list would not show until the app was
@@ -117,12 +123,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       if (!mounted) return;
       _onRefillTap();
       _onVisitBriefTap();
+      _onWindDownTap();
       _drainQueuedDoseActions();
       _drainQueuedWaterActions();
       _drainQueuedAnswers();
       _drainBackgroundHealthSync();
+      _importVitalsFromHealth();
+      _importWaterFromHealth();
       _refreshAmbientData();
       _shortcuts.refresh();
+      // Android, sensor already allowed: count steps from here, not only from the
+      // Steps screen, and add what was walked while the app was closed.
+      unawaited(StepService.keepCountingWhileOpen());
     });
   }
 
@@ -142,6 +154,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _stopListeningForQueues?.call();
     RefillLoop.pendingOpen.removeListener(_onRefillTap);
     VisitBriefLink.pendingOpen.removeListener(_onVisitBriefTap);
+    WindDownLink.pendingOpen.removeListener(_onWindDownTap);
     _cancelPendingShortcut();
     for (final c in _tabScrollControllers) {
       c.dispose();
@@ -158,17 +171,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   ///
   /// **This is the only place that drains the dose queue.** The medicine
   /// dashboard used to drain it as well, inside its own load, with its own
-  /// duplicate "Logged N doses · Undo" toast. `drainPendingDoseActions` is
-  /// read-and-clear, so the two raced: on a resume into the Meds tab whichever
-  /// ran first got the ids and reported them, and the other silently reported
-  /// nothing — so whether the user was told a dose had been logged on their
-  /// behalf depended on which tab they happened to open.
+  /// duplicate "Logged N doses · Undo" toast, and the two raced: whichever ran
+  /// first reported the ids and the other silently reported nothing — so whether
+  /// the user was told a dose had been logged on their behalf depended on which tab
+  /// they happened to open.
+  ///
+  /// Drains no longer clear what they read (an action is forgotten only once it has
+  /// landed), and they coalesce: a call that arrives while one is running asks for
+  /// ONE more pass and gets an empty answer, and the drain in flight reports
+  /// everything, its own and what arrived meanwhile, under ITS label. So when a
+  /// shortcut's take lands in a drain that a resume started, the toast says "from your
+  /// reminder" — one toast, with its Undo, which is the point; the wording is that of
+  /// whichever drain began first.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // The launcher menu is read while the app is NOT running, so the shortcut
     // list has to be fresh at the moment the user leaves, not when they return.
     if (state == AppLifecycleState.paused) {
       _shortcuts.refresh();
+      // The last moment Dart is sure to run before the phone may end the process:
+      // write the count the throttle is still holding, and the reading beside it.
+      unawaited(StepService.flushPendingLiveDay());
       return;
     }
     if (state != AppLifecycleState.resumed) return;
@@ -176,7 +199,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _drainQueuedWaterActions();
     _drainQueuedAnswers();
     _drainBackgroundHealthSync();
+    _importVitalsFromHealth();
+    _importWaterFromHealth();
+    unawaited(StepService.keepCountingWhileOpen());
     _rearmIfExactAlarmsWereGranted();
+    // iPhone: the reminders for a medicine that is not due every day run out, and
+    // an app that stays alive in the background is never started to arm them again.
+    unawaited(ReminderRescheduleService.rearmDosesIfStale().catchError(
+        (Object e) => debugPrint('⚠️ Dose re-arm on resume failed: $e')));
     _refreshAmbientData();
     // Back after a while: pick up what changed on other devices. Throttled, and
     // behind the same gates as the start-up run.
@@ -233,6 +263,25 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Draining background health sync on resume failed: $e');
     }
+  }
+
+  /// "Readings from other apps": when the person has turned it on, bring in what
+  /// a cuff or a meter app has saved since the last look.
+  ///
+  /// Silent, unlike the dose drain above, and for the opposite reason: a toast
+  /// here would replace the Undo of a dose or a drink that was just applied for
+  /// them. The readings say where they came from on their own rows, and the
+  /// switch that turned this on is the consent. Throttled and gated inside.
+  Future<void> _importVitalsFromHealth() async {
+    // `runIfEnabled` never throws: it answers for a health store that is slow,
+    // missing or refusing, which must not get in the way of opening the app.
+    await VitalsHealthImport.runIfEnabled();
+  }
+
+  /// "Count drinks from other apps": the same, for water. Silent for the same
+  /// reason, and the drinks it adds say where they came from in Today's Log.
+  Future<void> _importWaterFromHealth() async {
+    await WaterHealthImport.runIfEnabled();
   }
 
   Future<void> _drainQueuedDoseActions({String from = 'your reminder'}) async {
@@ -292,7 +341,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // And "from your reminder" was wrong for every home-screen quick-add.
     final ml = applied.fold<int>(0, (sum, a) => sum + a.amountMl);
     context.toastSuccess(
-      'Logged $ml ml from your quick-add',
+      'Logged ${Units.volumeText(ml)} from your quick-add',
       action: AppToastAction(
         label: 'Undo',
         onPressed: () async {
@@ -423,6 +472,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       if (appointment == null || !mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => VisitBriefScreen(appointment: appointment!)));
+    });
+  }
+
+  /// A tapped wind-down reminder: open the routine, which asks before it starts.
+  void _onWindDownTap() {
+    if (!WindDownLink.pendingOpen.value) return;
+    // Cleared first, so tapping the same notification again fires again.
+    WindDownLink.pendingOpen.value = false;
+    _runWhenUnlocked(() {
+      if (!mounted) return;
+      Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const WindDownScreen()));
     });
   }
 

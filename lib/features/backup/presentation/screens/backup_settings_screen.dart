@@ -3,6 +3,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../../core/widgets/app/app_widgets.dart';
 import '../../../../core/widgets/confirmation_bottom_sheet.dart';
 import '../../services/backup_service.dart';
+import '../backup_exporting.dart';
+import '../widgets/passphrase_sheet.dart';
 
 /// Calm Clarity, dark-aware Backup & Restore screen.
 ///
@@ -11,14 +13,19 @@ import '../../services/backup_service.dart';
 /// Every action reports a success OR error toast; a user-canceled restore
 /// reports a neutral "canceled" message rather than silently doing nothing.
 class BackupSettingsScreen extends StatefulWidget {
-  const BackupSettingsScreen({super.key});
+  const BackupSettingsScreen({super.key, this.service});
+
+  /// Replaces the real backup service. A test hands its own: the real one writes
+  /// to a temp directory and opens the share sheet.
+  final BackupService? service;
 
   @override
   State<BackupSettingsScreen> createState() => _BackupSettingsScreenState();
 }
 
-class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
-  final _backupService = BackupService();
+class _BackupSettingsScreenState extends State<BackupSettingsScreen>
+    with BackupExporting<BackupSettingsScreen> {
+  late final BackupService _backupService = widget.service ?? const BackupService();
   bool _isBackingUp = false;
   bool _isRestoring = false;
 
@@ -35,25 +42,23 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
     }
   }
 
-  Future<void> _createBackup() async {
-    if (_busy) return;
-    setState(() => _isBackingUp = true);
-    try {
-      final file = await _backupService.createBackup();
-      if (!mounted) return;
-      if (file != null) {
-        await _backupService.shareBackup(file);
-        if (!mounted) return;
-        _snack('Backup ready to share.', isError: false);
-      } else {
-        _snack('Could not create the backup file.', isError: true);
-      }
-    } catch (e) {
-      if (mounted) _snack('Backup failed: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isBackingUp = false);
-    }
-  }
+  // The backup flow itself is [BackupExporting]'s; this screen says how it is busy
+  // and how it speaks.
+  @override
+  BackupService get exportService => _backupService;
+
+  @override
+  bool get exportBusy => _busy;
+
+  @override
+  void setExportBusy(bool busy) => setState(() => _isBackingUp = busy);
+
+  @override
+  void reportExport(String message, {required bool isError}) =>
+      _snack(message, isError: isError);
+
+  @override
+  String get exportFailureLead => 'Backup failed';
 
   Future<void> _restoreBackup() async {
     if (_busy) return;
@@ -85,7 +90,12 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
 
     setState(() => _isRestoring = true);
     try {
-      final restored = await _backupService.restoreBackup();
+      final restored = await _backupService.restoreBackup(
+        // An encrypted backup asks for its passphrase, again for as long as it is
+        // wrong. Closing the sheet gives up: nothing is restored, nothing fails.
+        askPassphrase: ({required bool wrong}) async =>
+            mounted ? PassphraseSheet.askExisting(context, wrong: wrong) : null,
+      );
       if (!mounted) return;
       if (restored) {
         _snack('Data restored.', isError: false);
@@ -148,7 +158,28 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                           accent: ext.success,
                           fullWidth: true,
                           loading: _isBackingUp,
-                          onPressed: _busy ? null : _createBackup,
+                          onPressed: _busy ? null : exportBackup,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        // The file holds every record there is, and goes to a share
+                        // sheet — an email, a chat, a drive. This is the way to make
+                        // that not readable by whoever ends up with it.
+                        AppButton(
+                          label: 'Create encrypted backup',
+                          leadingIcon: Symbols.lock_rounded,
+                          accent: ext.success,
+                          variant: AppButtonVariant.tonal,
+                          fullWidth: true,
+                          onPressed: _busy ? null : () => exportBackup(encrypted: true),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Protected with a passphrase you choose. Without it nobody '
+                          'can open the file — including you.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: ext.textTertiary),
                         ),
                       ],
                     ),
@@ -167,8 +198,9 @@ class _BackupSettingsScreenState extends State<BackupSettingsScreen> {
                           icon: Symbols.restore_page_rounded,
                           title: 'Restore data',
                           subtitle:
-                              'Import data from a backup file. Merges with '
-                              'what is already here — nothing is deleted.',
+                              'Import data from a backup file, encrypted or '
+                              'not. Merges with what is already here — nothing '
+                              'is deleted.',
                           swatch: ext.warning,
                         ),
                         const SizedBox(height: AppSpacing.md),
